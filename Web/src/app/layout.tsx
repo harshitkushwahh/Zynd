@@ -1,18 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { AppProviders } from "@/components/providers";
+import { appTitle } from "@/shared/config/brand";
+import { copy } from "@/shared/config/copy";
+import { rootFontClassName } from "@/shared/config/fonts";
+import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-});
-
 export const metadata: Metadata = {
-  title: "ZYND — Your Wealth. Your Way.",
-  description:
-    "Manage, grow, and understand your financial life through a secure, intelligent platform.",
+  title: appTitle(),
+  description: copy.meta.siteDescription,
 };
 
 export default function RootLayout({
@@ -21,8 +17,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html lang="en" className={`${rootFontClassName} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans">
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

@@ -3,19 +3,21 @@
 import { useRef } from "react";
 import {
   Check,
-  Circle,
+  Info,
+  ListChecks,
   Mail,
   Pencil,
-  ShieldCheck,
-  Sparkles,
+  RefreshCw,
   User,
 } from "lucide-react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { UiMessage } from "@/components/ui/ui-message";
 import { PASSWORD_CRITERIA } from "@/lib/password-criteria";
 import { DEFAULT_COUNTRY } from "@/lib/input-rules";
 import { IndiaFlagIcon } from "@/components/auth/india-flag-icon";
+import { APP_TAGLINE } from "@/shared/config/brand";
 import { cn } from "@/lib/utils";
 
 const SIGNUP_STEPS = [
@@ -36,43 +38,16 @@ export function AuthBrandPanel() {
       <div className="pointer-events-none absolute bottom-8 -left-10 size-36 rounded-full bg-primary-foreground/10 blur-2xl" />
 
       <div className="relative z-10">
-        <div className="mb-8 inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1.5 backdrop-blur-[var(--blur-sm)]">
-          <Sparkles className="size-3.5 text-primary-foreground" />
-          <span className="text-caption font-semibold tracking-wide text-primary-foreground">
-            ZYND
-          </span>
-        </div>
         <p className="max-w-[220px] text-h2 font-semibold leading-tight text-primary-foreground">
           Simple, secure wealth management.
         </p>
       </div>
 
-      <div className="relative z-10 space-y-4">
+      <div className="relative z-10">
         <p className="text-compact font-medium text-primary-foreground/90">
-          YOUR WEALTH. YOUR WAY.
+          {APP_TAGLINE.toUpperCase()}
         </p>
-        <div className="flex flex-wrap gap-2">
-          {["Secure", "Encrypted", "Trusted"].map((tag) => (
-            <span
-              key={tag}
-              className="rounded-[var(--radius-control)] border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-0.5 text-caption text-primary-foreground/90"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
       </div>
-    </div>
-  );
-}
-
-export function AuthMobileBrandBar() {
-  return (
-    <div className="relative overflow-hidden bg-gradient-brand px-6 py-4 md:hidden">
-      <div className="auth-brand-pattern pointer-events-none absolute inset-0 opacity-20" />
-      <p className="relative z-10 text-compact font-semibold text-primary-foreground">
-        ZYND · YOUR WEALTH. YOUR WAY.
-      </p>
     </div>
   );
 }
@@ -189,38 +164,34 @@ function CriteriaIndicator({ met }: { met: boolean }) {
         "flex size-3 shrink-0 items-center justify-center rounded-full border transition-colors duration-200",
         met
           ? "border-success bg-success text-success-foreground"
-          : "border-muted-foreground/40 bg-transparent"
+          : "border-muted-foreground/30 bg-transparent"
       )}
     >
-      {met ? <Check className="size-2" strokeWidth={3} /> : null}
+      {met ? <Check className="size-2" strokeWidth={3} aria-hidden /> : null}
     </span>
   );
 }
 
 export function PasswordCriteriaList({ password }: { password: string }) {
   return (
-    <div className="mt-3 rounded-[var(--radius-card)] border border-border bg-muted/30 p-2.5 shadow-zynd-low">
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <ShieldCheck className="size-3.5 shrink-0 text-primary" />
-        <p className="text-caption font-medium text-foreground">Password must include:</p>
+    <div className="mt-3 rounded-[var(--radius-control)] border border-border/70 bg-muted/15 px-2.5 py-2">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <ListChecks className="size-3.5 shrink-0" aria-hidden />
+        <span>Must include</span>
       </div>
-      <ul className="space-y-1">
+      <ul className="flex flex-wrap gap-x-2 gap-y-1">
         {PASSWORD_CRITERIA.map((criterion) => {
           const met = criterion.test(password);
           return (
             <li
               key={criterion.id}
               className={cn(
-                "flex items-center gap-1.5 text-caption transition-colors duration-200",
+                "inline-flex items-center gap-1 text-xs leading-none transition-colors duration-200",
                 met ? "text-success" : "text-muted-foreground"
               )}
             >
-              {met ? (
-                <CriteriaIndicator met />
-              ) : (
-                <Circle className="size-3 shrink-0 text-muted-foreground/40" />
-              )}
-              {criterion.label}
+              <CriteriaIndicator met={met} />
+              <span>{criterion.label}</span>
             </li>
           );
         })}
@@ -229,8 +200,61 @@ export function PasswordCriteriaList({ password }: { password: string }) {
   );
 }
 
-export function OtpInfoBanner({ message }: { message: string }) {
-  return <UiMessage variant="info" message={message} className="mb-4 mt-0" />;
+export type OtpResendAction = {
+  canResend: boolean;
+  secondsLeft: number;
+  onResend: () => void;
+  disabled?: boolean;
+  readyLabel?: string;
+};
+
+export function OtpInfoBanner({
+  message,
+  resend,
+}: {
+  message: string;
+  resend?: OtpResendAction;
+}) {
+  const canResend = resend?.canResend ?? false;
+  const secondsLeft = resend?.secondsLeft ?? 0;
+  const resendLabel = canResend
+    ? (resend?.readyLabel ?? "Resend code")
+    : `Resend in ${secondsLeft}s`;
+
+  return (
+    <Alert
+      variant="info"
+      className="mb-4 mt-0 gap-2 rounded-[var(--radius-card)] px-4 py-3.5 shadow-zynd-low has-[>svg]:gap-x-3"
+    >
+      <Info className="size-5" />
+      <AlertDescription className="col-start-2 text-compact leading-relaxed text-current/90">
+        <p>{message}</p>
+        {resend ? (
+          <div className="mt-3 flex justify-end border-t border-info/15 pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-w-[7.5rem] border-info/30 bg-background/80 text-info hover:border-info/40 hover:bg-info/10 hover:text-info disabled:bg-background/60"
+              disabled={!canResend || resend.disabled}
+              onClick={resend.onResend}
+              aria-label={resendLabel}
+              title={resendLabel}
+            >
+              {canResend ? (
+                <>
+                  <RefreshCw className="size-3.5" aria-hidden />
+                  {resend.readyLabel ?? "Resend code"}
+                </>
+              ) : (
+                <span className="tabular-nums">{resendLabel}</span>
+              )}
+            </Button>
+          </div>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 export function OtpInput({
@@ -316,7 +340,7 @@ export function AuthSubmitFooter({
   className?: string;
 }) {
   return (
-    <div className={cn("space-y-3", className ?? "mt-auto")}>
+    <div className={cn("mt-auto space-y-3 pt-4", className)}>
       {children}
       {hint ? (
         <div className="text-center text-caption leading-relaxed text-muted-foreground">

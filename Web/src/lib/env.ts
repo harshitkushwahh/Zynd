@@ -1,8 +1,20 @@
 export const env = {
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? "ZYND",
+  appTagline: process.env.NEXT_PUBLIC_APP_TAGLINE ?? "Your Wealth. Your Way.",
   appEnv: process.env.NEXT_PUBLIC_APP_ENV ?? "development",
   apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "/api/v1",
   googleClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "",
+  appleClientId: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ?? "",
+  appleRedirectUri: process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI ?? "",
   turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "",
-  redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379/0",
+  appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "",
+  firebase: {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "",
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "",
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "",
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
+    vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY ?? "",
+  },
 } as const;

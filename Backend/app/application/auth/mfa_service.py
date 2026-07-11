@@ -37,7 +37,7 @@ async def get_user_totp_secret(db: AsyncSession, user_id: UUID) -> str | None:
     row = result.scalar_one_or_none()
     if not row:
         return None
-    return decrypt_secret(row.secret_ciphertext)
+    return decrypt_secret(row.secret_ciphertext, row.secret_key_version)
 
 
 async def save_pending_mfa_enrollment(
@@ -48,12 +48,29 @@ async def save_pending_mfa_enrollment(
 ) -> None:
     result = await db.execute(select(UserMfaSecret).where(UserMfaSecret.user_id == user_id))
     existing = result.scalar_one_or_none()
-    ciphertext = encrypt_secret(secret)
+    ciphertext, version = encrypt_secret(secret)
     if existing:
         existing.secret_ciphertext = ciphertext
-        existing.secret_key_version = 1
+        existing.secret_key_version = version
     else:
-        db.add(UserMfaSecret(user_id=user_id, secret_ciphertext=ciphertext))
+        db.add(
+            UserMfaSecret(
+                user_id=user_id,
+                secret_ciphertext=ciphertext,
+                secret_key_version=version,
+            )
+        )
+
+
+async def issue_backup_codes(db: AsyncSession, *, user_id: UUID) -> list[str]:
+    await db.execute(
+        UserBackupCode.__table__.delete().where(UserBackupCode.user_id == user_id)
+    )
+    plain_codes = generate_backup_codes()
+    for code in plain_codes:
+        db.add(UserBackupCode(user_id=user_id, code_hash=hash_password(code)))
+    await db.flush()
+    return plain_codes
 
 
 async def confirm_mfa_enrollment(
@@ -68,15 +85,38 @@ async def confirm_mfa_enrollment(
 
     await save_pending_mfa_enrollment(db, user_id=user.id, secret=secret)
     user.mfa_enrolled_at = _now()
+    return await issue_backup_codes(db, user_id=user.id)
 
-    await db.execute(
-        UserBackupCode.__table__.delete().where(UserBackupCode.user_id == user.id)
+
+async def get_backup_codes_status(db: AsyncSession, user_id: UUID) -> dict[str, int]:
+    result = await db.execute(
+        select(UserBackupCode).where(UserBackupCode.user_id == user_id)
     )
-    plain_codes = generate_backup_codes()
-    for code in plain_codes:
-        db.add(UserBackupCode(user_id=user.id, code_hash=hash_password(code)))
-    await db.flush()
-    return plain_codes
+    rows = list(result.scalars())
+    remaining = sum(1 for row in rows if row.used_at is None)
+    total = len(rows)
+    return {"total": total, "remaining": remaining, "used": total - remaining}
+
+
+async def regenerate_backup_codes(db: AsyncSession, user: User) -> list[str]:
+    if not user_has_mfa(user):
+        raise ValueError("mfa_not_enrolled")
+    return await issue_backup_codes(db, user_id=user.id)
+
+
+async def rotate_mfa_enrollment(
+    db: AsyncSession,
+    *,
+    user: User,
+    secret: str,
+    totp_code: str,
+) -> list[str]:
+    if not verify_totp_code(secret, totp_code):
+        raise ValueError("invalid_totp")
+
+    await save_pending_mfa_enrollment(db, user_id=user.id, secret=secret)
+    user.mfa_enrolled_at = _now()
+    return await issue_backup_codes(db, user_id=user.id)
 
 
 async def verify_user_totp(db: AsyncSession, user: User, code: str) -> bool:
@@ -101,6 +141,9 @@ async def verify_user_backup_code(db: AsyncSession, user: User, code: str) -> bo
     return False
 
 
+from app.infrastructure.security.apple_oauth import is_apple_private_relay_email
+
+
 def user_has_mfa(user: User) -> bool:
     return user.mfa_enrolled_at is not None
 
@@ -109,5 +152,7 @@ def user_fund_eligible(user: User) -> bool:
     if user.status.value != "active":
         return False
     if user.mfa_required_for_funds and not user_has_mfa(user):
+        return False
+    if is_apple_private_relay_email(user.email) and not user.phone_verified_at:
         return False
     return True

@@ -14,71 +14,102 @@ import {
   DASHBOARD_MAIN_SCROLL_CLASS,
   DASHBOARD_SHELL_PADDING,
 } from "@/components/dashboard/dashboard-layout";
-import { DashboardSectionProvider } from "@/components/dashboard/dashboard-section-context";
+import { ZyndPinLockScreen } from "@/features/account/pin";
+import { KycDialog } from "@/features/kyc/components/kyc-dialog";
+import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
+import { useKycOptional } from "@/contexts/kyc-context";
+import { ZyndGlobalLoader } from "@/components/ui/zynd-global-loader";
 import { useAuth } from "@/contexts/auth-context";
+import { SettingsNavigationProvider } from "@/contexts/settings-navigation-context";
+import { copy } from "@/shared/config/copy";
+import { ZyndErrorBoundary } from "@/shared/components/zynd-error-boundary";
 import { cn } from "@/lib/utils";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, loading, sessionRetrying } = useAuth();
+  const pinContext = useZyndPinOptional();
+  const kyc = useKycOptional();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !sessionRetrying && !user) {
       router.replace("/");
     }
-  }, [loading, router, user]);
+  }, [loading, router, sessionRetrying, user]);
 
-  if (loading) {
+  useEffect(() => {
+    if (!kyc || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("kyc_digilocker_return") === "1") {
+      kyc.resumeAfterDigilocker();
+      return;
+    }
+    if (params.get("kyc_proof_return") === "1" || params.get("kyc_esign_return") === "1") {
+      kyc.resumeAfterKycSubmission();
+    }
+  }, [kyc]);
+
+  if (loading || sessionRetrying) {
     return (
-      <div className="flex h-dvh items-center justify-center overflow-hidden bg-muted/40 p-6">
-        <p className="text-compact text-muted-foreground">Loading your dashboard...</p>
-      </div>
+      <ZyndGlobalLoader
+        status={sessionRetrying ? copy.account.reconnecting : undefined}
+      />
     );
   }
 
   if (!user) {
     return (
-      <div className="flex h-dvh items-center justify-center overflow-hidden bg-muted/40 p-6">
+      <div className="flex h-dvh items-center justify-center overflow-hidden bg-background p-6">
         <p className="text-compact text-muted-foreground">Redirecting...</p>
       </div>
     );
   }
 
   return (
-    <DashboardSectionProvider>
-      <div className="h-dvh overflow-hidden bg-muted/40">
+    <SettingsNavigationProvider>
+    <div className="h-dvh overflow-hidden bg-background">
+      {pinContext?.locked ? <ZyndPinLockScreen /> : null}
+      {kyc ? (
+        <KycDialog
+          open={kyc.dialogOpen}
+          onOpenChange={(open) => (open ? kyc.openDialog() : kyc.closeDialog())}
+        />
+      ) : null}
+        <div
+        className={cn(
+          "flex h-full min-h-0 flex-col",
+          DASHBOARD_SHELL_PADDING,
+          pinContext?.locked && "pointer-events-none select-none blur-sm"
+        )}
+      >
         <div
           className={cn(
-            "flex h-full min-h-0 flex-col",
-            DASHBOARD_SHELL_PADDING
+            "flex min-h-0 flex-1",
+            DASHBOARD_INNER_GAP,
+            "md:items-stretch"
           )}
         >
+          <DashboardSidebar className="hidden md:flex" />
+
           <div
             className={cn(
-              "flex min-h-0 flex-1",
-              DASHBOARD_INNER_GAP,
-              "md:items-stretch"
+              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+              DASHBOARD_INNER_GAP
             )}
           >
-            <DashboardSidebar className="hidden md:flex" />
-
-            <div
-              className={cn(
-                "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-                DASHBOARD_INNER_GAP
-              )}
-            >
-              <DashboardNavbar />
+            <DashboardNavbar />
 
               <main className={DASHBOARD_MAIN_SCROLL_CLASS}>
-                <div className={DASHBOARD_MAIN_CONTENT_CLASS}>{children}</div>
+                <div className={DASHBOARD_MAIN_CONTENT_CLASS}>
+                  <ZyndErrorBoundary>{children}</ZyndErrorBoundary>
+                </div>
               </main>
-            </div>
           </div>
-
-          <DashboardMobileNav />
         </div>
+
+        <DashboardMobileNav />
       </div>
-    </DashboardSectionProvider>
+    </div>
+    </SettingsNavigationProvider>
   );
 }

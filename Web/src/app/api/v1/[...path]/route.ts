@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
+import { serverEnv } from "@/shared/config/server-env";
 
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join("/");
-  const targetUrl = `${BACKEND_URL}/api/v1/${path}${request.nextUrl.search}`;
+  const targetUrl = `${serverEnv.backendUrl}/api/v1/${path}${request.nextUrl.search}`;
 
   const headers = new Headers(request.headers);
   headers.delete("host");
@@ -17,7 +17,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = await request.text();
+    init.body = await request.arrayBuffer();
   }
 
   const backendResponse = await fetch(targetUrl, init);

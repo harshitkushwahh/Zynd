@@ -4,21 +4,39 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.mfa_service import (
     build_provisioning_uri,
     confirm_mfa_enrollment,
     generate_totp_secret,
+    get_backup_codes_status,
+    regenerate_backup_codes,
+    rotate_mfa_enrollment,
     user_has_mfa,
     verify_user_backup_code,
     verify_user_totp,
 )
-from app.application.auth.service import AuthError
+from app.application.auth.audit_service import write_audit
+from app.application.auth.errors import AuthError
 from app.application.auth.session_service import revoke_all_sessions
+from app.application.notifications.notification_service import schedule_user_notification
+from app.application.notifications.types import NotificationType
+from app.application.documents.document_retention_service import (
+    clear_document_deletion_schedule,
+    schedule_documents_for_account_deletion,
+)
 from app.core.config import Settings, get_settings
-from app.infrastructure.otp.service import generate_otp, verify_otp
+from app.infrastructure.security.apple_oauth import is_apple_private_relay_email
+from app.application.ports.otp_gateway import OtpCooldownError, OtpRateLimitError, request_otp, verify_otp
+from app.application.identity.otp_purposes import OtpPurpose
+from app.infrastructure.security.hibp_service import (
+    HibpUnavailableError,
+    PasswordPwnedError,
+    ensure_password_not_pwned,
+)
+from app.infrastructure.notifications.email_service import send_security_email
 from app.infrastructure.persistence.models import (
     AuditEventType,
     DeletionEventType,
@@ -26,6 +44,8 @@ from app.infrastructure.persistence.models import (
     OAuthLinkRequest,
     OAuthProvider,
     User,
+    UserBackupCode,
+    UserMfaSecret,
     UserStatus,
 )
 from app.infrastructure.security.passwords import hash_password, verify_password
@@ -33,6 +53,7 @@ from app.infrastructure.security.pending_auth import (
     consume_pending_auth,
     generate_pending_token,
     has_step_up,
+    peek_pending_auth,
     store_pending_auth,
     store_step_up,
 )
@@ -42,26 +63,6 @@ from app.infrastructure.security.tokens import hash_token
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-async def _audit(
-    db: AsyncSession,
-    *,
-    event_type: AuditEventType,
-    user_id: UUID | None = None,
-    ip: str | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> None:
-    from app.infrastructure.persistence.models import AuditLog
-
-    db.add(
-        AuditLog(
-            user_id=user_id,
-            event_type=event_type,
-            ip_address=ip,
-            metadata_=metadata,
-        )
-    )
 
 
 async def mfa_enroll_start(db: AsyncSession, user: User) -> dict[str, Any]:
@@ -92,6 +93,7 @@ async def mfa_enroll_confirm(
     enroll_token: str,
     totp_code: str,
     ip: str | None,
+    session_id: UUID | None = None,
 ) -> dict[str, Any]:
     payload = await consume_pending_auth("mfa_enroll", enroll_token)
     if not payload or payload.get("user_id") != str(user.id):
@@ -107,8 +109,207 @@ async def mfa_enroll_confirm(
     except ValueError as exc:
         raise AuthError("Invalid authenticator code.", "invalid_totp", 400) from exc
 
-    await _audit(db, event_type=AuditEventType.mfa_enrolled, user_id=user.id, ip=ip)
+    await write_audit(db, event_type=AuditEventType.mfa_enrolled, user_id=user.id, ip=ip)
+    await revoke_all_sessions(
+        db,
+        user_id=user.id,
+        ip=ip,
+        except_session_id=session_id,
+        reason="mfa_enabled",
+    )
+    schedule_user_notification(
+        user_id=user.id,
+        user_email=user.email,
+        notification_type=NotificationType.AUTH_MFA_ENABLED,
+        title="Two-factor authentication enabled",
+        body=(
+            "Authenticator app MFA was enabled on your ZYND account. "
+            "Other active sessions were signed out.\n\n"
+            "If you didn't make this change, contact support immediately."
+        ),
+        idempotency_key=f"auth.mfa.enabled:{user.id}:{user.mfa_enrolled_at.isoformat()}",
+        email_subject="Two-factor authentication enabled on your ZYND account",
+    )
     return {"enrolled": True, "backup_codes": backup_codes, "mfa_enrolled_at": user.mfa_enrolled_at}
+
+
+async def mfa_backup_codes_status(db: AsyncSession, user: User) -> dict[str, Any]:
+    if not user_has_mfa(user):
+        return {"enrolled": False, "total": 0, "remaining": 0, "used": 0}
+    status = await get_backup_codes_status(db, user.id)
+    return {"enrolled": True, **status}
+
+
+async def mfa_regenerate_backup_codes(
+    db: AsyncSession,
+    *,
+    user: User,
+    session_id: UUID,
+    current_password: str,
+    totp_code: str | None,
+    ip: str | None,
+) -> dict[str, Any]:
+    await verify_step_up(
+        db,
+        user=user,
+        session_id=session_id,
+        current_password=current_password,
+        totp_code=totp_code,
+        ip=ip,
+    )
+    try:
+        backup_codes = await regenerate_backup_codes(db, user)
+    except ValueError as exc:
+        raise AuthError("Enable MFA before managing backup codes.", "mfa_not_enrolled", 400) from exc
+
+    await write_audit(
+        db,
+        event_type=AuditEventType.mfa_enrolled,
+        user_id=user.id,
+        ip=ip,
+        metadata={"action": "backup_codes_regenerated"},
+    )
+    return {"backup_codes": backup_codes}
+
+
+async def mfa_reset_start(
+    db: AsyncSession,
+    *,
+    user: User,
+    current_totp_code: str,
+    ip: str | None,
+) -> dict[str, Any]:
+    if not user_has_mfa(user):
+        raise AuthError("MFA is not enabled.", "mfa_not_enrolled", 400)
+
+    if not await verify_user_totp(db, user, current_totp_code):
+        raise AuthError("Invalid authenticator code.", "invalid_totp", 401)
+
+    secret = generate_totp_secret()
+    reset_token = generate_pending_token()
+    settings = get_settings()
+    await store_pending_auth(
+        "mfa_reset",
+        reset_token,
+        {"user_id": str(user.id), "secret": secret},
+        settings.mfa_pending_ttl_seconds,
+    )
+    await write_audit(
+        db,
+        event_type=AuditEventType.mfa_enrolled,
+        user_id=user.id,
+        ip=ip,
+        metadata={"action": "mfa_reset_started"},
+    )
+    return {
+        "reset_token": reset_token,
+        "qr_uri": build_provisioning_uri(secret, user.email),
+        "manual_secret": secret,
+        "expires_in": settings.mfa_pending_ttl_seconds,
+    }
+
+
+async def mfa_reset_confirm(
+    db: AsyncSession,
+    *,
+    user: User,
+    reset_token: str,
+    totp_code: str,
+    ip: str | None,
+) -> dict[str, Any]:
+    payload = await consume_pending_auth("mfa_reset", reset_token)
+    if not payload or payload.get("user_id") != str(user.id):
+        raise AuthError("Reset session expired. Start again.", "reset_expired", 410)
+
+    try:
+        backup_codes = await rotate_mfa_enrollment(
+            db,
+            user=user,
+            secret=payload["secret"],
+            totp_code=totp_code,
+        )
+    except ValueError as exc:
+        raise AuthError("Invalid authenticator code.", "invalid_totp", 400) from exc
+
+    await write_audit(
+        db,
+        event_type=AuditEventType.mfa_enrolled,
+        user_id=user.id,
+        ip=ip,
+        metadata={"action": "mfa_reset_completed"},
+    )
+    schedule_user_notification(
+        user_id=user.id,
+        user_email=user.email,
+        notification_type=NotificationType.AUTH_MFA_ENABLED,
+        title="Authenticator app reset",
+        body=(
+            "Your ZYND authenticator app was reset and re-enrolled.\n\n"
+            "If you didn't make this change, contact support immediately."
+        ),
+        idempotency_key=f"auth.mfa.reset:{user.id}:{user.mfa_enrolled_at.isoformat()}",
+        email_subject="Your ZYND authenticator app was reset",
+    )
+    return {
+        "enrolled": True,
+        "backup_codes": backup_codes,
+        "mfa_enrolled_at": user.mfa_enrolled_at,
+    }
+
+
+async def mfa_disable(
+    db: AsyncSession,
+    *,
+    user: User,
+    session_id: UUID,
+    current_password: str,
+    totp_code: str | None,
+    ip: str | None,
+) -> dict[str, bool]:
+    if not user_has_mfa(user):
+        raise AuthError("MFA is not enabled.", "mfa_not_enrolled", 400)
+
+    await verify_step_up(
+        db,
+        user=user,
+        session_id=session_id,
+        current_password=current_password,
+        totp_code=totp_code,
+        ip=ip,
+    )
+
+    await db.execute(delete(UserMfaSecret).where(UserMfaSecret.user_id == user.id))
+    await db.execute(delete(UserBackupCode).where(UserBackupCode.user_id == user.id))
+    user.mfa_enrolled_at = None
+
+    await write_audit(
+        db,
+        event_type=AuditEventType.mfa_disabled,
+        user_id=user.id,
+        ip=ip,
+    )
+    await revoke_all_sessions(
+        db,
+        user_id=user.id,
+        ip=ip,
+        except_session_id=session_id,
+        reason="mfa_disabled",
+    )
+    schedule_user_notification(
+        user_id=user.id,
+        user_email=user.email,
+        notification_type=NotificationType.AUTH_MFA_DISABLED,
+        title="Two-factor authentication disabled",
+        body=(
+            "Multi-factor authentication was disabled on your ZYND account. "
+            "Other active sessions were signed out.\n\n"
+            "If you did not make this change, sign in and secure your account immediately."
+        ),
+        idempotency_key=f"auth.mfa.disabled:{user.id}:{_now().isoformat()}",
+        email_subject="Authenticator disabled on your ZYND account",
+    )
+    await db.flush()
+    return {"disabled": True}
 
 
 async def verify_mfa_login(
@@ -145,7 +346,7 @@ async def verify_mfa_login(
         raise AuthError("Provide either a TOTP code or a backup code.", "invalid_mfa_payload", 400)
 
     if not verified:
-        await _audit(
+        await write_audit(
             db,
             event_type=AuditEventType.mfa_challenge_failure,
             user_id=user.id,
@@ -153,7 +354,7 @@ async def verify_mfa_login(
         )
         raise AuthError("Invalid verification code.", "invalid_mfa_code", 401)
 
-    await _audit(
+    await write_audit(
         db,
         event_type=AuditEventType.mfa_challenge_success,
         user_id=user.id,
@@ -161,7 +362,7 @@ async def verify_mfa_login(
         metadata={"used_backup_code": used_backup},
     )
     if used_backup:
-        await _audit(db, event_type=AuditEventType.backup_code_used, user_id=user.id, ip=ip)
+        await write_audit(db, event_type=AuditEventType.backup_code_used, user_id=user.id, ip=ip)
 
     return await _complete_authenticated_login(
         db,
@@ -196,8 +397,23 @@ async def create_oauth_link_request(
         expires_at=_now() + timedelta(seconds=settings.oauth_link_ttl_seconds),
     )
     db.add(link)
-    await generate_otp("oauth_link", str(user.id))
-    await _audit(
+    try:
+        otp_meta = await request_otp(
+            OtpPurpose.oauth_link,
+            str(user.id),
+            ip=ip,
+            destination=user.email,
+        )
+    except OtpCooldownError as exc:
+        raise AuthError(
+            "Please wait before requesting another code.",
+            "otp_cooldown",
+            429,
+            metadata={"retry_after_seconds": exc.retry_after_seconds},
+        ) from exc
+    except OtpRateLimitError as exc:
+        raise AuthError(str(exc), "rate_limited", 429) from exc
+    await write_audit(
         db,
         event_type=AuditEventType.oauth_link_requested,
         user_id=user.id,
@@ -221,7 +437,32 @@ async def create_oauth_link_request(
         "link_token": link_token,
         "expires_in": settings.oauth_link_ttl_seconds,
         "email_hint": _mask_email(user.email),
+        "provider": provider.value,
+        **otp_meta,
     }
+
+
+async def resend_oauth_link_otp(link_token: str, ip: str | None) -> dict[str, int]:
+    payload = await peek_pending_auth("oauth_link", link_token)
+    if not payload:
+        raise AuthError("Link session expired. Please sign in again.", "link_expired", 410)
+
+    try:
+        return await request_otp(
+            OtpPurpose.oauth_link,
+            payload["user_id"],
+            ip=ip,
+            destination=user.email,
+        )
+    except OtpCooldownError as exc:
+        raise AuthError(
+            "Please wait before requesting another code.",
+            "otp_cooldown",
+            429,
+            metadata={"retry_after_seconds": exc.retry_after_seconds},
+        ) from exc
+    except OtpRateLimitError as exc:
+        raise AuthError(str(exc), "rate_limited", 429) from exc
 
 
 def _mask_email(email: str) -> str:
@@ -257,7 +498,7 @@ async def confirm_oauth_link(
     if not verify_password(user.password_hash, password):
         raise AuthError("Invalid password.", "invalid_credentials", 401)
 
-    if not await verify_otp("oauth_link", str(user.id), email_otp):
+    if not await verify_otp(OtpPurpose.oauth_link, str(user.id), email_otp):
         raise AuthError("Invalid or expired verification code.", "invalid_otp", 400)
 
     provider = OAuthProvider(payload["provider"])
@@ -286,7 +527,7 @@ async def confirm_oauth_link(
             email=payload.get("provider_email"),
         )
     )
-    await _audit(
+    await write_audit(
         db,
         event_type=AuditEventType.oauth_link_confirmed,
         user_id=user.id,
@@ -351,6 +592,12 @@ async def verify_step_up(
     return {"verified": True}
 
 
+async def verify_account_password(*, user: User, current_password: str) -> dict[str, bool]:
+    if not user.password_hash or not verify_password(user.password_hash, current_password):
+        raise AuthError("Invalid password.", "invalid_credentials", 401)
+    return {"ok": True}
+
+
 async def change_password(
     db: AsyncSession,
     *,
@@ -369,10 +616,28 @@ async def change_password(
         totp_code=totp_code,
         ip=ip,
     )
+    try:
+        await ensure_password_not_pwned(new_password)
+    except PasswordPwnedError as exc:
+        raise AuthError(str(exc), "password_pwned", 400) from exc
+    except HibpUnavailableError as exc:
+        raise AuthError(str(exc), "hibp_unavailable", 503) from exc
+
     user.password_hash = hash_password(new_password)
     user.password_changed_at = _now()
     await revoke_all_sessions(db, user_id=user.id, ip=ip, except_session_id=session_id)
-    await _audit(db, event_type=AuditEventType.password_changed, user_id=user.id, ip=ip)
+    await write_audit(db, event_type=AuditEventType.password_changed, user_id=user.id, ip=ip)
+    schedule_user_notification(
+        user_id=user.id,
+        user_email=user.email,
+        notification_type=NotificationType.AUTH_PASSWORD_CHANGED,
+        title="Password changed",
+        body=(
+            "Your ZYND account password was changed. All other sessions were signed out.\n\n"
+            "If you didn't make this change, contact support immediately."
+        ),
+        idempotency_key=f"auth.password.changed:{user.id}:{user.password_changed_at.isoformat()}",
+    )
     return {"ok": True}
 
 
@@ -402,21 +667,62 @@ async def change_email_start(
 
     change_token = generate_pending_token()
     settings = get_settings()
-    await generate_otp("email_change", normalized)
+    try:
+        otp_meta = await request_otp(OtpPurpose.email_change, normalized, ip=ip)
+    except OtpCooldownError as exc:
+        raise AuthError(
+            "Please wait before requesting another code.",
+            "otp_cooldown",
+            429,
+            metadata={"retry_after_seconds": exc.retry_after_seconds},
+        ) from exc
+    except OtpRateLimitError as exc:
+        raise AuthError(str(exc), "rate_limited", 429) from exc
     await store_pending_auth(
         "email_change",
         change_token,
         {"user_id": str(user.id), "new_email": normalized},
         settings.oauth_link_ttl_seconds,
     )
-    await _audit(
+    await write_audit(
         db,
         event_type=AuditEventType.email_change_requested,
         user_id=user.id,
         ip=ip,
         metadata={"new_email": normalized},
     )
-    return {"change_token": change_token}
+    schedule_user_notification(
+        user_id=user.id,
+        user_email=user.email,
+        notification_type=NotificationType.AUTH_EMAIL_CHANGE_REQUESTED,
+        title="Email change requested",
+        body=(
+            f"A request was made to change your ZYND account email to {normalized}.\n\n"
+            "If you didn't request this, secure your account immediately."
+        ),
+        metadata={"new_email": normalized},
+        idempotency_key=f"auth.email_change.requested:{user.id}:{change_token}",
+        email_subject="Email change requested on your ZYND account",
+    )
+    return {"change_token": change_token, **otp_meta}
+
+
+async def change_email_resend(change_token: str, ip: str | None) -> dict[str, int]:
+    payload = await peek_pending_auth("email_change", change_token)
+    if not payload:
+        raise AuthError("Email change session expired.", "change_expired", 410)
+
+    try:
+        return await request_otp(OtpPurpose.email_change, payload["new_email"], ip=ip)
+    except OtpCooldownError as exc:
+        raise AuthError(
+            "Please wait before requesting another code.",
+            "otp_cooldown",
+            429,
+            metadata={"retry_after_seconds": exc.retry_after_seconds},
+        ) from exc
+    except OtpRateLimitError as exc:
+        raise AuthError(str(exc), "rate_limited", 429) from exc
 
 
 async def change_email_confirm(
@@ -436,14 +742,43 @@ async def change_email_confirm(
         raise AuthError("Email change session expired.", "change_expired", 410)
 
     new_email = payload["new_email"]
-    if not await verify_otp("email_change", new_email, otp):
+    if not await verify_otp(OtpPurpose.email_change, new_email, otp):
         raise AuthError("Invalid or expired verification code.", "invalid_otp", 400)
 
+    old_email = user.email
     user.email = new_email
     user.email_verified_at = _now()
     user.email_changed_at = _now()
     await revoke_all_sessions(db, user_id=user.id, ip=ip, except_session_id=session_id)
-    await _audit(db, event_type=AuditEventType.email_changed, user_id=user.id, ip=ip)
+    await write_audit(
+        db,
+        event_type=AuditEventType.email_changed,
+        user_id=user.id,
+        ip=ip,
+        metadata={"previous_email": old_email},
+    )
+    schedule_user_notification(
+        user_id=user.id,
+        user_email=new_email,
+        notification_type=NotificationType.AUTH_EMAIL_CHANGED,
+        title="Email address updated",
+        body=(
+            f"Your ZYND account email was changed to {new_email}.\n\n"
+            "If you didn't make this change, contact support immediately."
+        ),
+        metadata={"previous_email": old_email, "new_email": new_email},
+        idempotency_key=f"auth.email.changed:{user.id}:{user.email_changed_at.isoformat()}",
+        email_subject="Your ZYND email address was updated",
+    )
+    if old_email and old_email != new_email:
+        await send_security_email(
+            to_email=old_email,
+            subject="Your ZYND email address was changed",
+            body=(
+                f"Your ZYND account email was changed from {old_email} to {new_email}.\n\n"
+                "If you didn't make this change, contact support immediately."
+            ),
+        )
     return {"ok": True}
 
 
@@ -470,20 +805,31 @@ async def request_account_deletion(
     user.deletion_requested_at = _now()
     user.deletion_scheduled_at = _now() + timedelta(days=settings.account_deletion_grace_days)
 
+    scheduled_documents = await schedule_documents_for_account_deletion(db, user=user)
+
     db.add(
         DeletionLedger(
             user_id=user.id,
             event_type=DeletionEventType.deletion_requested,
             retention_policy="dpdp_grace_30d",
-            metadata_={"channel": "web"},
+            metadata_={"channel": "web", "documents_scheduled_count": scheduled_documents},
         )
     )
     await revoke_all_sessions(db, user_id=user.id, ip=ip, except_session_id=session_id)
-    await _audit(
+    await write_audit(
         db,
         event_type=AuditEventType.account_deletion_requested,
         user_id=user.id,
         ip=ip,
+    )
+    await send_security_email(
+        to_email=user.email,
+        subject="ZYND account deletion scheduled",
+        body=(
+            f"Your ZYND account is scheduled for deletion on "
+            f"{user.deletion_scheduled_at.isoformat() if user.deletion_scheduled_at else 'the grace deadline'}.\n\n"
+            "Sign in and visit Settings → Delete account to cancel before then."
+        ),
     )
     return {"ok": True, "deletion_scheduled_at": user.deletion_scheduled_at}
 
@@ -500,15 +846,16 @@ async def cancel_account_deletion(
     user.status = UserStatus.active
     user.deletion_requested_at = None
     user.deletion_scheduled_at = None
+    cleared_documents = await clear_document_deletion_schedule(db, user_id=user.id)
     db.add(
         DeletionLedger(
             user_id=user.id,
             event_type=DeletionEventType.deletion_cancelled,
             retention_policy="dpdp_grace_30d",
-            metadata_={"channel": "web"},
+            metadata_={"channel": "web", "documents_unscheduled_count": cleared_documents},
         )
     )
-    await _audit(
+    await write_audit(
         db,
         event_type=AuditEventType.account_deletion_cancelled,
         user_id=user.id,
@@ -518,9 +865,21 @@ async def cancel_account_deletion(
 
 
 def fund_eligibility_status(user: User) -> dict[str, Any]:
+    from app.application.auth.pin_service import user_has_pin
+
     reasons: list[str] = []
     if user.status != UserStatus.active:
         reasons.append("account_inactive")
     if user.mfa_required_for_funds and not user_has_mfa(user):
         reasons.append("mfa_required")
+    if user.mfa_required_for_funds and user_has_mfa(user) and not user_has_pin(user):
+        reasons.append("pin_required")
+    if is_apple_private_relay_email(user.email) and not user.phone_verified_at:
+        reasons.append("verified_contact_required")
     return {"eligible": not reasons, "reasons": reasons}
+
+
+def kyc_eligibility_status(user: User) -> dict[str, Any]:
+    from app.application.kyc.eligibility import kyc_eligibility_status as _kyc_eligibility_status
+
+    return _kyc_eligibility_status(user)

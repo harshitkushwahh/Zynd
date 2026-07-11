@@ -5,9 +5,16 @@ import httpx
 from app.core.config import get_settings
 
 
-async def verify_turnstile(token: str | None, remote_ip: str | None = None) -> bool:
+async def verify_turnstile(
+    token: str | None,
+    remote_ip: str | None = None,
+    *,
+    required: bool = True,
+) -> bool:
     settings = get_settings()
     if not settings.turnstile_secret_key:
+        return True
+    if not required:
         return True
     if not token:
         return False

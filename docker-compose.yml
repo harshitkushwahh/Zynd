@@ -18,5 +18,92 @@ services:
       - ./Redis/redis.local.conf:/usr/local/etc/redis/redis.conf:ro
     command: redis-server /usr/local/etc/redis/redis.conf
 
+  deletion-cron:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_deletion_scheduler --schedule
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      DELETION_EXECUTOR_INTERVAL_SECONDS: 3600
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: zynd
+      MINIO_ROOT_PASSWORD: zyndsecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - zynd_minio_data:/data
+
+  clamav:
+    image: clamav/clamav:1.4
+    ports:
+      - "3310:3310"
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  document-scan-worker:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_document_scan_worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      DOCUMENT_SCAN_DISPATCH_MODE: async
+      CLAMAV_ENABLED: "true"
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      clamav:
+        condition: service_healthy
+    restart: unless-stopped
+
+  event-worker:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_event_worker
+    env_file:
+      - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      EVENT_USE_WORKER_IN_DEV: "true"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  outbox-relay:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_outbox_relay
+    env_file:
+      - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      EVENT_USE_WORKER_IN_DEV: "true"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
 volumes:
   zynd_pg_data:
+  zynd_minio_data:

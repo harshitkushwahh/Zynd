@@ -1,26 +1,20 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-
-from cryptography.fernet import Fernet, InvalidToken
-
-from app.core.config import get_settings
-
-
-def _fernet() -> Fernet:
-    settings = get_settings()
-    digest = hashlib.sha256(settings.resolved_mfa_encryption_key.encode()).digest()
-    key = base64.urlsafe_b64encode(digest)
-    return Fernet(key)
+from app.infrastructure.security.field_encryption import (
+    PIIFieldType,
+    current_key_version,
+    decrypt_field,
+    encrypt_field,
+)
 
 
-def encrypt_secret(plaintext: str) -> str:
-    return _fernet().encrypt(plaintext.encode()).decode()
+def encrypt_secret(plaintext: str, key_version: int | None = None) -> tuple[str, int]:
+    return encrypt_field(plaintext, PIIFieldType.mfa_totp, key_version=key_version)
 
 
-def decrypt_secret(ciphertext: str) -> str:
-    try:
-        return _fernet().decrypt(ciphertext.encode()).decode()
-    except InvalidToken as exc:
-        raise ValueError("Invalid MFA secret ciphertext") from exc
+def decrypt_secret(ciphertext: str, key_version: int) -> str:
+    return decrypt_field(ciphertext, PIIFieldType.mfa_totp, key_version=key_version)
+
+
+def current_mfa_key_version() -> int:
+    return current_key_version(PIIFieldType.mfa_totp)

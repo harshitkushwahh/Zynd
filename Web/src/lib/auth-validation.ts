@@ -2,6 +2,7 @@ import {
   DEFAULT_COUNTRY,
   INPUT_RULES,
 } from "@/lib/input-rules";
+import { storageKeys } from "@/shared/config/storage-keys";
 
 export function isValidEmail(email: string): boolean {
   const trimmed = email.trim();
@@ -68,7 +69,7 @@ export type SignupSession = {
   country: typeof DEFAULT_COUNTRY.code;
 };
 
-export const SIGNUP_SESSION_KEY = "zynd_signup_session";
+export const SIGNUP_SESSION_KEY = storageKeys.signupSession;
 
 export function saveSignupSession(data: SignupSession) {
   sessionStorage.setItem(SIGNUP_SESSION_KEY, JSON.stringify(data));

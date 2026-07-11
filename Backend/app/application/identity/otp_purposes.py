@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Literal
+
+
+class OtpPurpose(str, Enum):
+    signup_email = "signup_email"
+    signup_mobile = "signup_mobile"
+    email_change = "email_change"
+    oauth_link = "oauth_link"
+    pin_reset = "pin_reset"
+
+
+OtpChannel = Literal["email", "sms"]
+
+
+@dataclass(frozen=True, slots=True)
+class OtpPurposeDefinition:
+    purpose: OtpPurpose
+    storage_key: str
+    channel: OtpChannel
+    email_subject: str
+
+
+OTP_PURPOSE_REGISTRY: dict[OtpPurpose, OtpPurposeDefinition] = {
+    OtpPurpose.signup_email: OtpPurposeDefinition(
+        purpose=OtpPurpose.signup_email,
+        storage_key="email",
+        channel="email",
+        email_subject="Your ZYND verification code",
+    ),
+    OtpPurpose.signup_mobile: OtpPurposeDefinition(
+        purpose=OtpPurpose.signup_mobile,
+        storage_key="mobile",
+        channel="sms",
+        email_subject="Your ZYND verification code",
+    ),
+    OtpPurpose.email_change: OtpPurposeDefinition(
+        purpose=OtpPurpose.email_change,
+        storage_key="email_change",
+        channel="email",
+        email_subject="Verify your new ZYND email address",
+    ),
+    OtpPurpose.oauth_link: OtpPurposeDefinition(
+        purpose=OtpPurpose.oauth_link,
+        storage_key="oauth_link",
+        channel="email",
+        email_subject="Verify linking your sign-in provider",
+    ),
+    OtpPurpose.pin_reset: OtpPurposeDefinition(
+        purpose=OtpPurpose.pin_reset,
+        storage_key="pin_reset",
+        channel="email",
+        email_subject="Reset your ZYND PIN",
+    ),
+}
+
+# Backward-compatible storage-key aliases used before Phase 4.
+LEGACY_STORAGE_KEY_TO_PURPOSE: dict[str, OtpPurpose] = {
+    definition.storage_key: purpose for purpose, definition in OTP_PURPOSE_REGISTRY.items()
+}
+
+
+def get_purpose_definition(purpose: OtpPurpose) -> OtpPurposeDefinition:
+    try:
+        return OTP_PURPOSE_REGISTRY[purpose]
+    except KeyError as exc:
+        raise ValueError(f"Unknown OTP purpose: {purpose}") from exc
+
+
+def resolve_purpose(value: str | OtpPurpose) -> OtpPurpose:
+    if isinstance(value, OtpPurpose):
+        return value
+    if value in LEGACY_STORAGE_KEY_TO_PURPOSE:
+        return LEGACY_STORAGE_KEY_TO_PURPOSE[value]
+    return OtpPurpose(value)
+
+
+def build_otp_message(*, purpose: OtpPurpose, code: str) -> str:
+    if purpose == OtpPurpose.signup_email:
+        return f"Your ZYND email verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.signup_mobile:
+        return f"Your ZYND mobile verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.email_change:
+        return f"Your ZYND email change verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.oauth_link:
+        return f"Your ZYND provider link verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.pin_reset:
+        return f"Your ZYND PIN reset code is {code}. It expires in 10 minutes."
+    return f"Your ZYND verification code is {code}. It expires in 10 minutes."

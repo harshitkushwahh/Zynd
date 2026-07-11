@@ -25,6 +25,15 @@ async def store_pending_auth(kind: str, token: str, payload: dict[str, Any], ttl
     await redis.setex(f"pending:{kind}:{_hash_token(token)}", ttl_seconds, json.dumps(payload))
 
 
+async def peek_pending_auth(kind: str, token: str) -> dict[str, Any] | None:
+    redis = await _redis()
+    key = f"pending:{kind}:{_hash_token(token)}"
+    raw = await redis.get(key)
+    if not raw:
+        return None
+    return json.loads(raw)
+
+
 async def consume_pending_auth(kind: str, token: str) -> dict[str, Any] | None:
     redis = await _redis()
     key = f"pending:{kind}:{_hash_token(token)}"

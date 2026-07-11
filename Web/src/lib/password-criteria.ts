@@ -9,27 +9,27 @@ export type PasswordCriterion = {
 export const PASSWORD_CRITERIA: PasswordCriterion[] = [
   {
     id: "length",
-    label: "At least 8 characters",
+    label: "8+ characters",
     test: (password) => password.length >= 8,
   },
   {
     id: "uppercase",
-    label: "One uppercase letter",
+    label: "Uppercase",
     test: (password) => /[A-Z]/.test(password),
   },
   {
     id: "lowercase",
-    label: "One lowercase letter",
+    label: "Lowercase",
     test: (password) => /[a-z]/.test(password),
   },
   {
     id: "number",
-    label: "One number",
+    label: "Number",
     test: (password) => /\d/.test(password),
   },
   {
     id: "special",
-    label: "One special character",
+    label: "Special char",
     test: (password) => /[^A-Za-z0-9]/.test(password),
   },
 ];
