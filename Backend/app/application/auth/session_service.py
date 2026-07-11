@@ -6,30 +6,15 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.auth.audit_service import write_session_revoked, write_sessions_revoked_all
+from app.application.notifications.notification_service import schedule_user_notification
+from app.application.notifications.types import NotificationType
 from app.core.config import Settings, get_settings
-from app.infrastructure.persistence.models import AuditEventType, AuditLog, Session
+from app.infrastructure.persistence.models import Session, User
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-async def _audit_revoke(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    session_id: UUID,
-    reason: str,
-    ip: str | None,
-) -> None:
-    db.add(
-        AuditLog(
-            user_id=user_id,
-            event_type=AuditEventType.session_revoked,
-            ip_address=ip,
-            metadata_={"session_id": str(session_id), "reason": reason},
-        )
-    )
 
 
 async def get_active_sessions(db: AsyncSession, user_id: UUID) -> list[Session]:
@@ -64,7 +49,7 @@ async def enforce_session_cap(
 
     for session in active[:overflow]:
         session.revoked_at = _now()
-        await _audit_revoke(
+        await write_session_revoked(
             db,
             user_id=user_id,
             session_id=session.id,
@@ -88,7 +73,7 @@ async def revoke_all_sessions(
             continue
         session.revoked_at = _now()
         revoked += 1
-        await _audit_revoke(
+        await write_session_revoked(
             db,
             user_id=user_id,
             session_id=session.id,
@@ -97,13 +82,12 @@ async def revoke_all_sessions(
         )
 
     if revoked:
-        db.add(
-            AuditLog(
-                user_id=user_id,
-                event_type=AuditEventType.sessions_revoked_all,
-                ip_address=ip,
-                metadata_={"count": revoked, "reason": reason},
-            )
+        await write_sessions_revoked_all(
+            db,
+            user_id=user_id,
+            count=revoked,
+            reason=reason,
+            ip=ip,
         )
     return revoked
 
@@ -152,22 +136,48 @@ async def revoke_user_session(
     session_id: UUID,
     ip: str | None,
 ) -> bool:
+    from sqlalchemy.orm import selectinload
+
     result = await db.execute(
-        select(Session).where(
+        select(Session)
+        .where(
             Session.id == session_id,
             Session.user_id == user_id,
             Session.revoked_at.is_(None),
         )
+        .options(selectinload(Session.device))
     )
     session = result.scalar_one_or_none()
     if not session:
         return False
     session.revoked_at = _now()
-    await _audit_revoke(
+    await write_session_revoked(
         db,
         user_id=user_id,
         session_id=session.id,
         reason="user_revoked",
         ip=ip,
     )
+
+    user = await db.get(User, user_id)
+    if user:
+        device = session.device
+        device_label = "Unknown device"
+        if device:
+            parts = [part for part in (device.os, device.browser) if part]
+            device_label = " · ".join(parts) if parts else "Unknown device"
+        schedule_user_notification(
+            user_id=user.id,
+            user_email=user.email,
+            notification_type=NotificationType.AUTH_DEVICE_REVOKED,
+            title="Device signed out",
+            body=(
+                f"A device session was signed out of your ZYND account.\n\n"
+                f"Device: {device_label}\n\n"
+                "If you didn't do this, review your active sessions in Settings."
+            ),
+            metadata={"session_id": str(session.id), "device_label": device_label},
+            idempotency_key=f"auth.device.revoked:{session.id}",
+            email_subject="A device was signed out of your ZYND account",
+        )
     return True

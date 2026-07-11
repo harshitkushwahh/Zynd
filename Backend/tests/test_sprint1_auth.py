@@ -32,8 +32,8 @@ def _user(**overrides) -> User:
 
 def test_mfa_crypto_roundtrip() -> None:
     secret = "JBSWY3DPEHPK3PXP"
-    ciphertext = encrypt_secret(secret)
-    assert decrypt_secret(ciphertext) == secret
+    ciphertext, key_version = encrypt_secret(secret)
+    assert decrypt_secret(ciphertext, key_version) == secret
 
 
 def test_totp_generate_and_verify() -> None:
@@ -61,6 +61,7 @@ def test_user_has_mfa() -> None:
         (UserStatus.active, False, True, False),
         (UserStatus.active, False, False, True),
         (UserStatus.deletion_pending, True, True, False),
+        (UserStatus.suspended, True, True, False),
     ],
 )
 def test_user_fund_eligible(

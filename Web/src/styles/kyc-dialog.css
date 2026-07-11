@@ -1,0 +1,56 @@
+/* KYC dialog — theme variables only, distinct overlay */
+
+.kyc-dialog-overlay {
+  background-color: var(--dialog-overlay) !important;
+  backdrop-filter: blur(calc(var(--blur-overlay) + 2px));
+  -webkit-backdrop-filter: blur(calc(var(--blur-overlay) + 2px));
+}
+
+.kyc-dialog-surface {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 4%, var(--card)) 0%,
+    var(--card) 18%,
+    var(--card) 100%
+  );
+  color: var(--card-foreground);
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--primary) 12%);
+  box-shadow:
+    var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.18)),
+    0 0 0 1px color-mix(in srgb, var(--primary) 6%, transparent);
+}
+
+.kyc-dialog-chrome {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 22%, var(--card));
+}
+
+.kyc-dialog-chrome--flat {
+  border-bottom: none;
+}
+
+.kyc-dialog-root--outcome {
+  max-height: none;
+}
+
+.kyc-dialog-root [data-slot="dialog-close"] {
+  color: var(--muted-foreground);
+}
+
+.kyc-dialog-root [data-slot="dialog-close"]:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.kyc-redirect-dialog-overlay,
+.kyc-esign-dialog-overlay {
+  background-color: var(--dialog-overlay) !important;
+  backdrop-filter: blur(calc(var(--blur-overlay) + 4px));
+  -webkit-backdrop-filter: blur(calc(var(--blur-overlay) + 4px));
+  z-index: 60;
+}
+
+.kyc-redirect-dialog-root [data-slot="dialog-content"],
+.kyc-esign-dialog-root [data-slot="dialog-content"] {
+  z-index: 61;
+}

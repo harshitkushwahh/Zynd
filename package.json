@@ -1,0 +1,10 @@
+{
+  "name": "zynd",
+  "private": true,
+  "workspaces": [
+    "Web",
+    "Admin",
+    "Mobile",
+    "packages/*"
+  ]
+}

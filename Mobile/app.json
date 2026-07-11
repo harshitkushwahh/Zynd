@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Zynd",
+    "slug": "zynd-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "zynd",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zynd.app"
+    },
+    "android": {
+      "package": "com.zynd.app",
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#2563eb"
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:8000/api/v1"
+    }
+  }
+}

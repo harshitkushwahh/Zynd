@@ -2,15 +2,331 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/zynd-brand.css";
+@import "../styles/kyc-dialog.css";
+
+@plugin "tailwindcss-animate";
+@plugin "tailwindcss-react-aria-components";
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html,
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-foreground;
   }
-  html {
-    @apply font-sans;
+}
+
+/* ─── ZYND Global Web Loader ──────────────────────────────────────────────── */
+/* NOTE: ZyndGlobalLoader is the app-wide full-screen loading state.          */
+/* Styles live here (globals.css); use <ZyndGlobalLoader /> — not ad-hoc text. */
+
+.zynd-global-loader-screen {
+  display: flex;
+  min-height: 100dvh;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  padding: 1.5rem;
+  background: var(--background);
+}
+
+.zynd-global-loader {
+  --zynd-loader-color-one: #ffbf48;
+  --zynd-loader-color-two: #be4a1d;
+  --zynd-loader-color-three: #ffbf4780;
+  --zynd-loader-color-four: #bf4a1d80;
+  --zynd-loader-color-five: #ffbf4740;
+  --zynd-loader-time: 2s;
+  --zynd-loader-size: 0.72;
+  position: relative;
+  border-radius: 50%;
+  transform: scale(var(--zynd-loader-size));
+  box-shadow:
+    0 0 25px 0 var(--zynd-loader-color-three),
+    0 20px 50px 0 var(--zynd-loader-color-four);
+  animation: zynd-global-loader-colorize calc(var(--zynd-loader-time) * 3) ease-in-out infinite;
+}
+
+.zynd-global-loader::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border-top: solid 1px var(--zynd-loader-color-one);
+  border-bottom: solid 1px var(--zynd-loader-color-two);
+  background: linear-gradient(180deg, var(--zynd-loader-color-five), var(--zynd-loader-color-four));
+  box-shadow:
+    inset 0 10px 10px 0 var(--zynd-loader-color-three),
+    inset 0 -10px 10px 0 var(--zynd-loader-color-four);
+}
+
+.zynd-global-loader__box {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(
+    180deg,
+    var(--zynd-loader-color-one) 30%,
+    var(--zynd-loader-color-two) 70%
+  );
+  mask: var(--zynd-loader-mask);
+  -webkit-mask: var(--zynd-loader-mask);
+}
+
+.zynd-global-loader__svg {
+  position: absolute;
+}
+
+.zynd-global-loader__mask {
+  filter: contrast(15);
+  animation: zynd-global-loader-roundness calc(var(--zynd-loader-time) / 2) linear infinite;
+}
+
+.zynd-global-loader__mask polygon {
+  filter: blur(7px);
+}
+
+.zynd-global-loader__mask polygon:nth-child(1) {
+  transform-origin: 75% 25%;
+  transform: rotate(90deg);
+}
+
+.zynd-global-loader__mask polygon:nth-child(2) {
+  transform-origin: 50% 50%;
+  animation: zynd-global-loader-rotation var(--zynd-loader-time) linear infinite reverse;
+}
+
+.zynd-global-loader__mask polygon:nth-child(3) {
+  transform-origin: 50% 60%;
+  animation: zynd-global-loader-rotation var(--zynd-loader-time) linear infinite;
+  animation-delay: calc(var(--zynd-loader-time) / -3);
+}
+
+.zynd-global-loader__mask polygon:nth-child(4) {
+  transform-origin: 40% 40%;
+  animation: zynd-global-loader-rotation var(--zynd-loader-time) linear infinite reverse;
+}
+
+.zynd-global-loader__mask polygon:nth-child(5) {
+  transform-origin: 40% 40%;
+  animation: zynd-global-loader-rotation var(--zynd-loader-time) linear infinite reverse;
+  animation-delay: calc(var(--zynd-loader-time) / -2);
+}
+
+.zynd-global-loader__mask polygon:nth-child(6) {
+  transform-origin: 60% 40%;
+  animation: zynd-global-loader-rotation var(--zynd-loader-time) linear infinite;
+}
+
+.zynd-global-loader__mask polygon:nth-child(7) {
+  transform-origin: 60% 40%;
+  animation: zynd-global-loader-rotation var(--zynd-loader-time) linear infinite;
+  animation-delay: calc(var(--zynd-loader-time) / -1.5);
+}
+
+.zynd-global-loader-quote {
+  margin: 0;
+  max-width: 32rem;
+  min-height: 3.25rem;
+  text-align: center;
+  font-size: var(--text-compact);
+  line-height: 1.65;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+.zynd-global-loader-quote--pending {
+  visibility: hidden;
+}
+
+.zynd-global-loader-status {
+  margin: -0.5rem 0 0;
+  font-size: var(--text-caption);
+  color: var(--muted-foreground);
+  opacity: 0.85;
+}
+
+@keyframes zynd-global-loader-rotation {
+  0% {
+    transform: rotate(0deg);
   }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes zynd-global-loader-roundness {
+  0% {
+    filter: contrast(15);
+  }
+  20% {
+    filter: contrast(3);
+  }
+  40% {
+    filter: contrast(3);
+  }
+  60% {
+    filter: contrast(15);
+  }
+  100% {
+    filter: contrast(15);
+  }
+}
+
+@keyframes zynd-global-loader-colorize {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  20% {
+    filter: hue-rotate(-30deg);
+  }
+  40% {
+    filter: hue-rotate(-60deg);
+  }
+  60% {
+    filter: hue-rotate(-90deg);
+  }
+  80% {
+    filter: hue-rotate(-45deg);
+  }
+  100% {
+    filter: hue-rotate(0deg);
+  }
+}
+
+/* Document upload dialog — spinning ring while uploading (no overlay spinner). */
+.upload-preview-spin-ring {
+  position: relative;
+}
+
+.upload-preview-spin-ring::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  padding: 3px;
+  background: conic-gradient(
+    from 0deg,
+    hsl(var(--primary)) 0deg,
+    hsl(var(--primary) / 0.15) 120deg,
+    transparent 280deg,
+    hsl(var(--primary)) 360deg
+  );
+  animation: upload-preview-ring-spin 0.9s linear infinite;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+@keyframes upload-preview-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sonner toasts — ZYND theme tokens */
+.zynd-toaster [data-sonner-toast][data-styled="true"] {
+  box-shadow: var(--shadow-mid);
+  padding: 0.875rem 1rem;
+  font-size: var(--text-compact);
+  gap: 0.625rem;
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-title] {
+  font-size: var(--text-compact);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-description] {
+  font-size: var(--text-caption);
+  line-height: 1.45;
+  color: var(--muted-foreground) !important;
+}
+
+.zynd-toaster [data-rich-colors="true"][data-sonner-toast][data-styled="true"] [data-description] {
+  color: color-mix(in srgb, currentColor 78%, var(--muted-foreground)) !important;
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-button].zynd-toast__action,
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-button]:not([data-cancel]) {
+  height: 1.75rem;
+  padding-inline: 0.75rem;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: var(--text-caption);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-button].zynd-toast__action:hover,
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-button]:not([data-cancel]):hover {
+  background: color-mix(in srgb, var(--primary) 88%, var(--foreground));
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-button].zynd-toast__action:focus-visible,
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-button]:not([data-cancel]):focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-cancel].zynd-toast__cancel,
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-cancel] {
+  height: 1.75rem;
+  padding-inline: 0.75rem;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: var(--text-caption);
+  font-weight: 500;
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-cancel]:hover {
+  background: color-mix(in srgb, var(--secondary) 90%, var(--foreground));
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-close-button].zynd-toast__close,
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-close-button] {
+  height: 1.375rem;
+  width: 1.375rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.zynd-toaster [data-sonner-toast][data-styled="true"] [data-close-button]:hover {
+  background: color-mix(in srgb, var(--muted) 85%, var(--foreground));
+  border-color: color-mix(in srgb, var(--border) 80%, var(--foreground));
+  color: var(--foreground);
+}
+
+.zynd-toaster [data-rich-colors="true"][data-sonner-toast][data-type="success"] [data-button]:not([data-cancel]) {
+  background: var(--success);
+  color: var(--success-foreground);
+}
+
+.zynd-toaster [data-rich-colors="true"][data-sonner-toast][data-type="info"] [data-button]:not([data-cancel]) {
+  background: var(--info);
+  color: var(--info-foreground);
+}
+
+.zynd-toaster [data-rich-colors="true"][data-sonner-toast][data-type="warning"] [data-button]:not([data-cancel]) {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.zynd-toaster [data-rich-colors="true"][data-sonner-toast][data-type="error"] [data-button]:not([data-cancel]) {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
 }

@@ -4,15 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { OtpInput } from "@/components/auth/otp-input";
+import { PasswordInput } from "@/components/auth/password-input";
+import { TurnstileWidget, isTurnstileRequired } from "@/components/auth/turnstile-widget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  getAdminSession,
-  saveAdminSession,
-  SEED_SUPER_ADMIN,
-} from "@/lib/admin-session";
+import { useAdminAuth } from "@/contexts/admin-auth-context";
+import { ApiError } from "@/lib/api-client";
+import { isAuthenticatedResponse } from "@/lib/auth-api";
 import { isValidEmail, isValidOtp, isValidPassword } from "@/lib/admin-validation";
 import { clampToMaxLength, inputRuleProps, INPUT_RULES } from "@/lib/input-rules";
 
@@ -20,24 +20,37 @@ const underlineInputClass = "auth-input-underline";
 
 type LoginStep = "credentials" | "mfa";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
 export function AdminLoginCard() {
   const router = useRouter();
+  const { user, loading, signIn, verifyMfa } = useAdminAuth();
   const [step, setStep] = useState<LoginStep>("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
+  const [mfaToken, setMfaToken] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [otpError, setOtpError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileError, setTurnstileError] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (getAdminSession()) {
+    if (!loading && user) {
       router.replace("/dashboard");
     }
-  }, [router]);
+  }, [loading, router, user]);
 
-  const handleCredentialsSubmit = (event: React.FormEvent) => {
+  const handleCredentialsSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     let hasError = false;
 
@@ -57,16 +70,39 @@ export function AdminLoginCard() {
 
     if (hasError) return;
 
+    if (captchaRequired && isTurnstileRequired() && !turnstileToken) {
+      setTurnstileError("Complete the verification check.");
+      return;
+    }
+    setTurnstileError("");
+
     setIsSubmitting(true);
-    setTimeout(() => {
+    setFormError("");
+    try {
+      const result = await signIn(email.trim(), password, turnstileToken || null);
+      setCaptchaRequired(false);
+      setTurnstileToken("");
+      if (isAuthenticatedResponse(result)) {
+        router.push("/dashboard");
+        return;
+      }
+      setMfaToken(result.mfa_token);
       setOtp("");
       setOtpError("");
       setStep("mfa");
+    } catch (error) {
+      if (error instanceof ApiError && error.captchaRequired) {
+        setCaptchaRequired(true);
+        setTurnstileToken("");
+        setTurnstileResetKey((value) => value + 1);
+      }
+      setFormError(getErrorMessage(error, "Could not sign in."));
+    } finally {
       setIsSubmitting(false);
-    }, 300);
+    }
   };
 
-  const handleMfaSubmit = (event: React.FormEvent) => {
+  const handleMfaSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!isValidOtp(otp)) {
       setOtpError(INPUT_RULES.otp.title);
@@ -74,19 +110,15 @@ export function AdminLoginCard() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const normalizedEmail = email.trim().toLowerCase();
-      const isSeedAdmin = normalizedEmail === SEED_SUPER_ADMIN.email;
-
-      saveAdminSession({
-        email: normalizedEmail,
-        role: isSeedAdmin ? SEED_SUPER_ADMIN.role : "admin",
-        displayName: isSeedAdmin ? SEED_SUPER_ADMIN.displayName : normalizedEmail.split("@")[0],
-        mfaVerified: true,
-      });
-
+    setFormError("");
+    try {
+      await verifyMfa(mfaToken, otp);
       router.push("/dashboard");
-    }, 300);
+    } catch (error) {
+      setOtpError(getErrorMessage(error, "Invalid authentication code."));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -102,7 +134,7 @@ export function AdminLoginCard() {
         </div>
 
         {step === "credentials" ? (
-          <form onSubmit={handleCredentialsSubmit}>
+          <form onSubmit={(event) => void handleCredentialsSubmit(event)}>
             <FieldGroup className="gap-5">
               <Field data-invalid={!!emailError}>
                 <FieldLabel htmlFor="admin-email" className="sr-only">
@@ -130,9 +162,8 @@ export function AdminLoginCard() {
                 <FieldLabel htmlFor="admin-password" className="sr-only">
                   Password
                 </FieldLabel>
-                <Input
+                <PasswordInput
                   id="admin-password"
-                  type="password"
                   autoComplete="current-password"
                   placeholder="Password"
                   required
@@ -149,6 +180,22 @@ export function AdminLoginCard() {
               </Field>
             </FieldGroup>
 
+            {captchaRequired ? (
+              <>
+                <TurnstileWidget
+                  resetKey={`admin-login-${turnstileResetKey}`}
+                  onVerify={setTurnstileToken}
+                  onExpire={() => setTurnstileToken("")}
+                  className="mt-4"
+                />
+                {turnstileError ? (
+                  <p className="mt-2 text-caption text-destructive">{turnstileError}</p>
+                ) : null}
+              </>
+            ) : null}
+
+            {formError ? <p className="mt-4 text-caption text-destructive">{formError}</p> : null}
+
             <Button
               type="submit"
               className="mt-7 h-11 w-full"
@@ -159,7 +206,7 @@ export function AdminLoginCard() {
             </Button>
           </form>
         ) : (
-          <form onSubmit={handleMfaSubmit}>
+          <form onSubmit={(event) => void handleMfaSubmit(event)}>
             {email.trim() ? (
               <p className="mb-5 truncate text-center text-caption text-muted-foreground">
                 {email.trim()}
@@ -184,6 +231,8 @@ export function AdminLoginCard() {
               </Field>
             </FieldGroup>
 
+            {formError ? <p className="mt-3 text-caption text-destructive">{formError}</p> : null}
+
             <div className="mt-7 space-y-4">
               <Button
                 type="submit"
@@ -201,6 +250,7 @@ export function AdminLoginCard() {
                   setStep("credentials");
                   setOtp("");
                   setOtpError("");
+                  setFormError("");
                 }}
               >
                 Back

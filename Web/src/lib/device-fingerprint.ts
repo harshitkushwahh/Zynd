@@ -1,3 +1,5 @@
+import { storageKeys } from "@/shared/config/storage-keys";
+
 export function getDeviceFingerprint(): string {
   if (typeof window === "undefined") return "server";
 
@@ -16,5 +18,5 @@ export function getDeviceFingerprint(): string {
     hash = (hash << 5) - hash + str.charCodeAt(i);
     hash |= 0;
   }
-  return `zynd-${Math.abs(hash)}`;
+  return `${storageKeys.deviceFingerprintPrefix}${Math.abs(hash)}`;
 }

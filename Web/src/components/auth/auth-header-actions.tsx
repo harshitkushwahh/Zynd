@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AuthDialog } from "@/components/auth/auth-dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
+import { APP_NAME } from "@/shared/config/brand";
 
 export function AuthHeaderActions() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export function SiteHeader() {
     <header className="border-b border-border bg-background shadow-zynd-low">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link href="/" className="text-h4 font-bold tracking-tight text-foreground">
-          ZYND
+          {APP_NAME}
         </Link>
         <AuthHeaderActions />
       </div>

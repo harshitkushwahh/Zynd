@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  ArrowLeftRight,
-  Landmark,
-  LayoutDashboard,
-  PieChart,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
 
-import { useDashboardSection } from "@/components/dashboard/dashboard-section-context";
-import { DASHBOARD_TABS } from "@/components/dashboard/dashboard-top-nav";
+import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import {
   CommandDialog,
   CommandEmpty,
@@ -17,13 +11,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-
-const TAB_ICONS = {
-  "portfolio-overview": LayoutDashboard,
-  "fixed-deposits": Landmark,
-  "mutual-funds": PieChart,
-  transactions: ArrowLeftRight,
-} as const;
 
 type DashboardSearchDialogProps = {
   open: boolean;
@@ -34,7 +21,8 @@ export function DashboardSearchDialog({
   open,
   onOpenChange,
 }: DashboardSearchDialogProps) {
-  const { setActiveSection } = useDashboardSection();
+  const router = useRouter();
+  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled);
 
   return (
     <CommandDialog
@@ -47,20 +35,20 @@ export function DashboardSearchDialog({
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Pages">
-          {DASHBOARD_TABS.map((tab) => {
-            const Icon = TAB_ICONS[tab.id as keyof typeof TAB_ICONS];
+          {navRoutes.map((route) => {
+            const Icon = route.icon;
 
             return (
               <CommandItem
-                key={tab.id}
-                value={tab.label}
+                key={route.id}
+                value={route.label}
                 onSelect={() => {
-                  setActiveSection(tab.id);
+                  router.push(route.href);
                   onOpenChange(false);
                 }}
               >
                 <Icon />
-                <span>{tab.label}</span>
+                <span>{route.label}</span>
               </CommandItem>
             );
           })}
