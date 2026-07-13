@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,13 +34,14 @@ import {
   formatNav,
   formatReturn,
   healthBadgeLabel,
+  resolveInvestAssetUrl,
 } from "@/features/invest/lib/mf-format";
 import { useAuth } from "@/contexts/auth-context";
 import { copy } from "@/shared/config/copy";
 
 type MfFundDetailViewProps = {
   productId: string;
-  onBack: () => void;
+  renderBreadcrumb?: (fundName: string | null) => ReactNode;
   onOrderPlaced: () => void;
 };
 
@@ -55,7 +56,7 @@ const returnRows: Array<{ key: keyof InvestFundDetail["returns"]; label: string 
   { key: "return_5y", label: "5Y" },
 ];
 
-export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDetailViewProps) {
+export function MfFundDetailView({ productId, renderBreadcrumb, onOrderPlaced }: MfFundDetailViewProps) {
   const { user } = useAuth();
   const [fund, setFund] = useState<InvestFundDetail | null>(null);
   const [navHistory, setNavHistory] = useState<InvestFundNavHistory | null>(null);
@@ -146,40 +147,53 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
 
   if (loading) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center text-muted-foreground">
-        <Loader2 className="mr-2 size-5 animate-spin" />
-        {copy.mutualFunds.loadingFund}
-      </div>
+      <>
+        {renderBreadcrumb?.(null)}
+        <div className="flex min-h-[320px] items-center justify-center text-muted-foreground">
+          <Loader2 className="mr-2 size-5 animate-spin" />
+          {copy.mutualFunds.loadingFund}
+        </div>
+      </>
     );
   }
 
   if (error || !fund) {
     return (
-      <Card>
-        <CardContent className="space-y-4 p-6">
-          <FieldMessage variant="error" message={error ?? copy.mutualFunds.fundUnavailable} />
-          <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="size-4" />
-            {copy.mutualFunds.backToBrowse}
-          </Button>
-        </CardContent>
-      </Card>
+      <>
+        {renderBreadcrumb?.(null)}
+        <Card className="rounded-[var(--radius-medium)]">
+          <CardContent className="space-y-4 p-6">
+            <FieldMessage variant="error" message={error ?? copy.mutualFunds.fundUnavailable} />
+          </CardContent>
+        </Card>
+      </>
     );
   }
 
+  const logoUrl = resolveInvestAssetUrl(fund.amc_logo_url);
+
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2">
-        <ArrowLeft className="size-4" />
-        {copy.mutualFunds.backToBrowse}
-      </Button>
+      {renderBreadcrumb?.(fund.name)}
 
       <FundEligibilityBanner />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
+      <Card className="rounded-[var(--radius-medium)]">
+        <CardHeader className="gap-4">
+          <div className="flex items-start gap-4">
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt=""
+                className="size-14 shrink-0 rounded-[var(--radius-control)] border border-border bg-background object-contain p-1.5"
+              />
+            ) : (
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-compact font-semibold text-muted-foreground">
+                {fund.amc_name.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1 space-y-3">
               <div className="flex flex-wrap gap-2">
                 {(fund.content?.risk_label ?? fund.sebi_category) ? (
                   <Badge variant="outline">{fund.content?.risk_label ?? fund.sebi_category}</Badge>
@@ -194,37 +208,47 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
                   </Badge>
                 ))}
               </div>
-              <CardTitle className="text-h3">{fund.name}</CardTitle>
-              <CardDescription>
-                {fund.content?.amc_marketing_name ?? fund.amc_name}
-                {fund.amc_aum_rank?.label ? ` · ${fund.amc_aum_rank.label}` : ""}
-                {fund.content?.tagline ? ` · ${fund.content.tagline}` : ""}
-                {fund.isin ? ` · ISIN ${fund.isin}` : ""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-caption text-muted-foreground">Latest NAV</p>
-                <p className="text-h3 font-semibold">{formatNav(fund.latest_nav)}</p>
-                <p className="text-caption text-muted-foreground">as of {formatDate(fund.latest_nav_date)}</p>
+                <CardTitle className="text-h3">{fund.name}</CardTitle>
+                <CardDescription className="mt-1">
+                  {fund.content?.amc_marketing_name ?? fund.amc_name}
+                  {fund.amc_aum_rank?.label ? ` · ${fund.amc_aum_rank.label}` : ""}
+                </CardDescription>
+                {fund.content?.tagline ? (
+                  <p className="mt-2 text-compact text-muted-foreground">{fund.content.tagline}</p>
+                ) : null}
+                {fund.isin ? (
+                  <p className="mt-1 text-caption text-muted-foreground">ISIN {fund.isin}</p>
+                ) : null}
               </div>
-              <div>
-                <p className="text-caption text-muted-foreground">AUM</p>
-                <p className="font-semibold">{formatInr(fund.aum_inr, { compact: true })}</p>
-                <p className="text-caption text-muted-foreground">as of {formatDate(fund.aum_as_of)}</p>
-              </div>
-              <div>
-                <p className="text-caption text-muted-foreground">TER</p>
-                <p className="font-semibold">
-                  {fund.ter_percent != null ? `${fund.ter_percent.toFixed(2)}%` : "—"}
-                </p>
-                <p className="text-caption text-muted-foreground">as of {formatDate(fund.ter_as_of)}</p>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 border-t border-border pt-6 sm:grid-cols-3">
+          <div>
+            <p className="text-caption text-muted-foreground">Latest NAV</p>
+            <p className="text-h3 font-semibold">{formatNav(fund.latest_nav)}</p>
+            <p className="text-caption text-muted-foreground">as of {formatDate(fund.latest_nav_date)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-muted-foreground">AUM</p>
+            <p className="font-semibold">{formatInr(fund.aum_inr, { compact: true })}</p>
+            <p className="text-caption text-muted-foreground">as of {formatDate(fund.aum_as_of)}</p>
+          </div>
+          <div>
+            <p className="text-caption text-muted-foreground">TER</p>
+            <p className="font-semibold">
+              {fund.ter_percent != null ? `${fund.ter_percent.toFixed(2)}%` : "—"}
+            </p>
+            <p className="text-caption text-muted-foreground">as of {formatDate(fund.ter_as_of)}</p>
+          </div>
+        </CardContent>
+      </Card>
 
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-6">
           {calculator && calculator.scenarios.length > 0 ? (
-            <Card>
+            <Card className="rounded-[var(--radius-medium)]">
               <CardHeader>
                 <CardTitle>Return calculator</CardTitle>
                 <CardDescription>
@@ -256,7 +280,7 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
           ) : null}
 
           {fund.compliance ? (
-            <Card>
+            <Card className="rounded-[var(--radius-medium)]">
               <CardHeader>
                 <CardTitle>Exit load, stamp duty & tax</CardTitle>
               </CardHeader>
@@ -284,7 +308,7 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
           ) : null}
 
           {fund.fund_house?.name ? (
-            <Card>
+            <Card className="rounded-[var(--radius-medium)]">
               <CardHeader>
                 <CardTitle>Fund house</CardTitle>
               </CardHeader>
@@ -310,7 +334,7 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
           ) : null}
 
           {fund.content?.benchmark_name || fund.content?.fund_manager_name ? (
-            <Card>
+            <Card className="rounded-[var(--radius-medium)]">
               <CardHeader>
                 <CardTitle>{copy.mutualFunds.fundFactsTitle}</CardTitle>
               </CardHeader>
@@ -349,7 +373,7 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
             </Card>
           ) : null}
 
-          <Card>
+          <Card className="rounded-[var(--radius-medium)]">
             <CardHeader>
               <CardTitle>{copy.mutualFunds.navChartTitle}</CardTitle>
               <CardDescription>{copy.mutualFunds.navChartDescription}</CardDescription>
@@ -359,7 +383,7 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-[var(--radius-medium)]">
             <CardHeader>
               <CardTitle>{copy.mutualFunds.returnsTitle}</CardTitle>
             </CardHeader>
@@ -378,7 +402,7 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-[var(--radius-medium)]">
             <CardHeader>
               <CardTitle>{copy.mutualFunds.disclaimerTitle}</CardTitle>
             </CardHeader>
@@ -398,7 +422,7 @@ export function MfFundDetailView({ productId, onBack, onOrderPlaced }: MfFundDet
           </Card>
         </div>
 
-        <Card className="h-fit lg:sticky lg:top-6">
+        <Card className="h-fit rounded-[var(--radius-medium)] lg:sticky lg:top-6">
           <CardHeader>
             <CardTitle>{copy.mutualFunds.investTitle}</CardTitle>
             <CardDescription>{copy.mutualFunds.investDescription}</CardDescription>

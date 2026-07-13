@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
+from app.application.mf.invest_catalog_invalidation import notify_invest_catalog_changed
 from app.application.mf.public_asset_service import amc_logo_storage_key, build_public_asset_url
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import FundAmc, IngestionRunStatus
@@ -14,16 +17,71 @@ from app.infrastructure.storage.documents.factory import get_document_storage
 
 logger = logging.getLogger(__name__)
 
+LOCAL_FILE_PREFIX = "file:"
 
-async def _load_logo_manifest(client: httpx.AsyncClient, manifest_url: str) -> dict[str, str]:
+
+def _resolve_manifest_path(settings) -> Path | None:
+    raw = settings.zynd_mf_amc_logo_manifest_path.strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        backend_root = Path(__file__).resolve().parents[3]
+        path = backend_root / path
+    return path
+
+
+async def _load_logo_manifest(
+    client: httpx.AsyncClient,
+    *,
+    manifest_path: Path | None,
+    manifest_url: str,
+) -> tuple[dict[str, str], Path | None]:
+    if manifest_path and manifest_path.is_file():
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return {}, manifest_path.parent
+        manifest = {str(key): str(value) for key, value in payload.items() if value}
+        return manifest, manifest_path.parent
+
     if not manifest_url.strip():
-        return {}
+        return {}, None
+
     response = await client.get(manifest_url)
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):
-        return {}
-    return {str(key): str(value) for key, value in payload.items() if value}
+        return {}, None
+    return {str(key): str(value) for key, value in payload.items() if value}, None
+
+
+async def _fetch_logo_bytes(
+    client: httpx.AsyncClient,
+    source_url: str,
+    *,
+    local_root: Path | None,
+) -> tuple[bytes, str]:
+    if source_url.startswith(LOCAL_FILE_PREFIX):
+        if local_root is None:
+            raise ValueError("Local logo path requires a filesystem manifest")
+        relative = source_url.removeprefix(LOCAL_FILE_PREFIX).lstrip("/")
+        file_path = (local_root / relative).resolve()
+        if local_root.resolve() not in file_path.parents and file_path != local_root.resolve():
+            raise ValueError(f"Logo path escapes manifest directory: {relative}")
+        content = file_path.read_bytes()
+        suffix = file_path.suffix.lower()
+        if suffix == ".svg":
+            content_type = "image/svg+xml"
+        elif suffix in {".jpg", ".jpeg"}:
+            content_type = "image/jpeg"
+        else:
+            content_type = "image/png"
+        return content, content_type
+
+    response = await client.get(source_url)
+    response.raise_for_status()
+    content_type = response.headers.get("content-type", "image/png")
+    return response.content, content_type
 
 
 def _resolve_source_url(amc: FundAmc, *, template: str, manifest: dict[str, str]) -> str | None:
@@ -45,7 +103,11 @@ async def run_amc_logo_ingestion(
     if not settings.zynd_mf_amc_logo_ingest_enabled:
         return {"skipped": 1, "reason": "amc_logo_ingest_disabled"}
 
-    if not settings.zynd_mf_amc_logo_url_template.strip() and not settings.zynd_mf_amc_logo_manifest_url.strip():
+    if (
+        not settings.zynd_mf_amc_logo_url_template.strip()
+        and not settings.zynd_mf_amc_logo_manifest_url.strip()
+        and not settings.zynd_mf_amc_logo_manifest_path.strip()
+    ):
         return {"skipped": 1, "reason": "logo_source_not_configured"}
 
     if await has_running_job(session, "amc-logo-ingest"):
@@ -66,7 +128,12 @@ async def run_amc_logo_ingestion(
         timeout = float(settings.zynd_mf_fetch_timeout_seconds)
 
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            manifest = await _load_logo_manifest(client, settings.zynd_mf_amc_logo_manifest_url)
+            manifest_path = _resolve_manifest_path(settings)
+            manifest, local_root = await _load_logo_manifest(
+                client,
+                manifest_path=manifest_path,
+                manifest_url=settings.zynd_mf_amc_logo_manifest_url,
+            )
 
             for amc in amcs:
                 processed += 1
@@ -80,14 +147,15 @@ async def run_amc_logo_ingestion(
                     continue
 
                 try:
-                    response = await client.get(source_url)
-                    response.raise_for_status()
-                    content = response.content
-                    if len(content) < 128:
+                    content, content_type = await _fetch_logo_bytes(
+                        client,
+                        source_url,
+                        local_root=local_root,
+                    )
+                    if len(content) < 64:
                         skipped += 1
                         continue
 
-                    content_type = response.headers.get("content-type", "image/png")
                     extension = "png"
                     if "svg" in content_type:
                         extension = "svg"
@@ -101,7 +169,7 @@ async def run_amc_logo_ingestion(
                         content=content,
                         encrypt_at_rest=False,
                     )
-                    amc.logo_url = build_public_asset_url(storage_key, settings)
+                    amc.logo_url = f"storage:{storage_key}"
                     uploaded += 1
                 except Exception as exc:
                     failed += 1
@@ -117,6 +185,8 @@ async def run_amc_logo_ingestion(
             records_skipped=skipped,
             metadata={"failed": failed, "manifest_entries": len(manifest)},
         )
+        if uploaded:
+            await notify_invest_catalog_changed(session)
         return {
             "processed": processed,
             "uploaded": uploaded,

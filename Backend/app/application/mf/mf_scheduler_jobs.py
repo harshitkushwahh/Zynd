@@ -17,7 +17,9 @@ from app.application.mf.catalog_lifecycle_sync_service import run_catalog_lifecy
 from app.application.mf.amfi_aum_ingestion_service import run_amfi_aum_ingestion
 from app.application.mf.amfi_ter_ingestion_service import run_amfi_ter_ingestion
 from app.application.mf.amfi_nav_ingestion_service import run_amfi_nav_ingestion
+from app.application.mf.collection_assign_service import run_collection_assign_sync
 from app.application.mf.composite_rank_service import run_composite_rank_compute
+from app.application.mf.fund_classification_service import run_fund_classification_compute
 from app.application.mf.cybrilla_scheme_sync_service import run_cybrilla_scheme_sync
 from app.application.mf.scheme_staging_ingest_service import run_cybrilla_scheme_ingest
 from app.application.mf.scheme_staging_promote_service import run_cybrilla_scheme_promote
@@ -60,6 +62,11 @@ def build_scheduled_jobs() -> list[ScheduledMfJob]:
     settings = get_settings()
     master = settings.zynd_mf_ingestion_enabled
     scheme_dep = _scheme_master_dependency(settings)
+    rank_dep = (
+        ("collection-assign-sync",)
+        if settings.zynd_mf_collections_enabled and settings.zynd_mf_metrics_enabled
+        else ("nav-metrics-compute",)
+    )
 
     jobs: list[ScheduledMfJob] = []
 
@@ -145,13 +152,31 @@ def build_scheduled_jobs() -> list[ScheduledMfJob]:
             depends_on=("amfi-nav-daily",),
         ),
         ScheduledMfJob(
+            name="fund-classification-compute",
+            cron=settings.zynd_mf_classification_cron,
+            enabled=master and settings.zynd_mf_collections_enabled and settings.zynd_mf_metrics_enabled,
+            runner=run_fund_classification_compute,
+            phase=2,
+            description="Derive cap buckets and theme tags from scheme metadata",
+            depends_on=("nav-metrics-compute",),
+        ),
+        ScheduledMfJob(
+            name="collection-assign-sync",
+            cron=settings.zynd_mf_collection_assign_cron,
+            enabled=master and settings.zynd_mf_collections_enabled and settings.zynd_mf_metrics_enabled,
+            runner=run_collection_assign_sync,
+            phase=2,
+            description="Assign active funds to curated collection categories",
+            depends_on=("fund-classification-compute",),
+        ),
+        ScheduledMfJob(
             name="composite-rank-compute",
             cron=settings.zynd_mf_rank_cron,
             enabled=master and settings.zynd_mf_metrics_enabled,
             runner=run_composite_rank_compute,
             phase=2,
             description="Rank funds by 3Y return within PM categories",
-            depends_on=("nav-metrics-compute",),
+            depends_on=rank_dep,
         ),
         ScheduledMfJob(
             name="return-calculator-snapshot",

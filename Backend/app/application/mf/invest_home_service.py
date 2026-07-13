@@ -4,7 +4,7 @@ import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, null, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_health_service import FundHealthInput, compute_fund_health_flags
@@ -19,10 +19,12 @@ from app.application.mf.product_content_service import (
     get_product_content_for_invest,
     resolve_effective_disclaimer,
 )
+from app.application.mf.popular_funds_service import list_popular_invest_funds
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
     AmcAumRanking,
     Category,
+    CategoryKind,
     FundAmc,
     FundCompositeRank,
     FundNavMetrics,
@@ -50,7 +52,35 @@ async def list_invest_categories(session: AsyncSession) -> list[dict]:
             .join(Product, Product.id == ProductCategory.product_id)
             .join(MutualFund, MutualFund.product_id == Product.id)
             .join(FundAmc, FundAmc.id == MutualFund.amc_id)
-            .where(invest_visibility_sql_clause(), Category.is_visible.is_(True))
+            .where(
+                invest_visibility_sql_clause(),
+                Category.is_visible.is_(True),
+                Category.category_kind == CategoryKind.browse,
+            )
+            .group_by(Category.id, Category.slug, Category.name, Category.display_order)
+            .order_by(Category.display_order, Category.name)
+        )
+    ).all()
+    return [
+        {"id": category_id, "slug": slug, "name": name, "fund_count": count}
+        for category_id, slug, name, count in rows
+    ]
+
+
+async def list_invest_collections(session: AsyncSession) -> list[dict]:
+    rows = (
+        await session.execute(
+            select(Category.id, Category.slug, Category.name, func.count(Product.id))
+            .join(ProductCategory, ProductCategory.category_id == Category.id)
+            .join(Product, Product.id == ProductCategory.product_id)
+            .join(MutualFund, MutualFund.product_id == Product.id)
+            .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+            .where(
+                invest_visibility_sql_clause(),
+                Category.is_visible.is_(True),
+                Category.category_kind == CategoryKind.collection,
+                product_category_effective_clause(),
+            )
             .group_by(Category.id, Category.slug, Category.name, Category.display_order)
             .order_by(Category.display_order, Category.name)
         )
@@ -73,31 +103,6 @@ async def list_invest_funds(
     page_size = min(max(page_size, 1), 100)
     offset = (page - 1) * page_size
 
-    base = (
-        select(
-            Product,
-            MutualFund,
-            FundAmc,
-            FundNavMetrics,
-            FundCompositeRank.rank_position,
-            Category.slug,
-            ProductCategory.is_featured,
-            ProductCategory.display_order,
-            ProductDisplayContent,
-        )
-        .join(MutualFund, MutualFund.product_id == Product.id)
-        .join(FundAmc, FundAmc.id == MutualFund.amc_id)
-        .outerjoin(FundNavMetrics, FundNavMetrics.fund_id == MutualFund.id)
-        .outerjoin(ProductCategory, ProductCategory.product_id == Product.id)
-        .outerjoin(Category, Category.id == ProductCategory.category_id)
-        .outerjoin(
-            FundCompositeRank,
-            (FundCompositeRank.fund_id == MutualFund.id)
-            & (FundCompositeRank.category_id == ProductCategory.category_id),
-        )
-        .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
-        .where(invest_visibility_sql_clause())
-    )
     if category_slug:
         base = (
             select(
@@ -129,8 +134,42 @@ async def list_invest_funds(
             )
             .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
         )
+        count_stmt = select(func.count(func.distinct(Product.id))).select_from(base.subquery())
+    else:
+        best_rank_sq = (
+            select(
+                FundCompositeRank.fund_id,
+                func.min(FundCompositeRank.rank_position).label("rank_position"),
+            )
+            .group_by(FundCompositeRank.fund_id)
+            .subquery()
+        )
+        base = (
+            select(
+                Product,
+                MutualFund,
+                FundAmc,
+                FundNavMetrics,
+                best_rank_sq.c.rank_position,
+                null(),
+                null(),
+                null(),
+                ProductDisplayContent,
+            )
+            .join(MutualFund, MutualFund.product_id == Product.id)
+            .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+            .outerjoin(FundNavMetrics, FundNavMetrics.fund_id == MutualFund.id)
+            .outerjoin(best_rank_sq, best_rank_sq.c.fund_id == MutualFund.id)
+            .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
+            .where(invest_visibility_sql_clause())
+        )
+        count_stmt = (
+            select(func.count(Product.id))
+            .select_from(Product)
+            .join(MutualFund, MutualFund.product_id == Product.id)
+            .where(invest_visibility_sql_clause())
+        )
 
-    count_stmt = select(func.count()).select_from(base.subquery())
     total = int(await session.scalar(count_stmt) or 0)
 
     if category_slug:
@@ -141,25 +180,11 @@ async def list_invest_funds(
     elif sort == "name":
         base = base.order_by(Product.name)
     else:
-        base = base.order_by(FundCompositeRank.rank_position.asc().nullslast(), Product.name)
+        base = base.order_by(best_rank_sq.c.rank_position.asc().nullslast(), Product.name)
 
     rows = (await session.execute(base.offset(offset).limit(page_size))).all()
     settings = get_settings()
-    items = [
-        _serialize_fund_summary(
-            product,
-            fund,
-            amc,
-            metrics,
-            rank_position,
-            category,
-            settings=settings,
-            is_featured=is_featured,
-            display_order=display_order,
-            display_content=display_content,
-        )
-        for product, fund, amc, metrics, rank_position, category, is_featured, display_order, display_content in rows
-    ]
+    items = _serialize_invest_fund_rows(rows, settings=settings)
 
     return {
         "items": items,
@@ -168,6 +193,40 @@ async def list_invest_funds(
         "total": total,
         "has_more": offset + len(items) < total,
     }
+
+
+def _serialize_invest_fund_rows(rows, *, settings) -> list[dict]:
+    seen: set[uuid.UUID] = set()
+    items: list[dict] = []
+    for (
+        product,
+        fund,
+        amc,
+        metrics,
+        rank_position,
+        category,
+        is_featured,
+        display_order,
+        display_content,
+    ) in rows:
+        if product.id in seen:
+            continue
+        seen.add(product.id)
+        items.append(
+            _serialize_fund_summary(
+                product,
+                fund,
+                amc,
+                metrics,
+                rank_position,
+                category,
+                settings=settings,
+                is_featured=is_featured,
+                display_order=display_order,
+                display_content=display_content,
+            )
+        )
+    return items
 
 
 async def list_featured_invest_funds(session: AsyncSession, *, limit: int = 8) -> list[dict]:
@@ -226,10 +285,14 @@ async def list_featured_invest_funds(session: AsyncSession, *, limit: int = 8) -
 
 async def get_invest_home(session: AsyncSession) -> dict:
     categories = await list_invest_categories(session)
+    collections = await list_invest_collections(session)
+    popular = await list_popular_invest_funds(session, limit=5)
     featured = await list_featured_invest_funds(session, limit=8)
     total_payload = await list_invest_funds(session, page=1, page_size=1)
     return {
         "categories": categories,
+        "collections": collections,
+        "popular_funds": popular,
         "featured_funds": featured,
         "total_active_funds": total_payload["total"],
     }

@@ -162,6 +162,30 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
     };
   }
 
+  if (pathname.startsWith("/dashboard/mutual-funds/all")) {
+    return {
+      title: "All Mutual Funds",
+      description: "Browse and filter every active mutual fund in the Zynd catalog.",
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/funds/")) {
+    return {
+      title: "Fund details",
+      description: "View NAV, returns, and investment details for a mutual fund scheme.",
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/category/")) {
+    return {
+      title: "Browse funds",
+      description: "Explore mutual fund schemes in this investment category.",
+      icon: PieChart,
+    };
+  }
+
   return {
     title: "Dashboard",
     description: copy.dashboard.defaultDescription,

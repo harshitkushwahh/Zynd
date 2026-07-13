@@ -295,6 +295,11 @@ class Settings(BaseSettings):
     zynd_mf_metrics_cron: str = "0 22 * * *"
     zynd_mf_rank_cron: str = "30 23 * * *"
     zynd_mf_metrics_batch_size: int = 50
+    zynd_mf_collections_enabled: bool = True
+    zynd_mf_collection_top_n: int = 25
+    zynd_mf_collection_best_sip_max_min_inr: int = 500
+    zynd_mf_classification_cron: str = "15 22 * * *"
+    zynd_mf_collection_assign_cron: str = "25 22 * * *"
     zynd_mf_raw_bucket: str = "zynd-mf-raw"
     zynd_mf_raw_archive_object_storage_enabled: bool = True
     zynd_mf_scheduler_tick_seconds: int = 60
@@ -304,6 +309,7 @@ class Settings(BaseSettings):
     zynd_mf_amc_logo_ingest_cron: str = "0 6 * * 1"
     zynd_mf_amc_logo_url_template: str = ""
     zynd_mf_amc_logo_manifest_url: str = ""
+    zynd_mf_amc_logo_manifest_path: str = ""
     zynd_mf_catalog_health_gates_enabled: bool = True
     zynd_mf_nav_stale_days: int = 3
     zynd_mf_min_nav_rows: int = 50

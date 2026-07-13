@@ -59,6 +59,11 @@ class IngestionRunStatus(str, enum.Enum):
     partial = "PARTIAL"
 
 
+class CategoryKind(str, enum.Enum):
+    browse = "BROWSE"
+    collection = "COLLECTION"
+
+
 class FundAmc(Base):
     __tablename__ = "fund_amcs"
 
@@ -179,6 +184,11 @@ class Category(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_visible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     min_funds_to_show: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    category_kind: Mapped[CategoryKind] = mapped_column(
+        Enum(CategoryKind, values_callable=lambda members: [member.value for member in members], native_enum=False),
+        default=CategoryKind.browse,
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     product_links: Mapped[list["ProductCategory"]] = relationship(back_populates="category")
@@ -228,6 +238,16 @@ class NavIngestionQuarantine(Base):
     raw_line: Mapped[str] = mapped_column(Text, nullable=False)
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FundDerivedAttributes(Base):
+    __tablename__ = "fund_derived_attributes"
+
+    fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_funds.id", ondelete="CASCADE"), primary_key=True)
+    cap_bucket: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    theme_tags: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    classified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    classification_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
 
 class FundNavMetrics(Base):

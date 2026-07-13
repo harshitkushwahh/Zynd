@@ -167,6 +167,8 @@ export type InvestConfig = {
 
 export type InvestHomeResponse = {
   categories: InvestCategory[];
+  collections?: InvestCategory[];
+  popular_funds?: InvestFundSummary[];
   featured_funds: InvestFundSummary[];
   total_active_funds: number;
 };

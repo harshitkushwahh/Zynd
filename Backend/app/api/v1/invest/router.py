@@ -40,6 +40,7 @@ from app.application.mf.invest_cached_read_service import (
     cached_get_invest_fund_detail,
     cached_get_invest_home,
     cached_list_invest_categories,
+    cached_list_invest_collections,
     cached_list_invest_funds,
     cached_search_invest_funds,
 )
@@ -76,6 +77,8 @@ async def invest_home(
     payload = await cached_get_invest_home(db)
     return InvestHomeResponse(
         categories=[InvestCategoryResponse(**item) for item in payload["categories"]],
+        collections=[InvestCategoryResponse(**item) for item in payload.get("collections", [])],
+        popular_funds=[InvestFundSummaryResponse(**item) for item in payload.get("popular_funds", [])],
         featured_funds=[InvestFundSummaryResponse(**item) for item in payload["featured_funds"]],
         total_active_funds=payload["total_active_funds"],
     )
@@ -88,6 +91,15 @@ async def invest_categories(
 ) -> InvestCategoryListResponse:
     categories = await cached_list_invest_categories(db)
     return InvestCategoryListResponse(categories=[InvestCategoryResponse(**item) for item in categories])
+
+
+@router.get("/collections", response_model=InvestCategoryListResponse)
+async def invest_collections(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+) -> InvestCategoryListResponse:
+    collections = await cached_list_invest_collections(db)
+    return InvestCategoryListResponse(categories=[InvestCategoryResponse(**item) for item in collections])
 
 
 @router.get("/funds", response_model=InvestFundListResponse)

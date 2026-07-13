@@ -11,8 +11,10 @@ Each phase adds jobs, tables, and config gates. Earlier phases must succeed befo
 20:05  cybrilla-scheme-promote     Phase 15 — Mongo → SQL (draft products)
 20:15  catalog-lifecycle-sync      Phase 5 — DRAFT→ACTIVE promotion
 21:00  amfi-nav-daily              Phase 1 — NAV overlay (ISIN match only)
-22:00  nav-metrics-compute      Phase 2 — returns from NAV history
-23:30  composite-rank-compute   Phase 2 — category rankings
+22:00  nav-metrics-compute         Phase 2 — returns from NAV history
+22:15  fund-classification-compute Phase 2 — cap/theme tags from scheme metadata
+22:25  collection-assign-sync      Phase 2 — curated collection membership
+23:30  composite-rank-compute      Phase 2 — category rankings
 
 Monthly (1st):
   09:00  amfi-aum-monthly       Phase 3 — fund size
@@ -65,6 +67,8 @@ python -m app.jobs.run_mf_scheduler --job amfi-nav-daily
 | Job | Input | Output |
 |-----|-------|--------|
 | `nav-metrics-compute` | `scheme_navs` | `fund_nav_metrics` (1D→5Y returns) |
+| `fund-classification-compute` | `mutual_funds` | `fund_derived_attributes` (cap/theme tags) |
+| `collection-assign-sync` | metrics + derived attrs | `product_categories` for 6 collection slugs |
 | `composite-rank-compute` | `fund_nav_metrics` + categories | `fund_composite_ranks` |
 
 **Config:**

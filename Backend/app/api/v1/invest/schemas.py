@@ -115,6 +115,8 @@ class InvestFundSearchResponse(InvestFundListResponse):
 
 class InvestHomeResponse(BaseModel):
     categories: list[InvestCategoryResponse]
+    collections: list[InvestCategoryResponse] = Field(default_factory=list)
+    popular_funds: list[InvestFundSummaryResponse] = Field(default_factory=list)
     featured_funds: list[InvestFundSummaryResponse]
     total_active_funds: int
 

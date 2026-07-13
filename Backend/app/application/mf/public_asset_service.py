@@ -19,8 +19,19 @@ def build_public_asset_url(storage_key: str, settings: Settings | None = None) -
 def resolve_amc_logo_url(stored_url: str | None, slug: str, settings: Settings | None = None) -> str | None:
     if not stored_url:
         return None
-    if stored_url.startswith("http://") or stored_url.startswith("https://"):
-        return stored_url
+
+    settings = settings or get_settings()
+    storage_key: str | None = None
+
     if stored_url.startswith("storage:"):
-        return build_public_asset_url(stored_url.removeprefix("storage:"), settings)
-    return build_public_asset_url(stored_url, settings)
+        storage_key = stored_url.removeprefix("storage:")
+    elif "/invest/assets/" in stored_url:
+        storage_key = stored_url.split("/invest/assets/", 1)[1].lstrip("/")
+    elif stored_url.startswith("http://") or stored_url.startswith("https://"):
+        return stored_url
+    else:
+        storage_key = stored_url.lstrip("/")
+
+    if storage_key:
+        return build_public_asset_url(storage_key, settings)
+    return stored_url

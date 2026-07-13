@@ -14,6 +14,7 @@ from app.application.mf.invest_home_service import (
     get_invest_fund_detail,
     get_invest_home,
     list_invest_categories,
+    list_invest_collections,
     list_invest_funds,
 )
 from app.application.mf.invest_search_service import search_invest_funds
@@ -43,6 +44,22 @@ async def cached_list_invest_categories(session: AsyncSession) -> list[dict]:
     if cached is not None:
         return cached
     payload = await list_invest_categories(session)
+    await set_cached_json(
+        key,
+        payload,
+        ttl_seconds=settings.zynd_mf_invest_cache_category_ttl_seconds,
+        settings=settings,
+    )
+    return payload
+
+
+async def cached_list_invest_collections(session: AsyncSession) -> list[dict]:
+    settings = get_settings()
+    key = await build_invest_cache_key("collections")
+    cached = await get_cached_json(key, settings=settings)
+    if cached is not None:
+        return cached
+    payload = await list_invest_collections(session)
     await set_cached_json(
         key,
         payload,
