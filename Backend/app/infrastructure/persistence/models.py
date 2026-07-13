@@ -95,6 +95,17 @@ class AuditEventType(str, enum.Enum):
     document_kyc_rejected = "document_kyc_rejected"
     notification_dispatched = "notification_dispatched"
     notification_push_failed = "notification_push_failed"
+    mf_fund_catalog_updated = "mf_fund_catalog_updated"
+    mf_amc_catalog_updated = "mf_amc_catalog_updated"
+    mf_category_catalog_updated = "mf_category_catalog_updated"
+    mf_product_content_updated = "mf_product_content_updated"
+    mf_amc_content_updated = "mf_amc_content_updated"
+    mf_compliance_settings_updated = "mf_compliance_settings_updated"
+    mf_catalog_rule_created = "mf_catalog_rule_created"
+    mf_catalog_rule_updated = "mf_catalog_rule_updated"
+    mf_catalog_rules_applied = "mf_catalog_rules_applied"
+    mf_catalog_bulk_submitted = "mf_catalog_bulk_submitted"
+    mf_catalog_bulk_executed = "mf_catalog_bulk_executed"
 
 
 class DeletionEventType(str, enum.Enum):
@@ -455,6 +466,8 @@ class AdminActionType(str, enum.Enum):
     encryption_rotate_mfa = "encryption_rotate_mfa"
     deletion_executor_run = "deletion_executor_run"
     security_config_update = "security_config_update"
+    mf_catalog_bulk_apply = "mf_catalog_bulk_apply"
+    mf_catalog_rules_apply = "mf_catalog_rules_apply"
 
 
 class AdminActionStatus(str, enum.Enum):
@@ -784,6 +797,8 @@ class UserKycStatus(Base):
 
 
 from app.infrastructure.persistence import investor_models as _investor_profile_models  # noqa: F401,E402
+from app.infrastructure.persistence import mf_models as _mf_models  # noqa: F401,E402
+from app.infrastructure.persistence import mf_transaction_models as _mf_transaction_models  # noqa: F401,E402
 from app.infrastructure.persistence import notification_models as _notification_models  # noqa: F401,E402
 from app.infrastructure.persistence import referral_models as _referral_models  # noqa: F401,E402
 

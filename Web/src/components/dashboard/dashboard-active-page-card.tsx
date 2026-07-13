@@ -23,8 +23,8 @@ export function DashboardActivePageCard() {
             <button
               type="button"
               className={cn(
-                "inline-flex h-9 max-w-[10rem] items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 outline-none transition-colors",
-                "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                "inline-flex h-9 w-[10rem] items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 outline-none",
+                "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
               )}
               aria-label={`${pageMeta.title} page info`}
             />

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.admin.mf_router import router as mf_admin_router
 from app.api.v1.admin.schemas import (
     AdminActionListResponse,
     AdminActionRequestResponse,
@@ -100,6 +101,7 @@ from app.infrastructure.persistence.models import (
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+router.include_router(mf_admin_router)
 
 
 @router.get("/security-reviews", response_model=SecurityReviewListResponse)

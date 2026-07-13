@@ -102,7 +102,7 @@ export const SETTINGS_NAV: {
     id: "delete-account",
     label: copy.settings.deleteAccountTitle,
     title: copy.settings.deleteAccountTitle,
-    description: copy.account.deletionGracePeriodShort(),
+    description: copy.settings.deleteAccountDescription,
     icon: Trash2,
   },
 ];

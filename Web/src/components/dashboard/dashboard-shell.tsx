@@ -14,6 +14,7 @@ import {
   DASHBOARD_MAIN_SCROLL_CLASS,
   DASHBOARD_SHELL_PADDING,
 } from "@/components/dashboard/dashboard-layout";
+import { ProfileMenuShortcutListener } from "@/features/dashboard/navigation/profile-menu-shortcut-listener";
 import { ZyndPinLockScreen } from "@/features/account/pin";
 import { KycDialog } from "@/features/kyc/components/kyc-dialog";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
@@ -67,6 +68,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SettingsNavigationProvider>
+      <ProfileMenuShortcutListener />
     <div className="h-dvh overflow-hidden bg-background">
       {pinContext?.locked ? <ZyndPinLockScreen /> : null}
       {kyc ? (

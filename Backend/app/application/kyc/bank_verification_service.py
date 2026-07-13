@@ -68,6 +68,17 @@ def _holder_name_from_pan_draft(pan_draft: dict[str, Any]) -> str:
     return " ".join(part for part in (first_name, middle_name, last_name) if part).strip()
 
 
+def _resolve_bank_holder_names(
+    pan_draft: dict[str, Any],
+    *,
+    kyckart_holder_name: str = "",
+) -> tuple[str, str]:
+    """Return (poa_name, display_name). POA always uses the PAN-verified name."""
+    pan_holder_name = _holder_name_from_pan_draft(pan_draft)
+    display_holder_name = kyckart_holder_name.strip() or pan_holder_name
+    return pan_holder_name, display_holder_name
+
+
 async def verify_bank_hybrid(
     db: AsyncSession,
     *,
@@ -92,21 +103,22 @@ async def verify_bank_hybrid(
     bank_name = str(ifsc_payload.get("bank_name") or ifsc_payload.get("bankName") or "").strip()
     branch = str(ifsc_payload.get("branch") or ifsc_payload.get("branch_name") or "").strip()
 
-    account_holder_name = ""
+    kyckart_holder_name = ""
     try:
         holder = await kyckart_bank_account_holder_name(
             account_number=account_no,
             ifsc_code=ifsc,
         )
-        account_holder_name = str(holder.get("accountHolderName") or holder.get("name") or "").strip()
-    except KyckartError as exc:
-        if exc.code == "kyckart_bank_failed":
-            raise KycError(exc.message, exc.code, exc.status_code) from exc
-        account_holder_name = _holder_name_from_pan_draft(pan_draft)
+        kyckart_holder_name = str(holder.get("accountHolderName") or holder.get("name") or "").strip()
+    except KyckartError:
+        # Kyckart is display-only; POA always verifies using the PAN name.
+        pass
 
-    if not account_holder_name:
-        account_holder_name = _holder_name_from_pan_draft(pan_draft)
-    if not account_holder_name:
+    pan_holder_name, display_holder_name = _resolve_bank_holder_names(
+        pan_draft,
+        kyckart_holder_name=kyckart_holder_name,
+    )
+    if not pan_holder_name:
         raise KycError(
             "Complete PAN verification before verifying your bank account.",
             "pan_name_unavailable",
@@ -116,7 +128,7 @@ async def verify_bank_hybrid(
     try:
         poa_result = await poa_verify_bank_account(
             pan_number=pan_number,
-            account_holder_name=account_holder_name,
+            account_holder_name=pan_holder_name,
             account_number=account_no,
             ifsc_code=ifsc,
             account_type=poa_account_type,
@@ -153,7 +165,8 @@ async def verify_bank_hybrid(
         "accountNumber": account_no,
         "accountType": account_type,
         "ifscCode": ifsc,
-        "accountHolderName": account_holder_name,
+        "accountHolderName": display_holder_name,
+        "panAccountHolderName": pan_holder_name,
         "bankName": bank_name,
         "branch": branch,
         "poaAccountType": poa_account_type,
@@ -172,7 +185,7 @@ async def verify_bank_hybrid(
 
     return {
         "success": bank_verified,
-        "accountHolderName": account_holder_name,
+        "accountHolderName": display_holder_name,
         "bankName": bank_name,
         "branch": branch,
         "panVerified": pan_verified,
@@ -240,7 +253,13 @@ async def verify_bank_manual(
     account_number = str(bank_draft.get("accountNumber") or "").strip()
     ifsc_code = str(bank_draft.get("ifscCode") or "").strip().upper()
     account_type = str(bank_draft.get("poaAccountType") or bank_draft.get("accountType") or "savings")
-    account_holder_name = str(bank_draft.get("accountHolderName") or "").strip() or _holder_name_from_pan_draft(pan_draft)
+    account_holder_name = _holder_name_from_pan_draft(pan_draft)
+    if not account_holder_name:
+        raise KycError(
+            "Complete PAN verification before verifying your bank account.",
+            "pan_name_unavailable",
+            403,
+        )
 
     from app.infrastructure.kyc.poa_client import poa_verify_bank_account_manual
 

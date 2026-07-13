@@ -30,6 +30,15 @@ Enforcement helper: `require_permission(key)` in `app/api/v1/auth/deps.py`
 | `audit.read` | enforced | `GET /admin/audit` | |
 | `retention.read` | enforced | `GET /admin/retention/schedule` | |
 | `deletion.execute` | enforced | `GET/POST /admin/deletions…` | |
+| `mf.jobs.read` | enforced | `GET /admin/mf/jobs`, `GET /admin/mf/ingestion-runs`, `GET /admin/mf/metrics` | |
+| `mf.jobs.run` | enforced | `POST /admin/mf/jobs/{job_name}/run` | |
+| `mf.amcs.read` | enforced | `GET /admin/mf/amcs` | |
+| `mf.amcs.manage` | enforced | `PATCH /admin/mf/amcs/{id}` | |
+| `mf.catalog.read` | enforced | `GET /admin/mf/overview`, `GET /admin/mf/catalog/health`, `GET /admin/mf/catalog/health/issues`, `GET /admin/mf/categories`, `GET /admin/mf/funds`, `GET /admin/mf/funds/{id}`, `GET /admin/mf/funds/{id}/navs` | |
+| `mf.catalog.manage` | enforced | `PATCH /admin/mf/funds/{id}` | Audited catalog overrides |
+| `mf.content.manage` | enforced | `PATCH /admin/mf/funds/{id}/content`, `PATCH /admin/mf/amcs/{id}/content`, `PATCH /admin/mf/compliance` | Display copy and compliance settings |
+| `mf.rules.manage` | enforced | `POST/PATCH /admin/mf/rules`, `POST /admin/mf/rules/preview` | Catalog automation rules |
+| `mf.catalog.publish` | enforced | `POST /admin/mf/rules/apply`, `POST /admin/mf/funds/bulk` | Apply rules and bulk catalog mutations |
 
 ## Non-RBAC admin routes
 

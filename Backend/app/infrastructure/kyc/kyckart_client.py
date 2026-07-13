@@ -90,6 +90,28 @@ def parse_kyckart_pan_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _looks_like_bank_error_message(value: str) -> bool:
+    lowered = value.strip().lower()
+    if not lowered:
+        return True
+    error_markers = (
+        "not a valid",
+        "invalid account",
+        "invalid ifsc",
+        "could not",
+        "couldn't",
+        "failed",
+        "offline",
+        "blocked",
+        "unavailable",
+        "does not exist",
+        "doesn't exist",
+        "not found",
+        "no name",
+    )
+    return any(marker in lowered for marker in error_markers)
+
+
 def _extract_bank_holder_name(payload: dict[str, Any]) -> str:
     candidate_keys = (
         "accountHolderName",
@@ -107,8 +129,10 @@ def _extract_bank_holder_name(payload: dict[str, Any]) -> str:
         if isinstance(node, dict):
             for key in candidate_keys:
                 value = node.get(key)
-                if isinstance(value, str) and value.strip():
-                    return value.strip()
+                if isinstance(value, str):
+                    cleaned = value.strip()
+                    if cleaned and not _looks_like_bank_error_message(cleaned):
+                        return cleaned
             for value in node.values():
                 found = walk(value)
                 if found:
@@ -125,13 +149,23 @@ def _extract_bank_holder_name(payload: dict[str, Any]) -> str:
 
 def parse_kyckart_bank_payload(payload: dict[str, Any]) -> dict[str, Any]:
     response_block = payload.get("response")
+    data = _coalesce_mapping(
+        payload.get("data"),
+        isinstance(response_block, dict) and response_block.get("data"),
+        payload,
+    )
     if isinstance(response_block, dict):
         response_code = response_block.get("code")
         if response_code not in (None, 200, "200"):
             message = str(response_block.get("message") or "Could not verify bank account.").strip()
             raise KyckartError(message, "kyckart_bank_failed", 400)
 
-    holder_name = _extract_bank_holder_name(payload)
+    account_exists = data.get("account_exists")
+    if account_exists is False or str(account_exists).strip().lower() == "false":
+        message = str(data.get("message") or "Could not verify bank account.").strip()
+        raise KyckartError(message, "kyckart_bank_failed", 400)
+
+    holder_name = _extract_bank_holder_name(data) or _extract_bank_holder_name(payload)
     if not holder_name:
         raise KyckartError(
             "Could not fetch bank account holder name.",

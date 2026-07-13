@@ -184,39 +184,6 @@ export function AuthEmailStep() {
         </>
       ) : null}
 
-      <p className="mt-3 text-center text-caption text-muted-foreground">
-        {isLoginMode ? (
-          <>
-            {copy.auth.newToZynd}{" "}
-            <button
-              type="button"
-              className="text-compact text-primary hover:underline"
-              onClick={() => {
-                setIsLoginMode(false);
-                setPassword("");
-                setLoginError("");
-              }}
-            >
-              {copy.auth.createAccountLink}
-            </button>
-          </>
-        ) : (
-          <>
-            {copy.auth.alreadyHaveAccount}{" "}
-            <button
-              type="button"
-              className="text-compact text-primary hover:underline"
-              onClick={() => {
-                setIsLoginMode(true);
-                setEmailError("");
-              }}
-            >
-              {copy.auth.signInLink}
-            </button>
-          </>
-        )}
-      </p>
-
       {isLoginMode && loginCaptchaRequired && !turnstileVerified ? (
         <>
           <TurnstileWidget

@@ -8,6 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.admin.user_admin_service import suspend_user, unsuspend_user
+from app.application.mf.catalog_bulk_service import execute_bulk_catalog_job
+from app.application.mf.catalog_rules_service import apply_catalog_rules
 from app.application.compliance.deletion_executor_service import run_deletion_executor
 from app.application.security.key_rotation_service import rotate_mfa_secrets_to_current_version
 from app.application.security.security_config_service import apply_security_config_update
@@ -31,6 +33,8 @@ HIGH_IMPACT_ACTIONS = {
     AdminActionType.encryption_rotate_mfa,
     AdminActionType.deletion_executor_run,
     AdminActionType.security_config_update,
+    AdminActionType.mf_catalog_bulk_apply,
+    AdminActionType.mf_catalog_rules_apply,
 }
 
 
@@ -206,6 +210,25 @@ async def _execute_action(
             changed_by=request.requested_by,
             approved_by=approver.id,
             reason=request.reason,
+        )
+    if request.action_type == AdminActionType.mf_catalog_bulk_apply:
+        job_id = payload.get("job_id")
+        if not job_id:
+            raise ValueError("Missing bulk job id.")
+        import uuid as uuid_module
+
+        return await execute_bulk_catalog_job(
+            db,
+            uuid_module.UUID(str(job_id)),
+            admin_user_id=request.requested_by,
+        )
+    if request.action_type == AdminActionType.mf_catalog_rules_apply:
+        rule_ids = payload.get("rule_ids")
+        return await apply_catalog_rules(
+            db,
+            admin_user_id=request.requested_by,
+            rule_ids=rule_ids,
+            dry_run=False,
         )
     raise ValueError(f"Unsupported action type: {request.action_type.value}")
 

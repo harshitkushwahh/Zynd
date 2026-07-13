@@ -32,6 +32,15 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("documents.verify", "Verify KYC documents and apply WORM immutability"),
     ("documents.legal_hold", "Place or release legal hold on documents"),
     ("documents.delete", "Break-glass deletion of protected documents"),
+    ("mf.jobs.read", "View MF ingestion jobs, runs, and metrics"),
+    ("mf.jobs.run", "Manually trigger MF ingestion jobs"),
+    ("mf.amcs.read", "View mutual fund AMC empanelment status"),
+    ("mf.amcs.manage", "Update AMC empanelment and AMFI codes"),
+    ("mf.catalog.read", "View mutual fund catalog, categories, and NAV history"),
+    ("mf.catalog.manage", "Update mutual fund catalog visibility and investability overrides"),
+    ("mf.content.manage", "Edit mutual fund display content and compliance settings"),
+    ("mf.rules.manage", "Create and update mutual fund catalog automation rules"),
+    ("mf.catalog.publish", "Apply catalog rules and bulk catalog mutations"),
 ]
 
 ROLES: dict[str, dict[str, object]] = {
@@ -63,6 +72,31 @@ ROLES: dict[str, dict[str, object]] = {
         "name": "Support Agent",
         "description": "Read-only support access for user lookups and open reviews.",
         "permissions": ["security_reviews.read", "users.read", "documents.read"],
+    },
+    "operations": {
+        "name": "Operations",
+        "description": "Run and monitor mutual fund ingestion jobs.",
+        "permissions": [
+            "mf.jobs.read",
+            "mf.jobs.run",
+            "mf.amcs.manage",
+            "mf.catalog.read",
+            "mf.catalog.manage",
+            "mf.content.manage",
+            "mf.rules.manage",
+            "audit.read",
+        ],
+    },
+    "catalog_publisher": {
+        "name": "Catalog Publisher",
+        "description": "Apply MF catalog rules and bulk publish operations.",
+        "permissions": [
+            "mf.catalog.read",
+            "mf.rules.manage",
+            "mf.catalog.publish",
+            "admin_actions.approve",
+            "audit.read",
+        ],
     },
 }
 

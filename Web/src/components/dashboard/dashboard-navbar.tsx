@@ -96,15 +96,19 @@ export function DashboardNavbar() {
               <Link
                 key={tab.id}
                 href={tab.href}
+                scroll={false}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-full)] px-3 py-2.5 text-[13px] leading-tight font-medium transition-colors",
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-full)] px-3 py-2.5 text-[13px] leading-tight font-medium",
                   active
                     ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                {active ? <Icon className="size-3.5 shrink-0" strokeWidth={2.25} /> : null}
+                <Icon
+                  className={cn("size-3.5 shrink-0", !active && "opacity-70")}
+                  strokeWidth={active ? 2.25 : 2}
+                />
                 {tab.label}
               </Link>
             );

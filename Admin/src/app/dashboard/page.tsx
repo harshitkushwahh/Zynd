@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, KeyRound, Shield, Trash2, UserX } from "lucide-react";
+import { AlertTriangle, KeyRound, Shield, Trash2, TrendingUp, UserX } from "lucide-react";
 
 import { AdminShell } from "@/components/admin-shell";
 import { AdminKycReviewPanel } from "@/components/admin-kyc-review-panel";
@@ -235,6 +236,19 @@ export default function AdminDashboardPage() {
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+          {hasPermission("mf.catalog.read") ||
+          hasPermission("mf.jobs.read") ||
+          hasPermission("mf.amcs.read") ? (
+            <div className="mb-8">
+              <Link
+                href="/dashboard/mutual-funds"
+                className="inline-flex items-center gap-2 rounded-[var(--radius-card)] border border-primary/20 bg-primary/5 px-4 py-3 text-compact font-medium text-primary hover:bg-primary/10"
+              >
+                <TrendingUp className="size-4" />
+                Open mutual fund catalog console
+              </Link>
+            </div>
+          ) : null}
           <div className="mb-8">
             <p className="text-compact font-medium text-primary">Platform Console</p>
             <h1 className="mt-1 font-heading text-h2 font-bold text-foreground">

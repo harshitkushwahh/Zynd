@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from app.application.kyc.bank_verification_service import (
     _extract_readiness_verified,
     _holder_name_from_pan_draft,
+    _resolve_bank_holder_names,
 )
 
 
@@ -14,6 +15,23 @@ def test_holder_name_from_pan_draft() -> None:
         _holder_name_from_pan_draft({"firstName": "RAHUL", "middleName": "K", "lastName": "SHARMA"})
         == "RAHUL K SHARMA"
     )
+
+
+def test_resolve_bank_holder_names_prefers_kyckart_for_display_only() -> None:
+    pan_draft = {"fullName": "RAHUL KUMAR SHARMA"}
+    pan_name, display_name = _resolve_bank_holder_names(
+        pan_draft,
+        kyckart_holder_name="RAHUL SHARMA",
+    )
+    assert pan_name == "RAHUL KUMAR SHARMA"
+    assert display_name == "RAHUL SHARMA"
+
+
+def test_resolve_bank_holder_names_falls_back_to_pan_for_display() -> None:
+    pan_draft = {"fullName": "RAHUL KUMAR SHARMA"}
+    pan_name, display_name = _resolve_bank_holder_names(pan_draft)
+    assert pan_name == "RAHUL KUMAR SHARMA"
+    assert display_name == "RAHUL KUMAR SHARMA"
 
 
 def test_extract_readiness_verified_from_poa_readiness() -> None:

@@ -164,6 +164,24 @@ async def require_fund_eligible_user(
     return current_user
 
 
+async def require_invest_eligible_user(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_fund_eligible_user)],
+) -> User:
+    from app.infrastructure.persistence.models import KycOverallStatus, UserKycStatus
+
+    status = await db.get(UserKycStatus, current_user.id)
+    if not status or status.overall_status != KycOverallStatus.completed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "kyc_required",
+                "message": "Complete KYC verification before investing.",
+            },
+        )
+    return current_user
+
+
 def handle_auth_error(exc: AuthError) -> HTTPException:
     detail: dict[str, Any] = {"code": exc.code, "message": exc.message}
     detail.update(exc.metadata)

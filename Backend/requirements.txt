@@ -23,3 +23,7 @@ Pillow>=11.0.0
 webauthn>=2.0.0
 pytest>=8.3.0
 pytest-asyncio>=0.24.0
+croniter>=2.0.0
+motor>=3.6.0
+openpyxl>=3.1.0
+xlrd>=2.0.1
