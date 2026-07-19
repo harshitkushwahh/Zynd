@@ -78,3 +78,34 @@ def test_parse_kyckart_bank_payload_success_from_nested_name_at_bank() -> None:
         }
     )
     assert result["accountHolderName"] == "RAHUL SHARMA"
+
+
+def test_parse_kyckart_bank_payload_account_not_exists_raises() -> None:
+    with pytest.raises(KyckartError) as exc:
+        parse_kyckart_bank_payload(
+            {
+                "status": {"statusCode": 200},
+                "response": {
+                    "code": 200,
+                    "data": {
+                        "account_exists": False,
+                        "message": "Invalid account number or ifsc provided",
+                    },
+                },
+            }
+        )
+    assert exc.value.code == "kyckart_bank_failed"
+
+
+def test_parse_kyckart_bank_payload_ignores_error_like_name_values() -> None:
+    with pytest.raises(KyckartError) as exc:
+        parse_kyckart_bank_payload(
+            {
+                "status": {"statusCode": 200},
+                "response": {
+                    "code": 200,
+                    "data": {"name": "name not a valid name on bank"},
+                },
+            }
+        )
+    assert exc.value.code == "kyckart_bank_incomplete"

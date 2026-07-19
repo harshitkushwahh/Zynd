@@ -33,7 +33,7 @@ export function ReferralLeaderboardPreviewCard({
         REFERRAL_CARD_RADIUS_CLASS
       )}
     >
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-2">
           <Trophy className="size-4 text-warning" strokeWidth={2.25} />
           <p className="text-compact font-semibold text-foreground">{copy.referral.leaderboardTitle}</p>
@@ -42,36 +42,40 @@ export function ReferralLeaderboardPreviewCard({
         {previewEntries.length === 0 ? (
           <ReferralLeaderboardEmptyState variant="compact" />
         ) : (
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-            <div className="flex items-center pl-1">
-              {previewEntries.map((entry, index) => (
-                <ReferralLeaderboardAvatar
-                  key={entry.rank}
-                  entry={entry}
-                  className={index === 0 ? "ml-0" : "-ml-2"}
-                />
-              ))}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-2">
+              <div className="flex shrink-0 items-center pl-1">
+                {previewEntries.map((entry, index) => (
+                  <ReferralLeaderboardAvatar
+                    key={entry.rank}
+                    entry={entry}
+                    className={index === 0 ? "ml-0" : "-ml-2"}
+                  />
+                ))}
 
-              {remainingCount > 0 ? (
-                <Avatar className="relative z-0 -ml-2 size-9 shrink-0 ring-2 ring-muted-foreground/20 ring-offset-1 ring-offset-card after:hidden">
-                  <AvatarFallback className="bg-muted text-caption font-semibold text-foreground">
-                    {moreCountLabel}
-                  </AvatarFallback>
-                </Avatar>
-              ) : null}
+                {remainingCount > 0 ? (
+                  <Avatar className="relative z-0 -ml-2 size-9 shrink-0 ring-2 ring-muted-foreground/20 ring-offset-1 ring-offset-card after:hidden">
+                    <AvatarFallback className="bg-muted text-caption font-semibold text-foreground">
+                      {moreCountLabel}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : null}
+              </div>
+
+              <p className="shrink-0 text-caption text-muted-foreground/55">
+                {copy.referral.leaderboardMoreHint}
+              </p>
             </div>
 
-            <p className="text-caption text-muted-foreground/55">{copy.referral.leaderboardMoreHint}</p>
+            <Link
+              href="/dashboard/referral/leaderboard"
+              className={cn(buttonVariants({ variant: "default", size: "sm" }), "shrink-0")}
+            >
+              {copy.referral.leaderboardViewAll}
+              <ArrowRight className="size-3.5" strokeWidth={2.25} />
+            </Link>
           </div>
         )}
-
-        <Link
-          href="/dashboard/referral/leaderboard"
-          className={cn(buttonVariants({ variant: "default", size: "sm" }), "ml-auto shrink-0 w-fit")}
-        >
-          {copy.referral.leaderboardViewAll}
-          <ArrowRight className="size-3.5" strokeWidth={2.25} />
-        </Link>
       </div>
     </section>
   );

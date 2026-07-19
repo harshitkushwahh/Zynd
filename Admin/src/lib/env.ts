@@ -3,4 +3,7 @@ export const env = {
   appEnv: process.env.NEXT_PUBLIC_APP_ENV ?? "development",
   apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "/api/v1",
   turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "",
+  zyndWebUrl: process.env.NEXT_PUBLIC_ZYND_WEB_URL ?? "http://localhost:7777",
+  zyndAndroidUrl: process.env.NEXT_PUBLIC_ZYND_ANDROID_URL ?? "",
+  zyndIosUrl: process.env.NEXT_PUBLIC_ZYND_IOS_URL ?? "",
 } as const;

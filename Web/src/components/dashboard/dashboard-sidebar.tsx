@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LogOut, RefreshCw, Settings, ShieldCheck, UserRound } from "lucide-react";
 
 import {
@@ -19,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -31,12 +31,17 @@ import { useSettingsNavigationOptional } from "@/contexts/settings-navigation-co
 import { useKycOptional } from "@/contexts/kyc-context";
 import { useProfileImage } from "@/contexts/profile-image-context";
 import { KycStatusRing } from "@/features/kyc/components/kyc-status-ring";
-import { checkKycReadiness } from "@/features/kyc/lib/kyc-api";
 import {
   DASHBOARD_ROUTES,
   isDashboardRouteActive,
   type DashboardRoute,
 } from "@/features/dashboard/navigation/dashboard-routes";
+import {
+  formatProfileMenuShortcut,
+  PROFILE_MENU_SHORTCUTS,
+} from "@/features/dashboard/navigation/profile-menu-shortcuts";
+import { useProfileMenuActions } from "@/features/dashboard/navigation/use-profile-menu-actions";
+import { PROFILE_SETTINGS_SECTIONS } from "@/components/dashboard/settings/settings-sidebar";
 import { APP_NAME } from "@/shared/config/brand";
 import { uiClasses } from "@/shared/config/ui-classes";
 import { getUserInitials } from "@/shared/utils/user-display";
@@ -45,11 +50,11 @@ import { cn } from "@/lib/utils";
 
 function navButtonClass(active: boolean, compact = false) {
   return cn(
-    "flex items-center justify-center rounded-full transition-colors outline-none",
+    "flex items-center justify-center rounded-full outline-none",
     compact ? "size-9" : "size-10",
     active
       ? "bg-foreground text-background"
-      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground",
   );
 }
 
@@ -63,12 +68,34 @@ function SidebarNavItem({
   const Icon = item.icon;
   const icon = <Icon className="size-[18px]" strokeWidth={active ? 2.25 : 2} />;
 
+  if (item.disabled) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              aria-disabled="true"
+              className={cn(navButtonClass(false, true), "cursor-not-allowed opacity-50")}
+              aria-label={item.label}
+            />
+          }
+        >
+          {icon}
+        </TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>
+          {item.label} — Coming soon
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Link
             href={item.href}
+            scroll={false}
             aria-current={active ? "page" : undefined}
             className={navButtonClass(active, true)}
             aria-label={item.label}
@@ -92,15 +119,36 @@ function MobileNavItem({
   active: boolean;
 }) {
   const Icon = item.icon;
+
+  if (item.disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className={cn(navButtonClass(false), "cursor-not-allowed opacity-50")}
+        aria-label={`${item.label} — Coming soon`}
+      >
+        <Icon className="size-[18px]" strokeWidth={2} />
+      </span>
+    );
+  }
+
   return (
     <Link
       href={item.href}
+      scroll={false}
       aria-current={active ? "page" : undefined}
       className={navButtonClass(active)}
       aria-label={item.label}
     >
       <Icon className="size-[18px]" strokeWidth={active ? 2.25 : 2} />
     </Link>
+  );
+}
+
+function profileMenuItemClass(active: boolean) {
+  return cn(
+    active &&
+      "bg-primary/10 text-primary focus:bg-primary/10 focus:text-primary data-highlighted:bg-primary/10 data-highlighted:text-primary [&_svg]:text-primary",
   );
 }
 
@@ -117,13 +165,19 @@ function ProfileAvatar({
   compact?: boolean;
   className?: string;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const settingsNavigation = useSettingsNavigationOptional();
-  const { user, displayName, signOut } = useAuth();
+  const { user, displayName } = useAuth();
   const { profileUrl } = useProfileImage();
   const kyc = useKycOptional();
-  const [checkingKraStatus, setCheckingKraStatus] = useState(false);
+  const {
+    checkingKraStatus,
+    openProfile,
+    openSettings,
+    openKyc,
+    checkKycStatus,
+    signOutAndRedirect,
+  } = useProfileMenuActions();
   const initials = getUserInitials(user?.first_name, user?.email);
   const profileLabel = displayName || user?.email || "Profile";
   const showKycRing = Boolean(kyc?.showRing && kyc.ringTone);
@@ -131,24 +185,15 @@ function ProfileAvatar({
   const showCheckKycStatus = Boolean(kyc?.overallStatus === "submitted" && kyc.kycAllowed);
 
   const isSettingsPage = pathname === "/dashboard/settings";
-  const isProfileActive = isSettingsPage && (settingsNavigation?.isProfileSettingsView ?? true);
+  const activeSettingsSection = settingsNavigation?.activeSection;
+  const isProfileActive =
+    isSettingsPage &&
+    activeSettingsSection != null &&
+    PROFILE_SETTINGS_SECTIONS.includes(activeSettingsSection);
   const isSecuritySettingsActive =
-    isSettingsPage && settingsNavigation != null && !settingsNavigation.isProfileSettingsView;
-
-  async function handleCheckKycStatus() {
-    if (!kyc || checkingKraStatus) return;
-    setCheckingKraStatus(true);
-    try {
-      const result = await checkKycReadiness();
-      kyc.applyReadinessCheck(result);
-      await kyc.refreshFromBootstrap();
-      if (!result.kra_verified) {
-        kyc.openDialog();
-      }
-    } finally {
-      setCheckingKraStatus(false);
-    }
-  }
+    isSettingsPage &&
+    activeSettingsSection != null &&
+    !PROFILE_SETTINGS_SECTIONS.includes(activeSettingsSection);
 
   const avatar = (
     <KycStatusRing tone={showKycRing ? kyc!.ringTone : null} showWatch={showWatchBadge}>
@@ -175,8 +220,8 @@ function ProfileAvatar({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={profileLabel}
-        className={cn("rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50", className)}
-        render={<button type="button" className="rounded-full" />}
+        className={cn("rounded-full outline-none ring-0 focus-visible:ring-0", className)}
+        render={<button type="button" className="rounded-full outline-none ring-0 focus-visible:ring-0" />}
       >
         {avatar}
       </DropdownMenuTrigger>
@@ -184,56 +229,71 @@ function ProfileAvatar({
         side={menuSide}
         align={menuAlign}
         sideOffset={menuSide === "top" ? 8 : 12}
-        className="w-52"
+        className="w-56 p-2"
       >
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col gap-0.5">
-              <span className="truncate font-medium text-foreground">
-                {displayName || "Account"}
-              </span>
-              {user?.email ? (
-                <span className="truncate text-caption text-muted-foreground">
-                  {user.email}
-                </span>
-              ) : null}
+          <DropdownMenuLabel className="px-2 py-1.5 font-normal">
+            <div className="flex items-center gap-2.5">
+              <KycStatusRing tone={showKycRing ? kyc!.ringTone : null} showWatch={showWatchBadge}>
+                <Avatar className="size-8">
+                  {profileUrl ? <AvatarImage src={profileUrl} alt={profileLabel} /> : null}
+                  <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </KycStatusRing>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-caption font-semibold text-foreground">
+                  {displayName || "Account"}
+                </p>
+                {user?.email ? (
+                  <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                    {user.email}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
-            className={cn(isProfileActive && "bg-accent text-accent-foreground")}
-            onClick={() => {
-              settingsNavigation?.openSettings("personal-details");
-              router.push("/dashboard/settings");
-            }}
+            className={profileMenuItemClass(isProfileActive)}
+            onClick={openProfile}
           >
             <UserRound />
             Profile
+            <DropdownMenuShortcut>
+              {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.profile)}
+            </DropdownMenuShortcut>
           </DropdownMenuItem>
           {showCheckKycStatus ? (
-            <DropdownMenuItem disabled={checkingKraStatus} onClick={() => void handleCheckKycStatus()}>
-              <RefreshCw />
+            <DropdownMenuItem disabled={checkingKraStatus} onClick={() => void checkKycStatus()}>
+              <RefreshCw className={cn(checkingKraStatus && "animate-spin")} />
               {checkingKraStatus ? copy.kyc.checkStatusChecking : copy.kyc.checkStatusAction}
+              <DropdownMenuShortcut>
+                {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.checkKycStatus)}
+              </DropdownMenuShortcut>
             </DropdownMenuItem>
           ) : null}
           {kyc?.showKycMenu ? (
             <DropdownMenuItem
               disabled={!kyc.kycAllowed}
               title={!kyc.kycAllowed ? copy.kyc.entryGate.menuDisabledHint : undefined}
-              onClick={() => kyc.openDialog()}
+              onClick={openKyc}
             >
               <ShieldCheck />
               {copy.kyc.menuLabel}
+              {kyc.kycAllowed ? (
+                <DropdownMenuShortcut>
+                  {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.kyc)}
+                </DropdownMenuShortcut>
+              ) : null}
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem
-            className={cn(isSecuritySettingsActive && "bg-accent text-accent-foreground")}
-            onClick={() => {
-              settingsNavigation?.openSettings("mfa");
-              router.push("/dashboard/settings");
-            }}
+            className={profileMenuItemClass(isSecuritySettingsActive)}
+            onClick={openSettings}
           >
             <Settings />
             Settings
@@ -241,16 +301,12 @@ function ProfileAvatar({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={async () => {
-              await signOut();
-              router.push("/");
-              router.refresh();
-            }}
-          >
+          <DropdownMenuItem variant="destructive" onClick={() => void signOutAndRedirect()}>
             <LogOut />
-            Sign out
+            Sign Out
+            <DropdownMenuShortcut>
+              {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.signOut)}
+            </DropdownMenuShortcut>
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>

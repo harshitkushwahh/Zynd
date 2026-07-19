@@ -1,30 +1,105 @@
 "use client";
 
-import { Building2 } from "lucide-react";
+import { useState } from "react";
+import { Building2, Plus } from "lucide-react";
 
-import {
-  SettingsDetailRow,
-  SettingsDetailSection,
-} from "@/components/dashboard/settings/settings-detail-row";
+import { SettingsAddBankAccountForm } from "@/components/dashboard/settings/settings-add-bank-account-form";
+import { SettingsBankAccountCard } from "@/components/dashboard/settings/settings-bank-account-card";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import { SETTINGS_NAV } from "@/components/dashboard/settings/settings-sidebar";
 import { Button } from "@/components/ui/button";
+import { FieldMessage } from "@/components/ui/ui-message";
 import { useKycOptional } from "@/contexts/kyc-context";
-import {
-  maskAccountNumber,
-  type SettingsKycBank,
-} from "@/features/kyc/lib/settings-kyc-profile";
+import { useInvestorBankAccounts } from "@/features/invest/hooks/use-investor-bank-accounts";
+import { setPrimaryInvestorBankAccount, disableInvestorBankAccount } from "@/features/invest/lib/investor-bank-accounts-api";
 import { copy } from "@/shared/config/copy";
 
-type BankAccountSettingsPanelProps = {
-  bank: SettingsKycBank | null;
-  loading?: boolean;
-};
+const MAX_BANK_ACCOUNTS = 5;
 
-export function BankAccountSettingsPanel({ bank, loading }: BankAccountSettingsPanelProps) {
+export function BankAccountSettingsPanel() {
   const sectionMeta = SETTINGS_NAV.find((item) => item.id === "bank-account")!;
   const kyc = useKycOptional();
+  const { accounts, loading, error, reloadAccounts } = useInvestorBankAccounts(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+
+  const canAddMore = accounts.length < MAX_BANK_ACCOUNTS;
+
+  const handleSetPrimary = async (accountId: string) => {
+    setSettingPrimaryId(accountId);
+    setActionError("");
+    setActionMessage("");
+    try {
+      await setPrimaryInvestorBankAccount(accountId);
+      setActionMessage(copy.settings.bankAccounts.setPrimarySuccess);
+      await reloadAccounts();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : copy.settings.bankAccounts.setPrimaryFailed);
+    } finally {
+      setSettingPrimaryId(null);
+    }
+  };
+
+  const handleRemove = async (accountId: string) => {
+    setRemovingId(accountId);
+    setActionError("");
+    setActionMessage("");
+    try {
+      await disableInvestorBankAccount(accountId);
+      setActionMessage(copy.settings.bankAccounts.removeSuccess);
+      await reloadAccounts();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : copy.settings.bankAccounts.removeFailed;
+      if (message.includes("primary")) {
+        setActionError(copy.settings.bankAccounts.removePrimaryBlocked);
+      } else if (message.includes("mandate")) {
+        setActionError(copy.settings.bankAccounts.removeMandateBlocked);
+      } else {
+        setActionError(message);
+      }
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const handleAddSuccess = async () => {
+    setShowAddForm(false);
+    setActionError("");
+    setActionMessage(copy.settings.bankAccounts.addSuccess);
+    await reloadAccounts();
+  };
+
+  const renderEmptyState = () => (
+    <div className="flex flex-col items-center gap-4 rounded-[var(--radius-card)] border border-dashed border-border px-6 py-10 text-center">
+      <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Building2 className="size-5" strokeWidth={2} />
+      </div>
+      <div className="space-y-1">
+        <p className="text-body font-semibold text-foreground">{copy.settings.bankAccountEmptyTitle}</p>
+        <p className="max-w-sm text-caption text-muted-foreground">
+          {copy.settings.bankAccountEmptyDescription}
+        </p>
+      </div>
+      {kyc?.kycAllowed ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button type="button" size="sm" onClick={() => kyc.openDialog()}>
+            {copy.kyc.menuLabel}
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
+            {copy.settings.bankAccounts.addBankAccount}
+          </Button>
+        </div>
+      ) : (
+        <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
+          {copy.settings.bankAccounts.addBankAccount}
+        </Button>
+      )}
+    </div>
+  );
 
   return (
     <SettingsContentCard
@@ -32,44 +107,75 @@ export function BankAccountSettingsPanel({ bank, loading }: BankAccountSettingsP
         <SettingsPanelHeader
           icon={sectionMeta.icon}
           title={sectionMeta.title}
-          description={sectionMeta.description}
+          description={copy.settings.bankAccountDescription}
         />
       }
     >
       {loading ? (
-        <p className="text-caption text-muted-foreground">{copy.settings.profileLoading}</p>
-      ) : bank ? (
-        <SettingsDetailSection title={copy.settings.bankAccountSectionTitle}>
-          <SettingsDetailRow
-            label={copy.kyc.bank.fields.accountNumber}
-            value={maskAccountNumber(bank.accountNumber)}
-            mono
-            verified={bank.verified}
-          />
-          <SettingsDetailRow
-            label={copy.kyc.bank.fields.accountHolderName}
-            value={bank.accountHolderName}
-          />
-          <SettingsDetailRow label={copy.kyc.bank.fields.accountType} value={bank.accountType} />
-          <SettingsDetailRow label={copy.kyc.bank.fields.ifscCode} value={bank.ifscCode} mono />
-          <SettingsDetailRow label={copy.kyc.bank.fields.bankName} value={bank.bankName} />
-          <SettingsDetailRow label={copy.kyc.bank.fields.branch} value={bank.branch} />
-        </SettingsDetailSection>
-      ) : (
-        <div className="flex flex-col items-center gap-4 rounded-[var(--radius-card)] border border-dashed border-border px-6 py-10 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <Building2 className="size-5" strokeWidth={2} />
-          </div>
-          <div className="space-y-1">
-            <p className="text-body font-semibold text-foreground">{copy.settings.bankAccountEmptyTitle}</p>
-            <p className="max-w-sm text-caption text-muted-foreground">
-              {copy.settings.bankAccountEmptyDescription}
-            </p>
-          </div>
+        <p className="text-caption text-muted-foreground">{copy.settings.bankAccounts.loading}</p>
+      ) : error ? (
+        <div className="space-y-4">
+          <FieldMessage message={error} />
           {kyc?.kycAllowed ? (
             <Button type="button" size="sm" onClick={() => kyc.openDialog()}>
               {copy.kyc.menuLabel}
             </Button>
+          ) : null}
+        </div>
+      ) : showAddForm && accounts.length === 0 ? (
+        <SettingsAddBankAccountForm
+          onSuccess={() => void handleAddSuccess()}
+          onCancel={() => setShowAddForm(false)}
+        />
+      ) : accounts.length === 0 ? (
+        renderEmptyState()
+      ) : (
+        <div className="space-y-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-body font-semibold text-foreground">
+                {copy.settings.bankAccounts.sectionTitle}
+              </h3>
+              <p className="mt-1 text-caption text-muted-foreground">
+                {copy.settings.bankAccounts.sectionDescription}
+              </p>
+            </div>
+            {canAddMore && !showAddForm ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
+                <Plus className="mr-1.5 size-4" />
+                {copy.settings.bankAccounts.addBankAccount}
+              </Button>
+            ) : null}
+          </div>
+
+          {actionMessage ? <p className="text-caption text-success">{actionMessage}</p> : null}
+          {actionError ? <FieldMessage message={actionError} /> : null}
+
+          <div className="space-y-3">
+            {accounts.map((account) => (
+              <SettingsBankAccountCard
+                key={account.id}
+                account={account}
+                settingPrimary={settingPrimaryId === account.id}
+                removing={removingId === account.id}
+                onSetPrimary={handleSetPrimary}
+                onRemove={handleRemove}
+              />
+            ))}
+          </div>
+
+          {!canAddMore ? (
+            <p className="text-caption text-muted-foreground">{copy.settings.bankAccounts.maxReached}</p>
+          ) : null}
+
+          {showAddForm ? (
+            <SettingsAddBankAccountForm
+              onSuccess={() => void handleAddSuccess()}
+              onCancel={() => {
+                setShowAddForm(false);
+                setActionError("");
+              }}
+            />
           ) : null}
         </div>
       )}

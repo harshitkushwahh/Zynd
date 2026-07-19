@@ -1,7 +1,13 @@
 import { setAccessToken } from "@/lib/api-client";
 import { storeLoginSecurityAlerts } from "@/features/account/security/login-security-alerts";
-import type { AuthSuccessResponse } from "@/features/auth/api/types";
+import type { AuthSuccessResponse, AuthUser } from "@/features/auth/api/types";
 import { storageKeys } from "@/shared/config/storage-keys";
+
+function assertInvestorUser(user: AuthUser) {
+  if (user.role === "admin") {
+    throw new Error("Admin accounts must use the management console.");
+  }
+}
 
 export function markSessionHint() {
   if (typeof window !== "undefined") {
@@ -20,6 +26,7 @@ export function hasSessionHint() {
 }
 
 export function storeAuthResponse(data: AuthSuccessResponse) {
+  assertInvestorUser(data.user);
   setAccessToken(data.access_token);
   markSessionHint();
   storeLoginSecurityAlerts({

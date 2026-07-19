@@ -56,4 +56,24 @@ fi
 echo "Applying database migrations..."
 .venv/bin/alembic upgrade head
 
+if [ "${ZYND_MF_WORKER_AUTOSTART:-true}" = "true" ]; then
+  if pgrep -f "app.jobs.run_mf_transaction_workers" >/dev/null 2>&1; then
+    echo "Stopping existing MF transaction workers..."
+    pkill -9 -f "app.jobs.run_mf_transaction_workers" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do
+      pgrep -f "app.jobs.run_mf_transaction_workers" >/dev/null 2>&1 || break
+      sleep 1
+    done
+  fi
+  rm -f .mf_transaction_worker.lock
+  echo "Starting MF order worker in background..."
+  .venv/bin/python -m app.jobs.run_mf_transaction_workers --orders &
+fi
+
+if lsof -ti :"${API_PORT}" >/dev/null 2>&1; then
+  echo "Stopping existing process on port ${API_PORT}..."
+  lsof -ti :"${API_PORT}" | xargs kill -9 2>/dev/null || true
+  sleep 1
+fi
+
 exec .venv/bin/uvicorn app.main:app --host "${API_HOST}" --port "${API_PORT}" --reload

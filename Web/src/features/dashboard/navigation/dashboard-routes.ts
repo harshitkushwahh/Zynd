@@ -20,6 +20,8 @@ export type DashboardRoute = {
   icon: LucideIcon;
   description: string;
   enabled: boolean;
+  /** When true, shown in nav but not navigable (coming soon). */
+  disabled?: boolean;
   /** When false, hidden from the top header nav only (sidebar/mobile keep the link). */
   showInTopNav?: boolean;
 };
@@ -48,6 +50,7 @@ export const DASHBOARD_ROUTES: DashboardRoute[] = [
     description:
       "Track fixed deposit investments, maturity dates, and interest earned in one place.",
     enabled: true,
+    disabled: true,
   },
   {
     id: "mutual-funds",
@@ -150,6 +153,70 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
       title: copy.referral.referralsPageTitle,
       description: copy.referral.referralsPageDescription,
       icon: Users,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/cart")) {
+    return {
+      title: copy.mutualFunds.cartTitle,
+      description: copy.mutualFunds.cartDescription,
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/compare")) {
+    return {
+      title: copy.mutualFunds.compareTitle,
+      description: copy.mutualFunds.compareDescription,
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/calculators/lumpsum")) {
+    return {
+      title: copy.mutualFunds.lumpsumCalcTitle,
+      description: copy.mutualFunds.lumpsumCalcDescription,
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/calculators/sip")) {
+    return {
+      title: copy.mutualFunds.sipCalcTitle,
+      description: copy.mutualFunds.sipCalcDescription,
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/all")) {
+    return {
+      title: "All Mutual Funds",
+      description: "Browse and filter every active mutual fund in the Zynd catalog.",
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/funds/")) {
+    return {
+      title: "Fund details",
+      description: "View NAV, returns, and investment details for a mutual fund scheme.",
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/category/")) {
+    return {
+      title: "Browse funds",
+      description: "Explore mutual fund schemes in this investment category.",
+      icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/mutual-funds/collections/")) {
+    return {
+      title: copy.mutualFunds.collectionsTitle,
+      description: "Explore curated mutual fund collections on Zynd.",
+      icon: PieChart,
     };
   }
 

@@ -1,7 +1,7 @@
 import { env } from "@/lib/env";
 import { configureApiClient } from "@zynd/shared/api";
 
-configureApiClient({ apiUrl: env.apiUrl });
+configureApiClient({ apiUrl: env.apiUrl, clientKind: "admin" });
 
 export {
   ApiError,

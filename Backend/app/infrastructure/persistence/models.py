@@ -95,6 +95,17 @@ class AuditEventType(str, enum.Enum):
     document_kyc_rejected = "document_kyc_rejected"
     notification_dispatched = "notification_dispatched"
     notification_push_failed = "notification_push_failed"
+    mf_fund_catalog_updated = "mf_fund_catalog_updated"
+    mf_amc_catalog_updated = "mf_amc_catalog_updated"
+    mf_category_catalog_updated = "mf_category_catalog_updated"
+    mf_product_content_updated = "mf_product_content_updated"
+    mf_amc_content_updated = "mf_amc_content_updated"
+    mf_compliance_settings_updated = "mf_compliance_settings_updated"
+    mf_catalog_rule_created = "mf_catalog_rule_created"
+    mf_catalog_rule_updated = "mf_catalog_rule_updated"
+    mf_catalog_rules_applied = "mf_catalog_rules_applied"
+    mf_catalog_bulk_submitted = "mf_catalog_bulk_submitted"
+    mf_catalog_bulk_executed = "mf_catalog_bulk_executed"
 
 
 class DeletionEventType(str, enum.Enum):
@@ -455,6 +466,8 @@ class AdminActionType(str, enum.Enum):
     encryption_rotate_mfa = "encryption_rotate_mfa"
     deletion_executor_run = "deletion_executor_run"
     security_config_update = "security_config_update"
+    mf_catalog_bulk_apply = "mf_catalog_bulk_apply"
+    mf_catalog_rules_apply = "mf_catalog_rules_apply"
 
 
 class AdminActionStatus(str, enum.Enum):
@@ -783,7 +796,47 @@ class UserKycStatus(Base):
     user: Mapped[User] = relationship(back_populates="kyc_status")
 
 
+class AdminInvitationStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    revoked = "revoked"
+    expired = "expired"
+
+
+class AdminInvitation(Base):
+    __tablename__ = "admin_invitations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(254), index=True, nullable=False)
+    first_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    role_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[AdminInvitationStatus] = mapped_column(
+        Enum(AdminInvitationStatus),
+        default=AdminInvitationStatus.pending,
+        nullable=False,
+        index=True,
+    )
+    invited_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    accepted_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 from app.infrastructure.persistence import investor_models as _investor_profile_models  # noqa: F401,E402
+from app.infrastructure.persistence import mf_models as _mf_models  # noqa: F401,E402
+from app.infrastructure.persistence import mf_transaction_models as _mf_transaction_models  # noqa: F401,E402
 from app.infrastructure.persistence import notification_models as _notification_models  # noqa: F401,E402
 from app.infrastructure.persistence import referral_models as _referral_models  # noqa: F401,E402
 

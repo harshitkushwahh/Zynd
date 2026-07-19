@@ -207,6 +207,7 @@ async def maybe_mfa_pending_login(
     device_fingerprint: str,
     user_agent: str | None,
     provider: str | None = None,
+    admin_client: bool = False,
 ) -> dict[str, Any] | None:
     if not user_has_mfa(user):
         return None
@@ -221,6 +222,7 @@ async def maybe_mfa_pending_login(
             "device_fingerprint": device_fingerprint,
             "user_agent": user_agent,
             "provider": provider,
+            "admin_client": admin_client,
         },
         settings.mfa_pending_ttl_seconds,
     )

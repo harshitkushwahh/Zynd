@@ -1,8 +1,5 @@
-import { DashboardSectionPlaceholder } from "@/features/dashboard/components/dashboard-section-placeholder";
-import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
-
-const route = DASHBOARD_ROUTES.find((item) => item.id === "transactions")!;
+import { MfTransactionsPage } from "@/features/invest/components/mf-transactions-page";
 
 export default function TransactionsPage() {
-  return <DashboardSectionPlaceholder route={route} />;
+  return <MfTransactionsPage />;
 }

@@ -17,6 +17,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { useNotifications } from "@/contexts/notification-context";
 import {
@@ -206,7 +207,7 @@ export function NotificationsPagePanel() {
                   <Bell className="size-4" strokeWidth={2.25} />
                 </div>
                 <div>
-                  <h1 className="text-body font-semibold text-foreground">All notifications</h1>
+                  <PageTitle>All notifications</PageTitle>
                   <p className="text-caption text-muted-foreground">
                     {unreadCount > 0
                       ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`

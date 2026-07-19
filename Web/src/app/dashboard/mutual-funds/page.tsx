@@ -1,8 +1,5 @@
-import { DashboardSectionPlaceholder } from "@/features/dashboard/components/dashboard-section-placeholder";
-import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
-
-const route = DASHBOARD_ROUTES.find((item) => item.id === "mutual-funds")!;
+import { MutualFundsCatalogPanel } from "@/features/invest/components/mutual-funds-catalog-panel";
 
 export default function MutualFundsPage() {
-  return <DashboardSectionPlaceholder route={route} />;
+  return <MutualFundsCatalogPanel />;
 }

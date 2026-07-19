@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
 
+from app.application.integrations.provider_log_recorder import record_provider_api_log
+from app.application.integrations.integration_runtime import (
+    get_cybrilla_runtime,
+    get_finprim_runtime,
+    is_cybrilla_poa_live,
+    is_kyckart_live,
+)
 from app.core.config import get_settings
 from app.infrastructure.kyc.stub_provider import (
     stub_create_kyc_request,
@@ -14,6 +23,7 @@ from app.infrastructure.kyc.stub_provider import (
     stub_states,
     stub_countries,
 )
+from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 
 
 class FpClientError(Exception):
@@ -78,34 +88,38 @@ class FpTokenService:
         self._poa_token: str | None = None
 
     async def get_kyc_token(self) -> str:
-        settings = get_settings()
-        if not settings.resolved_kyc_provider_live:
+        if not is_kyckart_live():
             return "stub-kyc-token"
         if self._kyc_token:
             return self._kyc_token
+        runtime = get_finprim_runtime()
         token = await self._fetch_token(
-            token_base_url=settings.fp_base_url,
-            auth_tenant=settings.fp_tenant,
-            client_id=settings.fp_client_id,
-            client_secret=settings.fp_client_secret,
+            token_base_url=runtime.base_url,
+            auth_tenant=runtime.tenant,
+            client_id=runtime.client_id,
+            client_secret=runtime.client_secret,
         )
         self._kyc_token = token
         return token
 
     async def get_poa_token(self) -> str:
-        settings = get_settings()
-        if not settings.resolved_kyc_provider_live:
+        if not is_cybrilla_poa_live():
             return "stub-poa-token"
         if self._poa_token:
             return self._poa_token
+        runtime = get_cybrilla_runtime()
         token = await self._fetch_token(
-            token_base_url=settings.fp_poa_token_base_url or settings.fp_poa_base_url,
-            auth_tenant=settings.fp_poa_auth_tenant,
-            client_id=settings.fp_poa_client_id,
-            client_secret=settings.fp_poa_client_secret,
+            token_base_url=runtime.resolved_token_base_url,
+            auth_tenant=runtime.auth_tenant,
+            client_id=runtime.client_id,
+            client_secret=runtime.client_secret,
         )
         self._poa_token = token
         return token
+
+    def invalidate(self) -> None:
+        self._kyc_token = None
+        self._poa_token = None
 
     async def _fetch_token(
         self,
@@ -127,6 +141,79 @@ class FpTokenService:
 
 
 _fp_tokens = FpTokenService()
+
+
+def invalidate_fp_tokens() -> None:
+    _fp_tokens.invalidate()
+
+
+async def _record_fp_client_log(
+    *,
+    method: str,
+    path: str,
+    use_poa: bool,
+    started: float,
+    status_code: int | None,
+    success: bool,
+    error_code: str | None = None,
+    request_body: Any = None,
+    response_body: Any = None,
+) -> None:
+    await record_provider_api_log(
+        source=ProviderLogSource.cybrilla if use_poa else ProviderLogSource.fintech_primitive,
+        method=method,
+        path=path,
+        status_code=status_code,
+        success=success,
+        duration_ms=int((time.perf_counter() - started) * 1000),
+        error_code=error_code,
+        request_body=request_body,
+        response_body=response_body,
+    )
+
+
+async def _run_logged_fp_request(
+    *,
+    method: str,
+    path: str,
+    use_poa: bool,
+    request_body: Any,
+    runner: Callable[[], Awaitable[httpx.Response]],
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    status_code: int | None = None
+    success = False
+    error_code: str | None = None
+    response_body: Any = None
+    try:
+        response = await runner()
+        status_code = response.status_code
+        try:
+            response_body = response.json() if response.content else {}
+        except ValueError:
+            response_body = {"raw": response.text[:500]}
+        _raise_for_fp_response(response)
+        success = True
+        return response_body if isinstance(response_body, dict) else {"data": response_body}
+    except FpClientError as exc:
+        status_code = exc.status_code
+        error_code = exc.code
+        raise
+    except Exception:
+        error_code = "fp_transport_error"
+        raise
+    finally:
+        await _record_fp_client_log(
+            method=method,
+            path=path,
+            use_poa=use_poa,
+            started=started,
+            status_code=status_code,
+            success=success,
+            error_code=error_code,
+            request_body=request_body,
+            response_body=response_body,
+        )
 
 
 def _normalize_state_row(item: dict[str, Any]) -> dict[str, str] | None:
@@ -154,36 +241,62 @@ async def ensure_kyc_tokens() -> None:
 
 
 async def fp_get(path: str, *, use_poa: bool = False) -> dict[str, Any]:
-    settings = get_settings()
     token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
-    base = settings.fp_poa_base_url if use_poa else settings.fp_base_url
-    tenant = settings.fp_poa_auth_tenant if use_poa else settings.fp_tenant
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(
-            f"{base.rstrip('/')}{path}",
-            headers={"Authorization": f"Bearer {token}", "x-tenant-id": tenant},
-        )
-        _raise_for_fp_response(response)
-        return response.json()
+    if use_poa:
+        runtime = get_cybrilla_runtime()
+        base = runtime.base_url
+        tenant = runtime.auth_tenant
+    else:
+        runtime = get_finprim_runtime()
+        base = runtime.base_url
+        tenant = runtime.tenant
+
+    async def runner() -> httpx.Response:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            return await client.get(
+                f"{base.rstrip('/')}{path}",
+                headers={"Authorization": f"Bearer {token}", "x-tenant-id": tenant},
+            )
+
+    return await _run_logged_fp_request(
+        method="GET",
+        path=path,
+        use_poa=use_poa,
+        request_body=None,
+        runner=runner,
+    )
 
 
 async def fp_post(path: str, body: dict[str, Any], *, use_poa: bool = False) -> dict[str, Any]:
-    settings = get_settings()
     token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
-    base = settings.fp_poa_base_url if use_poa else settings.fp_base_url
-    tenant = settings.fp_poa_auth_tenant if use_poa else settings.fp_tenant
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{base.rstrip('/')}{path}",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "x-tenant-id": tenant,
-                "Content-Type": "application/json",
-            },
-            json=body,
-        )
-        _raise_for_fp_response(response)
-        return response.json()
+    if use_poa:
+        runtime = get_cybrilla_runtime()
+        base = runtime.base_url
+        tenant = runtime.auth_tenant
+    else:
+        runtime = get_finprim_runtime()
+        base = runtime.base_url
+        tenant = runtime.tenant
+
+    async def runner() -> httpx.Response:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            return await client.post(
+                f"{base.rstrip('/')}{path}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "x-tenant-id": tenant,
+                    "Content-Type": "application/json",
+                },
+                json=body,
+            )
+
+    return await _run_logged_fp_request(
+        method="POST",
+        path=path,
+        use_poa=use_poa,
+        request_body=body,
+        runner=runner,
+    )
 
 
 async def fp_post_multipart(
@@ -193,42 +306,68 @@ async def fp_post_multipart(
     files: dict[str, tuple[str, bytes, str]],
     use_poa: bool = False,
 ) -> dict[str, Any]:
-    settings = get_settings()
     token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
-    base = settings.fp_poa_base_url if use_poa else settings.fp_base_url
-    tenant = settings.fp_poa_auth_tenant if use_poa else settings.fp_tenant
+    if use_poa:
+        runtime = get_cybrilla_runtime()
+        base = runtime.base_url
+        tenant = runtime.auth_tenant
+    else:
+        runtime = get_finprim_runtime()
+        base = runtime.base_url
+        tenant = runtime.tenant
     multipart_files = {
         key: (filename, content, mime)
         for key, (filename, content, mime) in files.items()
     }
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            f"{base.rstrip('/')}{path}",
-            headers={"Authorization": f"Bearer {token}", "x-tenant-id": tenant},
-            data=fields,
-            files=multipart_files,
-        )
-        _raise_for_fp_response(response)
-        return response.json()
+
+    async def runner() -> httpx.Response:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            return await client.post(
+                f"{base.rstrip('/')}{path}",
+                headers={"Authorization": f"Bearer {token}", "x-tenant-id": tenant},
+                data=fields,
+                files=multipart_files,
+            )
+
+    return await _run_logged_fp_request(
+        method="POST",
+        path=path,
+        use_poa=use_poa,
+        request_body={"fields": list(fields.keys()), "files": list(files.keys())},
+        runner=runner,
+    )
 
 
 async def fp_patch(path: str, body: dict[str, Any], *, use_poa: bool = False) -> dict[str, Any]:
-    settings = get_settings()
     token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
-    base = settings.fp_poa_base_url if use_poa else settings.fp_base_url
-    tenant = settings.fp_poa_auth_tenant if use_poa else settings.fp_tenant
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.patch(
-            f"{base.rstrip('/')}{path}",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "x-tenant-id": tenant,
-                "Content-Type": "application/json",
-            },
-            json=body,
-        )
-        _raise_for_fp_response(response)
-        return response.json()
+    if use_poa:
+        runtime = get_cybrilla_runtime()
+        base = runtime.base_url
+        tenant = runtime.auth_tenant
+    else:
+        runtime = get_finprim_runtime()
+        base = runtime.base_url
+        tenant = runtime.tenant
+
+    async def runner() -> httpx.Response:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            return await client.patch(
+                f"{base.rstrip('/')}{path}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "x-tenant-id": tenant,
+                    "Content-Type": "application/json",
+                },
+                json=body,
+            )
+
+    return await _run_logged_fp_request(
+        method="PATCH",
+        path=path,
+        use_poa=use_poa,
+        request_body=body,
+        runner=runner,
+    )
 
 
 async def poll_poa_preverification(preverify_id: str, *, max_attempts: int = 20) -> dict[str, Any]:

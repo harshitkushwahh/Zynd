@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { ReferralQrDialog } from "@/features/referral/components/referral-qr-dialog";
+import referIllustration from "@/features/referral/assets/refer-illustration.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -175,27 +176,27 @@ export function ReferralShareHeroCard({ shareUrl, code }: ReferralShareHeroCardP
         <div className="pointer-events-none absolute -right-8 -top-8 size-40 rounded-full bg-primary-foreground/10 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-1/4 size-32 rounded-full bg-[color-mix(in_srgb,var(--zynd-emerald)_30%,transparent)] blur-3xl" />
 
-        <div className="relative z-10 w-full space-y-4">
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1 space-y-2">
-              <p className="text-h4 font-semibold tracking-tight text-primary-foreground">
-                {copy.referral.shareTitle}
-              </p>
-              <p className="text-compact leading-relaxed text-primary-foreground/85">
-                {copy.referral.shareHint}
-              </p>
-            </div>
+        <div className="pointer-events-none absolute right-3 top-6 z-10 hidden sm:block">
+          <div className="relative h-20 w-24 lg:h-[5.75rem] lg:w-[6.75rem]">
+            <Image
+              src={referIllustration}
+              alt=""
+              fill
+              sizes="(min-width: 1024px) 6.75rem, 6rem"
+              className="object-contain object-top mix-blend-screen drop-shadow-md"
+              priority
+            />
+          </div>
+        </div>
 
-            <div className="relative hidden h-20 w-[5.5rem] shrink-0 sm:block lg:h-24 lg:w-28">
-              <Image
-                src="/refer.png"
-                alt=""
-                fill
-                sizes="(min-width: 1024px) 7rem, 5.5rem"
-                className="object-contain object-center drop-shadow-sm"
-                priority
-              />
-            </div>
+        <div className="relative z-10 w-full space-y-3 sm:pr-28 lg:pr-[7.5rem]">
+          <div className="space-y-1.5">
+            <p className="text-h4 font-semibold tracking-tight text-primary-foreground">
+              {copy.referral.shareTitle}
+            </p>
+            <p className="max-w-xl text-compact leading-relaxed text-primary-foreground/85">
+              {copy.referral.shareHint}
+            </p>
           </div>
 
           <div className="grid w-full grid-cols-1 gap-3">
@@ -224,8 +225,8 @@ export function ReferralShareHeroCard({ shareUrl, code }: ReferralShareHeroCardP
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5 sm:flex-nowrap">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:gap-3">
+              <div className="flex shrink-0 items-center gap-2">
                 {socialOptions.map((option) =>
                   option.href ? (
                     <a
@@ -254,46 +255,52 @@ export function ReferralShareHeroCard({ shareUrl, code }: ReferralShareHeroCardP
                 )}
               </div>
 
-              <div
-                aria-hidden
-                className="hidden h-7 w-px shrink-0 bg-primary-foreground/30 sm:block"
-              />
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div
+                  aria-hidden
+                  className="hidden h-7 w-px shrink-0 bg-primary-foreground/30 xl:block"
+                />
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Tooltip open={codeTooltipOpen} onOpenChange={setCodeTooltipOpen}>
-                  <TooltipTrigger
-                    render={
-                      <button
-                        type="button"
-                        aria-label={`${copy.referral.copyCodeLabel}: ${code}`}
-                        onClick={() => void handleCopyCode()}
-                        className={cn(
-                          "inline-flex items-center gap-2 rounded-[var(--radius-full)] px-3 py-1.5",
-                          "cursor-pointer transition-colors hover:bg-primary-foreground/25",
-                          glassControlClass
-                        )}
-                      >
-                        <Link2 className="size-3.5 shrink-0 text-primary-foreground/80" strokeWidth={2.25} />
-                        <span className="text-caption text-primary-foreground/75">{copy.referral.codeLabel}</span>
-                        <span className="font-mono text-compact font-semibold tracking-wide">{code}</span>
-                      </button>
-                    }
-                  />
-                  <TooltipContent side="top">{copy.referral.copied}</TooltipContent>
-                </Tooltip>
+                <div className="flex min-w-0 flex-nowrap items-center gap-2">
+                  <Tooltip open={codeTooltipOpen} onOpenChange={setCodeTooltipOpen}>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={`${copy.referral.copyCodeLabel}: ${code}`}
+                          onClick={() => void handleCopyCode()}
+                          className={cn(
+                            "inline-flex max-w-full items-center gap-2 rounded-[var(--radius-full)] px-3 py-1.5 whitespace-nowrap",
+                            "cursor-pointer transition-colors hover:bg-primary-foreground/25",
+                            glassControlClass
+                          )}
+                        >
+                          <Link2 className="size-3.5 shrink-0 text-primary-foreground/80" strokeWidth={2.25} />
+                          <span className="shrink-0 text-caption text-primary-foreground/75">
+                            {copy.referral.codeLabel}
+                          </span>
+                          <span className="truncate font-mono text-compact font-semibold tracking-wide">
+                            {code}
+                          </span>
+                        </button>
+                      }
+                    />
+                    <TooltipContent side="top">{copy.referral.copied}</TooltipContent>
+                  </Tooltip>
 
-                <button
-                  type="button"
-                  onClick={() => setQrOpen(true)}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-[var(--radius-full)] px-3 py-1.5",
-                    "text-caption font-medium transition-colors hover:bg-primary-foreground/25",
-                    glassControlClass
-                  )}
-                >
-                  <QrCode className="size-3.5 shrink-0" strokeWidth={2.25} />
-                  {copy.referral.qrButton}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setQrOpen(true)}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-full)] px-3 py-1.5 whitespace-nowrap",
+                      "text-caption font-medium transition-colors hover:bg-primary-foreground/25",
+                      glassControlClass
+                    )}
+                  >
+                    <QrCode className="size-3.5 shrink-0" strokeWidth={2.25} />
+                    {copy.referral.qrButton}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

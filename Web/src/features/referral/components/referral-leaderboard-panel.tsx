@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { PageTitle } from "@/components/ui/page-title";
 import { ReferralLeaderboardPodium } from "@/features/referral/components/referral-leaderboard-podium";
 import { ReferralLeaderboardSidebar } from "@/features/referral/components/referral-leaderboard-sidebar";
 import { ReferralLeaderboardTable } from "@/features/referral/components/referral-leaderboard-table";
@@ -157,9 +158,7 @@ export function ReferralLeaderboardPanel() {
                 <Trophy className="size-5 text-warning" strokeWidth={2.25} />
               </div>
               <div>
-                <h1 className="text-h4 font-semibold tracking-tight text-foreground">
-                  {copy.referral.leaderboardPageTitle}
-                </h1>
+                <PageTitle>{copy.referral.leaderboardPageTitle}</PageTitle>
                 <p className="mt-1 text-compact text-muted-foreground">{copy.referral.leaderboardPageSubtitle}</p>
               </div>
             </div>

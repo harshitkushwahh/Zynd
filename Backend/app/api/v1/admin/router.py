@@ -8,6 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.admin.admin_invitations_router import router as admin_invitations_router
+from app.api.v1.admin.mf_integrations_router import router as mf_integrations_router
+from app.api.v1.admin.mf_router import router as mf_admin_router
+from app.api.v1.admin.mf_transactions_router import router as mf_transactions_router
+from app.api.v1.admin.zynd_logs_router import router as zynd_logs_router
 from app.api.v1.admin.schemas import (
     AdminActionListResponse,
     AdminActionRequestResponse,
@@ -21,16 +26,25 @@ from app.api.v1.admin.schemas import (
     AdminLegalHoldRequest,
     AdminRejectKycDocumentRequest,
     AdminVerifyKycDocumentsResponse,
+    AdminPermissionsListResponse,
+    AdminPermissionResponse,
     AdminPermissionsResponse,
     AdminRoleResponse,
     AdminRolesResponse,
+    CreateAdminPermissionRequest,
+    CreateAdminRoleRequest,
+    UpdateAdminRoleRequest,
     AdminTransferRequest,
     AdminTransferResponse,
     AdminUserListItemResponse,
     AdminUserListResponse,
+    AdminUserProfileDetailResponse,
     AdminUserRolesResponse,
     AdminUserSummaryResponse,
     AssignAdminRoleRequest,
+    CreateAdminUserRequest,
+    CreateAdminUserResponse,
+    SetAdminUserRolesRequest,
     AuditLogItemResponse,
     AuditLogListResponse,
     PendingActionResponse,
@@ -64,10 +78,16 @@ from app.application.admin.document_admin_service import (
 from app.application.admin.document_kyc_service import get_user_kyc_review, reject_kyc_document
 from app.application.admin.rbac_service import (
     assign_role_to_admin_user,
+    create_admin_permission,
+    create_admin_role,
+    delete_admin_role,
     get_user_permission_keys,
+    list_admin_permissions,
     list_admin_roles,
     list_user_role_keys,
     revoke_role_from_admin_user,
+    set_admin_user_roles,
+    update_admin_role,
 )
 from app.application.auth.security_review_service import (
     list_security_review_items,
@@ -85,7 +105,14 @@ from app.application.documents.document_worm_service import (
     verify_user_kyc_documents,
 )
 from app.application.documents.errors import DocumentError
-from app.application.admin.user_admin_service import get_user_summary, list_users
+from app.application.admin.user_admin_service import (
+    create_admin_user,
+    get_user_by_reference,
+    get_user_summary,
+    get_user_summary_by_reference,
+    list_users,
+)
+from app.application.admin.user_profile_admin_service import get_user_profile_detail
 from app.application.compliance.retention_service import list_retention_policies
 from app.application.security.security_config_service import list_security_config
 from app.core.database import get_db
@@ -96,10 +123,26 @@ from app.infrastructure.persistence.models import (
     AuditLog,
     SecurityReviewStatus,
     User,
+    UserRole,
     UserStatus,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+router.include_router(mf_admin_router)
+router.include_router(admin_invitations_router)
+router.include_router(mf_integrations_router)
+router.include_router(mf_transactions_router)
+router.include_router(zynd_logs_router)
+
+
+async def _require_user_by_reference(db: AsyncSession, reference: str) -> User:
+    user = await get_user_by_reference(db, reference)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "user_not_found", "message": "User not found."},
+        )
+    return user
 
 
 @router.get("/security-reviews", response_model=SecurityReviewListResponse)
@@ -157,28 +200,171 @@ async def get_admin_roles(
     return AdminRolesResponse(roles=[AdminRoleResponse(**role) for role in roles])
 
 
+@router.get("/rbac/permissions", response_model=AdminPermissionsListResponse)
+async def get_admin_permissions_catalog(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("rbac.manage"))],
+) -> AdminPermissionsListResponse:
+    permissions = await list_admin_permissions(db)
+    return AdminPermissionsListResponse(
+        permissions=[AdminPermissionResponse(**item) for item in permissions]
+    )
+
+
+@router.post("/rbac/permissions", response_model=AdminPermissionResponse)
+async def post_admin_permission(
+    body: CreateAdminPermissionRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("rbac.manage"))],
+) -> AdminPermissionResponse:
+    try:
+        permission = await create_admin_permission(
+            db,
+            key=body.key,
+            description=body.description,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 409 if "already exists" in message.lower() else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": "permission_create_failed", "message": message},
+        ) from exc
+
+    db.add(
+        AuditLog(
+            user_id=admin.id,
+            event_type=AuditEventType.admin_action_requested,
+            ip_address=get_client_ip(request),
+            metadata_={
+                "kind": "rbac_permission_created",
+                "permission_key": permission["key"],
+            },
+        )
+    )
+    await db.commit()
+    return AdminPermissionResponse(**permission)
+
+
+@router.post("/rbac/roles", response_model=AdminRoleResponse)
+async def post_admin_role(
+    body: CreateAdminRoleRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("rbac.manage"))],
+) -> AdminRoleResponse:
+    try:
+        role = await create_admin_role(
+            db,
+            key=body.key,
+            name=body.name,
+            description=body.description,
+            permission_keys=body.permissions,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 409 if "already exists" in message.lower() else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": "role_create_failed", "message": message},
+        ) from exc
+
+    db.add(
+        AuditLog(
+            user_id=admin.id,
+            event_type=AuditEventType.admin_action_requested,
+            ip_address=get_client_ip(request),
+            metadata_={
+                "kind": "rbac_role_created",
+                "role_key": role["key"],
+            },
+        )
+    )
+    await db.commit()
+    return AdminRoleResponse(**role)
+
+
+@router.patch("/rbac/roles/{role_key}", response_model=AdminRoleResponse)
+async def patch_admin_role(
+    role_key: str,
+    body: UpdateAdminRoleRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("rbac.manage"))],
+) -> AdminRoleResponse:
+    try:
+        role = await update_admin_role(
+            db,
+            role_key=role_key,
+            name=body.name,
+            description=body.description,
+            permission_keys=body.permissions,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message.lower() else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": "role_update_failed", "message": message},
+        ) from exc
+
+    db.add(
+        AuditLog(
+            user_id=admin.id,
+            event_type=AuditEventType.admin_action_requested,
+            ip_address=get_client_ip(request),
+            metadata_={
+                "kind": "rbac_role_updated",
+                "role_key": role_key,
+            },
+        )
+    )
+    await db.commit()
+    return AdminRoleResponse(**role)
+
+
+@router.delete("/rbac/roles/{role_key}")
+async def delete_admin_role_endpoint(
+    role_key: str,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("rbac.manage"))],
+) -> dict[str, str]:
+    try:
+        await delete_admin_role(db, role_key=role_key)
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message.lower() else 409
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": "role_delete_failed", "message": message},
+        ) from exc
+
+    db.add(
+        AuditLog(
+            user_id=admin.id,
+            event_type=AuditEventType.admin_action_requested,
+            ip_address=get_client_ip(request),
+            metadata_={
+                "kind": "rbac_role_deleted",
+                "role_key": role_key,
+            },
+        )
+    )
+    await db.commit()
+    return {"message": f"Role {role_key} deleted."}
+
+
 @router.get("/rbac/users/{user_id}/roles", response_model=AdminUserRolesResponse)
 async def get_admin_user_roles(
     user_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("rbac.manage"))],
 ) -> AdminUserRolesResponse:
-    try:
-        parsed_id = UUID(user_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-        ) from exc
-
-    user = await db.get(User, parsed_id)
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "user_not_found", "message": "User not found."},
-        )
-    roles = await list_user_role_keys(db, parsed_id)
-    return AdminUserRolesResponse(user_id=parsed_id, roles=roles)
+    user = await _require_user_by_reference(db, user_id)
+    roles = await list_user_role_keys(db, user.id)
+    return AdminUserRolesResponse(user_id=user.id, roles=roles)
 
 
 @router.post("/rbac/users/{user_id}/roles", response_model=AdminUserRolesResponse)
@@ -189,11 +375,11 @@ async def post_assign_admin_role(
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("rbac.manage"))],
 ) -> AdminUserRolesResponse:
+    user = await _require_user_by_reference(db, user_id)
     try:
-        parsed_id = UUID(user_id)
         roles = await assign_role_to_admin_user(
             db,
-            user_id=parsed_id,
+            user_id=user.id,
             role_key=body.role_key,
         )
     except ValueError as exc:
@@ -211,13 +397,13 @@ async def post_assign_admin_role(
             ip_address=get_client_ip(request),
             metadata_={
                 "kind": "rbac_role_assigned",
-                "target_user_id": str(parsed_id),
+                "target_user_id": str(user.id),
                 "role_key": body.role_key,
             },
         )
     )
     await db.commit()
-    return AdminUserRolesResponse(user_id=parsed_id, roles=roles)
+    return AdminUserRolesResponse(user_id=user.id, roles=roles)
 
 
 @router.delete("/rbac/users/{user_id}/roles/{role_key}", response_model=AdminUserRolesResponse)
@@ -228,11 +414,11 @@ async def delete_admin_role_assignment(
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("rbac.manage"))],
 ) -> AdminUserRolesResponse:
+    user = await _require_user_by_reference(db, user_id)
     try:
-        parsed_id = UUID(user_id)
         roles = await revoke_role_from_admin_user(
             db,
-            user_id=parsed_id,
+            user_id=user.id,
             role_key=role_key,
         )
     except ValueError as exc:
@@ -250,13 +436,82 @@ async def delete_admin_role_assignment(
             ip_address=get_client_ip(request),
             metadata_={
                 "kind": "rbac_role_revoked",
-                "target_user_id": str(parsed_id),
+                "target_user_id": str(user.id),
                 "role_key": role_key,
             },
         )
     )
     await db.commit()
-    return AdminUserRolesResponse(user_id=parsed_id, roles=roles)
+    return AdminUserRolesResponse(user_id=user.id, roles=roles)
+
+
+@router.put("/rbac/users/{user_id}/roles", response_model=AdminUserRolesResponse)
+async def put_admin_user_roles(
+    user_id: str,
+    body: SetAdminUserRolesRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("rbac.manage"))],
+) -> AdminUserRolesResponse:
+    user = await _require_user_by_reference(db, user_id)
+    try:
+        roles = await set_admin_user_roles(
+            db,
+            user_id=user.id,
+            role_keys=body.role_keys,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message.lower() else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": "role_set_failed", "message": message},
+        ) from exc
+
+    db.add(
+        AuditLog(
+            user_id=admin.id,
+            event_type=AuditEventType.admin_action_requested,
+            ip_address=get_client_ip(request),
+            metadata_={
+                "kind": "rbac_roles_set",
+                "target_user_id": str(user.id),
+                "role_keys": body.role_keys,
+            },
+        )
+    )
+    await db.commit()
+    return AdminUserRolesResponse(user_id=user.id, roles=roles)
+
+
+@router.post("/rbac/admin-users", response_model=CreateAdminUserResponse, status_code=201)
+async def post_create_admin_user(
+    body: CreateAdminUserRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("rbac.manage"))],
+) -> CreateAdminUserResponse:
+    try:
+        summary = await create_admin_user(
+            db,
+            actor=admin,
+            email=body.email,
+            first_name=body.first_name,
+            last_name=body.last_name,
+            password=body.password,
+            role_keys=body.role_keys,
+            ip=get_client_ip(request),
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 409 if "already" in message.lower() else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": "admin_user_create_failed", "message": message},
+        ) from exc
+
+    await db.commit()
+    return CreateAdminUserResponse(**summary)
 
 
 @router.get("/security/config", response_model=SecurityConfigListResponse)
@@ -482,6 +737,7 @@ async def get_admin_users(
     _: Annotated[User, Depends(require_permission("users.read"))],
     email: Optional[str] = None,
     status: Optional[str] = None,
+    role: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> AdminUserListResponse:
@@ -495,10 +751,21 @@ async def get_admin_users(
                 detail={"code": "invalid_status", "message": "Invalid user status."},
             ) from exc
 
+    parsed_role: UserRole | None = None
+    if role:
+        try:
+            parsed_role = UserRole(role)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_role", "message": "Invalid user role."},
+            ) from exc
+
     items = await list_users(
         db,
         email=email,
         status=parsed_status,
+        role=parsed_role,
         limit=limit,
         offset=offset,
     )
@@ -513,21 +780,39 @@ async def get_admin_user_summary(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("users.read"))],
 ) -> AdminUserSummaryResponse:
-    try:
-        parsed_id = UUID(user_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-        ) from exc
-
-    summary = await get_user_summary(db, parsed_id)
+    summary = await get_user_summary_by_reference(db, user_id)
     if not summary:
         raise HTTPException(
             status_code=404,
             detail={"code": "user_not_found", "message": "User not found."},
         )
     return AdminUserSummaryResponse(**summary)
+
+
+@router.get("/users/{user_id}/profile-detail", response_model=AdminUserProfileDetailResponse)
+async def get_admin_user_profile_detail(
+    user_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("users.read"))],
+) -> AdminUserProfileDetailResponse:
+    from app.application.admin.rbac_service import user_has_permission
+
+    user = await _require_user_by_reference(db, user_id)
+    include_kyc = await user_has_permission(db, admin.id, "documents.read")
+    include_investments = await user_has_permission(db, admin.id, "mf.transactions.read")
+
+    detail = await get_user_profile_detail(
+        db,
+        user.id,
+        include_kyc=include_kyc,
+        include_investments=include_investments,
+    )
+    if not detail:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "user_not_found", "message": "User not found."},
+        )
+    return AdminUserProfileDetailResponse(**detail)
 
 
 @router.post("/users/{user_id}/suspend", response_model=PendingActionResponse)
@@ -538,21 +823,7 @@ async def post_suspend_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("users.suspend"))],
 ) -> PendingActionResponse:
-    try:
-        parsed_id = UUID(user_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-        ) from exc
-
-    result = await db.execute(select(User).where(User.id == parsed_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "user_not_found", "message": "User not found."},
-        )
+    user = await _require_user_by_reference(db, user_id)
 
     try:
         action = await create_admin_action_request(
@@ -585,21 +856,7 @@ async def post_unsuspend_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("users.suspend"))],
 ) -> PendingActionResponse:
-    try:
-        parsed_id = UUID(user_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-        ) from exc
-
-    result = await db.execute(select(User).where(User.id == parsed_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "user_not_found", "message": "User not found."},
-        )
+    user = await _require_user_by_reference(db, user_id)
 
     try:
         action = await create_admin_action_request(
@@ -683,26 +940,12 @@ async def get_admin_user_documents(
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("documents.read"))],
 ) -> AdminDocumentListResponse:
-    try:
-        parsed_id = UUID(user_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-        ) from exc
+    user = await _require_user_by_reference(db, user_id)
 
-    result = await db.execute(select(User).where(User.id == parsed_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "user_not_found", "message": "User not found."},
-        )
-
-    documents = await list_documents_for_user_admin(db, user_id=parsed_id)
+    documents = await list_documents_for_user_admin(db, user_id=user.id)
     await audit_documents_viewed_by_admin(
         db,
-        target_user_id=parsed_id,
+        target_user_id=user.id,
         admin_user_id=admin.id,
         document_count=len(documents),
         ip=get_client_ip(request),
@@ -766,16 +1009,10 @@ async def get_admin_user_kyc_review(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("documents.read"))],
 ) -> AdminKycReviewResponse:
-    try:
-        parsed_id = UUID(user_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-        ) from exc
+    user = await _require_user_by_reference(db, user_id)
 
     try:
-        payload = await get_user_kyc_review(db, user_id=parsed_id)
+        payload = await get_user_kyc_review(db, user_id=user.id)
     except DocumentError as exc:
         raise _handle_document_error(exc) from exc
 
@@ -838,26 +1075,12 @@ async def post_verify_user_kyc_documents(
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("documents.verify"))],
 ) -> AdminVerifyKycDocumentsResponse:
-    try:
-        parsed_id = UUID(user_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-        ) from exc
-
-    result = await db.execute(select(User).where(User.id == parsed_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "user_not_found", "message": "User not found."},
-        )
+    user = await _require_user_by_reference(db, user_id)
 
     try:
         payload = await verify_user_kyc_documents(
             db,
-            user_id=parsed_id,
+            user_id=user.id,
             admin=admin,
             ip=get_client_ip(request),
         )

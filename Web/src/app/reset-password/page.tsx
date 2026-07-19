@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { ZyndGlobalLoader } from "@/components/ui/zynd-global-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageTitle } from "@/components/ui/page-title";
 import { ApiError } from "@/lib/api-client";
 import { resetPassword } from "@/lib/auth-api";
 import { isPasswordValid } from "@/lib/password-criteria";
@@ -60,7 +61,7 @@ function ResetPasswordForm() {
   if (!token) {
     return (
       <div className="mx-auto max-w-md px-6 py-16 text-center">
-        <h1 className="text-h3 font-semibold text-foreground">{copy.resetPassword.invalidLinkTitle}</h1>
+        <PageTitle>{copy.resetPassword.invalidLinkTitle}</PageTitle>
         <p className="mt-2 text-compact text-muted-foreground">
           {copy.resetPassword.invalidLinkDescription}
         </p>
@@ -74,7 +75,7 @@ function ResetPasswordForm() {
   if (done) {
     return (
       <div className="mx-auto max-w-md px-6 py-16 text-center">
-        <h1 className="text-h3 font-semibold text-foreground">{copy.resetPassword.successTitle}</h1>
+        <PageTitle>{copy.resetPassword.successTitle}</PageTitle>
         <p className="mt-2 text-compact text-muted-foreground">
           {copy.resetPassword.successDescription}
         </p>
@@ -87,7 +88,7 @@ function ResetPasswordForm() {
 
   return (
     <div className="mx-auto max-w-md px-6 py-16">
-      <h1 className="text-h3 font-semibold text-foreground">{copy.resetPassword.title}</h1>
+      <PageTitle>{copy.resetPassword.title}</PageTitle>
       <p className="mt-2 text-compact text-muted-foreground">
         {copy.account.resetPasswordIntro}
       </p>

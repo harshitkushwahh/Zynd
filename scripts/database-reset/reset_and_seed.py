@@ -73,6 +73,29 @@ def _guard_environment(*, force: bool) -> None:
         raise SystemExit(1)
 
 
+async def _wipe_mongo_mf() -> None:
+    settings = get_settings()
+    mongo_url = settings.resolved_mongo_url
+    if not mongo_url:
+        print("MongoDB not configured — skipping MF raw/staging wipe.")
+        return
+
+    try:
+        from motor.motor_asyncio import AsyncIOMotorClient
+    except ImportError as exc:
+        raise RuntimeError("motor is required to wipe Mongo MF collections") from exc
+
+    db_name = settings.mongo_mf_raw_db
+    collections = ("scheme_ingest_batches", "scheme_staging_rows", "raw_ingestions")
+    client = AsyncIOMotorClient(mongo_url)
+    db = client[db_name]
+    for name in collections:
+        await db.drop_collection(name)
+        print(f"  Dropped Mongo {db_name}.{name}", flush=True)
+    client.close()
+    print(f"Mongo MF staging/raw collections wiped in {db_name}.", flush=True)
+
+
 async def _drop_public_schema(database_url: str) -> None:
     role = _database_role(database_url)
     engine = create_async_engine(database_url, pool_pre_ping=True)
@@ -82,6 +105,27 @@ async def _drop_public_schema(database_url: str) -> None:
             await conn.execute(text("CREATE SCHEMA public"))
             await conn.execute(text(f'GRANT ALL ON SCHEMA public TO "{role}"'))
             await conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+            # Enum types can survive a schema drop in some Postgres setups; clear leftovers.
+            await conn.execute(
+                text(
+                    """
+                    DO $$
+                    DECLARE
+                        enum_row RECORD;
+                    BEGIN
+                        FOR enum_row IN
+                            SELECT t.typname
+                            FROM pg_type t
+                            JOIN pg_namespace n ON n.oid = t.typnamespace
+                            WHERE n.nspname = 'public'
+                              AND t.typtype = 'e'
+                        LOOP
+                            EXECUTE format('DROP TYPE IF EXISTS public.%I CASCADE', enum_row.typname);
+                        END LOOP;
+                    END $$;
+                    """
+                )
+            )
     finally:
         await engine.dispose()
 
@@ -122,11 +166,14 @@ async def _run(*, assume_yes: bool, force: bool) -> None:
     _guard_environment(force=force)
     _confirm_proceed(masked_url, assume_yes=assume_yes)
 
-    print(f"Dropping public schema on {masked_url} ...")
+    print(f"Dropping public schema on {masked_url} ...", flush=True)
     await _drop_public_schema(settings.database_url)
-    print("Schema dropped.")
+    print("Schema dropped.", flush=True)
 
-    print("Running Alembic migrations ...")
+    print("Wiping Mongo MF staging and raw archive collections ...", flush=True)
+    await _wipe_mongo_mf()
+
+    print("Running Alembic migrations ...", flush=True)
     _run_migrations()
     print("Migrations complete.")
 

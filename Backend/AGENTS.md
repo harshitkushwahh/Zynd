@@ -13,6 +13,7 @@ Start here before large refactors:
 - `docs/architecture/RBAC_PERMISSION_MATRIX.md`
 - `docs/architecture/ADR-001-event-publishing.md`
 - `docs/architecture/SERVICE_BOUNDARIES.md`
+- `docs/architecture/MF_SCHEDULER_PHASES.md` — mutual fund cron pipeline (Cybrilla + AMFI)
 
 ## Hard rules (Phase 0+)
 

@@ -14,6 +14,8 @@ import {
   DASHBOARD_MAIN_SCROLL_CLASS,
   DASHBOARD_SHELL_PADDING,
 } from "@/components/dashboard/dashboard-layout";
+import { MfPaymentOverlayProvider } from "@/features/invest/contexts/mf-payment-overlay-context";
+import { ProfileMenuShortcutListener } from "@/features/dashboard/navigation/profile-menu-shortcut-listener";
 import { ZyndPinLockScreen } from "@/features/account/pin";
 import { KycDialog } from "@/features/kyc/components/kyc-dialog";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
@@ -66,7 +68,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <MfPaymentOverlayProvider>
     <SettingsNavigationProvider>
+      <ProfileMenuShortcutListener />
     <div className="h-dvh overflow-hidden bg-background">
       {pinContext?.locked ? <ZyndPinLockScreen /> : null}
       {kyc ? (
@@ -111,5 +115,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
     </SettingsNavigationProvider>
+    </MfPaymentOverlayProvider>
   );
 }

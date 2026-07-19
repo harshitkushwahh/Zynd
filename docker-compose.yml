@@ -104,6 +104,52 @@ services:
       - redis
     restart: unless-stopped
 
+  mf-scheduler:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_mf_scheduler --schedule
+    env_file:
+      - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      ZYND_MF_INGESTION_ENABLED: "true"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    restart: unless-stopped
+
+  mf-order-worker:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_mf_transaction_workers --orders
+    env_file:
+      - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      ZYND_MF_ORDERS_ENABLED: "true"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  mf-cas-worker:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_mf_transaction_workers --cas
+    env_file:
+      - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      ZYND_MF_CAS_ENABLED: "false"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
 volumes:
   zynd_pg_data:
   zynd_minio_data:

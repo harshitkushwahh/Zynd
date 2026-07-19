@@ -32,6 +32,12 @@ export async function bootstrapSession(): Promise<{
     const refreshed = await refreshSession();
     if (refreshed.ok) {
       const data = refreshed.data as AuthSuccessResponse;
+      if (data.user?.role === "admin") {
+        setAccessToken(null);
+        clearSessionHint();
+        await logout().catch(() => undefined);
+        return { user: null, reason: "expired" };
+      }
       storeAuthResponse(data);
       return { user: data.user };
     }

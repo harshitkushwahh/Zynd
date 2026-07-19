@@ -34,17 +34,18 @@ async def ensure_pending_investor_profile_for_payment(
     db: AsyncSession,
     *,
     user_id: UUID,
+    provision_trigger: InvestorProvisionTrigger = InvestorProvisionTrigger.payment,
 ) -> InvestorProfile:
-    """Called when user initiates first payment/MF flow (integration point for later).
-
-    Creates a local pending profile row. Cybrilla `invp_*` creation happens in a
-    future `provision_investor_profile` job once payment/MF modules call this.
-    """
-    return await get_or_create_pending_investor_profile(
+    """Ensure a local investor profile exists and is queued for Finprim provisioning."""
+    profile = await get_or_create_pending_investor_profile(
         db,
         user_id=user_id,
-        provision_trigger=InvestorProvisionTrigger.payment,
+        provision_trigger=provision_trigger,
     )
+    if profile.provision_trigger != provision_trigger:
+        profile.provision_trigger = provision_trigger
+        await db.flush()
+    return profile
 
 
 async def mark_investor_profile_provisioning(

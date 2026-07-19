@@ -1,13 +1,14 @@
 "use client";
 
+import { LayoutDashboard } from "lucide-react";
+
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { SecurityLoginAlerts } from "@/features/account/security/security-login-alerts";
-import { overviewContent } from "@/features/dashboard/config/dashboard-content";
-import { OverviewPortfolioSection } from "@/features/dashboard/overview/components/overview-portfolio-section";
-import { OverviewProfileCard } from "@/features/dashboard/overview/components/overview-profile-card";
-import { OverviewRecentActivity } from "@/features/dashboard/overview/components/overview-recent-activity";
-import { OverviewStatCards } from "@/features/dashboard/overview/components/overview-stat-cards";
+import { OverviewQuickLinks } from "@/features/dashboard/overview/components/overview-quick-links";
+import { OverviewRecentTransactions } from "@/features/dashboard/overview/components/overview-recent-transactions";
+import { PageTitle } from "@/components/ui/page-title";
 import { useAuth } from "@/contexts/auth-context";
+import { copy } from "@/shared/config/copy";
 
 export function PortfolioOverviewPage() {
   const { user } = useAuth();
@@ -21,22 +22,21 @@ export function PortfolioOverviewPage() {
       <SecurityLoginAlerts />
       <FundEligibilityBanner />
 
-      <div className="mb-8">
-        <h1 className="text-h2 font-bold text-foreground">
-          Welcome, {user.first_name ?? "there"}
-        </h1>
-        <p className="mt-2 text-compact text-muted-foreground">
-          {overviewContent.welcomeSubtitle}
-        </p>
+      <div className="mb-6 flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
+          <LayoutDashboard className="size-4" strokeWidth={2.25} />
+        </div>
+        <div className="min-w-0">
+          <PageTitle>Welcome, {user.first_name ?? "there"}</PageTitle>
+          <p className="mt-2 text-compact text-muted-foreground">
+            {copy.dashboard.overview.welcomeSubtitle}
+          </p>
+        </div>
       </div>
 
-      <OverviewStatCards />
+      <OverviewQuickLinks />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <OverviewPortfolioSection />
-        <OverviewProfileCard />
-        <OverviewRecentActivity />
-      </div>
+      <OverviewRecentTransactions />
     </div>
   );
 }

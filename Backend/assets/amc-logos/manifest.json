@@ -1,0 +1,23 @@
+{
+  "abakkus-mutual-fund": "file:logos/abakkus.png",
+  "aditya-birla-sun-life-mutual-fund": "file:logos/aditya_birla_sun_life.png",
+  "axis-mutual-fund": "file:logos/axis.png",
+  "bandhan-mutual-fund": "file:logos/bandhan.png",
+  "capitalmind-mutual-fund": "file:logos/capitalmind.png",
+  "dsp-mutual-fund": "file:logos/dsp.png",
+  "hdfc-mutual-fund": "file:logos/hdfc.png",
+  "helios-mutual-fund": "file:logos/helios.png",
+  "icici-mutual-fund": "file:logos/icici_prudential.png",
+  "invesco-mutual-fund": "file:logos/invesco.png",
+  "jm-financial-mutual-fund": "file:logos/jm_financial.png",
+  "kotak-mahindra-mutual-fund": "file:logos/kotak.png",
+  "mirae-asset-mutual-fund": "file:logos/mirae_asset.png",
+  "nippon-india-mutual-fund": "file:logos/nippon_india.png",
+  "pgim-india-mutual-fund": "file:logos/pgim_india.png",
+  "quant-mutual-fund": "file:logos/quant.png",
+  "quantum-mutual-fund": "file:logos/quantum.png",
+  "the-wealth-company-mutual-fund": "file:logos/the_wealth_company.png",
+  "trust-mutual-fund": "file:logos/trust.png",
+  "uti-mutual-fund": "file:logos/uti.png",
+  "whiteoak-capital-mutual-fund": "file:logos/whiteoak.png"
+}

@@ -13,6 +13,7 @@ import {
   getLocalPinBiometricCredentialId,
 } from "@/features/account/pin/storage/pin-biometric-storage";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { useAuth } from "@/contexts/auth-context";
 import { useProfileImage } from "@/contexts/profile-image-context";
@@ -131,11 +132,12 @@ export function ZyndPinLockScreen() {
               alt={APP_NAME}
               width={132}
               height={36}
-              className="h-9 w-auto object-contain"
+              className="h-9 object-contain"
+              style={{ width: "auto" }}
               priority
             />
 
-            <h1 className="mt-5 text-h4 font-semibold text-foreground">{copy.pin.lockTitle}</h1>
+            <PageTitle className="mt-5">{copy.pin.lockTitle}</PageTitle>
 
             <div className="mt-4 w-full rounded-[var(--radius-card)] border border-border bg-muted px-4 py-3.5">
               <div className="flex items-start gap-3">

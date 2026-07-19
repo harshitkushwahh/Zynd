@@ -119,8 +119,10 @@ class Settings(BaseSettings):
     deletion_executor_batch_size: int = 50
     deletion_executor_interval_seconds: int = 3600
     mongo_url: str = ""
+    mongo_conn: str = ""
     mongo_db_name: str = "zynd_analytics"
     mongo_export_batch_size: int = 500
+    mongo_mf_raw_db: str = "zynd_mf_raw"
     hibp_enabled: bool = True
     otp_send_limit_per_identifier: int = 5
     otp_send_limit_per_ip: int = 20
@@ -159,6 +161,7 @@ class Settings(BaseSettings):
     webauthn_rp_id: str = ""
     webauthn_origins: str = ""
     refresh_cookie_name: str = "zynd_refresh_token"
+    refresh_cookie_name_admin: str = "zynd_admin_refresh_token"
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: str = "lax"
 
@@ -221,37 +224,230 @@ class Settings(BaseSettings):
     kyc_provider_mode: Literal["auto", "stub", "live"] = "auto"
     kyckart_base_url: str = ""
     kyckart_api_key: str = ""
+    kyckart_base_url_test: str = ""
+    kyckart_api_key_test: str = ""
+    kyckart_base_url_live: str = ""
+    kyckart_api_key_live: str = ""
     kyckart_bank_verification_path: str = "/api/bank/pennyLessV4"
     fp_poa_token_base_url: str = ""
     fp_poa_client_id: str = ""
     fp_poa_client_secret: str = ""
     fp_poa_base_url: str = "https://api.cybrilla.com"
     fp_poa_auth_tenant: str = "cybrillapoa"
+    fp_poa_token_base_url_test: str = ""
+    fp_poa_client_id_test: str = ""
+    fp_poa_client_secret_test: str = ""
+    fp_poa_base_url_test: str = ""
+    fp_poa_auth_tenant_test: str = ""
+    fp_poa_token_base_url_live: str = ""
+    fp_poa_client_id_live: str = ""
+    fp_poa_client_secret_live: str = ""
+    fp_poa_base_url_live: str = ""
+    fp_poa_auth_tenant_live: str = ""
     fp_base_url: str = ""
     fp_tenant: str = ""
     fp_client_id: str = ""
     fp_client_secret: str = ""
+    fp_base_url_test: str = ""
+    fp_tenant_test: str = ""
+    fp_client_id_test: str = ""
+    fp_client_secret_test: str = ""
+    fp_webhook_secret_test: str = ""
+    fp_webhook_callback_url_test: str = ""
+    digilocker_fp_tenant_test: str = ""
+    fp_base_url_live: str = ""
+    fp_tenant_live: str = ""
+    fp_client_id_live: str = ""
+    fp_client_secret_live: str = ""
+    fp_webhook_secret_live: str = ""
+    fp_webhook_callback_url_live: str = ""
+    digilocker_fp_tenant_live: str = ""
+    fp_enabled: bool = False
+    fp_token_cache_minutes: int = 25
+    fp_webhook_secret: str = ""
+    fp_webhook_callback_url: str = ""
     digilocker_fp_tenant: str = ""
     kyc_digilocker_callback_url: str = ""
     kyc_proof_callback_url: str = ""
     kyc_esign_callback_url: str = ""
     kyc_auto_kra_check_enabled: bool = True
 
+    # Mutual fund ingestion — Cybrilla scheme sync + AMFI NAV overlay
+    zynd_distributor_arn: str = ""
+    zynd_distributor_euin: str = ""
+    zynd_mf_ingestion_enabled: bool = True
+    zynd_mf_scheme_sync_enabled: bool = True
+    zynd_mf_scheme_sync_cron: str = "0 20 * * *"
+    zynd_mf_scheme_sync_batch_size: int = 100
+    zynd_mf_scheme_staging_enabled: bool = True
+    zynd_mf_scheme_promote_auto: bool = False
+    zynd_mf_scheme_staging_ingest_cron: str = "0 20 * * *"
+    zynd_mf_scheme_staging_validate_cron: str = "2 20 * * *"
+    zynd_mf_scheme_staging_promote_cron: str = "5 20 * * *"
+    zynd_mf_nav_ingestion_enabled: bool = True
+    zynd_mf_nav_cron: str = "0 21 * * *"
+    zynd_mf_amfi_nav_url: str = "https://www.amfiindia.com/spages/NAVAll.txt"
+    zynd_mf_fetch_timeout_seconds: int = 60
+    zynd_mf_nav_batch_size: int = 500
+    zynd_mf_nav_write_chunk_size: int = 50
+    zynd_mf_min_nav_record_count: int = 5000
+    zynd_mf_min_file_size_bytes: int = 512_000
+    zynd_mf_nav_max_age_days: int = 1
+    zynd_mf_nav_isin_match_only: bool = True
+    zynd_mf_cold_start_backfill_enabled: bool = True
+    zynd_mf_cold_start_backfill_threshold: int = 1000
+    zynd_mf_cold_start_backfill_from_date: str = "2006-04-01"
+    zynd_mf_cold_start_backfill_days_per_window: int = 90
+    zynd_mf_cold_start_backfill_cron: str = "30 18 * * *"
+    zynd_mf_cold_start_on_startup: bool = True
+    zynd_mf_dependency_guard_enabled: bool = True
+    zynd_mf_dependency_lookback_hours: int = 24
+    zynd_mf_stale_run_cleanup_enabled: bool = True
+    zynd_mf_stale_run_cleanup_cron: str = "0 */2 * * *"
+    zynd_mf_stale_run_cleanup_threshold_hours: int = 3
+    zynd_mf_aum_cron: str = "0 9 1 * *"
+    zynd_mf_amfi_aum_url: str = "https://www.amfiindia.com/aum-data/aum-disclosure"
+    zynd_mf_aum_ingestion_enabled: bool = False
+    zynd_mf_ter_cron: str = "0 10 1 * *"
+    zynd_mf_ter_ingestion_enabled: bool = False
+    zynd_mf_ter_page_size: int = 500
+    zynd_mf_ter_max_pages: int = 0
+    zynd_mf_ter_financial_year: str = "2025-2026"
+    zynd_mf_ter_month: str = ""
+    zynd_mf_ter_tracker_url: str = ""
+    zynd_mf_amfi_aum_scheme_wise_data_url: str = ""
+    zynd_mf_aaum_enabled: bool = False
+    zynd_mf_aaum_cron: str = "30 11 15 1,4,7,10 *"
+    zynd_mf_aaum_str_type: str = "Categorywise"
+    zynd_mf_aaum_fy_id: str = ""
+    zynd_mf_aaum_period_id: str = ""
+    zynd_mf_amfi_aaum_base_url: str = "https://www.amfiindia.com"
+    zynd_mf_metrics_enabled: bool = True
+    zynd_mf_metrics_cron: str = "0 22 * * *"
+    zynd_mf_rank_cron: str = "30 23 * * *"
+    zynd_mf_metrics_batch_size: int = 50
+    zynd_mf_collections_enabled: bool = True
+    zynd_mf_collection_top_n: int = 25
+    zynd_mf_collection_best_sip_max_min_inr: int = 500
+    zynd_mf_classification_cron: str = "15 22 * * *"
+    zynd_mf_collection_assign_cron: str = "25 22 * * *"
+    zynd_mf_raw_bucket: str = "zynd-mf-raw"
+    zynd_mf_raw_archive_object_storage_enabled: bool = True
+    zynd_mf_scheduler_tick_seconds: int = 60
+    zynd_mf_catalog_lifecycle_enabled: bool = True
+    zynd_mf_catalog_lifecycle_cron: str = "15 20 * * *"
+    zynd_mf_amc_logo_ingest_enabled: bool = False
+    zynd_mf_amc_logo_ingest_cron: str = "0 6 * * 1"
+    zynd_mf_amc_logo_url_template: str = ""
+    zynd_mf_amc_logo_manifest_url: str = ""
+    zynd_mf_amc_logo_manifest_path: str = ""
+    zynd_mf_catalog_health_gates_enabled: bool = True
+    zynd_mf_nav_stale_days: int = 3
+    zynd_mf_min_nav_rows: int = 50
+    zynd_mf_invest_disclaimer: str = (
+        "Mutual fund investments are subject to market risks. Read all scheme-related documents carefully. "
+        "Past performance is not indicative of future returns."
+    )
+    zynd_mf_rules_enabled: bool = True
+    zynd_mf_bulk_maker_checker_threshold: int = 25
+    zynd_mf_invest_cache_enabled: bool = True
+    zynd_mf_invest_cache_home_ttl_seconds: int = 600
+    zynd_mf_invest_cache_category_ttl_seconds: int = 600
+    zynd_mf_invest_cache_fund_ttl_seconds: int = 180
+    zynd_mf_invest_cache_search_ttl_seconds: int = 300
+    zynd_mf_invest_cache_config_ttl_seconds: int = 900
+    zynd_mf_invest_cache_calc_ttl_seconds: int = 86400
+    zynd_mf_amfi_scheme_master_enabled: bool = True
+    zynd_mf_amfi_scheme_master_cron: str = "1 21 * * *"
+    zynd_mf_return_calculator_enabled: bool = True
+    zynd_mf_return_calculator_cron: str = "5 22 * * *"
+    zynd_mf_calculators_enabled: bool = True
+    zynd_mf_compare_enabled: bool = True
+    zynd_mf_amc_aum_rank_enabled: bool = True
+    zynd_mf_amc_aum_rank_cron: str = "0 10 2 * *"
+    zynd_mf_compliance_sync_enabled: bool = True
+    zynd_mf_compliance_sync_cron: str = "30 20 * * 0"
+    zynd_mf_compliance_sync_batch_size: int = 200
+    zynd_mf_scheme_min_amounts_backfill_enabled: bool = True
+    zynd_mf_scheme_min_amounts_backfill_cron: str = "15 21 * * *"
+    zynd_mf_scheme_min_amounts_backfill_batch_size: int = 200
+    zynd_mf_orders_enabled: bool = True
+    zynd_mf_order_worker_tick_seconds: int = 30
+    zynd_mf_order_worker_batch_size: int = 20
+    zynd_mf_mandate_sync_interval_seconds: int = 300
+    zynd_mf_order_status_sync_enabled: bool = True
+    zynd_mf_order_payment_gateway: str = "ondc"
+    zynd_mf_cart_max_items: int = 10
+    zynd_mf_sip_enabled: bool = True
+    zynd_mf_mandate_provider: str = "CYBRILLAPOA"
+    zynd_mf_sip_default_mandate_limit_inr: int = 15_000
+    zynd_mf_sip_default_monthly_installments: int = 360
+    zynd_mf_sip_default_daily_installments: int = 365
+    zynd_mf_payment_expiry_minutes: int = 1440
+    zynd_mf_stuck_transaction_minutes: int = 60
+    zynd_mf_worker_max_transient_retries: int = 5
+    zynd_mf_webhook_replay_enabled: bool = True
+    zynd_mf_webhook_replay_batch_size: int = 10
+    zynd_mf_payment_postback_url: str = ""
+    zynd_mf_payment_postback_path: str = "/dashboard/mutual-funds/orders/payment-return"
+    zynd_mf_sip_mandate_postback_path: str = "/dashboard/mutual-funds/sip/mandate-return"
+    zynd_investor_provision_enabled: bool = True
+    zynd_investor_provision_batch_size: int = 10
+    zynd_mf_cas_enabled: bool = False
+    zynd_mf_central_base_url: str = ""
+    zynd_mf_central_api_key: str = ""
+    zynd_mf_cas_worker_tick_seconds: int = 60
+    zynd_mf_cas_worker_batch_size: int = 10
+
+    @property
+    def resolved_mongo_url(self) -> str:
+        return self.mongo_url.strip() or self.mongo_conn.strip()
+
+    @property
+    def resolved_fp_enabled(self) -> bool:
+        from app.application.integrations.integration_runtime import is_finprim_enabled
+
+        return is_finprim_enabled()
+
     @property
     def resolved_kyc_provider_live(self) -> bool:
-        if self.kyc_provider_mode == "stub":
-            return False
-        if self.kyc_provider_mode == "live":
-            return True
-        return bool(
-            self.kyckart_api_key.strip()
-            and self.fp_client_id.strip()
-            and self.fp_client_secret.strip()
-        )
+        from app.application.integrations.integration_runtime import is_kyckart_live
+
+        return is_kyckart_live()
+
+    @property
+    def resolved_mf_payment_postback_url(self) -> str:
+        if self.zynd_mf_payment_postback_url.strip():
+            return self.zynd_mf_payment_postback_url.rstrip("/")
+        return f"{self.frontend_url.rstrip('/')}{self.zynd_mf_payment_postback_path}"
+
+    @property
+    def resolved_mf_sip_mandate_postback_url(self) -> str:
+        if self.zynd_mf_payment_postback_url.strip():
+            return self.zynd_mf_payment_postback_url.rstrip("/")
+        return f"{self.frontend_url.rstrip('/')}{self.zynd_mf_sip_mandate_postback_path}"
+
+    @property
+    def resolved_fp_webhook_verify_enabled(self) -> bool:
+        from app.application.integrations.integration_runtime import get_finprim_runtime
+
+        return bool(get_finprim_runtime().webhook_secret.strip())
+
+    @property
+    def resolved_fp_webhook_callback_url(self) -> str:
+        from app.application.integrations.integration_runtime import get_finprim_runtime
+
+        callback_url = get_finprim_runtime().webhook_callback_url.strip()
+        if callback_url:
+            return callback_url.rstrip("/")
+        return f"{self.resolved_api_public_url}/webhooks/finprim"
 
     @property
     def resolved_digilocker_fp_tenant(self) -> str:
-        return self.digilocker_fp_tenant.strip() or self.fp_tenant.strip()
+        from app.application.integrations.integration_runtime import get_finprim_runtime
+
+        runtime = get_finprim_runtime()
+        return runtime.digilocker_tenant.strip() or runtime.tenant.strip()
 
     @property
     def resolved_kyc_digilocker_callback_url(self) -> str:
