@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
-import {
-  fetchInvestSearch,
-  type InvestFundSummary,
-} from "@/features/invest/api/invest-api";
-import { resolveInvestAssetUrl } from "@/features/invest/lib/mf-format";
+import { MfFundSearchResultItem } from "@/features/invest/components/mf-fund-search-ui";
+import { MF_FUND_SEARCH_MIN_CHARS, useMfFundSearch } from "@/features/invest/lib/mf-fund-search";
+import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
 import {
   Command,
   CommandDialog,
@@ -26,23 +24,21 @@ type DashboardSearchDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-const SEARCH_MIN_CHARS = 2;
-const SEARCH_DEBOUNCE_MS = 300;
-const SEARCH_PAGE_SIZE = 8;
-
 export function DashboardSearchDialog({
   open,
   onOpenChange,
 }: DashboardSearchDialogProps) {
   const router = useRouter();
-  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled);
+  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled && !route.disabled);
   const [query, setQuery] = useState("");
-  const [funds, setFunds] = useState<InvestFundSummary[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
 
   const trimmedQuery = query.trim();
-  const isFundSearch = trimmedQuery.length >= SEARCH_MIN_CHARS;
+  const isFundSearch = trimmedQuery.length >= MF_FUND_SEARCH_MIN_CHARS;
+
+  const { results: funds, searching, error: searchError } = useMfFundSearch({
+    query,
+    enabled: open && isFundSearch,
+  });
 
   const filteredPages = useMemo(() => {
     if (!trimmedQuery) return navRoutes;
@@ -56,54 +52,16 @@ export function DashboardSearchDialog({
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setFunds([]);
-      setSearching(false);
-      setSearchError(null);
-      return;
     }
   }, [open]);
-
-  useEffect(() => {
-    if (!open || !isFundSearch) {
-      setFunds([]);
-      setSearching(false);
-      setSearchError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setSearching(true);
-    setSearchError(null);
-
-    const timeout = window.setTimeout(() => {
-      fetchInvestSearch({ q: trimmedQuery, page: 1, page_size: SEARCH_PAGE_SIZE })
-        .then((response) => {
-          if (!cancelled) setFunds(response.items);
-        })
-        .catch((error: Error) => {
-          if (!cancelled) {
-            setFunds([]);
-            setSearchError(error.message || copy.mutualFunds.searchLoadError);
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setSearching(false);
-        });
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [isFundSearch, open, trimmedQuery]);
 
   const showEmptyState =
     !searching &&
     ((isFundSearch && funds.length === 0 && filteredPages.length === 0) ||
       (!isFundSearch && filteredPages.length === 0));
 
-  const openFund = (productId: string) => {
-    router.push(`/dashboard/mutual-funds/funds/${productId}`);
+  const openFund = (fund: (typeof funds)[number]) => {
+    router.push(mfFundHref(fund));
     onOpenChange(false);
   };
 
@@ -139,35 +97,17 @@ export function DashboardSearchDialog({
           ) : null}
 
           {isFundSearch && funds.length > 0 ? (
-            <CommandGroup heading={copy.dashboard.search.fundsHeading}>
-              {funds.map((fund) => {
-                const logoUrl = resolveInvestAssetUrl(fund.amc_logo_url);
-
-                return (
-                  <CommandItem
-                    key={fund.product_id}
-                    value={fund.product_id}
-                    onSelect={() => openFund(fund.product_id)}
-                  >
-                    {logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={logoUrl}
-                        alt=""
-                        className="size-7 shrink-0 rounded-[var(--radius-control)] border border-border bg-background object-contain"
-                      />
-                    ) : (
-                      <div className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-[10px] font-semibold text-muted-foreground">
-                        {fund.amc_name.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-compact text-foreground">{fund.name}</p>
-                      <p className="truncate text-caption text-muted-foreground">{fund.amc_name}</p>
-                    </div>
-                  </CommandItem>
-                );
-              })}
+            <CommandGroup heading={copy.dashboard.search.fundsHeading} className="p-1.5">
+              {funds.map((fund) => (
+                <CommandItem
+                  key={fund.product_id}
+                  value={fund.product_id}
+                  className="py-2.5"
+                  onSelect={() => openFund(fund)}
+                >
+                  <MfFundSearchResultItem fund={fund} />
+                </CommandItem>
+              ))}
             </CommandGroup>
           ) : null}
 

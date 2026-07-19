@@ -1,37 +1,66 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getErrorMessage } from "@/lib/errors";
 import {
   AlertTriangle,
-  ArrowLeft,
   BarChart3,
   Building2,
-  ChevronLeft,
-  ChevronRight,
   Database,
   FileText,
-  GitBranch,
   Upload,
   HeartPulse,
   Layers,
   LineChart,
-  RefreshCw,
-  Search,
+  MoreHorizontal,
+  Package,
   Settings2,
   TrendingUp,
-  X,
 } from "lucide-react";
 
-import { AdminShell } from "@/components/admin-shell";
 import { BulkImportPanel } from "@/components/mf/bulk-import-panel";
-import { CatalogRulesPanel } from "@/components/mf/catalog-rules-panel";
 import { AmcContentDrawer } from "@/components/mf/amc-content-drawer";
+import { AmcLogo } from "@/components/mf/amc-logo";
 import { CatalogHealthPanel } from "@/components/mf/catalog-health-panel";
-import { CategoryCurationPanel } from "@/components/mf/category-curation-panel";
-import { ComplianceSettingsPanel } from "@/components/mf/compliance-settings-panel";
+import { CategoryCurationDialog } from "@/components/mf/category-curation-panel";
+import { ContentRulesPanel } from "@/components/mf/content-rules-panel";
+import { FundContentPanel } from "@/components/mf/fund-content-panel";
+import { MfOperationsPanel } from "@/components/mf/mf-operations-panel";
+import { lifecycleTone, MfStatusChip } from "@/components/mf/mf-status-chip";
+import { AdminSectionBreadcrumb } from "@/components/dashboard/admin-section-breadcrumb";
+import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
 import { SchemeStagingPanel } from "@/components/mf/scheme-staging-panel";
+import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
+import { AdminDrawer } from "@/components/ui/admin-drawer";
+import {
+  AdminDialogFooterActions,
+  AdminFormDialog,
+} from "@/components/ui/admin-dialog-presets";
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTablePagination,
+  AdminTableRow,
+  AdminTableStateRow,
+  paginateItems,
+} from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminFormSkeleton, AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Card,
   CardContent,
@@ -40,18 +69,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import {
   fetchMfAmcs,
   fetchMfCategories,
   fetchMfFundDetail,
   fetchMfFundNavs,
   fetchMfFunds,
-  fetchMfIngestionRuns,
-  fetchMfJobs,
   fetchMfOverview,
-  runMfJob,
   updateMfAmc,
   updateMfFund,
   type MfAmc,
@@ -59,56 +94,38 @@ import {
   type MfFundAdmin,
   type MfFundAdminDetail,
   type MfFundNavHistory,
-  type MfIngestionRun,
-  type MfJob,
 } from "@/lib/mf-admin-api";
 
-type TabKey = "overview" | "health" | "staging" | "categories" | "funds" | "amcs" | "content" | "rules" | "bulk" | "operations";
+type TabKey = "overview" | "health" | "staging" | "categories" | "funds" | "content" | "bulk" | "operations";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return fallback;
-}
+const FUND_PAGE_SIZE = 25;
+const ALL = "all";
+
 
 function formatPercent(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "NA";
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function formatReturnDisplay(value: number | null | undefined) {
+  if (value == null) {
+    return { text: "NA", tone: "muted" as const };
+  }
+  return {
+    text: `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`,
+    tone: value > 0 ? ("positive" as const) : value < 0 ? ("negative" as const) : ("muted" as const),
+  };
+}
+
+function returnToneClass(tone: "positive" | "negative" | "muted") {
+  if (tone === "positive") return "text-success";
+  if (tone === "negative") return "text-destructive";
+  return "text-muted-foreground";
+}
+
 function formatNav(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "NA";
   return value.toFixed(4);
-}
-
-function StatusBadge({
-  label,
-  tone = "neutral",
-}: {
-  label: string;
-  tone?: "success" | "warning" | "danger" | "neutral";
-}) {
-  const toneClass =
-    tone === "success"
-      ? "border-success/30 bg-success/10 text-success"
-      : tone === "warning"
-        ? "border-warning/30 bg-warning/10 text-warning"
-        : tone === "danger"
-          ? "border-destructive/30 bg-destructive/10 text-destructive"
-          : "border-border bg-muted text-foreground";
-  return (
-    <span
-      className={`inline-flex rounded-[var(--radius-control)] border px-2 py-0.5 text-caption ${toneClass}`}
-    >
-      {label}
-    </span>
-  );
-}
-
-function lifecycleTone(status: string | null): "success" | "warning" | "neutral" {
-  if (status === "ACTIVE") return "success";
-  if (status === "INACTIVE") return "warning";
-  return "neutral";
 }
 
 function NavSparkline({ points }: { points: MfFundNavHistory["points"] }) {
@@ -137,6 +154,7 @@ function NavSparkline({ points }: { points: MfFundNavHistory["points"] }) {
 }
 
 function ReasonModal({
+  open,
   title,
   description,
   confirmLabel,
@@ -144,6 +162,7 @@ function ReasonModal({
   onCancel,
   onConfirm,
 }: {
+  open: boolean;
   title: string;
   description: string;
   confirmLabel: string;
@@ -153,34 +172,38 @@ function ReasonModal({
 }) {
   const [reason, setReason] = useState("");
 
+  useEffect(() => {
+    if (open) setReason("");
+  }, [open]);
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input
-            placeholder="Reason (required)"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={loading}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={loading || !reason.trim()}
-              onClick={() => onConfirm(reason.trim())}
-            >
-              {loading ? "Saving..." : confirmLabel}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <AdminFormDialog
+      open={open}
+      onClose={onCancel}
+      title={title}
+      description={description}
+      icon={AlertTriangle}
+      iconTone="warning"
+      size="sm"
+      footer={
+        <AdminDialogFooterActions
+          cancelLabel="Cancel"
+          confirmLabel={confirmLabel}
+          confirmVariant="destructive"
+          loading={loading}
+          loadingLabel="Saving..."
+          confirmDisabled={!reason.trim()}
+          onCancel={onCancel}
+          onConfirm={() => onConfirm(reason.trim())}
+        />
+      }
+    >
+      <Input
+        placeholder="Reason (required)"
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+      />
+    </AdminFormDialog>
   );
 }
 
@@ -257,43 +280,34 @@ function FundDetailDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
-      <button type="button" className="flex-1" aria-label="Close fund drawer" onClick={onClose} />
-      <aside className="flex h-full w-full max-w-xl flex-col border-l border-border bg-card shadow-zynd-high">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <p className="text-caption text-muted-foreground">Fund detail</p>
-            <h2 className="font-heading text-h4 font-semibold text-foreground">
-              {detail?.scheme_name ?? "Loading..."}
-            </h2>
-          </div>
-          <Button variant="outline" size="sm" onClick={onClose}>
-            <X className="size-3.5" />
-            Close
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+    <AdminDrawer
+      open
+      onClose={onClose}
+      subtitle="Fund detail"
+      title={detail?.scheme_name ?? "Fund detail"}
+      icon={Package}
+      size="lg"
+    >
           {loading ? (
-            <p className="text-compact text-muted-foreground">Loading fund...</p>
+            <AdminFormSkeleton rows={6} />
           ) : error ? (
-            <p className="text-compact text-destructive">{error}</p>
+            <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
           ) : detail ? (
             <div className="space-y-6">
               <div className="flex flex-wrap gap-2">
-                <StatusBadge label={detail.lifecycle_status ?? "UNKNOWN"} tone={lifecycleTone(detail.lifecycle_status)} />
-                <StatusBadge
+                <MfStatusChip label={detail.lifecycle_status ?? "UNKNOWN"} tone={lifecycleTone(detail.lifecycle_status)} />
+                <MfStatusChip
                   label={detail.amc_empanelled ? "AMC empanelled" : "AMC not empanelled"}
                   tone={detail.amc_empanelled ? "success" : "warning"}
                 />
-                <StatusBadge
+                <MfStatusChip
                   label={detail.fp_oms_purchase_allowed ? "Purchasable" : "Not purchasable"}
                   tone={detail.fp_oms_purchase_allowed ? "success" : "warning"}
                 />
                 {detail.catalog_flags.map((flag) => (
-                  <StatusBadge key={flag} label={flag.replaceAll("_", " ")} tone="warning" />
+                  <MfStatusChip key={flag} label={flag.replaceAll("_", " ")} tone="warning" />
                 ))}
-                <StatusBadge
+                <MfStatusChip
                   label={detail.is_visible ? "Visible on site" : "Hidden on site"}
                   tone={detail.is_visible ? "success" : "danger"}
                 />
@@ -410,7 +424,7 @@ function FundDetailDrawer({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {navHistory ? <NavSparkline points={navHistory.points} /> : null}
-                  <div className="max-h-48 overflow-y-auto rounded-[var(--radius-control)] border border-border">
+                  <div className="max-h-scroll-sm overflow-y-auto rounded-[var(--radius-control)] border border-border">
                     <table className="w-full text-caption">
                       <thead className="sticky top-0 bg-muted">
                         <tr>
@@ -432,9 +446,7 @@ function FundDetailDrawer({
               </Card>
             </div>
           ) : null}
-        </div>
-      </aside>
-    </div>
+    </AdminDrawer>
   );
 }
 
@@ -450,7 +462,7 @@ export default function MutualFundsAdminPage() {
   const canReadJobs = hasPermission("mf.jobs.read");
   const canRunJobs = hasPermission("mf.jobs.run");
 
-  const defaultTab: TabKey = canReadCatalog ? "overview" : canReadJobs ? "operations" : "amcs";
+  const defaultTab: TabKey = canReadCatalog ? "overview" : "operations";
   const [tab, setTab] = useState<TabKey>(defaultTab);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -477,25 +489,23 @@ export default function MutualFundsAdminPage() {
   const [selectedFundId, setSelectedFundId] = useState<number | null>(null);
   const [selectedAmcContent, setSelectedAmcContent] = useState<MfAmc | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<MfCategoryAdmin | null>(null);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [amcs, setAmcs] = useState<MfAmc[]>([]);
-  const [jobs, setJobs] = useState<MfJob[]>([]);
-  const [runs, setRuns] = useState<MfIngestionRun[]>([]);
-
+  const [amcSearch, setAmcSearch] = useState("");
+  const [amcPage, setAmcPage] = useState(0);
   const tabs = useMemo(
     () =>
       [
         canReadCatalog ? { key: "overview" as const, label: "Overview", icon: BarChart3 } : null,
+        canReadCatalog ? { key: "funds" as const, label: "Funds", icon: TrendingUp } : null,
         canReadCatalog ? { key: "health" as const, label: "Health", icon: HeartPulse } : null,
         canReadCatalog ? { key: "staging" as const, label: "Staging", icon: Database } : null,
         canReadCatalog ? { key: "categories" as const, label: "Categories", icon: Layers } : null,
-        canReadCatalog ? { key: "funds" as const, label: "Funds", icon: TrendingUp } : null,
-        canReadCatalog ? { key: "content" as const, label: "Content", icon: FileText } : null,
-        canReadCatalog ? { key: "rules" as const, label: "Rules", icon: GitBranch } : null,
+        canReadCatalog ? { key: "content" as const, label: "Content & rules", icon: FileText } : null,
         canReadCatalog ? { key: "bulk" as const, label: "Bulk import", icon: Upload } : null,
-        canReadAmcs ? { key: "amcs" as const, label: "AMCs", icon: Building2 } : null,
         canReadJobs ? { key: "operations" as const, label: "Operations", icon: Settings2 } : null,
       ].filter(Boolean) as Array<{ key: TabKey; label: string; icon: typeof BarChart3 }>,
-    [canReadAmcs, canReadCatalog, canReadJobs]
+    [canReadCatalog, canReadJobs]
   );
 
   const loadData = useCallback(async () => {
@@ -509,7 +519,7 @@ export default function MutualFundsAdminPage() {
         tasks.push(
           fetchMfFunds({
             page: fundPage,
-            page_size: 25,
+            page_size: FUND_PAGE_SIZE,
             q: fundSearch || undefined,
             lifecycle_status: fundLifecycle || undefined,
             category_slug: fundCategory || undefined,
@@ -519,15 +529,7 @@ export default function MutualFundsAdminPage() {
             setFundHasMore(result.has_more);
           })
         );
-      }
-      if (canReadAmcs) {
         tasks.push(fetchMfAmcs().then(setAmcs));
-      } else if (canManageCatalog) {
-        tasks.push(fetchMfAmcs().then(setAmcs));
-      }
-      if (canReadJobs) {
-        tasks.push(fetchMfJobs().then(setJobs));
-        tasks.push(fetchMfIngestionRuns(15).then(setRuns));
       }
       await Promise.all(tasks);
     } catch (err) {
@@ -536,9 +538,7 @@ export default function MutualFundsAdminPage() {
       setLoading(false);
     }
   }, [
-    canReadAmcs,
     canReadCatalog,
-    canReadJobs,
     fundCategory,
     fundLifecycle,
     fundPage,
@@ -626,520 +626,550 @@ export default function MutualFundsAdminPage() {
     }
   };
 
-  const handleRunJob = async (jobName: string) => {
-    if (!canRunJobs) return;
-    setActionLoading(`job-${jobName}`);
-    setMessage("");
-    try {
-      const result = await runMfJob(jobName);
-      setMessage(`Job ${result.job} triggered.`);
-      await loadData();
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not run job."));
-    } finally {
-      setActionLoading(null);
+  useEffect(() => {
+    if (!tabs.some((item) => item.key === tab)) {
+      setTab(tabs[0]?.key ?? defaultTab);
     }
-  };
+  }, [defaultTab, tab, tabs]);
+
+  const fundTotalPages = Math.max(1, Math.ceil(fundTotal / FUND_PAGE_SIZE));
+
+  const overviewMetrics = useMemo(
+    () => [
+      {
+        key: "total-funds",
+        label: "Total funds",
+        value: (overview?.total_funds ?? 0).toLocaleString(),
+        icon: TrendingUp,
+        tone: "info" as const,
+      },
+      {
+        key: "active-products",
+        label: "Active products",
+        value: (overview?.active_products ?? 0).toLocaleString(),
+        icon: Package,
+        tone: "success" as const,
+      },
+      {
+        key: "empanelled-amcs",
+        label: "Empanelled AMCs",
+        value: (overview?.empanelled_amcs ?? 0).toLocaleString(),
+        icon: Building2,
+        tone: "default" as const,
+      },
+      {
+        key: "nav-rows",
+        label: "NAV rows",
+        value: (overview?.nav_rows ?? 0).toLocaleString(),
+        icon: LineChart,
+        tone: "muted" as const,
+      },
+    ],
+    [overview],
+  );
+
+  const filteredAmcs = useMemo(() => {
+    const query = amcSearch.trim().toLowerCase();
+    if (!query) return amcs;
+    return amcs.filter(
+      (amc) =>
+        amc.name.toLowerCase().includes(query) ||
+        amc.slug.toLowerCase().includes(query) ||
+        String(amc.amc_code ?? "").toLowerCase().includes(query),
+    );
+  }, [amcSearch, amcs]);
+
+  const amcPagination = useMemo(
+    () => paginateItems(filteredAmcs, amcPage, ADMIN_TABLE_PAGE_SIZE),
+    [amcPage, filteredAmcs],
+  );
+
+  useEffect(() => {
+    setAmcPage(0);
+  }, [amcSearch]);
 
   const hasAnyMfAccess = canReadCatalog || canReadAmcs || canReadJobs;
 
   return (
-    <AdminShell>
-      <div className="flex min-h-full flex-1 flex-col">
-        <header className="border-b border-border bg-card shadow-zynd-low">
-          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-            <div className="flex items-center gap-3">
-              <Link href="/dashboard" className="inline-flex items-center gap-1 text-compact text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="size-3.5" />
-                Console
-              </Link>
-              <span className="font-heading text-h4 font-bold tracking-tight text-foreground">
-                Mutual Funds
-              </span>
+    <>
+      {!hasAnyMfAccess ? (
+        <AdminFeedbackMessage variant="warning">
+          You do not have permission to view mutual fund administration.
+        </AdminFeedbackMessage>
+      ) : (
+        <div className="space-y-6">
+          <AdminSectionBreadcrumb segments={[{ label: "Mutual funds" }]} />
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="font-heading text-h3 font-semibold text-foreground">Mutual funds</h1>
+              <p className="mt-1 text-caption text-muted-foreground">
+                Catalog, content, AMCs, and ingestion operations.
+              </p>
             </div>
-            <Button variant="outline" disabled={loading} onClick={() => void loadData()}>
-              <RefreshCw className="size-3.5" />
-              Refresh
-            </Button>
-          </div>
-        </header>
-
-        <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-          {!hasAnyMfAccess ? (
-            <Card>
-              <CardContent className="flex items-center gap-3 py-8 text-compact text-muted-foreground">
-                <AlertTriangle className="size-4 text-warning" />
-                You do not have mutual fund admin permissions.
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="mb-6 flex flex-wrap gap-2">
-                {tabs.map(({ key, label, icon: Icon }) => (
-                  <Button
-                    key={key}
-                    variant={tab === key ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setTab(key)}
-                  >
-                    <Icon className="size-3.5" />
-                    {label}
-                  </Button>
-                ))}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="rounded-[var(--radius-card)] border border-border bg-primary/10 p-3 text-primary">
+                <TrendingUp className="size-5" />
               </div>
+            </div>
+          </div>
 
+          <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-6">
+            <TabsList variant="line" className="w-fit justify-start border-b border-border">
+              {tabs.map(({ key, label, icon: Icon }) => (
+                <TabsTrigger key={key} value={key} className="gap-2 px-4 py-2">
+                  <Icon className="size-4 shrink-0" />
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <div className="min-w-0">
               {error ? (
-                <div className="mb-4 rounded-[var(--radius-card)] border border-destructive/30 bg-destructive/5 px-4 py-3 text-compact text-destructive">
+                <AdminFeedbackMessage variant="destructive" className="mb-4">
                   {error}
-                </div>
+                </AdminFeedbackMessage>
               ) : null}
               {message ? (
-                <div className="mb-4 rounded-[var(--radius-card)] border border-success/30 bg-success/5 px-4 py-3 text-compact text-foreground">
+                <AdminFeedbackMessage variant="success" className="mb-4">
                   {message}
-                </div>
+                </AdminFeedbackMessage>
               ) : null}
 
-              {tab === "overview" && canReadCatalog ? (
-                <section className="space-y-6">
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {[
-                      ["Total funds", overview?.total_funds ?? 0],
-                      ["Active products", overview?.active_products ?? 0],
-                      ["Empanelled AMCs", overview?.empanelled_amcs ?? 0],
-                      ["NAV rows", overview?.nav_rows ?? 0],
-                    ].map(([label, value]) => (
-                      <Card key={label}>
-                        <CardHeader>
-                          <CardDescription>{label}</CardDescription>
-                          <CardTitle className="text-h3">{loading ? "…" : value}</CardTitle>
-                        </CardHeader>
-                      </Card>
+              {canReadCatalog ? (
+                <TabsContent value="overview" className="mt-0 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    {overviewMetrics.map((metric) => (
+                      <AdminMetricCard
+                        key={metric.key}
+                        label={metric.label}
+                        value={metric.value}
+                        icon={metric.icon}
+                        tone={metric.tone}
+                        loading={loading}
+                      />
                     ))}
                   </div>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Catalog snapshot</CardTitle>
-                      <CardDescription>
-                        {overview?.total_products ?? 0} products across {overview?.total_categories ?? 0} categories ·{" "}
-                        {overview?.total_amcs ?? 0} AMCs in master
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                </section>
-              ) : null}
 
-              {tab === "staging" && canReadCatalog ? (
-                <SchemeStagingPanel canPublish={canPublishCatalog} />
-              ) : null}
+                  <div className="space-y-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <AdminSectionTitle icon={Building2}>AMCs</AdminSectionTitle>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <AdminSearchInput
+                          containerClassName="max-w-sm sm:w-56"
+                          placeholder="Search AMCs"
+                          value={amcSearch}
+                          onChange={(event) => {
+                            setAmcSearch(event.target.value);
+                            setAmcPage(0);
+                          }}
+                        />
+                        <StatusBadge variant="info" showIcon={false}>
+                          {(overview?.total_categories ?? categories.length).toLocaleString()} categories
+                        </StatusBadge>
+                        <StatusBadge variant="neutral" showIcon={false}>
+                          {(overview?.total_amcs ?? amcs.length).toLocaleString()} AMCs
+                        </StatusBadge>
+                      </div>
+                    </div>
 
-              {tab === "health" && canReadCatalog ? (
-                <CatalogHealthPanel
-                  onOpenFund={(fundId) => {
-                    setSelectedFundId(fundId);
-                    setTab("funds");
-                  }}
-                />
-              ) : null}
-
-              {tab === "categories" && canReadCatalog ? (
-                <section>
-                  <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border">
-                    <table className="w-full text-compact">
-                      <thead className="bg-muted">
+                    <AdminDataTable minWidth="default">
+                      <AdminTableHeader>
                         <tr>
-                          <th className="px-4 py-3 text-left font-medium">Category</th>
-                          <th className="px-4 py-3 text-left font-medium">Slug</th>
-                          <th className="px-4 py-3 text-right font-medium">Order</th>
-                          <th className="px-4 py-3 text-right font-medium">Funds</th>
-                          <th className="px-4 py-3 text-right font-medium">Active</th>
-                          <th className="px-4 py-3 text-right font-medium">Visible</th>
-                          <th className="px-4 py-3 text-right font-medium">Curate</th>
+                          <AdminTableHeadCell>AMC</AdminTableHeadCell>
+                          <AdminTableHeadCell>Status</AdminTableHeadCell>
+                          <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
                         </tr>
-                      </thead>
-                      <tbody>
+                      </AdminTableHeader>
+                      <AdminTableBody>
                         {loading ? (
-                          <tr>
-                            <td colSpan={7} className="px-4 py-6 text-muted-foreground">
-                              Loading categories...
-                            </td>
-                          </tr>
-                        ) : categories.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="px-4 py-6 text-muted-foreground">
-                              No categories found.
-                            </td>
-                          </tr>
+                          <AdminTableSkeletonRows columns={3} />
+                        ) : amcPagination.items.length === 0 ? (
+                          <AdminTableStateRow colSpan={3}>No AMCs match your search.</AdminTableStateRow>
                         ) : (
-                          categories.map((category) => (
-                            <tr key={category.id} className="border-t border-border">
-                              <td className="px-4 py-3 font-medium">{category.name}</td>
-                              <td className="px-4 py-3 text-muted-foreground">{category.slug}</td>
-                              <td className="px-4 py-3 text-right">{category.display_order}</td>
-                              <td className="px-4 py-3 text-right">{category.fund_count}</td>
-                              <td className="px-4 py-3 text-right">{category.active_fund_count}</td>
-                              <td className="px-4 py-3 text-right">
-                                {category.is_visible ? "Yes" : "No"}
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <Button
-                                  size="sm"
-                                  variant={selectedCategory?.id === category.id ? "default" : "outline"}
-                                  onClick={() =>
-                                    setSelectedCategory((current) =>
-                                      current?.id === category.id ? null : category
-                                    )
-                                  }
-                                >
-                                  {selectedCategory?.id === category.id ? "Close" : "Curate"}
-                                </Button>
-                              </td>
-                            </tr>
+                          amcPagination.items.map((amc) => (
+                            <AdminTableRow key={amc.id}>
+                              <AdminTableCell>
+                                <div className="flex min-w-0 items-start gap-3">
+                                  <AmcLogo name={amc.name} logoUrl={amc.logo_url} className="mt-0.5" />
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-foreground">{amc.name}</p>
+                                    <p className="mt-0.5 text-caption text-muted-foreground">
+                                      {amc.slug} · AMFI {amc.amc_code ?? "—"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </AdminTableCell>
+                              <AdminTableCell>
+                                <div className="flex flex-wrap gap-1">
+                                  <MfStatusChip
+                                    label={amc.is_active ? "Empanelled" : "Not empanelled"}
+                                    tone={amc.is_active ? "success" : "warning"}
+                                  />
+                                  {amc.admin_kill_switch ? (
+                                    <MfStatusChip label="Kill switch" tone="danger" />
+                                  ) : null}
+                                </div>
+                              </AdminTableCell>
+                              <AdminTableCell className="text-right">
+                                {canManageAmcs || canManageContent ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger
+                                      render={
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          aria-label={`Actions for ${amc.name}`}
+                                        >
+                                          <MoreHorizontal className="size-4" />
+                                        </Button>
+                                      }
+                                    />
+                                    <DropdownMenuContent align="end">
+                                      {canManageContent ? (
+                                        <DropdownMenuItem onClick={() => setSelectedAmcContent(amc)}>
+                                          Edit content
+                                        </DropdownMenuItem>
+                                      ) : null}
+                                      {canManageAmcs ? (
+                                        <>
+                                          {canManageContent ? <DropdownMenuSeparator /> : null}
+                                          <DropdownMenuItem
+                                            disabled={actionLoading === `amc-${amc.id}`}
+                                            onClick={() => void handleToggleAmc(amc)}
+                                          >
+                                            {amc.is_active ? "Disable empanelment" : "Empanel AMC"}
+                                          </DropdownMenuItem>
+                                          {amc.admin_kill_switch ? (
+                                            <DropdownMenuItem
+                                              disabled={actionLoading === `amc-kill-${amc.id}`}
+                                              onClick={() => void handleDisableAmcKillSwitch(amc)}
+                                            >
+                                              Clear kill switch
+                                            </DropdownMenuItem>
+                                          ) : (
+                                            <DropdownMenuItem
+                                              variant="destructive"
+                                              disabled={actionLoading === `amc-kill-${amc.id}`}
+                                              onClick={() => setReasonModal({ kind: "amc-kill", amc })}
+                                            >
+                                              Enable kill switch
+                                            </DropdownMenuItem>
+                                          )}
+                                        </>
+                                      ) : null}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </AdminTableCell>
+                            </AdminTableRow>
                           ))
                         )}
-                      </tbody>
-                    </table>
+                      </AdminTableBody>
+                    </AdminDataTable>
+
+                    {!loading && filteredAmcs.length > 0 ? (
+                      <AdminTablePagination
+                        page={amcPagination.page}
+                        totalPages={amcPagination.totalPages}
+                        hasPrevious={amcPagination.hasPrevious}
+                        hasNext={amcPagination.hasNext}
+                        disabled={loading}
+                        onPrevious={() => setAmcPage((page) => Math.max(0, page - 1))}
+                        onNext={() => setAmcPage((page) => page + 1)}
+                      />
+                    ) : null}
                   </div>
+                </TabsContent>
+              ) : null}
+
+              {canReadCatalog ? (
+                <TabsContent value="staging" className="mt-0">
+                  <SchemeStagingPanel canPublish={canPublishCatalog} />
+                </TabsContent>
+              ) : null}
+
+              {canReadCatalog ? (
+                <TabsContent value="health" className="mt-0">
+                  <CatalogHealthPanel
+                    onOpenFund={(fundId) => {
+                      setSelectedFundId(fundId);
+                      setTab("funds");
+                    }}
+                  />
+                </TabsContent>
+              ) : null}
+
+              {canReadCatalog ? (
+                <TabsContent value="categories" className="mt-0 space-y-4">
+                  <AdminDataTable minWidth="xl">
+                    <AdminTableHeader>
+                      <tr>
+                        <AdminTableHeadCell>Category</AdminTableHeadCell>
+                        <AdminTableHeadCell>Slug</AdminTableHeadCell>
+                        <AdminTableHeadCell className="text-right">Order</AdminTableHeadCell>
+                        <AdminTableHeadCell className="text-right">Funds</AdminTableHeadCell>
+                        <AdminTableHeadCell className="text-right">Active</AdminTableHeadCell>
+                        <AdminTableHeadCell>Visible</AdminTableHeadCell>
+                        <AdminTableHeadCell className="text-right">Curate</AdminTableHeadCell>
+                      </tr>
+                    </AdminTableHeader>
+                    <AdminTableBody>
+                      {loading ? (
+                        <AdminTableSkeletonRows columns={7} />
+                      ) : categories.length === 0 ? (
+                        <AdminTableStateRow colSpan={7}>No categories found.</AdminTableStateRow>
+                      ) : (
+                        categories.map((category) => (
+                          <AdminTableRow key={category.id}>
+                            <AdminTableCell className="font-medium text-foreground">{category.name}</AdminTableCell>
+                            <AdminTableCell className="text-muted-foreground">{category.slug}</AdminTableCell>
+                            <AdminTableCell className="text-right">{category.display_order}</AdminTableCell>
+                            <AdminTableCell className="text-right">{category.fund_count}</AdminTableCell>
+                            <AdminTableCell className="text-right">{category.active_fund_count}</AdminTableCell>
+                            <AdminTableCell>
+                              <MfStatusChip
+                                label={category.is_visible ? "Visible" : "Hidden"}
+                                tone={category.is_visible ? "success" : "neutral"}
+                                showIcon={false}
+                              />
+                            </AdminTableCell>
+                            <AdminTableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant={
+                                  selectedCategory?.id === category.id && categoryDialogOpen
+                                    ? "default"
+                                    : "outline"
+                                }
+                                onClick={() => {
+                                  setSelectedCategory(category);
+                                  setCategoryDialogOpen(true);
+                                }}
+                              >
+                                Curate
+                              </Button>
+                            </AdminTableCell>
+                          </AdminTableRow>
+                        ))
+                      )}
+                    </AdminTableBody>
+                  </AdminDataTable>
 
                   {selectedCategory ? (
-                    <CategoryCurationPanel
-                      category={selectedCategory}
+                    <CategoryCurationDialog
+                      open={categoryDialogOpen}
+                      category={
+                        categories.find((item) => item.id === selectedCategory.id) ?? selectedCategory
+                      }
                       amcs={amcs}
                       canManage={canManageCatalog}
+                      onClose={() => {
+                        setCategoryDialogOpen(false);
+                        setSelectedCategory(null);
+                      }}
                       onUpdated={() => void loadData()}
                     />
                   ) : null}
-                </section>
+                </TabsContent>
               ) : null}
 
-              {tab === "funds" && canReadCatalog ? (
-                <section className="space-y-4">
-                  <div className="flex flex-col gap-3 lg:flex-row">
-                    <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        className="pl-9"
-                        placeholder="Search scheme, ISIN, or product code"
-                        value={fundSearch}
-                        onChange={(event) => {
-                          setFundSearch(event.target.value);
+              {canReadCatalog ? (
+                <TabsContent value="funds" className="mt-0 space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <AdminSearchInput
+                      containerClassName="max-w-sm"
+                      placeholder="Search scheme, ISIN, or product"
+                      value={fundSearch}
+                      onChange={(event) => {
+                        setFundSearch(event.target.value);
+                        setFundPage(1);
+                      }}
+                    />
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Select
+                        value={fundLifecycle || ALL}
+                        onValueChange={(value) => {
+                          setFundLifecycle(value === ALL ? "" : (value ?? ""));
                           setFundPage(1);
                         }}
-                      />
+                      >
+                        <SelectTrigger className="w-44">
+                          <SelectValue placeholder="All lifecycle">
+                            {fundLifecycle || "All lifecycle"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={ALL}>All lifecycle</SelectItem>
+                          <SelectItem value="ACTIVE">Active</SelectItem>
+                          <SelectItem value="DRAFT">Draft</SelectItem>
+                          <SelectItem value="INACTIVE">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        value={fundCategory || ALL}
+                        onValueChange={(value) => {
+                          setFundCategory(value === ALL ? "" : (value ?? ""));
+                          setFundPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="w-44">
+                          <SelectValue placeholder="All categories">
+                            {categories.find((category) => category.slug === fundCategory)?.name ??
+                              "All categories"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={ALL}>All categories</SelectItem>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.slug}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <select
-                      className="h-8 rounded-[var(--radius-control)] border border-input bg-transparent px-2.5 text-compact"
-                      value={fundLifecycle}
-                      onChange={(event) => {
-                        setFundLifecycle(event.target.value);
-                        setFundPage(1);
-                      }}
-                    >
-                      <option value="">All lifecycle</option>
-                      <option value="ACTIVE">Active</option>
-                      <option value="DRAFT">Draft</option>
-                      <option value="INACTIVE">Inactive</option>
-                    </select>
-                    <select
-                      className="h-8 rounded-[var(--radius-control)] border border-input bg-transparent px-2.5 text-compact"
-                      value={fundCategory}
-                      onChange={(event) => {
-                        setFundCategory(event.target.value);
-                        setFundPage(1);
-                      }}
-                    >
-                      <option value="">All categories</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.slug}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
                   </div>
 
-                  <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border">
-                    <table className="w-full text-compact">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-medium">Scheme</th>
-                          <th className="px-4 py-3 text-left font-medium">AMC</th>
-                          <th className="px-4 py-3 text-left font-medium">Status</th>
-                          <th className="px-4 py-3 text-right font-medium">3Y</th>
-                          <th className="px-4 py-3 text-right font-medium">NAV</th>
-                          {canManageCatalog ? (
-                            <th className="px-4 py-3 text-right font-medium">Actions</th>
-                          ) : null}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loading ? (
-                          <tr>
-                            <td colSpan={canManageCatalog ? 6 : 5} className="px-4 py-6 text-muted-foreground">
-                              Loading funds...
-                            </td>
-                          </tr>
-                        ) : funds.length === 0 ? (
-                          <tr>
-                            <td colSpan={canManageCatalog ? 6 : 5} className="px-4 py-6 text-muted-foreground">
-                              No funds match your filters.
-                            </td>
-                          </tr>
-                        ) : (
-                          funds.map((fund) => (
-                            <tr
-                              key={fund.fund_id}
-                              className="cursor-pointer border-t border-border hover:bg-muted/40"
-                              onClick={() => setSelectedFundId(fund.fund_id)}
-                            >
-                              <td className="px-4 py-3">
-                                <p className="font-medium">{fund.scheme_name}</p>
-                                <p className="text-caption text-muted-foreground">
-                                  {fund.isin ?? fund.product_code ?? "—"}
-                                </p>
-                              </td>
-                              <td className="px-4 py-3">{fund.amc_name}</td>
-                              <td className="px-4 py-3">
-                                <div className="flex flex-wrap gap-1">
-                                  <StatusBadge
-                                    label={fund.lifecycle_status ?? "—"}
-                                    tone={lifecycleTone(fund.lifecycle_status)}
+                  <AdminDataTable minWidth="3xl">
+                    <AdminTableHeader>
+                      <tr>
+                        <AdminTableHeadCell>Scheme</AdminTableHeadCell>
+                        <AdminTableHeadCell>AMC</AdminTableHeadCell>
+                        <AdminTableHeadCell>Status</AdminTableHeadCell>
+                        <AdminTableHeadCell className="text-right">3Y</AdminTableHeadCell>
+                        <AdminTableHeadCell className="text-right">NAV</AdminTableHeadCell>
+                        {canManageCatalog ? (
+                          <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+                        ) : null}
+                      </tr>
+                    </AdminTableHeader>
+                    <AdminTableBody>
+                      {loading ? (
+                        <AdminTableSkeletonRows columns={canManageCatalog ? 6 : 5} />
+                      ) : funds.length === 0 ? (
+                        <AdminTableStateRow colSpan={canManageCatalog ? 6 : 5}>
+                          No funds match your filters.
+                        </AdminTableStateRow>
+                      ) : (
+                        funds.map((fund) => {
+                          const return3y = formatReturnDisplay(fund.return_3y);
+
+                          return (
+                          <AdminTableRow
+                            key={fund.fund_id}
+                            onClick={() => setSelectedFundId(fund.fund_id)}
+                          >
+                            <AdminTableCell>
+                              <p className="font-medium text-foreground">{fund.scheme_name}</p>
+                              <p className="mt-0.5 text-caption text-muted-foreground">
+                                {fund.isin ?? fund.product_code ?? "—"}
+                              </p>
+                            </AdminTableCell>
+                            <AdminTableCell className="text-muted-foreground">{fund.amc_name}</AdminTableCell>
+                            <AdminTableCell>
+                              <div className="flex flex-wrap gap-1">
+                                <MfStatusChip
+                                  label={fund.lifecycle_status ?? "—"}
+                                  tone={lifecycleTone(fund.lifecycle_status)}
+                                  showIcon={false}
+                                />
+                                {fund.catalog_flags.length ? (
+                                  <MfStatusChip
+                                    label={`${fund.catalog_flags.length} flags`}
+                                    tone="warning"
+                                    showIcon={false}
                                   />
-                                  {fund.catalog_flags.length ? (
-                                    <StatusBadge label={`${fund.catalog_flags.length} flags`} tone="warning" />
-                                  ) : null}
-                                  {fund.health_flags?.map((flag) => (
-                                    <StatusBadge
-                                      key={flag}
-                                      label={flag.replaceAll("_", " ")}
-                                      tone={flag === "stale_nav" ? "danger" : "warning"}
-                                    />
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">{formatPercent(fund.return_3y)}</td>
-                              <td className="px-4 py-3 text-right">{formatNav(fund.latest_nav)}</td>
-                              {canManageCatalog ? (
-                                <td className="px-4 py-3 text-right">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={actionLoading === `fund-${fund.fund_id}`}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      handleToggleFundActive(fund);
-                                    }}
-                                  >
-                                    {fund.fund_active ? "Disable" : "Enable"}
-                                  </Button>
-                                </td>
-                              ) : null}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-caption text-muted-foreground">
-                      Page {fundPage} · {fundTotal} funds
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={fundPage <= 1 || loading}
-                        onClick={() => setFundPage((page) => Math.max(1, page - 1))}
-                      >
-                        <ChevronLeft className="size-3.5" />
-                        Prev
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!fundHasMore || loading}
-                        onClick={() => setFundPage((page) => page + 1)}
-                      >
-                        Next
-                        <ChevronRight className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
-              {tab === "amcs" && canReadAmcs ? (
-                <section className="space-y-3">
-                  {loading ? (
-                    <p className="text-compact text-muted-foreground">Loading AMCs...</p>
-                  ) : amcs.length === 0 ? (
-                    <Card>
-                      <CardContent className="py-6 text-compact text-muted-foreground">
-                        No AMCs found.
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    amcs.map((amc) => (
-                      <Card key={amc.id}>
-                        <CardContent className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <p className="font-medium text-foreground">{amc.name}</p>
-                            <p className="text-caption text-muted-foreground">
-                              {amc.slug} · AMFI {amc.amc_code ?? "—"}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <StatusBadge
-                              label={amc.is_active ? "Empanelled" : "Not empanelled"}
-                              tone={amc.is_active ? "success" : "warning"}
-                            />
-                            {amc.admin_kill_switch ? (
-                              <StatusBadge label="Kill switch" tone="danger" />
-                            ) : null}
-                            {canManageAmcs ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setSelectedAmcContent(amc)}
-                                >
-                                  Content
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={actionLoading === `amc-${amc.id}`}
-                                  onClick={() => void handleToggleAmc(amc)}
-                                >
-                                  {amc.is_active ? "Disable" : "Empanel"}
-                                </Button>
-                                {amc.admin_kill_switch ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={actionLoading === `amc-kill-${amc.id}`}
-                                    onClick={() => void handleDisableAmcKillSwitch(amc)}
-                                  >
-                                    Clear kill switch
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    disabled={actionLoading === `amc-kill-${amc.id}`}
-                                    onClick={() => setReasonModal({ kind: "amc-kill", amc })}
-                                  >
-                                    Kill switch
-                                  </Button>
+                                ) : null}
+                              </div>
+                            </AdminTableCell>
+                            <AdminTableCell className="text-right">
+                              <span
+                                className={cn(
+                                  "tabular-nums",
+                                  returnToneClass(return3y.tone),
                                 )}
-                              </>
+                              >
+                                {return3y.text}
+                              </span>
+                            </AdminTableCell>
+                            <AdminTableCell className="text-right">
+                              <span
+                                className={cn(
+                                  "tabular-nums",
+                                  fund.latest_nav == null
+                                    ? "text-muted-foreground"
+                                    : "text-foreground",
+                                )}
+                              >
+                                {formatNav(fund.latest_nav)}
+                              </span>
+                            </AdminTableCell>
+                            {canManageCatalog ? (
+                              <AdminTableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={actionLoading === `fund-${fund.fund_id}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleToggleFundActive(fund);
+                                  }}
+                                >
+                                  {fund.fund_active ? "Disable" : "Enable"}
+                                </Button>
+                              </AdminTableCell>
                             ) : null}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </section>
+                          </AdminTableRow>
+                          );
+                        })
+                      )}
+                    </AdminTableBody>
+                  </AdminDataTable>
+
+                  {!loading && funds.length > 0 ? (
+                    <AdminTablePagination
+                      page={fundPage - 1}
+                      totalPages={fundTotalPages}
+                      hasPrevious={fundPage > 1}
+                      hasNext={fundHasMore}
+                      disabled={loading}
+                      onPrevious={() => setFundPage((page) => Math.max(1, page - 1))}
+                      onNext={() => setFundPage((page) => page + 1)}
+                    />
+                  ) : null}
+                </TabsContent>
               ) : null}
 
-              {tab === "content" && canReadCatalog ? (
-                <section>
-                  <ComplianceSettingsPanel canManage={canManageContent} />
-                </section>
-              ) : null}
-
-              {tab === "rules" && canReadCatalog ? (
-                <section>
-                  <CatalogRulesPanel
+              {canReadCatalog ? (
+                <TabsContent value="content" className="mt-0">
+                  <ContentRulesPanel
+                    canManageContent={canManageContent}
                     canManageRules={canManageRules}
                     canPublish={canPublishCatalog}
                   />
-                </section>
+                </TabsContent>
               ) : null}
 
-              {tab === "bulk" && canReadCatalog ? (
-                <section>
+              {canReadCatalog ? (
+                <TabsContent value="bulk" className="mt-0">
                   <BulkImportPanel canPublish={canPublishCatalog} />
-                </section>
+                </TabsContent>
               ) : null}
 
-              {tab === "operations" && canReadJobs ? (
-                <section className="space-y-8">
-                  <div>
-                    <h2 className="mb-3 font-heading text-h4 font-semibold">Scheduler jobs</h2>
-                    <div className="space-y-3">
-                      {jobs.map((job) => (
-                        <Card key={job.name}>
-                          <CardContent className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
-                            <div>
-                              <p className="font-medium">{job.name}</p>
-                              <p className="text-caption text-muted-foreground">
-                                {job.description} · cron {job.cron}
-                              </p>
-                              {job.last_run ? (
-                                <p className="mt-1 text-caption text-muted-foreground">
-                                  Last: {job.last_run.status ?? "unknown"}
-                                  {job.last_run.finished_at
-                                    ? ` · ${new Date(job.last_run.finished_at).toLocaleString()}`
-                                    : ""}
-                                </p>
-                              ) : null}
-                            </div>
-                            {canRunJobs ? (
-                              <Button
-                                size="sm"
-                                disabled={actionLoading === `job-${job.name}`}
-                                onClick={() => void handleRunJob(job.name)}
-                              >
-                                {actionLoading === `job-${job.name}` ? "Running..." : "Run now"}
-                              </Button>
-                            ) : null}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h2 className="mb-3 font-heading text-h4 font-semibold">Recent ingestion runs</h2>
-                    <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border">
-                      <table className="w-full text-compact">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="px-4 py-3 text-left font-medium">Job</th>
-                            <th className="px-4 py-3 text-left font-medium">Status</th>
-                            <th className="px-4 py-3 text-left font-medium">Started</th>
-                            <th className="px-4 py-3 text-right font-medium">Processed</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {runs.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="px-4 py-6 text-muted-foreground">
-                                No recent runs.
-                              </td>
-                            </tr>
-                          ) : (
-                            runs.map((run) => (
-                              <tr key={run.run_uuid ?? `${run.job_name}-${run.started_at}`} className="border-t border-border">
-                                <td className="px-4 py-3">{run.job_name ?? "—"}</td>
-                                <td className="px-4 py-3">{run.status ?? "—"}</td>
-                                <td className="px-4 py-3">
-                                  {run.started_at ? new Date(run.started_at).toLocaleString() : "—"}
-                                </td>
-                                <td className="px-4 py-3 text-right">{run.records_processed ?? "—"}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </section>
+              {canReadJobs ? (
+                <TabsContent value="operations" className="mt-0">
+                  <MfOperationsPanel canRunJobs={canRunJobs} />
+                </TabsContent>
               ) : null}
-            </>
-          )}
-        </main>
-      </div>
+            </div>
+          </Tabs>
+        </div>
+      )}
 
       {selectedFundId != null ? (
         <FundDetailDrawer
@@ -1162,6 +1192,7 @@ export default function MutualFundsAdminPage() {
 
       {reasonModal ? (
         <ReasonModal
+          open
           title={reasonModal.kind === "fund-disable" ? "Disable fund" : "Enable AMC kill switch"}
           description={
             reasonModal.kind === "fund-disable"
@@ -1174,6 +1205,6 @@ export default function MutualFundsAdminPage() {
           onConfirm={(reason) => void handleConfirmReasonModal(reason)}
         />
       ) : null}
-    </AdminShell>
+    </>
   );
 }

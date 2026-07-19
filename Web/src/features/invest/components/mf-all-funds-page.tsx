@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   fetchInvestFunds,
@@ -45,9 +46,13 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const hasLoadedOnceRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const refetchingRef = useRef(false);
+  const pageRef = useRef(1);
+  const hasMoreRef = useRef(true);
+  const categorySlugRef = useRef<string | null>(initialCategorySlug);
 
   const filteredFunds = useMemo(() => applyMfFundFilters(funds, filters), [funds, filters]);
-  const tablePaused = loadingMore || refetching;
   const tableTotalCount = hasClientOnlyMfFundFilters(filters) ? filteredFunds.length : total;
 
   const filterOptions = useMemo(
@@ -60,13 +65,32 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     return categories.find((category) => category.slug === filters.categorySlug)?.name ?? null;
   }, [categories, filters.categorySlug]);
 
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  useEffect(() => {
+    categorySlugRef.current = filters.categorySlug;
+  }, [filters.categorySlug]);
+
   const loadPage = useCallback(
     async (nextPage: number, append: boolean, categorySlug: string | null) => {
-      if (nextPage === 1) {
-        if (hasLoadedOnceRef.current) setRefetching(true);
-        else setInitialLoading(true);
-      } else {
+      if (append) {
+        if (loadingMoreRef.current || !hasMoreRef.current) return;
+        loadingMoreRef.current = true;
         setLoadingMore(true);
+      } else if (nextPage === 1) {
+        pageRef.current = 1;
+        if (hasLoadedOnceRef.current) {
+          refetchingRef.current = true;
+          setRefetching(true);
+        } else {
+          setInitialLoading(true);
+        }
       }
       setError(null);
 
@@ -79,6 +103,8 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
         });
 
         setFunds((current) => (append ? mergeInvestFunds(current, response.items) : mergeInvestFunds([], response.items)));
+        pageRef.current = response.page;
+        hasMoreRef.current = response.has_more;
         setPage(response.page);
         setHasMore(response.has_more);
         setTotal(response.total);
@@ -87,7 +113,9 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
         setError(err instanceof Error ? err.message : copy.mutualFunds.catalogLoadError);
       } finally {
         setInitialLoading(false);
+        refetchingRef.current = false;
         setRefetching(false);
+        loadingMoreRef.current = false;
         setLoadingMore(false);
       }
     },
@@ -114,7 +142,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   }, [filters.categorySlug, loadPage]);
 
   useEffect(() => {
-    if (!hasMore || initialLoading || refetching || loadingMore) return;
+    if (initialLoading) return;
 
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
@@ -122,24 +150,17 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          void loadPage(page + 1, true, filters.categorySlug);
-        }
+        if (!entries[0]?.isIntersecting) return;
+        if (!hasMoreRef.current) return;
+        if (loadingMoreRef.current || refetchingRef.current) return;
+        void loadPage(pageRef.current + 1, true, categorySlugRef.current);
       },
       { root, rootMargin: "120px" },
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [
-    filters.categorySlug,
-    hasMore,
-    initialLoading,
-    loadPage,
-    loadingMore,
-    page,
-    refetching,
-  ]);
+  }, [initialLoading, loadPage, filters.categorySlug]);
 
   return (
     <div className={MF_PAGE_SECTION_CLASS}>
@@ -152,7 +173,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
       />
 
       <div className="mb-6">
-        <h1 className="text-h4 font-semibold tracking-tight text-foreground">{copy.mutualFunds.allFundsTitle}</h1>
+        <PageTitle>{copy.mutualFunds.allFundsTitle}</PageTitle>
       </div>
 
       <MfFundsFilterBar
@@ -162,9 +183,9 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
         onChange={setFilters}
       />
 
-      <div className="relative mt-6">
-        {error ? <FieldMessage variant="error" message={error} className="mb-4" /> : null}
+      {error ? <FieldMessage variant="error" message={error} className="mt-4" /> : null}
 
+      <div className="relative mt-6 min-w-0">
         <div className="relative flex h-[min(32rem,calc(100vh-14rem))] flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
           {initialLoading ? (
             <div className="flex h-full min-h-[280px] items-center justify-center text-muted-foreground">
@@ -172,24 +193,15 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
               {copy.mutualFunds.loadingFunds}
             </div>
           ) : (
-            <>
-              <MfFundsTable
-                funds={filteredFunds}
-                totalCount={tableTotalCount}
-                loading={tablePaused}
-                scrollContainerRef={scrollContainerRef}
-                loadMoreRef={loadMoreRef}
-              />
-
-              {tablePaused ? (
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-6">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1.5 text-caption text-muted-foreground shadow-zynd-mid backdrop-blur-sm">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    {copy.mutualFunds.loadingMore}
-                  </div>
-                </div>
-              ) : null}
-            </>
+            <MfFundsTable
+              funds={filteredFunds}
+              totalCount={tableTotalCount}
+              refetching={refetching}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
+              scrollContainerRef={scrollContainerRef}
+              loadMoreRef={loadMoreRef}
+            />
           )}
         </div>
       </div>

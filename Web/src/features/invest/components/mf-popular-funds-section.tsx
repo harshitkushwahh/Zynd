@@ -4,14 +4,18 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { SectionTitle } from "@/components/ui/page-title";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import { MfFundCard } from "@/features/invest/components/mf-fund-card";
-import { MF_FUNDS_GRID_CLASS } from "@/features/invest/lib/mf-ui";
+import { MfHorizontalScrollRow } from "@/features/invest/components/mf-horizontal-scroll-row";
+import {
+  MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS,
+} from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 
 type MfPopularFundsSectionProps = {
   funds: InvestFundSummary[];
-  onSelectFund: (productId: string) => void;
+  onSelectFund: (fund: InvestFundSummary) => void;
 };
 
 export function MfPopularFundsSection({ funds, onSelectFund }: MfPopularFundsSectionProps) {
@@ -20,23 +24,28 @@ export function MfPopularFundsSection({ funds, onSelectFund }: MfPopularFundsSec
   return (
     <section className="min-w-0 space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-h3 font-semibold text-foreground">{copy.mutualFunds.popularFundsTitle}</h2>
+        <SectionTitle>{copy.mutualFunds.popularFundsTitle}</SectionTitle>
         <Button
           variant="ghost"
           size="sm"
           nativeButton={false}
-          render={<Link href="/dashboard/mutual-funds/collections/high-return" />}
+          render={<Link href="/dashboard/mutual-funds/all" />}
         >
-          {copy.mutualFunds.viewAll}
+          {copy.mutualFunds.viewAllFunds}
           <ChevronRight className="size-4" />
         </Button>
       </div>
 
-      <div className={MF_FUNDS_GRID_CLASS}>
+      <MfHorizontalScrollRow>
         {funds.map((fund) => (
-          <MfFundCard key={fund.product_id} fund={fund} onSelect={onSelectFund} />
+          <MfFundCard
+            key={fund.product_id}
+            fund={fund}
+            onSelect={onSelectFund}
+            className={MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS}
+          />
         ))}
-      </div>
+      </MfHorizontalScrollRow>
     </section>
   );
 }

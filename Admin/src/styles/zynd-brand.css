@@ -22,6 +22,15 @@
   --zynd-neutral-50: #f8fafc;
   --zynd-white: #ffffff;
 
+  /* Dark neutral scale — true black, no blue tint */
+  --zynd-dark-bg: #0a0a0a;
+  --zynd-dark-surface: #151515;
+  --zynd-dark-elevated: #1c1c1c;
+  --zynd-dark-muted: #222222;
+  --zynd-dark-border: #353535;
+  --zynd-dark-foreground: #fafafa;
+  --zynd-dark-muted-foreground: #a3a3a3;
+
   /* Accent palette */
   --zynd-accent-green: #22c55e;
   --zynd-accent-amber: #f59e0b;
@@ -44,6 +53,67 @@
   --text-body: 1rem;
   --text-compact: 0.875rem;
   --text-caption: 0.75rem;
+  --text-tiny: 0.6875rem;
+  --text-micro: 0.625rem;
+
+  /* Layout — tables */
+  --table-min-width-sm: 40rem;
+  --table-min-width-md: 45rem;
+  --table-min-width-lg: 47.5rem;
+  --table-min-width-xl: 55rem;
+  --table-min-width-2xl: 56.25rem;
+  --table-min-width-default: 57.5rem;
+  --table-min-width-3xl: 60rem;
+  --table-min-width-4xl: 61.25rem;
+  --table-min-width-5xl: 67.5rem;
+  --table-min-width-6xl: 70rem;
+  --table-min-width-7xl: 73.75rem;
+
+  /* Layout — form fields */
+  --field-min-height-xs: 4.5rem;
+  --field-min-height-sm: 6rem;
+  --field-min-height-md: 7.5rem;
+  --field-min-height-lg: 10rem;
+  --field-min-height-xl: 12.5rem;
+  --field-min-height-2xl: 13.75rem;
+
+  /* Layout — selects & controls */
+  --select-min-width-xs: 6rem;
+  --select-min-width-sm: 8.75rem;
+  --select-min-width-md: 10rem;
+  --select-min-width-lg: 11.25rem;
+  --select-min-width-xl: 12.5rem;
+  --login-card-max-width: 25rem;
+  --timeline-rail-width: 1.375rem;
+  --theme-toggle-width: 4.5rem;
+  --label-column-width: 7rem;
+  --kyc-progress-min-width: 13.75rem;
+
+  /* Layout — scroll regions */
+  --scroll-max-height-sm: 12rem;
+  --scroll-max-height-md: 18rem;
+  --scroll-max-height-lg: 20rem;
+
+  /* Layout — empty states */
+  --empty-state-padding-y-sm: 2.5rem;
+  --empty-state-padding-y-md: 3rem;
+  --empty-state-padding-y-lg: 3.5rem;
+  --empty-state-padding-y-xl: 4rem;
+  --empty-state-padding-y-2xl: 5rem;
+
+  /* Layout — dialogs */
+  --dialog-max-height: 90vh;
+  --dialog-body-max-height: min(70vh, 40rem);
+  --dialog-body-detail-max-height: min(75vh, 45rem);
+  --dialog-body-wide-max-height: min(78vh, 47.5rem);
+  --dialog-body-form-max-height: min(75vh, 42.5rem);
+  --dialog-scale-enter: 0.96;
+  --dialog-inset-x: 2rem;
+
+  /* Motion */
+  --duration-progress: 700ms;
+  --duration-overlay: 200ms;
+  --scrollbar-size: 0.25rem;
 
   /* Border radius (reduced) */
   --radius-control: 0.375rem;
@@ -116,7 +186,7 @@
   --chart-3: var(--zynd-accent-cyan);
   --chart-4: var(--zynd-accent-amber);
   --chart-5: var(--zynd-purple);
-  --sidebar: var(--zynd-neutral-50);
+  --sidebar: var(--zynd-white);
   --sidebar-foreground: var(--zynd-neutral-900);
   --sidebar-primary: var(--zynd-blue);
   --sidebar-primary-foreground: var(--zynd-white);
@@ -127,18 +197,18 @@
 }
 
 .dark {
-  --background: var(--zynd-navy);
-  --foreground: var(--zynd-neutral-50);
-  --card: var(--zynd-neutral-800);
-  --card-foreground: var(--zynd-neutral-50);
-  --popover: var(--zynd-neutral-800);
-  --popover-foreground: var(--zynd-neutral-50);
+  --background: var(--zynd-dark-bg);
+  --foreground: var(--zynd-dark-foreground);
+  --card: var(--zynd-dark-surface);
+  --card-foreground: var(--zynd-dark-foreground);
+  --popover: var(--zynd-dark-elevated);
+  --popover-foreground: var(--zynd-dark-foreground);
   --primary: var(--zynd-blue);
   --primary-foreground: var(--zynd-white);
-  --secondary: var(--zynd-neutral-700);
-  --secondary-foreground: var(--zynd-neutral-50);
-  --muted: var(--zynd-neutral-800);
-  --muted-foreground: var(--zynd-neutral-400);
+  --secondary: var(--zynd-dark-elevated);
+  --secondary-foreground: var(--zynd-dark-foreground);
+  --muted: var(--zynd-dark-muted);
+  --muted-foreground: var(--zynd-dark-muted-foreground);
   --accent: var(--zynd-purple);
   --accent-foreground: var(--zynd-white);
   --destructive: var(--zynd-accent-red);
@@ -146,20 +216,24 @@
   --success: var(--zynd-emerald);
   --success-foreground: var(--zynd-white);
   --warning: var(--zynd-accent-amber);
-  --warning-foreground: var(--zynd-neutral-900);
+  --warning-foreground: var(--zynd-dark-bg);
   --info: var(--zynd-blue);
   --info-foreground: var(--zynd-white);
-  --border: var(--zynd-neutral-700);
-  --input: var(--zynd-neutral-700);
+  --border: var(--zynd-dark-border);
+  --input: #2f2f2f;
   --ring: var(--zynd-blue);
-  --sidebar: var(--zynd-neutral-800);
-  --sidebar-foreground: var(--zynd-neutral-50);
+  --sidebar: var(--zynd-dark-bg);
+  --sidebar-foreground: var(--zynd-dark-foreground);
   --sidebar-primary: var(--zynd-blue);
   --sidebar-primary-foreground: var(--zynd-white);
-  --sidebar-accent: var(--zynd-neutral-700);
-  --sidebar-accent-foreground: var(--zynd-neutral-50);
-  --sidebar-border: var(--zynd-neutral-700);
+  --sidebar-accent: var(--zynd-dark-elevated);
+  --sidebar-accent-foreground: var(--zynd-dark-foreground);
+  --sidebar-border: var(--zynd-dark-border);
   --sidebar-ring: var(--zynd-blue);
+  --overlay-backdrop-opacity: var(--opacity-medium);
+  --shadow-low: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-mid: 0 4px 12px rgb(0 0 0 / 0.5);
+  --shadow-high: 0 8px 24px rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
@@ -222,6 +296,8 @@
   --text-body: var(--text-body);
   --text-compact: var(--text-compact);
   --text-caption: var(--text-caption);
+  --text-tiny: var(--text-tiny);
+  --text-micro: var(--text-micro);
 
   --shadow-low: var(--shadow-low);
   --shadow-mid: var(--shadow-mid);
@@ -262,6 +338,18 @@
     font-size: var(--text-display);
     line-height: 1.1;
   }
+  .text-h2 {
+    font-size: var(--text-h2);
+    line-height: 1.25;
+  }
+  .text-h3 {
+    font-size: var(--text-h3);
+    line-height: 1.3;
+  }
+  .text-h4 {
+    font-size: var(--text-h4);
+    line-height: 1.35;
+  }
   .text-body {
     font-size: var(--text-body);
   }
@@ -271,6 +359,162 @@
   .text-caption {
     font-size: var(--text-caption);
   }
+  .text-tiny {
+    font-size: var(--text-tiny);
+  }
+  .text-micro {
+    font-size: var(--text-micro);
+  }
+
+  .min-w-table-sm {
+    min-width: var(--table-min-width-sm);
+  }
+  .min-w-table-md {
+    min-width: var(--table-min-width-md);
+  }
+  .min-w-table-lg {
+    min-width: var(--table-min-width-lg);
+  }
+  .min-w-table-xl {
+    min-width: var(--table-min-width-xl);
+  }
+  .min-w-table-2xl {
+    min-width: var(--table-min-width-2xl);
+  }
+  .min-w-table-default {
+    min-width: var(--table-min-width-default);
+  }
+  .min-w-table-3xl {
+    min-width: var(--table-min-width-3xl);
+  }
+  .min-w-table-4xl {
+    min-width: var(--table-min-width-4xl);
+  }
+  .min-w-table-5xl {
+    min-width: var(--table-min-width-5xl);
+  }
+  .min-w-table-6xl {
+    min-width: var(--table-min-width-6xl);
+  }
+  .min-w-table-7xl {
+    min-width: var(--table-min-width-7xl);
+  }
+
+  .min-h-field-xs {
+    min-height: var(--field-min-height-xs);
+  }
+  .min-h-field-sm {
+    min-height: var(--field-min-height-sm);
+  }
+  .min-h-field-md {
+    min-height: var(--field-min-height-md);
+  }
+  .min-h-field-lg {
+    min-height: var(--field-min-height-lg);
+  }
+  .min-h-field-xl {
+    min-height: var(--field-min-height-xl);
+  }
+  .min-h-field-2xl {
+    min-height: var(--field-min-height-2xl);
+  }
+
+  .min-w-select-xs {
+    min-width: var(--select-min-width-xs);
+  }
+  .min-w-select-sm {
+    min-width: var(--select-min-width-sm);
+  }
+  .min-w-select-md {
+    min-width: var(--select-min-width-md);
+  }
+  .min-w-select-lg {
+    min-width: var(--select-min-width-lg);
+  }
+  .min-w-select-xl {
+    min-width: var(--select-min-width-xl);
+  }
+
+  .max-w-login-card {
+    max-width: var(--login-card-max-width);
+  }
+  .w-timeline-rail {
+    width: var(--timeline-rail-width);
+  }
+  .w-theme-toggle {
+    width: var(--theme-toggle-width);
+  }
+  .min-w-kyc-progress {
+    min-width: var(--kyc-progress-min-width);
+  }
+  .grid-cols-label-value {
+    grid-template-columns: var(--label-column-width) 1fr;
+  }
+
+  .max-h-scroll-sm {
+    max-height: var(--scroll-max-height-sm);
+  }
+  .max-h-scroll-md {
+    max-height: var(--scroll-max-height-md);
+  }
+  .max-h-scroll-lg {
+    max-height: var(--scroll-max-height-lg);
+  }
+
+  .py-empty-state-sm {
+    padding-block: var(--empty-state-padding-y-sm);
+  }
+  .py-empty-state-md {
+    padding-block: var(--empty-state-padding-y-md);
+  }
+  .py-empty-state-lg {
+    padding-block: var(--empty-state-padding-y-lg);
+  }
+  .py-empty-state-xl {
+    padding-block: var(--empty-state-padding-y-xl);
+  }
+  .py-empty-state-2xl {
+    padding-block: var(--empty-state-padding-y-2xl);
+  }
+
+  .max-h-dialog {
+    max-height: var(--dialog-max-height);
+  }
+  .max-h-dialog-body {
+    max-height: var(--dialog-body-max-height);
+  }
+  .max-h-dialog-body-detail {
+    max-height: var(--dialog-body-detail-max-height);
+  }
+  .max-h-dialog-body-wide {
+    max-height: var(--dialog-body-wide-max-height);
+  }
+  .max-h-dialog-body-form {
+    max-height: var(--dialog-body-form-max-height);
+  }
+
+  .duration-progress {
+    transition-duration: var(--duration-progress);
+  }
+
+  .admin-page-icon-tile {
+    border-radius: var(--radius-card);
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    padding: var(--space-md);
+    color: var(--primary);
+  }
+
+  .h-skeleton-sm {
+    height: 8rem;
+  }
+  .h-skeleton-md {
+    height: 16rem;
+  }
+  .h-skeleton-lg {
+    height: 18rem;
+  }
+
   .shadow-zynd-low {
     box-shadow: var(--shadow-low);
   }
@@ -317,6 +561,16 @@
       var(--background);
   }
 
+  .dark .admin-login-shell {
+    background:
+      radial-gradient(
+        ellipse 80% 50% at 50% -20%,
+        color-mix(in srgb, var(--foreground) 5%, transparent),
+        transparent
+      ),
+      var(--background);
+  }
+
   .admin-login-card {
     border: 1px solid var(--border);
     border-radius: var(--radius-modal);
@@ -331,12 +585,11 @@
     background: var(--gradient-brand);
   }
 
-  .admin-logo-placeholder {
+  .admin-login-logo {
     width: 3.5rem;
     height: 3.5rem;
     border-radius: var(--radius-card);
-    border: 1px dashed color-mix(in srgb, var(--primary) 30%, var(--border));
-    background: color-mix(in srgb, var(--primary) 6%, var(--muted));
+    object-fit: contain;
   }
 
   .admin-login-title-brand {

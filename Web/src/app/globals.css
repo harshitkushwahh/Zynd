@@ -330,3 +330,15 @@
   background: var(--destructive);
   color: var(--destructive-foreground);
 }
+
+/* Accordion — smooth height transition (Base UI panel) */
+[data-slot="accordion-content"] {
+  height: var(--accordion-panel-height);
+  overflow: hidden;
+  transition: height 200ms ease-out;
+}
+
+[data-slot="accordion-content"][data-starting-style],
+[data-slot="accordion-content"][data-ending-style] {
+  height: 0;
+}

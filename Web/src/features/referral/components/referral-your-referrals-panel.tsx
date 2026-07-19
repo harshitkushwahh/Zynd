@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { PaginationPageMinimalCenter } from "@/components/core/table";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { PageTitle } from "@/components/ui/page-title";
 import { fetchReferralList, type ReferralListItem } from "@/features/referral/api/referral-api";
 import { ReferralListRow } from "@/features/referral/components/referral-list-row";
 import { ReferralYourReferralsEmptyState } from "@/features/referral/components/referral-your-referrals-empty-state";
@@ -188,9 +189,7 @@ export function ReferralYourReferralsPanel() {
               <Users className="size-5 text-primary" strokeWidth={2.25} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-h4 font-semibold tracking-tight text-foreground">
-                {copy.referral.referralsPageTitle}
-              </h1>
+              <PageTitle>{copy.referral.referralsPageTitle}</PageTitle>
               <p className="mt-1 text-compact text-muted-foreground">{copy.referral.referralsPageSubtitle}</p>
             </div>
           </div>

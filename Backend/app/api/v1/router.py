@@ -9,6 +9,7 @@ from app.api.v1.kyc.router import router as kyc_router
 from app.api.v1.notifications.router import router as notifications_router
 from app.api.v1.referral.router import router as referral_router
 from app.api.v1.transactions.router import router as transactions_router
+from app.api.v1.webhooks.router import router as webhooks_router
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -20,3 +21,4 @@ api_router.include_router(kyc_router)
 api_router.include_router(invest_router)
 api_router.include_router(notifications_router)
 api_router.include_router(referral_router)
+api_router.include_router(webhooks_router)

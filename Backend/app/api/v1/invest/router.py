@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.auth.deps import get_current_user, require_invest_eligible_user
+from app.api.v1.auth.deps import get_client_ip, get_current_user, require_invest_eligible_user
 from app.api.v1.invest.schemas import (
+    CheckoutMfCartRequest,
+    BulkUpsertMfCartItemsRequest,
+    CreateMfMandateRequest,
     CreateMfOrderRequest,
+    CreateMfSipPlanRequest,
     InvestCategoryListResponse,
     InvestCategoryResponse,
     InvestConfigResponse,
@@ -23,12 +27,44 @@ from app.api.v1.invest.schemas import (
     InvestFundSummaryResponse,
     InvestHomeResponse,
     InvestReturnCalculatorResponse,
+    InvestorBankAccountListResponse,
+    InvestorBankAccountManualVerifyResponse,
+    InvestorBankAccountPreverifyStatusResponse,
+    InvestorBankAccountProofUploadResponse,
+    InvestorBankAccountFailure,
+    InvestorBankAccountResponse,
+    InvestorBankAccountVerifyRequest,
+    InvestorBankAccountVerifyResponse,
+    MfCompareRequest,
+    MfCompareResponse,
+    MfLumpsumCalculatorResponse,
+    MfSipCalculatorResponse,
+    MfSwpCalculatorResponse,
+    MfCartResponse,
     MfCasImportListResponse,
     MfCasImportResponse,
+    MfCheckoutResponse,
     MfExternalHoldingResponse,
     MfHoldingsResponse,
+    MfMandateListResponse,
+    MfMandateResponse,
     MfOrderListResponse,
+    MfOrderJourneyResponse,
     MfOrderResponse,
+    MfSipCartCheckoutResponse,
+    MfSipPlanListResponse,
+    MfSipPlanResponse,
+    UpsertMfCartItemRequest,
+)
+from app.application.investor.investor_bank_account_errors import InvestorBankAccountError
+from app.application.investor.investor_bank_account_service import (
+    disable_bank_account,
+    get_bank_account_preverify_status,
+    list_user_bank_accounts,
+    set_primary_bank_account,
+    upload_bank_account_proof,
+    verify_and_add_bank_account,
+    verify_bank_account_manual,
 )
 from app.application.mf.cas_import_service import (
     list_user_cas_imports,
@@ -44,21 +80,70 @@ from app.application.mf.invest_cached_read_service import (
     cached_list_invest_funds,
     cached_search_invest_funds,
 )
+from app.application.mf.invest_fund_slug import resolve_invest_fund_product_id
 from app.application.mf.invest_home_service import list_invest_fund_navs
-from app.application.mf.return_calculator_service import cached_compute_return_calculator
+from app.application.mf.mf_calculator_errors import MfCalculatorError
+from app.application.mf.mf_compare_service import compare_invest_funds
+from app.application.mf.return_calculator_service import (
+    cached_compute_lumpsum_calculator,
+    cached_compute_return_calculator,
+    cached_compute_sip_calculator,
+    cached_compute_swp_calculator,
+)
 from app.application.mf.mf_order_errors import MfCasError, MfOrderError
+from app.application.mf.mf_cart_service import (
+    bulk_upsert_cart_items,
+    checkout_cart,
+    checkout_sip_cart,
+    get_cart_summary,
+    get_user_checkout,
+    remove_cart_item,
+    serialize_checkout,
+    upsert_cart_item,
+)
+from app.application.mf.mf_mandate_service import (
+    cancel_user_mandate,
+    create_mandate_for_user,
+    get_user_mandate,
+    initiate_mandate_auth,
+    list_user_mandates,
+    serialize_mandate,
+)
+from app.application.mf.mf_sip_plan_service import (
+    cancel_sip_plan,
+    create_sip_plan,
+    get_user_sip_plan,
+    list_user_sip_plans,
+    serialize_sip_plan,
+)
 from app.application.mf.mf_order_service import (
     create_lumpsum_order,
     get_user_order,
+    get_user_order_journey,
     list_user_orders,
+    load_order_fund_metadata,
     serialize_order,
+)
+from app.application.mf.mf_payment_flow_service import (
+    abandon_unpaid_checkout_payment,
+    abandon_unpaid_order_payment,
+    advance_checkout_for_payment,
+    advance_order_for_payment,
 )
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.infrastructure.persistence.mf_models import Product
+from app.infrastructure.persistence.mf_transaction_models import MfCheckout, MfMandate
 from app.infrastructure.persistence.models import User
 
 router = APIRouter(prefix="/invest", tags=["invest"])
+
+
+async def _resolve_fund_product_id(db: AsyncSession, fund_ref: str) -> UUID:
+    product_id = await resolve_invest_fund_product_id(db, fund_ref)
+    if not product_id:
+        raise HTTPException(status_code=404, detail="Fund not found in catalog")
+    return product_id
 
 
 def _handle_mf_order_error(exc: MfOrderError) -> JSONResponse:
@@ -67,6 +152,69 @@ def _handle_mf_order_error(exc: MfOrderError) -> JSONResponse:
 
 def _handle_mf_cas_error(exc: MfCasError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": exc.message}})
+
+
+def _handle_mf_calculator_error(exc: MfCalculatorError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": exc.message}})
+
+
+def _handle_investor_bank_account_error(exc: InvestorBankAccountError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": exc.message}})
+
+
+def _bank_account_response(payload: dict) -> InvestorBankAccountResponse:
+    failure = payload.get("failure")
+    failure_model = None
+    if isinstance(failure, dict) and failure.get("field"):
+        failure_model = InvestorBankAccountFailure(**failure)
+    return InvestorBankAccountResponse(
+        id=payload["id"],
+        account_number_masked=payload["account_number_masked"],
+        account_number_last4=payload["account_number_last4"],
+        ifsc_code=payload["ifsc_code"],
+        account_type=payload["account_type"],
+        account_holder_name=payload["account_holder_name"],
+        pan_account_holder_name=payload.get("pan_account_holder_name"),
+        bank_name=payload.get("bank_name"),
+        branch_name=payload.get("branch_name"),
+        is_primary=payload["is_primary"],
+        source=payload["source"],
+        verification_status=payload["verification_status"],
+        sync_status=payload["sync_status"],
+        requires_manual_verification=bool(payload.get("requires_manual_verification")),
+        requires_proof_upload=bool(payload.get("requires_proof_upload")),
+        proof_uploaded=bool(payload.get("proof_uploaded")),
+        preverify_id=payload.get("preverify_id"),
+        failure=failure_model,
+        readiness_verified=bool(payload.get("readiness_verified")),
+        external_bank_account_id=payload.get("external_bank_account_id"),
+        created_at=payload.get("created_at"),
+        updated_at=payload.get("updated_at"),
+    )
+
+
+async def _order_response(
+    db: AsyncSession,
+    order,
+    *,
+    product_name: str | None,
+    amc_name: str | None = None,
+    amc_logo_url: str | None = None,
+) -> MfOrderResponse:
+    if amc_name is None and amc_logo_url is None:
+        amc_names, amc_logos = await load_order_fund_metadata(db, [order])
+        amc_name = amc_names.get(order.fund_id)
+        amc_logo_url = amc_logos.get(order.fund_id)
+    checkout = await db.get(MfCheckout, order.checkout_id) if order.checkout_id else None
+    return MfOrderResponse(
+        **serialize_order(
+            order,
+            product_name=product_name,
+            checkout=checkout,
+            amc_name=amc_name,
+            amc_logo_url=amc_logo_url,
+        )
+    )
 
 
 @router.get("/home", response_model=InvestHomeResponse)
@@ -154,51 +302,153 @@ async def invest_search(
     )
 
 
-@router.get("/funds/{product_id}/navs", response_model=InvestFundNavHistoryResponse)
+@router.post("/funds/compare", response_model=MfCompareResponse)
+async def invest_compare_funds(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    body: MfCompareRequest = Body(...),
+) -> MfCompareResponse:
+    try:
+        payload = await compare_invest_funds(db, product_ids=body.product_ids)
+    except MfCalculatorError as exc:
+        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    return MfCompareResponse(
+        funds=[InvestFundDetailResponse(**item) for item in payload["funds"]],
+        disclaimer=payload["disclaimer"],
+    )
+
+
+@router.get("/funds/{fund_ref}/navs", response_model=InvestFundNavHistoryResponse)
 async def invest_fund_navs(
-    product_id: UUID,
+    fund_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
     limit: int = Query(default=365, ge=1, le=2000),
 ) -> InvestFundNavHistoryResponse:
+    product_id = await _resolve_fund_product_id(db, fund_ref)
     payload = await list_invest_fund_navs(db, product_id, limit=limit)
     if not payload:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return InvestFundNavHistoryResponse(**payload)
 
 
-@router.get("/funds/{product_id}", response_model=InvestFundDetailResponse)
+@router.get("/funds/{fund_ref}", response_model=InvestFundDetailResponse)
 async def invest_fund_detail(
-    product_id: UUID,
+    fund_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
 ) -> InvestFundDetailResponse:
+    product_id = await _resolve_fund_product_id(db, fund_ref)
     payload = await cached_get_invest_fund_detail(db, product_id)
     if not payload:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return InvestFundDetailResponse(**payload)
 
 
-@router.get("/funds/{product_id}/return-calculator", response_model=InvestReturnCalculatorResponse)
+@router.get("/funds/{fund_ref}/return-calculator", response_model=InvestReturnCalculatorResponse)
 async def invest_return_calculator(
-    product_id: UUID,
+    fund_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
-    amount_inr: float = Query(default=1000, gt=0, le=10_000_000),
+    amount_inr: float = Query(default=1000, gt=0, le=100_000_000),
     mode: str = Query(default="lumpsum", pattern="^(lumpsum|sip)$"),
     horizons: Optional[str] = Query(default=None, description="Comma-separated: 3m,6m,1y,3y,5y"),
+    duration_months: int = Query(default=12, ge=1, le=999),
+    sip_day: int = Query(default=5, ge=1, le=28),
 ) -> InvestReturnCalculatorResponse:
+    product_id = await _resolve_fund_product_id(db, fund_ref)
     horizon_list = [part.strip() for part in (horizons or "").split(",") if part.strip()] or None
-    payload = await cached_compute_return_calculator(
-        db,
-        product_id=product_id,
-        amount_inr=amount_inr,
-        mode=mode,
-        horizons=horizon_list,
-    )
+    try:
+        payload = await cached_compute_return_calculator(
+            db,
+            product_id=product_id,
+            amount_inr=amount_inr,
+            mode=mode,
+            horizons=horizon_list,
+            duration_months=duration_months,
+            sip_day=sip_day,
+        )
+    except MfCalculatorError as exc:
+        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
     if not payload:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return InvestReturnCalculatorResponse(**payload)
+
+
+@router.get("/funds/{fund_ref}/calculators/lumpsum", response_model=MfLumpsumCalculatorResponse)
+async def invest_lumpsum_calculator(
+    fund_ref: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    amount_inr: float = Query(default=1000, gt=0, le=100_000_000),
+    horizons: Optional[str] = Query(default=None, description="Comma-separated: 3m,6m,1y,3y,5y"),
+) -> MfLumpsumCalculatorResponse:
+    product_id = await _resolve_fund_product_id(db, fund_ref)
+    horizon_list = [part.strip() for part in (horizons or "").split(",") if part.strip()] or None
+    try:
+        payload = await cached_compute_lumpsum_calculator(
+            db,
+            product_id=product_id,
+            amount_inr=amount_inr,
+            horizons=horizon_list,
+        )
+    except MfCalculatorError as exc:
+        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    if not payload:
+        raise HTTPException(status_code=404, detail="Fund not found in catalog")
+    return MfLumpsumCalculatorResponse(**payload)
+
+
+@router.get("/funds/{fund_ref}/calculators/sip", response_model=MfSipCalculatorResponse)
+async def invest_sip_calculator(
+    fund_ref: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    monthly_amount_inr: float = Query(default=5000, gt=0, le=100_000),
+    duration_months: int = Query(default=60, ge=1, le=999),
+    sip_day: int = Query(default=5, ge=1, le=28),
+) -> MfSipCalculatorResponse:
+    product_id = await _resolve_fund_product_id(db, fund_ref)
+    try:
+        payload = await cached_compute_sip_calculator(
+            db,
+            product_id=product_id,
+            monthly_amount_inr=monthly_amount_inr,
+            duration_months=duration_months,
+            sip_day=sip_day,
+        )
+    except MfCalculatorError as exc:
+        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    if not payload:
+        raise HTTPException(status_code=404, detail="Fund not found in catalog")
+    return MfSipCalculatorResponse(**payload)
+
+
+@router.get("/funds/{fund_ref}/calculators/swp", response_model=MfSwpCalculatorResponse)
+async def invest_swp_calculator(
+    fund_ref: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    corpus_inr: float = Query(default=1_000_000, gt=0, le=10_000_000),
+    monthly_withdrawal_inr: float = Query(default=10_000, gt=0, le=10_000_000),
+    duration_months: int = Query(default=60, ge=1, le=999),
+    withdrawal_day: int = Query(default=5, ge=1, le=28),
+) -> MfSwpCalculatorResponse:
+    product_id = await _resolve_fund_product_id(db, fund_ref)
+    try:
+        payload = await cached_compute_swp_calculator(
+            db,
+            product_id=product_id,
+            corpus_inr=corpus_inr,
+            monthly_withdrawal_inr=monthly_withdrawal_inr,
+            duration_months=duration_months,
+            withdrawal_day=withdrawal_day,
+        )
+    except MfCalculatorError as exc:
+        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    if not payload:
+        raise HTTPException(status_code=404, detail="Fund not found in catalog")
+    return MfSwpCalculatorResponse(**payload)
 
 
 @router.get("/assets/{asset_path:path}")
@@ -227,6 +477,7 @@ async def serve_public_asset(asset_path: str) -> FileResponse:
 @router.post("/orders", response_model=MfOrderResponse)
 async def create_mf_order(
     body: CreateMfOrderRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_invest_eligible_user)],
 ) -> MfOrderResponse:
@@ -241,6 +492,8 @@ async def create_mf_order(
             product_id=body.product_id,
             amount_inr=Decimal(str(body.amount_inr)),
             idempotency_key=body.idempotency_key,
+            user_ip=get_client_ip(request),
+            bank_account_id=body.bank_account_id,
         )
         product = await db.get(Product, order.product_id)
         await db.commit()
@@ -248,7 +501,404 @@ async def create_mf_order(
         await db.rollback()
         raise _handle_mf_order_error(exc) from exc
 
-    return MfOrderResponse(**serialize_order(order, product_name=product.name if product else None))
+    return await _order_response(db, order, product_name=product.name if product else None)
+
+
+@router.get("/cart", response_model=MfCartResponse)
+async def get_mf_cart(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCartResponse:
+    payload = await get_cart_summary(db, user_id=current_user.id)
+    return MfCartResponse(**payload)
+
+
+@router.post("/cart/items", response_model=MfCartResponse)
+async def upsert_mf_cart_item(
+    body: UpsertMfCartItemRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCartResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled:
+        raise HTTPException(status_code=503, detail="MF orders are temporarily unavailable")
+
+    try:
+        if body.investment_type == "sip" and not settings.zynd_mf_sip_enabled:
+            raise HTTPException(status_code=503, detail="SIP is temporarily unavailable")
+        await upsert_cart_item(
+            db,
+            user_id=current_user.id,
+            product_id=body.product_id,
+            amount_inr=Decimal(str(body.amount_inr)),
+            investment_type=body.investment_type,
+            installment_day=body.installment_day,
+            frequency=body.frequency,
+        )
+        payload = await get_cart_summary(db, user_id=current_user.id)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return MfCartResponse(**payload)
+
+
+@router.post("/cart/items/bulk", response_model=MfCartResponse)
+async def bulk_upsert_mf_cart_items(
+    body: BulkUpsertMfCartItemsRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCartResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled:
+        raise HTTPException(status_code=503, detail="MF orders are temporarily unavailable")
+
+    try:
+        await bulk_upsert_cart_items(
+            db,
+            user_id=current_user.id,
+            items=[(line.product_id, Decimal(str(line.amount_inr))) for line in body.items],
+        )
+        payload = await get_cart_summary(db, user_id=current_user.id)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return MfCartResponse(**payload)
+
+
+@router.delete("/cart/items/{product_id}", response_model=MfCartResponse)
+async def delete_mf_cart_item(
+    product_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    investment_type: Literal["lumpsum", "sip"] = Query(default="lumpsum"),
+) -> MfCartResponse:
+    try:
+        await remove_cart_item(
+            db,
+            user_id=current_user.id,
+            product_id=product_id,
+            investment_type=investment_type,
+        )
+        payload = await get_cart_summary(db, user_id=current_user.id)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return MfCartResponse(**payload)
+
+
+@router.post("/cart/checkout", response_model=MfCheckoutResponse)
+async def checkout_mf_cart(
+    body: CheckoutMfCartRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCheckoutResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled:
+        raise HTTPException(status_code=503, detail="MF orders are temporarily unavailable")
+
+    try:
+        checkout, orders = await checkout_cart(
+            db,
+            user_id=current_user.id,
+            idempotency_key=body.idempotency_key,
+            user_ip=get_client_ip(request),
+            bank_account_id=body.bank_account_id,
+        )
+        product_ids = {order.product_id for order in orders}
+        products = {
+            row.id: row.name
+            for row in (
+                await db.execute(select(Product).where(Product.id.in_(product_ids)))
+            ).scalars()
+        } if product_ids else {}
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return MfCheckoutResponse(**serialize_checkout(checkout, orders, product_names=products))
+
+
+@router.post("/cart/sip/checkout", response_model=MfSipCartCheckoutResponse)
+async def checkout_mf_sip_cart(
+    body: CheckoutMfCartRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipCartCheckoutResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled or not settings.zynd_mf_sip_enabled:
+        raise HTTPException(status_code=503, detail="SIP is temporarily unavailable")
+
+    try:
+        plans = await checkout_sip_cart(
+            db,
+            user_id=current_user.id,
+            idempotency_key=body.idempotency_key,
+            user_ip=get_client_ip(request),
+            bank_account_id=body.bank_account_id,
+        )
+        product_ids = {plan.product_id for plan in plans}
+        products = {
+            row.id: row.name
+            for row in (
+                await db.execute(select(Product).where(Product.id.in_(product_ids)))
+            ).scalars()
+        } if product_ids else {}
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    responses: list[MfSipPlanResponse] = []
+    for plan in plans:
+        mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+        responses.append(
+            MfSipPlanResponse(
+                **serialize_sip_plan(
+                    plan,
+                    product_name=products.get(plan.product_id),
+                    mandate=mandate_row,
+                )
+            )
+        )
+    return MfSipCartCheckoutResponse(plans=responses)
+
+
+@router.get("/cart/checkout/{checkout_id}", response_model=MfCheckoutResponse)
+async def get_mf_cart_checkout(
+    checkout_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCheckoutResponse:
+    result = await get_user_checkout(db, user_id=current_user.id, checkout_id=checkout_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    checkout, orders = result
+    if await advance_checkout_for_payment(db, checkout, user_ip=get_client_ip(request)):
+        await db.commit()
+    product_ids = {order.product_id for order in orders}
+    products = {
+        row.id: row.name
+        for row in (
+            await db.execute(select(Product).where(Product.id.in_(product_ids)))
+        ).scalars()
+    } if product_ids else {}
+    return MfCheckoutResponse(**serialize_checkout(checkout, orders, product_names=products))
+
+
+@router.post("/cart/checkout/{checkout_id}/abandon-payment", response_model=MfCheckoutResponse)
+async def abandon_mf_cart_checkout_payment(
+    checkout_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCheckoutResponse:
+    result = await get_user_checkout(db, user_id=current_user.id, checkout_id=checkout_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    checkout, orders = result
+    if not await abandon_unpaid_checkout_payment(db, checkout_id):
+        raise HTTPException(status_code=409, detail="Payment cannot be abandoned in its current state")
+    await db.commit()
+    product_ids = {order.product_id for order in orders}
+    products = {
+        row.id: row.name
+        for row in (
+            await db.execute(select(Product).where(Product.id.in_(product_ids)))
+        ).scalars()
+    } if product_ids else {}
+    return MfCheckoutResponse(**serialize_checkout(checkout, orders, product_names=products))
+
+
+async def _sip_plan_response(
+    db: AsyncSession,
+    plan,
+    *,
+    product_name: str | None,
+) -> MfSipPlanResponse:
+    from app.infrastructure.persistence.mf_transaction_models import MfMandate
+
+    mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+    return MfSipPlanResponse(**serialize_sip_plan(plan, product_name=product_name, mandate=mandate_row))
+
+
+@router.get("/mandates", response_model=MfMandateListResponse)
+async def list_mf_mandates(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfMandateListResponse:
+    mandates = await list_user_mandates(db, user_id=current_user.id)
+    return MfMandateListResponse(mandates=[MfMandateResponse(**serialize_mandate(row)) for row in mandates])
+
+
+@router.post("/mandates", response_model=MfMandateResponse)
+async def create_mf_mandate(
+    body: CreateMfMandateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfMandateResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled or not settings.zynd_mf_sip_enabled:
+        raise HTTPException(status_code=503, detail="SIP is temporarily unavailable")
+
+    try:
+        amount = Decimal(str(body.installment_amount_inr)) if body.installment_amount_inr else None
+        mandate = await create_mandate_for_user(
+            db,
+            user_id=current_user.id,
+            idempotency_key=body.idempotency_key,
+            installment_amount_inr=amount,
+            bank_account_id=body.bank_account_id,
+        )
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return MfMandateResponse(**serialize_mandate(mandate))
+
+
+@router.get("/mandates/{mandate_id}", response_model=MfMandateResponse)
+async def get_mf_mandate(
+    mandate_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfMandateResponse:
+    mandate = await get_user_mandate(db, user_id=current_user.id, mandate_id=mandate_id)
+    if not mandate:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    return MfMandateResponse(**serialize_mandate(mandate))
+
+
+@router.post("/mandates/{mandate_id}/auth", response_model=MfMandateResponse)
+async def auth_mf_mandate(
+    mandate_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfMandateResponse:
+    mandate = await get_user_mandate(db, user_id=current_user.id, mandate_id=mandate_id)
+    if not mandate:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    try:
+        mandate = await initiate_mandate_auth(db, mandate)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+    return MfMandateResponse(**serialize_mandate(mandate))
+
+
+@router.post("/mandates/{mandate_id}/cancel", response_model=MfMandateResponse)
+async def cancel_mf_mandate(
+    mandate_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfMandateResponse:
+    mandate = await get_user_mandate(db, user_id=current_user.id, mandate_id=mandate_id)
+    if not mandate:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    try:
+        mandate = await cancel_user_mandate(db, mandate)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+    return MfMandateResponse(**serialize_mandate(mandate))
+
+
+@router.post("/sip/plans", response_model=MfSipPlanResponse)
+async def create_mf_sip_plan(
+    body: CreateMfSipPlanRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipPlanResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled or not settings.zynd_mf_sip_enabled:
+        raise HTTPException(status_code=503, detail="SIP is temporarily unavailable")
+
+    try:
+        plan = await create_sip_plan(
+            db,
+            user_id=current_user.id,
+            product_id=body.product_id,
+            amount_inr=Decimal(str(body.amount_inr)),
+            frequency=body.frequency,
+            installment_day=body.installment_day,
+            number_of_installments=body.number_of_installments,
+            mandate_id=body.mandate_id,
+            idempotency_key=body.idempotency_key,
+            user_ip=get_client_ip(request),
+            bank_account_id=body.bank_account_id,
+        )
+        product = await db.get(Product, plan.product_id)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return await _sip_plan_response(db, plan, product_name=product.name if product else None)
+
+
+@router.get("/sip/plans", response_model=MfSipPlanListResponse)
+async def list_mf_sip_plans(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    limit: int = Query(default=50, ge=1, le=100),
+) -> MfSipPlanListResponse:
+    plans = await list_user_sip_plans(db, user_id=current_user.id, limit=limit)
+    product_ids = {plan.product_id for plan in plans}
+    products = {
+        row.id: row.name
+        for row in (
+            await db.execute(select(Product).where(Product.id.in_(product_ids)))
+        ).scalars()
+    } if product_ids else {}
+    responses = [
+        await _sip_plan_response(db, plan, product_name=products.get(plan.product_id))
+        for plan in plans
+    ]
+    return MfSipPlanListResponse(plans=responses)
+
+
+@router.get("/sip/plans/{plan_id}", response_model=MfSipPlanResponse)
+async def get_mf_sip_plan(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipPlanResponse:
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    product = await db.get(Product, plan.product_id)
+    return await _sip_plan_response(db, plan, product_name=product.name if product else None)
+
+
+@router.post("/sip/plans/{plan_id}/cancel", response_model=MfSipPlanResponse)
+async def cancel_mf_sip_plan(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipPlanResponse:
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    try:
+        plan = await cancel_sip_plan(db, plan)
+        product = await db.get(Product, plan.product_id)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+    return await _sip_plan_response(db, plan, product_name=product.name if product else None)
 
 
 @router.get("/orders", response_model=MfOrderListResponse)
@@ -265,16 +915,51 @@ async def list_mf_orders(
             await db.execute(select(Product).where(Product.id.in_(product_ids)))
         ).scalars()
     } if product_ids else {}
-    return MfOrderListResponse(
-        orders=[
-            MfOrderResponse(**serialize_order(order, product_name=products.get(order.product_id)))
-            for order in orders
-        ]
-    )
+    amc_names, amc_logos = await load_order_fund_metadata(db, orders)
+    responses: list[MfOrderResponse] = []
+    for order in orders:
+        responses.append(
+            await _order_response(
+                db,
+                order,
+                product_name=products.get(order.product_id),
+                amc_name=amc_names.get(order.fund_id),
+                amc_logo_url=amc_logos.get(order.fund_id),
+            )
+        )
+    return MfOrderListResponse(orders=responses)
+
+
+@router.get("/orders/{order_id}/journey", response_model=MfOrderJourneyResponse)
+async def get_mf_order_journey(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfOrderJourneyResponse:
+    payload = await get_user_order_journey(db, user_id=current_user.id, order_id=order_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return MfOrderJourneyResponse(**payload)
 
 
 @router.get("/orders/{order_id}", response_model=MfOrderResponse)
 async def get_mf_order(
+    order_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfOrderResponse:
+    order = await get_user_order(db, user_id=current_user.id, order_id=order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if await advance_order_for_payment(db, order, user_ip=get_client_ip(request)):
+        await db.commit()
+    product = await db.get(Product, order.product_id)
+    return await _order_response(db, order, product_name=product.name if product else None)
+
+
+@router.post("/orders/{order_id}/abandon-payment", response_model=MfOrderResponse)
+async def abandon_mf_order_payment(
     order_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_invest_eligible_user)],
@@ -282,8 +967,11 @@ async def get_mf_order(
     order = await get_user_order(db, user_id=current_user.id, order_id=order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if not await abandon_unpaid_order_payment(db, order):
+        raise HTTPException(status_code=409, detail="Payment cannot be abandoned in its current state")
+    await db.commit()
     product = await db.get(Product, order.product_id)
-    return MfOrderResponse(**serialize_order(order, product_name=product.name if product else None))
+    return await _order_response(db, order, product_name=product.name if product else None)
 
 
 @router.get("/holdings/external", response_model=MfHoldingsResponse)
@@ -344,3 +1032,153 @@ async def list_cas_imports(
             for row in imports
         ]
     )
+
+
+@router.get("/bank-accounts", response_model=InvestorBankAccountListResponse)
+async def get_investor_bank_accounts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestorBankAccountListResponse:
+    try:
+        accounts = await list_user_bank_accounts(db, user_id=current_user.id)
+    except InvestorBankAccountError as exc:
+        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    return InvestorBankAccountListResponse(
+        bank_accounts=[_bank_account_response(account) for account in accounts]
+    )
+
+
+@router.post("/bank-accounts/verify", response_model=InvestorBankAccountVerifyResponse)
+async def post_investor_bank_account_verify(
+    body: InvestorBankAccountVerifyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestorBankAccountVerifyResponse:
+    try:
+        result = await verify_and_add_bank_account(
+            db,
+            user=current_user,
+            account_number=body.account_number,
+            account_type=body.account_type,
+            ifsc_code=body.ifsc_code,
+        )
+    except InvestorBankAccountError as exc:
+        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    await db.commit()
+    base = _bank_account_response(result)
+    return InvestorBankAccountVerifyResponse(
+        **base.model_dump(),
+        success=bool(result.get("success")),
+        pan_verified=bool(result.get("pan_verified")),
+        bank_verified=bool(result.get("bank_verified")),
+    )
+
+
+@router.post("/bank-accounts/{bank_account_id}/upload-proof", response_model=InvestorBankAccountProofUploadResponse)
+async def post_investor_bank_account_upload_proof(
+    bank_account_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    file: UploadFile = File(...),
+) -> InvestorBankAccountProofUploadResponse:
+    content = await file.read()
+    try:
+        result = await upload_bank_account_proof(
+            db,
+            user=current_user,
+            bank_account_id=bank_account_id,
+            file_bytes=content,
+            filename=file.filename or "bank-proof.pdf",
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except InvestorBankAccountError as exc:
+        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    await db.commit()
+    return InvestorBankAccountProofUploadResponse(
+        file_id=result["file_id"],
+        bank_account=_bank_account_response(result["bank_account"]),
+    )
+
+
+@router.post(
+    "/bank-accounts/{bank_account_id}/verify-manual",
+    response_model=InvestorBankAccountManualVerifyResponse,
+)
+async def post_investor_bank_account_verify_manual(
+    bank_account_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestorBankAccountManualVerifyResponse:
+    try:
+        result = await verify_bank_account_manual(
+            db,
+            user=current_user,
+            bank_account_id=bank_account_id,
+        )
+    except InvestorBankAccountError as exc:
+        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    await db.commit()
+    base = _bank_account_response(result)
+    return InvestorBankAccountManualVerifyResponse(
+        **base.model_dump(),
+        success=bool(result.get("success")),
+        bank_verified=bool(result.get("bank_verified")),
+        readiness_verified=bool(result.get("readiness_verified")),
+    )
+
+
+@router.get(
+    "/bank-accounts/{bank_account_id}/preverify-status",
+    response_model=InvestorBankAccountPreverifyStatusResponse,
+)
+async def get_investor_bank_account_preverify_status(
+    bank_account_id: UUID,
+    preverify_id: Annotated[str, Query(min_length=1)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestorBankAccountPreverifyStatusResponse:
+    try:
+        result = await get_bank_account_preverify_status(
+            db,
+            user_id=current_user.id,
+            bank_account_id=bank_account_id,
+            preverify_id=preverify_id,
+        )
+    except InvestorBankAccountError as exc:
+        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    return InvestorBankAccountPreverifyStatusResponse(**result)
+
+
+@router.patch("/bank-accounts/{bank_account_id}/set-primary", response_model=InvestorBankAccountResponse)
+async def patch_investor_bank_account_set_primary(
+    bank_account_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestorBankAccountResponse:
+    try:
+        result = await set_primary_bank_account(
+            db,
+            user_id=current_user.id,
+            bank_account_id=bank_account_id,
+        )
+    except InvestorBankAccountError as exc:
+        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    await db.commit()
+    return _bank_account_response(result)
+
+
+@router.delete("/bank-accounts/{bank_account_id}", status_code=204)
+async def delete_investor_bank_account(
+    bank_account_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    try:
+        await disable_bank_account(
+            db,
+            user_id=current_user.id,
+            bank_account_id=bank_account_id,
+        )
+    except InvestorBankAccountError as exc:
+        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    await db.commit()

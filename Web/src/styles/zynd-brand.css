@@ -50,6 +50,7 @@
   --text-h2: 2rem;
   --text-h3: 1.5rem;
   --text-h4: 1.25rem;
+  --text-page-title: var(--text-h4);
   --text-body: 1rem;
   --text-compact: 0.875rem;
   --text-caption: 0.75rem;
@@ -59,6 +60,8 @@
   --radius-card: 0.5rem;
   --radius-modal: 0.625rem;
   --radius-medium: 0.75rem;
+  --radius-2xl: 1.5rem;
+  --radius-invest-card: var(--radius-2xl);
   --radius-full: 9999px;
 
   /* Shadows */
@@ -138,6 +141,28 @@
   --chart-3: var(--zynd-accent-cyan);
   --chart-4: var(--zynd-accent-amber);
   --chart-5: var(--zynd-purple);
+
+  /* SIP calculator surfaces */
+  --sip-panel-bg: color-mix(in srgb, var(--muted) var(--opacity-subtle), transparent);
+  --sip-panel-border: color-mix(in srgb, var(--border) 70%, transparent);
+  --sip-stat-border: color-mix(in srgb, var(--border) 60%, transparent);
+  --sip-icon-bg: color-mix(in srgb, var(--primary) var(--opacity-subtle), transparent);
+  --sip-icon-fg: var(--primary);
+  --sip-hero-bg: color-mix(in srgb, var(--primary) 5%, transparent);
+  --sip-hero-border: color-mix(in srgb, var(--primary) 15%, transparent);
+  --sip-invested: var(--muted-foreground);
+  --sip-invested-track: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+  --sip-gain: var(--success);
+  --sip-gain-track: var(--success);
+  --sip-chart-invested-stroke: var(--muted-foreground);
+  --sip-chart-invested-fill-start: color-mix(in srgb, var(--muted-foreground) 22%, transparent);
+  --sip-chart-invested-fill-end: color-mix(in srgb, var(--muted-foreground) 4%, transparent);
+  --sip-chart-gain-stroke: var(--success);
+  --sip-chart-gain-fill-start: color-mix(in srgb, var(--success) 35%, transparent);
+  --sip-chart-gain-fill-end: color-mix(in srgb, var(--success) 6%, transparent);
+  --sip-overlay: color-mix(in srgb, var(--background) 25%, transparent);
+  --sip-lock-panel-bg: color-mix(in srgb, var(--card) 95%, transparent);
+  --sip-empty-icon: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
   --sidebar: var(--zynd-neutral-50);
   --sidebar-foreground: var(--zynd-neutral-900);
   --sidebar-primary: var(--zynd-blue);
@@ -239,9 +264,10 @@
   --radius-md: var(--radius-control);
   --radius-lg: var(--radius-card);
   --radius-xl: var(--radius-modal);
-  --radius-2xl: var(--radius-modal);
-  --radius-3xl: calc(var(--radius-modal) + 0.25rem);
-  --radius-4xl: calc(var(--radius-modal) + 0.5rem);
+  --radius-2xl: 1.5rem;
+  --radius-3xl: calc(var(--radius-2xl) + 0.25rem);
+  --radius-4xl: calc(var(--radius-2xl) + 0.5rem);
+  --radius-invest-card: var(--radius-2xl);
 
   --text-display: var(--text-display);
   --text-h1: var(--text-h1);
@@ -269,15 +295,20 @@
 }
 
 @layer base {
-  h1 {
+  h1:not([data-page-title]) {
     font-size: var(--text-h1);
     font-weight: 600;
     line-height: 1.2;
   }
-  h2 {
+  h2:not([data-page-title]) {
     font-size: var(--text-h2);
     font-weight: 600;
     line-height: 1.25;
+  }
+  [data-page-title] {
+    font-size: var(--text-h4);
+    font-weight: 600;
+    line-height: 1.35;
   }
   h3 {
     font-size: var(--text-h3);
@@ -295,6 +326,10 @@
   .text-display {
     font-size: var(--text-display);
     line-height: 1.1;
+  }
+  .text-page-title {
+    font-size: var(--text-h4);
+    line-height: 1.35;
   }
   .text-body {
     font-size: var(--text-body);
@@ -325,6 +360,9 @@
   }
   .rounded-modal {
     border-radius: var(--radius-modal);
+  }
+  .rounded-invest-card {
+    border-radius: var(--radius-invest-card);
   }
   .bg-gradient-blue {
     background: var(--gradient-blue);
@@ -411,5 +449,49 @@
     box-shadow:
       0 0 0 1px var(--success),
       0 0 16px color-mix(in srgb, var(--success) 40%, transparent);
+  }
+
+  .sip-panel {
+    border: 1px solid var(--sip-panel-border);
+    background-color: var(--sip-panel-bg);
+    border-radius: var(--radius-control);
+  }
+
+  .sip-stat {
+    border: 1px solid var(--sip-stat-border);
+    border-radius: var(--radius-control);
+  }
+
+  .sip-hero {
+    border: 1px solid var(--sip-hero-border);
+    background-color: var(--sip-hero-bg);
+    border-radius: var(--radius-control);
+  }
+
+  .sip-icon-badge {
+    background-color: var(--sip-icon-bg);
+    color: var(--sip-icon-fg);
+  }
+
+  .sip-gain-text {
+    color: var(--sip-gain);
+  }
+
+  .sip-invested-dot {
+    background-color: var(--sip-invested-track);
+  }
+
+  .sip-gain-dot {
+    background-color: var(--sip-gain-track);
+  }
+
+  .sip-chart-overlay {
+    background-color: var(--sip-overlay);
+  }
+
+  .sip-lock-panel {
+    border: 1px solid var(--border);
+    background-color: var(--sip-lock-panel-bg);
+    border-radius: var(--radius-medium);
   }
 }

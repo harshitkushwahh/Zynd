@@ -9,6 +9,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.account_service import fund_eligibility_status
+from app.application.auth.auth_client_policy import (
+    is_admin_auth_header,
+    is_admin_device_fingerprint as policy_is_admin_device_fingerprint,
+    resolve_admin_client,
+)
 from app.application.auth.errors import AuthError
 from app.application.auth.user_service import get_user_by_id
 from app.core.config import get_settings
@@ -19,19 +24,48 @@ from app.infrastructure.security.tokens import decode_access_token
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def is_admin_auth_client(request: Request) -> bool:
+    return is_admin_auth_header(request.headers.get("x-zynd-client"))
+
+
+def is_admin_device_fingerprint(fingerprint: str | None) -> bool:
+    return policy_is_admin_device_fingerprint(fingerprint)
+
+
+def resolve_auth_client_from_request(request: Request, device_fingerprint: str | None) -> bool:
+    try:
+        return resolve_admin_client(
+            header_admin=is_admin_auth_client(request),
+            fingerprint_admin=is_admin_device_fingerprint(device_fingerprint),
+        )
+    except AuthError:
+        raise
+
+
+def get_refresh_token_from_request(request: Request) -> tuple[str | None, bool]:
+    settings = get_settings()
+    if is_admin_auth_client(request):
+        return request.cookies.get(settings.refresh_cookie_name_admin), True
+    return request.cookies.get(settings.refresh_cookie_name), False
+
+
 def get_client_ip(request: Request) -> Optional[str]:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
     if request.client:
-        return request.client.host
+        host = request.client.host
+        if host in {"::1", "0:0:0:0:0:0:0:1"}:
+            return "127.0.0.1"
+        return host
     return None
 
 
-def set_refresh_cookie(response, refresh_token: str) -> None:
+def set_refresh_cookie(response, refresh_token: str, *, admin: bool = False) -> None:
     settings = get_settings()
+    cookie_name = settings.refresh_cookie_name_admin if admin else settings.refresh_cookie_name
     response.set_cookie(
-        key=settings.refresh_cookie_name,
+        key=cookie_name,
         value=refresh_token,
         httponly=True,
         secure=settings.refresh_cookie_secure,
@@ -41,9 +75,10 @@ def set_refresh_cookie(response, refresh_token: str) -> None:
     )
 
 
-def clear_refresh_cookie(response) -> None:
+def clear_refresh_cookie(response, *, admin: bool = False) -> None:
     settings = get_settings()
-    response.delete_cookie(key=settings.refresh_cookie_name, path="/api/v1/auth")
+    cookie_name = settings.refresh_cookie_name_admin if admin else settings.refresh_cookie_name
+    response.delete_cookie(key=cookie_name, path="/api/v1/auth")
 
 
 async def get_current_user(

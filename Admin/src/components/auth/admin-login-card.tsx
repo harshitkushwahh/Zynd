@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { getErrorMessage } from "@/lib/errors";
 
 import { OtpInput } from "@/components/auth/otp-input";
 import { PasswordInput } from "@/components/auth/password-input";
@@ -20,11 +22,6 @@ const underlineInputClass = "auth-input-underline";
 
 type LoginStep = "credentials" | "mfa";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return fallback;
-}
 
 export function AdminLoginCard() {
   const router = useRouter();
@@ -122,12 +119,19 @@ export function AdminLoginCard() {
   };
 
   return (
-    <Card className="admin-login-card w-full max-w-[400px] ring-0">
+    <Card className="admin-login-card w-full max-w-login-card ring-0">
       <div className="admin-login-accent" aria-hidden="true" />
 
       <CardContent className="px-8 pb-8 pt-7">
         <div className="mb-7 flex flex-col items-center gap-3.5 text-center">
-          <div className="admin-logo-placeholder" aria-hidden="true" />
+          <Image
+            src="/logo.png"
+            alt="ZYND"
+            width={56}
+            height={56}
+            className="admin-login-logo"
+            priority
+          />
           <h1 className="font-heading text-h4 font-semibold tracking-tight text-foreground">
             <span className="admin-login-title-brand">ZYND</span> Admin Console
           </h1>

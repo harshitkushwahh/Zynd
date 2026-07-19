@@ -19,6 +19,7 @@ from app.application.auth.mfa_service import (
     verify_user_totp,
 )
 from app.application.auth.audit_service import write_audit
+from app.application.auth.auth_client_policy import validate_user_role_for_client
 from app.application.auth.errors import AuthError
 from app.application.auth.session_service import revoke_all_sessions
 from app.application.notifications.notification_service import schedule_user_notification
@@ -372,7 +373,10 @@ async def verify_mfa_login(
         ip=ip,
         settings=settings,
         provider=payload.get("provider"),
-    )
+    ) | {
+        "device_fingerprint": payload["device_fingerprint"],
+        "admin_client": bool(payload.get("admin_client")),
+    }
 
 
 async def create_oauth_link_request(
@@ -501,6 +505,8 @@ async def confirm_oauth_link(
     if not await verify_otp(OtpPurpose.oauth_link, str(user.id), email_otp):
         raise AuthError("Invalid or expired verification code.", "invalid_otp", 400)
 
+    validate_user_role_for_client(user, admin_client=False)
+
     provider = OAuthProvider(payload["provider"])
     result = await db.execute(
         select(OAuthLinkRequest).where(OAuthLinkRequest.id == UUID(payload["link_id"]))
@@ -540,6 +546,7 @@ async def confirm_oauth_link(
         device_fingerprint=device_fingerprint,
         user_agent=user_agent,
         provider=provider.value,
+        admin_client=False,
     )
     if pending:
         return pending
@@ -560,6 +567,7 @@ async def _maybe_mfa_pending_login(
     device_fingerprint: str,
     user_agent: str | None,
     provider: str | None = None,
+    admin_client: bool = False,
 ) -> dict[str, Any] | None:
     from app.application.auth.service import _maybe_mfa_pending_login as pending
 
@@ -568,6 +576,7 @@ async def _maybe_mfa_pending_login(
         device_fingerprint=device_fingerprint,
         user_agent=user_agent,
         provider=provider,
+        admin_client=admin_client,
     )
 
 

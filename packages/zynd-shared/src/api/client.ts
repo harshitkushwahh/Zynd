@@ -1,4 +1,4 @@
-import { getApiUrl } from "./configure";
+import { getApiUrl, getClientKind } from "./configure";
 import { ApiError, parseApiError } from "./errors";
 
 let accessToken: string | null = null;
@@ -11,6 +11,12 @@ const AUTH_PATHS_SKIP_SESSION_REFRESH = [
   "/auth/password/reset",
   "/auth/oauth/",
 ] as const;
+
+function applyClientHeaders(headers: Headers) {
+  if (getClientKind() === "admin") {
+    headers.set("X-Zynd-Client", "admin");
+  }
+}
 
 function shouldRefreshSessionOn401(path: string): boolean {
   if (path === "/auth/refresh") {
@@ -36,9 +42,12 @@ export async function refreshSession(): Promise<SessionRefreshResult> {
   if (!refreshPromise) {
     refreshPromise = (async (): Promise<SessionRefreshResult> => {
       try {
+        const headers = new Headers();
+        applyClientHeaders(headers);
         const response = await fetch(`${getApiUrl()}/auth/refresh`, {
           method: "POST",
           credentials: "include",
+          headers,
         });
 
         if (!response.ok) {
@@ -73,6 +82,7 @@ export async function apiRequest<T>(
   retry = true
 ): Promise<T> {
   const headers = new Headers(options.headers);
+  applyClientHeaders(headers);
   if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }

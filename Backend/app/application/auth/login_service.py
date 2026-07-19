@@ -12,6 +12,7 @@ from app.application.auth.auth_session_context import (
     get_or_create_device,
     maybe_mfa_pending_login,
 )
+from app.application.auth.auth_client_policy import validate_user_role_for_client
 from app.application.auth.errors import AuthError
 from app.application.auth.mfa_service import user_has_mfa
 from app.application.auth.progressive_lockout_service import (
@@ -54,6 +55,7 @@ async def login_with_email(
     device_fingerprint: str,
     user_agent: str | None,
     ip: str | None,
+    admin_client: bool = False,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
@@ -193,6 +195,8 @@ async def login_with_email(
     user.is_locked = False
     user.locked_until = None
 
+    validate_user_role_for_client(user, admin_client=admin_client)
+
     device, is_new_device = await get_or_create_device(
         db, user=user, fingerprint=device_fingerprint, user_agent=user_agent
     )
@@ -239,6 +243,7 @@ async def login_with_email(
             user,
             device_fingerprint=device_fingerprint,
             user_agent=user_agent,
+            admin_client=admin_client,
         )
     else:
         pending = None

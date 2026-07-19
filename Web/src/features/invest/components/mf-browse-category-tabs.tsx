@@ -1,24 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestCategory, InvestFundSummary } from "@/features/invest/api/invest-api";
-import { MfFundCard } from "@/features/invest/components/mf-fund-card";
+import { MfFundCard, MfFundCardSkeletonGrid } from "@/features/invest/components/mf-fund-card";
 import { fetchTopFundsForCategory } from "@/features/invest/lib/mf-fund-ranking";
-import { MF_CARD_RADIUS_CLASS, MF_FUNDS_GRID_CLASS } from "@/features/invest/lib/mf-ui";
+import {
+  MF_CARD_RADIUS_CLASS,
+  MF_FUNDS_GRID_CLASS,
+} from "@/features/invest/lib/mf-ui";
+import { SectionTitle } from "@/components/ui/page-title";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 export const MF_BROWSE_TAB_CATEGORY_SLUGS = ["equity-funds", "debt-funds", "liquid-funds"] as const;
 
+const BROWSE_TAB_SKELETON_COUNT = 5;
+
+function categoryTabLabel(name: string) {
+  return name.replace(/\s+Funds$/i, "");
+}
+
 type MfBrowseCategoryTabsProps = {
   categories: InvestCategory[];
-  onSelectFund: (productId: string) => void;
+  onSelectFund: (fund: InvestFundSummary) => void;
 };
 
 export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCategoryTabsProps) {
@@ -31,11 +40,17 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
   );
 
   const [activeSlug, setActiveSlug] = useState<string>(tabCategories[0]?.slug ?? "");
-  const [funds, setFunds] = useState<InvestFundSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fundsCache, setFundsCache] = useState<Record<string, InvestFundSummary[]>>({});
+  const [loadingSlug, setLoadingSlug] = useState<string | null>(tabCategories[0]?.slug ?? null);
+  const [errorBySlug, setErrorBySlug] = useState<Record<string, string>>({});
+  const fundsCacheRef = useRef(fundsCache);
+
+  fundsCacheRef.current = fundsCache;
 
   const activeCategory = tabCategories.find((category) => category.slug === activeSlug) ?? tabCategories[0];
+  const activeFunds = activeCategory ? fundsCache[activeCategory.slug] : undefined;
+  const activeError = activeCategory ? errorBySlug[activeCategory.slug] : null;
+  const isLoadingActive = Boolean(activeCategory && loadingSlug === activeCategory.slug);
 
   useEffect(() => {
     if (tabCategories.length === 0) return;
@@ -47,94 +62,137 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
   useEffect(() => {
     if (!activeCategory) return;
 
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
+    const slug = activeCategory.slug;
+    if (fundsCacheRef.current[slug]) {
+      setLoadingSlug((current) => (current === slug ? null : current));
+      return;
+    }
 
-    fetchTopFundsForCategory(activeCategory.slug)
+    let cancelled = false;
+    setLoadingSlug(slug);
+    setErrorBySlug((current) => {
+      if (!current[slug]) return current;
+      const next = { ...current };
+      delete next[slug];
+      return next;
+    });
+
+    fetchTopFundsForCategory(slug)
       .then((items) => {
-        if (!cancelled) setFunds(items);
+        if (cancelled) return;
+        setFundsCache((current) => ({ ...current, [slug]: items }));
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message || copy.mutualFunds.categoryLoadError);
+        if (cancelled) return;
+        setErrorBySlug((current) => ({
+          ...current,
+          [slug]: err.message || copy.mutualFunds.categoryLoadError,
+        }));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoadingSlug((current) => (current === slug ? null : current));
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [activeCategory]);
+  }, [activeCategory?.slug]);
+
+  const handleTabChange = useCallback((slug: string) => {
+    startTransition(() => {
+      setActiveSlug(slug);
+      setLoadingSlug(fundsCacheRef.current[slug] ? null : slug);
+    });
+  }, []);
 
   if (tabCategories.length === 0) return null;
 
   return (
     <section className="min-w-0 space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-h3 font-semibold text-foreground">{copy.mutualFunds.browseByCategoryTitle}</h2>
-        {activeCategory ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            nativeButton={false}
-            render={
-              <Link href={`/dashboard/mutual-funds/all?category=${activeCategory.slug}`} />
-            }
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <SectionTitle className="shrink-0">{copy.mutualFunds.browseByCategoryTitle}</SectionTitle>
+
+        <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+          <div
+            className={cn(
+              MF_CARD_RADIUS_CLASS,
+              "inline-flex max-w-full shrink-0 items-center gap-0.5 overflow-x-auto border border-border/70 bg-muted/25 p-0.5",
+              "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            )}
+            role="tablist"
+            aria-label={copy.mutualFunds.browseByCategoryTitle}
           >
-            {copy.mutualFunds.viewAll}
-            <ChevronRight className="size-4" />
-          </Button>
-        ) : null}
+            {tabCategories.map((category) => {
+              const isActive = category.slug === activeCategory?.slug;
+              const isLoading = loadingSlug === category.slug;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-busy={isLoading}
+                  onClick={() => handleTabChange(category.slug)}
+                  className={cn(
+                    "shrink-0 rounded-[calc(var(--radius-medium)-0.125rem)] px-3 py-1.5 text-caption font-semibold transition-[color,background-color,box-shadow,transform] duration-200 ease-out sm:px-3.5 sm:text-compact",
+                    isActive
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
+                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+                    isLoading && isActive && "opacity-80",
+                  )}
+                >
+                  {categoryTabLabel(category.name)}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeCategory ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
+              nativeButton={false}
+              render={
+                <Link href={`/dashboard/mutual-funds/all?category=${activeCategory.slug}`} />
+              }
+            >
+              {copy.mutualFunds.viewAll}
+              <ChevronRight className="size-4" />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      <Card className={cn(MF_CARD_RADIUS_CLASS, "min-w-0 overflow-hidden")}>
-        <div className="flex min-w-0 gap-1 overflow-x-auto border-b border-border px-4 pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabCategories.map((category) => {
-            const isActive = category.slug === activeCategory?.slug;
-            return (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => setActiveSlug(category.slug)}
-                className={cn(
-                  "shrink-0 rounded-t-[var(--radius-control)] px-4 py-2.5 text-compact font-medium transition-colors",
-                  isActive
-                    ? "border-b-2 border-primary text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {category.name.replace(" Funds", "")}
-              </button>
-            );
-          })}
-        </div>
+      <div className="relative min-h-[12rem] min-w-0">
+        {activeError ? <FieldMessage variant="error" message={activeError} className="mb-4" /> : null}
 
-        <CardContent className="min-w-0 p-4 sm:p-5">
-          {error ? <FieldMessage variant="error" message={error} className="mb-4" /> : null}
+        {isLoadingActive ? (
+          <MfFundCardSkeletonGrid
+            count={BROWSE_TAB_SKELETON_COUNT}
+            className="animate-in fade-in duration-200"
+          />
+        ) : null}
 
-          {loading ? (
-            <div className="flex min-h-[160px] items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 size-4 animate-spin" />
-              {copy.mutualFunds.loadingFunds}
-            </div>
-          ) : null}
+        {!isLoadingActive && activeFunds && activeFunds.length === 0 && !activeError ? (
+          <div className="flex min-h-[12rem] items-center justify-center text-compact text-muted-foreground">
+            {copy.mutualFunds.categoryEmpty}
+          </div>
+        ) : null}
 
-          {!loading && !error && funds.length === 0 ? (
-            <div className="flex min-h-[160px] items-center justify-center text-compact text-muted-foreground">
-              {copy.mutualFunds.categoryEmpty}
-            </div>
-          ) : null}
-
-          {!loading && funds.length > 0 ? (
-            <div className={MF_FUNDS_GRID_CLASS}>
-              {funds.map((fund) => (
-                <MfFundCard key={fund.product_id} fund={fund} onSelect={onSelectFund} />
-              ))}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+        {!isLoadingActive && activeFunds && activeFunds.length > 0 ? (
+          <div
+            key={activeCategory?.slug}
+            className={cn(MF_FUNDS_GRID_CLASS, "animate-in fade-in duration-300")}
+          >
+            {activeFunds.map((fund) => (
+              <MfFundCard key={fund.product_id} fund={fund} onSelect={onSelectFund} />
+            ))}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { SectionTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestCategory, InvestFundSummary } from "@/features/invest/api/invest-api";
 import { MfFundCard } from "@/features/invest/components/mf-fund-card";
@@ -13,7 +14,7 @@ import { copy } from "@/shared/config/copy";
 
 type MfCategoryTopFundsSectionProps = {
   category: InvestCategory;
-  onSelectFund: (productId: string) => void;
+  onSelectFund: (fund: InvestFundSummary) => void;
 };
 
 export function MfCategoryTopFundsSection({ category, onSelectFund }: MfCategoryTopFundsSectionProps) {
@@ -46,7 +47,7 @@ export function MfCategoryTopFundsSection({ category, onSelectFund }: MfCategory
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-h3 font-semibold text-foreground">{category.name}</h2>
+          <SectionTitle>{category.name}</SectionTitle>
           <p className="mt-1 text-compact text-muted-foreground">
             {copy.mutualFunds.topFundsDescription.replace("{count}", String(category.fund_count))}
           </p>

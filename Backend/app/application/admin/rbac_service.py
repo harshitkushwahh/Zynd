@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.persistence.models import (
@@ -41,6 +42,10 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("mf.content.manage", "Edit mutual fund display content and compliance settings"),
     ("mf.rules.manage", "Create and update mutual fund catalog automation rules"),
     ("mf.catalog.publish", "Apply catalog rules and bulk catalog mutations"),
+    ("mf.transactions.read", "View MF orders, checkouts, SIP plans, mandates, and webhooks"),
+    ("mf.transactions.manage", "Reconcile MF transactions, replay webhooks, and expire stale checkouts"),
+    ("mf.integrations.read", "View mutual fund provider integration status and environment"),
+    ("mf.integrations.manage", "Switch mutual fund provider integration test/live environments"),
 ]
 
 ROLES: dict[str, dict[str, object]] = {
@@ -84,6 +89,10 @@ ROLES: dict[str, dict[str, object]] = {
             "mf.catalog.manage",
             "mf.content.manage",
             "mf.rules.manage",
+            "mf.transactions.read",
+            "mf.transactions.manage",
+            "mf.integrations.read",
+            "mf.integrations.manage",
             "audit.read",
         ],
     },
@@ -99,6 +108,10 @@ ROLES: dict[str, dict[str, object]] = {
         ],
     },
 }
+
+SEEDED_ROLE_KEYS = frozenset(ROLES.keys())
+PERMISSION_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]+)+$")
+ROLE_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]+$")
 
 
 async def ensure_rbac_seed(db: AsyncSession) -> None:
@@ -164,24 +177,152 @@ async def get_user_permission_keys(db: AsyncSession, user_id: UUID) -> set[str]:
     return set(result.scalars())
 
 
+async def _role_permission_keys(db: AsyncSession, role_id: UUID) -> list[str]:
+    permission_result = await db.execute(
+        select(AdminPermission.key)
+        .join(AdminRolePermission, AdminRolePermission.permission_id == AdminPermission.id)
+        .where(AdminRolePermission.role_id == role_id)
+        .order_by(AdminPermission.key)
+    )
+    return list(permission_result.scalars())
+
+
+async def _serialize_admin_role(db: AsyncSession, role: AdminRole) -> dict[str, object]:
+    return {
+        "key": role.key,
+        "name": role.name,
+        "description": role.description,
+        "permissions": await _role_permission_keys(db, role.id),
+        "is_system": role.key in SEEDED_ROLE_KEYS,
+    }
+
+
+async def _get_permission_rows_by_keys(
+    db: AsyncSession,
+    permission_keys: list[str],
+) -> dict[str, AdminPermission]:
+    if not permission_keys:
+        return {}
+    unique_keys = sorted(set(permission_keys))
+    result = await db.execute(
+        select(AdminPermission).where(AdminPermission.key.in_(unique_keys))
+    )
+    rows = {row.key: row for row in result.scalars()}
+    missing = [key for key in unique_keys if key not in rows]
+    if missing:
+        raise ValueError(f"Unknown permissions: {', '.join(missing)}")
+    return rows
+
+
+async def list_admin_permissions(db: AsyncSession) -> list[dict[str, str]]:
+    result = await db.execute(select(AdminPermission).order_by(AdminPermission.key))
+    return [{"key": row.key, "description": row.description} for row in result.scalars()]
+
+
+async def create_admin_permission(
+    db: AsyncSession,
+    *,
+    key: str,
+    description: str,
+) -> dict[str, str]:
+    normalized_key = key.strip().lower()
+    if not PERMISSION_KEY_PATTERN.fullmatch(normalized_key):
+        raise ValueError("Permission key must look like area.action (for example users.read).")
+    existing = await db.execute(
+        select(AdminPermission).where(AdminPermission.key == normalized_key)
+    )
+    if existing.scalar_one_or_none():
+        raise ValueError("Permission already exists.")
+    row = AdminPermission(key=normalized_key, description=description.strip())
+    db.add(row)
+    await db.flush()
+    return {"key": row.key, "description": row.description}
+
+
 async def list_admin_roles(db: AsyncSession) -> list[dict[str, object]]:
-    roles = list((await db.execute(select(AdminRole))).scalars())
+    roles = list((await db.execute(select(AdminRole).order_by(AdminRole.name))).scalars())
     payload: list[dict[str, object]] = []
     for role in roles:
-        permission_result = await db.execute(
-            select(AdminPermission.key)
-            .join(AdminRolePermission, AdminRolePermission.permission_id == AdminPermission.id)
-            .where(AdminRolePermission.role_id == role.id)
-        )
-        payload.append(
-            {
-                "key": role.key,
-                "name": role.name,
-                "description": role.description,
-                "permissions": list(permission_result.scalars()),
-            }
-        )
+        payload.append(await _serialize_admin_role(db, role))
     return payload
+
+
+async def create_admin_role(
+    db: AsyncSession,
+    *,
+    key: str,
+    name: str,
+    description: str,
+    permission_keys: list[str],
+) -> dict[str, object]:
+    normalized_key = key.strip().lower()
+    if not ROLE_KEY_PATTERN.fullmatch(normalized_key):
+        raise ValueError("Role key must use lowercase letters, numbers, and underscores.")
+    existing = await db.execute(select(AdminRole).where(AdminRole.key == normalized_key))
+    if existing.scalar_one_or_none():
+        raise ValueError("Role already exists.")
+
+    permission_rows = await _get_permission_rows_by_keys(db, permission_keys)
+    role = AdminRole(
+        key=normalized_key,
+        name=name.strip(),
+        description=description.strip(),
+    )
+    db.add(role)
+    await db.flush()
+    for permission in permission_rows.values():
+        db.add(AdminRolePermission(role_id=role.id, permission_id=permission.id))
+    await db.flush()
+    return await _serialize_admin_role(db, role)
+
+
+async def update_admin_role(
+    db: AsyncSession,
+    *,
+    role_key: str,
+    name: str | None = None,
+    description: str | None = None,
+    permission_keys: list[str] | None = None,
+) -> dict[str, object]:
+    role_result = await db.execute(select(AdminRole).where(AdminRole.key == role_key))
+    role = role_result.scalar_one_or_none()
+    if not role:
+        raise ValueError("Role not found.")
+
+    if name is not None:
+        role.name = name.strip()
+    if description is not None:
+        role.description = description.strip()
+
+    if permission_keys is not None:
+        permission_rows = await _get_permission_rows_by_keys(db, permission_keys)
+        await db.execute(delete(AdminRolePermission).where(AdminRolePermission.role_id == role.id))
+        for permission in permission_rows.values():
+            db.add(AdminRolePermission(role_id=role.id, permission_id=permission.id))
+
+    await db.flush()
+    return await _serialize_admin_role(db, role)
+
+
+async def delete_admin_role(db: AsyncSession, *, role_key: str) -> None:
+    if role_key in SEEDED_ROLE_KEYS:
+        raise ValueError("Built-in roles cannot be deleted.")
+
+    role_result = await db.execute(select(AdminRole).where(AdminRole.key == role_key))
+    role = role_result.scalar_one_or_none()
+    if not role:
+        raise ValueError("Role not found.")
+
+    assignment_count = await db.execute(
+        select(func.count())
+        .select_from(AdminUserRoleAssignment)
+        .where(AdminUserRoleAssignment.role_id == role.id)
+    )
+    if int(assignment_count.scalar_one()) > 0:
+        raise ValueError("Remove this role from all admin users before deleting it.")
+
+    await db.delete(role)
+    await db.flush()
 
 
 async def user_has_permission(db: AsyncSession, user_id: UUID, permission_key: str) -> bool:
@@ -257,5 +398,46 @@ async def revoke_role_from_admin_user(
         raise ValueError("Cannot revoke the last assigned role.")
 
     await db.delete(row)
+    await db.flush()
+    return await list_user_role_keys(db, user_id)
+
+
+async def set_admin_user_roles(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    role_keys: list[str],
+) -> list[str]:
+    user = await db.get(User, user_id)
+    if not user:
+        raise ValueError("User not found.")
+    if user.role != UserRole.admin:
+        raise ValueError("RBAC roles can only be assigned to admin users.")
+
+    unique_role_keys = sorted(set(role_keys))
+    if not unique_role_keys:
+        raise ValueError("At least one team role is required.")
+
+    role_result = await db.execute(select(AdminRole).where(AdminRole.key.in_(unique_role_keys)))
+    role_rows = {row.key: row for row in role_result.scalars()}
+    missing = [key for key in unique_role_keys if key not in role_rows]
+    if missing:
+        raise ValueError(f"Unknown roles: {', '.join(missing)}")
+
+    desired_role_ids = {role_rows[key].id for key in unique_role_keys}
+
+    existing = await db.execute(
+        select(AdminUserRoleAssignment).where(AdminUserRoleAssignment.user_id == user_id)
+    )
+    current_assignments = list(existing.scalars())
+
+    current_role_ids = {assignment.role_id for assignment in current_assignments}
+    for assignment in current_assignments:
+        if assignment.role_id not in desired_role_ids:
+            await db.delete(assignment)
+
+    for role_id in desired_role_ids - current_role_ids:
+        db.add(AdminUserRoleAssignment(user_id=user_id, role_id=role_id))
+
     await db.flush()
     return await list_user_role_keys(db, user_id)

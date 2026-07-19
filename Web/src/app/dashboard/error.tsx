@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
+import { PageTitle } from "@/components/ui/page-title";
 import { copy } from "@/shared/config/copy";
 
 type DashboardErrorProps = {
@@ -17,7 +18,7 @@ export default function DashboardError({ error, reset }: DashboardErrorProps) {
 
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center px-6 text-center">
-      <h1 className="text-h3 font-semibold text-foreground">{copy.dashboard.error.boundaryTitle}</h1>
+      <PageTitle>{copy.dashboard.error.boundaryTitle}</PageTitle>
       <p className="mt-2 max-w-md text-compact text-muted-foreground">
         {copy.dashboard.error.boundaryDescription}
       </p>

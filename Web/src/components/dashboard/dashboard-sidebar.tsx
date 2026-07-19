@@ -68,6 +68,27 @@ function SidebarNavItem({
   const Icon = item.icon;
   const icon = <Icon className="size-[18px]" strokeWidth={active ? 2.25 : 2} />;
 
+  if (item.disabled) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              aria-disabled="true"
+              className={cn(navButtonClass(false, true), "cursor-not-allowed opacity-50")}
+              aria-label={item.label}
+            />
+          }
+        >
+          {icon}
+        </TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>
+          {item.label} — Coming soon
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <Tooltip>
       <TooltipTrigger
@@ -98,6 +119,19 @@ function MobileNavItem({
   active: boolean;
 }) {
   const Icon = item.icon;
+
+  if (item.disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        className={cn(navButtonClass(false), "cursor-not-allowed opacity-50")}
+        aria-label={`${item.label} — Coming soon`}
+      >
+        <Icon className="size-[18px]" strokeWidth={2} />
+      </span>
+    );
+  }
+
   return (
     <Link
       href={item.href}

@@ -1,10 +1,44 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getErrorMessage } from "@/lib/errors";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Database,
+  Layers,
+  MinusCircle,
+  RefreshCw,
+  Upload,
+} from "lucide-react";
 
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
+
+import { MfStatusChip, type MfStatusTone } from "@/components/mf/mf-status-chip";
+import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
+import type { AdminDialogSize } from "@/components/ui/admin-dialog";
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTablePagination,
+  AdminTableRow,
+  AdminTableStateRow,
+} from "@/components/ui/admin-table";
+import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ApiError } from "@/lib/api-client";
 import {
   approveMfStagingBatch,
@@ -15,32 +49,168 @@ import {
   type MfStagingBatch,
   type MfStagingRow,
 } from "@/lib/mf-admin-api";
+import { cn } from "@/lib/utils";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return fallback;
+const ALL = "all";
+
+
+function batchStatusTone(status: string): MfStatusTone {
+  if (status === "promoted" || status === "validated" || status === "approved") return "success";
+  if (status === "failed" || status === "rejected") return "danger";
+  return "warning";
 }
 
-function statusTone(status: string) {
-  if (status === "promoted" || status === "validated" || status === "approved") {
-    return "border-success/30 bg-success/10 text-foreground";
+function validationTone(status: string | null | undefined): MfStatusTone {
+  if (status === "valid") return "success";
+  if (status === "excluded") return "warning";
+  if (status === "invalid") return "danger";
+  return "neutral";
+}
+
+function promoteTone(status: string | null | undefined): MfStatusTone {
+  if (status === "promoted") return "success";
+  if (status === "failed") return "danger";
+  if (status === "pending") return "warning";
+  return "neutral";
+}
+
+function StagingBatchStatTile({
+  label,
+  value,
+  icon: Icon,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  tone?: "default" | "success" | "warning" | "danger" | "info" | "muted";
+}) {
+  const iconClass =
+    tone === "success"
+      ? "bg-success/10 text-success"
+      : tone === "warning"
+        ? "bg-warning/10 text-warning"
+        : tone === "danger"
+          ? "bg-destructive/10 text-destructive"
+          : tone === "info"
+            ? "bg-primary/10 text-primary"
+            : "bg-muted/50 text-muted-foreground";
+
+  const valueClass =
+    tone === "success"
+      ? "text-success"
+      : tone === "warning"
+        ? "text-warning"
+        : tone === "danger"
+          ? "text-destructive"
+          : tone === "info"
+            ? "text-primary"
+            : "text-foreground";
+
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-md", iconClass)}>
+        <Icon className="size-3.5" strokeWidth={2} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-caption text-muted-foreground">{label}</p>
+        <p className={cn("mt-0.5 font-heading text-h4 font-semibold tabular-nums", valueClass)}>{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function StagingBatchStatsBar({
+  normalized,
+  excluded,
+  invalid,
+}: {
+  normalized: number;
+  excluded: number;
+  invalid: number;
+}) {
+  const total = normalized + excluded + invalid;
+  if (total <= 0) {
+    return (
+      <div className="h-2 overflow-hidden rounded-full bg-muted/40">
+        <div className="h-full w-full bg-muted/60" />
+      </div>
+    );
   }
-  if (status === "failed" || status === "rejected") {
-    return "border-destructive/30 bg-destructive/10 text-destructive";
-  }
-  return "border-border bg-muted/30 text-foreground";
+
+  const segments = [
+    { key: "normalized", value: normalized, className: "bg-success" },
+    { key: "excluded", value: excluded, className: "bg-warning" },
+    { key: "invalid", value: invalid, className: "bg-destructive" },
+  ].filter((segment) => segment.value > 0);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
+        {segments.map((segment) => (
+          <div
+            key={segment.key}
+            className={cn("h-full transition-[width]", segment.className)}
+            style={{ width: `${(segment.value / total) * 100}%` }}
+            title={`${segment.key}: ${segment.value.toLocaleString()}`}
+          />
+        ))}
+      </div>
+      <p className="text-caption text-muted-foreground">
+        {total.toLocaleString()} classified rows
+        {normalized > 0 ? ` · ${Math.round((normalized / total) * 100)}% normalized` : ""}
+      </p>
+    </div>
+  );
+}
+
+function StagingDialog({
+  open,
+  title,
+  description,
+  onClose,
+  children,
+  size = "detail",
+}: {
+  open: boolean;
+  title: string;
+  description?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  size?: AdminDialogSize;
+}) {
+  return (
+    <AdminDetailDialog
+      open={open}
+      onClose={onClose}
+      title={title}
+      description={description}
+      icon={Layers}
+      iconTone="info"
+      size={size}
+    >
+      {children}
+    </AdminDetailDialog>
+  );
 }
 
 export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
   const [batches, setBatches] = useState<MfStagingBatch[]>([]);
   const [selected, setSelected] = useState<MfStagingBatch | null>(null);
   const [rows, setRows] = useState<MfStagingRow[]>([]);
+  const [rowPage, setRowPage] = useState(1);
+  const [rowTotal, setRowTotal] = useState(0);
+  const [rowHasMore, setRowHasMore] = useState(false);
+  const [validationFilter, setValidationFilter] = useState("");
+  const [promoteFilter, setPromoteFilter] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [loading, setLoading] = useState(true);
+  const [rowsLoading, setRowsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [batchesDialogOpen, setBatchesDialogOpen] = useState(false);
+  const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
 
   const loadBatches = useCallback(async () => {
     setLoading(true);
@@ -59,26 +229,46 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
     }
   }, []);
 
-  const loadRows = useCallback(async (batch: MfStagingBatch | null) => {
-    if (!batch) {
+  const loadRows = useCallback(async () => {
+    if (!selected) {
       setRows([]);
+      setRowTotal(0);
+      setRowHasMore(false);
       return;
     }
+
+    setRowsLoading(true);
+    setError("");
     try {
-      const payload = await fetchMfStagingBatchRows(batch.batch_uuid, { page: 1 });
+      const payload = await fetchMfStagingBatchRows(selected.batch_uuid, {
+        page: rowPage,
+        page_size: ADMIN_TABLE_PAGE_SIZE,
+        validation_status: validationFilter || undefined,
+        promote_status: promoteFilter || undefined,
+      });
       setRows(payload.items);
+      setRowTotal(payload.total);
+      setRowHasMore(payload.has_more);
     } catch (err) {
       setError(getErrorMessage(err, "Could not load staging rows."));
+    } finally {
+      setRowsLoading(false);
     }
-  }, []);
+  }, [promoteFilter, rowPage, selected, validationFilter]);
 
   useEffect(() => {
     void loadBatches();
   }, [loadBatches]);
 
   useEffect(() => {
-    void loadRows(selected);
-  }, [selected, loadRows]);
+    void loadRows();
+  }, [loadRows]);
+
+  useEffect(() => {
+    setRowPage(1);
+  }, [selected?.batch_uuid, validationFilter, promoteFilter]);
+
+  const rowTotalPages = Math.max(1, Math.ceil(rowTotal / ADMIN_TABLE_PAGE_SIZE));
 
   async function handleApprove() {
     if (!selected || !canPublish) return;
@@ -120,8 +310,16 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
     setError("");
     try {
       const result = await promoteMfStagingBatch(selected.batch_uuid);
-      setMessage(`Promote finished: ${JSON.stringify(result.result ?? result)}`);
+      const summary = result.result ?? result;
+      setMessage(
+        typeof summary === "object" && summary !== null
+          ? `Promote finished: ${Object.entries(summary as Record<string, unknown>)
+              .map(([key, value]) => `${key} ${value}`)
+              .join(" · ")}`
+          : "Promote finished.",
+      );
       await loadBatches();
+      await loadRows();
     } catch (err) {
       setError(getErrorMessage(err, "Promote failed."));
     } finally {
@@ -130,129 +328,328 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
   }
 
   return (
-    <section className="space-y-6">
-      {error ? (
-        <div className="rounded-[var(--radius-card)] border border-destructive/30 bg-destructive/5 px-4 py-3 text-compact text-destructive">
-          {error}
-        </div>
-      ) : null}
-      {message ? (
-        <div className="rounded-[var(--radius-card)] border border-success/30 bg-success/5 px-4 py-3 text-compact text-foreground">
-          {message}
-        </div>
-      ) : null}
+    <section className="space-y-4">
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Scheme staging batches</CardTitle>
-          <CardDescription>
-            Cybrilla ingest lands in Mongo first. Approve a validated batch, then promote to SQL as draft products.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {loading ? <p className="text-compact text-muted-foreground">Loading batches…</p> : null}
-          {!loading && batches.length === 0 ? (
-            <p className="text-compact text-muted-foreground">No staging batches yet. Run cybrilla-scheme-ingest.</p>
-          ) : null}
-          <div className="space-y-2">
-            {batches.map((batch) => (
-              <button
-                key={batch.batch_uuid}
-                type="button"
-                onClick={() => setSelected(batch)}
-                className={`flex w-full items-center justify-between rounded-[var(--radius-card)] border px-4 py-3 text-left ${selected?.batch_uuid === batch.batch_uuid ? "border-primary" : "border-border"}`}
-              >
-                <div>
-                  <p className="font-medium text-foreground">{batch.batch_uuid.slice(0, 8)}…</p>
+      <div
+        className={cn(
+          "w-full rounded-[var(--radius-card)] border bg-card",
+          selected ? "border-border" : "border-dashed border-border/80",
+        )}
+      >
+        <div className="flex w-full flex-col gap-4 p-4">
+          <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            {selected ? (
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Database className="size-5" strokeWidth={2} />
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <p className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+                    Selected batch
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3
+                      className="font-heading text-h4 font-semibold text-foreground"
+                      title={selected.batch_uuid}
+                    >
+                      {selected.batch_uuid.slice(0, 8)}…
+                    </h3>
+                    <MfStatusChip
+                      label={selected.status}
+                      tone={batchStatusTone(selected.status)}
+                      showIcon={false}
+                    />
+                  </div>
                   <p className="text-caption text-muted-foreground">
-                    {batch.stats.normalized ?? 0} normalized · {batch.stats.excluded ?? 0} excluded ·{" "}
-                    {batch.stats.invalid ?? 0} invalid
+                    {selected.created_at
+                      ? `Ingested ${new Date(selected.created_at).toLocaleString()}`
+                      : "Ingest time unavailable"}
+                    {(selected.stats.raw_rows ?? 0) > 0
+                      ? ` · ${(selected.stats.raw_rows ?? 0).toLocaleString()} raw rows`
+                      : ""}
                   </p>
                 </div>
-                <span className={`rounded-full border px-2 py-0.5 text-caption ${statusTone(batch.status)}`}>
-                  {batch.status}
-                </span>
-              </button>
-            ))}
+              </div>
+            ) : (
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-foreground">
+                  <Database className="size-5" strokeWidth={2} />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">No batch selected</p>
+                  <p className="mt-0.5 text-caption text-muted-foreground">
+                    Choose a staging batch to review rows and run promote actions.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={() => setBatchesDialogOpen(true)}>
+                Choose batch
+              </Button>
+              <Button disabled={!selected} onClick={() => setActionsDialogOpen(true)}>
+                Batch actions
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {selected ? (
+            <div className="w-full space-y-4 border-t border-border pt-4">
+              <StagingBatchStatsBar
+                normalized={selected.stats.normalized ?? 0}
+                excluded={selected.stats.excluded ?? 0}
+                invalid={selected.stats.invalid ?? 0}
+              />
+              <div className="grid w-full grid-cols-2 gap-x-6 gap-y-4 xl:grid-cols-4">
+                <StagingBatchStatTile
+                  label="Normalized"
+                  value={(selected.stats.normalized ?? 0).toLocaleString()}
+                  icon={CheckCircle2}
+                  tone="success"
+                />
+                <StagingBatchStatTile
+                  label="Excluded"
+                  value={(selected.stats.excluded ?? 0).toLocaleString()}
+                  icon={MinusCircle}
+                  tone="warning"
+                />
+                <StagingBatchStatTile
+                  label="Invalid"
+                  value={(selected.stats.invalid ?? 0).toLocaleString()}
+                  icon={AlertCircle}
+                  tone="danger"
+                />
+                <StagingBatchStatTile
+                  label="Promoted"
+                  value={(selected.stats.promoted ?? 0).toLocaleString()}
+                  icon={Upload}
+                  tone="info"
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <StagingDialog
+        open={batchesDialogOpen}
+        title="Staging batches"
+        description="Select a Cybrilla ingest batch to review and promote."
+        onClose={() => setBatchesDialogOpen(false)}
+        size="wide"
+      >
+        <div className="mb-3 flex justify-end">
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={loading}
+            onClick={() => void loadBatches()}
+            aria-label="Refresh staging batches"
+          >
+            <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+        <AdminDataTable minWidth="md">
+          <AdminTableHeader>
+            <tr>
+              <AdminTableHeadCell>Batch</AdminTableHeadCell>
+              <AdminTableHeadCell>Stats</AdminTableHeadCell>
+              <AdminTableHeadCell>Status</AdminTableHeadCell>
+            </tr>
+          </AdminTableHeader>
+          <AdminTableBody>
+            {loading ? (
+              <AdminTableSkeletonRows columns={3} />
+            ) : batches.length === 0 ? (
+              <AdminTableStateRow colSpan={3}>
+                No staging batches yet. Run cybrilla-scheme-ingest.
+              </AdminTableStateRow>
+            ) : (
+              batches.map((batch) => {
+                const isSelected = selected?.batch_uuid === batch.batch_uuid;
+                return (
+                  <AdminTableRow
+                    key={batch.batch_uuid}
+                    className={cn(isSelected && "bg-muted/40")}
+                    onClick={() => {
+                      setSelected(batch);
+                      setBatchesDialogOpen(false);
+                    }}
+                  >
+                    <AdminTableCell>
+                      <p className="font-medium text-foreground">{batch.batch_uuid.slice(0, 8)}…</p>
+                      {batch.created_at ? (
+                        <p className="mt-0.5 text-caption text-muted-foreground">
+                          {new Date(batch.created_at).toLocaleString()}
+                        </p>
+                      ) : null}
+                    </AdminTableCell>
+                    <AdminTableCell className="text-muted-foreground">
+                      {(batch.stats.normalized ?? 0).toLocaleString()} normalized ·{" "}
+                      {(batch.stats.excluded ?? 0).toLocaleString()} excluded ·{" "}
+                      {(batch.stats.invalid ?? 0).toLocaleString()} invalid
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <MfStatusChip
+                        label={batch.status}
+                        tone={batchStatusTone(batch.status)}
+                        showIcon={false}
+                      />
+                    </AdminTableCell>
+                  </AdminTableRow>
+                );
+              })
+            )}
+          </AdminTableBody>
+        </AdminDataTable>
+      </StagingDialog>
+
+      <StagingDialog
+        open={actionsDialogOpen}
+        title="Batch actions"
+        description={
+          selected
+            ? `Status: ${selected.status}${selected.approved_by ? ` · approved by ${selected.approved_by}` : ""}`
+            : undefined
+        }
+        onClose={() => setActionsDialogOpen(false)}
+        size="md"
+      >
+        <div className="flex flex-col gap-3">
+          <Button
+            variant="outline"
+            disabled={!canPublish || actionLoading || selected?.status !== "validated"}
+            onClick={() => void handleApprove()}
+          >
+            Approve
+          </Button>
+          <Button disabled={!canPublish || actionLoading || !selected} onClick={() => void handlePromote()}>
+            Promote to SQL
+          </Button>
+          <Input
+            value={rejectReason}
+            onChange={(event) => setRejectReason(event.target.value)}
+            placeholder="Rejection reason"
+          />
+          <Button
+            variant="destructive"
+            disabled={!canPublish || actionLoading || !rejectReason.trim() || !selected}
+            onClick={() => void handleReject()}
+          >
+            Reject
+          </Button>
+        </div>
+      </StagingDialog>
 
       {selected ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Batch actions</CardTitle>
-            <CardDescription>
-              Status: {selected.status}
-              {selected.approved_by ? ` · approved by ${selected.approved_by}` : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              disabled={!canPublish || actionLoading || selected.status !== "validated"}
-              onClick={() => void handleApprove()}
-            >
-              Approve
-            </Button>
-            <Button
-              disabled={!canPublish || actionLoading}
-              onClick={() => void handlePromote()}
-            >
-              Promote to SQL
-            </Button>
-            <Input
-              value={rejectReason}
-              onChange={(event) => setRejectReason(event.target.value)}
-              placeholder="Rejection reason"
-              className="max-w-xs"
-            />
-            <Button
-              variant="destructive"
-              disabled={!canPublish || actionLoading || !rejectReason.trim()}
-              onClick={() => void handleReject()}
-            >
-              Reject
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
+        <div className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <AdminSectionTitle icon={Layers}>Staged rows</AdminSectionTitle>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Select
+                  value={validationFilter || ALL}
+                  onValueChange={(value) => setValidationFilter(value === ALL ? "" : (value ?? ""))}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Validation">
+                      {validationFilter || "All validation"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>All validation</SelectItem>
+                    <SelectItem value="valid">Valid</SelectItem>
+                    <SelectItem value="excluded">Excluded</SelectItem>
+                    <SelectItem value="invalid">Invalid</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={promoteFilter || ALL}
+                  onValueChange={(value) => setPromoteFilter(value === ALL ? "" : (value ?? ""))}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Promote">
+                      {promoteFilter || "All promote"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>All promote</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="promoted">Promoted</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-      {selected ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Staged rows</CardTitle>
-            <CardDescription>Showing up to 50 rows from the selected batch.</CardDescription>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="min-w-full text-compact">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-2 py-2">ISIN</th>
-                  <th className="px-2 py-2">Scheme</th>
-                  <th className="px-2 py-2">Validation</th>
-                  <th className="px-2 py-2">Promote</th>
+            <AdminDataTable minWidth="xl">
+              <AdminTableHeader>
+                <tr>
+                  <AdminTableHeadCell>ISIN</AdminTableHeadCell>
+                  <AdminTableHeadCell>Scheme</AdminTableHeadCell>
+                  <AdminTableHeadCell>Validation</AdminTableHeadCell>
+                  <AdminTableHeadCell>Promote</AdminTableHeadCell>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.mongo_id ?? row.isin_growth} className="border-b border-border/60">
-                    <td className="px-2 py-2">{row.isin_growth}</td>
-                    <td className="px-2 py-2">{row.scheme_name ?? "—"}</td>
-                    <td className="px-2 py-2">
-                      {row.validation_status}
-                      {row.validation_reason ? ` (${row.validation_reason})` : ""}
-                    </td>
-                    <td className="px-2 py-2">
-                      {row.promote_status ?? "—"}
-                      {row.promote_error ? ` · ${row.promote_error}` : ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+              </AdminTableHeader>
+              <AdminTableBody>
+                {rowsLoading ? (
+                  <AdminTableSkeletonRows columns={4} />
+                ) : rows.length === 0 ? (
+                  <AdminTableStateRow colSpan={4}>No rows match your filters.</AdminTableStateRow>
+                ) : (
+                  rows.map((row) => (
+                    <AdminTableRow key={row.mongo_id ?? row.isin_growth ?? `${row.isin_growth}-row`}>
+                      <AdminTableCell className="font-mono text-caption text-foreground">
+                        {row.isin_growth ?? "—"}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <p className="font-medium text-foreground">{row.scheme_name ?? "—"}</p>
+                        {row.amc_name ? (
+                          <p className="mt-0.5 text-caption text-muted-foreground">{row.amc_name}</p>
+                        ) : null}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <MfStatusChip
+                          label={
+                            row.validation_reason
+                              ? `${row.validation_status ?? "—"} (${row.validation_reason})`
+                              : (row.validation_status ?? "—")
+                          }
+                          tone={validationTone(row.validation_status)}
+                          showIcon={false}
+                        />
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <MfStatusChip
+                          label={
+                            row.promote_error
+                              ? `${row.promote_status ?? "—"} · ${row.promote_error}`
+                              : (row.promote_status ?? "—")
+                          }
+                          tone={promoteTone(row.promote_status)}
+                          showIcon={false}
+                        />
+                      </AdminTableCell>
+                    </AdminTableRow>
+                  ))
+                )}
+              </AdminTableBody>
+            </AdminDataTable>
+
+            {!rowsLoading && rows.length > 0 ? (
+              <AdminTablePagination
+                page={rowPage - 1}
+                totalPages={rowTotalPages}
+                hasPrevious={rowPage > 1}
+                hasNext={rowHasMore}
+                disabled={rowsLoading}
+                onPrevious={() => setRowPage((page) => Math.max(1, page - 1))}
+                onNext={() => setRowPage((page) => page + 1)}
+              />
+            ) : null}
+        </div>
       ) : null}
     </section>
   );

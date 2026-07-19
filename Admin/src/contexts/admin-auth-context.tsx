@@ -16,6 +16,7 @@ import {
   adminVerifyMfa,
   bootstrapAdminSession,
   fetchAdminPermissions,
+  fetchCurrentAdminUser,
   getDisplayName,
   isAuthenticatedResponse,
   type AdminLoginFlowResponse,
@@ -36,6 +37,8 @@ type AdminAuthContextValue = {
   verifyMfa: (mfaToken: string, totpCode: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshPermissions: () => Promise<string[]>;
+  refreshUser: () => Promise<AdminUser | null>;
+  completeSession: () => Promise<void>;
   hasPermission: (key: string) => boolean;
 };
 
@@ -91,6 +94,23 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const next = await fetchCurrentAdminUser();
+      setUser(next);
+      return next;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const completeSession = useCallback(async () => {
+    const next = await fetchCurrentAdminUser();
+    setUser(next);
+    const nextPermissions = await fetchAdminPermissions();
+    setPermissions(nextPermissions);
+  }, []);
+
   const value = useMemo<AdminAuthContextValue>(
     () => ({
       user,
@@ -101,9 +121,11 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       verifyMfa,
       signOut,
       refreshPermissions,
+      refreshUser,
+      completeSession,
       hasPermission: (key: string) => permissions.includes(key),
     }),
-    [loading, permissions, refreshPermissions, signIn, signOut, user, verifyMfa]
+    [completeSession, loading, permissions, refreshPermissions, refreshUser, signIn, signOut, user, verifyMfa]
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;

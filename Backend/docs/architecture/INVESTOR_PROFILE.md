@@ -68,8 +68,20 @@ if profile.status != InvestorProfileStatus.active:
 ## What is NOT in scope yet
 
 - Cybrilla `POST /v2/investor_profiles` client (profile creation API — confirm exact endpoint with Cybrilla docs)
-- Payment or MF order modules
-- Multiple bank UI in settings (schema supports multiple rows)
+
+## Multi-bank accounts
+
+Users can manage up to **5 verified bank accounts** in Settings and select a payout bank during MF invest flows.
+
+| Capability | API / code |
+|------------|------------|
+| List / add / verify | `GET/POST /invest/bank-accounts/*` |
+| Set primary | `PATCH /invest/bank-accounts/{id}/set-primary` |
+| Remove (soft-disable) | `DELETE /invest/bank-accounts/{id}` |
+| MF payment resolution | `investor_bank_account_resolver.resolve_payment_bank_account` |
+| KYC seed + sync | `seed_investor_drafts_from_kyc` + `sync_bank_account_from_kyc_journey` on completion |
+
+Primary switch updates Finprim MFIA `payout_bank_account` via `refresh_mfia_payout_bank_account`. Active SIP mandates block primary switch and bank removal on the tied account.
 
 ## Code (seeding)
 

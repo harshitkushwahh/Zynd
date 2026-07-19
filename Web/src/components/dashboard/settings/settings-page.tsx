@@ -134,9 +134,7 @@ export function SettingsPage() {
         );
 
       case "bank-account":
-        return (
-          <BankAccountSettingsPanel bank={kycProfile?.bank ?? null} loading={kycProfileLoading} />
-        );
+        return <BankAccountSettingsPanel />;
 
       case "mfa":
         return (

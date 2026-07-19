@@ -13,10 +13,14 @@ from app.application.admin.audit_admin_service import list_audit_logs
 from app.application.admin.permission_matrix import PERMISSION_ROUTE_MATRIX
 from app.application.admin.rbac_service import (
     assign_role_to_admin_user,
+    create_admin_permission,
+    create_admin_role,
+    delete_admin_role,
     ensure_rbac_seed,
     get_user_permission_keys,
     list_user_role_keys,
     revoke_role_from_admin_user,
+    update_admin_role,
     user_has_permission,
 )
 from app.application.admin.user_admin_service import list_users
@@ -58,6 +62,8 @@ async def test_list_users_and_audit_logs(db_session: AsyncSession) -> None:
 
     users = await list_users(db_session, email="listed-", limit=10)
     assert any(item["user_id"] == user.id for item in users)
+    listed = next(item for item in users if item["user_id"] == user.id)
+    assert listed["kyc_compliant"] is False
 
     logs = await list_audit_logs(
         db_session,
@@ -203,3 +209,40 @@ def test_permission_matrix_fully_enforced() -> None:
     for entry in PERMISSION_ROUTE_MATRIX:
         assert entry["status"] == "enforced", entry["permission"]
         assert entry["routes"], entry["permission"]
+
+
+@pytest.mark.asyncio
+async def test_rbac_role_and_permission_crud(db_session: AsyncSession) -> None:
+    await ensure_rbac_seed(db_session)
+
+    permission = await create_admin_permission(
+        db_session,
+        key="reports.read",
+        description="View custom operational reports",
+    )
+    assert permission["key"] == "reports.read"
+
+    role = await create_admin_role(
+        db_session,
+        key="report_viewer",
+        name="Report Viewer",
+        description="Read-only custom report access.",
+        permission_keys=["reports.read", "users.read"],
+    )
+    assert role["key"] == "report_viewer"
+    assert "reports.read" in role["permissions"]
+    assert role["is_system"] is False
+
+    updated = await update_admin_role(
+        db_session,
+        role_key="report_viewer",
+        name="Report Analyst",
+        permission_keys=["reports.read"],
+    )
+    assert updated["name"] == "Report Analyst"
+    assert updated["permissions"] == ["reports.read"]
+
+    await delete_admin_role(db_session, role_key="report_viewer")
+
+    with pytest.raises(ValueError, match="Built-in roles cannot be deleted"):
+        await delete_admin_role(db_session, role_key="super_admin")

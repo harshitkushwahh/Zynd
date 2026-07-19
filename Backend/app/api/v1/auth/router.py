@@ -11,10 +11,13 @@ from app.api.v1.auth.deps import (
     get_client_ip,
     get_current_session_id,
     get_current_user,
+    get_refresh_token_from_request,
     handle_auth_error,
     require_fund_eligible_user,
+    resolve_auth_client_from_request,
     set_refresh_cookie,
 )
+from app.application.auth.auth_client_policy import validate_user_role_for_client
 from app.api.v1.auth.schemas import (
     AuthResponse,
     ChangeEmailConfirmRequest,
@@ -48,6 +51,8 @@ from app.api.v1.auth.schemas import (
     OAuthLinkConfirmRequest,
     OAuthLinkResendRequest,
     OAuthLinkRequiredResponse,
+    AdminInviteAcceptRequest,
+    AdminInviteValidateResponse,
     OAuthStateResponse,
     OkResponse,
     OtpSendResponse,
@@ -81,6 +86,10 @@ from app.api.v1.auth.schemas import (
     VerifyPasswordRequest,
     UserResponse,
     VerifiedResponse,
+)
+from app.application.admin.admin_invitation_service import (
+    accept_admin_invitation,
+    validate_admin_invite_token,
 )
 from app.application.auth.account_service import (
     cancel_account_deletion,
@@ -168,7 +177,26 @@ def _auth_response(result: dict[str, Any]) -> AuthResponse:
     )
 
 
-def _handle_login_result(result: dict[str, Any], response: Response) -> AuthResponse | MfaRequiredResponse | OAuthLinkRequiredResponse:
+def _validate_client_role(user: User, *, admin: bool) -> None:
+    try:
+        validate_user_role_for_client(user, admin_client=admin)
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+
+
+def _resolve_auth_client(request: Request, device_fingerprint: str | None) -> bool:
+    try:
+        return resolve_auth_client_from_request(request, device_fingerprint)
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+
+
+def _handle_login_result(
+    result: dict[str, Any],
+    response: Response,
+    *,
+    admin: bool = False,
+) -> AuthResponse | MfaRequiredResponse | OAuthLinkRequiredResponse:
     if result["next"] == "mfa_required":
         return MfaRequiredResponse(
             mfa_token=result["mfa_token"],
@@ -182,7 +210,8 @@ def _handle_login_result(result: dict[str, Any], response: Response) -> AuthResp
             provider=result["provider"],
             retry_after_seconds=result.get("retry_after_seconds", 30),
         )
-    set_refresh_cookie(response, result["refresh_token"])
+    _validate_client_role(result["user"], admin=admin)
+    set_refresh_cookie(response, result["refresh_token"], admin=admin)
     return _auth_response(result)
 
 
@@ -292,7 +321,8 @@ async def post_signup_complete(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    set_refresh_cookie(response, refresh_token)
+    _resolve_auth_client(request, body.device_fingerprint)
+    set_refresh_cookie(response, refresh_token, admin=False)
     return AuthResponse(access_token=access_token, user=_user_response(user))
 
 
@@ -304,6 +334,7 @@ async def post_login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
+        admin_client = _resolve_auth_client(request, body.device_fingerprint)
         result = await login_with_email(
             db,
             email=body.email,
@@ -312,10 +343,11 @@ async def post_login(
             device_fingerprint=body.device_fingerprint,
             user_agent=request.headers.get("user-agent"),
             ip=get_client_ip(request),
+            admin_client=admin_client,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return _handle_login_result(result, response)
+    return _handle_login_result(result, response, admin=admin_client)
 
 
 @router.post("/google")
@@ -326,6 +358,7 @@ async def post_google_login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
+        admin_client = _resolve_auth_client(request, body.device_fingerprint)
         result = await login_with_google(
             db,
             id_token=body.id_token,
@@ -334,10 +367,11 @@ async def post_google_login(
             ip=get_client_ip(request),
             oauth_state=body.oauth_state,
             referral_code=body.referral_code,
+            admin_client=admin_client,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return _handle_login_result(result, response)
+    return _handle_login_result(result, response, admin=admin_client)
 
 
 @router.post("/apple")
@@ -348,6 +382,7 @@ async def post_apple_login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
+        admin_client = _resolve_auth_client(request, body.device_fingerprint)
         result = await login_with_apple(
             db,
             id_token=body.id_token,
@@ -359,10 +394,11 @@ async def post_apple_login(
             first_name=body.first_name,
             last_name=body.last_name,
             referral_code=body.referral_code,
+            admin_client=admin_client,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return _handle_login_result(result, response)
+    return _handle_login_result(result, response, admin=admin_client)
 
 
 @router.post("/mfa/verify")
@@ -382,7 +418,18 @@ async def post_mfa_verify(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    set_refresh_cookie(response, result["refresh_token"])
+    admin_client = bool(result.get("admin_client"))
+    resolved_client = _resolve_auth_client(request, result.get("device_fingerprint"))
+    if resolved_client != admin_client:
+        raise handle_auth_error(
+            AuthError(
+                "Sign-in client mismatch. Use the correct app to continue.",
+                "invalid_auth_client",
+                403,
+            )
+        )
+    _validate_client_role(result["user"], admin=admin_client)
+    set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
     return _auth_response(result)
 
 
@@ -417,7 +464,8 @@ async def post_oauth_link_confirm(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return _handle_login_result(result, response)
+    admin_client = _resolve_auth_client(request, body.device_fingerprint)
+    return _handle_login_result(result, response, admin=admin_client)
 
 
 @router.get("/oauth/connections", response_model=OAuthConnectionsResponse)
@@ -1024,8 +1072,7 @@ async def post_refresh(
     response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthResponse:
-    settings = get_settings()
-    refresh_token = request.cookies.get(settings.refresh_cookie_name)
+    refresh_token, admin_client = get_refresh_token_from_request(request)
     if not refresh_token:
         raise HTTPException(
             status_code=401,
@@ -1038,7 +1085,7 @@ async def post_refresh(
             ip=get_client_ip(request),
         )
     except AuthError as exc:
-        clear_refresh_cookie(response)
+        clear_refresh_cookie(response, admin=admin_client)
         raise handle_auth_error(exc) from exc
 
     from app.infrastructure.security.tokens import decode_access_token
@@ -1048,7 +1095,12 @@ async def post_refresh(
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=401, detail={"code": "unauthorized", "message": "User not found"})
-    set_refresh_cookie(response, new_refresh_token)
+    try:
+        _validate_client_role(user, admin=admin_client)
+    except HTTPException:
+        clear_refresh_cookie(response, admin=admin_client)
+        raise
+    set_refresh_cookie(response, new_refresh_token, admin=admin_client)
     return AuthResponse(access_token=access_token, user=_user_response(user))
 
 
@@ -1058,11 +1110,10 @@ async def post_logout(
     response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OkResponse:
-    settings = get_settings()
-    refresh_token = request.cookies.get(settings.refresh_cookie_name)
+    refresh_token, admin_client = get_refresh_token_from_request(request)
     if refresh_token:
         await logout(db, refresh_token=refresh_token, ip=get_client_ip(request))
-    clear_refresh_cookie(response)
+    clear_refresh_cookie(response, admin=admin_client)
     return OkResponse()
 
 
@@ -1135,6 +1186,46 @@ async def post_reset_password(
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
     return OkResponse()
+
+
+@router.get("/admin-invite/validate", response_model=AdminInviteValidateResponse)
+async def get_admin_invite_validate(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AdminInviteValidateResponse:
+    try:
+        result = await validate_admin_invite_token(db, token=token)
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    return AdminInviteValidateResponse(**result)
+
+
+@router.post("/admin-invite/accept", response_model=AuthResponse)
+async def post_admin_invite_accept(
+    body: AdminInviteAcceptRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthResponse:
+    try:
+        result = await accept_admin_invitation(
+            db,
+            token=body.token,
+            first_name=body.first_name,
+            last_name=body.last_name,
+            password=body.password,
+            device_fingerprint=body.device_fingerprint,
+            user_agent=request.headers.get("user-agent"),
+            ip=get_client_ip(request),
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+
+    await db.commit()
+    admin_client = _resolve_auth_client(request, body.device_fingerprint)
+    _validate_client_role(result["user"], admin=admin_client)
+    set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
+    return _auth_response(result)
 
 
 @router.get("/jwks")

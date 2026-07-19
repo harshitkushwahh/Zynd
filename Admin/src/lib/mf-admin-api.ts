@@ -183,8 +183,11 @@ export async function fetchMfCatalogHealth() {
   return apiRequest<MfCatalogHealthSummary>("/admin/mf/catalog/health");
 }
 
-export async function fetchMfCatalogHealthIssues(check?: string, page = 1) {
-  const params = new URLSearchParams({ page: String(page) });
+export async function fetchMfCatalogHealthIssues(check?: string, page = 1, pageSize = 10) {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
   if (check) params.set("check", check);
   return apiRequest<{
     items: MfCatalogHealthIssue[];
@@ -348,9 +351,14 @@ export async function fetchMfJobs() {
   return result.jobs;
 }
 
+export type MfRunJobResult = {
+  job: string;
+  result: Record<string, unknown>;
+};
+
 export async function runMfJob(jobName: string, force = false) {
   const query = force ? "?force=true" : "";
-  return apiRequest<{ job: string; result: Record<string, unknown> }>(
+  return apiRequest<MfRunJobResult>(
     `/admin/mf/jobs/${encodeURIComponent(jobName)}/run${query}`,
     { method: "POST" }
   );
@@ -586,12 +594,18 @@ export function fetchMfStagingBatches(limit = 20, status?: string) {
 
 export function fetchMfStagingBatchRows(
   batchUuid: string,
-  params?: { validation_status?: string; promote_status?: string; page?: number },
+  params?: {
+    validation_status?: string;
+    promote_status?: string;
+    page?: number;
+    page_size?: number;
+  },
 ) {
   const search = new URLSearchParams();
   if (params?.validation_status) search.set("validation_status", params.validation_status);
   if (params?.promote_status) search.set("promote_status", params.promote_status);
   if (params?.page) search.set("page", String(params.page));
+  if (params?.page_size) search.set("page_size", String(params.page_size));
   const query = search.toString();
   return apiRequest<{
     items: MfStagingRow[];

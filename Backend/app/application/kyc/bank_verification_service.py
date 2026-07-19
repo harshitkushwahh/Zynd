@@ -5,78 +5,41 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.kyc.bank_verification_core import (
+    BankVerificationError,
+    extract_bank_account_result,
+    extract_readiness_verified,
+    holder_name_from_pan_draft,
+    is_verified_result,
+    map_account_type,
+    resolve_bank_holder_names,
+    run_hybrid_bank_verification,
+)
+from app.application.investor.investor_bank_account_service import sync_bank_account_from_kyc_journey
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_gate_service import require_phase1_complete
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status
-from app.infrastructure.kyc.fp_clients import FpClientError, lookup_ifsc
-from app.infrastructure.kyc.kyckart_client import KyckartError, kyckart_bank_account_holder_name
-from app.infrastructure.kyc.poa_client import poa_verify_bank_account
+from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.models import KycOverallStatus, KycStepStatus, User
 
 
-ACCOUNT_TYPE_MAP = {
-    "Savings": "savings",
-    "Current": "current",
-    "NRE": "nre_savings",
-    "NRO": "nro_savings",
-}
+def _map_bank_verification_error(exc: BankVerificationError) -> KycError:
+    return KycError(exc.message, exc.code, exc.status_code)
 
 
-def _map_account_type(account_type: str) -> str:
-    mapped = ACCOUNT_TYPE_MAP.get(account_type.strip())
-    if not mapped:
-        raise KycError("Invalid bank account type.", "invalid_account_type", 400)
-    return mapped
-
-
-def _extract_field_result(payload: dict[str, Any], field: str) -> dict[str, Any]:
-    value = payload.get(field)
-    if isinstance(value, dict):
-        return value
-    return {}
-
-
-def _extract_bank_account_result(payload: dict[str, Any]) -> dict[str, Any]:
-    accounts = payload.get("bank_accounts")
-    if isinstance(accounts, list):
-        for item in accounts:
-            if isinstance(item, dict):
-                return item
-    return _extract_field_result(payload, "bank_account")
-
-
-def _is_verified(result: dict[str, Any]) -> bool:
-    return str(result.get("status") or "").lower() == "verified"
-
-
+# Backward-compatible re-exports for existing tests/imports.
 def _extract_readiness_verified(poa_result: dict[str, Any], journey: Any) -> bool:
-    readiness = poa_result.get("readiness")
-    if isinstance(readiness, dict) and readiness.get("status"):
-        return _is_verified(readiness)
-    if journey.kyc_already_registered is True:
-        return True
-    return False
+    return extract_readiness_verified(
+        poa_result,
+        kyc_already_registered=getattr(journey, "kyc_already_registered", None),
+    )
 
 
-def _holder_name_from_pan_draft(pan_draft: dict[str, Any]) -> str:
-    full_name = str(pan_draft.get("fullName") or "").strip()
-    if full_name:
-        return full_name
-    first_name = str(pan_draft.get("firstName") or "").strip()
-    middle_name = str(pan_draft.get("middleName") or "").strip()
-    last_name = str(pan_draft.get("lastName") or "").strip()
-    return " ".join(part for part in (first_name, middle_name, last_name) if part).strip()
-
-
-def _resolve_bank_holder_names(
-    pan_draft: dict[str, Any],
-    *,
-    kyckart_holder_name: str = "",
-) -> tuple[str, str]:
-    """Return (poa_name, display_name). POA always uses the PAN-verified name."""
-    pan_holder_name = _holder_name_from_pan_draft(pan_draft)
-    display_holder_name = kyckart_holder_name.strip() or pan_holder_name
-    return pan_holder_name, display_holder_name
+_holder_name_from_pan_draft = holder_name_from_pan_draft
+_resolve_bank_holder_names = resolve_bank_holder_names
+_map_account_type = map_account_type
+_extract_bank_account_result = extract_bank_account_result
+_is_verified = is_verified_result
 
 
 async def verify_bank_hybrid(
@@ -95,106 +58,59 @@ async def verify_bank_hybrid(
     if not pan_number:
         raise KycError("Complete PAN verification first.", "pan_not_verified", 403)
 
-    ifsc = ifsc_code.strip().upper()
-    account_no = account_number.strip()
-    poa_account_type = _map_account_type(account_type)
-
-    ifsc_payload = await lookup_ifsc(ifsc)
-    bank_name = str(ifsc_payload.get("bank_name") or ifsc_payload.get("bankName") or "").strip()
-    branch = str(ifsc_payload.get("branch") or ifsc_payload.get("branch_name") or "").strip()
-
-    kyckart_holder_name = ""
     try:
-        holder = await kyckart_bank_account_holder_name(
-            account_number=account_no,
-            ifsc_code=ifsc,
-        )
-        kyckart_holder_name = str(holder.get("accountHolderName") or holder.get("name") or "").strip()
-    except KyckartError:
-        # Kyckart is display-only; POA always verifies using the PAN name.
-        pass
-
-    pan_holder_name, display_holder_name = _resolve_bank_holder_names(
-        pan_draft,
-        kyckart_holder_name=kyckart_holder_name,
-    )
-    if not pan_holder_name:
-        raise KycError(
-            "Complete PAN verification before verifying your bank account.",
-            "pan_name_unavailable",
-            403,
-        )
-
-    try:
-        poa_result = await poa_verify_bank_account(
+        outcome = await run_hybrid_bank_verification(
+            pan_draft=pan_draft,
             pan_number=pan_number,
-            account_holder_name=pan_holder_name,
-            account_number=account_no,
-            ifsc_code=ifsc,
-            account_type=poa_account_type,
+            account_number=account_number,
+            account_type=account_type,
+            ifsc_code=ifsc_code,
+            kyc_already_registered=journey.kyc_already_registered,
         )
-    except FpClientError as exc:
-        raise KycError(exc.message, exc.code, exc.status_code) from exc
-    preverify_id = str(poa_result.get("id") or "")
-    bank_result = _extract_bank_account_result(poa_result)
-    pan_result = _extract_field_result(poa_result, "pan")
+    except BankVerificationError as exc:
+        raise _map_bank_verification_error(exc) from exc
 
-    bank_verified = _is_verified(bank_result)
-    pan_verified = _is_verified(pan_result)
-    readiness_verified = _extract_readiness_verified(poa_result, journey)
-    bank_code = str(bank_result.get("code") or "").lower()
-    requires_manual = bank_code in {
-        "bank_account_proof_required",
-        "uncertain",
-        "manual_verification_required",
-    }
-    requires_proof_upload = bank_code == "bank_account_proof_required"
-
-    failure: dict[str, Any] | None = None
-    if not bank_verified and not requires_manual:
-        failure = {
-            "field": "bank_account",
-            "code": bank_result.get("code"),
-            "reason": bank_result.get("reason") or "Bank account verification failed.",
-        }
-
-    journey.poa_bank_preverify_id = preverify_id or journey.poa_bank_preverify_id
-    journey.bank_verification_status = "verified" if bank_verified else ("manual_required" if requires_manual else "failed")
-    journey.bank_verification_failure_json = failure
+    journey.poa_bank_preverify_id = outcome.preverify_id or journey.poa_bank_preverify_id
+    journey.bank_verification_status = (
+        "verified" if outcome.bank_verified else ("manual_required" if outcome.requires_manual else "failed")
+    )
+    journey.bank_verification_failure_json = outcome.failure
     journey.bank_draft_json = {
-        "accountNumber": account_no,
-        "accountType": account_type,
-        "ifscCode": ifsc,
-        "accountHolderName": display_holder_name,
-        "panAccountHolderName": pan_holder_name,
-        "bankName": bank_name,
-        "branch": branch,
-        "poaAccountType": poa_account_type,
-        "readinessVerified": readiness_verified,
+        "accountNumber": outcome.account_number,
+        "accountType": outcome.account_type_label,
+        "ifscCode": outcome.ifsc_code,
+        "accountHolderName": outcome.display_holder_name,
+        "panAccountHolderName": outcome.pan_holder_name,
+        "bankName": outcome.bank_name,
+        "branch": outcome.branch,
+        "poaAccountType": outcome.poa_account_type,
+        "readinessVerified": outcome.readiness_verified,
     }
 
     status = await get_or_create_status(db, user.id)
-    if bank_verified:
+    if outcome.bank_verified:
         status.bank_step_status = KycStepStatus.verified
-    elif requires_manual:
+    elif outcome.requires_manual:
         status.bank_step_status = KycStepStatus.pending
     else:
         status.bank_step_status = KycStepStatus.failed
 
     await db.flush()
 
+    await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
+
     return {
-        "success": bank_verified,
-        "accountHolderName": display_holder_name,
-        "bankName": bank_name,
-        "branch": branch,
-        "panVerified": pan_verified,
-        "bankVerified": bank_verified,
-        "readinessVerified": readiness_verified,
-        "requiresManualVerification": requires_manual,
-        "requiresProofUpload": requires_proof_upload,
-        "preverifyId": preverify_id,
-        "failure": failure,
+        "success": outcome.bank_verified,
+        "accountHolderName": outcome.display_holder_name,
+        "bankName": outcome.bank_name,
+        "branch": outcome.branch,
+        "panVerified": outcome.pan_verified,
+        "bankVerified": outcome.bank_verified,
+        "readinessVerified": outcome.readiness_verified,
+        "requiresManualVerification": outcome.requires_manual,
+        "requiresProofUpload": outcome.requires_proof_upload,
+        "preverifyId": outcome.preverify_id,
+        "failure": outcome.failure,
     }
 
 
@@ -253,7 +169,7 @@ async def verify_bank_manual(
     account_number = str(bank_draft.get("accountNumber") or "").strip()
     ifsc_code = str(bank_draft.get("ifscCode") or "").strip().upper()
     account_type = str(bank_draft.get("poaAccountType") or bank_draft.get("accountType") or "savings")
-    account_holder_name = _holder_name_from_pan_draft(pan_draft)
+    account_holder_name = holder_name_from_pan_draft(pan_draft)
     if not account_holder_name:
         raise KycError(
             "Complete PAN verification before verifying your bank account.",
@@ -269,14 +185,22 @@ async def verify_bank_manual(
             account_holder_name=account_holder_name,
             account_number=account_number,
             ifsc_code=ifsc_code,
-            account_type=account_type if account_type in {"savings", "current", "nre_savings", "nro_savings"} else _map_account_type(str(bank_draft.get("accountType") or "Savings")),
+            account_type=account_type
+            if account_type in {"savings", "current", "nre_savings", "nro_savings"}
+            else map_account_type(str(bank_draft.get("accountType") or "Savings")),
             proof_file_id=proof_file_id,
         )
     except FpClientError as exc:
         raise KycError(exc.message, exc.code, exc.status_code) from exc
-    bank_result = _extract_bank_account_result(poa_result)
-    bank_verified = _is_verified(bank_result)
-    readiness_verified = _extract_readiness_verified(poa_result, journey)
+    except BankVerificationError as exc:
+        raise _map_bank_verification_error(exc) from exc
+
+    bank_result = extract_bank_account_result(poa_result)
+    bank_verified = is_verified_result(bank_result)
+    readiness_verified = extract_readiness_verified(
+        poa_result,
+        kyc_already_registered=journey.kyc_already_registered,
+    )
 
     failure: dict[str, Any] | None = None
     if not bank_verified:
@@ -299,6 +223,8 @@ async def verify_bank_manual(
         status.overall_status = KycOverallStatus.phase2_complete
 
     await db.flush()
+
+    await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
 
     return {
         "success": bank_verified,
@@ -326,10 +252,10 @@ async def get_bank_preverify_status(
         payload = await fetch_poa_preverification(preverify_id)
     except FpClientError as exc:
         raise KycError(exc.message, exc.code, exc.status_code) from exc
-    bank_result = _extract_bank_account_result(payload)
+    bank_result = extract_bank_account_result(payload)
     return {
         "status": payload.get("status"),
-        "bankVerified": _is_verified(bank_result),
+        "bankVerified": is_verified_result(bank_result),
         "code": bank_result.get("code"),
         "reason": bank_result.get("reason"),
     }

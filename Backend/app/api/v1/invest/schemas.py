@@ -82,6 +82,7 @@ class InvestFundContentResponse(InvestFundDisplayResponse):
 
 class InvestFundSummaryResponse(BaseModel):
     product_id: str
+    slug: str
     product_code: str
     name: str
     provider: Optional[str] = None
@@ -153,7 +154,70 @@ class InvestReturnCalculatorResponse(BaseModel):
     amount_inr: float
     mode: str
     as_of_date: Optional[str] = None
+    data_quality: Optional[str] = None
+    disclaimer: Optional[str] = None
     scenarios: list[InvestReturnCalculatorScenarioResponse] = Field(default_factory=list)
+
+
+class MfCalculatorPointResponse(BaseModel):
+    date: str
+    invested_inr: Optional[float] = None
+    value_inr: float
+    units: Optional[float] = None
+
+
+class MfLumpsumCalculatorResponse(BaseModel):
+    product_id: str
+    mode: Literal["lumpsum"] = "lumpsum"
+    amount_inr: float
+    as_of_date: Optional[str] = None
+    data_quality: str
+    disclaimer: str
+    scenarios: list[InvestReturnCalculatorScenarioResponse] = Field(default_factory=list)
+    points: list[MfCalculatorPointResponse] = Field(default_factory=list)
+
+
+class MfSipCalculatorResponse(BaseModel):
+    product_id: str
+    mode: Literal["sip"] = "sip"
+    monthly_amount_inr: float
+    duration_months: int
+    sip_day: int
+    total_invested_inr: float
+    projected_value_inr: float
+    return_pct: Optional[float] = None
+    xirr_pct: Optional[float] = None
+    installments: int
+    as_of_date: Optional[str] = None
+    data_quality: str
+    disclaimer: str
+    points: list[MfCalculatorPointResponse] = Field(default_factory=list)
+
+
+class MfSwpCalculatorResponse(BaseModel):
+    product_id: str
+    mode: Literal["swp"] = "swp"
+    corpus_inr: float
+    monthly_withdrawal_inr: float
+    duration_months: int
+    withdrawal_day: int
+    total_withdrawn_inr: float
+    remaining_value_inr: float
+    months_sustained: int
+    depleted: bool
+    as_of_date: Optional[str] = None
+    data_quality: str
+    disclaimer: str
+    points: list[MfCalculatorPointResponse] = Field(default_factory=list)
+
+
+class MfCompareRequest(BaseModel):
+    product_ids: list[UUID] = Field(..., min_length=1, max_length=3)
+
+
+class MfCompareResponse(BaseModel):
+    funds: list[InvestFundDetailResponse]
+    disclaimer: str
 
 
 class InvestNavPointResponse(BaseModel):
@@ -174,6 +238,7 @@ class InvestConfigResponse(BaseModel):
     distributor_euin: Optional[str] = None
     disclaimer: str
     orders_enabled: bool
+    sip_enabled: bool = True
     cas_enabled: bool
 
 
@@ -181,26 +246,194 @@ class CreateMfOrderRequest(BaseModel):
     product_id: UUID
     amount_inr: float = Field(gt=0)
     idempotency_key: str = Field(min_length=8, max_length=128)
+    bank_account_id: Optional[UUID] = None
 
 
 class MfOrderResponse(BaseModel):
     order_id: str
+    checkout_id: Optional[str] = None
     product_id: str
     product_name: Optional[str] = None
+    amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
     order_type: str
     amount_inr: float
     status: str
     fp_purchase_id: Optional[str] = None
+    fp_purchase_old_id: Optional[int] = None
     fp_state: Optional[str] = None
+    payment_url: Optional[str] = None
+    next_action: Optional[str] = None
     failure_code: Optional[str] = None
     failure_reason: Optional[str] = None
     created_at: Optional[str] = None
     submitted_at: Optional[str] = None
     settled_at: Optional[str] = None
+    payout_bank_account_id: Optional[str] = None
+    payout_bank_account_masked: Optional[str] = None
+    payout_bank_ifsc_code: Optional[str] = None
+    payout_bank_name: Optional[str] = None
 
 
 class MfOrderListResponse(BaseModel):
     orders: list[MfOrderResponse]
+
+
+class MfOrderEventResponse(BaseModel):
+    from_status: Optional[str] = None
+    to_status: str
+    source: str
+    payload: Optional[dict] = None
+    created_at: Optional[str] = None
+
+
+class MfOrderJourneyResponse(BaseModel):
+    order: MfOrderResponse
+    events: list[MfOrderEventResponse]
+
+
+class MfCartItemResponse(BaseModel):
+    product_id: str
+    product_name: Optional[str] = None
+    fund_id: int
+    amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
+    amount_inr: float
+    investment_type: Literal["lumpsum", "sip"] = "lumpsum"
+    installment_day: Optional[int] = None
+    frequency: Optional[str] = None
+    fp_scheme_id: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class MfCartResponse(BaseModel):
+    items: list[MfCartItemResponse]
+    lumpsum_items: list[MfCartItemResponse] = Field(default_factory=list)
+    sip_items: list[MfCartItemResponse] = Field(default_factory=list)
+    item_count: int
+    lumpsum_item_count: int = 0
+    sip_item_count: int = 0
+    total_amount_inr: float
+    lumpsum_total_amount_inr: float = 0
+    sip_total_amount_inr: float = 0
+    max_items: int
+
+
+class UpsertMfCartItemRequest(BaseModel):
+    product_id: UUID
+    amount_inr: float = Field(gt=0)
+    investment_type: Literal["lumpsum", "sip"] = "lumpsum"
+    installment_day: Optional[int] = Field(default=None, ge=1, le=28)
+    frequency: Literal["monthly", "daily"] = "monthly"
+
+
+class BulkUpsertMfCartItemLine(BaseModel):
+    product_id: UUID
+    amount_inr: float = Field(gt=0)
+
+
+class BulkUpsertMfCartItemsRequest(BaseModel):
+    items: list[BulkUpsertMfCartItemLine] = Field(min_length=1, max_length=50)
+
+
+class CheckoutMfCartRequest(BaseModel):
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    bank_account_id: Optional[UUID] = None
+
+
+class MfCheckoutOrderLineResponse(BaseModel):
+    order_id: str
+    product_id: str
+    product_name: Optional[str] = None
+    amount_inr: float
+    status: str
+    line_index: int
+    fp_state: Optional[str] = None
+
+
+class MfCheckoutResponse(BaseModel):
+    checkout_id: str
+    checkout_type: str
+    status: str
+    total_amount_inr: float
+    payment_url: Optional[str] = None
+    next_action: Optional[str] = None
+    fp_payment_id: Optional[int] = None
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    created_at: Optional[str] = None
+    payout_bank_account_id: Optional[str] = None
+    payout_bank_account_masked: Optional[str] = None
+    payout_bank_ifsc_code: Optional[str] = None
+    payout_bank_name: Optional[str] = None
+    orders: list[MfCheckoutOrderLineResponse] = Field(default_factory=list)
+
+
+class CreateMfMandateRequest(BaseModel):
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    installment_amount_inr: Optional[float] = Field(default=None, gt=0)
+    bank_account_id: Optional[UUID] = None
+
+
+class MfMandateResponse(BaseModel):
+    mandate_id: str
+    status: str
+    fp_mandate_id: Optional[int] = None
+    bank_account_old_id: int
+    mandate_type: str
+    mandate_limit: int
+    fp_mandate_status: Optional[str] = None
+    auth_url: Optional[str] = None
+    next_action: Optional[str] = None
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    created_at: Optional[str] = None
+    approved_at: Optional[str] = None
+
+
+class MfMandateListResponse(BaseModel):
+    mandates: list[MfMandateResponse]
+
+
+class CreateMfSipPlanRequest(BaseModel):
+    product_id: UUID
+    amount_inr: float = Field(gt=0)
+    frequency: Literal["monthly", "daily"] = "monthly"
+    installment_day: Optional[int] = Field(default=None, ge=1, le=28)
+    number_of_installments: Optional[int] = Field(default=None, ge=1, le=9999)
+    mandate_id: Optional[UUID] = None
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    bank_account_id: Optional[UUID] = None
+
+
+class MfSipPlanResponse(BaseModel):
+    plan_id: str
+    product_id: str
+    product_name: Optional[str] = None
+    amount_inr: float
+    frequency: str
+    installment_day: Optional[int] = None
+    number_of_installments: int
+    status: str
+    fp_plan_id: Optional[str] = None
+    fp_state: Optional[str] = None
+    next_installment_date: Optional[str] = None
+    mandate: Optional[MfMandateResponse] = None
+    mandate_auth_url: Optional[str] = None
+    next_action: Optional[str] = None
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    created_at: Optional[str] = None
+    activated_at: Optional[str] = None
+
+
+class MfSipPlanListResponse(BaseModel):
+    plans: list[MfSipPlanResponse]
+
+
+class MfSipCartCheckoutResponse(BaseModel):
+    plans: list[MfSipPlanResponse]
 
 
 class MfExternalHoldingResponse(BaseModel):
@@ -232,3 +465,72 @@ class MfCasImportResponse(BaseModel):
 
 class MfCasImportListResponse(BaseModel):
     imports: list[MfCasImportResponse]
+
+
+class InvestorBankAccountFailure(BaseModel):
+    field: str
+    code: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class InvestorBankAccountResponse(BaseModel):
+    id: str
+    account_number_masked: str
+    account_number_last4: str
+    ifsc_code: str
+    account_type: str
+    account_holder_name: str
+    pan_account_holder_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    branch_name: Optional[str] = None
+    is_primary: bool
+    source: str
+    verification_status: str
+    sync_status: str
+    requires_manual_verification: bool = False
+    requires_proof_upload: bool = False
+    proof_uploaded: bool = False
+    preverify_id: Optional[str] = None
+    failure: Optional[InvestorBankAccountFailure] = None
+    readiness_verified: bool = False
+    external_bank_account_id: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class InvestorBankAccountListResponse(BaseModel):
+    bank_accounts: list[InvestorBankAccountResponse]
+
+
+class InvestorBankAccountVerifyRequest(BaseModel):
+    account_number: str = Field(min_length=9, max_length=18)
+    account_type: str
+    ifsc_code: str = Field(min_length=11, max_length=11)
+
+
+class InvestorBankAccountVerifyResponse(InvestorBankAccountResponse):
+    success: bool
+    pan_verified: bool = False
+    bank_verified: bool = False
+    requires_manual_verification: bool = False
+    requires_proof_upload: bool = False
+
+
+class InvestorBankAccountProofUploadResponse(BaseModel):
+    file_id: str
+    bank_account: InvestorBankAccountResponse
+
+
+class InvestorBankAccountManualVerifyResponse(InvestorBankAccountResponse):
+    success: bool
+    bank_verified: bool = False
+    readiness_verified: bool = False
+    requires_manual_verification: bool = False
+    requires_proof_upload: bool = False
+
+
+class InvestorBankAccountPreverifyStatusResponse(BaseModel):
+    status: Optional[str] = None
+    bank_verified: bool = False
+    code: Optional[str] = None
+    reason: Optional[str] = None

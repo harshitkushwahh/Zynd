@@ -108,3 +108,45 @@ export async function fetchAdminPermissions() {
   const result = await apiRequest<{ permissions: string[] }>("/admin/rbac/me");
   return result.permissions;
 }
+
+export async function fetchCurrentAdminUser() {
+  const user = await apiRequest<AdminUser>("/auth/me");
+  assertAdminUser(user);
+  return user;
+}
+
+export type AdminInvitePreview = {
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  role_key: string;
+  role_name: string | null;
+  inviter_name: string | null;
+  expires_at: string;
+};
+
+export async function validateAdminInvite(token: string) {
+  const params = new URLSearchParams({ token });
+  return apiRequest<AdminInvitePreview>(`/auth/admin-invite/validate?${params.toString()}`);
+}
+
+export async function acceptAdminInvite(payload: {
+  token: string;
+  first_name: string;
+  last_name?: string;
+  password: string;
+}) {
+  const result = await apiRequest<AuthSuccessResponse>("/auth/admin-invite/accept", {
+    method: "POST",
+    body: JSON.stringify({
+      token: payload.token,
+      first_name: payload.first_name,
+      last_name: payload.last_name ?? null,
+      password: payload.password,
+      device_fingerprint: "admin-console",
+    }),
+  });
+  assertAdminUser(result.user);
+  setAccessToken(result.access_token);
+  return result;
+}

@@ -7,9 +7,11 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.investor.investor_bank_account_crypto import encrypt_account_number
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
     InvestorBankAccount,
+    InvestorBankVerificationStatus,
     InvestorEmailAddress,
     InvestorObjectSource,
     InvestorObjectSyncStatus,
@@ -84,6 +86,50 @@ def _parse_nominee_dob(value: Any):
         return date.fromisoformat(raw)
     except ValueError:
         return None
+
+
+def _map_verification_status(raw: Any) -> InvestorBankVerificationStatus:
+    normalized = _str(raw).lower()
+    if normalized == "verified":
+        return InvestorBankVerificationStatus.verified
+    if normalized == "manual_required":
+        return InvestorBankVerificationStatus.manual_required
+    if normalized == "failed":
+        return InvestorBankVerificationStatus.failed
+    return InvestorBankVerificationStatus.pending
+
+
+def _build_bank_metadata(*, bank: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {"seededFrom": "kyc"}
+    readiness = bank.get("readinessVerified")
+    if readiness is not None:
+        metadata["readinessVerified"] = bool(readiness)
+    poa_account_type = _str(bank.get("poaAccountType"))
+    if poa_account_type:
+        metadata["poaAccountType"] = poa_account_type
+    return metadata
+
+
+def _apply_bank_verification_fields(
+    row: InvestorBankAccount,
+    *,
+    journey: KycJourneyState,
+    bank: dict[str, Any],
+    account_number: str,
+    holder: str,
+) -> None:
+    ciphertext, key_version = encrypt_account_number(account_number)
+    pan_holder = _str(bank.get("panAccountHolderName")) or holder
+
+    row.poa_preverify_id = _str(journey.poa_bank_preverify_id) or None
+    row.pan_account_holder_name = pan_holder[:120] or None
+    row.verification_status = _map_verification_status(journey.bank_verification_status)
+    row.verification_failure_json = journey.bank_verification_failure_json
+    row.account_number_ciphertext = ciphertext
+    row.account_number_key_version = key_version
+    row.metadata_json = _build_bank_metadata(bank=bank)
+    if not row.cancelled_cheque_file_id:
+        row.cancelled_cheque_file_id = _str(journey.poa_bank_proof_file_id) or None
 
 
 async def seed_investor_drafts_from_kyc(
@@ -209,27 +255,43 @@ async def _seed_bank(db: AsyncSession, profile: InvestorProfile, journey: KycJou
             InvestorBankAccount.ifsc_code == ifsc,
         )
     )
-    if existing.scalar_one_or_none():
-        return
+    existing_row = existing.scalar_one_or_none()
 
     account_type = ACCOUNT_TYPE_MAP.get(_str(bank.get("accountType")), "savings")
     holder = _str(bank.get("accountHolderName")) or "Account Holder"
 
-    db.add(
-        InvestorBankAccount(
-            investor_profile_id=profile.user_id,
-            is_primary=True,
-            account_type=account_type,
-            account_number_last4=last4,
-            ifsc_code=ifsc,
-            primary_account_holder_name=holder[:120],
-            bank_name=_str(bank.get("bankName"))[:120] or None,
-            branch_name=_str(bank.get("branch"))[:120] or None,
-            cancelled_cheque_file_id=_str(journey.poa_bank_proof_file_id) or None,
-            source=InvestorObjectSource.kyc,
-            sync_status=InvestorObjectSyncStatus.draft,
-        )
+    if existing_row:
+        if not existing_row.account_number_ciphertext:
+            _apply_bank_verification_fields(
+                existing_row,
+                journey=journey,
+                bank=bank,
+                account_number=account_number,
+                holder=holder,
+            )
+        return
+
+    row = InvestorBankAccount(
+        investor_profile_id=profile.user_id,
+        is_primary=True,
+        account_type=account_type,
+        account_number_last4=last4,
+        ifsc_code=ifsc,
+        primary_account_holder_name=holder[:120],
+        bank_name=_str(bank.get("bankName"))[:120] or None,
+        branch_name=_str(bank.get("branch"))[:120] or None,
+        cancelled_cheque_file_id=_str(journey.poa_bank_proof_file_id) or None,
+        source=InvestorObjectSource.kyc,
+        sync_status=InvestorObjectSyncStatus.draft,
     )
+    _apply_bank_verification_fields(
+        row,
+        journey=journey,
+        bank=bank,
+        account_number=account_number,
+        holder=holder,
+    )
+    db.add(row)
 
 
 async def _seed_nominees(db: AsyncSession, profile: InvestorProfile, journey: KycJourneyState) -> None:
@@ -250,6 +312,10 @@ async def _seed_nominees(db: AsyncSession, profile: InvestorProfile, journey: Ky
         if not name:
             continue
         pan = _str(identity.get("documentNumber")) if _str(identity.get("documentType")).lower() == "pan" else None
+        guardian_pan = None
+        if isinstance(guardian, dict):
+            if _str(guardian.get("documentType")).lower() == "pan":
+                guardian_pan = _str(guardian.get("documentNumber")) or None
         db.add(
             InvestorRelatedParty(
                 investor_profile_id=profile.user_id,
@@ -259,6 +325,7 @@ async def _seed_nominees(db: AsyncSession, profile: InvestorProfile, journey: Ky
                 date_of_birth=_parse_nominee_dob(core.get("dateOfBirth")),
                 pan=pan[:10] if pan else None,
                 guardian_name=_str(guardian.get("name"))[:120] or None,
+                guardian_pan=guardian_pan[:10] if guardian_pan else None,
                 share_percent=_parse_share_percent(core.get("sharePercent")),
                 source=InvestorObjectSource.kyc,
                 sync_status=InvestorObjectSyncStatus.draft,

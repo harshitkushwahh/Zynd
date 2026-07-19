@@ -22,6 +22,7 @@ import {
   DASHBOARD_ROUTES,
 } from "@/features/dashboard/navigation/dashboard-routes";
 import { useDashboardRoute } from "@/features/dashboard/navigation/use-dashboard-route";
+import { useMfCartCount } from "@/features/invest/hooks/use-mf-cart-count";
 import { useTheme } from "@/contexts/theme-context";
 import { uiClasses } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ export function DashboardNavbar() {
   const { isRouteActive } = useDashboardRoute();
   const { theme, setTheme } = useTheme();
   const [searchOpen, setSearchOpen] = useState(false);
+  const { itemCount: cartItemCount } = useMfCartCount();
   const navRoutes = DASHBOARD_ROUTES.filter(
     (route) => route.enabled && route.showInTopNav !== false
   );
@@ -92,6 +94,28 @@ export function DashboardNavbar() {
             const active = isRouteActive(tab);
             const Icon = tab.icon;
 
+            if (tab.disabled) {
+              return (
+                <Tooltip key={tab.id}>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        aria-disabled="true"
+                        className={cn(
+                          "inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-[var(--radius-full)] px-3 py-2.5 text-[13px] leading-tight font-medium",
+                          "text-muted-foreground/50",
+                        )}
+                      >
+                        <Icon className="size-3.5 shrink-0 opacity-50" strokeWidth={2} />
+                        {tab.label}
+                      </span>
+                    }
+                  />
+                  <TooltipContent side="bottom">Coming soon</TooltipContent>
+                </Tooltip>
+              );
+            }
+
             return (
               <Link
                 key={tab.id}
@@ -119,17 +143,22 @@ export function DashboardNavbar() {
         <DashboardActivePageCard />
 
         <div className={cn("flex items-center", uiClasses.navSurface)}>
-          <button
-            type="button"
+          <Link
+            href="/dashboard/mutual-funds/cart"
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 outline-none transition-colors",
-              "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              "relative inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-full)] px-2.5 outline-none transition-colors",
+              "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
             )}
             aria-label="Cart"
           >
             <ShoppingCart className="size-4 shrink-0" strokeWidth={2.25} />
             <span className="text-[13px] font-medium leading-none">Cart</span>
-          </button>
+            {cartItemCount > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                {cartItemCount > 9 ? "9+" : cartItemCount}
+              </span>
+            ) : null}
+          </Link>
         </div>
 
         <div className={cn("flex items-center gap-1 p-1.5", uiClasses.navSurface)}>

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.investor.investor_bank_account_service import (
+    sync_bank_account_from_kyc_journey,
+)
 from app.application.investor.investor_profile_seed_service import seed_investor_drafts_from_kyc
 from app.application.kyc.kyc_notification_service import notify_kyc_completed
 from app.application.kyc.user_name_sync_service import sync_user_name_from_verified_kyc
@@ -19,6 +22,7 @@ async def on_kyc_completed(
 ) -> dict[str, bool]:
     name_updated = await sync_user_name_from_verified_kyc(db, user=user, journey=journey)
     await seed_investor_drafts_from_kyc(db, user=user, journey=journey)
+    await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
     referral = await advance_referral_kyc_verified(db, referee=user)
     notify_kyc_completed(user=user)
     return {

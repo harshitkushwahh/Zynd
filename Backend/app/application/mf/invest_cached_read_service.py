@@ -127,15 +127,26 @@ async def cached_get_invest_config(session: AsyncSession) -> dict:
     key = await build_invest_cache_key("config")
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
-        return cached
+        return _enrich_invest_config_payload(cached, settings=settings)
     payload = await get_invest_config(session)
+    enriched = _enrich_invest_config_payload(payload, settings=settings)
     await set_cached_json(
         key,
-        payload,
+        enriched,
         ttl_seconds=settings.zynd_mf_invest_cache_config_ttl_seconds,
         settings=settings,
     )
-    return payload
+    return enriched
+
+
+def _enrich_invest_config_payload(payload: dict, *, settings) -> dict:
+    """Settings-backed flags must reflect current env even when config cache is stale."""
+    return {
+        **payload,
+        "orders_enabled": settings.zynd_mf_orders_enabled,
+        "sip_enabled": settings.zynd_mf_sip_enabled,
+        "cas_enabled": settings.zynd_mf_cas_enabled,
+    }
 
 
 async def cached_search_invest_funds(

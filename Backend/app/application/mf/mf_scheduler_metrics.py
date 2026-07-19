@@ -45,6 +45,18 @@ def render_catalog_prometheus_metrics(stats: dict[str, float | int]) -> str:
         "# TYPE zynd_mf_invest_cache_hit_rate gauge",
         "# HELP zynd_mf_zero_active_funds_alert Alert when catalog has products but zero ACTIVE (1/0).",
         "# TYPE zynd_mf_zero_active_funds_alert gauge",
+        "# HELP zynd_mf_stuck_orders Open MF orders past stuck threshold.",
+        "# TYPE zynd_mf_stuck_orders gauge",
+        "# HELP zynd_mf_stuck_checkouts Open MF checkouts past stuck threshold.",
+        "# TYPE zynd_mf_stuck_checkouts gauge",
+        "# HELP zynd_mf_stuck_mandates Mandates in auth_pending past stuck threshold.",
+        "# TYPE zynd_mf_stuck_mandates gauge",
+        "# HELP zynd_mf_stuck_sip_plans Non-terminal SIP plans past stuck threshold.",
+        "# TYPE zynd_mf_stuck_sip_plans gauge",
+        "# HELP zynd_mf_failed_orders_24h MF orders marked failed in the last 24 hours.",
+        "# TYPE zynd_mf_failed_orders_24h gauge",
+        "# HELP zynd_mf_failed_webhooks_24h Finprim webhooks failed in the last 24 hours.",
+        "# TYPE zynd_mf_failed_webhooks_24h gauge",
     ]
     lines.append(f"zynd_mf_active_products {stats['active_products']}")
     lines.append(f"zynd_mf_total_products {stats['total_products']}")
@@ -56,6 +68,13 @@ def render_catalog_prometheus_metrics(stats: dict[str, float | int]) -> str:
     lines.append(f"zynd_mf_invest_cache_misses {stats['cache_misses']}")
     lines.append(f"zynd_mf_invest_cache_hit_rate {stats['cache_hit_rate']:.6f}")
     lines.append(f"zynd_mf_zero_active_funds_alert {stats['zero_active_funds_alert']}")
+    if "stuck_orders" in stats:
+        lines.append(f"zynd_mf_stuck_orders {stats['stuck_orders']}")
+        lines.append(f"zynd_mf_stuck_checkouts {stats['stuck_checkouts']}")
+        lines.append(f"zynd_mf_stuck_mandates {stats['stuck_mandates']}")
+        lines.append(f"zynd_mf_stuck_sip_plans {stats['stuck_sip_plans']}")
+        lines.append(f"zynd_mf_failed_orders_24h {stats['failed_orders_24h']}")
+        lines.append(f"zynd_mf_failed_webhooks_24h {stats['failed_webhooks_24h']}")
     return "\n".join(lines) + "\n"
 
 

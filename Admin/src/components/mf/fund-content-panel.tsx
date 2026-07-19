@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getErrorMessage } from "@/lib/errors";
 
 import { Button } from "@/components/ui/button";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminFormSkeleton } from "@/components/ui/admin-skeletons";
 import {
   Card,
   CardContent,
@@ -18,11 +21,6 @@ import {
   type MfFundContent,
 } from "@/lib/mf-admin-api";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return fallback;
-}
 
 export function FundContentPanel({
   fundId,
@@ -84,7 +82,7 @@ export function FundContentPanel({
   };
 
   if (loading) {
-    return <p className="text-compact text-muted-foreground">Loading content…</p>;
+    return <AdminFormSkeleton rows={4} />;
   }
 
   if (!content?.product_id) {
@@ -104,8 +102,8 @@ export function FundContentPanel({
         <CardDescription>Marketing copy and SEO fields merged into the public invest API.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {error ? <p className="text-compact text-destructive">{error}</p> : null}
-        {message ? <p className="text-compact text-success">{message}</p> : null}
+        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
         {(
           [
             ["tagline", "Tagline", "Short pitch shown on fund cards"],
@@ -129,7 +127,7 @@ export function FundContentPanel({
         <label className="block space-y-1 text-compact">
           <span className="text-muted-foreground">Fund-specific disclaimer</span>
           <textarea
-            className="min-h-[96px] w-full rounded-[var(--radius-control)] border border-input bg-transparent px-2.5 py-2 text-compact"
+            className="min-h-field-sm w-full rounded-[var(--radius-control)] border border-input bg-transparent px-2.5 py-2 text-compact"
             value={form.disclaimer_text}
             onChange={(event) => setForm((current) => ({ ...current, disclaimer_text: event.target.value }))}
             disabled={!canManage}
@@ -138,7 +136,7 @@ export function FundContentPanel({
         <label className="block space-y-1 text-compact">
           <span className="text-muted-foreground">SEO meta description</span>
           <textarea
-            className="min-h-[72px] w-full rounded-[var(--radius-control)] border border-input bg-transparent px-2.5 py-2 text-compact"
+            className="min-h-field-xs w-full rounded-[var(--radius-control)] border border-input bg-transparent px-2.5 py-2 text-compact"
             value={form.seo_meta_description}
             onChange={(event) =>
               setForm((current) => ({ ...current, seo_meta_description: event.target.value }))

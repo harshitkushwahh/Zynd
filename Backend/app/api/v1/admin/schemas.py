@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -43,10 +43,38 @@ class AdminRoleResponse(BaseModel):
     name: str
     description: str
     permissions: list[str]
+    is_system: bool = False
 
 
 class AdminRolesResponse(BaseModel):
     roles: list[AdminRoleResponse]
+
+
+class AdminPermissionResponse(BaseModel):
+    key: str
+    description: str
+
+
+class AdminPermissionsListResponse(BaseModel):
+    permissions: list[AdminPermissionResponse]
+
+
+class CreateAdminPermissionRequest(BaseModel):
+    key: str = Field(min_length=3, max_length=64)
+    description: str = Field(min_length=3, max_length=255)
+
+
+class CreateAdminRoleRequest(BaseModel):
+    key: str = Field(min_length=2, max_length=64)
+    name: str = Field(min_length=2, max_length=128)
+    description: str = Field(min_length=2, max_length=255)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class UpdateAdminRoleRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=128)
+    description: str | None = Field(default=None, min_length=2, max_length=255)
+    permissions: list[str] | None = None
 
 
 class RotateKeysResponse(BaseModel):
@@ -91,13 +119,139 @@ class DeletionExecutorRunResponse(BaseModel):
 
 class AdminUserSummaryResponse(BaseModel):
     user_id: UUID
+    client_id: str
     email: str
+    display_name: str
     status: str
     role: str
+    has_invested: bool
     suspended_at: Optional[datetime] = None
     suspension_reason_code: Optional[str] = None
     mfa_enrolled: bool
     created_at: datetime
+
+
+class AdminUserKycStepResponse(BaseModel):
+    key: str
+    label: str
+    status: Optional[str] = None
+
+
+class AdminUserKycPanResponse(BaseModel):
+    pan_last4: Optional[str] = None
+    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    pan_category: Optional[str] = None
+
+
+class AdminUserKycAddressBlockResponse(BaseModel):
+    line1: Optional[str] = None
+    line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    country: Optional[str] = None
+
+
+class AdminUserKycAddressResponse(BaseModel):
+    permanent: Optional[AdminUserKycAddressBlockResponse] = None
+    correspondence: Optional[AdminUserKycAddressBlockResponse] = None
+    same_as_permanent: Optional[bool] = None
+
+
+class AdminUserKycPersonalResponse(BaseModel):
+    fathers_name: Optional[str] = None
+    gender: Optional[str] = None
+    income_slab: Optional[str] = None
+    occupation: Optional[str] = None
+    marital_status: Optional[str] = None
+    pep_exposed: Optional[bool] = None
+    place_of_birth: Optional[str] = None
+    nationality: Optional[str] = None
+
+
+class AdminUserKycBankDraftResponse(BaseModel):
+    account_number_last4: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    account_type: Optional[str] = None
+    account_holder_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    branch: Optional[str] = None
+    readiness_verified: Optional[bool] = None
+
+
+class AdminUserKycNomineeResponse(BaseModel):
+    full_name: Optional[str] = None
+    name: Optional[str] = None
+    relationship: Optional[str] = None
+    share_percent: Optional[int] = None
+    date_of_birth: Optional[str] = None
+    document_type: Optional[str] = None
+    document_number_last4: Optional[str] = None
+    pan_last4: Optional[str] = None
+    guardian_name: Optional[str] = None
+    guardian_pan_last4: Optional[str] = None
+    sync_status: Optional[str] = None
+
+
+class AdminUserKycSignatureResponse(BaseModel):
+    mode: Optional[str] = None
+    has_upload: bool = False
+    document_id: Optional[str] = None
+
+
+class AdminUserInvestorAddressResponse(BaseModel):
+    id: str
+    is_primary: bool
+    nature: str
+    line1: str
+    line2: Optional[str] = None
+    line3: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: str
+    country: str
+    sync_status: str
+
+
+class AdminUserKycDetailResponse(BaseModel):
+    overall_status: str
+    last_completed_step: Optional[str] = None
+    active_step_index: int = 0
+    step_statuses: dict[str, str]
+    incomplete_steps: list[AdminUserKycStepResponse]
+    pan: Optional[AdminUserKycPanResponse] = None
+    address: Optional[AdminUserKycAddressResponse] = None
+    investor_addresses: list[AdminUserInvestorAddressResponse] = []
+    personal: Optional[AdminUserKycPersonalResponse] = None
+    bank_draft: Optional[AdminUserKycBankDraftResponse] = None
+    bank_accounts: list[dict] = []
+    nominees: list[AdminUserKycNomineeResponse] = []
+    signature: Optional[AdminUserKycSignatureResponse] = None
+    signature_document_id: Optional[str] = None
+    pan_verification_status: Optional[str] = None
+    bank_verification_status: Optional[str] = None
+    external_kyc_status: Optional[str] = None
+    kyc_form_status: Optional[str] = None
+    investor_profile_status: Optional[str] = None
+    documents: list[AdminKycDocumentResponse]
+
+
+class AdminUserInvestmentsDetailResponse(BaseModel):
+    orders: list[dict]
+    purchases: list[dict]
+    cart: dict
+    holdings: list[dict]
+    sip_plans: list[dict]
+
+
+class AdminUserProfileDetailResponse(BaseModel):
+    user_id: UUID
+    email: str
+    kyc: Optional[AdminUserKycDetailResponse] = None
+    investments: Optional[AdminUserInvestmentsDetailResponse] = None
 
 
 class SuspendUserRequest(BaseModel):
@@ -154,9 +308,13 @@ class PendingActionResponse(BaseModel):
 
 class AdminUserListItemResponse(BaseModel):
     user_id: UUID
+    client_id: str
     email: str
+    display_name: str
     status: str
     role: str
+    has_invested: bool
+    kyc_compliant: bool
     suspended_at: Optional[datetime] = None
     mfa_enrolled: bool
     created_at: datetime
@@ -177,6 +335,31 @@ class AuditLogItemResponse(BaseModel):
 
 class AuditLogListResponse(BaseModel):
     items: list[AuditLogItemResponse]
+
+
+class ZyndLogItemResponse(BaseModel):
+    id: UUID
+    source: str
+    user_id: Optional[UUID] = None
+    user_email: Optional[str] = None
+    action: str
+    method: str
+    path: str
+    status_code: Optional[int] = None
+    success: bool
+    duration_ms: Optional[int] = None
+    error_code: Optional[str] = None
+    request_summary: dict = Field(default_factory=dict)
+    response_summary: dict = Field(default_factory=dict)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime
+
+
+class ZyndLogListResponse(BaseModel):
+    items: list[ZyndLogItemResponse]
+    total: int
+    has_more: bool
+    latest_at: Optional[datetime] = None
 
 
 class SecurityConfigItemResponse(BaseModel):
@@ -204,6 +387,22 @@ class AdminUserRolesResponse(BaseModel):
 
 class AssignAdminRoleRequest(BaseModel):
     role_key: str = Field(min_length=2, max_length=64)
+
+
+class SetAdminUserRolesRequest(BaseModel):
+    role_keys: list[str] = Field(min_length=1, max_length=20)
+
+
+class CreateAdminUserRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: Optional[str] = Field(default=None, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+    role_keys: list[str] = Field(min_length=1, max_length=10)
+
+
+class CreateAdminUserResponse(AdminUserSummaryResponse):
+    roles: list[str] = Field(default_factory=list)
 
 
 class AdminTransferRequest(BaseModel):
@@ -786,3 +985,111 @@ class MfStagingRowListResponse(BaseModel):
 
 class MfStagingRejectRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+
+
+class MfTransactionOverviewResponse(BaseModel):
+    order_counts: dict[str, int] = Field(default_factory=dict)
+    stuck_orders: int
+    stuck_checkouts: int
+    stuck_mandates: int
+    stuck_sip_plans: int
+    failed_orders_24h: int
+    failed_webhooks_24h: int
+    stuck_threshold_minutes: int
+    payment_expiry_minutes: int
+
+
+class MfTransactionOrderListResponse(BaseModel):
+    orders: list[dict[str, Any]]
+
+
+class MfTransactionSipPlanListResponse(BaseModel):
+    plans: list[dict[str, Any]]
+
+
+class MfTransactionMandateListResponse(BaseModel):
+    mandates: list[dict[str, Any]]
+    summary: dict[str, int] = Field(default_factory=dict)
+
+
+class MfTransactionCheckoutListResponse(BaseModel):
+    checkouts: list[dict[str, Any]]
+
+
+class MfTransactionSipBatchListResponse(BaseModel):
+    batches: list[dict[str, Any]]
+
+
+class MfTransactionOrderDetailResponse(BaseModel):
+    order: dict[str, Any]
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class MfTransactionWebhookListResponse(BaseModel):
+    events: list[dict[str, Any]]
+
+
+class MfTransactionReconcileResponse(BaseModel):
+    synced: Optional[bool] = None
+    advanced: Optional[bool] = None
+    order: Optional[dict[str, Any]] = None
+    plan: Optional[dict[str, Any]] = None
+    mandate: Optional[dict[str, Any]] = None
+
+
+class MfTransactionWebhookReplayResponse(BaseModel):
+    status: str
+    event_id: int
+    event_type: str
+    handled: bool
+
+
+class MfTransactionReplayResponse(BaseModel):
+    expired_checkouts: Optional[int] = None
+    processed: Optional[int] = None
+    replayed: Optional[int] = None
+
+
+class MfIntegrationEnvironmentUpdateRequest(BaseModel):
+    environment: Literal["test", "live"]
+
+
+class MfIntegrationProviderResponse(BaseModel):
+    id: Literal["finprim", "cybrilla", "kyckart"]
+    active_environment: Literal["test", "live"]
+    active_configured: bool
+    profiles: dict[str, dict[str, Any]]
+    notes: list[str] = Field(default_factory=list)
+
+
+class MfIntegrationsListResponse(BaseModel):
+    items: list[MfIntegrationProviderResponse]
+
+
+class AdminInvitationResponse(BaseModel):
+    id: UUID
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role_key: str
+    role_name: Optional[str] = None
+    status: str
+    invited_by: Optional[UUID] = None
+    inviter_name: Optional[str] = None
+    accepted_user_id: Optional[UUID] = None
+    expires_at: datetime
+    accepted_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminInvitationListResponse(BaseModel):
+    items: list[AdminInvitationResponse]
+
+
+class CreateAdminInvitationRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+    role_key: str = Field(min_length=2, max_length=64)
+    first_name: Optional[str] = Field(default=None, max_length=50)
+    last_name: Optional[str] = Field(default=None, max_length=50)

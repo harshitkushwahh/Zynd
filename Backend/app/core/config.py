@@ -161,6 +161,7 @@ class Settings(BaseSettings):
     webauthn_rp_id: str = ""
     webauthn_origins: str = ""
     refresh_cookie_name: str = "zynd_refresh_token"
+    refresh_cookie_name_admin: str = "zynd_admin_refresh_token"
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: str = "lax"
 
@@ -223,18 +224,48 @@ class Settings(BaseSettings):
     kyc_provider_mode: Literal["auto", "stub", "live"] = "auto"
     kyckart_base_url: str = ""
     kyckart_api_key: str = ""
+    kyckart_base_url_test: str = ""
+    kyckart_api_key_test: str = ""
+    kyckart_base_url_live: str = ""
+    kyckart_api_key_live: str = ""
     kyckart_bank_verification_path: str = "/api/bank/pennyLessV4"
     fp_poa_token_base_url: str = ""
     fp_poa_client_id: str = ""
     fp_poa_client_secret: str = ""
     fp_poa_base_url: str = "https://api.cybrilla.com"
     fp_poa_auth_tenant: str = "cybrillapoa"
+    fp_poa_token_base_url_test: str = ""
+    fp_poa_client_id_test: str = ""
+    fp_poa_client_secret_test: str = ""
+    fp_poa_base_url_test: str = ""
+    fp_poa_auth_tenant_test: str = ""
+    fp_poa_token_base_url_live: str = ""
+    fp_poa_client_id_live: str = ""
+    fp_poa_client_secret_live: str = ""
+    fp_poa_base_url_live: str = ""
+    fp_poa_auth_tenant_live: str = ""
     fp_base_url: str = ""
     fp_tenant: str = ""
     fp_client_id: str = ""
     fp_client_secret: str = ""
+    fp_base_url_test: str = ""
+    fp_tenant_test: str = ""
+    fp_client_id_test: str = ""
+    fp_client_secret_test: str = ""
+    fp_webhook_secret_test: str = ""
+    fp_webhook_callback_url_test: str = ""
+    digilocker_fp_tenant_test: str = ""
+    fp_base_url_live: str = ""
+    fp_tenant_live: str = ""
+    fp_client_id_live: str = ""
+    fp_client_secret_live: str = ""
+    fp_webhook_secret_live: str = ""
+    fp_webhook_callback_url_live: str = ""
+    digilocker_fp_tenant_live: str = ""
     fp_enabled: bool = False
     fp_token_cache_minutes: int = 25
+    fp_webhook_secret: str = ""
+    fp_webhook_callback_url: str = ""
     digilocker_fp_tenant: str = ""
     kyc_digilocker_callback_url: str = ""
     kyc_proof_callback_url: str = ""
@@ -330,6 +361,8 @@ class Settings(BaseSettings):
     zynd_mf_amfi_scheme_master_cron: str = "1 21 * * *"
     zynd_mf_return_calculator_enabled: bool = True
     zynd_mf_return_calculator_cron: str = "5 22 * * *"
+    zynd_mf_calculators_enabled: bool = True
+    zynd_mf_compare_enabled: bool = True
     zynd_mf_amc_aum_rank_enabled: bool = True
     zynd_mf_amc_aum_rank_cron: str = "0 10 2 * *"
     zynd_mf_compliance_sync_enabled: bool = True
@@ -341,8 +374,25 @@ class Settings(BaseSettings):
     zynd_mf_orders_enabled: bool = True
     zynd_mf_order_worker_tick_seconds: int = 30
     zynd_mf_order_worker_batch_size: int = 20
+    zynd_mf_mandate_sync_interval_seconds: int = 300
     zynd_mf_order_status_sync_enabled: bool = True
     zynd_mf_order_payment_gateway: str = "ondc"
+    zynd_mf_cart_max_items: int = 10
+    zynd_mf_sip_enabled: bool = True
+    zynd_mf_mandate_provider: str = "CYBRILLAPOA"
+    zynd_mf_sip_default_mandate_limit_inr: int = 15_000
+    zynd_mf_sip_default_monthly_installments: int = 360
+    zynd_mf_sip_default_daily_installments: int = 365
+    zynd_mf_payment_expiry_minutes: int = 1440
+    zynd_mf_stuck_transaction_minutes: int = 60
+    zynd_mf_worker_max_transient_retries: int = 5
+    zynd_mf_webhook_replay_enabled: bool = True
+    zynd_mf_webhook_replay_batch_size: int = 10
+    zynd_mf_payment_postback_url: str = ""
+    zynd_mf_payment_postback_path: str = "/dashboard/mutual-funds/orders/payment-return"
+    zynd_mf_sip_mandate_postback_path: str = "/dashboard/mutual-funds/sip/mandate-return"
+    zynd_investor_provision_enabled: bool = True
+    zynd_investor_provision_batch_size: int = 10
     zynd_mf_cas_enabled: bool = False
     zynd_mf_central_base_url: str = ""
     zynd_mf_central_api_key: str = ""
@@ -355,30 +405,49 @@ class Settings(BaseSettings):
 
     @property
     def resolved_fp_enabled(self) -> bool:
-        if not self.fp_enabled:
-            return False
-        return bool(
-            self.fp_base_url.strip()
-            and self.fp_tenant.strip()
-            and self.fp_client_id.strip()
-            and self.fp_client_secret.strip()
-        )
+        from app.application.integrations.integration_runtime import is_finprim_enabled
+
+        return is_finprim_enabled()
 
     @property
     def resolved_kyc_provider_live(self) -> bool:
-        if self.kyc_provider_mode == "stub":
-            return False
-        if self.kyc_provider_mode == "live":
-            return True
-        return bool(
-            self.kyckart_api_key.strip()
-            and self.fp_client_id.strip()
-            and self.fp_client_secret.strip()
-        )
+        from app.application.integrations.integration_runtime import is_kyckart_live
+
+        return is_kyckart_live()
+
+    @property
+    def resolved_mf_payment_postback_url(self) -> str:
+        if self.zynd_mf_payment_postback_url.strip():
+            return self.zynd_mf_payment_postback_url.rstrip("/")
+        return f"{self.frontend_url.rstrip('/')}{self.zynd_mf_payment_postback_path}"
+
+    @property
+    def resolved_mf_sip_mandate_postback_url(self) -> str:
+        if self.zynd_mf_payment_postback_url.strip():
+            return self.zynd_mf_payment_postback_url.rstrip("/")
+        return f"{self.frontend_url.rstrip('/')}{self.zynd_mf_sip_mandate_postback_path}"
+
+    @property
+    def resolved_fp_webhook_verify_enabled(self) -> bool:
+        from app.application.integrations.integration_runtime import get_finprim_runtime
+
+        return bool(get_finprim_runtime().webhook_secret.strip())
+
+    @property
+    def resolved_fp_webhook_callback_url(self) -> str:
+        from app.application.integrations.integration_runtime import get_finprim_runtime
+
+        callback_url = get_finprim_runtime().webhook_callback_url.strip()
+        if callback_url:
+            return callback_url.rstrip("/")
+        return f"{self.resolved_api_public_url}/webhooks/finprim"
 
     @property
     def resolved_digilocker_fp_tenant(self) -> str:
-        return self.digilocker_fp_tenant.strip() or self.fp_tenant.strip()
+        from app.application.integrations.integration_runtime import get_finprim_runtime
+
+        runtime = get_finprim_runtime()
+        return runtime.digilocker_tenant.strip() or runtime.tenant.strip()
 
     @property
     def resolved_kyc_digilocker_callback_url(self) -> str:

@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import {
   formatInr,
@@ -14,12 +15,13 @@ import {
 import {
   MF_CARD_RADIUS_CLASS,
   MF_FUND_CARD_HOVER_CLASS,
+  MF_FUNDS_GRID_CLASS,
 } from "@/features/invest/lib/mf-ui";
 import { cn } from "@/lib/utils";
 
 type MfFundCardProps = {
   fund: InvestFundSummary;
-  onSelect: (productId: string) => void;
+  onSelect: (fund: InvestFundSummary) => void;
   className?: string;
 };
 
@@ -103,15 +105,15 @@ export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(fund.product_id)}
+      onClick={() => onSelect(fund)}
       className={cn("group min-w-0 max-w-full text-left", className)}
     >
       <Card
         className={cn(
           MF_CARD_RADIUS_CLASS,
-          "h-full min-w-0 overflow-hidden border border-border/50 bg-card ring-0 shadow-none transition-colors duration-200",
+          "h-full min-w-0 overflow-hidden border border-zinc-200 bg-card ring-0 shadow-none transition-colors duration-200 dark:border-zinc-600/80",
           MF_FUND_CARD_HOVER_CLASS,
-          "hover:border-border/80",
+          "hover:border-zinc-300 dark:hover:border-zinc-500",
         )}
       >
         <CardContent className="flex h-full min-w-0 flex-col gap-3 p-4">
@@ -171,5 +173,67 @@ export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
         </CardContent>
       </Card>
     </button>
+  );
+}
+
+const MF_FUND_CARD_BORDER_CLASS =
+  "border border-zinc-200 dark:border-zinc-600/80";
+
+export function MfFundCardSkeleton({ className }: { className?: string }) {
+  return (
+    <div aria-hidden="true" className={cn("min-w-0 max-w-full", className)}>
+      <Card
+        className={cn(
+          MF_CARD_RADIUS_CLASS,
+          "h-full min-w-0 overflow-hidden bg-card ring-0 shadow-none",
+          MF_FUND_CARD_BORDER_CLASS,
+        )}
+      >
+        <CardContent className="flex h-full min-w-0 flex-col gap-3 p-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <Skeleton className="size-11 shrink-0 rounded-[var(--radius-control)]" />
+            <div className="relative min-w-0 flex-1 space-y-2">
+              <Skeleton className="ml-auto h-5 w-14 rounded-[var(--radius-control)]" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-[88%]" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </div>
+
+          <div className="mt-auto min-w-0">
+            <div
+              className={cn(
+                "grid min-w-0 grid-cols-2 gap-3 rounded-[var(--radius-card)] border border-border/50 bg-muted/10 px-3 py-3",
+              )}
+            >
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+              <div className="space-y-2 text-right">
+                <Skeleton className="ml-auto h-3 w-12" />
+                <Skeleton className="ml-auto h-4 w-14" />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export function MfFundCardSkeletonGrid({
+  count = 5,
+  className,
+}: {
+  count?: number;
+  className?: string;
+}) {
+  return (
+    <div className={cn(MF_FUNDS_GRID_CLASS, className)}>
+      {Array.from({ length: count }).map((_, index) => (
+        <MfFundCardSkeleton key={index} />
+      ))}
+    </div>
   );
 }

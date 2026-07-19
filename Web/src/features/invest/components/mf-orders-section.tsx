@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
-import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { fetchMfOrders, type MfOrder } from "@/features/invest/api/invest-api";
 import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
@@ -64,8 +63,6 @@ export function MfOrdersSection() {
 
   return (
     <div className="space-y-6">
-      <FundEligibilityBanner />
-
       <Card>
         <CardHeader>
           <CardTitle>{copy.mutualFunds.ordersTitle}</CardTitle>

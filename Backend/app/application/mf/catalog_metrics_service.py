@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_health_service import get_catalog_health
 from app.application.mf.invest_catalog_cache import get_invest_cache_stats
+from app.application.mf.mf_transaction_ops_service import get_transaction_overview
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
     IngestionRunLog,
@@ -70,6 +71,8 @@ async def collect_catalog_prometheus_stats(session: AsyncSession) -> dict[str, f
 
     zero_active_alert = 1 if active_products == 0 and total_products > 0 else 0
 
+    tx_overview = await get_transaction_overview(session)
+
     return {
         "active_products": active_products,
         "total_products": total_products,
@@ -82,4 +85,10 @@ async def collect_catalog_prometheus_stats(session: AsyncSession) -> dict[str, f
         "cache_hit_rate": hit_rate,
         "zero_active_funds_alert": zero_active_alert,
         "catalog_health_gates_enabled": 1 if settings.zynd_mf_catalog_health_gates_enabled else 0,
+        "stuck_orders": tx_overview["stuck_orders"],
+        "stuck_checkouts": tx_overview["stuck_checkouts"],
+        "stuck_mandates": tx_overview["stuck_mandates"],
+        "stuck_sip_plans": tx_overview["stuck_sip_plans"],
+        "failed_orders_24h": tx_overview["failed_orders_24h"],
+        "failed_webhooks_24h": tx_overview["failed_webhooks_24h"],
     }

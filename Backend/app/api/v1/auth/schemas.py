@@ -391,6 +391,24 @@ class OAuthDisconnectRequest(BaseModel):
 LoginFlowResponse = Union[AuthResponse, MfaRequiredResponse, OAuthLinkRequiredResponse]
 
 
+class AdminInviteValidateResponse(BaseModel):
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role_key: str
+    role_name: Optional[str] = None
+    inviter_name: Optional[str] = None
+    expires_at: datetime
+
+
+class AdminInviteAcceptRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    first_name: str = Field(min_length=1, max_length=50)
+    last_name: Optional[str] = Field(default=None, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+    device_fingerprint: str = Field(default="admin-console", min_length=4, max_length=128)
+
+
 class OkResponse(BaseModel):
     ok: bool = True
 

@@ -1,30 +1,70 @@
 "use client";
 
-import { useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { getErrorMessage } from "@/lib/errors";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ExternalLink,
+  FileSearch,
+  FileText,
+  ShieldCheck,
+} from "lucide-react";
+
+import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminProfilePageSkeleton } from "@/components/ui/admin-skeletons";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { documentReviewStatusVariant } from "@/components/users/user-status-badge";
+import { userInitials } from "@/lib/admin-capabilities";
+import { clientIdToProfilePath } from "@/lib/admin-user-ref";
 import {
   fetchAdminDocumentDownload,
   fetchAdminKycReview,
   rejectAdminKycDocument,
   verifyAdminDocument,
   verifyAdminUserKycDocuments,
+  type AdminKycDocument,
   type AdminKycReview,
 } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api-client";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return fallback;
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  aadhaar: "Aadhaar",
+  pan: "PAN card",
+  profile_image: "Profile photo",
+  bank_statement: "Bank statement",
+  signature: "Signature",
+  address_proof: "Address proof",
+  nominee_id: "Nominee ID",
+};
+
+
+function formatDocumentType(docType: string) {
+  return DOCUMENT_TYPE_LABELS[docType] ?? docType.replaceAll("_", " ");
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function isDocumentVerified(document: AdminKycDocument) {
+  const status = (document.kyc_review_status ?? document.status ?? "").toLowerCase();
+  return status === "verified" || status === "approved";
+}
+
+function userProfileHref(clientId: string) {
+  return `/dashboard/users/${encodeURIComponent(clientIdToProfilePath(clientId))}`;
 }
 
 type AdminKycReviewPanelProps = {
@@ -32,21 +72,63 @@ type AdminKycReviewPanelProps = {
   hasVerify: boolean;
 };
 
+function KycLookupEmptyState() {
+  return (
+    <div className="flex flex-col items-center px-6 py-empty-state-xl text-center">
+      <div className="rounded-full bg-muted/40 p-3 text-muted-foreground">
+        <FileSearch className="size-6" strokeWidth={2} />
+      </div>
+      <p className="mt-4 font-medium text-foreground">Look up a customer</p>
+      <p className="mt-1 max-w-md text-caption leading-relaxed text-muted-foreground">
+        Enter a client ID or user reference to load uploaded KYC documents for preview,
+        verification, or rejection.
+      </p>
+    </div>
+  );
+}
+
+function KycDocumentsEmptyState() {
+  return (
+    <div className="flex flex-col items-center px-6 py-empty-state-lg text-center">
+      <div className="rounded-full bg-muted/40 p-3 text-muted-foreground">
+        <FileText className="size-6" strokeWidth={2} />
+      </div>
+      <p className="mt-4 font-medium text-foreground">No documents uploaded</p>
+      <p className="mt-1 max-w-sm text-caption leading-relaxed text-muted-foreground">
+        Uploaded identity, address, and bank proofs will appear here once the customer
+        submits them.
+      </p>
+    </div>
+  );
+}
+
 export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPanelProps) {
-  const [userId, setUserId] = useState("");
+  const [userRef, setUserRef] = useState("");
   const [review, setReview] = useState<AdminKycReview | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const documentStats = useMemo(() => {
+    if (!review) return null;
+    const verified = review.documents.filter(isDocumentVerified).length;
+    const pending = review.documents.length - verified;
+    return {
+      total: review.documents.length,
+      pending,
+      verified,
+    };
+  }, [review]);
+
   const loadReview = async () => {
-    if (!userId.trim()) return;
+    const query = userRef.trim();
+    if (!query) return;
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      const payload = await fetchAdminKycReview(userId.trim());
+      const payload = await fetchAdminKycReview(query);
       setReview(payload);
       setMessage("KYC review loaded.");
     } catch (err) {
@@ -116,66 +198,149 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>KYC document review</CardTitle>
-        <CardDescription>
-          Review user KYC uploads by client ID, preview files, and approve or reject.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Input
-            placeholder="User UUID"
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
+    <div className="space-y-4">
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <AdminSectionTitle variant="section">
+          KYC document review
+        </AdminSectionTitle>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <AdminSearchInput
+            containerClassName="max-w-sm sm:w-56"
+            placeholder="Client ID or user reference"
+            value={userRef}
+            onChange={(event) => setUserRef(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && userRef.trim()) {
+                void loadReview();
+              }
+            }}
           />
-          <Button variant="outline" disabled={loading || !userId.trim()} onClick={() => void loadReview()}>
-            {loading ? "Loading..." : "Load KYC"}
+          <Button
+            disabled={loading || !userRef.trim()}
+            onClick={() => void loadReview()}
+          >
+            {loading ? "Loading..." : "Load review"}
           </Button>
+          {review ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReview(null);
+                setUserRef("");
+                setMessage("");
+                setError("");
+              }}
+            >
+              Clear
+            </Button>
+          ) : null}
         </div>
+      </div>
 
-        {error ? <p className="text-compact text-destructive">{error}</p> : null}
-        {message ? <p className="text-compact text-muted-foreground">{message}</p> : null}
-
-        {review ? (
-          <div className="space-y-4 border-t border-border pt-4">
-            <div>
-              <p className="font-medium text-foreground">{review.email}</p>
-              <p className="text-caption text-muted-foreground">
-                Client ID: {review.client_id}
-              </p>
+      {loading ? (
+        <AdminProfilePageSkeleton />
+      ) : review ? (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar className="size-11 border border-border">
+                <AvatarFallback className="bg-primary/10 text-primary">
+                  {userInitials(review.email)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">{review.email}</p>
+                <p className="mt-0.5 truncate text-caption text-muted-foreground">
+                  Client ID: {review.client_id}
+                </p>
+                <Link
+                  href={userProfileHref(review.client_id)}
+                  className="mt-1 inline-flex items-center gap-1 text-caption text-primary hover:underline"
+                >
+                  Open full profile
+                  <ExternalLink className="size-3" />
+                </Link>
+              </div>
             </div>
 
-            {hasVerify ? (
+            {hasVerify && review.documents.length > 0 ? (
               <Button
                 size="sm"
                 disabled={actionLoading === "verify-all"}
                 onClick={() => void handleVerifyAll()}
               >
-                Verify all KYC documents
+                <ShieldCheck className="size-3.5" />
+                {actionLoading === "verify-all" ? "Verifying..." : "Verify all documents"}
               </Button>
             ) : null}
+          </div>
 
-            <div className="space-y-3">
-              {review.documents.length === 0 ? (
-                <p className="text-compact text-muted-foreground">No KYC documents uploaded.</p>
-              ) : (
-                review.documents.map((document) => (
-                  <div
-                    key={document.id}
-                    className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-border p-4 md:flex-row md:items-center md:justify-between"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {document.doc_type} · v{document.version}
-                      </p>
-                      <p className="text-caption text-muted-foreground">
-                        {document.kyc_review_status ?? "n/a"} · {document.status} ·{" "}
-                        {document.original_filename}
-                      </p>
+          {documentStats ? (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <AdminMetricCard
+                label="Uploaded documents"
+                value={documentStats.total}
+                icon={FileText}
+                tone="info"
+              />
+              <AdminMetricCard
+                label="Pending review"
+                value={documentStats.pending}
+                icon={FileSearch}
+                tone={documentStats.pending > 0 ? "warning" : "default"}
+              />
+              <AdminMetricCard
+                label="Verified"
+                value={documentStats.verified}
+                icon={ShieldCheck}
+                tone="success"
+              />
+            </div>
+          ) : null}
+
+          {review.documents.length === 0 ? (
+            <KycDocumentsEmptyState />
+          ) : (
+            <div className="grid gap-3">
+              {review.documents.map((document) => (
+                <article
+                  key={document.id}
+                  className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-border bg-muted/10 p-4 lg:flex-row lg:items-center lg:justify-between"
+                >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="rounded-[var(--radius-control)] bg-background p-2 text-primary ring-1 ring-border">
+                        <FileText className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-foreground">
+                            {formatDocumentType(document.doc_type)}
+                          </p>
+                          <StatusBadge variant="neutral" showIcon={false}>
+                            v{document.version}
+                          </StatusBadge>
+                          <StatusBadge
+                            variant={documentReviewStatusVariant(
+                              document.kyc_review_status ?? document.status ?? "",
+                            )}
+                          >
+                            {document.kyc_review_status ?? document.status}
+                          </StatusBadge>
+                        </div>
+                        <p className="mt-1 truncate text-caption text-muted-foreground">
+                          {document.original_filename}
+                        </p>
+                        <p className="mt-1 text-caption text-muted-foreground">
+                          {document.mime_type} · Uploaded {formatDateTime(document.created_at)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
                       {hasDownload ? (
                         <Button
                           size="sm"
@@ -190,7 +355,10 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
                         <>
                           <Button
                             size="sm"
-                            disabled={actionLoading === `verify-${document.id}`}
+                            disabled={
+                              actionLoading === `verify-${document.id}` ||
+                              isDocumentVerified(document)
+                            }
                             onClick={() => void handleVerify(document.id)}
                           >
                             Verify
@@ -206,13 +374,14 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
                         </>
                       ) : null}
                     </div>
-                  </div>
-                ))
-              )}
+                  </article>
+                ))}
             </div>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+          )}
+        </div>
+      ) : (
+        <KycLookupEmptyState />
+      )}
+    </div>
   );
 }

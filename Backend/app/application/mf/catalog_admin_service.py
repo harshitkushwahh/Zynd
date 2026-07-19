@@ -161,6 +161,60 @@ async def list_categories_admin(session: AsyncSession) -> list[dict]:
     ]
 
 
+def _fund_list_ids_query():
+    return (
+        select(MutualFund.id, MutualFund.scheme_name)
+        .select_from(MutualFund)
+        .outerjoin(Product, Product.id == MutualFund.product_id)
+        .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+        .outerjoin(ProductCategory, ProductCategory.product_id == Product.id)
+        .outerjoin(Category, Category.id == ProductCategory.category_id)
+    )
+
+
+def _apply_fund_list_filters(
+    stmt,
+    *,
+    q: str | None = None,
+    amc_id: int | None = None,
+    category_slug: str | None = None,
+    lifecycle_status: str | None = None,
+    fund_active: bool | None = None,
+    amc_empanelled: bool | None = None,
+    purchasable: bool | None = None,
+):
+    if q:
+        pattern = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                MutualFund.scheme_name.ilike(pattern),
+                MutualFund.isin_growth.ilike(pattern),
+                Product.name.ilike(pattern),
+            )
+        )
+    if amc_id is not None:
+        stmt = stmt.where(MutualFund.amc_id == amc_id)
+    if category_slug:
+        stmt = stmt.where(Category.slug == category_slug)
+    if lifecycle_status:
+        stmt = stmt.where(Product.lifecycle_status == lifecycle_status)
+    if fund_active is not None:
+        stmt = stmt.where(MutualFund.is_active.is_(fund_active))
+    if amc_empanelled is not None:
+        stmt = stmt.where(FundAmc.is_active.is_(amc_empanelled))
+    if purchasable is not None:
+        if purchasable:
+            stmt = stmt.where(MutualFund.fp_oms_purchase_allowed.is_(True))
+        else:
+            stmt = stmt.where(
+                or_(
+                    MutualFund.fp_oms_purchase_allowed.is_(False),
+                    MutualFund.fp_oms_purchase_allowed.is_(None),
+                )
+            )
+    return stmt
+
+
 def _fund_list_base_query():
     return (
         select(
@@ -202,61 +256,63 @@ async def list_funds_admin(
     page_size = min(max(page_size, 1), 200)
     offset = (page - 1) * page_size
 
-    base = _fund_list_base_query()
-    if q:
-        pattern = f"%{q.strip()}%"
-        base = base.where(
-            or_(
-                MutualFund.scheme_name.ilike(pattern),
-                MutualFund.isin_growth.ilike(pattern),
-                Product.name.ilike(pattern),
-            )
-        )
-    if amc_id is not None:
-        base = base.where(MutualFund.amc_id == amc_id)
-    if category_slug:
-        base = base.where(Category.slug == category_slug)
-    if lifecycle_status:
-        base = base.where(Product.lifecycle_status == lifecycle_status)
-    if fund_active is not None:
-        base = base.where(MutualFund.is_active.is_(fund_active))
-    if amc_empanelled is not None:
-        base = base.where(FundAmc.is_active.is_(amc_empanelled))
-    if purchasable is not None:
-        if purchasable:
-            base = base.where(MutualFund.fp_oms_purchase_allowed.is_(True))
-        else:
-            base = base.where(
-                or_(
-                    MutualFund.fp_oms_purchase_allowed.is_(False),
-                    MutualFund.fp_oms_purchase_allowed.is_(None),
-                )
-            )
+    filter_kwargs = {
+        "q": q,
+        "amc_id": amc_id,
+        "category_slug": category_slug,
+        "lifecycle_status": lifecycle_status,
+        "fund_active": fund_active,
+        "amc_empanelled": amc_empanelled,
+        "purchasable": purchasable,
+    }
 
-    count_stmt = select(func.count()).select_from(base.subquery())
-    total = int(await session.scalar(count_stmt) or 0)
+    grouped_ids = _apply_fund_list_filters(_fund_list_ids_query(), **filter_kwargs).group_by(
+        MutualFund.id,
+        MutualFund.scheme_name,
+    )
+    total = int(await session.scalar(select(func.count()).select_from(grouped_ids.subquery())) or 0)
+
+    id_rows = (
+        await session.execute(
+            grouped_ids.order_by(MutualFund.scheme_name).offset(offset).limit(page_size)
+        )
+    ).all()
+    fund_ids = [row[0] for row in id_rows]
+
+    if not fund_ids:
+        return {
+            "items": [],
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "has_more": offset < total,
+        }
 
     rows = (
         await session.execute(
-            base.order_by(MutualFund.scheme_name).offset(offset).limit(page_size)
+            _apply_fund_list_filters(_fund_list_base_query(), **filter_kwargs)
+            .where(MutualFund.id.in_(fund_ids))
+            .order_by(MutualFund.scheme_name, MutualFund.id)
         )
     ).all()
 
     settings = get_settings()
-    items = []
+    items_by_id: dict[int, dict] = {}
     for fund, product, amc, category_slug_val, category_name, return_3y, rank_position in rows:
-        items.append(
-            _serialize_fund_row(
-                fund,
-                product,
-                amc,
-                category_slug=category_slug_val,
-                category_name=category_name,
-                return_3y=return_3y,
-                rank_position=rank_position,
-                settings=settings,
-            )
+        if fund.id in items_by_id:
+            continue
+        items_by_id[fund.id] = _serialize_fund_row(
+            fund,
+            product,
+            amc,
+            category_slug=category_slug_val,
+            category_name=category_name,
+            return_3y=return_3y,
+            rank_position=rank_position,
+            settings=settings,
         )
+
+    items = [items_by_id[fund_id] for fund_id in fund_ids if fund_id in items_by_id]
 
     return {
         "items": items,

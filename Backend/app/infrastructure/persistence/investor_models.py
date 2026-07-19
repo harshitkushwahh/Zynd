@@ -61,6 +61,13 @@ class InvestorObjectSource(str, enum.Enum):
     cybrilla = "cybrilla"
 
 
+class InvestorBankVerificationStatus(str, enum.Enum):
+    pending = "pending"
+    verified = "verified"
+    manual_required = "manual_required"
+    failed = "failed"
+
+
 class InvestorProfile(Base):
     """One Cybrilla investor profile per Zynd user (invp_*)."""
 
@@ -155,6 +162,17 @@ class InvestorBankAccount(Base):
     bank_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     branch_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     cancelled_cheque_file_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    poa_preverify_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    pan_account_holder_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    verification_status: Mapped[InvestorBankVerificationStatus] = mapped_column(
+        Enum(InvestorBankVerificationStatus),
+        default=InvestorBankVerificationStatus.pending,
+        nullable=False,
+    )
+    verification_failure_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    account_number_ciphertext: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    account_number_key_version: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     failure_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     external_payload_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

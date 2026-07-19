@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, Star, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ListFilter, Star, Trash2 } from "lucide-react";
+import { getErrorMessage } from "@/lib/errors";
 
+import { AdminConfirmDialog, AdminFormDialog } from "@/components/ui/admin-dialog-presets";
 import { Button } from "@/components/ui/button";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
@@ -18,11 +22,49 @@ import {
   type MfCategoryAdmin,
   type MfCategoryFundCuration,
 } from "@/lib/mf-admin-api";
+import { cn } from "@/lib/utils";
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return fallback;
+
+type ConfirmState =
+  | { kind: "remove-fund"; productId: string; schemeName: string }
+  | { kind: "toggle-visible" }
+  | { kind: "bulk-add"; amcName: string };
+
+export function CategoryCurationDialog({
+  open,
+  category,
+  amcs,
+  canManage,
+  onClose,
+  onUpdated,
+}: {
+  open: boolean;
+  category: MfCategoryAdmin;
+  amcs: MfAmc[];
+  canManage: boolean;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  return (
+    <AdminFormDialog
+      open={open}
+      onClose={onClose}
+      title={`${category.name} curation`}
+      description="Per-category sort order and featured flags drive the public invest catalog."
+      icon={ListFilter}
+      iconTone="info"
+      size="xl"
+      bodyClassName="max-h-dialog-body-detail"
+    >
+      <CategoryCurationPanel
+        category={category}
+        amcs={amcs}
+        canManage={canManage}
+        embedded
+        onUpdated={onUpdated}
+      />
+    </AdminFormDialog>
+  );
 }
 
 export function CategoryCurationPanel({
@@ -30,11 +72,13 @@ export function CategoryCurationPanel({
   amcs,
   canManage,
   onUpdated,
+  embedded = false,
 }: {
   category: MfCategoryAdmin;
   amcs: MfAmc[];
   canManage: boolean;
   onUpdated: () => void;
+  embedded?: boolean;
 }) {
   const [items, setItems] = useState<MfCategoryFundCuration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +87,7 @@ export function CategoryCurationPanel({
   const [message, setMessage] = useState("");
   const [addProductId, setAddProductId] = useState("");
   const [bulkAmcId, setBulkAmcId] = useState("");
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
 
   const loadFunds = useCallback(async () => {
     setLoading(true);
@@ -147,6 +192,7 @@ export function CategoryCurationPanel({
       setError(getErrorMessage(err, "Could not remove fund."));
     } finally {
       setSaving(false);
+      setConfirmState(null);
     }
   };
 
@@ -158,11 +204,13 @@ export function CategoryCurationPanel({
       const result = await bulkAddAmcToCategory(category.slug, Number(bulkAmcId));
       setItems(result.category.items);
       setMessage(`Added ${result.added} funds from AMC.`);
+      setBulkAmcId("");
       onUpdated();
     } catch (err) {
       setError(getErrorMessage(err, "Could not bulk-add AMC funds."));
     } finally {
       setSaving(false);
+      setConfirmState(null);
     }
   };
 
@@ -177,20 +225,56 @@ export function CategoryCurationPanel({
       setError(getErrorMessage(err, "Could not update category."));
     } finally {
       setSaving(false);
+      setConfirmState(null);
     }
   };
 
-  return (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>{category.name} curation</CardTitle>
-        <CardDescription>
-          Per-category sort order and featured flags drive the public invest catalog.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error ? <p className="text-compact text-destructive">{error}</p> : null}
-        {message ? <p className="text-compact text-success">{message}</p> : null}
+  const runConfirmAction = () => {
+    if (!confirmState) return;
+    if (confirmState.kind === "remove-fund") {
+      void handleRemoveFund(confirmState.productId);
+      return;
+    }
+    if (confirmState.kind === "toggle-visible") {
+      void handleToggleVisible();
+      return;
+    }
+    if (confirmState.kind === "bulk-add") {
+      void handleBulkAddAmc();
+    }
+  };
+
+  const confirmCopy = (() => {
+    if (!confirmState) return null;
+    if (confirmState.kind === "remove-fund") {
+      return {
+        title: "Remove fund from category?",
+        description: `${confirmState.schemeName} will be removed from ${category.name}. This updates the public catalog immediately.`,
+        confirmLabel: "Remove fund",
+      };
+    }
+    if (confirmState.kind === "toggle-visible") {
+      return {
+        title: category.is_visible ? "Hide category?" : "Show category?",
+        description: category.is_visible
+          ? `${category.name} will be hidden from the public invest catalog.`
+          : `${category.name} will become visible on the public invest catalog.`,
+        confirmLabel: category.is_visible ? "Hide category" : "Show category",
+        destructive: category.is_visible,
+      };
+    }
+    return {
+      title: "Bulk add AMC funds?",
+      description: `All eligible funds from ${confirmState.amcName} will be added to ${category.name}.`,
+      confirmLabel: "Bulk add",
+      destructive: false,
+    };
+  })();
+
+  const content = (
+    <div className={cn("space-y-4", !embedded && "mt-6")}>
+        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
         <div className="flex flex-wrap gap-2">
           <span className="rounded-[var(--radius-control)] bg-muted px-2 py-1 text-caption">
@@ -200,7 +284,12 @@ export function CategoryCurationPanel({
             {category.is_visible ? "Visible" : "Hidden"}
           </span>
           {canManage ? (
-            <Button size="sm" variant="outline" disabled={saving} onClick={() => void handleToggleVisible()}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={saving}
+              onClick={() => setConfirmState({ kind: "toggle-visible" })}
+            >
               {category.is_visible ? "Hide category" : "Show category"}
             </Button>
           ) : null}
@@ -231,7 +320,15 @@ export function CategoryCurationPanel({
                   </option>
                 ))}
               </select>
-              <Button variant="outline" disabled={saving || !bulkAmcId} onClick={() => void handleBulkAddAmc()}>
+              <Button
+                variant="outline"
+                disabled={saving || !bulkAmcId}
+                onClick={() => {
+                  const amc = amcs.find((item) => String(item.id) === bulkAmcId);
+                  if (!amc) return;
+                  setConfirmState({ kind: "bulk-add", amcName: amc.name });
+                }}
+              >
                 Bulk add
               </Button>
             </div>
@@ -251,11 +348,7 @@ export function CategoryCurationPanel({
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={canManage ? 5 : 4} className="px-4 py-6 text-muted-foreground">
-                    Loading category funds...
-                  </td>
-                </tr>
+                <AdminTableSkeletonRows columns={canManage ? 5 : 4} rows={5} dense />
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={canManage ? 5 : 4} className="px-4 py-6 text-muted-foreground">
@@ -310,7 +403,13 @@ export function CategoryCurationPanel({
                             size="sm"
                             variant="outline"
                             disabled={saving}
-                            onClick={() => void handleRemoveFund(item.product_id)}
+                            onClick={() =>
+                              setConfirmState({
+                                kind: "remove-fund",
+                                productId: item.product_id,
+                                schemeName: item.scheme_name ?? item.product_id,
+                              })
+                            }
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -329,7 +428,33 @@ export function CategoryCurationPanel({
             Save featured ranks
           </Button>
         ) : null}
-      </CardContent>
+
+      {confirmCopy ? (
+        <AdminConfirmDialog
+          open
+          title={confirmCopy.title}
+          description={confirmCopy.description}
+          confirmLabel={confirmCopy.confirmLabel}
+          confirmVariant={confirmCopy.destructive ?? true ? "destructive" : "default"}
+          loading={saving}
+          onClose={() => setConfirmState(null)}
+          onConfirm={runConfirmAction}
+        />
+      ) : null}
+    </div>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{category.name} curation</CardTitle>
+        <CardDescription>
+          Per-category sort order and featured flags drive the public invest catalog.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }

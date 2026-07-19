@@ -12,12 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
-import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
   fetchExternalHoldings,
-  fetchInvestConfig,
-  requestCasImport,
-  type InvestConfig,
   type MfExternalHolding,
 } from "@/features/invest/api/invest-api";
 import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
@@ -47,22 +43,15 @@ function HoldingRow({ holding }: { holding: MfExternalHolding }) {
 
 export function MfHoldingsSection() {
   const [holdings, setHoldings] = useState<MfExternalHolding[]>([]);
-  const [config, setConfig] = useState<InvestConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   async function loadHoldings() {
     setLoading(true);
     setError(null);
     try {
-      const [holdingsResponse, investConfig] = await Promise.all([
-        fetchExternalHoldings(),
-        fetchInvestConfig(),
-      ]);
+      const holdingsResponse = await fetchExternalHoldings();
       setHoldings(holdingsResponse.external_holdings);
-      setConfig(investConfig);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.holdingsLoadError);
     } finally {
@@ -74,53 +63,21 @@ export function MfHoldingsSection() {
     void loadHoldings();
   }, []);
 
-  async function handleCasImport() {
-    setImporting(true);
-    setImportMessage(null);
-    try {
-      const result = await requestCasImport();
-      setImportMessage(
-        copy.mutualFunds.casImportRequested.replace("{status}", result.status.replaceAll("_", " ")),
-      );
-      await loadHoldings();
-    } catch (err) {
-      setImportMessage(err instanceof Error ? err.message : copy.mutualFunds.casImportFailed);
-    } finally {
-      setImporting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
-      <FundEligibilityBanner />
-
       <Card>
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle>{copy.mutualFunds.holdingsTitle}</CardTitle>
             <CardDescription>{copy.mutualFunds.holdingsDescription}</CardDescription>
           </div>
-          {config?.cas_enabled ? (
-            <Button variant="outline" disabled={importing} onClick={() => void handleCasImport()}>
-              {importing ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  {copy.mutualFunds.casImporting}
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="size-4" />
-                  {copy.mutualFunds.casImportCta}
-                </>
-              )}
-            </Button>
-          ) : null}
+          <Button variant="outline" disabled>
+            <RefreshCw className="size-4" />
+            {copy.mutualFunds.casImportCta}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!config?.cas_enabled ? (
-            <FieldMessage variant="info" message={copy.mutualFunds.casDisabled} />
-          ) : null}
-          {importMessage ? <FieldMessage variant="info" message={importMessage} /> : null}
+          <FieldMessage variant="info" message={copy.mutualFunds.casDisabled} />
           {loading ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />

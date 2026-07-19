@@ -39,6 +39,10 @@ Enforcement helper: `require_permission(key)` in `app/api/v1/auth/deps.py`
 | `mf.content.manage` | enforced | `PATCH /admin/mf/funds/{id}/content`, `PATCH /admin/mf/amcs/{id}/content`, `PATCH /admin/mf/compliance` | Display copy and compliance settings |
 | `mf.rules.manage` | enforced | `POST/PATCH /admin/mf/rules`, `POST /admin/mf/rules/preview` | Catalog automation rules |
 | `mf.catalog.publish` | enforced | `POST /admin/mf/rules/apply`, `POST /admin/mf/funds/bulk` | Apply rules and bulk catalog mutations |
+| `mf.transactions.read` | enforced | `GET /admin/mf/transactions/overview`, `GET /admin/mf/transactions/orders`, `GET /admin/mf/transactions/orders/{order_id}`, `GET /admin/mf/transactions/checkouts/{checkout_id}`, `GET /admin/mf/transactions/sip-plans/{plan_id}`, `GET /admin/mf/transactions/mandates/{mandate_id}`, `GET /admin/mf/transactions/webhooks` | MF payment ops read |
+| `mf.transactions.manage` | enforced | `POST /admin/mf/transactions/orders/{order_id}/sync`, `POST /admin/mf/transactions/sip-plans/{plan_id}/sync`, `POST /admin/mf/transactions/mandates/{mandate_id}/sync`, `POST /admin/mf/transactions/webhooks/{event_id}/replay`, `POST /admin/mf/transactions/expire-stale` | Reconcile, replay, expire |
+| `mf.integrations.read` | enforced | `GET /admin/mf/integrations` | View MF provider integration status |
+| `mf.integrations.manage` | enforced | `PATCH /admin/mf/integrations/{provider}/environment` | Switch provider test/live mode |
 
 ## Non-RBAC admin routes
 

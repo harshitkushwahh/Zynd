@@ -19,6 +19,7 @@ from app.application.mf.product_content_service import (
     get_product_content_for_invest,
     resolve_effective_disclaimer,
 )
+from app.application.mf.invest_fund_slug import fund_public_slug
 from app.application.mf.popular_funds_service import list_popular_invest_funds
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
@@ -397,6 +398,10 @@ async def get_invest_fund_detail(session: AsyncSession, product_id: uuid.UUID) -
         compliance=config,
     )
     payload["content"] = content
+    payload["slug"] = fund_public_slug(
+        name=product.name,
+        seo_slug=content.get("seo_slug"),
+    )
     payload["display"] = {
         "tagline": content.get("tagline"),
         "hero_badge": content.get("hero_badge"),
@@ -512,6 +517,7 @@ def get_invest_config_payload() -> dict:
         "distributor_euin": settings.zynd_distributor_euin or None,
         "disclaimer": settings.zynd_mf_invest_disclaimer,
         "orders_enabled": settings.zynd_mf_orders_enabled,
+        "sip_enabled": settings.zynd_mf_sip_enabled,
         "cas_enabled": settings.zynd_mf_cas_enabled,
     }
 
@@ -524,6 +530,7 @@ async def get_invest_config(session: AsyncSession) -> dict:
         "distributor_euin": compliance["distributor_euin"],
         "disclaimer": compliance["default_disclaimer"],
         "orders_enabled": settings.zynd_mf_orders_enabled,
+        "sip_enabled": settings.zynd_mf_sip_enabled,
         "cas_enabled": settings.zynd_mf_cas_enabled,
     }
 
@@ -579,4 +586,8 @@ def _serialize_fund_summary(
             "hero_badge": display_content.hero_badge,
             "risk_label": display_content.risk_label,
         }
+    payload["slug"] = fund_public_slug(
+        name=product.name,
+        seo_slug=display_content.seo_slug if display_content else None,
+    )
     return payload

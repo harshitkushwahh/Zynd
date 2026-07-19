@@ -2,12 +2,14 @@
 
 import { useMemo, useState, type RefObject } from "react";
 import type { SortDescriptor } from "react-aria-components";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Table, TableCard } from "@/components/core/table";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import { dedupeInvestFunds, displayCategoryLabel } from "@/features/invest/lib/mf-fund-ranking";
 import { formatSignedReturn, resolveInvestAssetUrl } from "@/features/invest/lib/mf-format";
+import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +20,9 @@ type MfFundsTableRow = InvestFundSummary & {
 type MfFundsTableProps = {
   funds: InvestFundSummary[];
   totalCount: number;
-  loading?: boolean;
+  refetching?: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
   className?: string;
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   loadMoreRef?: RefObject<HTMLDivElement | null>;
@@ -83,7 +87,9 @@ function ReturnCell({ value }: { value: number | null | undefined }) {
 export function MfFundsTable({
   funds,
   totalCount,
-  loading = false,
+  refetching = false,
+  loadingMore = false,
+  hasMore = false,
   className,
   scrollContainerRef,
   loadMoreRef,
@@ -127,16 +133,13 @@ export function MfFundsTable({
     <div className={cn("flex h-full min-h-0 flex-col overflow-hidden", className)}>
       <TableCard.Root
         size="sm"
-        className={cn(
-          "flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 shadow-none",
-          loading && "opacity-80",
-        )}
+        className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 shadow-none"
       >
         <div
           ref={scrollContainerRef}
           className={cn(
             "min-h-0 flex-1 overflow-auto overscroll-y-contain overscroll-x-auto",
-            loading && "pointer-events-none blur-[2px] opacity-80",
+            refetching && "pointer-events-none opacity-60",
           )}
         >
           <Table
@@ -190,26 +193,27 @@ export function MfFundsTable({
             </Table.Header>
 
             <Table.Body className="[&>tr:first-child>td]:border-t-0" items={sortedRows}>
-              {(fund) => (
+              {(fund) => {
+                function navigateToFund() {
+                  if (onRowClick) {
+                    onRowClick(fund);
+                    return;
+                  }
+                  router.push(mfFundHref(fund));
+                }
+
+                return (
                 <Table.Row
                   id={fund.tableId}
                   className={cn(
                     "cursor-pointer",
                     selectedProductId === fund.product_id && "bg-muted/50",
                   )}
-                  onClick={() => {
-                    if (onRowClick) {
-                      onRowClick(fund);
-                      return;
-                    }
-                    router.push(`/dashboard/mutual-funds/funds/${fund.product_id}`);
-                  }}
+                  onAction={navigateToFund}
                   onDoubleClick={() => {
                     if (onRowDoubleClick) {
                       onRowDoubleClick(fund);
-                      return;
                     }
-                    router.push(`/dashboard/mutual-funds/funds/${fund.product_id}`);
                   }}
                 >
                   <Table.Cell className={cn("align-top", COL_NAME, BODY_CELL_CLASS)}>
@@ -235,10 +239,27 @@ export function MfFundsTable({
                     <ReturnCell value={fund.returns.return_5y} />
                   </Table.Cell>
                 </Table.Row>
-              )}
+                );
+              }}
             </Table.Body>
           </Table>
-          <div ref={loadMoreRef} className="h-6 shrink-0" aria-hidden="true" />
+
+          {hasMore ? <div ref={loadMoreRef} className="h-px shrink-0" aria-hidden="true" /> : null}
+
+          {hasMore ? (
+            <div
+              className="flex h-12 shrink-0 items-center justify-center gap-2 border-t border-border text-caption text-muted-foreground"
+              aria-live="polite"
+              aria-busy={loadingMore}
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {copy.mutualFunds.loadingMore}
+                </>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </TableCard.Root>
     </div>

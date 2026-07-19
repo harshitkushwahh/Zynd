@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   CalendarClock,
   FileInput,
+  GitCompare,
   LineChart,
   Search,
   type LucideIcon,
@@ -20,12 +21,32 @@ import { cn } from "@/lib/utils";
 const TOOL_ICONS: Record<MfPopularTool["icon"], LucideIcon> = {
   cas: FileInput,
   screener: Search,
-  "high-return": LineChart,
-  "best-sip": CalendarClock,
+  compare: GitCompare,
+  "lumpsum-calc": LineChart,
+  "sip-calc": CalendarClock,
 };
 
 function ToolRow({ tool }: { tool: MfPopularTool }) {
   const Icon = TOOL_ICONS[tool.icon];
+
+  if (tool.disabled) {
+    return (
+      <div
+        aria-disabled="true"
+        className={cn(
+          "flex cursor-not-allowed items-center gap-3 rounded-[var(--radius-control)] border border-transparent px-2 py-2.5 opacity-50",
+        )}
+      >
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
+          <Icon className="size-4" strokeWidth={2.25} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-compact font-medium text-foreground">{tool.label}</p>
+          <p className="mt-0.5 truncate text-caption text-muted-foreground">{tool.description}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Link
