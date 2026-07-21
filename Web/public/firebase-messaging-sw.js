@@ -15,7 +15,7 @@ if (config.apiKey) {
 
     self.registration.showNotification(title, {
       body,
-      icon: "/favicon.ico",
+      icon: "/favicon/favicon.ico",
       data: {
         ...payload.data,
         web_url: targetUrl,
@@ -58,7 +58,7 @@ self.addEventListener("message", (event) => {
     event.waitUntil(
       self.registration.showNotification(title, {
         body,
-        icon: "/favicon.ico",
+        icon: "/favicon/favicon.ico",
         data: payload,
       }),
     );

@@ -495,6 +495,12 @@ export function removeMfCartItem(productId: string, investmentType: "lumpsum" | 
   });
 }
 
+export function clearMfCartTab(investmentType: "lumpsum" | "sip") {
+  return apiRequest<MfCart>(`/invest/cart/clear?investment_type=${investmentType}`, {
+    method: "DELETE",
+  });
+}
+
 export function checkoutMfCart(body: { idempotency_key: string; bank_account_id?: string }) {
   return apiRequest<MfCheckout>("/invest/cart/checkout", {
     method: "POST",

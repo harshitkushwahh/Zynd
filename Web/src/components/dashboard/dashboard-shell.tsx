@@ -12,8 +12,10 @@ import {
   DASHBOARD_INNER_GAP,
   DASHBOARD_MAIN_CONTENT_CLASS,
   DASHBOARD_MAIN_SCROLL_CLASS,
+  DASHBOARD_MAIN_TOP_OFFSET,
   DASHBOARD_SHELL_PADDING,
 } from "@/components/dashboard/dashboard-layout";
+import { cn } from "@/lib/utils";
 import { MfPaymentOverlayProvider } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { ProfileMenuShortcutListener } from "@/features/dashboard/navigation/profile-menu-shortcut-listener";
 import { ZyndPinLockScreen } from "@/features/account/pin";
@@ -25,7 +27,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { SettingsNavigationProvider } from "@/contexts/settings-navigation-context";
 import { copy } from "@/shared/config/copy";
 import { ZyndErrorBoundary } from "@/shared/components/zynd-error-boundary";
-import { cn } from "@/lib/utils";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -88,22 +89,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         <div
           className={cn(
-            "flex min-h-0 flex-1",
+            "flex min-h-0 flex-1 items-stretch",
             DASHBOARD_INNER_GAP,
-            "md:items-stretch"
           )}
         >
           <DashboardSidebar className="hidden md:flex" />
 
-          <div
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-              DASHBOARD_INNER_GAP
-            )}
-          >
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
             <DashboardNavbar />
 
-              <main className={DASHBOARD_MAIN_SCROLL_CLASS}>
+            <main className={cn(DASHBOARD_MAIN_SCROLL_CLASS, DASHBOARD_MAIN_TOP_OFFSET)}>
                 <div className={DASHBOARD_MAIN_CONTENT_CLASS}>
                   <ZyndErrorBoundary>{children}</ZyndErrorBoundary>
                 </div>

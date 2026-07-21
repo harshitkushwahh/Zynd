@@ -18,6 +18,10 @@ export type MfCollectionTheme = {
   footerClass: string;
   /** Optional illustration asset — when unset, a placeholder is shown. */
   illustrationSrc?: string | null;
+  /** Optional scale utility for the illustration image. */
+  illustrationScaleClass?: string;
+  /** Optional positioning overrides for the illustration slot. */
+  illustrationSlotClass?: string;
 };
 
 export type MfCollectionMeta = {
@@ -62,6 +66,7 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
       labelClass: "text-amber-50",
       borderClass: "border-amber-300/70 dark:border-amber-500/40",
       footerClass: "bg-gradient-to-t from-amber-950/80 via-amber-900/35 to-transparent",
+      illustrationSrc: "/gold.png",
     },
   },
   "large-cap": {
@@ -70,10 +75,13 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
     description: copy.mutualFunds.collectionDescLargeCap,
     theme: {
       cardClass:
-        "bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-blue-950/80",
+        "bg-[linear-gradient(145deg,#eef3f8_0%,#c2d0df_38%,#7691ab_72%,#425f79_100%)] dark:bg-[linear-gradient(145deg,#1a2430_0%,#2b3d52_38%,#456078_72%,#8ea8c0_100%)]",
       labelClass: "text-slate-50",
-      borderClass: "border-slate-200/90 dark:border-slate-600/50",
-      footerClass: "bg-gradient-to-t from-slate-950/70 via-slate-900/30 to-transparent",
+      borderClass: "border-slate-300/60 dark:border-slate-500/35",
+      footerClass: "bg-gradient-to-t from-slate-950/72 via-slate-900/28 to-transparent",
+      illustrationSrc: "/large.png",
+      illustrationScaleClass: "scale-[1.12] origin-bottom-right",
+      illustrationSlotClass: "top-5 right-3",
     },
   },
   "mid-cap": {
@@ -82,10 +90,13 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
     description: copy.mutualFunds.collectionDescMidCap,
     theme: {
       cardClass:
-        "bg-gradient-to-br from-teal-50 via-emerald-100 to-cyan-100 dark:from-teal-950 dark:via-emerald-900/70 dark:to-cyan-950/60",
-      labelClass: "text-teal-50",
-      borderClass: "border-teal-200/80 dark:border-teal-700/50",
-      footerClass: "bg-gradient-to-t from-teal-950/70 via-teal-900/30 to-transparent",
+        "bg-[linear-gradient(145deg,#edf2f4_0%,#c0cdd2_38%,#728a92_72%,#456068_100%)] dark:bg-[linear-gradient(145deg,#192226_0%,#293a40_38%,#456068_72%,#89a3aa_100%)]",
+      labelClass: "text-slate-50",
+      borderClass: "border-slate-300/60 dark:border-slate-500/35",
+      footerClass: "bg-gradient-to-t from-slate-950/72 via-slate-900/28 to-transparent",
+      illustrationSrc: "/mid.png",
+      illustrationScaleClass: "scale-[1.12] origin-bottom-right",
+      illustrationSlotClass: "top-5 right-3",
     },
   },
   "small-cap": {
@@ -94,10 +105,12 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
     description: copy.mutualFunds.collectionDescSmallCap,
     theme: {
       cardClass:
-        "bg-gradient-to-br from-violet-50 via-purple-100 to-fuchsia-100 dark:from-violet-950 dark:via-purple-900/70 dark:to-fuchsia-950/50",
-      labelClass: "text-violet-50",
-      borderClass: "border-violet-200/80 dark:border-violet-700/50",
-      footerClass: "bg-gradient-to-t from-violet-950/70 via-violet-900/30 to-transparent",
+        "bg-[linear-gradient(145deg,#f0f1f6_0%,#c5c9d8_38%,#80889f_72%,#4f566c_100%)] dark:bg-[linear-gradient(145deg,#1b1e28_0%,#2d3344_38%,#4f566c_72%,#939ab0_100%)]",
+      labelClass: "text-slate-50",
+      borderClass: "border-slate-300/60 dark:border-slate-500/35",
+      footerClass: "bg-gradient-to-t from-slate-950/72 via-slate-900/28 to-transparent",
+      illustrationSrc: "/small.png",
+      illustrationSlotClass: "top-5 right-3",
     },
   },
 };

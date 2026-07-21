@@ -7,6 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import {
+  MfFundCategoryBadge,
+  resolveMfFundCategoryKind,
+} from "@/features/invest/components/mf-fund-category-badge";
+import {
   formatInr,
   formatSignedReturn,
   healthBadgeLabel,
@@ -89,6 +93,7 @@ function FundMetric({
 export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
   const return3y = formatSignedReturn(fund.returns.return_3y);
   const categoryLabel = displayRiskLabel(fund);
+  const categoryKind = resolveMfFundCategoryKind(categoryLabel);
 
   const secondaryBadges = [
     fund.display?.hero_badge
@@ -122,15 +127,24 @@ export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
 
             <div className="relative min-w-0 flex-1 overflow-hidden">
               {categoryLabel ? (
-                <Badge
-                  variant="outline"
-                  className="absolute top-0 right-0 max-w-[5.5rem] truncate uppercase"
-                >
-                  {categoryLabel}
-                </Badge>
+                categoryKind ? (
+                  <MfFundCategoryBadge
+                    kind={categoryKind}
+                    label={categoryLabel}
+                    showLabel
+                    className="absolute top-0 right-0 max-w-[5.5rem]"
+                  />
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="absolute top-0 right-0 max-w-[5.5rem] truncate uppercase"
+                  >
+                    {categoryLabel}
+                  </Badge>
+                )
               ) : null}
 
-              <div className={cn("min-w-0", categoryLabel && "pr-[4.5rem]")}>
+              <div className={cn("min-w-0", categoryLabel && "pr-[4.75rem]")}>
                 <p className="line-clamp-2 break-words font-semibold leading-snug text-foreground">
                   {fund.name}
                 </p>

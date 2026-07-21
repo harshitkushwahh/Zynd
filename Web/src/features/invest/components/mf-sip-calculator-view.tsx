@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CalendarClock, Loader2, TrendingUp } from "lucide-react";
+import { CalendarClock, TrendingUp } from "lucide-react";
 
 import {
   Card,
@@ -23,6 +23,7 @@ import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculat
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
 import { MfSipProjectionChartPanel } from "@/features/invest/components/mf-sip-projection-chart";
+import { MfSipCalculatorResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
 import { formatDate, formatInr, formatReturn } from "@/features/invest/lib/mf-format";
 import {
@@ -410,14 +411,7 @@ export function MfSipCalculatorView() {
 
           {fund && error ? <FieldMessage variant="error" message={error} /> : null}
 
-          {fund && loading ? (
-            <Card className="h-full rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
-              <CardContent className="flex h-full min-h-full items-center justify-center gap-2 p-5 text-muted-foreground sm:p-6">
-                <Loader2 className="size-4 animate-spin" />
-                {copy.mutualFunds.calculatorLoading}
-              </CardContent>
-            </Card>
-          ) : null}
+          {fund && loading ? <MfSipCalculatorResultsSkeleton /> : null}
 
           {fund && hasResult && result ? <SipResultsCard result={result} projectedGain={projectedGain} /> : null}
         </div>

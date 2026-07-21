@@ -91,10 +91,14 @@ export function ConfirmDialog({
             <h3 className="mt-4 text-h4 font-semibold text-foreground">{title}</h3>
           ) : null}
 
+          {isInfo && title ? (
+            <h3 className="mt-4 text-body font-semibold text-foreground">{title}</h3>
+          ) : null}
+
           <p
             className={cn(
               "max-w-sm text-caption leading-relaxed text-muted-foreground",
-              isInfo ? "mt-4" : "mt-2"
+              isInfo ? (title ? "mt-2" : "mt-4") : "mt-2"
             )}
           >
             {description}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 
 import {
@@ -13,6 +13,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PaginationPageMinimalCenter } from "@/components/core/table";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
 import { fetchReferralList, type ReferralListItem } from "@/features/referral/api/referral-api";
 import { ReferralListRow } from "@/features/referral/components/referral-list-row";
@@ -92,33 +93,22 @@ export function ReferralYourReferralsPanel() {
     REFERRALS_PERIOD_OPTIONS.find((option) => option.value === period)?.label ??
     copy.referral.leaderboardPeriodThisMonth;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const list = await fetchReferralList();
-        if (!cancelled) {
-          setReferrals(list.items);
-        }
-      } catch {
-        if (!cancelled) {
-          setError(copy.referral.loadFailed);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+  const loadReferrals = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const list = await fetchReferralList();
+      setReferrals(list.items);
+    } catch {
+      setError(copy.referral.loadFailed);
+    } finally {
+      setLoading(false);
     }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    void loadReferrals();
+  }, [loadReferrals]);
 
   const periodReferrals = useMemo(
     () => filterReferralsByPeriod(referrals, period),
@@ -165,7 +155,7 @@ export function ReferralYourReferralsPanel() {
   };
   const hasNoReferrals = referrals.length === 0;
 
-  if (loading) {
+  if (loading && !error && referrals.length === 0) {
     return <ReferralYourReferralsSkeleton />;
   }
 
@@ -173,7 +163,19 @@ export function ReferralYourReferralsPanel() {
     return (
       <>
         <ReferralYourReferralsBreadcrumb />
-        <FieldMessage message={error} />
+        <LoadErrorCard
+          title={copy.referral.loadFailedTitle}
+          description={error}
+          retryLabel={copy.referral.retry}
+          retryLoading={loading}
+          onRetry={() => void loadReferrals()}
+          icon={Users}
+          backAction={
+            <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/referral" />}>
+              {referralRouteLabel}
+            </Button>
+          }
+        />
       </>
     );
   }

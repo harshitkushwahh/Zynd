@@ -201,6 +201,11 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
               hasMore={hasMore}
               scrollContainerRef={scrollContainerRef}
               loadMoreRef={loadMoreRef}
+              emptyDescription={
+                hasClientOnlyMfFundFilters(filters) && funds.length > 0
+                  ? copy.mutualFunds.allFundsEmptyFiltered
+                  : copy.mutualFunds.allFundsEmptyDescription
+              }
             />
           )}
         </div>

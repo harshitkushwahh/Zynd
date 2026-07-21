@@ -6,7 +6,7 @@ from uuid import UUID
 from decimal import Decimal
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,24 @@ from app.api.v1.invest.schemas import (
     InvestorBankAccountResponse,
     InvestorBankAccountVerifyRequest,
     InvestorBankAccountVerifyResponse,
+    InvestRiskProfileCurrentResponse,
+    InvestRiskProfileAssessmentResponse,
+    InvestRiskProfileAssessmentAnswersResponse,
+    InvestRiskProfileAssessmentAnswerResponse,
+    InvestRiskProfileAssessmentHistoryItemResponse,
+    InvestRiskProfileAssessmentHistoryResponse,
+    InvestRiskProfileReportResponse,
+    InvestRiskProfileAttemptStateResponse,
+    InvestRiskProfileDraftResponse,
+    InvestRiskProfileDraftUpsertRequest,
+    InvestRiskProfileQuestionResponse,
+    InvestRiskProfileTemplateSummaryResponse,
+    InvestRiskProfileResultResponse,
+    InvestRiskProfileSessionResponse,
+    InvestRiskProfileSubmitRequest,
+    InvestRiskProfileTierResponse,
+    InvestRiskProfileTierListResponse,
+    InvestRiskProfileConfigResponse,
     MfCompareRequest,
     MfCompareResponse,
     MfLumpsumCalculatorResponse,
@@ -90,11 +108,26 @@ from app.application.mf.return_calculator_service import (
     cached_compute_sip_calculator,
     cached_compute_swp_calculator,
 )
+from app.application.risk_profile.config_service import serialize_risk_profile_config
+from app.application.risk_profile.draft_service import delete_draft, get_draft, upsert_draft
+from app.application.risk_profile.errors import RiskProfileError
+from app.application.risk_profile.report_service import get_or_create_report_pdf, get_report_metadata
+from app.application.risk_profile.scoring_service import (
+    get_assessment_answers,
+    get_user_risk_profile,
+    list_user_assessments,
+    submit_assessment,
+)
+from app.application.risk_profile.attempt_service import ensure_can_take_assessment, get_attempt_state
+from app.application.risk_profile.template_service import auto_select_template, resolve_template_questions
+from app.application.risk_profile.tier_service import list_tiers
 from app.application.mf.mf_order_errors import MfCasError, MfOrderError
 from app.application.mf.mf_cart_service import (
     bulk_upsert_cart_items,
     checkout_cart,
     checkout_sip_cart,
+    clear_lumpsum_cart,
+    clear_sip_cart,
     get_cart_summary,
     get_user_checkout,
     remove_cart_item,
@@ -583,6 +616,26 @@ async def delete_mf_cart_item(
             product_id=product_id,
             investment_type=investment_type,
         )
+        payload = await get_cart_summary(db, user_id=current_user.id)
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return MfCartResponse(**payload)
+
+
+@router.delete("/cart/clear", response_model=MfCartResponse)
+async def clear_mf_cart_tab(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    investment_type: Literal["lumpsum", "sip"] = Query(...),
+) -> MfCartResponse:
+    try:
+        if investment_type == "lumpsum":
+            await clear_lumpsum_cart(db, user_id=current_user.id)
+        else:
+            await clear_sip_cart(db, user_id=current_user.id)
         payload = await get_cart_summary(db, user_id=current_user.id)
         await db.commit()
     except MfOrderError as exc:
@@ -1182,3 +1235,276 @@ async def delete_investor_bank_account(
     except InvestorBankAccountError as exc:
         return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
     await db.commit()
+
+
+def _handle_risk_profile_error(exc: RiskProfileError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
+
+
+@router.get("/risk-profile/tiers", response_model=InvestRiskProfileTierListResponse)
+async def get_invest_risk_profile_tiers(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestRiskProfileTierListResponse:
+    del current_user
+    tiers = await list_tiers(db)
+    return InvestRiskProfileTierListResponse(
+        items=[InvestRiskProfileTierResponse(**item) for item in tiers],
+    )
+
+
+@router.get("/risk-profile/config", response_model=InvestRiskProfileConfigResponse)
+async def get_invest_risk_profile_config(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestRiskProfileConfigResponse:
+    del current_user
+    return InvestRiskProfileConfigResponse(**serialize_risk_profile_config())
+
+
+@router.get("/risk-profile/assessment", response_model=InvestRiskProfileAssessmentResponse)
+async def get_invest_risk_profile_assessment(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    template_id: Optional[UUID] = Query(default=None),
+    auto: bool = Query(default=True),
+) -> InvestRiskProfileAssessmentResponse:
+    try:
+        await ensure_can_take_assessment(db, current_user.id)
+        if template_id is not None:
+            result = await resolve_template_questions(db, template_id=template_id)
+            return InvestRiskProfileAssessmentResponse(
+                template=InvestRiskProfileTemplateSummaryResponse(
+                    id=result["template"]["id"],
+                    name=result["template"]["name"],
+                    description=result["template"].get("description"),
+                    is_default=result["template"]["is_default"],
+                    selection_mode=result["template"]["selection_mode"],
+                    total_questions=result["total_questions"],
+                ),
+                questions=[InvestRiskProfileQuestionResponse(**item) for item in result["questions"]],
+                total_questions=result["total_questions"],
+            )
+        if auto:
+            result = await auto_select_template(db, user_id=current_user.id)
+            return InvestRiskProfileAssessmentResponse(
+                selection_reason=result["selection_reason"],
+                preferred_question_count=result["preferred_question_count"],
+                template=InvestRiskProfileTemplateSummaryResponse(
+                    id=result["template"]["id"],
+                    name=result["template"]["name"],
+                    description=result["template"].get("description"),
+                    is_default=result["template"]["is_default"],
+                    selection_mode=result["template"]["selection_mode"],
+                    total_questions=result["total_questions"],
+                ),
+                questions=[InvestRiskProfileQuestionResponse(**item) for item in result["questions"]],
+                total_questions=result["total_questions"],
+            )
+        raise RiskProfileError("template_required", "template_id is required when auto-select is disabled.")
+    except RiskProfileError as exc:
+        raise _handle_risk_profile_error(exc) from exc
+
+
+@router.post("/risk-profile/assessment/submit", response_model=InvestRiskProfileResultResponse)
+async def post_invest_risk_profile_submit(
+    body: InvestRiskProfileSubmitRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestRiskProfileResultResponse:
+    try:
+        result = await submit_assessment(
+            db,
+            user=current_user,
+            answers=[answer.model_dump() for answer in body.answers],
+            ip=get_client_ip(request),
+            template_id=body.template_id,
+        )
+    except RiskProfileError as exc:
+        raise _handle_risk_profile_error(exc) from exc
+    await db.commit()
+    return InvestRiskProfileResultResponse(
+        assessment_id=result["assessment_id"],
+        score=result["score"],
+        display_score=result["display_score"],
+        tier=result["tier"],
+        tier_config=InvestRiskProfileTierResponse(**result["tier_config"]),
+        category_scores=result["category_scores"],
+        attempt_state=InvestRiskProfileAttemptStateResponse(**result["attempt_state"]),
+    )
+
+
+@router.get("/risk-profile/session", response_model=InvestRiskProfileSessionResponse)
+async def get_invest_risk_profile_session(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestRiskProfileSessionResponse:
+    attempt_state = await get_attempt_state(db, current_user.id)
+    draft = await get_draft(db, current_user.id)
+    return InvestRiskProfileSessionResponse(
+        attempt_state=InvestRiskProfileAttemptStateResponse(**attempt_state),
+        draft=InvestRiskProfileDraftResponse(**draft) if draft else None,
+    )
+
+
+@router.put("/risk-profile/assessment/draft", response_model=InvestRiskProfileDraftResponse)
+async def put_invest_risk_profile_draft(
+    body: InvestRiskProfileDraftUpsertRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestRiskProfileDraftResponse:
+    try:
+        await ensure_can_take_assessment(db, current_user.id)
+        draft = await upsert_draft(
+            db,
+            user_id=current_user.id,
+            template_id=body.template_id,
+            question_ids=body.question_ids,
+            answers=body.answers,
+            step_index=body.step_index,
+        )
+    except RiskProfileError as exc:
+        raise _handle_risk_profile_error(exc) from exc
+    await db.commit()
+    return InvestRiskProfileDraftResponse(**draft)
+
+
+@router.delete("/risk-profile/assessment/draft", status_code=204)
+async def delete_invest_risk_profile_draft(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    await delete_draft(db, current_user.id)
+    await db.commit()
+
+
+@router.get(
+    "/risk-profile/assessments",
+    response_model=InvestRiskProfileAssessmentHistoryResponse,
+)
+async def get_invest_risk_profile_assessments(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> InvestRiskProfileAssessmentHistoryResponse:
+    result = await list_user_assessments(
+        db,
+        user_id=current_user.id,
+        limit=limit,
+        offset=offset,
+    )
+    return InvestRiskProfileAssessmentHistoryResponse(
+        items=[InvestRiskProfileAssessmentHistoryItemResponse(**item) for item in result["items"]],
+        limit=result["limit"],
+        offset=result["offset"],
+    )
+
+
+@router.get(
+    "/risk-profile/assessments/{assessment_id}/answers",
+    response_model=InvestRiskProfileAssessmentAnswersResponse,
+)
+async def get_invest_risk_profile_assessment_answers(
+    assessment_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestRiskProfileAssessmentAnswersResponse:
+    try:
+        result = await get_assessment_answers(
+            db,
+            user_id=current_user.id,
+            assessment_id=assessment_id,
+        )
+    except RiskProfileError as exc:
+        raise _handle_risk_profile_error(exc) from exc
+    return InvestRiskProfileAssessmentAnswersResponse(
+        assessment_id=result["assessment_id"],
+        completed_at=result["completed_at"],
+        answers=[InvestRiskProfileAssessmentAnswerResponse(**item) for item in result["answers"]],
+    )
+
+
+@router.get("/risk-profile/result", response_model=InvestRiskProfileCurrentResponse)
+async def get_invest_risk_profile_result(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestRiskProfileCurrentResponse:
+    result = await get_user_risk_profile(db, current_user.id)
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "risk_profile_not_found", "message": "Risk profile not completed yet."},
+        )
+    return InvestRiskProfileCurrentResponse(
+        user_id=result["user_id"],
+        score=result["score"],
+        display_score=result["display_score"],
+        tier=result["tier"],
+        tier_config=InvestRiskProfileTierResponse(**result["tier_config"]),
+        assessment_id=result["assessment_id"],
+        questions_answered=result["questions_answered"],
+        total_questions=result["total_questions"],
+        computed_at=result["computed_at"],
+        updated_at=result["updated_at"],
+        attempt_state=InvestRiskProfileAttemptStateResponse(**result["attempt_state"]),
+    )
+
+
+@router.get("/risk-profile/report", response_model=InvestRiskProfileReportResponse)
+async def get_invest_risk_profile_report(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    assessment_id: UUID | None = Query(default=None),
+) -> InvestRiskProfileReportResponse:
+    try:
+        result = await get_report_metadata(
+            db,
+            user_id=current_user.id,
+            assessment_id=assessment_id,
+        )
+    except RiskProfileError as exc:
+        raise _handle_risk_profile_error(exc) from exc
+    return InvestRiskProfileReportResponse(**result)
+
+
+@router.get("/risk-profile/report/download")
+async def download_invest_risk_profile_report(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    assessment_id: UUID | None = Query(default=None),
+) -> Response:
+    try:
+        pdf_bytes, filename, from_cache = await get_or_create_report_pdf(
+            db,
+            user=current_user,
+            assessment_id=assessment_id,
+        )
+        await db.commit()
+    except RiskProfileError as exc:
+        await db.rollback()
+        raise _handle_risk_profile_error(exc) from exc
+    except FileNotFoundError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "report_asset_missing", "message": "Report branding assets are unavailable."},
+        ) from exc
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "report_generation_failed", "message": "Could not generate the risk profile report."},
+        ) from exc
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Report-Cached": "true" if from_cache else "false",
+        },
+    )

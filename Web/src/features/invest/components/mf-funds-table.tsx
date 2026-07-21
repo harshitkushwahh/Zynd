@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type RefObject } from "react";
 import type { SortDescriptor } from "react-aria-components";
-import { Loader2 } from "lucide-react";
+import { Loader2, SearchX } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Table, TableCard } from "@/components/core/table";
@@ -29,6 +29,8 @@ type MfFundsTableProps = {
   onRowClick?: (fund: InvestFundSummary) => void;
   onRowDoubleClick?: (fund: InvestFundSummary) => void;
   selectedProductId?: string | null;
+  emptyTitle?: string;
+  emptyDescription?: string;
 };
 
 const TABLE_LAYOUT_CLASS = "w-full min-w-[680px] table-fixed border-collapse border-spacing-0";
@@ -68,6 +70,20 @@ function FundNameCell({ fund }: { fund: InvestFundSummary }) {
   );
 }
 
+function MfFundsTableEmptyState({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+      <SearchX className="size-10 text-[var(--sip-empty-icon)]" strokeWidth={1.75} aria-hidden />
+      <div>
+        <p className="text-compact font-medium text-foreground">{title}</p>
+        {description ? (
+          <p className="mt-1 max-w-sm text-caption text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ReturnCell({ value }: { value: number | null | undefined }) {
   const formatted = formatSignedReturn(value);
   return (
@@ -96,6 +112,8 @@ export function MfFundsTable({
   onRowClick,
   onRowDoubleClick,
   selectedProductId,
+  emptyTitle,
+  emptyDescription,
 }: MfFundsTableProps) {
   const router = useRouter();
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
@@ -138,7 +156,7 @@ export function MfFundsTable({
         <div
           ref={scrollContainerRef}
           className={cn(
-            "min-h-0 flex-1 overflow-auto overscroll-y-contain overscroll-x-auto",
+            "flex min-h-0 flex-1 flex-col overflow-auto overscroll-y-contain overscroll-x-auto",
             refetching && "pointer-events-none opacity-60",
           )}
         >
@@ -192,6 +210,7 @@ export function MfFundsTable({
               />
             </Table.Header>
 
+            {sortedRows.length > 0 ? (
             <Table.Body className="[&>tr:first-child>td]:border-t-0" items={sortedRows}>
               {(fund) => {
                 function navigateToFund() {
@@ -242,11 +261,21 @@ export function MfFundsTable({
                 );
               }}
             </Table.Body>
+            ) : null}
           </Table>
 
-          {hasMore ? <div ref={loadMoreRef} className="h-px shrink-0" aria-hidden="true" /> : null}
+          {sortedRows.length === 0 ? (
+            <MfFundsTableEmptyState
+              title={emptyTitle ?? copy.mutualFunds.allFundsEmpty}
+              description={emptyDescription ?? copy.mutualFunds.allFundsEmptyDescription}
+            />
+          ) : null}
 
-          {hasMore ? (
+          {sortedRows.length > 0 && hasMore ? (
+            <div ref={loadMoreRef} className="h-px shrink-0" aria-hidden="true" />
+          ) : null}
+
+          {sortedRows.length > 0 && hasMore ? (
             <div
               className="flex h-12 shrink-0 items-center justify-center gap-2 border-t border-border text-caption text-muted-foreground"
               aria-live="polite"

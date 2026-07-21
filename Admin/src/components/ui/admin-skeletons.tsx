@@ -4,52 +4,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   AdminDataTable,
   AdminTableBody,
-  AdminTableCell,
-  AdminTableRow,
+  AdminTableSkeletonRows,
 } from "@/components/ui/admin-table";
 import type { AdminTableMinWidth } from "@/components/ui/admin-design-tokens";
-import { cn } from "@/lib/utils";
+
+export { AdminTableSkeletonRows } from "@/components/ui/admin-table";
 
 type AdminTableSkeletonRowsProps = {
   columns: number;
   rows?: number;
   dense?: boolean;
 };
-
-export function AdminTableSkeletonRows({
-  columns,
-  rows = 6,
-  dense = false,
-}: AdminTableSkeletonRowsProps) {
-  return (
-    <>
-      {Array.from({ length: rows }).map((_, rowIndex) => (
-        <AdminTableRow key={`skeleton-row-${rowIndex}`}>
-          {Array.from({ length: columns }).map((_, columnIndex) => (
-            <AdminTableCell key={`skeleton-cell-${rowIndex}-${columnIndex}`}>
-              {columnIndex === 0 && !dense ? (
-                <div className="flex items-center gap-3">
-                  <Skeleton className="size-8 shrink-0 rounded-control" />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <Skeleton className="h-4 w-36 max-w-full" />
-                    <Skeleton className="h-3 w-24 max-w-full" />
-                  </div>
-                </div>
-              ) : (
-                <Skeleton
-                  className={cn(
-                    "h-4 max-w-full",
-                    columnIndex === columns - 1 ? "ml-auto w-16" : "w-28",
-                  )}
-                />
-              )}
-            </AdminTableCell>
-          ))}
-        </AdminTableRow>
-      ))}
-    </>
-  );
-}
 
 type AdminTableSkeletonProps = AdminTableSkeletonRowsProps & {
   minWidth?: AdminTableMinWidth;

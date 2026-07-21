@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
 
 import {
@@ -19,6 +19,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -26,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
 import { ReferralLeaderboardPodium } from "@/features/referral/components/referral-leaderboard-podium";
 import { ReferralLeaderboardSidebar } from "@/features/referral/components/referral-leaderboard-sidebar";
@@ -126,6 +127,19 @@ export function ReferralLeaderboardPanel() {
     };
   }, [period]);
 
+  const retryLeaderboard = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await fetchReferralLeaderboard(period);
+      setLeaderboard(data);
+    } catch {
+      setError(copy.referral.loadFailed);
+    } finally {
+      setLoading(false);
+    }
+  }, [period]);
+
   const totalEntries = leaderboard?.entries.length ?? 0;
   const { topThree, tableEntries } = useMemo(
     () => splitLeaderboardEntries(leaderboard?.entries ?? []),
@@ -141,7 +155,19 @@ export function ReferralLeaderboardPanel() {
     return (
       <>
         <ReferralLeaderboardBreadcrumb />
-        <FieldMessage message={error} />
+        <LoadErrorCard
+          title={copy.referral.loadFailedTitle}
+          description={error}
+          retryLabel={copy.referral.retry}
+          retryLoading={loading}
+          onRetry={() => void retryLeaderboard()}
+          icon={Trophy}
+          backAction={
+            <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/referral" />}>
+              {referralRouteLabel}
+            </Button>
+          }
+        />
       </>
     );
   }

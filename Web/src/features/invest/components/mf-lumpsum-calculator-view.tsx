@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { LineChart, Loader2, TrendingUp } from "lucide-react";
+import { LineChart, TrendingUp } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -17,6 +17,7 @@ import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculat
 import { MfCalculatorSliderField } from "@/features/invest/components/mf-calculator-slider-field";
 import { LumpsumCorpusDonut } from "@/features/invest/components/mf-lumpsum-corpus-donut";
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
+import { MfLumpsumCalculatorResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
 import {
   MF_CALC_CARD_CLASS,
@@ -371,14 +372,7 @@ export function MfLumpsumCalculatorView() {
 
           {fund && error ? <FieldMessage variant="error" message={error} /> : null}
 
-          {fund && loading ? (
-            <Card className="h-full rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
-              <CardContent className="flex h-full min-h-full items-center justify-center gap-2 p-5 text-muted-foreground sm:p-6">
-                <Loader2 className="size-4 animate-spin" />
-                {copy.mutualFunds.calculatorLoading}
-              </CardContent>
-            </Card>
-          ) : null}
+          {fund && loading ? <MfLumpsumCalculatorResultsSkeleton /> : null}
 
           {!loading && result && result.scenarios.length === 0 ? (
             <FieldMessage variant="info" message={copy.mutualFunds.calculatorDataShallow} />

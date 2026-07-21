@@ -35,7 +35,7 @@ export function NotificationDeepLinkHandler() {
       router.replace(
         buildNotificationHref({
           notification_type: notificationType,
-          category: (category as "security" | "kyc" | "referral" | "account" | null) ?? undefined,
+          category: (category as "security" | "kyc" | "referral" | "account" | "family" | null) ?? undefined,
         }),
       );
     }

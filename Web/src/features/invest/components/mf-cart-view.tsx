@@ -23,6 +23,7 @@ import { FieldMessage } from "@/components/ui/ui-message";
 import {
   checkoutMfCart,
   checkoutMfSipCart,
+  clearMfCartTab,
   fetchMfCart,
   removeMfCartItem,
   type MfCart,
@@ -350,6 +351,7 @@ export function MfCartView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
+  const [clearingTab, setClearingTab] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const {
     accounts: paymentReadyAccounts,
@@ -400,6 +402,20 @@ export function MfCartView() {
     }
   }
 
+  async function handleClearTab() {
+    if (activeCount === 0) return;
+    setClearingTab(true);
+    try {
+      const next = await clearMfCartTab(tab);
+      setCart(next);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : copy.mutualFunds.cartClearFailed);
+    } finally {
+      setClearingTab(false);
+    }
+  }
+
   async function handleCheckout() {
     if (!cart || activeCount === 0) return;
     if (!hasPaymentReadyAccount || !selectedBankAccountId) {
@@ -439,6 +455,7 @@ export function MfCartView() {
   const description =
     tab === "lumpsum" ? copy.mutualFunds.cartDescription : copy.mutualFunds.cartSipDescription;
   const DescriptionIcon = tab === "lumpsum" ? Wallet : CalendarDays;
+  const clearDisabled = activeCount === 0 || clearingTab || removingProductId !== null || checkingOut;
 
   if (loading) {
     return (
@@ -470,12 +487,29 @@ export function MfCartView() {
         </div>
       </div>
 
-      <CartTabToggle
-        tab={tab}
-        onChange={setTab}
-        lumpsumCount={cart?.lumpsum_item_count ?? 0}
-        sipCount={cart?.sip_item_count ?? 0}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CartTabToggle
+          tab={tab}
+          onChange={setTab}
+          lumpsumCount={cart?.lumpsum_item_count ?? 0}
+          sipCount={cart?.sip_item_count ?? 0}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+          disabled={clearDisabled}
+          onClick={() => void handleClearTab()}
+        >
+          {clearingTab ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Trash2 className="size-4" />
+          )}
+          {copy.mutualFunds.cartClearTab}
+        </Button>
+      </div>
 
       {error ? <FieldMessage variant="error" message={error} /> : null}
 

@@ -2,6 +2,10 @@
 
 import type { InvestFundDetail } from "@/features/invest/api/invest-api";
 import { Badge } from "@/components/ui/badge";
+import {
+  MfFundCategoryBadge,
+  resolveMfFundCategoryKind,
+} from "@/features/invest/components/mf-fund-category-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   formatDate,
@@ -45,6 +49,8 @@ function MetricItem({
 export function MfFundDetailHeader({ fund }: MfFundDetailHeaderProps) {
   const logoUrl = resolveInvestAssetUrl(fund.amc_logo_url);
   const dayReturn = formatSignedReturn(fund.returns.return_1d);
+  const categoryLabel = fund.content?.risk_label ?? fund.sebi_category;
+  const categoryKind = resolveMfFundCategoryKind(categoryLabel);
 
   return (
     <div className="space-y-3">
@@ -65,10 +71,14 @@ export function MfFundDetailHeader({ fund }: MfFundDetailHeaderProps) {
             )}
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex flex-wrap items-center gap-1.5">
-                {(fund.content?.risk_label ?? fund.sebi_category) ? (
-                  <Badge variant="outline" className="text-[11px]">
-                    {fund.content?.risk_label ?? fund.sebi_category}
-                  </Badge>
+                {categoryLabel ? (
+                  categoryKind ? (
+                    <MfFundCategoryBadge kind={categoryKind} label={categoryLabel} showLabel />
+                  ) : (
+                    <Badge variant="outline" className="text-[11px]">
+                      {categoryLabel}
+                    </Badge>
+                  )
                 ) : null}
                 {fund.isin ? (
                   <Badge variant="outline" className="text-[11px] font-normal">

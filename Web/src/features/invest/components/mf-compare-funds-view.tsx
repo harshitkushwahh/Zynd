@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight, GitCompare, Loader2, TableProperties } from "lucide-react";
+import { ArrowUpRight, GitCompare, TableProperties } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
 } from "@/features/invest/api/invest-api";
 import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculator-disclaimer";
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
+import { MfCompareFundsResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
 import {
   MF_CALC_CARD_CLASS,
@@ -571,13 +572,8 @@ export function MfCompareFundsView() {
           </Card>
         ) : null}
 
-        {loading ? (
-          <Card className="rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
-            <CardContent className="flex min-h-[220px] items-center justify-center gap-2 p-8 text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {copy.mutualFunds.compareLoading}
-            </CardContent>
-          </Card>
+        {loading && selectedCount > 0 ? (
+          <MfCompareFundsResultsSkeleton columns={Math.min(selectedCount, MAX_SLOTS)} />
         ) : null}
 
         {!loading && funds.length > 0 ? (

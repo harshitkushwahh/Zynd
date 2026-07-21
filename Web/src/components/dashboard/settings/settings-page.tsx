@@ -85,6 +85,10 @@ export function SettingsPage() {
 
   useEffect(() => {
     const section = searchParams.get("section");
+    if (section === "risk-profile") {
+      router.replace("/dashboard/risk-profile");
+      return;
+    }
     if (section && SETTINGS_NAV.some((item) => item.id === section)) {
       setActiveSection(section as SettingsSection);
     }

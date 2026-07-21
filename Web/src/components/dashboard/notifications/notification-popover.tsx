@@ -75,7 +75,7 @@ export function NotificationPopover() {
               aria-label="Notifications"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                "relative size-9 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
+                "relative size-10 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             />
           }

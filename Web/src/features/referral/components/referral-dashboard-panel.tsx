@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   fetchReferralLeaderboard,
@@ -26,12 +26,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { LoadErrorCard } from "@/components/ui/load-error-card";
 import {
   REFERRAL_LEFT_COLUMN_CLASS,
   REFERRAL_RIGHT_COLUMN_CLASS,
 } from "@/features/referral/lib/referral-ui";
 import { ReferralDashboardSkeleton } from "@/features/referral/components/referral-skeleton";
-import { FieldMessage } from "@/components/ui/ui-message";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { copy } from "@/shared/config/copy";
 
@@ -52,6 +52,7 @@ type ReferralDashboardPanelProps = {
 
 const referralRouteLabel =
   DASHBOARD_ROUTES.find((route) => route.id === "referral")?.label ?? "Referrals";
+const ReferralRouteIcon = DASHBOARD_ROUTES.find((route) => route.id === "referral")?.icon;
 
 function ReferralBreadcrumb() {
   return (
@@ -76,42 +77,36 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState("");
 
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [me, list, leaderboardData] = await Promise.all([
+        fetchReferralMe(),
+        fetchReferralList(),
+        fetchReferralLeaderboard("this_month"),
+      ]);
+      setData(me);
+      setReferrals(list.items);
+      setLeaderboard(leaderboardData);
+    } catch {
+      setError(copy.referral.loadFailed);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (initialData) return;
-
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const [me, list, leaderboardData] = await Promise.all([
-          fetchReferralMe(),
-          fetchReferralList(),
-          fetchReferralLeaderboard("this_month"),
-        ]);
-        if (!cancelled) {
-          setData(me);
-          setReferrals(list.items);
-          setLeaderboard(leaderboardData);
-        }
-      } catch {
-        if (!cancelled) setError(copy.referral.loadFailed);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [initialData]);
+    void loadDashboard();
+  }, [initialData, loadDashboard]);
 
   const shareUrl =
     data?.share_url ??
     (data?.code ? buildReferralShareUrl(data.code) : "");
 
-  if (loading) {
+  if (loading && !error && !data) {
     return <ReferralDashboardSkeleton />;
   }
 
@@ -119,7 +114,14 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
     return (
       <>
         <ReferralBreadcrumb />
-        <FieldMessage message={error || copy.referral.loadFailed} />
+        <LoadErrorCard
+          title={copy.referral.loadFailedTitle}
+          description={error || copy.referral.loadFailed}
+          retryLabel={copy.referral.retry}
+          retryLoading={loading}
+          onRetry={() => void loadDashboard()}
+          icon={ReferralRouteIcon}
+        />
       </>
     );
   }

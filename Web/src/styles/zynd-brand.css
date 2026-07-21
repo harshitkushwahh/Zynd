@@ -121,6 +121,9 @@
   --secondary-foreground: var(--zynd-neutral-900);
   --muted: var(--zynd-neutral-50);
   --muted-foreground: var(--zynd-neutral-600);
+  --skeleton: var(--zynd-neutral-200);
+  --skeleton-subtle: color-mix(in srgb, var(--zynd-neutral-200) 72%, var(--card));
+  --skeleton-on-brand: color-mix(in srgb, var(--primary-foreground) 24%, transparent);
   --accent: var(--zynd-purple);
   --accent-foreground: var(--zynd-white);
   --destructive: var(--zynd-accent-red);
@@ -186,6 +189,9 @@
   --secondary-foreground: var(--zynd-dark-foreground);
   --muted: var(--zynd-dark-muted);
   --muted-foreground: var(--zynd-dark-muted-foreground);
+  --skeleton: color-mix(in srgb, var(--zynd-dark-muted) 88%, var(--foreground));
+  --skeleton-subtle: color-mix(in srgb, var(--zynd-dark-muted) 72%, var(--card));
+  --skeleton-on-brand: color-mix(in srgb, var(--primary-foreground) 18%, transparent);
   --accent: var(--zynd-purple);
   --accent-foreground: var(--zynd-white);
   --destructive: var(--zynd-accent-red);
@@ -230,6 +236,9 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-skeleton: var(--skeleton);
+  --color-skeleton-subtle: var(--skeleton-subtle);
+  --color-skeleton-on-brand: var(--skeleton-on-brand);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -493,5 +502,9 @@
     border: 1px solid var(--border);
     background-color: var(--sip-lock-panel-bg);
     border-radius: var(--radius-medium);
+  }
+
+  .risk-profile-gauge-overlay {
+    background-color: color-mix(in srgb, var(--card) 18%, transparent);
   }
 }

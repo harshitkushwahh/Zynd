@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, type ReactNode } from "react";
-import { Lock, Loader2 } from "lucide-react";
+import { Lock } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -13,6 +13,7 @@ import {
 } from "recharts";
 
 import type { MfCalculatorPoint } from "@/features/invest/api/invest-api";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   MF_SIP_GAIN_TEXT_CLASS,
   MF_SIP_ICON_BADGE_CLASS,
@@ -208,11 +209,8 @@ export function MfSipProjectionChartPanel({
 }: MfSipProjectionChartPanelProps) {
   if (loading) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border px-6">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          {copy.mutualFunds.calculatorLoading}
-        </div>
+      <div className="space-y-4">
+        <Skeleton className="h-[320px] w-full rounded-[var(--radius-card)]" aria-hidden />
       </div>
     );
   }

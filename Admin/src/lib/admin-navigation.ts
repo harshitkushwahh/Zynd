@@ -1,4 +1,5 @@
 import {
+  Gauge,
   Globe,
   Handshake,
   Layers,
@@ -76,6 +77,29 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     icon: Layers,
     description: "Cart checkouts with multiple lumpsum funds or SIP batches",
     permissions: ["mf.transactions.read"],
+  },
+  {
+    id: "risk-profile",
+    label: "Risk Profile",
+    href: "/dashboard/risk-profile",
+    icon: Gauge,
+    description: "Questionnaire categories, bulk import, templates, and user risk profiles",
+    permissions: [
+      "risk_profile.read",
+      "risk_profile.categories.manage",
+      "risk_profile.questions.manage",
+      "risk_profile.templates.manage",
+      "risk_profile.tiers.manage",
+      "risk_profile.users.read",
+    ],
+  },
+  {
+    id: "family-groups",
+    label: "Family Groups",
+    href: "/dashboard/family-groups",
+    icon: Users,
+    description: "Family group directory, invites, and moderation",
+    permissions: ["family_groups.read", "family_groups.manage"],
   },
   {
     id: "security-config",
@@ -170,7 +194,7 @@ export function getVisibleAdminRoutes(hasPermission: (key: string) => boolean) {
 
 const ADMIN_PLATFORM_LEADING_ROUTE_IDS = ["users", "mutual-funds"] as const;
 
-const ADMIN_PLATFORM_TRAILING_ROUTE_IDS = ["bulk-order", "security-config"] as const;
+const ADMIN_PLATFORM_TRAILING_ROUTE_IDS = ["bulk-order", "risk-profile", "security-config"] as const;
 
 const ADMIN_PLATFORM_DROPDOWN_IDS = ["orders", "systematic-plans", "txn-requests"] as const;
 

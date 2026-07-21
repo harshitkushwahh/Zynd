@@ -20,6 +20,15 @@ import { KycPanLottie } from "@/features/kyc/components/kyc-pan-lottie";
 import { KycPanStep } from "@/features/kyc/components/kyc-pan-step";
 import { KycBankStep } from "@/features/kyc/components/kyc-bank-step";
 import { KycNomineeStep } from "@/features/kyc/components/kyc-nominee-step";
+import { KycNomineeFamilyGroupDialog } from "@/features/kyc/components/kyc-nominee-family-group-dialog";
+import {
+  addNomineeToFamilyGroup,
+  previewNomineeFamilyGroupAdd,
+} from "@/features/family-groups/api/family-groups-api";
+import {
+  filterNomineesForFamilyPrompt,
+  isActionableFamilyPreviewStatus,
+} from "@/features/family-groups/lib/kyc-nominee-family-bridge";
 import { KycPersonalInfoStep } from "@/features/kyc/components/kyc-personal-info-step";
 import { KycReviewStep } from "@/features/kyc/components/kyc-review-step";
 import { KycSignatureStep } from "@/features/kyc/components/kyc-signature-step";
@@ -182,6 +191,15 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [familyPromptQueue, setFamilyPromptQueue] = useState<KycNomineeRecord[]>([]);
+  const [familyPromptOpen, setFamilyPromptOpen] = useState(false);
+  const [familyPromptNominee, setFamilyPromptNominee] = useState<KycNomineeRecord | null>(null);
+  const [familyPromptSkippedIds, setFamilyPromptSkippedIds] = useState<string[]>([]);
+  const [reviewFamilyRepromptNominee, setReviewFamilyRepromptNominee] = useState<KycNomineeRecord | null>(
+    null,
+  );
+  const [reviewFamilyRepromptChecked, setReviewFamilyRepromptChecked] = useState(false);
+  const [familyReviewDialogOpen, setFamilyReviewDialogOpen] = useState(false);
 
   const processSubmissionResult = useCallback(
     async (result: KycFormActionResponse) => {
@@ -359,6 +377,13 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       setNomineeEnums(null);
       setEsignDialogOpen(false);
       setPendingEsignUrl(null);
+      setFamilyPromptQueue([]);
+      setFamilyPromptOpen(false);
+      setFamilyPromptNominee(null);
+      setFamilyPromptSkippedIds([]);
+      setReviewFamilyRepromptNominee(null);
+      setReviewFamilyRepromptChecked(false);
+      setFamilyReviewDialogOpen(false);
     }
   }, [open]);
 
@@ -389,6 +414,46 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const goToNextStep = () => {
     setActiveStepIndex((current) => Math.min(current + 1, journeySteps.length - 1));
   };
+
+  const advanceFamilyPromptQueue = useCallback(() => {
+    setFamilyPromptQueue((remaining) => {
+      if (remaining.length === 0) {
+        setFamilyPromptOpen(false);
+        setFamilyPromptNominee(null);
+        setActiveStepIndex((current) => Math.min(current + 1, journeySteps.length - 1));
+        return [];
+      }
+      const [next, ...rest] = remaining;
+      setFamilyPromptNominee(next);
+      setFamilyPromptOpen(true);
+      return rest;
+    });
+  }, [journeySteps.length]);
+
+  const handleFamilyPromptCompleted = useCallback(
+    (result: "invited" | "skipped" | "blocked") => {
+      if (familyPromptNominee && result === "skipped") {
+        setFamilyPromptSkippedIds((current) =>
+          current.includes(familyPromptNominee.id) ? current : [...current, familyPromptNominee.id],
+        );
+      }
+      advanceFamilyPromptQueue();
+    },
+    [advanceFamilyPromptQueue, familyPromptNominee],
+  );
+
+  const handleReviewFamilyPromptCompleted = useCallback(
+    (result: "invited" | "skipped" | "blocked") => {
+      setFamilyReviewDialogOpen(false);
+      setReviewFamilyRepromptNominee(null);
+      if (result === "skipped" && reviewFamilyRepromptNominee) {
+        setFamilyPromptSkippedIds((current) =>
+          current.filter((id) => id !== reviewFamilyRepromptNominee.id),
+        );
+      }
+    },
+    [reviewFamilyRepromptNominee],
+  );
 
   const handlePanBlocked = (response: KycPanVerifyResponse) => {
     if (response.block_type === "corporate_pan") {
@@ -551,7 +616,39 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         last_completed_step: "nominee",
       });
       updateDraft({ nominees });
-      goToNextStep();
+
+      const eligible = filterNomineesForFamilyPrompt(nominees);
+      if (eligible.length === 0) {
+        goToNextStep();
+        return;
+      }
+
+      const queue: KycNomineeRecord[] = [];
+      for (const nominee of eligible) {
+        try {
+          const preview = await previewNomineeFamilyGroupAdd({
+            nominee_email: nominee.contact.email.trim(),
+            nominee_name: nominee.core.fullName.trim(),
+            relationship: nominee.core.relationship,
+            kyc_nominee_id: nominee.id,
+          });
+          if (isActionableFamilyPreviewStatus(preview.status)) {
+            queue.push(nominee);
+          }
+        } catch {
+          // Non-blocking — continue KYC if family group preview fails.
+        }
+      }
+
+      if (queue.length === 0) {
+        goToNextStep();
+        return;
+      }
+
+      const [first, ...rest] = queue;
+      setFamilyPromptQueue(rest);
+      setFamilyPromptNominee(first);
+      setFamilyPromptOpen(true);
     } catch (error) {
       setJourneySaveError(resolveJourneySaveError(error));
     } finally {
@@ -701,6 +798,47 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const panVerified = bootstrap?.pan_verification_status === "verified";
   const submittedPan = bootstrap?.pan_draft?.panNumber ?? journeyDraft.pan?.panNumber;
 
+  useEffect(() => {
+    if (activeStepId !== "review" || reviewFamilyRepromptChecked || familyPromptSkippedIds.length === 0) {
+      return;
+    }
+
+    const nominees = journeyDraft.nominees ?? [];
+    const nominee = nominees.find((item) => familyPromptSkippedIds.includes(item.id));
+    if (!nominee) {
+      setReviewFamilyRepromptChecked(true);
+      return;
+    }
+
+    let cancelled = false;
+    setReviewFamilyRepromptChecked(true);
+
+    void previewNomineeFamilyGroupAdd({
+      nominee_email: nominee.contact.email.trim(),
+      nominee_name: nominee.core.fullName.trim(),
+      relationship: nominee.core.relationship,
+      kyc_nominee_id: nominee.id,
+    })
+      .then((preview) => {
+        if (cancelled) return;
+        if (isActionableFamilyPreviewStatus(preview.status)) {
+          setReviewFamilyRepromptNominee(nominee);
+        }
+      })
+      .catch(() => {
+        // Non-blocking — review submit must remain available.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeStepId,
+    familyPromptSkippedIds,
+    journeyDraft.nominees,
+    reviewFamilyRepromptChecked,
+  ]);
+
   const enumOptions = useMemo(
     () =>
       masterEnums
@@ -840,6 +978,27 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               onAddNominee={() =>
                 setActiveStepIndex(journeySteps.findIndex((step) => step.id === "nominee"))
               }
+              familyGroupRepromptNominee={reviewFamilyRepromptNominee}
+              onFamilyGroupRepromptInvite={() => {
+                if (!reviewFamilyRepromptNominee) return;
+                setFamilyPromptNominee(reviewFamilyRepromptNominee);
+                setFamilyReviewDialogOpen(true);
+              }}
+              onFamilyGroupRepromptDismiss={() => {
+                if (!reviewFamilyRepromptNominee) {
+                  setReviewFamilyRepromptNominee(null);
+                  return;
+                }
+                void addNomineeToFamilyGroup({
+                  nominee_email: reviewFamilyRepromptNominee.contact.email.trim(),
+                  nominee_name: reviewFamilyRepromptNominee.core.fullName.trim(),
+                  relationship: reviewFamilyRepromptNominee.core.relationship,
+                  kyc_nominee_id: reviewFamilyRepromptNominee.id,
+                  action: "skip",
+                }).finally(() => {
+                  setReviewFamilyRepromptNominee(null);
+                });
+              }}
             />
             {submitting ? (
               <p className="mt-3 shrink-0 text-center text-compact text-muted-foreground">
@@ -1004,6 +1163,20 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             window.location.assign(pendingEsignUrl);
           }
         }}
+      />
+
+      <KycNomineeFamilyGroupDialog
+        open={familyPromptOpen}
+        onOpenChange={setFamilyPromptOpen}
+        nominee={familyPromptNominee}
+        onCompleted={handleFamilyPromptCompleted}
+      />
+
+      <KycNomineeFamilyGroupDialog
+        open={familyReviewDialogOpen}
+        onOpenChange={setFamilyReviewDialogOpen}
+        nominee={reviewFamilyRepromptNominee}
+        onCompleted={handleReviewFamilyPromptCompleted}
       />
     </>
   );

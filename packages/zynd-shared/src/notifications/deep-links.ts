@@ -1,4 +1,4 @@
-export type NotificationCategory = "security" | "kyc" | "referral" | "account";
+export type NotificationCategory = "security" | "kyc" | "referral" | "account" | "family";
 
 export type NotificationDeepLinkInput = {
   notification_type: string;
@@ -44,6 +44,33 @@ const NOTIFICATION_TYPE_ROUTES: Record<string, NotificationDeepLink> = {
     path: "/dashboard/settings",
     settingsSection: "personal-details",
   },
+  "invest.risk_profile.completed": {
+    path: "/dashboard/risk-profile",
+  },
+  "invest.risk_profile.unlock_otp": {
+    path: "/dashboard/notifications",
+  },
+  "family.invite.received": {
+    path: "/dashboard/family/invites",
+  },
+  "family.invite.accepted": {
+    path: "/dashboard/family",
+  },
+  "family.invite.declined": {
+    path: "/dashboard/family",
+  },
+  "family.member.removed": {
+    path: "/dashboard/family",
+  },
+  "family.member.role_changed": {
+    path: "/dashboard/family",
+  },
+  "family.head.transferred": {
+    path: "/dashboard/family",
+  },
+  "family.invite.reminder": {
+    path: "/dashboard/family/invites",
+  },
 };
 
 const CATEGORY_FALLBACK_ROUTES: Record<NotificationCategory, NotificationDeepLink> = {
@@ -51,6 +78,7 @@ const CATEGORY_FALLBACK_ROUTES: Record<NotificationCategory, NotificationDeepLin
   kyc: { path: "/dashboard/kyc" },
   referral: { path: "/dashboard/referral" },
   account: { path: "/dashboard/settings", settingsSection: NOTIFICATIONS_SETTINGS_SECTION },
+  family: { path: "/dashboard/family" },
 };
 
 export function resolveNotificationDeepLink(

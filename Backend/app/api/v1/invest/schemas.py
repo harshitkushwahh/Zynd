@@ -534,3 +534,175 @@ class InvestorBankAccountPreverifyStatusResponse(BaseModel):
     bank_verified: bool = False
     code: Optional[str] = None
     reason: Optional[str] = None
+
+
+class InvestRiskProfileAnswerInput(BaseModel):
+    question_id: UUID
+    option_id: UUID
+
+
+class InvestRiskProfileQuestionOptionResponse(BaseModel):
+    id: str
+    label: str
+    score_value: int
+    sort_order: int
+
+
+class InvestRiskProfileQuestionResponse(BaseModel):
+    id: str
+    category_id: str
+    category_slug: Optional[str] = None
+    category_name: Optional[str] = None
+    prompt: str
+    help_text: Optional[str] = None
+    sort_order: int
+    options: list[InvestRiskProfileQuestionOptionResponse]
+
+
+class InvestRiskProfileTemplateSummaryResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    is_default: bool
+    selection_mode: str
+    total_questions: int
+
+
+class InvestRiskProfileSubmitRequest(BaseModel):
+    answers: list[InvestRiskProfileAnswerInput] = Field(min_length=1)
+    template_id: Optional[UUID] = None
+
+
+class InvestRiskProfileAttemptStateResponse(BaseModel):
+    completed_count: int
+    granted_attempts: int
+    attempts_remaining: int
+    is_locked: bool
+    locked_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class InvestRiskProfileDraftResponse(BaseModel):
+    template_id: Optional[str] = None
+    question_ids: list[str] = Field(default_factory=list)
+    answers: dict[str, str] = Field(default_factory=dict)
+    step_index: int = 0
+    updated_at: Optional[str] = None
+
+
+class InvestRiskProfileSessionResponse(BaseModel):
+    attempt_state: InvestRiskProfileAttemptStateResponse
+    draft: Optional[InvestRiskProfileDraftResponse] = None
+
+
+class InvestRiskProfileDraftUpsertRequest(BaseModel):
+    template_id: Optional[UUID] = None
+    question_ids: list[str] = Field(min_length=1)
+    answers: dict[str, str] = Field(default_factory=dict)
+    step_index: int = Field(default=0, ge=0)
+
+
+class InvestRiskProfileAssessmentResponse(BaseModel):
+    selection_reason: Optional[str] = None
+    preferred_question_count: Optional[int] = None
+    template: Optional[InvestRiskProfileTemplateSummaryResponse] = None
+    questions: list[InvestRiskProfileQuestionResponse] = Field(default_factory=list)
+    total_questions: int = 0
+
+
+class InvestRiskProfileTierResponse(BaseModel):
+    tier: str
+    min_score: int
+    max_score: int
+    display_score: int
+    display_score_min: int
+    display_score_max: int
+    title: str
+    message_body: str
+    message_summary: str
+    message_recommendation: str
+    sort_order: int
+    updated_at: Optional[str] = None
+
+
+class InvestRiskProfileTierListResponse(BaseModel):
+    items: list[InvestRiskProfileTierResponse] = Field(default_factory=list)
+
+
+class InvestRiskProfileConfigResponse(BaseModel):
+    trends_min_profiles: int
+    default_attempts: int
+    unlock_bonus_attempts: int
+
+
+class InvestRiskProfileResultResponse(BaseModel):
+    assessment_id: str
+    score: int
+    display_score: int
+    tier: str
+    tier_config: InvestRiskProfileTierResponse
+    category_scores: dict[str, float]
+    attempt_state: InvestRiskProfileAttemptStateResponse
+
+
+class InvestRiskProfileCurrentResponse(BaseModel):
+    user_id: str
+    score: int
+    display_score: int
+    tier: str
+    tier_config: InvestRiskProfileTierResponse
+    assessment_id: str
+    questions_answered: int
+    total_questions: int
+    computed_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    attempt_state: Optional[InvestRiskProfileAttemptStateResponse] = None
+
+
+class InvestRiskProfileAssessmentAnswerOptionResponse(BaseModel):
+    id: str
+    label: str
+    selected: bool
+
+
+class InvestRiskProfileAssessmentAnswerResponse(BaseModel):
+    question_id: str
+    category_name: Optional[str] = None
+    prompt: str
+    help_text: Optional[str] = None
+    sort_order: int
+    selected_option_id: str
+    selected_option_label: str
+    options: list[InvestRiskProfileAssessmentAnswerOptionResponse] = Field(default_factory=list)
+
+
+class InvestRiskProfileAssessmentAnswersResponse(BaseModel):
+    assessment_id: str
+    completed_at: Optional[str] = None
+    answers: list[InvestRiskProfileAssessmentAnswerResponse] = Field(default_factory=list)
+
+
+class InvestRiskProfileAssessmentHistoryItemResponse(BaseModel):
+    assessment_id: str
+    score: int
+    display_score: int
+    tier: str
+    tier_config: InvestRiskProfileTierResponse
+    completed_at: Optional[str] = None
+    questions_answered: int
+    total_questions: int
+
+
+class InvestRiskProfileAssessmentHistoryResponse(BaseModel):
+    items: list[InvestRiskProfileAssessmentHistoryItemResponse] = Field(default_factory=list)
+    limit: int
+    offset: int
+
+
+class InvestRiskProfileReportResponse(BaseModel):
+    assessment_id: str
+    tier: str
+    score: int
+    cached: bool
+    generated_at: Optional[str] = None
+    filename: str

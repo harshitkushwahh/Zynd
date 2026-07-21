@@ -1,14 +1,18 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
+import { DASHBOARD_NAV_CLUSTER_CLASS, DASHBOARD_NAV_ITEM_CLASS } from "@/components/dashboard/dashboard-layout";
 import { useDashboardRoute } from "@/features/dashboard/navigation/use-dashboard-route";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfCartAmcAvatarStack } from "@/features/invest/components/mf-cart-amc-avatar-stack";
 import { useMfCartNavbarMeta } from "@/features/invest/hooks/use-mf-cart-navbar-meta";
 import { useMfFundNavbarMeta } from "@/features/invest/hooks/use-mf-fund-navbar-meta";
+import { RiskProfileActiveCard } from "@/features/risk-profile/components/risk-profile-active-card";
+import { useRiskProfileActiveCard } from "@/features/risk-profile/hooks/use-risk-profile-active-card";
+import { ReferralActiveCard } from "@/features/referral/components/referral-active-card";
+import { useReferralActiveCard } from "@/features/referral/hooks/use-referral-active-card";
 import { copy } from "@/shared/config/copy";
-import { uiClasses } from "@/shared/config/ui-classes";
 import {
   HoverCard,
   HoverCardContent,
@@ -30,7 +34,13 @@ export function DashboardActivePageCard() {
 
   const showFundAmc = isFundPage && Boolean(fund?.amc_name);
   const showCartAmcs = isCartPage && cartCount > 0;
+  const showCartEmptyLabel = isCartPage && !showCartAmcs && !cartLoading;
   const cardTitle = showFundAmc ? fund!.amc_name : pageMeta.title;
+  const activeCardLabel = showCartEmptyLabel
+    ? copy.mutualFunds.cartNavbarEmptyLabel
+    : !isCartPage
+      ? cardTitle
+      : null;
   const ariaLabel = isCartPage ? copy.mutualFunds.cartTitle : cardTitle;
   const hoverTitle = showFundAmc
     ? fund!.name
@@ -43,9 +53,27 @@ export function DashboardActivePageCard() {
       ? copy.mutualFunds.cartItemCount.replace("{count}", String(cartCount))
       : pageMeta.description;
   const isLoading = (isFundPage && fundLoading) || (isCartPage && cartLoading);
+  const { isRiskProfileSection } = useRiskProfileActiveCard(pathname);
+  const { isReferralSection } = useReferralActiveCard(pathname);
+
+  if (isRiskProfileSection) {
+    return (
+      <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
+        <RiskProfileActiveCard />
+      </div>
+    );
+  }
+
+  if (isReferralSection) {
+    return (
+      <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
+        <ReferralActiveCard pathname={pathname} />
+      </div>
+    );
+  }
 
   return (
-    <div className={cn("flex items-center justify-center", uiClasses.navSurface)}>
+    <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
       <HoverCard>
         <HoverCardTrigger
           delay={200}
@@ -54,8 +82,8 @@ export function DashboardActivePageCard() {
             <button
               type="button"
               className={cn(
-                "inline-flex h-9 items-center justify-center gap-1.5 rounded-[var(--radius-full)] text-center outline-none",
-                isCartPage ? "w-auto px-3" : "w-[11rem] px-2.5",
+                DASHBOARD_NAV_ITEM_CLASS,
+                "w-auto justify-center text-center outline-none",
                 "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
               )}
               aria-label={`${ariaLabel} page info`}
@@ -73,11 +101,13 @@ export function DashboardActivePageCard() {
               size="sm"
               className="size-6 shrink-0 p-0.5"
             />
+          ) : showCartEmptyLabel ? (
+            <Plus className="size-4 shrink-0" strokeWidth={2.25} />
           ) : (
             <Icon className="size-4 shrink-0" strokeWidth={2.25} />
           )}
-          {!isCartPage ? (
-            <span className="truncate text-[13px] font-medium leading-none">{cardTitle}</span>
+          {activeCardLabel ? (
+            <span className="whitespace-nowrap text-[13px] font-medium leading-none">{activeCardLabel}</span>
           ) : null}
         </HoverCardTrigger>
 
@@ -95,6 +125,10 @@ export function DashboardActivePageCard() {
                 amcName={fund!.amc_name}
                 className="size-9 shrink-0 p-1"
               />
+            ) : showCartEmptyLabel ? (
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
+                <Plus className="size-4" strokeWidth={2.25} />
+              </div>
             ) : (
               <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
                 <Icon className="size-4" strokeWidth={2.25} />

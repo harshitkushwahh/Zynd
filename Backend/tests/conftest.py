@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.application.messaging.scheduled_events import begin_event_batch, discard_scheduled_events
 from app.core.config import get_settings
 from app.infrastructure.persistence.models import AuditEventType, Base
+from app.infrastructure.persistence import risk_profile_models  # noqa: F401
+from app.infrastructure.persistence import family_group_models  # noqa: F401
 
 # Enum values added after initial schema creation — sync for isolated test DBs.
 _AUDIT_EVENT_ENUM_EXTENSIONS = [
@@ -131,6 +133,7 @@ def fake_redis(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     monkeypatch.setattr("app.core.redis.get_redis", fake_get_redis)
     monkeypatch.setattr("app.infrastructure.otp.service.get_redis", fake_get_redis)
     monkeypatch.setattr("app.infrastructure.persistence.signup_draft_store.get_redis", fake_get_redis)
+    monkeypatch.setattr("app.infrastructure.persistence.family_invite_token_store.get_redis", fake_get_redis)
     monkeypatch.setattr("app.infrastructure.persistence.password_reset_token_store.get_redis", fake_get_redis)
     monkeypatch.setattr("app.infrastructure.security.rate_limit.get_redis", fake_get_redis)
     monkeypatch.setattr("app.infrastructure.security.pending_auth.get_redis", fake_get_redis)
@@ -149,6 +152,9 @@ async def db_session() -> AsyncSession:
 
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
+        # Recreate activity enum with migration-aligned dot-notation values.
+        await conn.execute(text("DROP TABLE IF EXISTS family_group_activities CASCADE"))
+        await conn.execute(text("DROP TYPE IF EXISTS familygroupactivitytype CASCADE"))
         await conn.run_sync(Base.metadata.create_all)
         for value in _AUDIT_EVENT_ENUM_EXTENSIONS:
             await conn.execute(
@@ -263,6 +269,115 @@ async def db_session() -> AsyncSession:
                 "CASE WHEN doc_type = 'profile_image' THEN 'zynd-public-assets' "
                 "ELSE 'zynd-pii-documents' END) "
                 "WHERE storage_provider IS NULL OR storage_bucket IS NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                DO $$ BEGIN
+                    CREATE TYPE risktier AS ENUM (
+                        'secure', 'conservative', 'moderate', 'growth', 'aggressive'
+                    );
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                DO $$ BEGIN
+                    CREATE TYPE risktemplateselectionmode AS ENUM ('manual', 'auto');
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(
+            text("ALTER TABLE risk_profile_assessments ADD COLUMN IF NOT EXISTS template_id UUID")
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE risk_question_options "
+                "ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE risk_profile_answers "
+                "ADD COLUMN IF NOT EXISTS answer_snapshot JSONB"
+            )
+        )
+        await conn.execute(
+            text("ALTER TYPE documenttype ADD VALUE IF NOT EXISTS 'family_group_avatar'")
+        )
+        for enum_sql in (
+            """
+            DO $$ BEGIN
+                CREATE TYPE familygroupstatus AS ENUM ('active', 'archived');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+            """,
+            """
+            DO $$ BEGIN
+                CREATE TYPE familygroupmemberrole AS ENUM ('head', 'contributor', 'viewer');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+            """,
+            """
+            DO $$ BEGIN
+                CREATE TYPE familygroupmemberstatus AS ENUM ('active', 'removed');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+            """,
+            """
+            DO $$ BEGIN
+                CREATE TYPE familygroupinvitestatus AS ENUM ('pending', 'accepted', 'declined', 'revoked', 'expired');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+            """,
+            """
+            DO $$ BEGIN
+                CREATE TYPE notificationcategory AS ENUM ('security', 'kyc', 'referral', 'account', 'family');
+            EXCEPTION
+                WHEN duplicate_object THEN NULL;
+            END $$;
+            """,
+        ):
+            await conn.execute(text(enum_sql))
+        await conn.execute(
+            text("ALTER TYPE notificationcategory ADD VALUE IF NOT EXISTS 'family'")
+        )
+        for column_sql in (
+            "ALTER TABLE family_group_members ADD COLUMN IF NOT EXISTS badge_key VARCHAR(32)",
+            "ALTER TABLE family_group_members ADD COLUMN IF NOT EXISTS badge_label VARCHAR(64)",
+            "ALTER TABLE family_group_members ADD COLUMN IF NOT EXISTS invited_by_user_id UUID",
+            "ALTER TABLE family_group_members ADD COLUMN IF NOT EXISTS display_nickname VARCHAR(64)",
+            "ALTER TABLE family_group_members ADD COLUMN IF NOT EXISTS nickname_set_by_user_id UUID",
+            "ALTER TABLE family_group_invites ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ",
+            "ALTER TABLE family_group_invites ADD COLUMN IF NOT EXISTS reminder_count INTEGER NOT NULL DEFAULT 0",
+        ):
+            await conn.execute(text(column_sql))
+        await conn.execute(
+            text(
+                "ALTER TYPE familygroupactivitytype ADD VALUE IF NOT EXISTS 'nominee.suggested_from_kyc'"
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                DO $$ BEGIN
+                    CREATE TYPE familygroupnomineelinkstatus AS ENUM ('skipped', 'invited', 'already_member');
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$;
+                """
             )
         )
 

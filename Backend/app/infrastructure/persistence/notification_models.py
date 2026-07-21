@@ -17,6 +17,7 @@ class NotificationCategory(str, enum.Enum):
     kyc = "kyc"
     referral = "referral"
     account = "account"
+    family = "family"
 
 
 class UserNotification(Base):

@@ -106,6 +106,32 @@ class AuditEventType(str, enum.Enum):
     mf_catalog_rules_applied = "mf_catalog_rules_applied"
     mf_catalog_bulk_submitted = "mf_catalog_bulk_submitted"
     mf_catalog_bulk_executed = "mf_catalog_bulk_executed"
+    risk_category_created = "risk_category_created"
+    risk_category_updated = "risk_category_updated"
+    risk_question_created = "risk_question_created"
+    risk_question_updated = "risk_question_updated"
+    risk_question_deleted = "risk_question_deleted"
+    risk_tier_config_updated = "risk_tier_config_updated"
+    risk_profile_completed = "risk_profile_completed"
+    risk_profile_message_sent = "risk_profile_message_sent"
+    risk_question_bulk_imported = "risk_question_bulk_imported"
+    risk_template_created = "risk_template_created"
+    risk_template_updated = "risk_template_updated"
+    risk_profile_locked = "risk_profile_locked"
+    risk_profile_unlock_granted = "risk_profile_unlock_granted"
+    family_group_created = "family_group_created"
+    family_group_updated = "family_group_updated"
+    family_group_archived = "family_group_archived"
+    family_group_invite_sent = "family_group_invite_sent"
+    family_group_invite_accepted = "family_group_invite_accepted"
+    family_group_invite_declined = "family_group_invite_declined"
+    family_group_invite_revoked = "family_group_invite_revoked"
+    family_group_member_role_changed = "family_group_member_role_changed"
+    family_group_member_removed = "family_group_member_removed"
+    family_group_member_left = "family_group_member_left"
+    family_group_head_transferred = "family_group_head_transferred"
+    family_group_nominee_kyc_invited = "family_group_nominee_kyc_invited"
+    family_group_nominee_kyc_skipped = "family_group_nominee_kyc_skipped"
 
 
 class DeletionEventType(str, enum.Enum):
@@ -634,6 +660,7 @@ class DocumentType(str, enum.Enum):
     signature = "signature"
     address_proof = "address_proof"
     nominee_id = "nominee_id"
+    family_group_avatar = "family_group_avatar"
 
 
 class KycReviewStatus(str, enum.Enum):
@@ -834,6 +861,7 @@ class AdminInvitation(Base):
     )
 
 
+from app.infrastructure.persistence import family_group_models as _family_group_models  # noqa: F401,E402
 from app.infrastructure.persistence import investor_models as _investor_profile_models  # noqa: F401,E402
 from app.infrastructure.persistence import mf_models as _mf_models  # noqa: F401,E402
 from app.infrastructure.persistence import mf_transaction_models as _mf_transaction_models  # noqa: F401,E402

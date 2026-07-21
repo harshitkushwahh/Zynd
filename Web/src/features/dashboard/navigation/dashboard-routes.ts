@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   Bell,
   Gift,
+  Gauge,
   Landmark,
   LayoutDashboard,
   PieChart,
@@ -70,11 +71,29 @@ export const DASHBOARD_ROUTES: DashboardRoute[] = [
     enabled: true,
   },
   {
+    id: "risk-profile",
+    label: copy.riskProfile.settingsTitle,
+    href: "/dashboard/risk-profile",
+    icon: Gauge,
+    description: copy.riskProfile.settingsDescription,
+    enabled: true,
+    showInTopNav: false,
+  },
+  {
     id: "referral",
     label: "Referrals",
     href: "/dashboard/referral",
     icon: Gift,
     description: copy.referral.pageDescription,
+    enabled: true,
+    showInTopNav: false,
+  },
+  {
+    id: "family-groups",
+    label: copy.familyGroups.pageTitle,
+    href: "/dashboard/family",
+    icon: Users,
+    description: copy.familyGroups.pageDescription,
     enabled: true,
     showInTopNav: false,
   },
@@ -217,6 +236,14 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
       title: copy.mutualFunds.collectionsTitle,
       description: "Explore curated mutual fund collections on Zynd.",
       icon: PieChart,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/risk-profile/assessment")) {
+    return {
+      title: copy.riskProfile.dialogTitle,
+      description: copy.riskProfile.startAssessmentDescription,
+      icon: Gauge,
     };
   }
 

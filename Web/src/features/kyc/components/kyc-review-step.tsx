@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CreditCard, Users } from "lucide-react";
+import { Building2, CreditCard, Users, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -10,6 +10,7 @@ import { KycReviewIntro } from "@/features/kyc/components/kyc-review-intro";
 import { KycReviewNomineeEmpty } from "@/features/kyc/components/kyc-review-nominee-empty";
 import { KycReviewPanSection } from "@/features/kyc/components/kyc-review-pan-section";
 import type { KycJourneyDraft } from "@/features/kyc/lib/kyc-journey-draft";
+import type { KycNomineeRecord } from "@/features/kyc/lib/kyc-nominee";
 import {
   KYC_GENDER_OPTIONS,
   KYC_INCOME_SLAB_OPTIONS,
@@ -26,6 +27,9 @@ type KycReviewStepProps = {
   requiresFullKyc?: boolean;
   onSubmit: () => void;
   onAddNominee: () => void;
+  familyGroupRepromptNominee?: KycNomineeRecord | null;
+  onFamilyGroupRepromptInvite?: () => void;
+  onFamilyGroupRepromptDismiss?: () => void;
 };
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
@@ -61,6 +65,9 @@ export function KycReviewStep({
   requiresFullKyc = true,
   onSubmit,
   onAddNominee,
+  familyGroupRepromptNominee = null,
+  onFamilyGroupRepromptInvite,
+  onFamilyGroupRepromptDismiss,
 }: KycReviewStepProps) {
   const pan = draft.pan;
   const address = draft.address;
@@ -113,6 +120,37 @@ export function KycReviewStep({
       <div className="shrink-0">
         <KycReviewIntro />
       </div>
+
+      {familyGroupRepromptNominee ? (
+        <div className="shrink-0 rounded-[var(--radius-card)] border border-primary/20 bg-primary/5 px-3 py-3">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <UsersRound className="size-4" strokeWidth={2} />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <div>
+                <p className="text-caption font-medium text-foreground">
+                  {copy.kyc.familyGroup.reviewBannerTitle}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {copy.kyc.familyGroup.reviewBannerDescription(familyGroupRepromptNominee.core.fullName)}
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground/80">
+                  {copy.kyc.familyGroup.legalDisclaimer}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={onFamilyGroupRepromptInvite}>
+                  {copy.kyc.familyGroup.reviewBannerInvite}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={onFamilyGroupRepromptDismiss}>
+                  {copy.kyc.familyGroup.reviewBannerDismiss}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin]">
         <KycReviewAccordion

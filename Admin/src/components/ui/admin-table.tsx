@@ -7,6 +7,7 @@ import {
   type AdminTableMinWidth,
 } from "@/components/ui/admin-design-tokens";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export const ADMIN_TABLE_PAGE_SIZE = 10;
@@ -100,17 +101,90 @@ export function AdminTableCell({
 export function AdminTableStateRow({
   colSpan,
   children,
+  message,
 }: {
   colSpan: number;
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  message?: React.ReactNode;
 }) {
   return (
     <AdminTableRow>
       <AdminTableCell colSpan={colSpan} className="py-10 text-center text-muted-foreground">
-        {children}
+        {message ?? children}
       </AdminTableCell>
     </AdminTableRow>
   );
+}
+
+type AdminTableSkeletonRowsProps = {
+  columns: number;
+  rows?: number;
+  dense?: boolean;
+};
+
+export function AdminTableSkeletonRows({
+  columns,
+  rows = 6,
+  dense = false,
+}: AdminTableSkeletonRowsProps) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, rowIndex) => (
+        <AdminTableRow key={`skeleton-row-${rowIndex}`}>
+          {Array.from({ length: columns }).map((_, columnIndex) => (
+            <AdminTableCell key={`skeleton-cell-${rowIndex}-${columnIndex}`}>
+              {columnIndex === 0 && !dense ? (
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-8 shrink-0 rounded-control" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-36 max-w-full" />
+                    <Skeleton className="h-3 w-24 max-w-full" />
+                  </div>
+                </div>
+              ) : (
+                <Skeleton
+                  className={cn(
+                    "h-4 max-w-full",
+                    columnIndex === columns - 1 ? "ml-auto w-16" : "w-28",
+                  )}
+                />
+              )}
+            </AdminTableCell>
+          ))}
+        </AdminTableRow>
+      ))}
+    </>
+  );
+}
+
+type AdminTableRowsProps = {
+  children: React.ReactNode;
+  colSpan: number;
+  loading?: boolean;
+  isEmpty?: boolean;
+  emptyMessage?: React.ReactNode;
+  skeletonRows?: number;
+  dense?: boolean;
+};
+
+export function AdminTableRows({
+  children,
+  colSpan,
+  loading = false,
+  isEmpty = false,
+  emptyMessage = "No data.",
+  skeletonRows = 6,
+  dense = false,
+}: AdminTableRowsProps) {
+  if (loading) {
+    return <AdminTableSkeletonRows columns={colSpan} rows={skeletonRows} dense={dense} />;
+  }
+
+  if (isEmpty) {
+    return <AdminTableStateRow colSpan={colSpan} message={emptyMessage} />;
+  }
+
+  return children;
 }
 
 export function AdminTablePagination({

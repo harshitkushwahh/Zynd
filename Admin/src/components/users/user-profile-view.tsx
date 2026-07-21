@@ -13,10 +13,9 @@ import {
   UserCheck,
   UserRound,
   UserX,
+  UsersRound,
   X,
 } from "lucide-react";
-
-import { StatusBadge } from "@/components/ui/status-badge";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminProfilePageSkeleton } from "@/components/ui/admin-skeletons";
 import {
@@ -43,6 +42,8 @@ import {
   userManagementBreadcrumbSegments,
 } from "@/components/dashboard/admin-section-breadcrumb";
 import { UserInvestmentsDetailSection } from "@/components/users/user-investments-detail-section";
+import { UserRiskDetailSection } from "@/components/users/user-risk-detail-section";
+import { UserFamilyGroupsDetailSection } from "@/components/users/user-family-groups-detail-section";
 import { UserKycDetailSection } from "@/components/users/user-kyc-detail-section";
 import { userInitials } from "@/lib/admin-capabilities";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
@@ -73,7 +74,7 @@ const SUSPEND_REASONS = [
 ] as const;
 
 
-type ProfileTab = "overview" | "kyc" | "investments" | "activity";
+type ProfileTab = "overview" | "kyc" | "investments" | "risk" | "activity";
 
 function suspendReasonLabel(value: string) {
   return SUSPEND_REASONS.find((reason) => reason.value === value)?.label ?? value.replaceAll("_", " ");
@@ -475,6 +476,8 @@ export function UserProfileView({ clientId }: { clientId: string }) {
   const canDownloadDocs = hasPermission("documents.download");
   const canVerifyDocs = hasPermission("documents.verify");
   const canReadMf = hasPermission("mf.transactions.read");
+  const canReadRiskProfile = hasPermission("risk_profile.users.read");
+  const canReadFamilyGroups = hasPermission("family_groups.read");
   const canReadAudit = hasPermission("audit.read");
 
   const [summary, setSummary] = useState<AdminUserSummary | null>(null);
@@ -550,6 +553,7 @@ export function UserProfileView({ clientId }: { clientId: string }) {
   const visibleTabs: ProfileTab[] = ["overview"];
   if (canReadKyc && profileDetail?.kyc) visibleTabs.push("kyc");
   if (canReadMf && profileDetail?.investments) visibleTabs.push("investments");
+  if (canReadRiskProfile) visibleTabs.push("risk");
   if (canReadAudit) visibleTabs.push("activity");
 
   useEffect(() => {
@@ -682,6 +686,11 @@ export function UserProfileView({ clientId }: { clientId: string }) {
                   Investments
                 </TabsTrigger>
               ) : null}
+              {canReadRiskProfile ? (
+                <TabsTrigger value="risk" className="px-4 py-2">
+                  Risk profile
+                </TabsTrigger>
+              ) : null}
               {canReadAudit ? (
                 <TabsTrigger value="activity" className="px-4 py-2">
                   Activity
@@ -775,6 +784,16 @@ export function UserProfileView({ clientId }: { clientId: string }) {
                 </div>
               </ProfileSection>
 
+              {canReadFamilyGroups ? (
+                <ProfileSection
+                  title="Family groups"
+                  description="Groups this user created and memberships they belong to."
+                  icon={UsersRound}
+                >
+                  <UserFamilyGroupsDetailSection userId={summary.user_id} />
+                </ProfileSection>
+              ) : null}
+
               {canSuspend ? (
                 <ProfileSection
                   title="Account actions"
@@ -836,6 +855,12 @@ export function UserProfileView({ clientId }: { clientId: string }) {
             {canReadMf && profileDetail?.investments ? (
               <TabsContent value="investments" className="mt-0">
                 <UserInvestmentsDetailSection investments={profileDetail.investments} />
+              </TabsContent>
+            ) : null}
+
+            {canReadRiskProfile ? (
+              <TabsContent value="risk" className="mt-0">
+                <UserRiskDetailSection userId={summary.user_id} />
               </TabsContent>
             ) : null}
 

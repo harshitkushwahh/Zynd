@@ -1,0 +1,263 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Lock, MoreHorizontal, CheckCircle2 } from "lucide-react";
+
+import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
+import { LockedProfileUserCell } from "@/components/risk-profile/risk-profile-locked-user-cell";
+import { RiskProfileUnlockJourneyDialog } from "@/components/risk-profile/risk-profile-unlock-journey-dialog";
+import {
+  AdminDialogFooterActions,
+  AdminFormDialog,
+} from "@/components/ui/admin-dialog-presets";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTablePagination,
+  AdminTableRow,
+  AdminTableRows,
+  getOffsetPage,
+} from "@/components/ui/admin-table";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/errors";
+import {
+  confirmRiskProfileUnlock,
+  fetchLockedRiskProfiles,
+  requestRiskProfileUnlock,
+  type LockedRiskProfileUser,
+} from "@/lib/risk-profile-admin-api";
+
+const RISK_PROFILE_UNLOCK_ATTEMPTS = 3;
+
+export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
+  const [items, setItems] = useState<LockedRiskProfileUser[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [selectedUser, setSelectedUser] = useState<LockedRiskProfileUser | null>(null);
+  const [journeyUser, setJourneyUser] = useState<LockedRiskProfileUser | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+
+  const page = getOffsetPage(offset);
+
+  const loadLockedUsers = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await fetchLockedRiskProfiles({
+        limit: ADMIN_TABLE_PAGE_SIZE,
+        offset,
+      });
+      setItems(result.items);
+      setHasMore(result.items.length === ADMIN_TABLE_PAGE_SIZE);
+    } catch (err) {
+      setItems([]);
+      setHasMore(false);
+      setError(getErrorMessage(err, "Could not load locked risk profiles."));
+    } finally {
+      setLoading(false);
+    }
+  }, [offset]);
+
+  useEffect(() => {
+    void loadLockedUsers();
+  }, [loadLockedUsers]);
+
+  const openRevokeDialog = (user: LockedRiskProfileUser) => {
+    setSelectedUser(user);
+    setOtpCode("");
+    setOtpSent(false);
+    setMessage("");
+    setError("");
+  };
+
+  const closeRevokeDialog = () => {
+    setSelectedUser(null);
+    setOtpCode("");
+    setOtpSent(false);
+  };
+
+  const handleSendOtp = async () => {
+    if (!selectedUser) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      await requestRiskProfileUnlock(selectedUser.user_id);
+      setOtpSent(true);
+      setMessage("Unlock code sent to the user's in-app notifications.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not send unlock code."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleConfirmUnlock = async () => {
+    if (!selectedUser) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      await confirmRiskProfileUnlock(selectedUser.user_id, {
+        otp_code: otpCode.trim(),
+      });
+      setMessage(`Granted ${RISK_PROFILE_UNLOCK_ATTEMPTS} attempt(s) to ${selectedUser.email}.`);
+      closeRevokeDialog();
+      await loadLockedUsers();
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not unlock risk profile attempts."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <AdminSectionTitle>Locked profiles</AdminSectionTitle>
+
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+
+      <AdminDataTable minWidth="lg">
+        <AdminTableHeader>
+          <tr>
+            <AdminTableHeadCell>User</AdminTableHeadCell>
+            <AdminTableHeadCell className="text-right">Completed</AdminTableHeadCell>
+            <AdminTableHeadCell className="text-right">Granted</AdminTableHeadCell>
+            <AdminTableHeadCell>Locked at</AdminTableHeadCell>
+            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
+          </tr>
+        </AdminTableHeader>
+        <AdminTableBody>
+          <AdminTableRows
+            colSpan={canManage ? 5 : 4}
+            loading={loading}
+            isEmpty={items.length === 0}
+            emptyMessage="No locked risk profiles."
+          >
+            {items.map((item) => (
+              <AdminTableRow key={item.user_id}>
+                <AdminTableCell>
+                  <LockedProfileUserCell user={item} />
+                </AdminTableCell>
+                <AdminTableCell className="text-right">{item.completed_count}</AdminTableCell>
+                <AdminTableCell className="text-right">{item.granted_attempts}</AdminTableCell>
+                <AdminTableCell>{item.locked_at ? new Date(item.locked_at).toLocaleString() : "—"}</AdminTableCell>
+                {canManage ? (
+                  <AdminTableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button size="icon-sm" variant="ghost" aria-label="Row actions">
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setJourneyUser(item)}>View journey</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openRevokeDialog(item)}>Revoke lock</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </AdminTableCell>
+                ) : null}
+              </AdminTableRow>
+            ))}
+          </AdminTableRows>
+        </AdminTableBody>
+      </AdminDataTable>
+
+      <AdminTablePagination
+        page={page}
+        hasPrevious={offset > 0}
+        hasNext={hasMore}
+        disabled={loading}
+        onPrevious={() => setOffset((value) => Math.max(0, value - ADMIN_TABLE_PAGE_SIZE))}
+        onNext={() => setOffset((value) => value + ADMIN_TABLE_PAGE_SIZE)}
+      />
+
+      <AdminFormDialog
+        open={Boolean(selectedUser)}
+        onClose={closeRevokeDialog}
+        title="Revoke lock"
+        description="Send a code to their dashboard notifications."
+        icon={Lock}
+        iconTone="warning"
+        footer={
+          otpSent ? (
+            <AdminDialogFooterActions
+              cancelLabel="Cancel"
+              confirmLabel="Grant attempts"
+              loading={saving}
+              confirmDisabled={!otpCode.trim()}
+              onCancel={closeRevokeDialog}
+              onConfirm={() => void handleConfirmUnlock()}
+            />
+          ) : (
+            <AdminDialogFooterActions
+              cancelLabel="Cancel"
+              confirmLabel="Send unlock code"
+              loading={saving}
+              onCancel={closeRevokeDialog}
+              onConfirm={() => void handleSendOtp()}
+            />
+          )
+        }
+      >
+        {selectedUser ? (
+          <div className="grid gap-4">
+            <div className="rounded-[var(--radius-control)] border border-border bg-muted/20 px-3 py-2 text-compact">
+              <LockedProfileUserCell user={selectedUser} />
+              <p className="mt-2 flex items-center gap-1.5 text-muted-foreground">
+                <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
+                Completed {selectedUser.completed_count} of {selectedUser.granted_attempts} granted attempts.
+              </p>
+            </div>
+            {otpSent ? (
+              <div className="space-y-2">
+                <Label htmlFor="risk-unlock-otp">Unlock code from user</Label>
+                <Input
+                  id="risk-unlock-otp"
+                  value={otpCode}
+                  onChange={(event) => setOtpCode(event.target.value)}
+                  placeholder="6-digit code"
+                />
+                <p className="text-caption text-muted-foreground">
+                  Confirming will grant {RISK_PROFILE_UNLOCK_ATTEMPTS} additional assessment attempts.
+                </p>
+              </div>
+            ) : (
+              <AdminFeedbackMessage variant="info">
+                The user will receive the unlock code in their in-app notifications. Ask them to read it back to
+                you before confirming.
+              </AdminFeedbackMessage>
+            )}
+          </div>
+        ) : null}
+      </AdminFormDialog>
+
+      <RiskProfileUnlockJourneyDialog
+        open={Boolean(journeyUser)}
+        user={journeyUser}
+        onClose={() => setJourneyUser(null)}
+      />
+    </div>
+  );
+}
