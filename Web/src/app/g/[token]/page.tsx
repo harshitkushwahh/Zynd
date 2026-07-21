@@ -1,4 +1,5 @@
-import { FamilyInviteLanding, normalizeLandingFamilyInviteToken } from "@/features/family-groups/components/family-invite-landing";
+import { FamilyInviteLanding } from "@/features/family-groups/components/family-invite-landing";
+import { normalizeFamilyInviteToken } from "@/features/family-groups/lib/family-invite-storage";
 import { SiteHeader } from "@/components/auth/auth-header-actions";
 import { copy } from "@/shared/config/copy";
 import { notFound } from "next/navigation";
@@ -9,7 +10,7 @@ type FamilyInviteLandingPageProps = {
 
 export default async function FamilyInviteLandingPage({ params }: FamilyInviteLandingPageProps) {
   const { token } = await params;
-  const normalized = normalizeLandingFamilyInviteToken(token);
+  const normalized = normalizeFamilyInviteToken(token);
 
   if (!normalized) {
     notFound();

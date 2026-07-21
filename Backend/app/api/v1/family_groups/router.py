@@ -34,6 +34,18 @@ from app.api.v1.family_groups.schemas import (
     NomineeFamilyGroupPreviewRequest,
     NomineeFamilyGroupPreviewResponse,
 )
+from app.api.v1.goals.schemas import (
+    AddFamilyGoalContributionRequest,
+    CreateFamilyGoalRequest,
+    FamilyGoalContributionsResponse,
+    FamilyGoalContributionItemResponse,
+    FamilyGoalListResponse,
+    FamilyGoalMemberTotalResponse,
+    FamilyGoalResponse,
+    UpdateFamilyGoalRequest,
+)
+from app.application.documents.document_image_validation import max_bytes_for_doc_type
+from app.application.documents.errors import DocumentError
 from app.application.family_groups.constants import MAX_FAMILY_GROUPS_PER_USER
 from app.application.family_groups.errors import FamilyGroupError
 from app.application.family_groups.group_service import (
@@ -42,6 +54,7 @@ from app.application.family_groups.group_service import (
     create_family_group,
     get_family_group_for_user,
     list_family_groups_for_user,
+    list_archived_family_groups_for_user,
     list_group_members_preview,
     update_family_group,
     upload_family_group_avatar,
@@ -70,14 +83,34 @@ from app.application.family_groups.invite_service import (
     resend_family_group_invite,
     revoke_family_group_invite,
 )
+from app.application.goals.constants import MAX_ACTIVE_FAMILY_GOALS_PER_GROUP
+from app.application.goals.errors import GoalError
+from app.application.goals.family_goal_service import (
+    add_family_goal_contribution,
+    archive_family_goal,
+    count_active_family_goals,
+    create_family_goal,
+    get_family_goal,
+    get_family_goal_contributions,
+    list_family_goals,
+    update_family_goal,
+)
 from app.core.database import get_db
 from app.infrastructure.persistence.family_group_models import FamilyGroupMemberRole
-from app.infrastructure.persistence.models import User
+from app.infrastructure.persistence.goal_models import GoalStatus
+from app.infrastructure.persistence.models import DocumentType, User
 
 router = APIRouter(prefix="/family-groups", tags=["family-groups"])
 
 
 def _handle_family_group_error(exc: FamilyGroupError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": {"code": exc.code, "message": exc.message}},
+    )
+
+
+def _handle_goal_error(exc: GoalError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": {"code": exc.code, "message": exc.message}},
@@ -102,8 +135,25 @@ async def list_my_family_groups(
     )
 
 
+@router.get("/me/archived", response_model=FamilyGroupListResponse)
+async def list_my_archived_family_groups(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGroupListResponse:
+    items = await list_archived_family_groups_for_user(db, user_id=current_user.id)
+    active_count = await count_active_groups_created_by_user(db, current_user.id)
+    return FamilyGroupListResponse(
+        items=[_to_group_response(item) for item in items],
+        limit=MAX_FAMILY_GROUPS_PER_USER,
+        active_count=active_count,
+    )
+
+
 @router.get("/badges", response_model=FamilyGroupBadgePresetListResponse)
-async def get_family_group_badges() -> FamilyGroupBadgePresetListResponse:
+async def get_family_group_badges(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGroupBadgePresetListResponse:
+    _ = current_user
     return FamilyGroupBadgePresetListResponse(
         items=[FamilyGroupBadgePresetResponse.model_validate(item) for item in list_badge_presets()]
     )
@@ -239,6 +289,7 @@ async def get_family_group(
         invites: list[dict[str, object]] = []
         if payload.get("my_role") == FamilyGroupMemberRole.head.value:
             invites = await list_group_invites(db, group_id=group_id, user_id=current_user.id)
+        active_goals_count = await count_active_family_goals(db, group_id=group_id)
     except FamilyGroupError as exc:
         return _handle_family_group_error(exc)
 
@@ -246,6 +297,7 @@ async def get_family_group(
         **_to_group_response(payload).model_dump(),
         members=[FamilyGroupMemberPreviewResponse.model_validate(member) for member in members],
         invites=[FamilyGroupInviteResponse.model_validate(invite) for invite in invites],
+        active_goals_count=active_goals_count,
     )
 
 
@@ -311,7 +363,17 @@ async def post_family_group_avatar(
     current_user: Annotated[User, Depends(get_current_user)],
     file: Annotated[UploadFile, File()],
 ) -> FamilyGroupResponse:
-    content = await file.read()
+    max_bytes = max_bytes_for_doc_type(DocumentType.family_group_avatar)
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        return _handle_family_group_error(
+            FamilyGroupError(
+                "file_too_large",
+                f"Group icon must be at most {max_bytes // (1024 * 1024)} MB.",
+                status_code=400,
+            )
+        )
+
     try:
         payload = await upload_family_group_avatar(
             db,
@@ -324,6 +386,10 @@ async def post_family_group_avatar(
         )
     except FamilyGroupError as exc:
         return _handle_family_group_error(exc)
+    except DocumentError as exc:
+        return _handle_family_group_error(
+            FamilyGroupError(exc.code, exc.message, status_code=exc.status_code)
+        )
     return _to_group_response(payload)
 
 
@@ -582,3 +648,189 @@ async def post_family_group_transfer_head(
     except FamilyGroupError as exc:
         return _handle_family_group_error(exc)
     return _to_group_response(payload)
+
+
+@router.get("/{group_id}/goals", response_model=FamilyGoalListResponse)
+async def get_family_group_goals(
+    group_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    include_archived: bool = Query(default=False),
+) -> FamilyGoalListResponse:
+    try:
+        items = await list_family_goals(
+            db,
+            group_id=group_id,
+            user_id=current_user.id,
+            include_archived=include_archived,
+        )
+    except (FamilyGroupError, GoalError) as exc:
+        if isinstance(exc, GoalError):
+            return _handle_goal_error(exc)
+        return _handle_family_group_error(exc)
+    active_count = sum(1 for item in items if item["status"] in {"draft", "active", "paused"})
+    return FamilyGoalListResponse(
+        items=[FamilyGoalResponse(**item) for item in items],
+        limit=MAX_ACTIVE_FAMILY_GOALS_PER_GROUP,
+        active_count=active_count,
+    )
+
+
+@router.post("/{group_id}/goals", response_model=FamilyGoalResponse, status_code=201)
+async def post_family_group_goal(
+    group_id: UUID,
+    body: CreateFamilyGoalRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGoalResponse:
+    try:
+        result = await create_family_goal(
+            db,
+            group_id=group_id,
+            user_id=current_user.id,
+            title=body.title,
+            target_amount_inr=body.target_amount_inr,
+            target_date=body.target_date,
+            template_id=body.template_id,
+            tag=body.tag,
+            priority=body.priority,
+            existing_savings_inr=body.existing_savings_inr,
+            expected_return_pct=body.expected_return_pct,
+            status=GoalStatus(body.status),
+        )
+    except (FamilyGroupError, GoalError) as exc:
+        if isinstance(exc, GoalError):
+            return _handle_goal_error(exc)
+        return _handle_family_group_error(exc)
+    await db.commit()
+    return FamilyGoalResponse(**result)
+
+
+@router.get("/{group_id}/goals/{goal_id}", response_model=FamilyGoalResponse)
+async def get_family_group_goal(
+    group_id: UUID,
+    goal_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGoalResponse:
+    try:
+        result = await get_family_goal(
+            db,
+            group_id=group_id,
+            goal_id=goal_id,
+            user_id=current_user.id,
+        )
+    except (FamilyGroupError, GoalError) as exc:
+        if isinstance(exc, GoalError):
+            return _handle_goal_error(exc)
+        return _handle_family_group_error(exc)
+    return FamilyGoalResponse(**result)
+
+
+@router.patch("/{group_id}/goals/{goal_id}", response_model=FamilyGoalResponse)
+async def patch_family_group_goal(
+    group_id: UUID,
+    goal_id: UUID,
+    body: UpdateFamilyGoalRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGoalResponse:
+    try:
+        result = await update_family_goal(
+            db,
+            group_id=group_id,
+            goal_id=goal_id,
+            user_id=current_user.id,
+            title=body.title,
+            tag=body.tag,
+            priority=body.priority,
+            target_amount_inr=body.target_amount_inr,
+            target_date=body.target_date,
+            existing_savings_inr=body.existing_savings_inr,
+            expected_return_pct=body.expected_return_pct,
+            status=GoalStatus(body.status) if body.status else None,
+        )
+    except (FamilyGroupError, GoalError) as exc:
+        if isinstance(exc, GoalError):
+            return _handle_goal_error(exc)
+        return _handle_family_group_error(exc)
+    await db.commit()
+    return FamilyGoalResponse(**result)
+
+
+@router.delete("/{group_id}/goals/{goal_id}", response_model=FamilyGoalResponse)
+async def delete_family_group_goal(
+    group_id: UUID,
+    goal_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGoalResponse:
+    try:
+        result = await archive_family_goal(
+            db,
+            group_id=group_id,
+            goal_id=goal_id,
+            user_id=current_user.id,
+        )
+    except (FamilyGroupError, GoalError) as exc:
+        if isinstance(exc, GoalError):
+            return _handle_goal_error(exc)
+        return _handle_family_group_error(exc)
+    await db.commit()
+    return FamilyGoalResponse(**result)
+
+
+@router.get("/{group_id}/goals/{goal_id}/contributions", response_model=FamilyGoalContributionsResponse)
+async def get_family_group_goal_contributions(
+    group_id: UUID,
+    goal_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGoalContributionsResponse:
+    try:
+        result = await get_family_goal_contributions(
+            db,
+            group_id=group_id,
+            goal_id=goal_id,
+            user_id=current_user.id,
+        )
+    except (FamilyGroupError, GoalError) as exc:
+        if isinstance(exc, GoalError):
+            return _handle_goal_error(exc)
+        return _handle_family_group_error(exc)
+    return FamilyGoalContributionsResponse(
+        goal_id=result["goal_id"],
+        total_contributed_inr=result["total_contributed_inr"],
+        member_totals=[FamilyGoalMemberTotalResponse(**item) for item in result["member_totals"]],
+        items=[FamilyGoalContributionItemResponse(**item) for item in result["items"]],
+    )
+
+
+@router.post("/{group_id}/goals/{goal_id}/contributions", response_model=FamilyGoalContributionsResponse)
+async def post_family_group_goal_contribution(
+    group_id: UUID,
+    goal_id: UUID,
+    body: AddFamilyGoalContributionRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGoalContributionsResponse:
+    try:
+        result = await add_family_goal_contribution(
+            db,
+            group_id=group_id,
+            goal_id=goal_id,
+            user_id=current_user.id,
+            amount_inr=body.amount_inr,
+            note=body.note,
+        )
+    except (FamilyGroupError, GoalError) as exc:
+        if isinstance(exc, GoalError):
+            return _handle_goal_error(exc)
+        return _handle_family_group_error(exc)
+    await db.commit()
+    return FamilyGoalContributionsResponse(
+        goal_id=result["goal_id"],
+        total_contributed_inr=result["total_contributed_inr"],
+        member_totals=[FamilyGoalMemberTotalResponse(**item) for item in result["member_totals"]],
+        items=[FamilyGoalContributionItemResponse(**item) for item in result["items"]],
+    )

@@ -282,7 +282,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
       record,
       overallStatus,
       showRing: Boolean(user && record),
-      showKycMenu: Boolean(user && record && record.status !== "complete"),
+      showKycMenu: Boolean(user && record),
       kycAllowed,
       kycBlockReasons,
       ringTone: getRingTone(record),

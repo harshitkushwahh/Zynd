@@ -15,15 +15,19 @@ from app.application.family_groups.constants import (
     MAX_FAMILY_GROUPS_PER_USER,
 )
 from app.application.family_groups.display import (
+    MASKED_DETAIL_PLACEHOLDER,
     get_family_group_or_raise,
     group_audit_snapshot,
+    mask_member_email,
+    mask_member_phone,
+    mask_member_zynd_id,
     now_utc,
     require_group_head,
     require_group_member,
     resolve_member_display_name,
     serialize_family_group,
 )
-from app.application.family_groups.activity_service import record_family_group_activity
+from app.application.family_groups.member_insights_service import load_member_insights
 from app.application.family_groups.errors import FamilyGroupError
 from app.infrastructure.persistence.family_group_models import (
     FamilyGroup,
@@ -149,6 +153,28 @@ async def list_family_groups_for_user(
             FamilyGroup.status == FamilyGroupStatus.active,
         )
         .order_by(FamilyGroup.created_at.desc())
+    )
+    groups = list(result.scalars().unique())
+    payload: list[dict[str, object]] = []
+    for group in groups:
+        payload.append(await serialize_family_group(db, group, viewer_user_id=user_id))
+    return payload
+
+
+async def list_archived_family_groups_for_user(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> list[dict[str, object]]:
+    result = await db.execute(
+        select(FamilyGroup)
+        .join(FamilyGroupMember, FamilyGroupMember.group_id == FamilyGroup.id)
+        .where(
+            FamilyGroupMember.user_id == user_id,
+            FamilyGroupMember.status == FamilyGroupMemberStatus.active,
+            FamilyGroup.status == FamilyGroupStatus.archived,
+        )
+        .order_by(FamilyGroup.archived_at.desc(), FamilyGroup.updated_at.desc())
     )
     groups = list(result.scalars().unique())
     payload: list[dict[str, object]] = []
@@ -291,7 +317,8 @@ async def list_group_members_preview(
     group_id: UUID,
     user_id: UUID,
 ) -> list[dict[str, object]]:
-    await require_group_member(db, group_id=group_id, user_id=user_id)
+    _group, viewer_membership = await require_group_member(db, group_id=group_id, user_id=user_id)
+    can_view_details = viewer_membership.role == FamilyGroupMemberRole.head
 
     result = await db.execute(
         select(FamilyGroupMember, User)
@@ -308,10 +335,29 @@ async def list_group_members_preview(
     rows = list(result.all())
     user_ids = [user_row.id for _member, user_row in rows]
     profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids)
+    insights = await load_member_insights(db, user_ids)
 
     members: list[dict[str, object]] = []
     for member, user_row in rows:
         display_name = resolve_member_display_name(member, user_row)
+        member_insights = insights.get(user_row.id, {"kyc_completed": False, "has_invested": False})
+        kyc_completed = bool(member_insights["kyc_completed"])
+        has_invested = bool(member_insights["has_invested"])
+        if can_view_details:
+            email = user_row.email
+            phone = user_row.phone
+            zynd_id = user_row.client_id
+            details_masked = False
+            contribution_amount = None
+            group_sip_count = 0
+        else:
+            email = mask_member_email(user_row.email) or MASKED_DETAIL_PLACEHOLDER
+            phone = mask_member_phone(user_row.phone) or MASKED_DETAIL_PLACEHOLDER
+            zynd_id = mask_member_zynd_id(user_row.client_id) or MASKED_DETAIL_PLACEHOLDER
+            details_masked = True
+            contribution_amount = None
+            group_sip_count = None
+
         members.append(
             {
                 "user_id": user_row.id,
@@ -322,6 +368,14 @@ async def list_group_members_preview(
                 "badge_label": member.badge_label,
                 "profile_image_url": profile_images.get(user_row.id),
                 "joined_at": member.joined_at,
+                "kyc_completed": kyc_completed,
+                "has_invested": has_invested,
+                "email": email,
+                "phone": phone,
+                "zynd_id": zynd_id,
+                "details_masked": details_masked,
+                "contribution_amount": contribution_amount,
+                "group_sip_count": group_sip_count,
             }
         )
     return members

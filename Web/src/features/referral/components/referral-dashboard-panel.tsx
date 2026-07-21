@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -18,14 +17,7 @@ import { ReferralSummaryStatCards } from "@/features/referral/components/referra
 import { ReferralYourReferralsCard } from "@/features/referral/components/referral-your-referrals-card";
 import { buildReferralShareUrl } from "@/features/referral/lib/referral-storage";
 import { sumEarningsThisMonth, summarizeReferralList } from "@/features/referral/lib/referral-display";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import {
   REFERRAL_LEFT_COLUMN_CLASS,
@@ -55,19 +47,7 @@ const referralRouteLabel =
 const ReferralRouteIcon = DASHBOARD_ROUTES.find((route) => route.id === "referral")?.icon;
 
 function ReferralBreadcrumb() {
-  return (
-    <Breadcrumb className="mb-6 shrink-0">
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{referralRouteLabel}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
-  );
+  return <DashboardBreadcrumb items={[{ label: referralRouteLabel }]} />;
 }
 
 export function ReferralDashboardPanel({ initialData = null }: ReferralDashboardPanelProps) {

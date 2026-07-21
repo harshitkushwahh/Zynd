@@ -87,7 +87,10 @@ def _handle_kyc_error(exc: KycError) -> HTTPException:
 async def post_kyc_token_ensure(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, bool]:
-    require_entry_gate(current_user)
+    try:
+        require_entry_gate(current_user)
+    except KycError as exc:
+        raise _handle_kyc_error(exc) from exc
     await ensure_kyc_tokens()
     return {"ok": True}
 

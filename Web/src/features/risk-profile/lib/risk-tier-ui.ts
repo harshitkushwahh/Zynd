@@ -1,3 +1,5 @@
+import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
+
 export type RiskTierId = "secure" | "conservative" | "moderate" | "growth" | "aggressive";
 
 export type RiskTierVisual = {
@@ -196,16 +198,14 @@ export function resolveTierMessageParts(
   return message ? splitRiskTierMessage(message) : { summary: "", recommendation: "" };
 }
 
+
 export const RISK_PROFILE_CARD_CLASS =
-  "overflow-hidden rounded-[var(--radius-card)] border border-border bg-card";
+  `overflow-hidden ${ZYND_CARD_RADIUS_CLASS} border border-border bg-card`;
 
 export const RISK_PROFILE_TOP_ROW_MIN_HEIGHT_CLASS = "min-h-[16rem]";
 
-export const RISK_PROFILE_HERO_RADIUS_CLASS = "rounded-[var(--radius-medium)]";
+/** Hero cards use the same card radius as dashboard surfaces. */
+export const RISK_PROFILE_HERO_RADIUS_CLASS = ZYND_CARD_RADIUS_CLASS;
 
-const RISK_PROFILE_HERO_GRADIENT_STOPS =
-  "var(--zynd-navy)_0%,var(--zynd-blue-dark)_46%,var(--zynd-blue)_100%";
-
-export const RISK_PROFILE_HERO_GRADIENT_CLASS = `bg-[linear-gradient(145deg,${RISK_PROFILE_HERO_GRADIENT_STOPS})]`;
-
-export const FAMILY_GROUP_HERO_GRADIENT_CLASS = `bg-[linear-gradient(225deg,${RISK_PROFILE_HERO_GRADIENT_STOPS})]`;
+export const RISK_PROFILE_HERO_GRADIENT_CLASS =
+  "bg-[linear-gradient(145deg,var(--zynd-navy)_0%,var(--zynd-blue-dark)_46%,var(--zynd-blue)_100%)]";

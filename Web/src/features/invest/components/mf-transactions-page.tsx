@@ -1,16 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
@@ -35,19 +27,7 @@ const transactionsRoute = DASHBOARD_ROUTES.find((route) => route.id === "transac
 const TransactionsIcon = transactionsRoute.icon;
 
 function TransactionsBreadcrumb() {
-  return (
-    <Breadcrumb className="mb-6 shrink-0">
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{copy.transactions.title}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
-  );
+  return <DashboardBreadcrumb items={[{ label: copy.transactions.title }]} />;
 }
 
 export function MfTransactionsPage() {

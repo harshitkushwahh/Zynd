@@ -31,13 +31,13 @@ NOTIFICATION_TYPE_ROUTES: dict[str, tuple[str, str | None]] = {
     "account.profile_image.updated": ("/dashboard/settings", "personal-details"),
     "invest.risk_profile.completed": ("/dashboard/risk-profile", None),
     "invest.risk_profile.unlock_otp": ("/dashboard/notifications", None),
-    "family.invite.received": ("/dashboard/family/invites", None),
+    "family.invite.received": ("/dashboard/family", None),
     "family.invite.accepted": ("/dashboard/family", None),
     "family.invite.declined": ("/dashboard/family", None),
     "family.member.removed": ("/dashboard/family", None),
     "family.member.role_changed": ("/dashboard/family", None),
     "family.head.transferred": ("/dashboard/family", None),
-    "family.invite.reminder": ("/dashboard/family/invites", None),
+    "family.invite.reminder": ("/dashboard/family", None),
 }
 
 CATEGORY_FALLBACK_ROUTES: dict[NotificationCategory, tuple[str, str | None]] = {

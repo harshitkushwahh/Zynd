@@ -2,7 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 
-import { NOTIFICATION_CATEGORY_META } from "@/features/notifications/lib/notification-category-meta";
+import { getNotificationCategoryMeta } from "@/features/notifications/lib/notification-category-meta";
 import { useNotificationNavigation } from "@/features/notifications/hooks/use-notification-navigation";
 import type { NotificationItem } from "@/features/notifications/api/notifications-api";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ type NotificationListItemProps = {
 };
 
 export function NotificationListItem({ item, onMarkRead }: NotificationListItemProps) {
-  const meta = NOTIFICATION_CATEGORY_META[item.category];
+  const meta = getNotificationCategoryMeta(item.category);
   const Icon = meta.icon;
   const unread = !item.read_at;
   const navigateToNotification = useNotificationNavigation(onMarkRead);

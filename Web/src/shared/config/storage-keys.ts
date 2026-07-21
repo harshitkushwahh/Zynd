@@ -17,6 +17,7 @@ export const storageKeys = {
   turnstileSession: "zynd:turnstile-session",
   referralCode: "zynd:referral-code",
   familyInviteToken: "zynd:family-invite-token",
+  familyGroupPinnedPrefix: "zynd:family-group-pinned:",
 } as const;
 
 export function mfaBackupCodesKey(userId: string): string {

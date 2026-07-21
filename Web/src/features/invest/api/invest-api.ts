@@ -545,6 +545,9 @@ export type MfSipPlan = {
   plan_id: string;
   product_id: string;
   product_name: string | null;
+  amc_name: string | null;
+  amc_logo_url: string | null;
+  isin: string | null;
   amount_inr: number;
   frequency: string;
   installment_day: number | null;
@@ -587,6 +590,12 @@ export function createMfMandate(body: {
 
 export function authMfMandate(mandateId: string) {
   return apiRequest<MfMandate>(`/invest/mandates/${mandateId}/auth`, { method: "POST" });
+}
+
+export function cancelMfMandate(mandateId: string) {
+  return apiRequest<MfMandate>(`/invest/mandates/${mandateId}/cancel`, {
+    method: "POST",
+  });
 }
 
 export function createMfSipPlan(body: {

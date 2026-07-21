@@ -15,7 +15,7 @@ export function useMfCartNavbarMeta(pathname: string) {
   const isCartPage = isMfCartPath(pathname);
   const { user } = useAuth();
   const [items, setItems] = useState<MfCartItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(isCartPage);
 
   const refresh = useCallback(async () => {
     if (!isCartPage || !user?.fund_movement_eligible) {

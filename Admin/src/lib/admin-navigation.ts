@@ -9,6 +9,7 @@ import {
   Settings,
   Shield,
   Smartphone,
+  Target,
   TrendingUp,
   Users,
   type LucideIcon,
@@ -100,6 +101,14 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     icon: Users,
     description: "Family group directory, invites, and moderation",
     permissions: ["family_groups.read", "family_groups.manage"],
+  },
+  {
+    id: "goals",
+    label: "Goals",
+    href: "/dashboard/goals",
+    icon: Target,
+    description: "Predefined goal templates for personal and family savings",
+    permissions: ["goals.templates.read", "goals.templates.manage"],
   },
   {
     id: "security-config",

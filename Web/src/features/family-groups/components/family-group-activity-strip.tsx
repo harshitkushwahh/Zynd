@@ -1,41 +1,60 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Clock3, TrendingUp, UserPlus, UsersRound } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Crown } from "lucide-react";
 
 import { LoadErrorCard } from "@/components/ui/load-error-card";
+import { Button } from "@/components/ui/button";
 import {
   fetchFamilyGroupActivity,
   type FamilyGroupActivityItem,
 } from "@/features/family-groups/api/family-groups-api";
-import { formatRelativeActivityTime } from "@/features/family-groups/lib/family-group-ui";
-import { parseApiError } from "@/lib/api-client";
+import { formatRelativeActivityTime, familyMemberInitials, FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
+import { buildFamilyGroupActivityHref } from "@/features/family-groups/lib/family-group-navigation";
+import { FamilyGroupActivityEmptyState } from "@/features/family-groups/components/family-group-activity-empty-state";
+import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type FamilyGroupActivityStripProps = {
   groupId: string;
-  onViewAll?: () => void;
   className?: string;
+  layout?: "horizontal" | "vertical";
 };
 
-function activityIcon(eventType: string) {
-  if (eventType.includes("invite")) return UserPlus;
-  if (eventType.includes("joined") || eventType.includes("member")) return UsersRound;
-  if (eventType.includes("badge") || eventType.includes("role")) return TrendingUp;
-  return Clock3;
-}
+const DASHBOARD_ACTIVITY_PREVIEW_LIMIT = 3;
 
-function ActivityCard({ item }: { item: FamilyGroupActivityItem }) {
-  const Icon = activityIcon(item.event_type);
+function ActivityCard({ item, stacked = false }: { item: FamilyGroupActivityItem; stacked?: boolean }) {
+  const label = item.actor_display_name ?? copy.familyGroups.activity.unknownMember;
+
   return (
-    <div className="min-w-[15rem] max-w-[16rem] shrink-0 rounded-[var(--radius-medium)] border border-border/80 bg-card p-3 shadow-zynd-low">
+    <div
+      className={cn(
+        FAMILY_GROUP_CARD_RADIUS_CLASS,
+        "border border-border/80 bg-card p-3 shadow-zynd-low",
+        stacked ? "w-full" : "min-w-[15rem] max-w-[16rem] shrink-0",
+      )}
+    >
       <div className="flex items-start gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Icon className="size-4" strokeWidth={2} />
+        <div className="relative shrink-0">
+          <div className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
+            {item.actor_profile_image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.actor_profile_image_url} alt="" className="size-full object-cover" />
+            ) : (
+              <span className="text-[10px] font-semibold">{familyMemberInitials(label)}</span>
+            )}
+          </div>
+          {item.actor_role === "head" ? (
+            <span className="absolute -right-0.5 -top-0.5 flex size-3.5 items-center justify-center rounded-full bg-amber-400 text-amber-950 ring-2 ring-card">
+              <Crown className="size-2" strokeWidth={2.25} />
+            </span>
+          ) : null}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-3 text-caption leading-snug text-foreground">{item.message}</p>
+          <p className="truncate text-caption font-medium text-foreground">{label}</p>
+          <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{item.message}</p>
           <p className="mt-2 text-[11px] text-muted-foreground">
             {formatRelativeActivityTime(item.created_at)}
           </p>
@@ -45,7 +64,11 @@ function ActivityCard({ item }: { item: FamilyGroupActivityItem }) {
   );
 }
 
-export function FamilyGroupActivityStrip({ groupId, onViewAll, className }: FamilyGroupActivityStripProps) {
+export function FamilyGroupActivityStrip({
+  groupId,
+  className,
+  layout = "horizontal",
+}: FamilyGroupActivityStripProps) {
   const [items, setItems] = useState<FamilyGroupActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -54,10 +77,12 @@ export function FamilyGroupActivityStrip({ groupId, onViewAll, className }: Fami
     setLoading(true);
     setError("");
     try {
-      const response = await fetchFamilyGroupActivity(groupId, { limit: 8 });
+      const response = await fetchFamilyGroupActivity(groupId, {
+        limit: DASHBOARD_ACTIVITY_PREVIEW_LIMIT,
+      });
       setItems(response.items);
     } catch (loadError) {
-      setError(parseApiError(loadError).message);
+      setError(resolveFamilyGroupApiError(loadError, copy.familyGroups.activity.loadFailedTitle));
     } finally {
       setLoading(false);
     }
@@ -68,25 +93,30 @@ export function FamilyGroupActivityStrip({ groupId, onViewAll, className }: Fami
   }, [loadActivity]);
 
   return (
-    <section className={cn("rounded-[var(--radius-card)] border border-border bg-card p-4 shadow-zynd-low sm:p-5", className)}>
+    <section
+      className={cn(
+        FAMILY_GROUP_CARD_RADIUS_CLASS,
+        "flex h-full flex-col border border-border bg-card p-4 shadow-zynd-low sm:p-5",
+        className,
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-body font-semibold text-foreground">{copy.familyGroups.dashboard.activityTitle}</h3>
-          <p className="mt-1 text-compact text-muted-foreground">{copy.familyGroups.activity.title}</p>
+          <p className="mt-1 text-compact text-muted-foreground">{copy.familyGroups.dashboard.activitySubtitle}</p>
         </div>
-        {onViewAll ? (
-          <button
-            type="button"
-            onClick={onViewAll}
-            className="inline-flex items-center gap-1 text-compact font-medium text-primary transition hover:text-primary/80"
-          >
-            {copy.familyGroups.dashboard.viewAllActivity}
-            <ArrowRight className="size-3.5" strokeWidth={2.25} />
-          </button>
-        ) : null}
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href={buildFamilyGroupActivityHref(groupId)} />}
+        >
+          {copy.familyGroups.dashboard.viewAllActivity}
+          <ArrowRight className="size-3.5" strokeWidth={2.25} />
+        </Button>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 min-h-0 flex-1">
         {loading ? (
           <p className="text-compact text-muted-foreground">{copy.familyGroups.activity.loading}</p>
         ) : error ? (
@@ -97,10 +127,16 @@ export function FamilyGroupActivityStrip({ groupId, onViewAll, className }: Fami
             onRetry={() => void loadActivity()}
           />
         ) : items.length === 0 ? (
-          <p className="text-compact text-muted-foreground">{copy.familyGroups.activity.empty}</p>
+          <FamilyGroupActivityEmptyState compact className="min-h-0 flex-1" />
+        ) : layout === "vertical" ? (
+          <div className="space-y-3">
+            {items.map((item) => (
+              <ActivityCard key={item.id} item={item} stacked />
+            ))}
+          </div>
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-            {items.slice(0, 4).map((item) => (
+            {items.map((item) => (
               <ActivityCard key={item.id} item={item} />
             ))}
           </div>

@@ -3,6 +3,7 @@ import {
   Shield,
   UserRound,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,4 +44,16 @@ export const NOTIFICATION_CATEGORY_META: Record<
     iconClassName: "text-sky-600 dark:text-sky-400",
     accentClassName: "border-l-sky-500/70 bg-sky-500/5",
   },
+  family: {
+    label: "Family",
+    icon: UsersRound,
+    iconClassName: "text-violet-600 dark:text-violet-400",
+    accentClassName: "border-l-violet-500/70 bg-violet-500/5",
+  },
 };
+
+const FALLBACK_NOTIFICATION_CATEGORY_META = NOTIFICATION_CATEGORY_META.account;
+
+export function getNotificationCategoryMeta(category: string): NotificationCategoryMeta {
+  return NOTIFICATION_CATEGORY_META[category as NotificationCategory] ?? FALLBACK_NOTIFICATION_CATEGORY_META;
+}

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -24,14 +23,7 @@ import { YourDevicesSettingsPanel } from "@/components/dashboard/settings/your-d
 import {
   SettingsPageSkeleton,
 } from "@/components/dashboard/settings/settings-skeleton";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { useAuth } from "@/contexts/auth-context";
 import { useSettingsNavigation } from "@/contexts/settings-navigation-context";
 import {
@@ -202,21 +194,12 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
-      <Breadcrumb className="mb-6 shrink-0">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/dashboard/settings" />}>Settings</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{activeLabel}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      <DashboardBreadcrumb
+        items={[
+          { label: "Settings", href: "/dashboard/settings" },
+          { label: activeLabel },
+        ]}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row">
         <SettingsSidebar

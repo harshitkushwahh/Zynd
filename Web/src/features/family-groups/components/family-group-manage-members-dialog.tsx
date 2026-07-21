@@ -1,16 +1,18 @@
 "use client";
 
-import { Settings2, UsersRound } from "lucide-react";
+import { UsersRound } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { BrandDialog } from "@/components/ui/brand-dialog";
-import type {
-  FamilyGroupDetail,
-  FamilyGroupInvite,
-} from "@/features/family-groups/api/family-groups-api";
-import { FamilyGroupMemberRow } from "@/features/family-groups/components/family-group-member-row";
+import type { FamilyGroupDetail } from "@/features/family-groups/api/family-groups-api";
+import {
+  FamilyGroupMemberRow,
+  MemberDetailsGrid,
+} from "@/features/family-groups/components/family-group-member-row";
 import { FamilyMemberRoleBadge } from "@/features/family-groups/components/family-member-role-badge";
+import { FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
+import { cn } from "@/lib/utils";
 
 type FamilyGroupManageMembersDialogProps = {
   open: boolean;
@@ -23,9 +25,8 @@ type FamilyGroupManageMembersDialogProps = {
   saveError?: string;
   onMemberUpdated: () => void;
   onMemberError: (message: string) => void;
-  onRevokeInvite: (invite: FamilyGroupInvite) => void;
-  onOpenSettings?: () => void;
   isHead?: boolean;
+  mode?: "view" | "manage";
 };
 
 export function FamilyGroupManageMembersDialog({
@@ -39,41 +40,39 @@ export function FamilyGroupManageMembersDialog({
   saveError,
   onMemberUpdated,
   onMemberError,
-  onRevokeInvite,
-  onOpenSettings,
   isHead = false,
+  mode = "view",
 }: FamilyGroupManageMembersDialogProps) {
-  const pendingInvites = group.invites?.filter((invite) => invite.status === "pending") ?? [];
+  const atCapacity = reservedSlots >= memberLimit;
+  const dialogTitle =
+    mode === "manage"
+      ? copy.familyGroups.dashboard.manageSectionTitle
+      : copy.familyGroups.dashboard.viewGroupSectionTitle;
 
   return (
     <BrandDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={copy.familyGroups.dashboard.manageSectionTitle}
-      description={copy.familyGroups.invite.capacityLabel(reservedSlots, memberLimit)}
+      title={dialogTitle}
+      description={
+        isHead
+          ? copy.familyGroups.dashboard.manageSectionDescriptionHead(group.title)
+          : copy.familyGroups.dashboard.manageSectionDescriptionMember(group.title)
+      }
       icon={UsersRound}
       maxWidth="lg"
       className="max-w-2xl"
+      headerAction={
+        <Badge
+          variant="secondary"
+          className="border-primary-foreground/20 bg-primary-foreground/10 font-normal tabular-nums text-primary-foreground"
+        >
+          {reservedSlots}/{memberLimit}
+        </Badge>
+      }
     >
-      <div className="max-h-[min(70vh,36rem)] overflow-y-auto px-6 py-5 [scrollbar-width:thin]">
-        {isHead && onOpenSettings ? (
-          <div className="mb-4 flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                onOpenChange(false);
-                onOpenSettings();
-              }}
-            >
-              <Settings2 className="size-4" strokeWidth={2} />
-              {copy.familyGroups.dashboard.settingsTitle}
-            </Button>
-          </div>
-        ) : null}
-
-        <div className="space-y-3">
+      <div className="max-h-[min(70vh,36rem)] space-y-6 overflow-y-auto px-6 py-5 [scrollbar-width:thin]">
+        <section className="space-y-3">
           {group.members.map((member) =>
             currentUserId ? (
               <FamilyGroupMemberRow
@@ -88,77 +87,48 @@ export function FamilyGroupManageMembersDialog({
             ) : (
               <div
                 key={member.user_id}
-                className="flex items-center gap-3 rounded-[var(--radius-control)] border border-border/70 bg-muted/10 px-3 py-2.5"
+                className={cn(
+                  "overflow-hidden border border-border bg-card shadow-zynd-low",
+                  FAMILY_GROUP_CARD_RADIUS_CLASS,
+                )}
               >
-                <div className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
-                  {member.profile_image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={member.profile_image_url} alt="" className="size-full object-cover" />
-                  ) : (
-                    <UsersRound className="size-4" strokeWidth={2} />
-                  )}
+                <div className="flex items-center gap-3 px-3 py-3">
+                  <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
+                    {member.profile_image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={member.profile_image_url} alt="" className="size-full object-cover" />
+                    ) : (
+                      <UsersRound className="size-4" strokeWidth={2} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-caption font-medium text-foreground">{member.display_name}</p>
+                    <FamilyMemberRoleBadge
+                      role={member.role}
+                      badgeLabel={member.badge_label}
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-caption font-medium text-foreground">{member.display_name}</p>
-                  <FamilyMemberRoleBadge
-                    role={member.role}
-                    badgeLabel={member.badge_label}
-                    className="mt-1"
-                  />
-                </div>
+                <MemberDetailsGrid member={member} />
               </div>
             ),
           )}
-        </div>
+        </section>
 
         {leaveBlocked ? (
-          <p className="mt-4 text-compact text-muted-foreground">{leaveBlocked}</p>
+          <p className="rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-compact text-amber-900 dark:text-amber-100">
+            {leaveBlocked}
+          </p>
         ) : null}
 
-        {isHead && pendingInvites.length > 0 ? (
-          <div className="mt-6 border-t border-border pt-4">
-            <h4 className="text-caption font-semibold text-foreground">{copy.familyGroups.invite.pendingTitle}</h4>
-            <div className="mt-3 space-y-2">
-              {pendingInvites.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-control)] border border-dashed border-border/80 px-3 py-2"
-                >
-                  <div>
-                    <p className="text-caption font-medium text-foreground">
-                      {invite.invitee_email ?? copy.familyGroups.invite.linkRecipient}
-                    </p>
-                    <p className="text-[11px] capitalize text-muted-foreground">{invite.intended_role}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    {invite.share_url ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(invite.share_url ?? "");
-                        }}
-                      >
-                        {copy.familyGroups.invite.copyLink}
-                      </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onRevokeInvite(invite)}
-                    >
-                      {copy.familyGroups.invite.revoke}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        {isHead && atCapacity ? (
+          <p className="rounded-[var(--radius-control)] border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-compact text-amber-900 dark:text-amber-100">
+            {copy.familyGroups.invite.capacityReached(memberLimit)}
+          </p>
         ) : null}
 
-        {saveError ? <p className="mt-4 text-compact text-destructive">{saveError}</p> : null}
+        {saveError ? <p className="text-compact text-destructive">{saveError}</p> : null}
       </div>
     </BrandDialog>
   );

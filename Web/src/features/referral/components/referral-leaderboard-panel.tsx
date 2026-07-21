@@ -11,14 +11,7 @@ import {
   type ReferralLeaderboardResponse,
   type ReferralListItem,
 } from "@/features/referral/api/referral-api";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -48,21 +41,12 @@ const LEADERBOARD_PERIOD_OPTIONS: { value: ReferralLeaderboardPeriod; label: str
 
 function ReferralLeaderboardBreadcrumb() {
   return (
-    <Breadcrumb className="mb-6 shrink-0">
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard/referral" />}>{referralRouteLabel}</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{copy.referral.leaderboardPageTitle}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
+    <DashboardBreadcrumb
+      items={[
+        { label: referralRouteLabel, href: "/dashboard/referral" },
+        { label: copy.referral.leaderboardPageTitle },
+      ]}
+    />
   );
 }
 

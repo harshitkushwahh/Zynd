@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Crown, Trash2, UsersRound } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { CheckCircle2, ChevronDown, Crown, Trash2, UsersRound, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,9 +32,20 @@ import {
   canRemoveMember,
   canTransferHeadToMember,
 } from "@/features/family-groups/lib/family-permissions";
-import { parseApiError } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
+import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
+import {
+  FAMILY_GROUP_LIMITS,
+  hasFamilyGroupFormErrors,
+  validateCustomBadgeLabel,
+  validateMemberNickname,
+  type FamilyGroupFormFieldErrors,
+} from "@/features/family-groups/lib/family-group-validation";
+import {
+  FAMILY_GROUP_CARD_RADIUS_CLASS,
+  formatFamilyMemberDetailValue,
+} from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
+import { cn } from "@/lib/utils";
 
 type FamilyGroupMemberRowProps = {
   groupId: string;
@@ -44,6 +56,156 @@ type FamilyGroupMemberRowProps = {
   onError: (message: string) => void;
 };
 
+function MemberAvatar({ member }: { member: FamilyGroupMemberPreview }) {
+  return (
+    <div className="relative shrink-0">
+      <div className="flex size-10 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary ring-1 ring-border/60">
+        {member.profile_image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={member.profile_image_url} alt="" className="size-full object-cover" />
+        ) : (
+          <UsersRound className="size-4" strokeWidth={2} />
+        )}
+      </div>
+      {member.role === "head" ? (
+        <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-amber-400 text-amber-950 ring-2 ring-card">
+          <Crown className="size-2" strokeWidth={2.25} />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function MemberDetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 truncate text-compact text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function MemberDetailBadgeItem({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+function MemberStatusBadge({ label, positive }: { label: string; positive: boolean }) {
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        "h-auto gap-1 px-2 py-1 text-[10px] font-semibold leading-none",
+        positive && "border-success/20 bg-success text-success-foreground hover:bg-success",
+      )}
+    >
+      {positive ? (
+        <CheckCircle2 className="size-3 shrink-0" strokeWidth={2.25} />
+      ) : (
+        <XCircle className="size-3 shrink-0" strokeWidth={2.25} />
+      )}
+      <span className="truncate">{label}</span>
+    </Badge>
+  );
+}
+
+export function MemberDetailsGrid({ member }: { member: FamilyGroupMemberPreview }) {
+  const detailsCopy = copy.familyGroups.dashboard.memberDetails;
+  const masked = member.details_masked === true;
+  const empty = detailsCopy.emptyValue;
+
+  const kycValue = member.kyc_completed ? detailsCopy.kycCompleted : detailsCopy.kycPending;
+  const investedValue = member.has_invested ? detailsCopy.investedYes : detailsCopy.investedNo;
+  const contributionValue = masked
+    ? detailsCopy.maskedValue
+    : member.contribution_amount == null
+      ? detailsCopy.contributionComingSoon
+      : formatFamilyMemberDetailValue(member.contribution_amount, { empty });
+  const groupSipsValue = masked
+    ? detailsCopy.maskedValue
+    : formatFamilyMemberDetailValue(member.group_sip_count, { empty });
+
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-border/60 px-3 py-3 sm:grid-cols-4">
+      <MemberDetailItem
+        label={detailsCopy.emailLabel}
+        value={formatFamilyMemberDetailValue(member.email, { empty })}
+      />
+      <MemberDetailItem
+        label={detailsCopy.zyndIdLabel}
+        value={formatFamilyMemberDetailValue(member.zynd_id, { empty })}
+      />
+      <MemberDetailItem
+        label={detailsCopy.mobileLabel}
+        value={formatFamilyMemberDetailValue(member.phone, { empty })}
+      />
+      <MemberDetailBadgeItem label={detailsCopy.kycLabel}>
+        <MemberStatusBadge label={kycValue} positive={member.kyc_completed === true} />
+      </MemberDetailBadgeItem>
+      <MemberDetailBadgeItem label={detailsCopy.investedLabel}>
+        <MemberStatusBadge label={investedValue} positive={member.has_invested === true} />
+      </MemberDetailBadgeItem>
+      <MemberDetailBadgeItem label={detailsCopy.badgeLabel}>
+        <FamilyMemberRoleBadge role={member.role} badgeLabel={member.badge_label} />
+      </MemberDetailBadgeItem>
+      <MemberDetailItem label={detailsCopy.contributionLabel} value={contributionValue} />
+      <MemberDetailItem label={detailsCopy.groupSipsLabel} value={groupSipsValue} />
+    </div>
+  );
+}
+
+function MemberAccordionLabel({
+  member,
+  currentUserId,
+  open,
+}: {
+  member: FamilyGroupMemberPreview;
+  currentUserId: string;
+  open?: boolean;
+}) {
+  return (
+    <>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <MemberAvatar member={member} />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="truncate text-caption font-semibold text-foreground">{member.display_name}</p>
+            {currentUserId === member.user_id ? (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
+                {copy.familyGroups.dashboard.orbitMemberDetail.youLabel}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <FamilyMemberRoleBadge
+        role={member.role}
+        badgeLabel={member.badge_label}
+        className="shrink-0"
+      />
+      {open !== undefined ? (
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-out",
+            open && "rotate-180",
+          )}
+          aria-hidden
+        />
+      ) : null}
+    </>
+  );
+}
+
 export function FamilyGroupMemberRow({
   groupId,
   member,
@@ -52,11 +214,14 @@ export function FamilyGroupMemberRow({
   onUpdated,
   onError,
 }: FamilyGroupMemberRowProps) {
+  const panelId = useId();
   const editable = canEditMember(myRole, member.role, currentUserId, member.user_id);
   const nicknameEditable = canEditNickname(myRole, currentUserId, member.user_id);
   const removable = canRemoveMember(myRole, member.role, currentUserId, member.user_id);
   const transferable = canTransferHeadToMember(myRole, member.role, currentUserId, member.user_id);
+  const expandable = editable || nicknameEditable || transferable || removable;
 
+  const [open, setOpen] = useState(false);
   const [role, setRole] = useState<InvitableFamilyGroupRole>(
     member.role === "head" ? "contributor" : member.role,
   );
@@ -70,6 +235,7 @@ export function FamilyGroupMemberRow({
   const [removeOpen, setRemoveOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [acting, setActing] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FamilyGroupFormFieldErrors>({});
 
   useEffect(() => {
     setRole(member.role === "head" ? "contributor" : member.role);
@@ -90,8 +256,19 @@ export function FamilyGroupMemberRow({
     (badgeKey || "") !== (member.badge_key ?? "") ||
     (badgeKey === "custom" && customBadgeLabel.trim() !== (member.badge_label ?? ""));
   const nicknameChanged = nickname.trim() !== (member.display_nickname ?? "");
+  const hasPendingChanges = roleChanged || badgeChanged || nicknameChanged;
 
   async function handleSave() {
+    const errors: FamilyGroupFormFieldErrors = {};
+    if (badgeKey === "custom") {
+      errors.customBadgeLabel = validateCustomBadgeLabel(customBadgeLabel);
+    }
+    if (nicknameChanged) {
+      errors.nickname = validateMemberNickname(nickname);
+    }
+    setFieldErrors(errors);
+    if (hasFamilyGroupFormErrors(errors)) return;
+
     setSaving(true);
     try {
       const input: Parameters<typeof updateFamilyGroupMember>[2] = {};
@@ -115,8 +292,9 @@ export function FamilyGroupMemberRow({
       }
       await updateFamilyGroupMember(groupId, member.user_id, input);
       onUpdated();
+      setFieldErrors({});
     } catch (error) {
-      onError(parseApiError(error).message || copy.familyGroups.governance.errors.updateFailed);
+      onError(resolveFamilyGroupApiError(error, copy.familyGroups.governance.errors.updateFailed));
     } finally {
       setSaving(false);
     }
@@ -129,7 +307,7 @@ export function FamilyGroupMemberRow({
       setRemoveOpen(false);
       onUpdated();
     } catch (error) {
-      onError(parseApiError(error).message || copy.familyGroups.governance.errors.removeFailed);
+      onError(resolveFamilyGroupApiError(error, copy.familyGroups.governance.errors.removeFailed));
       setRemoveOpen(false);
     } finally {
       setActing(false);
@@ -143,124 +321,151 @@ export function FamilyGroupMemberRow({
       setTransferOpen(false);
       onUpdated();
     } catch (error) {
-      onError(parseApiError(error).message || copy.familyGroups.governance.errors.transferFailed);
+      onError(resolveFamilyGroupApiError(error, copy.familyGroups.governance.errors.transferFailed));
       setTransferOpen(false);
     } finally {
       setActing(false);
     }
   }
 
+  if (!expandable) {
+    return (
+      <div className={cn("w-full min-w-0 overflow-hidden border border-border bg-card shadow-zynd-low", FAMILY_GROUP_CARD_RADIUS_CLASS)}>
+        <div className="flex items-center gap-3 px-3 py-3">
+          <MemberAccordionLabel member={member} currentUserId={currentUserId} />
+        </div>
+        <MemberDetailsGrid member={member} />
+      </div>
+    );
+  }
+
   return (
     <>
-      <div
-        className={cn(
-          "rounded-[var(--radius-control)] border border-border/70 bg-muted/10 px-3 py-2.5",
-          (editable || nicknameEditable) && "space-y-3",
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
-            {member.profile_image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={member.profile_image_url} alt="" className="size-full object-cover" />
-            ) : (
-              <UsersRound className="size-4" strokeWidth={2} />
-            )}
+      <div className={cn("w-full min-w-0 overflow-hidden border border-border bg-card shadow-zynd-low", FAMILY_GROUP_CARD_RADIUS_CLASS)}>
+        <button
+          type="button"
+          className="flex w-full min-w-0 items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/40"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <MemberAccordionLabel member={member} currentUserId={currentUserId} open={open} />
+        </button>
+
+        <MemberDetailsGrid member={member} />
+
+        <div
+          className={cn(
+            "grid w-full min-w-0 transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none",
+            open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+          )}
+        >
+          <div className="min-h-0 min-w-0 overflow-hidden">
+            <div
+              id={panelId}
+              className={cn(
+                "w-full min-w-0 space-y-4 border-t border-border/60 px-3 pb-3 pt-3 transition-opacity duration-300 ease-out motion-reduce:transition-none",
+                open ? "opacity-100" : "opacity-0",
+              )}
+            >
+              {(editable || nicknameEditable) && (
+                <div className="space-y-4">
+                  {editable ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="min-w-0 space-y-1.5">
+                        <Label htmlFor={`${panelId}-role`}>{copy.familyGroups.governance.roleLabel}</Label>
+                        <Select value={role} onValueChange={(value) => setRole(value as InvitableFamilyGroupRole)}>
+                          <SelectTrigger id={`${panelId}-role`} className="h-9 w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="viewer">{copy.familyGroups.invite.roles.viewer}</SelectItem>
+                            <SelectItem value="contributor">{copy.familyGroups.invite.roles.contributor}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="min-w-0 space-y-1.5">
+                        <Label htmlFor={`${panelId}-badge`}>{copy.familyGroups.governance.badgeLabel}</Label>
+                        <Select
+                          value={badgeKey || "none"}
+                          onValueChange={(value) => setBadgeKey(value === "none" ? "" : value)}
+                        >
+                          <SelectTrigger id={`${panelId}-badge`} className="h-9 w-full">
+                            <SelectValue placeholder={copy.familyGroups.invite.badgePlaceholder} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">{copy.familyGroups.invite.badgePlaceholder}</SelectItem>
+                            {badges.map((badge) => (
+                              <SelectItem key={badge.key} value={badge.key}>
+                                {badge.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {badgeKey === "custom" ? (
+                          <>
+                            <Input
+                              value={customBadgeLabel}
+                              onChange={(event) => setCustomBadgeLabel(event.target.value)}
+                              placeholder={copy.familyGroups.invite.customBadgeLabel}
+                              maxLength={FAMILY_GROUP_LIMITS.customBadgeMax}
+                              className="h-9 w-full"
+                              aria-invalid={Boolean(fieldErrors.customBadgeLabel)}
+                            />
+                            {fieldErrors.customBadgeLabel ? (
+                              <p className="text-compact text-destructive">{fieldErrors.customBadgeLabel}</p>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {nicknameEditable ? (
+                    <div className="min-w-0 space-y-1.5">
+                      <Label htmlFor={`${panelId}-nickname`}>{copy.familyGroups.governance.nicknameLabel}</Label>
+                      <Input
+                        id={`${panelId}-nickname`}
+                        value={nickname}
+                        onChange={(event) => setNickname(event.target.value)}
+                        placeholder={copy.familyGroups.governance.nicknamePlaceholder}
+                        maxLength={FAMILY_GROUP_LIMITS.nicknameMax}
+                        className="h-9 w-full"
+                        aria-invalid={Boolean(fieldErrors.nickname)}
+                      />
+                      {fieldErrors.nickname ? (
+                        <p className="text-compact text-destructive">{fieldErrors.nickname}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {hasPendingChanges ? (
+                    <Button type="button" size="sm" disabled={saving} onClick={() => void handleSave()}>
+                      {copy.familyGroups.governance.saveMember}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+
+              {transferable || removable ? (
+                <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
+                  {transferable ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
+                      <Crown className="size-3.5" strokeWidth={2} />
+                      {copy.familyGroups.governance.transferHeadAction}
+                    </Button>
+                  ) : null}
+                  {removable ? (
+                    <Button type="button" size="sm" variant="destructive" onClick={() => setRemoveOpen(true)}>
+                      <Trash2 className="size-3.5" strokeWidth={2} />
+                      {copy.familyGroups.governance.removeAction}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-caption font-medium text-foreground">{member.display_name}</p>
-            {!editable && !nicknameEditable ? (
-              <FamilyMemberRoleBadge
-                role={member.role}
-                badgeLabel={member.badge_label}
-                className="mt-1"
-              />
-            ) : null}
-          </div>
-          {transferable ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
-              <Crown className="size-3.5" strokeWidth={2} />
-              {copy.familyGroups.governance.transferHeadAction}
-            </Button>
-          ) : null}
-          {removable ? (
-            <Button type="button" size="sm" variant="destructive" onClick={() => setRemoveOpen(true)}>
-              <Trash2 className="size-3.5" strokeWidth={2} />
-              {copy.familyGroups.governance.removeAction}
-            </Button>
-          ) : null}
         </div>
-
-        {editable ? (
-          <div className="grid gap-3 border-t border-border/60 pt-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>{copy.familyGroups.governance.roleLabel}</Label>
-              <Select value={role} onValueChange={(value) => setRole(value as InvitableFamilyGroupRole)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="viewer">{copy.familyGroups.invite.roles.viewer}</SelectItem>
-                  <SelectItem value="contributor">{copy.familyGroups.invite.roles.contributor}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{copy.familyGroups.governance.badgeLabel}</Label>
-              <Select
-                value={badgeKey || "none"}
-                onValueChange={(value) => setBadgeKey(value === "none" ? "" : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={copy.familyGroups.invite.badgePlaceholder} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{copy.familyGroups.invite.badgePlaceholder}</SelectItem>
-                  {badges.map((badge) => (
-                    <SelectItem key={badge.key} value={badge.key}>
-                      {badge.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {badgeKey === "custom" ? (
-                <Input
-                  value={customBadgeLabel}
-                  onChange={(event) => setCustomBadgeLabel(event.target.value)}
-                  placeholder={copy.familyGroups.invite.customBadgeLabel}
-                  maxLength={64}
-                />
-              ) : null}
-            </div>
-            {(roleChanged || badgeChanged) && (
-              <div className="sm:col-span-2">
-                <Button type="button" size="sm" disabled={saving} onClick={() => void handleSave()}>
-                  {copy.familyGroups.governance.saveMember}
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : null}
-
-        {nicknameEditable ? (
-          <div className={cn("space-y-1.5", editable && "border-t border-border/60 pt-3")}>
-            <Label>{copy.familyGroups.governance.nicknameLabel}</Label>
-            <div className="flex flex-wrap gap-2">
-              <Input
-                value={nickname}
-                onChange={(event) => setNickname(event.target.value)}
-                placeholder={copy.familyGroups.governance.nicknamePlaceholder}
-                maxLength={64}
-                className="min-w-[200px] flex-1"
-              />
-              {nicknameChanged ? (
-                <Button type="button" size="sm" disabled={saving} onClick={() => void handleSave()}>
-                  {copy.familyGroups.governance.saveMember}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <ConfirmDialog

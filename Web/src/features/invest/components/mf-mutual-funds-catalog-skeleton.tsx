@@ -3,6 +3,7 @@ import { MfFundCardSkeleton } from "@/features/invest/components/mf-fund-card";
 import {
   MF_CARD_RADIUS_CLASS,
   MF_COLLECTIONS_GRID_CLASS,
+  MF_COLLECTION_CARD_MIN_HEIGHT_CLASS,
   MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS,
   MF_FUNDS_GRID_CLASS,
   MF_FUNDS_HORIZONTAL_ROW_CLASS,
@@ -27,7 +28,7 @@ function SectionHeaderSkeleton({ withTabs = false }: { withTabs?: boolean }) {
 
 function CollectionCardSkeleton() {
   return (
-    <Skeleton className={cn(MF_CARD_RADIUS_CLASS, "h-[8.75rem] w-full min-w-0")} />
+    <Skeleton className={cn(MF_CARD_RADIUS_CLASS, MF_COLLECTION_CARD_MIN_HEIGHT_CLASS, "w-full min-w-0")} />
   );
 }
 

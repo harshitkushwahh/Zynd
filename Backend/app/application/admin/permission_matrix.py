@@ -396,6 +396,23 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         ],
         "notes": "Phase 5 admin moderation actions.",
     },
+    {
+        "permission": "goals.templates.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/goals/templates",
+            "GET /admin/goals/templates/{template_id}",
+        ],
+        "notes": "View predefined goal templates seeded at startup.",
+    },
+    {
+        "permission": "goals.templates.manage",
+        "status": "enforced",
+        "routes": [
+            "PATCH /admin/goals/templates/{template_id}",
+        ],
+        "notes": "Update predefined goal template metadata and visibility.",
+    },
 ]
 
 

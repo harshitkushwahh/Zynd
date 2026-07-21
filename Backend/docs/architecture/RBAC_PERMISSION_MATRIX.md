@@ -43,6 +43,8 @@ Enforcement helper: `require_permission(key)` in `app/api/v1/auth/deps.py`
 | `mf.transactions.manage` | enforced | `POST /admin/mf/transactions/orders/{order_id}/sync`, `POST /admin/mf/transactions/sip-plans/{plan_id}/sync`, `POST /admin/mf/transactions/mandates/{mandate_id}/sync`, `POST /admin/mf/transactions/webhooks/{event_id}/replay`, `POST /admin/mf/transactions/expire-stale` | Reconcile, replay, expire |
 | `mf.integrations.read` | enforced | `GET /admin/mf/integrations` | View MF provider integration status |
 | `mf.integrations.manage` | enforced | `PATCH /admin/mf/integrations/{provider}/environment` | Switch provider test/live mode |
+| `goals.templates.read` | enforced | `GET /admin/goals/templates`, `GET /admin/goals/templates/{template_id}` | Predefined goal templates |
+| `goals.templates.manage` | enforced | `PATCH /admin/goals/templates/{template_id}` | Update goal template metadata |
 
 ## Non-RBAC admin routes
 

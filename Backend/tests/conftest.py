@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.infrastructure.persistence.models import AuditEventType, Base
 from app.infrastructure.persistence import risk_profile_models  # noqa: F401
 from app.infrastructure.persistence import family_group_models  # noqa: F401
+from app.infrastructure.persistence import goal_models  # noqa: F401
 
 # Enum values added after initial schema creation — sync for isolated test DBs.
 _AUDIT_EVENT_ENUM_EXTENSIONS = [
@@ -380,6 +381,37 @@ async def db_session() -> AsyncSession:
                 """
             )
         )
+        await conn.execute(
+            text(
+                """
+                DO $$ BEGIN
+                    CREATE TYPE goalstatus AS ENUM ('draft', 'active', 'achieved', 'paused', 'archived');
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                DO $$ BEGIN
+                    CREATE TYPE goalcontributionsourcetype AS ENUM ('manual', 'sip_plan', 'lumpsum_order');
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$;
+                """
+            )
+        )
+        for value in (
+            "goal.created",
+            "goal.updated",
+            "goal.contribution_added",
+            "goal.archived",
+        ):
+            await conn.execute(
+                text(f"ALTER TYPE familygroupactivitytype ADD VALUE IF NOT EXISTS '{value}'")
+            )
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     begin_event_batch()

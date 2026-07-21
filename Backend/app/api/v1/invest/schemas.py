@@ -411,6 +411,9 @@ class MfSipPlanResponse(BaseModel):
     plan_id: str
     product_id: str
     product_name: Optional[str] = None
+    amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
+    isin: Optional[str] = None
     amount_inr: float
     frequency: str
     installment_day: Optional[int] = None

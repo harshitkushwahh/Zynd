@@ -12,6 +12,14 @@ export type FamilyGroupMemberPreview = {
   badge_label?: string | null;
   profile_image_url?: string | null;
   joined_at: string;
+  kyc_completed?: boolean;
+  has_invested?: boolean;
+  email?: string | null;
+  phone?: string | null;
+  zynd_id?: string | null;
+  details_masked?: boolean;
+  contribution_amount?: number | null;
+  group_sip_count?: number | null;
 };
 
 export type FamilyGroupSummary = {
@@ -111,6 +119,9 @@ export type FamilyGroupActivityItem = {
   message: string;
   actor_user_id?: string | null;
   target_user_id?: string | null;
+  actor_display_name?: string | null;
+  actor_profile_image_url?: string | null;
+  actor_role?: FamilyGroupRole | null;
   metadata?: Record<string, unknown>;
   created_at: string;
 };
@@ -139,6 +150,10 @@ export type CreateFamilyGroupInviteInput = {
 
 export async function fetchFamilyGroups(): Promise<FamilyGroupListResponse> {
   return apiRequest<FamilyGroupListResponse>("/family-groups/me");
+}
+
+export async function fetchArchivedFamilyGroups(): Promise<FamilyGroupListResponse> {
+  return apiRequest<FamilyGroupListResponse>("/family-groups/me/archived");
 }
 
 export async function fetchFamilyGroup(groupId: string): Promise<FamilyGroupDetail> {

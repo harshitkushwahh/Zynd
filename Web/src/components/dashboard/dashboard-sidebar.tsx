@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, RefreshCw, Settings, ShieldCheck, UserRound } from "lucide-react";
+import { LogOut, RefreshCw, Settings, ShieldCheck, UserRound, Bell } from "lucide-react";
 
 import {
   DASHBOARD_HEADER_CLASS,
@@ -30,6 +30,7 @@ import { KycStatusRing } from "@/features/kyc/components/kyc-status-ring";
 import {
   DASHBOARD_ROUTES,
   isDashboardRouteActive,
+  NOTIFICATIONS_PAGE_META,
   type DashboardRoute,
 } from "@/features/dashboard/navigation/dashboard-routes";
 import {
@@ -54,7 +55,8 @@ function navButtonClass(active: boolean, compact = false) {
   );
 }
 
-const SIDEBAR_NAV_ITEM_Z = "z-[100]";
+/** Above page content for hover-expanding pills; below dialog overlay (z-50). */
+const SIDEBAR_NAV_ITEM_Z = "z-30";
 
 function sidebarNavPillClass(active: boolean, disabled = false) {
   return cn(
@@ -194,17 +196,21 @@ function ProfileAvatar({
     checkingKraStatus,
     openProfile,
     openSettings,
+    openNotifications,
     openKyc,
     checkKycStatus,
     signOutAndRedirect,
   } = useProfileMenuActions();
   const initials = getUserInitials(user?.first_name, user?.email);
   const profileLabel = displayName || user?.email || "Profile";
-  const showKycRing = Boolean(kyc?.showRing && kyc.ringTone);
-  const showWatchBadge = showKycRing && kyc?.status !== "complete";
+  const kycRingTone = kyc?.showRing && kyc.ringTone ? kyc.ringTone : null;
+  const showWatchBadge = Boolean(kycRingTone && kyc?.status !== "complete");
   const showCheckKycStatus = Boolean(kyc?.overallStatus === "submitted" && kyc.kycAllowed);
+  const kycComplete = kyc?.status === "complete";
+  const kycMenuLabel = kycComplete ? copy.kyc.completeTitle : copy.kyc.menuLabel;
 
   const isSettingsPage = pathname === "/dashboard/settings";
+  const isNotificationsPage = pathname.startsWith("/dashboard/notifications");
   const activeSettingsSection = settingsNavigation?.activeSection;
   const isProfileActive =
     isSettingsPage &&
@@ -215,17 +221,23 @@ function ProfileAvatar({
     activeSettingsSection != null &&
     !PROFILE_SETTINGS_SECTIONS.includes(activeSettingsSection);
 
-  const avatar = (
-    <KycStatusRing tone={showKycRing ? kyc!.ringTone : null} showWatch={showWatchBadge}>
-      <Avatar className={compact ? "size-9" : "size-11"}>
-        {profileUrl ? (
-          <AvatarImage src={profileUrl} alt={profileLabel} />
-        ) : null}
-        <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
-          {initials}
-        </AvatarFallback>
-      </Avatar>
+  const profileAvatar = (
+    <Avatar className={compact ? "size-9" : "size-11"}>
+      {profileUrl ? (
+        <AvatarImage src={profileUrl} alt={profileLabel} />
+      ) : null}
+      <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
+        {initials}
+      </AvatarFallback>
+    </Avatar>
+  );
+
+  const avatar = kycRingTone ? (
+    <KycStatusRing tone={kycRingTone} showWatch={showWatchBadge} size={compact ? "compact" : "default"}>
+      {profileAvatar}
     </KycStatusRing>
+  ) : (
+    profileAvatar
   );
 
   if (!withMenu) {
@@ -254,14 +266,12 @@ function ProfileAvatar({
         <DropdownMenuGroup>
           <DropdownMenuLabel className="px-2 py-1.5 font-normal">
             <div className="flex items-center gap-2.5">
-              <KycStatusRing tone={showKycRing ? kyc!.ringTone : null} showWatch={showWatchBadge}>
-                <Avatar className="size-8">
-                  {profileUrl ? <AvatarImage src={profileUrl} alt={profileLabel} /> : null}
-                  <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-              </KycStatusRing>
+              <Avatar className="size-8">
+                {profileUrl ? <AvatarImage src={profileUrl} alt={profileLabel} /> : null}
+                <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-caption font-semibold text-foreground">
                   {displayName || "Account"}
@@ -302,9 +312,9 @@ function ProfileAvatar({
               title={!kyc.kycAllowed ? copy.kyc.entryGate.menuDisabledHint : undefined}
               onClick={openKyc}
             >
-              <ShieldCheck />
-              {copy.kyc.menuLabel}
-              {kyc.kycAllowed ? (
+              <ShieldCheck className={cn(kycComplete && "text-success")} />
+              {kycMenuLabel}
+              {kyc.kycAllowed && !kycComplete ? (
                 <DropdownMenuShortcut>
                   {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.kyc)}
                 </DropdownMenuShortcut>
@@ -317,6 +327,13 @@ function ProfileAvatar({
           >
             <Settings />
             Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={profileMenuItemClass(isNotificationsPage)}
+            onClick={openNotifications}
+          >
+            <Bell />
+            {NOTIFICATIONS_PAGE_META.title}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

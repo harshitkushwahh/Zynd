@@ -7,13 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.family_groups.activity_service import list_family_group_activity
 from app.application.family_groups.errors import FamilyGroupError
-from app.application.family_groups.group_service import create_family_group
+from app.application.family_groups.group_service import create_family_group, list_group_members_preview
 from app.application.family_groups.invite_reminder_service import run_family_invite_reminder_batch
 from app.application.family_groups.invite_service import (
     accept_family_group_invite,
     create_family_group_invite,
 )
 from app.application.family_groups.membership_service import update_group_member
+from app.application.referral.referral_notification_service import mask_referee_email
+from app.application.family_groups.display import mask_member_email, mask_member_phone
 from app.application.messaging.scheduled_events import begin_event_batch, discard_scheduled_events, take_scheduled_events
 from app.infrastructure.persistence.family_group_models import (
     FamilyGroupActivityType,
@@ -54,6 +56,94 @@ async def test_accept_invite_records_activity(db_session: AsyncSession, fake_red
     assert FamilyGroupActivityType.invite_accepted.value in event_types
     assert FamilyGroupActivityType.member_joined.value in event_types
     assert any("joined" in str(item["message"]).lower() for item in feed["items"])
+    assert feed["items"][0]["actor_display_name"]
+
+
+@pytest.mark.asyncio
+async def test_member_can_view_activity_with_masked_email(db_session: AsyncSession, fake_redis) -> None:
+    head, member, group = await _group_with_member(db_session)
+    await create_family_group_invite(
+        db_session,
+        group_id=group["id"],
+        inviter=head,
+        invitee_email="secret.invitee@example.com",
+        intended_role=FamilyGroupMemberRole.viewer,
+    )
+
+    feed = await list_family_group_activity(
+        db_session,
+        group_id=group["id"],
+        user_id=member.id,
+    )
+
+    invite_event = next(item for item in feed["items"] if item["event_type"] == FamilyGroupActivityType.invite_sent.value)
+    assert "secret.invitee@example.com" not in str(invite_event["message"])
+    assert invite_event["metadata"].get("invitee_email") is None
+
+
+@pytest.mark.asyncio
+async def test_head_activity_shows_full_invite_email(db_session: AsyncSession, fake_redis) -> None:
+    head = await _create_user(db_session, prefix="email-head")
+    invitee = await _create_user(db_session, prefix="email-target")
+    group = await create_family_group(db_session, user=head, title="Email Activity Family")
+    await create_family_group_invite(
+        db_session,
+        group_id=group["id"],
+        inviter=head,
+        invitee_email=invitee.email,
+        intended_role=FamilyGroupMemberRole.viewer,
+    )
+
+    feed = await list_family_group_activity(
+        db_session,
+        group_id=group["id"],
+        user_id=head.id,
+    )
+
+    invite_event = next(item for item in feed["items"] if item["event_type"] == FamilyGroupActivityType.invite_sent.value)
+    assert invitee.email in str(invite_event["message"])
+    assert invite_event["metadata"].get("invitee_email") == invitee.email
+
+
+@pytest.mark.asyncio
+async def test_head_sees_unmasked_member_details(db_session: AsyncSession, fake_redis) -> None:
+    head, member, group = await _group_with_member(db_session)
+    member.phone = "9876543210"
+    await db_session.flush()
+
+    members = await list_group_members_preview(db_session, group_id=group["id"], user_id=head.id)
+    target = next(item for item in members if item["user_id"] == member.id)
+
+    assert target["details_masked"] is False
+    assert target["email"] == member.email
+    assert target["phone"] == "9876543210"
+    assert target["zynd_id"] == member.client_id
+    assert target["group_sip_count"] == 0
+    assert target["contribution_amount"] is None
+
+
+@pytest.mark.asyncio
+async def test_member_sees_masked_member_details(db_session: AsyncSession, fake_redis) -> None:
+    head, member, group = await _group_with_member(db_session)
+    head.phone = "9123456780"
+    await db_session.flush()
+
+    members = await list_group_members_preview(db_session, group_id=group["id"], user_id=member.id)
+    target = next(item for item in members if item["user_id"] == head.id)
+
+    assert target["details_masked"] is True
+    assert target["email"] == mask_member_email(head.email)
+    assert head.email not in str(target["email"])
+    assert "@" in str(target["email"])
+    assert target["phone"] != "9123456780"
+    assert str(target["phone"]).startswith("91")
+    assert str(target["phone"]).endswith("6780")
+    assert "***" in str(target["phone"])
+    assert target["zynd_id"] != head.client_id
+    assert "kyc_completed" in target
+    assert "has_invested" in target
+    assert target["group_sip_count"] is None
+    assert target["contribution_amount"] is None
 
 
 @pytest.mark.asyncio

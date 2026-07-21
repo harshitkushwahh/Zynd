@@ -15,11 +15,13 @@ from app.application.mf.mf_fp_state import map_fp_plan_state
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
 from app.application.mf.mf_mandate_service import (
     create_mandate_for_user,
+    maybe_release_mandate_after_sip_change,
     serialize_mandate,
 )
 from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.mf_order_service import _load_order_context, get_or_create_mf_investment_account
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
+from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
@@ -36,6 +38,7 @@ from app.infrastructure.persistence.investor_models import (
     InvestorProfileStatus,
     InvestorProvisionTrigger,
 )
+from app.infrastructure.persistence.mf_models import FundAmc, MutualFund
 from app.infrastructure.persistence.mf_transaction_models import (
     MfInvestmentAccountStatus,
     MfMandate,
@@ -71,12 +74,47 @@ def _derive_sip_next_action(*, status: str, mandate: MfMandate | None) -> str:
     return "wait_processing"
 
 
-def serialize_sip_plan(plan: MfSipPlan, *, product_name: str | None = None, mandate: MfMandate | None = None) -> dict:
+async def load_sip_plan_fund_metadata(
+    session: AsyncSession,
+    plans: list[MfSipPlan],
+) -> tuple[dict[int, str], dict[int, str | None], dict[int, str]]:
+    fund_ids = {plan.fund_id for plan in plans}
+    if not fund_ids:
+        return {}, {}, {}
+
+    settings = get_settings()
+    result = await session.execute(
+        select(MutualFund.id, MutualFund.isin_growth, FundAmc.name, FundAmc.logo_url, FundAmc.slug)
+        .join(FundAmc, MutualFund.amc_id == FundAmc.id)
+        .where(MutualFund.id.in_(fund_ids))
+    )
+    amc_names: dict[int, str] = {}
+    amc_logos: dict[int, str | None] = {}
+    isins: dict[int, str] = {}
+    for fund_id, isin, name, logo_url, slug in result:
+        amc_names[fund_id] = name
+        amc_logos[fund_id] = resolve_amc_logo_url(logo_url, slug, settings)
+        isins[fund_id] = isin
+    return amc_names, amc_logos, isins
+
+
+def serialize_sip_plan(
+    plan: MfSipPlan,
+    *,
+    product_name: str | None = None,
+    mandate: MfMandate | None = None,
+    amc_name: str | None = None,
+    amc_logo_url: str | None = None,
+    isin: str | None = None,
+) -> dict:
     mandate_payload = serialize_mandate(mandate) if mandate else None
     return {
         "plan_id": str(plan.id),
         "product_id": str(plan.product_id),
         "product_name": product_name,
+        "amc_name": amc_name,
+        "amc_logo_url": amc_logo_url,
+        "isin": isin,
         "amount_inr": float(plan.amount_inr),
         "frequency": plan.frequency,
         "installment_day": plan.installment_day,
@@ -309,6 +347,8 @@ async def cancel_sip_plan(session: AsyncSession, plan: MfSipPlan) -> MfSipPlan:
         to_status=plan.status.value,
         source="API",
     )
+    mandate = await session.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+    await maybe_release_mandate_after_sip_change(session, mandate)
     await session.flush()
     return plan
 
@@ -353,6 +393,9 @@ async def _apply_plan_state(session: AsyncSession, plan: MfSipPlan, *, fp_state:
         source=source,
         payload={"fp_state": plan.fp_state},
     )
+    if mapped in {MfSipPlanStatus.cancelled, MfSipPlanStatus.failed}:
+        mandate = await session.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+        await maybe_release_mandate_after_sip_change(session, mandate)
     return True
 
 

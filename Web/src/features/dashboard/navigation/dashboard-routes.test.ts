@@ -17,6 +17,8 @@ describe("dashboard-routes", () => {
 
   it("resolves nested dashboard paths", () => {
     expect(resolveDashboardRoute("/dashboard/transactions")?.id).toBe("transactions");
+    expect(resolveDashboardRoute("/dashboard/my-sips")?.id).toBe("my-sips");
+    expect(resolveDashboardRoute("/dashboard/goals")?.id).toBe("goals");
     expect(resolveDashboardRoute("/dashboard/settings")).toBeUndefined();
   });
 

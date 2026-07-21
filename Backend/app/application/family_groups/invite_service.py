@@ -41,6 +41,7 @@ from app.infrastructure.persistence.family_group_models import (
 from app.infrastructure.persistence.family_invite_token_store import (
     create_family_invite_token,
     delete_family_invite_token,
+    delete_family_invite_tokens_for_invite,
     get_family_invite_token,
 )
 from app.infrastructure.persistence.models import AuditEventType, User, UserStatus
@@ -68,11 +69,19 @@ def _serialize_badge_presets() -> list[dict[str, str]]:
     return [{"key": key, "label": label} for key, label in FAMILY_GROUP_BADGE_PRESETS]
 
 
-def _serialize_invite(invite: FamilyGroupInvite, *, share_url: str | None = None) -> dict[str, Any]:
+def _serialize_invite(
+    invite: FamilyGroupInvite,
+    *,
+    share_url: str | None = None,
+    for_head: bool = False,
+) -> dict[str, Any]:
+    invitee_email = invite.invitee_email
+    if invitee_email and not for_head:
+        invitee_email = mask_referee_email(invitee_email)
     return {
         "id": invite.id,
         "group_id": invite.group_id,
-        "invitee_email": mask_referee_email(invite.invitee_email) if invite.invitee_email else None,
+        "invitee_email": invitee_email,
         "invitee_user_id": invite.invitee_user_id,
         "intended_role": invite.intended_role.value,
         "intended_badge_key": invite.intended_badge_key,
@@ -375,7 +384,7 @@ async def create_family_group_invite(
         },
     )
 
-    return _serialize_invite(invite, share_url=share_url)
+    return _serialize_invite(invite, share_url=share_url, for_head=True)
 
 
 async def list_group_invites(
@@ -402,7 +411,15 @@ async def list_group_invites(
         )
         .order_by(FamilyGroupInvite.created_at.desc())
     )
-    return [_serialize_invite(invite) for invite in result.scalars().all()]
+    invites = list(result.scalars().all())
+    payload: list[dict[str, Any]] = []
+    for invite in invites:
+        share_url = None
+        if invite.status == FamilyGroupInviteStatus.pending:
+            token = await create_family_invite_token(str(invite.id))
+            share_url = _invite_url(token)
+        payload.append(_serialize_invite(invite, share_url=share_url, for_head=True))
+    return payload
 
 
 async def list_pending_invites_for_user(
@@ -692,6 +709,7 @@ async def revoke_family_group_invite(
     invite.revoked_at = now_utc()
     invite.updated_at = now_utc()
     await db.flush()
+    await delete_family_invite_tokens_for_invite(str(invite.id))
 
     await write_audit(
         db,
@@ -714,7 +732,7 @@ async def revoke_family_group_invite(
         },
     )
 
-    return _serialize_invite(invite)
+    return _serialize_invite(invite, for_head=True)
 
 
 async def resend_family_group_invite(
@@ -760,7 +778,7 @@ async def resend_family_group_invite(
         metadata={"group_id": str(group_id), "invite_id": str(invite_id), "action": "resent"},
     )
 
-    return _serialize_invite(invite, share_url=share_url)
+    return _serialize_invite(invite, share_url=share_url, for_head=True)
 
 
 def list_badge_presets() -> list[dict[str, str]]:

@@ -95,10 +95,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         >
           <DashboardSidebar className="hidden md:flex" />
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <DashboardNavbar />
 
-            <main className={cn(DASHBOARD_MAIN_SCROLL_CLASS, DASHBOARD_MAIN_TOP_OFFSET)}>
+            <main
+              className={cn(
+                DASHBOARD_MAIN_SCROLL_CLASS,
+                DASHBOARD_MAIN_TOP_OFFSET,
+                "overflow-x-hidden",
+              )}
+            >
                 <div className={DASHBOARD_MAIN_CONTENT_CLASS}>
                   <ZyndErrorBoundary>{children}</ZyndErrorBoundary>
                 </div>

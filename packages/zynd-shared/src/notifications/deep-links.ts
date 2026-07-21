@@ -51,7 +51,7 @@ const NOTIFICATION_TYPE_ROUTES: Record<string, NotificationDeepLink> = {
     path: "/dashboard/notifications",
   },
   "family.invite.received": {
-    path: "/dashboard/family/invites",
+    path: "/dashboard/family",
   },
   "family.invite.accepted": {
     path: "/dashboard/family",
@@ -69,7 +69,7 @@ const NOTIFICATION_TYPE_ROUTES: Record<string, NotificationDeepLink> = {
     path: "/dashboard/family",
   },
   "family.invite.reminder": {
-    path: "/dashboard/family/invites",
+    path: "/dashboard/family",
   },
 };
 

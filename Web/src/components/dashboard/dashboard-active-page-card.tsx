@@ -20,6 +20,24 @@ import {
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 
+const NAVBAR_CARD_FADE_CLASS = "animate-in fade-in duration-200 motion-reduce:animate-none";
+
+function ActiveCardFadeIn({
+  modeKey,
+  className,
+  children,
+}: {
+  modeKey: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span key={modeKey} className={cn(NAVBAR_CARD_FADE_CLASS, className)}>
+      {children}
+    </span>
+  );
+}
+
 export function DashboardActivePageCard() {
   const { pathname, pageMeta } = useDashboardRoute();
   const { fund, loading: fundLoading, isFundPage } = useMfFundNavbarMeta(pathname);
@@ -53,6 +71,13 @@ export function DashboardActivePageCard() {
       ? copy.mutualFunds.cartItemCount.replace("{count}", String(cartCount))
       : pageMeta.description;
   const isLoading = (isFundPage && fundLoading) || (isCartPage && cartLoading);
+  const cartCardMode = cartLoading
+    ? "loading"
+    : showCartAmcs
+      ? "amcs"
+      : showCartEmptyLabel
+        ? "empty"
+        : "default";
   const { isRiskProfileSection } = useRiskProfileActiveCard(pathname);
   const { isReferralSection } = useReferralActiveCard(pathname);
 
@@ -90,25 +115,51 @@ export function DashboardActivePageCard() {
             />
           }
         >
-          {isLoading ? (
+          {isCartPage ? (
+            cartCardMode === "loading" ? (
+              <Loader2 className="size-4 shrink-0 animate-spin opacity-70" aria-hidden="true" />
+            ) : (
+              <ActiveCardFadeIn
+                modeKey={cartCardMode === "amcs" ? `cart-amcs-${cartCount}` : "cart-empty"}
+                className="inline-flex min-w-[5.5rem] items-center justify-center gap-1.5"
+              >
+                {cartCardMode === "amcs" ? (
+                  <MfCartAmcAvatarStack items={visibleItems} overflowCount={overflowCount} />
+                ) : (
+                  <>
+                    <Plus className="size-4 shrink-0" strokeWidth={2.25} />
+                    <span className="whitespace-nowrap text-[13px] font-medium leading-none">
+                      {copy.mutualFunds.cartNavbarEmptyLabel}
+                    </span>
+                  </>
+                )}
+              </ActiveCardFadeIn>
+            )
+          ) : isLoading ? (
             <Loader2 className="size-4 shrink-0 animate-spin opacity-70" aria-hidden="true" />
-          ) : showCartAmcs ? (
-            <MfCartAmcAvatarStack items={visibleItems} overflowCount={overflowCount} />
           ) : showFundAmc ? (
-            <MfFundAmcAvatar
-              amcLogoUrl={fund!.amc_logo_url}
-              amcName={fund!.amc_name}
-              size="sm"
-              className="size-6 shrink-0 p-0.5"
-            />
-          ) : showCartEmptyLabel ? (
-            <Plus className="size-4 shrink-0" strokeWidth={2.25} />
+            <ActiveCardFadeIn
+              modeKey={`fund-${fund!.amc_name}`}
+              className="inline-flex items-center gap-1.5"
+            >
+              <MfFundAmcAvatar
+                amcLogoUrl={fund!.amc_logo_url}
+                amcName={fund!.amc_name}
+                size="sm"
+                className="size-6 shrink-0 p-0.5"
+              />
+              {activeCardLabel ? (
+                <span className="whitespace-nowrap text-[13px] font-medium leading-none">{activeCardLabel}</span>
+              ) : null}
+            </ActiveCardFadeIn>
           ) : (
-            <Icon className="size-4 shrink-0" strokeWidth={2.25} />
+            <ActiveCardFadeIn modeKey={pageMeta.title} className="inline-flex items-center gap-1.5">
+              <Icon className="size-4 shrink-0" strokeWidth={2.25} />
+              {activeCardLabel ? (
+                <span className="whitespace-nowrap text-[13px] font-medium leading-none">{activeCardLabel}</span>
+              ) : null}
+            </ActiveCardFadeIn>
           )}
-          {activeCardLabel ? (
-            <span className="whitespace-nowrap text-[13px] font-medium leading-none">{activeCardLabel}</span>
-          ) : null}
         </HoverCardTrigger>
 
         <HoverCardContent side="bottom" align="end" className="w-72">

@@ -13,6 +13,11 @@ export function buildNotificationHref(input: NotificationDeepLinkInput): string 
     params.set("family_invite", inviteToken);
   }
 
+  const inviteId = input.metadata?.invite_id;
+  if (typeof inviteId === "string" && inviteId) {
+    params.set("family_invite_id", inviteId);
+  }
+
   const query = params.toString();
   return query ? `${resolved.path}?${query}` : resolved.path;
 }

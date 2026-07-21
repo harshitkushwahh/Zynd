@@ -14,6 +14,9 @@ export interface OrbitingCirclesProps extends React.HTMLAttributes<HTMLDivElemen
   path?: boolean;
   iconSize?: number;
   speed?: number;
+  startAngle?: number;
+  paused?: boolean;
+  getOrbitItemClassName?: (index: number) => string | undefined;
 }
 
 export function OrbitingCircles({
@@ -26,6 +29,9 @@ export function OrbitingCircles({
   path = true,
   iconSize = 30,
   speed = 1,
+  startAngle = 0,
+  paused = false,
+  getOrbitItemClassName,
   ...props
 }: OrbitingCirclesProps) {
   const calculatedDuration = duration / speed;
@@ -41,7 +47,7 @@ export function OrbitingCircles({
           aria-hidden
         >
           <circle
-            className="stroke-primary/15 stroke-1 dark:stroke-primary-foreground/15"
+            className="stroke-white/50 stroke-1"
             cx="50%"
             cy="50%"
             r={radius}
@@ -51,7 +57,8 @@ export function OrbitingCircles({
         </svg>
       ) : null}
       {React.Children.map(children, (child, index) => {
-        const angle = childCount > 0 ? (360 / childCount) * index : 0;
+        const angle =
+          childCount > 0 ? startAngle + (360 / childCount) * index : startAngle;
         return (
           <div
             style={
@@ -64,7 +71,9 @@ export function OrbitingCircles({
               } as React.CSSProperties
             }
             className={cn(
-              "animate-orbit absolute left-[calc(50%-var(--icon-size)/2)] top-[calc(50%-var(--icon-size)/2)] flex size-[var(--icon-size)] transform-gpu items-center justify-center",
+              "animate-orbit pointer-events-auto absolute left-[calc(50%-var(--icon-size)/2)] top-[calc(50%-var(--icon-size)/2)] flex size-[var(--icon-size)] transform-gpu items-center justify-center overflow-visible",
+              paused && "[animation-play-state:paused]",
+              getOrbitItemClassName?.(index),
               reverse && "[animation-direction:reverse]",
               className,
             )}

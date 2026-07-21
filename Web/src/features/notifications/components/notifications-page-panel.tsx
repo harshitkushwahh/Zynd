@@ -1,21 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Bell, RefreshCw } from "lucide-react";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 
 import { NotificationEmptyState } from "@/components/dashboard/notifications/notification-empty-state";
 import { NotificationListItem } from "@/components/dashboard/notifications/notification-list-item";
 import { NotificationUnreadEmptyState } from "@/components/dashboard/notifications/notification-unread-empty-state";
 import { PaginationPageMinimalCenter } from "@/components/core/table";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -38,19 +30,7 @@ import { cn } from "@/lib/utils";
 const PAGE_SIZE = 20;
 
 function NotificationsBreadcrumb() {
-  return (
-    <Breadcrumb className="mb-6 shrink-0">
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>Notifications</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
-  );
+  return <DashboardBreadcrumb items={[{ label: "Notifications" }]} />;
 }
 
 export function NotificationsPagePanel() {
@@ -230,7 +210,8 @@ export function NotificationsPagePanel() {
                 Refresh
               </Button>
               {unreadCount > 0 ? (
-                <Button type="button" size="sm" onClick={() => void handleMarkAllRead()}>
+                <Button type="button" size="sm" className="gap-1.5" onClick={() => void handleMarkAllRead()}>
+                  <CheckCheck className="size-3.5" strokeWidth={2.25} />
                   Mark all read
                 </Button>
               ) : null}

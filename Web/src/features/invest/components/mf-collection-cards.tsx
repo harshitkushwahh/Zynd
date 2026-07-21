@@ -20,7 +20,12 @@ export function MfCollectionCards({ collections, className }: MfCollectionCardsP
 
   return (
     <section className={cn("min-w-0 space-y-4", className)}>
-      <SectionTitle>{copy.mutualFunds.collectionsTitle}</SectionTitle>
+      <div className="space-y-1.5">
+        <SectionTitle>{copy.mutualFunds.collectionsTitle}</SectionTitle>
+        <p className="max-w-2xl text-compact text-muted-foreground">
+          {copy.mutualFunds.collectionsDescription}
+        </p>
+      </div>
 
       <div className={MF_COLLECTIONS_GRID_CLASS}>
         {items.map((collection) => (

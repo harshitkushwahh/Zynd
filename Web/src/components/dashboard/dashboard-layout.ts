@@ -4,7 +4,7 @@ export const DASHBOARD_SIDEBAR_SECTION_GAP = "gap-6";
 export const DASHBOARD_SIDEBAR_WIDTH = "w-14";
 export const DASHBOARD_HEADER_CLASS = "relative z-20 flex w-full min-h-14 shrink-0 items-center";
 export const DASHBOARD_NAV_CLUSTER_CLASS =
-  "flex shrink-0 items-center rounded-[var(--radius-full)] bg-card p-1.5 shadow-zynd-mid min-h-14";
+  "flex shrink-0 items-center rounded-[var(--radius-full)] border border-border/80 bg-card p-1.5 shadow-zynd-low min-h-14";
 export const DASHBOARD_NAV_ITEM_CLASS =
   "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[var(--radius-full)] px-3 text-[13px] leading-none font-medium";
 export const DASHBOARD_NAVBAR_CHROME_CLASS = "relative z-20 shrink-0 mb-7";

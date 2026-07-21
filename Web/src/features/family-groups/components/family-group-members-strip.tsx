@@ -1,10 +1,14 @@
 "use client";
 
-import { Crown, Plus, UsersRound } from "lucide-react";
+import { Crown, LogOut, Plus, Settings2, UsersRound } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { FamilyGroupMemberPreview } from "@/features/family-groups/api/family-groups-api";
-import { FamilyMemberRoleBadge } from "@/features/family-groups/components/family-member-role-badge";
-import { familyMemberInitials } from "@/features/family-groups/lib/family-group-ui";
+import {
+  FAMILY_GROUP_CARD_RADIUS_CLASS,
+  familyMemberInitials,
+} from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -15,52 +19,109 @@ type FamilyGroupMembersStripProps = {
   inviteDisabled?: boolean;
   onInvite: () => void;
   onManageMembers: () => void;
+  onViewGroup: () => void;
+  isHead?: boolean;
+  memberCount: number;
+  pendingInvites?: number;
+  memberLimit: number;
+  canLeave?: boolean;
+  onLeave?: () => void;
   className?: string;
 };
 
-function MemberCard({
+function MemberChip({
   member,
   isCurrentUser,
 }: {
   member: FamilyGroupMemberPreview;
   isCurrentUser: boolean;
 }) {
+  const youLabel = copy.familyGroups.dashboard.orbitMemberDetail.youLabel;
+  const label = isCurrentUser ? `${member.display_name} (${youLabel})` : member.display_name;
+
   return (
-    <div className="group relative min-w-[9.5rem] max-w-[10.5rem] shrink-0 rounded-[var(--radius-medium)] border border-border/80 bg-card p-3 shadow-zynd-low transition hover:border-primary/25 hover:shadow-zynd-mid">
-      <div className="relative mx-auto w-fit">
-        <div className="flex size-16 items-center justify-center overflow-hidden rounded-full bg-primary/10 ring-2 ring-primary/15">
-          {member.profile_image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={member.profile_image_url} alt="" className="size-full object-cover" />
-          ) : (
-            <span className="text-caption font-semibold text-primary">
-              {familyMemberInitials(member.display_name)}
-            </span>
-          )}
+    <div className="relative z-10 shrink-0 hover:z-20 focus-within:z-20" title={label}>
+      <div
+        className={cn(
+          "group flex h-10 max-w-10 items-center overflow-hidden rounded-full",
+          "border border-border/80 bg-card shadow-zynd-low outline-none",
+          "transition-[max-width,border-color,box-shadow] duration-200 ease-out",
+          "hover:max-w-56 hover:border-primary/30 hover:shadow-zynd-mid",
+          "focus-within:max-w-56 focus-within:border-primary/30 focus-within:shadow-zynd-mid",
+        )}
+      >
+        <div className="flex size-10 shrink-0 items-center justify-center">
+          <div className="flex size-8 items-center justify-center overflow-hidden rounded-full bg-primary/10 ring-1 ring-primary/15">
+            {member.profile_image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={member.profile_image_url} alt="" className="size-full object-cover" />
+            ) : (
+              <span className="text-[10px] font-semibold text-primary">
+                {familyMemberInitials(member.display_name)}
+              </span>
+            )}
+          </div>
         </div>
-        {member.role === "head" ? (
-          <span className="absolute -right-1 -top-1 flex size-6 items-center justify-center rounded-full bg-amber-400 text-amber-950">
-            <Crown className="size-3" strokeWidth={2.25} />
+
+        <span
+          className={cn(
+            "min-w-0 overflow-hidden whitespace-nowrap pr-3 text-caption font-semibold text-foreground",
+            "max-w-0 opacity-0 transition-[max-width,opacity] duration-200 ease-out",
+            "group-hover:max-w-44 group-hover:opacity-100",
+            "group-focus-within:max-w-44 group-focus-within:opacity-100",
+          )}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="truncate">{member.display_name}</span>
+            {isCurrentUser ? (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
+                {youLabel}
+              </span>
+            ) : null}
           </span>
-        ) : null}
+        </span>
       </div>
 
-      <div className="mt-3 text-center">
-        <div className="flex items-center justify-center gap-1.5">
-          <p className="truncate text-caption font-semibold text-foreground">{member.display_name}</p>
-          {isCurrentUser ? (
-            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
-              You
-            </span>
-          ) : null}
-        </div>
-        <FamilyMemberRoleBadge
-          role={member.role}
-          badgeLabel={member.badge_label}
-          className="mt-2 justify-center"
-        />
-      </div>
+      {member.role === "head" ? (
+        <span className="pointer-events-none absolute right-0 top-0 z-30 flex size-4 items-center justify-center rounded-full bg-amber-400 text-amber-950 ring-2 ring-card">
+          <Crown className="size-2.5" strokeWidth={2.25} />
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+function InviteChip({
+  disabled,
+  onInvite,
+}: {
+  disabled?: boolean;
+  onInvite: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onInvite}
+      aria-label={copy.familyGroups.invite.action}
+      className={cn(
+        "relative z-10 flex h-10 shrink-0 items-center gap-0 overflow-hidden rounded-full pr-3",
+        "border border-dashed border-primary/40 bg-primary/5 text-primary outline-none",
+        "transition-[border-color,background-color] duration-200 ease-out",
+        "hover:z-20 hover:border-primary/60 hover:bg-primary/10",
+        "focus-visible:z-20 focus-visible:border-primary/60 focus-visible:bg-primary/10",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+      )}
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center">
+        <span className="flex size-8 items-center justify-center rounded-full border border-dashed border-primary/40 bg-background">
+          <Plus className="size-4" strokeWidth={2.25} />
+        </span>
+      </span>
+      <span className="whitespace-nowrap text-caption font-semibold">
+        {copy.familyGroups.invite.action}
+      </span>
+    </button>
   );
 }
 
@@ -71,49 +132,78 @@ export function FamilyGroupMembersStrip({
   inviteDisabled,
   onInvite,
   onManageMembers,
+  onViewGroup,
+  isHead = false,
+  memberCount,
+  pendingInvites = 0,
+  memberLimit,
+  canLeave = false,
+  onLeave,
   className,
 }: FamilyGroupMembersStripProps) {
   return (
-    <section className={cn("rounded-[var(--radius-card)] border border-border bg-card p-4 shadow-zynd-low sm:p-5", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-body font-semibold text-foreground">{copy.familyGroups.dashboard.membersTitle}</h3>
-          <p className="mt-1 text-compact text-muted-foreground">{copy.familyGroups.dashboard.membersSubtitle}</p>
-        </div>
-        <button
-          type="button"
-          className="text-compact font-medium text-primary transition hover:text-primary/80"
-          onClick={onManageMembers}
-        >
-          {copy.familyGroups.dashboard.manageMembersAction}
-        </button>
-      </div>
+    <section
+      className={cn(
+        FAMILY_GROUP_CARD_RADIUS_CLASS,
+        "flex items-center gap-3 border border-border bg-card px-3 py-2.5 shadow-zynd-low",
+        className,
+      )}
+    >
+      <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
+        {memberCount}/{memberLimit}
+      </Badge>
+      {pendingInvites > 0 ? (
+        <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+          {copy.familyGroups.dashboard.pendingInvites(pendingInvites)}
+        </span>
+      ) : null}
 
-      <div className="mt-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-0.5 [scrollbar-width:thin]">
         {members.map((member) => (
-          <MemberCard
+          <MemberChip
             key={member.user_id}
             member={member}
             isCurrentUser={member.user_id === currentUserId}
           />
         ))}
 
-        {canInvite ? (
-          <button
+        {canInvite ? <InviteChip disabled={inviteDisabled} onInvite={onInvite} /> : null}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 px-2.5"
+          onClick={onViewGroup}
+        >
+          <UsersRound className="size-3.5" strokeWidth={2} />
+          <span className="hidden sm:inline">{copy.familyGroups.dashboard.viewGroupAction}</span>
+        </Button>
+        {isHead ? (
+          <Button
             type="button"
-            disabled={inviteDisabled}
-            onClick={onInvite}
-            className="flex min-w-[9.5rem] max-w-[10.5rem] shrink-0 flex-col items-center justify-center rounded-[var(--radius-medium)] border border-dashed border-primary/35 bg-primary/5 px-4 py-6 text-primary transition hover:border-primary/60 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 px-2.5"
+            onClick={onManageMembers}
           >
-            <div className="flex size-14 items-center justify-center rounded-full border border-dashed border-primary/40 bg-background">
-              <Plus className="size-6" strokeWidth={2} />
-            </div>
-            <p className="mt-3 text-caption font-semibold">{copy.familyGroups.invite.action}</p>
-            <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <UsersRound className="size-3" strokeWidth={2} />
-              {copy.familyGroups.dashboard.inviteHint}
-            </p>
-          </button>
+            <Settings2 className="size-3.5" strokeWidth={2} />
+            <span className="hidden sm:inline">{copy.familyGroups.dashboard.manageMembersAction}</span>
+          </Button>
+        ) : null}
+        {canLeave && onLeave ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 px-2.5"
+            onClick={onLeave}
+          >
+            <LogOut className="size-3.5" strokeWidth={2} />
+            <span className="hidden sm:inline">{copy.familyGroups.detail.leaveAction}</span>
+          </Button>
         ) : null}
       </div>
     </section>

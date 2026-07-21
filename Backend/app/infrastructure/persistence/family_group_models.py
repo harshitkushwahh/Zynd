@@ -57,6 +57,10 @@ class FamilyGroupActivityType(str, enum.Enum):
     group_archived = "group.archived"
     head_transferred = "head.transferred"
     nominee_suggested_from_kyc = "nominee.suggested_from_kyc"
+    goal_created = "goal.created"
+    goal_updated = "goal.updated"
+    goal_contribution_added = "goal.contribution_added"
+    goal_archived = "goal.archived"
 
 
 class FamilyGroupNomineeLinkStatus(str, enum.Enum):

@@ -23,7 +23,102 @@ from app.infrastructure.persistence.investor_models import (
     InvestorObjectSyncStatus,
     InvestorProfile,
 )
+from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product, ProductType
+from app.infrastructure.persistence.mf_transaction_models import (
+    MfMandate,
+    MfMandateStatus,
+    MfSipPlan,
+    MfSipPlanStatus,
+)
 from app.infrastructure.persistence.models import KycJourneyState, User
+
+
+async def _seed_user_with_two_banks(db_session) -> tuple[User, InvestorBankAccount, InvestorBankAccount]:
+    user = User(
+        id=uuid4(),
+        email=f"bank-mandate-{uuid4()}@example.com",
+        phone=f"+919{uuid4().int % 10_000_000_000:010d}",
+        password_hash="hash",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        KycJourneyState(
+            user_id=user.id,
+            pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
+        )
+    )
+    primary = InvestorBankAccount(
+        investor_profile_id=user.id,
+        is_primary=True,
+        account_type="savings",
+        account_number_last4="9725",
+        ifsc_code="KKBK0005915",
+        primary_account_holder_name="Test User",
+        verification_status=InvestorBankVerificationStatus.verified,
+        source=InvestorObjectSource.kyc,
+        sync_status=InvestorObjectSyncStatus.active,
+        external_bank_account_id="bac_primary",
+        external_old_id=101,
+    )
+    secondary = InvestorBankAccount(
+        investor_profile_id=user.id,
+        is_primary=False,
+        account_type="savings",
+        account_number_last4="2169",
+        ifsc_code="STCB0000065",
+        primary_account_holder_name="Test User",
+        verification_status=InvestorBankVerificationStatus.verified,
+        source=InvestorObjectSource.user,
+        sync_status=InvestorObjectSyncStatus.active,
+        external_bank_account_id="bac_secondary",
+        external_old_id=202,
+    )
+    db_session.add_all([primary, secondary])
+    await db_session.flush()
+    return user, primary, secondary
+
+
+async def _seed_sip_plan(
+    db_session,
+    *,
+    user_id,
+    mandate_id,
+    status: MfSipPlanStatus,
+) -> MfSipPlan:
+    amc = FundAmc(name="Test AMC", slug=f"test-amc-{uuid4().hex[:8]}")
+    db_session.add(amc)
+    await db_session.flush()
+    product = Product(
+        code=f"P{uuid4().hex[:8]}",
+        name="Test Fund",
+        product_type=ProductType.mutual_fund,
+    )
+    db_session.add(product)
+    await db_session.flush()
+    fund = MutualFund(
+        amc_id=amc.id,
+        isin_growth=f"INF{uuid4().hex[:10].upper()}",
+        scheme_name="Test Scheme",
+        product_id=product.id,
+    )
+    db_session.add(fund)
+    await db_session.flush()
+    plan = MfSipPlan(
+        user_id=user_id,
+        product_id=product.id,
+        fund_id=fund.id,
+        mf_mandate_id=mandate_id,
+        amount_inr=1000,
+        frequency="monthly",
+        installment_day=10,
+        number_of_installments=120,
+        status=status,
+        idempotency_key=str(uuid4()),
+    )
+    db_session.add(plan)
+    await db_session.flush()
+    return plan
 
 
 def _verification_outcome(**overrides) -> HybridBankVerificationOutcome:
@@ -322,3 +417,95 @@ async def test_disable_bank_account_rejects_primary(db_session) -> None:
         await disable_bank_account(db_session, user_id=user.id, bank_account_id=primary.id)
 
     assert exc.value.code == "cannot_disable_primary"
+
+
+@pytest.mark.asyncio
+async def test_set_primary_allowed_when_mandate_has_only_cancelled_sips(db_session) -> None:
+    user, primary, secondary = await _seed_user_with_two_banks(db_session)
+    mandate = MfMandate(
+        user_id=user.id,
+        investor_bank_account_id=primary.id,
+        bank_account_old_id=int(primary.external_old_id),
+        status=MfMandateStatus.approved,
+        mandate_limit=5000,
+        idempotency_key=str(uuid4()),
+        fp_mandate_id=9001,
+    )
+    db_session.add(mandate)
+    await db_session.flush()
+    await _seed_sip_plan(
+        db_session,
+        user_id=user.id,
+        mandate_id=mandate.id,
+        status=MfSipPlanStatus.cancelled,
+    )
+
+    with patch(
+        "app.application.investor.investor_bank_account_service.refresh_mfia_payout_bank_account",
+        new=AsyncMock(return_value=True),
+    ):
+        result = await set_primary_bank_account(
+            db_session,
+            user_id=user.id,
+            bank_account_id=secondary.id,
+        )
+
+    assert result["is_primary"] is True
+    refreshed_primary = await db_session.get(InvestorBankAccount, primary.id)
+    assert refreshed_primary is not None and refreshed_primary.is_primary is False
+
+
+@pytest.mark.asyncio
+async def test_set_primary_blocked_when_mandate_has_active_sip(db_session) -> None:
+    user, primary, secondary = await _seed_user_with_two_banks(db_session)
+    mandate = MfMandate(
+        user_id=user.id,
+        investor_bank_account_id=primary.id,
+        bank_account_old_id=int(primary.external_old_id),
+        status=MfMandateStatus.approved,
+        mandate_limit=5000,
+        idempotency_key=str(uuid4()),
+        fp_mandate_id=9002,
+    )
+    db_session.add(mandate)
+    await db_session.flush()
+    await _seed_sip_plan(
+        db_session,
+        user_id=user.id,
+        mandate_id=mandate.id,
+        status=MfSipPlanStatus.active,
+    )
+
+    with pytest.raises(InvestorBankAccountError) as exc:
+        await set_primary_bank_account(
+            db_session,
+            user_id=user.id,
+            bank_account_id=secondary.id,
+        )
+
+    assert exc.value.code == "active_mandate_exists"
+
+
+@pytest.mark.asyncio
+async def test_set_primary_blocked_when_mandate_auth_pending(db_session) -> None:
+    user, primary, secondary = await _seed_user_with_two_banks(db_session)
+    db_session.add(
+        MfMandate(
+            user_id=user.id,
+            investor_bank_account_id=primary.id,
+            bank_account_old_id=int(primary.external_old_id),
+            status=MfMandateStatus.auth_pending,
+            mandate_limit=5000,
+            idempotency_key=str(uuid4()),
+        )
+    )
+    await db_session.flush()
+
+    with pytest.raises(InvestorBankAccountError) as exc:
+        await set_primary_bank_account(
+            db_session,
+            user_id=user.id,
+            bank_account_id=secondary.id,
+        )
+
+    assert exc.value.code == "active_mandate_exists"

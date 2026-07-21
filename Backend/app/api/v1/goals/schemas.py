@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+from datetime import date
+from typing import Literal, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+
+class GoalTemplateResponse(BaseModel):
+    id: UUID
+    slug: str
+    name: str
+    description: Optional[str] = None
+    icon_key: str
+    default_tenure_months: int
+    suggested_return_pct: Optional[float] = None
+    is_active: bool
+    sort_order: int
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class GoalTemplateListResponse(BaseModel):
+    items: list[GoalTemplateResponse]
+
+
+class GoalMilestoneResponse(BaseModel):
+    date: str
+    month_offset: int
+    projected_value_inr: float
+
+
+class GoalCalculatorRequest(BaseModel):
+    target_amount_inr: float = Field(gt=0)
+    target_date: date
+    existing_savings_inr: float = Field(default=0, ge=0)
+    expected_return_pct: Optional[float] = Field(default=None, ge=0, le=100)
+
+
+class GoalCalculatorResponse(BaseModel):
+    target_amount_inr: float
+    target_date: str
+    duration_months: int
+    existing_savings_inr: float
+    expected_return_pct: float
+    required_monthly_sip_inr: float
+    required_lumpsum_inr: float
+    projected_value_inr: float
+    progress_pct: float
+    milestones: list[GoalMilestoneResponse]
+
+
+class GoalResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    family_group_id: Optional[UUID] = None
+    template_id: Optional[UUID] = None
+    template: Optional[GoalTemplateResponse] = None
+    title: str
+    tag: Optional[str] = None
+    priority: int
+    target_amount_inr: float
+    target_date: str
+    current_amount_inr: float
+    existing_savings_inr: float
+    expected_return_pct: Optional[float] = None
+    status: Literal["draft", "active", "achieved", "paused", "archived"]
+    progress_pct: float
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class GoalListResponse(BaseModel):
+    items: list[GoalResponse]
+    limit: int
+    active_count: int
+
+
+class CreateGoalRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    target_amount_inr: float = Field(gt=0)
+    target_date: date
+    template_id: Optional[UUID] = None
+    tag: Optional[str] = Field(default=None, max_length=32)
+    priority: int = Field(default=3, ge=1, le=5)
+    existing_savings_inr: float = Field(default=0, ge=0)
+    expected_return_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    status: Literal["draft", "active"] = "active"
+
+
+class UpdateGoalRequest(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    tag: Optional[str] = Field(default=None, max_length=32)
+    priority: Optional[int] = Field(default=None, ge=1, le=5)
+    target_amount_inr: Optional[float] = Field(default=None, gt=0)
+    target_date: Optional[date] = None
+    existing_savings_inr: Optional[float] = Field(default=None, ge=0)
+    current_amount_inr: Optional[float] = Field(default=None, ge=0)
+    expected_return_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    status: Optional[Literal["draft", "active", "achieved", "paused", "archived"]] = None
+
+
+class FamilyGoalResponse(GoalResponse):
+    created_by_user_id: Optional[UUID] = None
+    contribution_total_inr: Optional[float] = None
+
+
+class FamilyGoalListResponse(BaseModel):
+    items: list[FamilyGoalResponse]
+    limit: int
+    active_count: int
+
+
+class CreateFamilyGoalRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    target_amount_inr: float = Field(gt=0)
+    target_date: date
+    template_id: Optional[UUID] = None
+    tag: Optional[str] = Field(default=None, max_length=32)
+    priority: int = Field(default=3, ge=1, le=5)
+    existing_savings_inr: float = Field(default=0, ge=0)
+    expected_return_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    status: Literal["draft", "active"] = "active"
+
+
+class UpdateFamilyGoalRequest(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    tag: Optional[str] = Field(default=None, max_length=32)
+    priority: Optional[int] = Field(default=None, ge=1, le=5)
+    target_amount_inr: Optional[float] = Field(default=None, gt=0)
+    target_date: Optional[date] = None
+    existing_savings_inr: Optional[float] = Field(default=None, ge=0)
+    expected_return_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    status: Optional[Literal["draft", "active", "achieved", "paused", "archived"]] = None
+
+
+class AddFamilyGoalContributionRequest(BaseModel):
+    amount_inr: float = Field(gt=0)
+    note: Optional[str] = Field(default=None, max_length=120)
+
+
+class FamilyGoalContributionItemResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    display_name: str
+    amount_inr: float
+    source_type: str
+    note: Optional[str] = None
+    contributed_at: Optional[str] = None
+
+
+class FamilyGoalMemberTotalResponse(BaseModel):
+    user_id: UUID
+    display_name: str
+    total_inr: float
+    contribution_count: int
+
+
+class FamilyGoalContributionsResponse(BaseModel):
+    goal_id: UUID
+    total_contributed_inr: float
+    member_totals: list[FamilyGoalMemberTotalResponse]
+    items: list[FamilyGoalContributionItemResponse]

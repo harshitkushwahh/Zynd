@@ -16,6 +16,8 @@ export type MfCollectionTheme = {
   labelClass: string;
   borderClass: string;
   footerClass: string;
+  iconBadgeClass: string;
+  glowClass: string;
   /** Optional illustration asset — when unset, a placeholder is shown. */
   illustrationSrc?: string | null;
   /** Optional scale utility for the illustration image. */
@@ -42,6 +44,8 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
       labelClass: "text-emerald-950 dark:text-emerald-50",
       borderClass: "border-emerald-200/80 dark:border-emerald-700/50",
       footerClass: "bg-gradient-to-t from-emerald-950/45 via-emerald-900/15 to-transparent",
+      iconBadgeClass: "border-emerald-100/40 bg-emerald-950/15 text-emerald-950 dark:border-emerald-200/25 dark:bg-white/10 dark:text-emerald-50",
+      glowClass: "bg-emerald-300/35 dark:bg-emerald-400/20",
     },
   },
   "best-sip": {
@@ -54,6 +58,8 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
       labelClass: "text-blue-950 dark:text-blue-50",
       borderClass: "border-blue-200/80 dark:border-blue-700/50",
       footerClass: "bg-gradient-to-t from-blue-950/45 via-blue-900/15 to-transparent",
+      iconBadgeClass: "border-blue-100/40 bg-blue-950/15 text-blue-950 dark:border-blue-200/25 dark:bg-white/10 dark:text-blue-50",
+      glowClass: "bg-sky-300/35 dark:bg-sky-400/20",
     },
   },
   "gold-silver": {
@@ -66,6 +72,8 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
       labelClass: "text-amber-50",
       borderClass: "border-amber-300/70 dark:border-amber-500/40",
       footerClass: "bg-gradient-to-t from-amber-950/80 via-amber-900/35 to-transparent",
+      iconBadgeClass: "border-amber-100/35 bg-amber-950/20 text-amber-50",
+      glowClass: "bg-amber-200/45 dark:bg-amber-300/25",
       illustrationSrc: "/gold.png",
     },
   },
@@ -79,6 +87,8 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
       labelClass: "text-slate-50",
       borderClass: "border-slate-300/60 dark:border-slate-500/35",
       footerClass: "bg-gradient-to-t from-slate-950/72 via-slate-900/28 to-transparent",
+      iconBadgeClass: "border-white/25 bg-white/12 text-slate-50",
+      glowClass: "bg-slate-200/30 dark:bg-slate-300/15",
       illustrationSrc: "/large.png",
       illustrationScaleClass: "scale-[1.12] origin-bottom-right",
       illustrationSlotClass: "top-5 right-3",
@@ -94,6 +104,8 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
       labelClass: "text-slate-50",
       borderClass: "border-slate-300/60 dark:border-slate-500/35",
       footerClass: "bg-gradient-to-t from-slate-950/72 via-slate-900/28 to-transparent",
+      iconBadgeClass: "border-white/25 bg-white/12 text-slate-50",
+      glowClass: "bg-slate-200/30 dark:bg-slate-300/15",
       illustrationSrc: "/mid.png",
       illustrationScaleClass: "scale-[1.12] origin-bottom-right",
       illustrationSlotClass: "top-5 right-3",
@@ -109,6 +121,8 @@ const COLLECTION_META: Record<string, MfCollectionMeta> = {
       labelClass: "text-slate-50",
       borderClass: "border-slate-300/60 dark:border-slate-500/35",
       footerClass: "bg-gradient-to-t from-slate-950/72 via-slate-900/28 to-transparent",
+      iconBadgeClass: "border-white/25 bg-white/12 text-slate-50",
+      glowClass: "bg-slate-200/30 dark:bg-slate-300/15",
       illustrationSrc: "/small.png",
       illustrationSlotClass: "top-5 right-3",
     },
@@ -127,6 +141,8 @@ export function collectionMetaFor(slug: string): MfCollectionMeta {
         labelClass: "text-foreground",
         borderClass: "border-border/70",
         footerClass: "bg-gradient-to-t from-black/25 via-black/10 to-transparent dark:from-black/45 dark:via-black/20",
+        iconBadgeClass: "border-border/60 bg-background/70 text-foreground",
+        glowClass: "bg-primary/10",
       },
     }
   );

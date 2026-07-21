@@ -20,6 +20,45 @@ from app.infrastructure.persistence.family_group_models import (
 from app.infrastructure.persistence.models import DocumentStatus, DocumentType, User, UserDocument
 from app.application.referral.referral_notification_service import mask_referee_email
 
+MASKED_DETAIL_PLACEHOLDER = "••••••••"
+
+
+def mask_member_email(email: str | None) -> str | None:
+    if not email:
+        return None
+    local, separator, domain = email.partition("@")
+    if not separator or not domain:
+        return MASKED_DETAIL_PLACEHOLDER
+    if len(local) <= 1:
+        masked_local = f"{local}***" if local else "***"
+    elif len(local) <= 3:
+        masked_local = f"{local[0]}***{local[-1]}"
+    else:
+        masked_local = f"{local[:2]}***{local[-2:]}"
+    return f"{masked_local}@{domain}"
+
+
+def mask_member_phone(phone: str | None) -> str | None:
+    if not phone:
+        return None
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if len(digits) <= 4:
+        return MASKED_DETAIL_PLACEHOLDER
+    if len(digits) <= 6:
+        return f"{digits[:1]}***{digits[-2:]}"
+    return f"{digits[:2]}***{digits[-4:]}"
+
+
+def mask_member_zynd_id(zynd_id: str | None) -> str | None:
+    if not zynd_id:
+        return None
+    value = zynd_id.strip()
+    if len(value) <= 4:
+        return MASKED_DETAIL_PLACEHOLDER
+    if len(value) <= 6:
+        return f"{value[:1]}••••{value[-1:]}"
+    return f"{value[:2]}••••{value[-2:]}"
+
 
 def _group_snapshot(group: FamilyGroup) -> dict[str, object]:
     return {

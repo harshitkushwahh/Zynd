@@ -22,6 +22,7 @@ from app.application.kyc.bank_verification_core import (
 )
 from app.application.kyc.journey_state_service import get_or_create_journey
 from app.application.mf.mf_folio_defaults_service import refresh_mfia_payout_bank_account
+from app.application.mf.mf_mandate_guard import find_blocking_mandate_for_bank
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_investor_client import create_bank_account
@@ -32,7 +33,6 @@ from app.infrastructure.persistence.investor_models import (
     InvestorObjectSyncStatus,
     InvestorProfile,
 )
-from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus
 from app.infrastructure.persistence.models import KycJourneyState, User
 from app.infrastructure.persistence.repositories.investor_profile_repository import (
     get_or_create_pending_investor_profile,
@@ -41,11 +41,6 @@ from app.infrastructure.persistence.repositories.investor_profile_repository imp
 logger = logging.getLogger(__name__)
 
 MAX_BANK_ACCOUNTS_PER_USER = 5
-_BLOCKING_MANDATE_STATUSES = {
-    MfMandateStatus.pending,
-    MfMandateStatus.auth_pending,
-    MfMandateStatus.approved,
-}
 
 KYC_ACCOUNT_TYPE_MAP = {
     "Savings": "savings",
@@ -550,12 +545,18 @@ async def set_primary_bank_account(
         )
     )
     if current_primary and current_primary.id != target.id and current_primary.external_old_id is not None:
-        blocking_mandate = await db.scalar(
-            select(MfMandate).where(
-                MfMandate.user_id == user_id,
-                MfMandate.bank_account_old_id == current_primary.external_old_id,
-                MfMandate.status.in_(_BLOCKING_MANDATE_STATUSES),
-            )
+        from app.application.mf.mf_mandate_service import reconcile_bank_mandates_from_fp
+
+        await reconcile_bank_mandates_from_fp(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(current_primary.external_old_id),
+            force=True,
+        )
+        blocking_mandate = await find_blocking_mandate_for_bank(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(current_primary.external_old_id),
         )
         if blocking_mandate:
             raise InvestorBankAccountError(
@@ -602,12 +603,18 @@ async def disable_bank_account(
         )
 
     if row.external_old_id is not None:
-        blocking_mandate = await db.scalar(
-            select(MfMandate).where(
-                MfMandate.user_id == user_id,
-                MfMandate.bank_account_old_id == row.external_old_id,
-                MfMandate.status.in_(_BLOCKING_MANDATE_STATUSES),
-            )
+        from app.application.mf.mf_mandate_service import reconcile_bank_mandates_from_fp
+
+        await reconcile_bank_mandates_from_fp(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(row.external_old_id),
+            force=True,
+        )
+        blocking_mandate = await find_blocking_mandate_for_bank(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(row.external_old_id),
         )
         if blocking_mandate:
             raise InvestorBankAccountError(

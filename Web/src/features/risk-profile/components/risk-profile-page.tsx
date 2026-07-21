@@ -1,16 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { PageTitle } from "@/components/ui/page-title";
 import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
@@ -52,17 +44,7 @@ export function RiskProfilePage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
-      <Breadcrumb className="mb-6 shrink-0">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{riskProfileRoute.label}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      <DashboardBreadcrumb items={[{ label: riskProfileRoute.label }]} />
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
         <div className="mb-6 flex items-start gap-3">

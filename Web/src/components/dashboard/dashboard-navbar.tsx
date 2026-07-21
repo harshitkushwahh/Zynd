@@ -121,6 +121,7 @@ export function DashboardNavbar() {
               <Link
                 key={tab.id}
                 href={tab.href}
+                prefetch={false}
                 scroll={false}
                 aria-current={active ? "page" : undefined}
                 className={cn(

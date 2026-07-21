@@ -15,6 +15,7 @@ from app.api.v1.admin.mf_transactions_router import router as mf_transactions_ro
 from app.api.v1.admin.zynd_logs_router import router as zynd_logs_router
 from app.api.v1.admin.risk_profile_router import router as risk_profile_router
 from app.api.v1.admin.family_groups_router import router as family_groups_router
+from app.api.v1.admin.goals_router import router as goals_router
 from app.api.v1.admin.schemas import (
     AdminActionListResponse,
     AdminActionRequestResponse,
@@ -133,6 +134,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 router.include_router(mf_admin_router)
 router.include_router(risk_profile_router)
 router.include_router(family_groups_router)
+router.include_router(goals_router)
 router.include_router(admin_invitations_router)
 router.include_router(mf_integrations_router)
 router.include_router(mf_transactions_router)

@@ -147,6 +147,7 @@ from app.application.mf.mf_sip_plan_service import (
     create_sip_plan,
     get_user_sip_plan,
     list_user_sip_plans,
+    load_sip_plan_fund_metadata,
     serialize_sip_plan,
 )
 from app.application.mf.mf_order_service import (
@@ -710,6 +711,7 @@ async def checkout_mf_sip_cart(
         await db.rollback()
         raise _handle_mf_order_error(exc) from exc
 
+    amc_names, amc_logos, isins = await load_sip_plan_fund_metadata(db, plans)
     responses: list[MfSipPlanResponse] = []
     for plan in plans:
         mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
@@ -719,6 +721,9 @@ async def checkout_mf_sip_cart(
                     plan,
                     product_name=products.get(plan.product_id),
                     mandate=mandate_row,
+                    amc_name=amc_names.get(plan.fund_id),
+                    amc_logo_url=amc_logos.get(plan.fund_id),
+                    isin=isins.get(plan.fund_id),
                 )
             )
         )
@@ -776,11 +781,31 @@ async def _sip_plan_response(
     plan,
     *,
     product_name: str | None,
+    amc_name: str | None = None,
+    amc_logo_url: str | None = None,
+    isin: str | None = None,
 ) -> MfSipPlanResponse:
+    from app.application.mf.mf_mandate_service import refresh_mandate_status_from_fp
     from app.infrastructure.persistence.mf_transaction_models import MfMandate
 
     mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
-    return MfSipPlanResponse(**serialize_sip_plan(plan, product_name=product_name, mandate=mandate_row))
+    if mandate_row is not None:
+        await refresh_mandate_status_from_fp(db, mandate_row, force=True)
+    if amc_name is None and amc_logo_url is None and isin is None:
+        amc_names, amc_logos, isins = await load_sip_plan_fund_metadata(db, [plan])
+        amc_name = amc_names.get(plan.fund_id)
+        amc_logo_url = amc_logos.get(plan.fund_id)
+        isin = isins.get(plan.fund_id)
+    return MfSipPlanResponse(
+        **serialize_sip_plan(
+            plan,
+            product_name=product_name,
+            mandate=mandate_row,
+            amc_name=amc_name,
+            amc_logo_url=amc_logo_url,
+            isin=isin,
+        )
+    )
 
 
 @router.get("/mandates", response_model=MfMandateListResponse)
@@ -915,8 +940,16 @@ async def list_mf_sip_plans(
             await db.execute(select(Product).where(Product.id.in_(product_ids)))
         ).scalars()
     } if product_ids else {}
+    amc_names, amc_logos, isins = await load_sip_plan_fund_metadata(db, plans)
     responses = [
-        await _sip_plan_response(db, plan, product_name=products.get(plan.product_id))
+        await _sip_plan_response(
+            db,
+            plan,
+            product_name=products.get(plan.product_id),
+            amc_name=amc_names.get(plan.fund_id),
+            amc_logo_url=amc_logos.get(plan.fund_id),
+            isin=isins.get(plan.fund_id),
+        )
         for plan in plans
     ]
     return MfSipPlanListResponse(plans=responses)

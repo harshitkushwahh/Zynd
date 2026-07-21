@@ -55,6 +55,8 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("risk_profile.templates.manage", "Create and update risk profile assessment templates"),
     ("family_groups.read", "View family groups, members, and invites"),
     ("family_groups.manage", "Moderate family groups and force-remove members"),
+    ("goals.templates.read", "View predefined goal templates"),
+    ("goals.templates.manage", "Update predefined goal templates"),
 ]
 
 ROLES: dict[str, dict[str, object]] = {
@@ -110,6 +112,8 @@ ROLES: dict[str, dict[str, object]] = {
             "risk_profile.tiers.manage",
             "risk_profile.templates.manage",
             "risk_profile.users.read",
+            "goals.templates.read",
+            "goals.templates.manage",
             "audit.read",
         ],
     },

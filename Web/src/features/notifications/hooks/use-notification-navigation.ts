@@ -18,7 +18,7 @@ export function useNotificationNavigation(
   const markReadOnNavigate = options?.markReadOnNavigate ?? true;
 
   return useCallback(
-    (item: Pick<NotificationItem, "id" | "notification_type" | "category" | "read_at">) => {
+    (item: Pick<NotificationItem, "id" | "notification_type" | "category" | "read_at" | "metadata">) => {
       if (markReadOnNavigate && !item.read_at) {
         onMarkRead?.(item.id);
       }
@@ -27,6 +27,7 @@ export function useNotificationNavigation(
         buildNotificationHref({
           notification_type: item.notification_type,
           category: item.category,
+          metadata: item.metadata,
         }),
       );
     },

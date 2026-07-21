@@ -16,6 +16,14 @@ class FamilyGroupMemberPreviewResponse(BaseModel):
     badge_label: Optional[str] = None
     profile_image_url: Optional[str] = None
     joined_at: datetime
+    kyc_completed: bool = False
+    has_invested: bool = False
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    zynd_id: Optional[str] = None
+    details_masked: bool = False
+    contribution_amount: Optional[float] = None
+    group_sip_count: Optional[int] = None
 
 
 class FamilyGroupResponse(BaseModel):
@@ -121,6 +129,7 @@ class FamilyGroupInviteListResponse(BaseModel):
 class FamilyGroupDetailResponse(FamilyGroupResponse):
     members: list[FamilyGroupMemberPreviewResponse] = Field(default_factory=list)
     invites: list[FamilyGroupInviteResponse] = Field(default_factory=list)
+    active_goals_count: int = 0
 
 
 class UpdateFamilyGroupMemberRequest(BaseModel):
@@ -138,6 +147,9 @@ class FamilyGroupActivityResponse(BaseModel):
     message: str
     actor_user_id: Optional[UUID] = None
     target_user_id: Optional[UUID] = None
+    actor_display_name: Optional[str] = None
+    actor_profile_image_url: Optional[str] = None
+    actor_role: Optional[str] = None
     metadata: dict[str, object] = Field(default_factory=dict)
     created_at: datetime
 

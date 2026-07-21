@@ -215,6 +215,7 @@ class Settings(BaseSettings):
     clamav_port: int = 3310
     clamav_timeout_seconds: int = 30
     clamav_fail_open: bool = False
+    clamav_stream_max_length_bytes: int = 25 * 1024 * 1024
     documents_worm_s3_object_lock_enabled: bool = False
     documents_worm_retention_days: int = 0
     documents_cdn_base_url: str = ""

@@ -1,33 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, UserPlus, UsersRound } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   createFamilyGroup,
   fetchFamilyGroups,
   type FamilyGroupListResponse,
 } from "@/features/family-groups/api/family-groups-api";
+import { FamilyGroupArchivedDialog } from "@/features/family-groups/components/family-group-archived-dialog";
 import { FamilyGroupCreateDialog } from "@/features/family-groups/components/family-group-create-dialog";
 import { FamilyGroupDashboard } from "@/features/family-groups/components/family-group-dashboard";
-import { FamilyGroupsPageSkeleton } from "@/features/family-groups/components/family-groups-page-skeleton";
+import {
+  FamilyGroupDashboardContentSkeleton,
+} from "@/features/family-groups/components/family-group-dashboard-skeleton";
+import { FamilyGroupEditDialog } from "@/features/family-groups/components/family-group-edit-dialog";
+import { FamilyGroupTabs } from "@/features/family-groups/components/family-group-tabs";
+import { useFamilyGroupPinned } from "@/features/family-groups/hooks/use-family-group-pinned";
 import { buildFamilyGroupHref } from "@/features/family-groups/lib/family-group-navigation";
+import { FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
-import { parseApiError } from "@/lib/api-client";
+import { useAuth } from "@/contexts/auth-context";
+import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
 import { copy } from "@/shared/config/copy";
+import { cn } from "@/lib/utils";
 
 const familyRoute = DASHBOARD_ROUTES.find((route) => route.id === "family-groups")!;
 const FamilyRouteIcon = familyRoute.icon;
@@ -35,7 +37,9 @@ const FamilyRouteIcon = familyRoute.icon;
 export function FamilyGroupsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const requestedGroupId = searchParams.get("group");
+  const { pinnedGroupId, togglePin } = useFamilyGroupPinned(user?.id);
 
   const [data, setData] = useState<FamilyGroupListResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +48,10 @@ export function FamilyGroupsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editGroupId, setEditGroupId] = useState<string | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [switchingGroupId, setSwitchingGroupId] = useState<string | null>(null);
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
@@ -53,7 +61,7 @@ export function FamilyGroupsPage() {
       setData(response);
       return response;
     } catch (loadError) {
-      setError(parseApiError(loadError).message);
+      setError(resolveFamilyGroupApiError(loadError, copy.familyGroups.errors.pageLoadFailedTitle));
       return null;
     } finally {
       setLoading(false);
@@ -69,12 +77,20 @@ export function FamilyGroupsPage() {
     if (requestedGroupId && data.items.some((group) => group.id === requestedGroupId)) {
       return requestedGroupId;
     }
+    if (pinnedGroupId && data.items.some((group) => group.id === pinnedGroupId)) {
+      return pinnedGroupId;
+    }
     return data.items[0]?.id ?? null;
-  }, [data, requestedGroupId]);
+  }, [data, pinnedGroupId, requestedGroupId]);
 
   const selectedGroup = useMemo(
     () => data?.items.find((group) => group.id === selectedGroupId) ?? null,
     [data, selectedGroupId],
+  );
+
+  const editGroup = useMemo(
+    () => data?.items.find((group) => group.id === (editGroupId ?? selectedGroupId)) ?? null,
+    [data, editGroupId, selectedGroupId],
   );
 
   const inviteDisabled = selectedGroup
@@ -92,7 +108,22 @@ export function FamilyGroupsPage() {
   const atLimit = Boolean(data && data.active_count >= data.limit);
 
   function handleSelectGroup(groupId: string) {
+    if (groupId !== selectedGroupId) {
+      setSwitchingGroupId(groupId);
+      router.replace(buildFamilyGroupHref(groupId), { scroll: false });
+      return;
+    }
     router.replace(buildFamilyGroupHref(groupId), { scroll: false });
+  }
+
+  function handleEditGroup(groupId: string) {
+    const group = data?.items.find((item) => item.id === groupId);
+    if (!group || group.my_role !== "head") return;
+    if (groupId !== selectedGroupId) {
+      handleSelectGroup(groupId);
+    }
+    setEditGroupId(groupId);
+    setEditOpen(true);
   }
 
   async function handleMembershipChanged() {
@@ -136,7 +167,7 @@ export function FamilyGroupsPage() {
       }
       router.replace(buildFamilyGroupHref(created.id), { scroll: false });
     } catch (submitError) {
-      setCreateError(parseApiError(submitError).message || copy.familyGroups.errors.createFailed);
+      setCreateError(resolveFamilyGroupApiError(submitError, copy.familyGroups.errors.createFailed));
     } finally {
       setCreating(false);
     }
@@ -144,57 +175,78 @@ export function FamilyGroupsPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
-      <Breadcrumb className="mb-6 shrink-0">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>{familyRoute.label}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      <DashboardBreadcrumb items={[{ label: familyRoute.label }]} />
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-              <FamilyRouteIcon className="size-4" strokeWidth={2.25} />
+        <div className="mb-6 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
+                <FamilyRouteIcon className="size-4" strokeWidth={2.25} />
+              </div>
+              <div className="min-w-0">
+                {loading && !data ? (
+                  <div className="space-y-2" aria-hidden="true">
+                    <Skeleton className="h-7 w-40" />
+                    <Skeleton className="h-4 w-full max-w-xl" />
+                  </div>
+                ) : (
+                  <>
+                    <PageTitle>{copy.familyGroups.dashboard.heroTitle}</PageTitle>
+                    <p className="mt-2 max-w-2xl text-compact text-muted-foreground">
+                      {copy.familyGroups.dashboard.heroSubtitle}
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="min-w-0">
-              <PageTitle>{copy.familyGroups.dashboard.heroTitle}</PageTitle>
-              <p className="mt-2 max-w-2xl text-compact text-muted-foreground">
-                {copy.familyGroups.dashboard.heroSubtitle}
-              </p>
-            </div>
+
+            {!loading && data && data.items.length === 0 ? (
+              <Button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                disabled={atLimit}
+                className="shrink-0"
+              >
+                <Plus className="size-4" strokeWidth={2} />
+                {copy.familyGroups.createAction}
+              </Button>
+            ) : selectedGroup?.my_role === "head" ? (
+              <Button
+                type="button"
+                onClick={() => setInviteOpen(true)}
+                disabled={inviteDisabled}
+                className="shrink-0"
+              >
+                <UserPlus className="size-4" strokeWidth={2} />
+                {copy.familyGroups.dashboard.inviteAction}
+              </Button>
+            ) : null}
           </div>
 
-          {!loading && data && data.items.length === 0 ? (
-            <Button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              disabled={atLimit}
-              className="shrink-0"
-            >
-              <Plus className="size-4" strokeWidth={2} />
-              {copy.familyGroups.createAction}
-            </Button>
-          ) : selectedGroup?.my_role === "head" ? (
-            <Button
-              type="button"
-              onClick={() => setInviteOpen(true)}
-              disabled={inviteDisabled}
-              className="shrink-0"
-            >
-              <UserPlus className="size-4" strokeWidth={2} />
-              {copy.familyGroups.dashboard.inviteAction}
-            </Button>
+          {loading && !data ? (
+            <div className="flex gap-2 overflow-hidden pb-1" aria-hidden="true">
+              <Skeleton className="h-10 w-[10rem] shrink-0 rounded-full" />
+              <Skeleton className="h-10 w-[9rem] shrink-0 rounded-full" />
+            </div>
+          ) : data ? (
+            <FamilyGroupTabs
+              groups={data.items}
+              selectedGroupId={selectedGroupId}
+              pinnedGroupId={pinnedGroupId}
+              loadingGroupId={switchingGroupId}
+              onSelect={handleSelectGroup}
+              onTogglePin={togglePin}
+              onEditGroup={handleEditGroup}
+              onViewArchived={() => setArchivedOpen(true)}
+              onCreate={() => setCreateOpen(true)}
+              canCreate={!atLimit}
+            />
           ) : null}
         </div>
 
         {loading && !data ? (
-          <FamilyGroupsPageSkeleton />
+          <FamilyGroupDashboardContentSkeleton />
         ) : error && !data ? (
           <LoadErrorCard
             title={copy.familyGroups.errors.pageLoadFailedTitle}
@@ -204,12 +256,15 @@ export function FamilyGroupsPage() {
           />
         ) : data && data.items.length > 0 && selectedGroupId ? (
           <FamilyGroupDashboard
-            key={selectedGroupId}
             groupId={selectedGroupId}
-            groups={data.items}
-            onSelectGroup={handleSelectGroup}
-            onCreateGroup={() => setCreateOpen(true)}
-            canCreateGroup={!atLimit}
+            onLoadingChange={(dashboardLoading) => {
+              setSwitchingGroupId((current) => {
+                if (dashboardLoading) {
+                  return selectedGroupId ?? current;
+                }
+                return current === selectedGroupId ? null : current;
+              });
+            }}
             onMembershipChanged={() => void handleMembershipChanged()}
             inviteOpen={inviteOpen}
             onInviteOpenChange={setInviteOpen}
@@ -217,7 +272,7 @@ export function FamilyGroupsPage() {
         ) : (
           <div className="space-y-6">
             {atLimit ? (
-              <div className="rounded-[var(--radius-card)] border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-compact text-amber-900 dark:text-amber-100">
+              <div className={cn("border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-compact text-amber-900 dark:text-amber-100", FAMILY_GROUP_CARD_RADIUS_CLASS)}>
                 <p className="font-medium">{copy.familyGroups.limitReachedTitle}</p>
                 <p className="mt-1 text-muted-foreground">
                   {copy.familyGroups.limitReachedDescription(data?.limit ?? 5)}
@@ -225,7 +280,7 @@ export function FamilyGroupsPage() {
               </div>
             ) : null}
 
-            <div className="flex flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border/80 bg-muted/10 px-6 py-16 text-center">
+            <div className={cn("flex flex-col items-center justify-center border border-dashed border-border/80 bg-muted/10 px-6 py-16 text-center", FAMILY_GROUP_CARD_RADIUS_CLASS)}>
               <div className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <UsersRound className="size-6" strokeWidth={2} />
               </div>
@@ -249,6 +304,19 @@ export function FamilyGroupsPage() {
         submitting={creating}
         error={createError}
       />
+
+      <FamilyGroupEditDialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open);
+          if (!open) setEditGroupId(null);
+        }}
+        group={editGroup}
+        onUpdated={() => void loadGroups()}
+        onArchived={() => void handleMembershipChanged()}
+      />
+
+      <FamilyGroupArchivedDialog open={archivedOpen} onOpenChange={setArchivedOpen} />
     </div>
   );
 }

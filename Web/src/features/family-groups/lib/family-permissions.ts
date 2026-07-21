@@ -4,6 +4,10 @@ export function canManageMembers(myRole: FamilyGroupRole | null | undefined): bo
   return myRole === "head";
 }
 
+export function canViewSentInvites(myRole: FamilyGroupRole | null | undefined): boolean {
+  return myRole === "head";
+}
+
 export function canEditMember(
   myRole: FamilyGroupRole | null | undefined,
   targetRole: FamilyGroupRole,

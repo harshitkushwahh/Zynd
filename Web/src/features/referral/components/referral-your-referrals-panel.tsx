@@ -4,14 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,21 +55,12 @@ const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
 
 function ReferralYourReferralsBreadcrumb() {
   return (
-    <Breadcrumb className="mb-6 shrink-0">
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard/referral" />}>{referralRouteLabel}</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{copy.referral.referralsPageTitle}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
+    <DashboardBreadcrumb
+      items={[
+        { label: referralRouteLabel, href: "/dashboard/referral" },
+        { label: copy.referral.referralsPageTitle },
+      ]}
+    />
   );
 }
 

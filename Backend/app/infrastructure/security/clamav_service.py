@@ -30,6 +30,12 @@ def _scan_bytes_sync(content: bytes, settings: Settings) -> ClamavScanResult:
     if pyclamd is None:
         return ClamavScanResult(clean=False, error="pyclamd unavailable")
 
+    if len(content) > settings.clamav_stream_max_length_bytes:
+        return ClamavScanResult(
+            clean=False,
+            error="INSTREAM size limit exceeded",
+        )
+
     try:
         client = pyclamd.ClamdNetworkSocket(
             settings.clamav_host,

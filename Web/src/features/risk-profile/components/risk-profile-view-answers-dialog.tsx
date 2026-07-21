@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Check, ClipboardList } from "lucide-react";
 
-import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
-import { Button } from "@/components/ui/button";
+import { BrandDialog } from "@/components/ui/brand-dialog";
+import { Badge } from "@/components/ui/badge";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   fetchRiskProfileAssessmentAnswers,
@@ -109,7 +109,9 @@ export function RiskProfileViewAnswersDialog({
                     {copy.riskProfile.viewAnswersQuestionLabel(index + 1, totalQuestions)}
                   </p>
                   {item.category_name ? (
-                    <p className="text-[11px] font-medium text-primary">{item.category_name}</p>
+                    <Badge variant="secondary" className="font-normal">
+                      {item.category_name}
+                    </Badge>
                   ) : null}
                 </div>
 
@@ -151,12 +153,6 @@ export function RiskProfileViewAnswersDialog({
           </ol>
         ) : null}
       </div>
-
-      <BrandDialogFooter>
-        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-          {copy.riskProfile.viewAnswersCloseAction}
-        </Button>
-      </BrandDialogFooter>
     </BrandDialog>
   );
 }

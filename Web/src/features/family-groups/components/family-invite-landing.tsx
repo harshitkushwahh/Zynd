@@ -11,7 +11,7 @@ import {
   persistFamilyInviteToken,
 } from "@/features/family-groups/lib/family-invite-storage";
 import { useAuth } from "@/contexts/auth-context";
-import { parseApiError } from "@/lib/api-client";
+import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
 import { copy } from "@/shared/config/copy";
 
 type FamilyInviteLandingProps = {
@@ -33,14 +33,14 @@ export function FamilyInviteLanding({ token }: FamilyInviteLandingProps) {
         persistFamilyInviteToken(token);
 
         if (user) {
-          router.replace(`/dashboard/family/invites?family_invite=${encodeURIComponent(token)}`);
+          router.replace(`/dashboard/family?family_invite=${encodeURIComponent(token)}`);
           return;
         }
 
         router.replace(`/?family_invite=${encodeURIComponent(token)}`);
       } catch (loadError) {
         if (cancelled) return;
-        setError(parseApiError(loadError).message || copy.familyGroups.join.errors.previewFailed);
+        setError(resolveFamilyGroupApiError(loadError, copy.familyGroups.join.errors.previewFailed));
       }
     }
 
@@ -67,8 +67,4 @@ export function FamilyInviteLanding({ token }: FamilyInviteLandingProps) {
       )}
     </div>
   );
-}
-
-export function normalizeLandingFamilyInviteToken(value: string): string | null {
-  return normalizeFamilyInviteToken(value);
 }

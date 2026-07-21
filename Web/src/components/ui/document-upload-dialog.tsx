@@ -328,7 +328,7 @@ export function DocumentUploadDialog({
       icon={Icon}
       headerReserveCloseSpace
     >
-      <div className="space-y-4 p-6">
+      <div className="min-w-0 space-y-4 overflow-hidden p-6">
         <input
           ref={inputRef}
           type="file"
@@ -445,9 +445,14 @@ export function DocumentUploadDialog({
               <img src={previewUrl} alt={previewAlt} className={previewClassName} />
             </div>
 
-            <div className="rounded-[var(--radius-card)] border border-border bg-muted/20 px-4 py-3 text-center">
-              <p className="truncate text-caption font-medium text-foreground">{selectedFile?.name}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">{formatsHint}</p>
+            <div className="min-w-0 rounded-[var(--radius-card)] border border-border bg-muted/20 px-4 py-3">
+              <p
+                className="min-w-0 truncate text-center text-caption font-medium text-foreground"
+                title={selectedFile?.name}
+              >
+                {selectedFile?.name}
+              </p>
+              <p className="mt-1 text-center text-[11px] text-muted-foreground">{formatsHint}</p>
             </div>
 
             <Button
