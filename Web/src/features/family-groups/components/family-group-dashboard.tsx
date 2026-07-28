@@ -1,14 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
-import {
-  fetchFamilyGroup,
-  leaveFamilyGroup,
-  type FamilyGroupDetail,
-} from "@/features/family-groups/api/family-groups-api";
+import { leaveFamilyGroup } from "@/features/family-groups/api/family-groups-api";
 import { FamilyGroupActivityStrip } from "@/features/family-groups/components/family-group-activity-strip";
 import { FamilyGroupHeroSection } from "@/features/family-groups/components/family-group-hero-section";
 import { FamilyGroupStatsCard } from "@/features/family-groups/components/family-group-stats-card";
@@ -19,12 +16,14 @@ import { FamilyGroupHowItWorksCard } from "@/features/family-groups/components/f
 import { FamilyGroupGoalsPanel } from "@/features/family-groups/components/family-group-goals-panel";
 import { FamilyGroupPortfolioPanel } from "@/features/family-groups/components/family-group-portfolio-panel";
 import { FamilyGroupDashboardContentSkeleton } from "@/features/family-groups/components/family-group-dashboard-skeleton";
+import { useFamilyGroupQuery } from "@/features/family-groups/hooks/use-family-group-query";
 import {
   canLeaveGroup,
   leaveGroupBlockedReason,
 } from "@/features/family-groups/lib/family-permissions";
 import { useAuth } from "@/contexts/auth-context";
 import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
+import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
 import { copy } from "@/shared/config/copy";
 
 type FamilyGroupDashboardProps = {
@@ -43,37 +42,22 @@ export function FamilyGroupDashboard({
   onInviteOpenChange,
 }: FamilyGroupDashboardProps) {
   const { user } = useAuth();
-  const [group, setGroup] = useState<FamilyGroupDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const { group, showSkeleton, errorMessage, isFetching, refetch } = useFamilyGroupQuery(groupId);
   const [saveError, setSaveError] = useState("");
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const [membersDialogMode, setMembersDialogMode] = useState<"view" | "manage">("view");
 
-  const loadGroup = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    setGroup(null);
-    try {
-      const response = await fetchFamilyGroup(groupId);
-      setGroup(response);
-    } catch (loadError) {
-      setError(resolveFamilyGroupApiError(loadError, copy.familyGroups.errors.pageLoadFailedTitle));
-      setGroup(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [groupId]);
-
   useEffect(() => {
-    void loadGroup();
-  }, [loadGroup]);
+    onLoadingChange?.(showSkeleton);
+  }, [showSkeleton, onLoadingChange]);
 
-  useEffect(() => {
-    onLoadingChange?.(loading);
-  }, [loading, onLoadingChange]);
+  const refreshGroup = async () => {
+    await invalidateFamilyQueries(queryClient, groupId);
+    await refetch();
+  };
 
   const isHead = group?.my_role === "head";
   const memberLimit = group?.member_limit ?? 12;
@@ -96,24 +80,25 @@ export function FamilyGroupDashboard({
     }
   }
 
-  if (loading && !group) {
+  if (showSkeleton) {
     return <FamilyGroupDashboardContentSkeleton />;
   }
 
-  if (error && !group) {
+  if (errorMessage && !group) {
     return (
       <LoadErrorCard
         title={copy.familyGroups.errors.pageLoadFailedTitle}
-        description={error}
+        description={errorMessage}
         retryLabel={copy.familyGroups.errors.retry}
-        onRetry={() => void loadGroup()}
+        retryLoading={isFetching}
+        onRetry={() => void refetch()}
       />
     );
   }
 
   if (!group) return null;
 
-  const contentReady = group.id === groupId && !loading;
+  const contentReady = group.id === groupId;
 
   return (
     <>
@@ -130,6 +115,10 @@ export function FamilyGroupDashboard({
             <FamilyGroupStatsCard
               memberCount={group.member_count}
               pendingInvites={group.pending_invite_count}
+              activeGoalsCount={group.active_goals_count ?? 0}
+              activeSipsCount={group.active_sips_count ?? 0}
+              totalInvestedInr={group.total_invested_inr ?? 0}
+              totalCurrentValueInr={group.total_current_value_inr ?? 0}
               className="min-h-[24rem] w-full sm:min-h-[26rem] xl:w-[20rem] xl:shrink-0"
             />
           </div>
@@ -157,13 +146,13 @@ export function FamilyGroupDashboard({
           />
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <FamilyGroupPortfolioPanel className="min-w-0" />
-            <FamilyGroupGoalsPanel className="min-w-0" />
+            <FamilyGroupPortfolioPanel groupId={group.id} className="min-w-0" />
+            <FamilyGroupGoalsPanel groupId={group.id} myRole={group.my_role ?? "viewer"} className="min-w-0" />
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
             <FamilyGroupActivityStrip groupId={group.id} layout="vertical" className="min-w-0" />
-            <FamilyGroupHowItWorksCard className="min-w-0" />
+            <FamilyGroupHowItWorksCard />
           </div>
         </div>
       ) : (
@@ -180,7 +169,7 @@ export function FamilyGroupDashboard({
         leaveBlocked={leaveBlocked ? copy.familyGroups.detail.leaveBlockedTransferFirst : null}
         saveError={saveError}
         onMemberUpdated={() => {
-          void loadGroup();
+          void refreshGroup();
           onMembershipChanged();
         }}
         onMemberError={setSaveError}
@@ -197,7 +186,7 @@ export function FamilyGroupDashboard({
         pendingInviteCount={group.pending_invite_count ?? 0}
         memberLimit={memberLimit}
         onInviteCreated={() => {
-          void loadGroup();
+          void refreshGroup();
           onMembershipChanged();
         }}
       />

@@ -353,7 +353,9 @@ function ProfileAvatar({
 
 export function DashboardSidebar({ className }: { className?: string }) {
   const pathname = usePathname();
-  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled);
+  const navRoutes = DASHBOARD_ROUTES.filter(
+    (route) => route.enabled && route.showInSidebar !== false,
+  );
 
   return (
     <aside
@@ -402,7 +404,9 @@ export function DashboardSidebar({ className }: { className?: string }) {
 
 export function DashboardMobileNav() {
   const pathname = usePathname();
-  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled);
+  const navRoutes = DASHBOARD_ROUTES.filter(
+    (route) => route.enabled && route.showInSidebar !== false,
+  );
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-[var(--blur-sm)] md:hidden">

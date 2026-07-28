@@ -130,6 +130,26 @@ class FamilyGroupDetailResponse(FamilyGroupResponse):
     members: list[FamilyGroupMemberPreviewResponse] = Field(default_factory=list)
     invites: list[FamilyGroupInviteResponse] = Field(default_factory=list)
     active_goals_count: int = 0
+    active_sips_count: int = 0
+    total_invested_inr: float = 0
+    total_current_value_inr: float = 0
+
+
+class FamilyGroupPortfolioSliceResponse(BaseModel):
+    id: str
+    label: str
+    amount_inr: float
+    value_pct: float
+
+
+class FamilyGroupPortfolioResponse(BaseModel):
+    total_current_value_inr: float
+    total_invested_inr: float
+    active_sips_count: int
+    active_goals_count: int
+    goal_funded_inr: float
+    has_holdings_data: bool
+    slices: list[FamilyGroupPortfolioSliceResponse] = Field(default_factory=list)
 
 
 class UpdateFamilyGroupMemberRequest(BaseModel):

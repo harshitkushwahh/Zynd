@@ -2,7 +2,6 @@
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -169,7 +168,7 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
 
           {activeCategory ? (
             <Button
-              variant="ghost"
+              variant="muted"
               size="sm"
               className="shrink-0"
               nativeButton={false}
@@ -178,7 +177,6 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
               }
             >
               {copy.mutualFunds.viewAll}
-              <ChevronRight className="size-4" />
             </Button>
           ) : null}
         </div>

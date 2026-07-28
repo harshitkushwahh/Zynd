@@ -2,6 +2,7 @@
 
 import type { InvestFundDetail } from "@/features/invest/api/invest-api";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   MfFundCategoryBadge,
   resolveMfFundCategoryKind,
@@ -91,9 +92,9 @@ export function MfFundDetailHeader({ fund }: MfFundDetailHeaderProps) {
                   </Badge>
                 ) : null}
                 {fund.health_badges?.map((flag) => (
-                  <Badge key={flag} variant="warning" className="text-[11px]">
+                  <StatusBadge key={flag} variant="warning" className="text-[11px]">
                     {healthBadgeLabel(flag)}
-                  </Badge>
+                  </StatusBadge>
                 ))}
               </div>
               <div>

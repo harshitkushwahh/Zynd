@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useId, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, Crown, Trash2, UsersRound, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldMessage } from "@/components/ui/ui-message";
 import {
   Select,
   SelectContent,
@@ -25,6 +28,7 @@ import {
   type FamilyGroupRole,
   type InvitableFamilyGroupRole,
 } from "@/features/family-groups/api/family-groups-api";
+import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
 import { FamilyMemberRoleBadge } from "@/features/family-groups/components/family-member-role-badge";
 import {
   canEditMember,
@@ -79,7 +83,7 @@ function MemberAvatar({ member }: { member: FamilyGroupMemberPreview }) {
 function MemberDetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground">{label}</p>
       <p className="mt-0.5 truncate text-compact text-foreground">{value}</p>
     </div>
   );
@@ -94,7 +98,7 @@ function MemberDetailBadgeItem({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground">{label}</p>
       <div className="mt-1">{children}</div>
     </div>
   );
@@ -102,20 +106,13 @@ function MemberDetailBadgeItem({
 
 function MemberStatusBadge({ label, positive }: { label: string; positive: boolean }) {
   return (
-    <Badge
-      variant="secondary"
-      className={cn(
-        "h-auto gap-1 px-2 py-1 text-[10px] font-semibold leading-none",
-        positive && "border-success/20 bg-success text-success-foreground hover:bg-success",
-      )}
+    <StatusBadge
+      variant={positive ? "success" : "neutral"}
+      icon={positive ? CheckCircle2 : XCircle}
+      className="h-auto max-w-full px-2 py-1 text-[10px] font-semibold"
     >
-      {positive ? (
-        <CheckCircle2 className="size-3 shrink-0" strokeWidth={2.25} />
-      ) : (
-        <XCircle className="size-3 shrink-0" strokeWidth={2.25} />
-      )}
       <span className="truncate">{label}</span>
-    </Badge>
+    </StatusBadge>
   );
 }
 
@@ -181,7 +178,7 @@ function MemberAccordionLabel({
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="truncate text-caption font-semibold text-foreground">{member.display_name}</p>
             {currentUserId === member.user_id ? (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-primary">
                 {copy.familyGroups.dashboard.orbitMemberDetail.youLabel}
               </span>
             ) : null}
@@ -214,6 +211,7 @@ export function FamilyGroupMemberRow({
   onUpdated,
   onError,
 }: FamilyGroupMemberRowProps) {
+  const queryClient = useQueryClient();
   const panelId = useId();
   const editable = canEditMember(myRole, member.role, currentUserId, member.user_id);
   const nicknameEditable = canEditNickname(myRole, currentUserId, member.user_id);
@@ -291,6 +289,7 @@ export function FamilyGroupMemberRow({
         }
       }
       await updateFamilyGroupMember(groupId, member.user_id, input);
+      await invalidateFamilyQueries(queryClient, groupId);
       onUpdated();
       setFieldErrors({});
     } catch (error) {
@@ -305,6 +304,7 @@ export function FamilyGroupMemberRow({
     try {
       await removeFamilyGroupMember(groupId, member.user_id);
       setRemoveOpen(false);
+      await invalidateFamilyQueries(queryClient, groupId);
       onUpdated();
     } catch (error) {
       onError(resolveFamilyGroupApiError(error, copy.familyGroups.governance.errors.removeFailed));
@@ -319,6 +319,7 @@ export function FamilyGroupMemberRow({
     try {
       await transferFamilyGroupHead(groupId, { new_head_user_id: member.user_id });
       setTransferOpen(false);
+      await invalidateFamilyQueries(queryClient, groupId);
       onUpdated();
     } catch (error) {
       onError(resolveFamilyGroupApiError(error, copy.familyGroups.governance.errors.transferFailed));
@@ -413,7 +414,7 @@ export function FamilyGroupMemberRow({
                               aria-invalid={Boolean(fieldErrors.customBadgeLabel)}
                             />
                             {fieldErrors.customBadgeLabel ? (
-                              <p className="text-compact text-destructive">{fieldErrors.customBadgeLabel}</p>
+                              <FieldMessage message={fieldErrors.customBadgeLabel} />
                             ) : null}
                           </>
                         ) : null}
@@ -434,7 +435,7 @@ export function FamilyGroupMemberRow({
                         aria-invalid={Boolean(fieldErrors.nickname)}
                       />
                       {fieldErrors.nickname ? (
-                        <p className="text-compact text-destructive">{fieldErrors.nickname}</p>
+                        <FieldMessage message={fieldErrors.nickname} />
                       ) : null}
                     </div>
                   ) : null}

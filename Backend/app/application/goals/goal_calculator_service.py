@@ -17,6 +17,10 @@ def _quantize_inr(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def _decimal(value: Decimal | float | int | str) -> Decimal:
+    return Decimal(str(value))
+
+
 def _monthly_rate(annual_return_pct: Decimal) -> Decimal:
     annual = annual_return_pct / Decimal("100")
     return annual / Decimal("12")
@@ -75,12 +79,14 @@ def months_until(target_date: date, *, from_date: date | None = None) -> int:
 
 def calculate_goal_plan(
     *,
-    target_amount_inr: Decimal,
+    target_amount_inr: Decimal | float,
     target_date: date,
-    existing_savings_inr: Decimal = Decimal("0"),
-    expected_return_pct: Decimal | None = None,
+    existing_savings_inr: Decimal | float = Decimal("0"),
+    expected_return_pct: Decimal | float | None = None,
     from_date: date | None = None,
 ) -> dict[str, Any]:
+    target_amount_inr = _decimal(target_amount_inr)
+    existing_savings_inr = _decimal(existing_savings_inr)
     if target_amount_inr <= 0 or target_amount_inr > MAX_TARGET_AMOUNT_INR:
         raise GoalError(
             code="invalid_target",
@@ -89,7 +95,7 @@ def calculate_goal_plan(
     if existing_savings_inr < 0:
         raise GoalError(code="invalid_savings", message="Existing savings cannot be negative.")
 
-    annual_return = Decimal(str(expected_return_pct or DEFAULT_EXPECTED_RETURN_PCT))
+    annual_return = _decimal(expected_return_pct or DEFAULT_EXPECTED_RETURN_PCT)
     if annual_return < 0 or annual_return > 100:
         raise GoalError(code="invalid_return", message="Expected return must be between 0 and 100.")
 
@@ -108,17 +114,25 @@ def calculate_goal_plan(
     monthly_rate = _monthly_rate(annual_return)
     savings_future = _future_value_lump_sum(existing_savings_inr, monthly_rate, duration_months)
     remaining = target_amount_inr - savings_future
-    required_sip = _required_monthly_sip(
-        remaining_target_inr=remaining,
-        monthly_rate=monthly_rate,
-        months=duration_months,
-    )
-    required_lumpsum = Decimal("0")
-    if remaining > 0:
+    goal_covered = remaining <= 0
+
+    if goal_covered:
+        required_sip = Decimal("0")
+        required_lumpsum = Decimal("0")
+        projected_from_sip = target_amount_inr
+    else:
+        required_sip = _required_monthly_sip(
+            remaining_target_inr=remaining,
+            monthly_rate=monthly_rate,
+            months=duration_months,
+        )
         growth = (Decimal("1") + monthly_rate) ** duration_months
         required_lumpsum = _quantize_inr(max(remaining / growth, Decimal("0")))
-
-    projected_from_sip = savings_future + _sip_future_value(required_sip, monthly_rate, duration_months)
+        projected_from_sip = savings_future + _sip_future_value(
+            required_sip,
+            monthly_rate,
+            duration_months,
+        )
     progress_pct = float(
         (existing_savings_inr / target_amount_inr * Decimal("100")).quantize(Decimal("0.01"))
         if target_amount_inr > 0
@@ -138,9 +152,17 @@ def calculate_goal_plan(
     for month_offset in checkpoint_months:
         if month_offset < 1:
             continue
-        projected = savings_future if month_offset == duration_months else (
-            _future_value_lump_sum(existing_savings_inr, monthly_rate, month_offset)
-            + _sip_future_value(required_sip, monthly_rate, month_offset)
+        projected = (
+            target_amount_inr
+            if goal_covered
+            else (
+                savings_future
+                if month_offset == duration_months
+                else (
+                    _future_value_lump_sum(existing_savings_inr, monthly_rate, month_offset)
+                    + _sip_future_value(required_sip, monthly_rate, month_offset)
+                )
+            )
         )
         milestones.append(
             {

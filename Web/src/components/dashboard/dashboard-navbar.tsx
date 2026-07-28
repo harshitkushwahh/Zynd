@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  Bot,
   Info,
   Search,
   ShoppingCart,
@@ -24,6 +25,7 @@ import {
 import { useDashboardRoute } from "@/features/dashboard/navigation/use-dashboard-route";
 import { useMfCartCount } from "@/features/invest/hooks/use-mf-cart-count";
 import { useTheme } from "@/contexts/theme-context";
+import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 function NavIconButton({
@@ -56,8 +58,44 @@ function NavIconButton({
   );
 }
 
+function NavIconLink({
+  href,
+  label,
+  children,
+  active,
+}: {
+  href: string;
+  label: string;
+  children: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Link
+            href={href}
+            prefetch={false}
+            scroll={false}
+            aria-label={label}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "inline-flex size-10 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors",
+              "hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+              active && "bg-muted text-foreground",
+            )}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function DashboardNavbar() {
-  const { isRouteActive } = useDashboardRoute();
+  const { isRouteActive, pathname } = useDashboardRoute();
   const { theme, setTheme } = useTheme();
   const [searchOpen, setSearchOpen] = useState(false);
   const { itemCount: cartItemCount } = useMfCartCount();
@@ -86,7 +124,7 @@ export function DashboardNavbar() {
         <header className={cn(DASHBOARD_HEADER_CLASS, "justify-between gap-3 overflow-visible md:gap-4")}>
         <nav
           className={cn(
-            "w-fit max-w-[calc(100%-12rem)] md:max-w-none",
+            "min-w-0 w-fit max-w-[calc(100%-12rem)] md:max-w-none",
             DASHBOARD_NAV_CLUSTER_CLASS,
           )}
         >
@@ -142,7 +180,34 @@ export function DashboardNavbar() {
           </div>
         </nav>
 
-        <div className="flex shrink-0 items-center gap-2 md:gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className="zynd-ai-bot-button"
+                aria-label={copy.navbar.aiBotLabel}
+                aria-disabled="true"
+              >
+                <span className="zynd-ai-bot-aurora" aria-hidden />
+                <span className="zynd-ai-bot-surface">
+                  <span className="zynd-ai-bot-fold" aria-hidden />
+                  <span className="zynd-ai-bot-points" aria-hidden>
+                    {Array.from({ length: 10 }, (_, index) => (
+                      <i key={index} className="zynd-ai-bot-point" />
+                    ))}
+                  </span>
+                  <span className="zynd-ai-bot-inner">
+                    <Bot className="zynd-ai-bot-icon" strokeWidth={2.5} />
+                  </span>
+                </span>
+              </button>
+            }
+          />
+          <TooltipContent side="bottom">{copy.navbar.aiBotComingSoon}</TooltipContent>
+        </Tooltip>
+
         <DashboardActivePageCard />
 
         <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
@@ -172,9 +237,13 @@ export function DashboardNavbar() {
 
           <NotificationPopover />
 
-          <NavIconButton label="Help">
+          <NavIconLink
+            href="/dashboard/about"
+            label={copy.about.navLabel}
+            active={pathname.startsWith("/dashboard/about")}
+          >
             <Info className="size-4" />
-          </NavIconButton>
+          </NavIconLink>
         </div>
 
         <div className={DASHBOARD_NAV_CLUSTER_CLASS}>

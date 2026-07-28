@@ -1,16 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
-import { fetchMfSipPlans, type MfSipPlan } from "@/features/invest/api/invest-api";
+import { type MfSipPlan } from "@/features/invest/api/invest-api";
 import { MfMySipsFilterBar } from "@/features/invest/components/mf-my-sips-filter-bar";
 import { MfMySipsPageSkeleton } from "@/features/invest/components/mf-my-sips-page-skeleton";
 import { MfMySipsTable } from "@/features/invest/components/mf-my-sips-table";
 import { MfSipPlanDetailDialog } from "@/features/invest/components/mf-sip-plan-detail-dialog";
+import { useMfSipPlansQuery } from "@/features/invest/hooks/use-mf-sip-plans-query";
+import { invalidateInvestQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import {
   EMPTY_MF_SIP_FILTERS,
   applyMfSipFilters,
@@ -31,53 +34,16 @@ function MySipsBreadcrumb() {
 }
 
 export function MfMySipsPage() {
-  const [plans, setPlans] = useState<MfSipPlan[]>([]);
+  const queryClient = useQueryClient();
+  const { plans, showSkeleton, errorMessage, isPending, isFetching, refetch } = useMfSipPlansQuery();
   const [filters, setFilters] = useState<MfSipFilters>(EMPTY_MF_SIP_FILTERS);
   const [visibleCount, setVisibleCount] = useState(SIPS_PAGE_SIZE);
-  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
-  const loadInFlightRef = useRef(false);
-  const mountedRef = useRef(true);
-
-  const loadPlans = useCallback(async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
-    if (loadInFlightRef.current) return;
-    loadInFlightRef.current = true;
-
-    if (showLoading) {
-      setLoading(true);
-    }
-
-    try {
-      const response = await fetchMfSipPlans();
-      if (!mountedRef.current) return;
-      setPlans(response.plans);
-      setError(null);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      const message = err instanceof Error ? err.message.trim() : "";
-      setError(message && message !== "Request failed" ? message : copy.mySips.loadError);
-    } finally {
-      loadInFlightRef.current = false;
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    void loadPlans();
-
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [loadPlans]);
 
   const sortedPlans = useMemo(() => sortMfSipPlans(plans), [plans]);
   const filteredPlans = useMemo(
@@ -95,7 +61,7 @@ export function MfMySipsPage() {
   }, [filters]);
 
   useEffect(() => {
-    if (loading || !hasMore) return;
+    if ((isPending && plans.length === 0) || !hasMore) return;
 
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
@@ -119,7 +85,7 @@ export function MfMySipsPage() {
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [loading, hasMore]);
+  }, [isPending, plans.length, hasMore]);
 
   const handlePlanClick = (plan: MfSipPlan) => {
     setSelectedPlanId(plan.plan_id);
@@ -127,11 +93,11 @@ export function MfMySipsPage() {
   };
 
   const handlePlanUpdated = () => {
-    void loadPlans();
+    void invalidateInvestQueries(queryClient);
   };
 
   const handleRetry = () => {
-    void loadPlans({ showLoading: true });
+    void refetch();
   };
 
   useEffect(() => {
@@ -144,8 +110,8 @@ export function MfMySipsPage() {
     return () => window.clearTimeout(timer);
   }, [detailOpen]);
 
-  const showTable = !loading && !error && plans.length > 0;
-  const showEmpty = !loading && !error && plans.length === 0;
+  const showTable = !showSkeleton && !errorMessage && plans.length > 0;
+  const showEmpty = !showSkeleton && !errorMessage && plans.length === 0;
 
   return (
     <div className={MF_PAGE_SECTION_CLASS}>
@@ -161,14 +127,14 @@ export function MfMySipsPage() {
         </div>
       </div>
 
-      {loading && plans.length === 0 ? <MfMySipsPageSkeleton /> : null}
+      {showSkeleton ? <MfMySipsPageSkeleton /> : null}
 
-      {!loading && error ? (
+      {!showSkeleton && errorMessage ? (
         <LoadErrorCard
           title={copy.mySips.loadFailedTitle}
-          description={error}
+          description={errorMessage}
           retryLabel={copy.mySips.retry}
-          retryLoading={loading}
+          retryLoading={isFetching}
           onRetry={handleRetry}
         />
       ) : null}

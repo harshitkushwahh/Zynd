@@ -412,6 +412,9 @@ async def db_session() -> AsyncSession:
             await conn.execute(
                 text(f"ALTER TYPE familygroupactivitytype ADD VALUE IF NOT EXISTS '{value}'")
             )
+        await conn.execute(text("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by_user_id UUID"))
+        await conn.execute(text("ALTER TABLE goals ADD COLUMN IF NOT EXISTS linked_product_id UUID"))
+        await conn.run_sync(goal_models.GoalContribution.__table__.create, checkfirst=True)
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     begin_event_batch()

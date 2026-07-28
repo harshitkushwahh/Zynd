@@ -65,6 +65,8 @@ async def patch_admin_goal_template(
             name=body.name,
             description=body.description,
             icon_key=body.icon_key,
+            image_url=body.image_url,
+            clear_image_url=body.clear_image_url or False,
             default_tenure_months=body.default_tenure_months,
             suggested_return_pct=Decimal(str(body.suggested_return_pct))
             if body.suggested_return_pct is not None

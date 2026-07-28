@@ -10,6 +10,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.goals.errors import GoalError
+from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
 from app.application.mf.mf_fp_state import map_fp_plan_state
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
@@ -240,6 +242,7 @@ async def create_sip_plan(
     idempotency_key: str,
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
+    family_goal_id: uuid.UUID | None = None,
 ) -> MfSipPlan:
     if amount_inr <= 0:
         raise MfOrderError(code="invalid_amount", message="Amount must be positive")
@@ -284,6 +287,11 @@ async def create_sip_plan(
             bank_account_id=bank_account_id,
         )
 
+    try:
+        linked_goal = await validate_family_goal_link(session, user_id=user_id, family_goal_id=family_goal_id)
+    except GoalError as exc:
+        raise MfOrderError(code=exc.code, message=exc.message, status_code=exc.status_code) from exc
+
     plan = MfSipPlan(
         user_id=user_id,
         product_id=product.id,
@@ -296,12 +304,15 @@ async def create_sip_plan(
         number_of_installments=installments,
         status=MfSipPlanStatus.pending,
         idempotency_key=idempotency_key,
-        metadata_={
-            "investor_profile_status": profile.status.value,
-            "mfia_status": mfia.status.value,
-            "fp_scheme_id": fund.fp_scheme_id,
-            "user_ip": user_ip,
-        },
+        metadata_=apply_family_goal_metadata(
+            {
+                "investor_profile_status": profile.status.value,
+                "mfia_status": mfia.status.value,
+                "fp_scheme_id": fund.fp_scheme_id,
+                "user_ip": user_ip,
+            },
+            family_goal_id=linked_goal.id if linked_goal else None,
+        ),
     )
     session.add(plan)
     await session.flush()
@@ -382,6 +393,9 @@ async def _apply_plan_state(session: AsyncSession, plan: MfSipPlan, *, fp_state:
     plan.status = mapped
     if mapped == MfSipPlanStatus.active and plan.activated_at is None:
         plan.activated_at = datetime.now(timezone.utc)
+        from app.application.goals.goal_funding_service import record_contribution_from_sip_plan
+
+        await record_contribution_from_sip_plan(session, plan)
     elif mapped == MfSipPlanStatus.failed:
         plan.failure_code = plan.failure_code or "fp_plan_failed"
         plan.failure_reason = plan.failure_reason or str(fp_state)

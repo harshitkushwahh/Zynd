@@ -20,6 +20,8 @@ import { MfPaymentOverlayProvider } from "@/features/invest/contexts/mf-payment-
 import { ProfileMenuShortcutListener } from "@/features/dashboard/navigation/profile-menu-shortcut-listener";
 import { ZyndPinLockScreen } from "@/features/account/pin";
 import { KycDialog } from "@/features/kyc/components/kyc-dialog";
+import { SupportFloatingWidget } from "@/features/support/components/support-floating-widget";
+import { SupportWidgetProvider } from "@/features/support/contexts/support-widget-context";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
 import { useKycOptional } from "@/contexts/kyc-context";
 import { ZyndGlobalLoader } from "@/components/ui/zynd-global-loader";
@@ -71,6 +73,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <MfPaymentOverlayProvider>
     <SettingsNavigationProvider>
+    <SupportWidgetProvider>
       <ProfileMenuShortcutListener />
     <div className="h-dvh overflow-hidden bg-background">
       {pinContext?.locked ? <ZyndPinLockScreen /> : null}
@@ -114,7 +117,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <DashboardMobileNav />
       </div>
+      {pinContext?.locked ? null : <SupportFloatingWidget />}
     </div>
+    </SupportWidgetProvider>
     </SettingsNavigationProvider>
     </MfPaymentOverlayProvider>
   );

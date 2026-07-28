@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
@@ -17,11 +17,11 @@ import {
 import { PaginationPageMinimalCenter } from "@/components/core/table";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
-import { fetchReferralList, type ReferralListItem } from "@/features/referral/api/referral-api";
 import { ReferralListRow } from "@/features/referral/components/referral-list-row";
 import { ReferralYourReferralsEmptyState } from "@/features/referral/components/referral-your-referrals-empty-state";
 import { ReferralYourReferralsSkeleton } from "@/features/referral/components/referral-skeleton";
 import { ReferralSummaryStatCards } from "@/features/referral/components/referral-summary-stat-cards";
+import { useReferralListQuery } from "@/features/referral/hooks/use-referral-list-query";
 import {
   filterReferralsByPeriod,
   mapReferralDisplayItems,
@@ -65,9 +65,7 @@ function ReferralYourReferralsBreadcrumb() {
 }
 
 export function ReferralYourReferralsPanel() {
-  const [referrals, setReferrals] = useState<ReferralListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { referrals, showSkeleton, errorMessage, isFetching, refetch } = useReferralListQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [period, setPeriod] = useState<ReferralsPeriod>("this_month");
@@ -77,22 +75,7 @@ export function ReferralYourReferralsPanel() {
     REFERRALS_PERIOD_OPTIONS.find((option) => option.value === period)?.label ??
     copy.referral.leaderboardPeriodThisMonth;
 
-  const loadReferrals = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const list = await fetchReferralList();
-      setReferrals(list.items);
-    } catch {
-      setError(copy.referral.loadFailed);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadReferrals();
-  }, [loadReferrals]);
+  const loadReferrals = () => refetch();
 
   const periodReferrals = useMemo(
     () => filterReferralsByPeriod(referrals, period),
@@ -139,19 +122,19 @@ export function ReferralYourReferralsPanel() {
   };
   const hasNoReferrals = referrals.length === 0;
 
-  if (loading && !error && referrals.length === 0) {
+  if (showSkeleton && !errorMessage && referrals.length === 0) {
     return <ReferralYourReferralsSkeleton />;
   }
 
-  if (error) {
+  if (errorMessage) {
     return (
       <>
         <ReferralYourReferralsBreadcrumb />
         <LoadErrorCard
           title={copy.referral.loadFailedTitle}
-          description={error}
+          description={errorMessage}
           retryLabel={copy.referral.retry}
-          retryLoading={loading}
+          retryLoading={isFetching}
           onRetry={() => void loadReferrals()}
           icon={Users}
           backAction={

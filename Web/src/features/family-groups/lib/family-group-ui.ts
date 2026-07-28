@@ -1,5 +1,6 @@
 import type { FamilyGroupMemberPreview, FamilyGroupRole } from "@/features/family-groups/api/family-groups-api";
 import { ZYND_CARD_RADIUS_CLASS, ZYND_CONTROL_RADIUS_CLASS } from "@/shared/config/ui-classes";
+import { copy } from "@/shared/config/copy";
 
 export const FAMILY_GROUP_CARD_RADIUS_CLASS = ZYND_CARD_RADIUS_CLASS;
 export const FAMILY_GROUP_CONTROL_RADIUS_CLASS = ZYND_CONTROL_RADIUS_CLASS;
@@ -25,9 +26,12 @@ export function familyMemberInitials(name: string) {
 }
 
 export function familyMemberRoleName(role: FamilyGroupRole | string) {
-  if (role === "head") return "Primary Owner";
-  if (role === "contributor") return "Contributor";
-  return "Member";
+  const normalized = role.trim().toLowerCase();
+  const roles = copy.familyGroups.roles;
+  if (normalized === "head") return roles.head;
+  if (normalized === "contributor") return roles.contributor;
+  if (normalized === "viewer") return roles.viewer;
+  return roles.viewer;
 }
 
 export function familyRoleLabel(role: FamilyGroupRole | string, badgeLabel?: string | null) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldMessage } from "@/components/ui/ui-message";
 import {
   Dialog,
   DialogContent,
@@ -967,9 +968,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         return (
           <div className="flex min-h-0 flex-1 flex-col">
             {submitError ? (
-              <p className="mb-3 shrink-0 rounded-[var(--radius-card)] border border-destructive/30 bg-destructive/5 px-3 py-2 text-caption text-destructive">
-                {submitError}
-              </p>
+              <FieldMessage message={submitError} className="mb-3 mt-0 shrink-0" />
             ) : null}
             <KycReviewStep
               draft={journeyDraft}
@@ -1093,9 +1092,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               />
               <KycDialogBody variant={activeStepId === "review" ? "review" : "default"}>
                 {journeySaveError ? (
-                  <p className="mb-3 shrink-0 rounded-[var(--radius-card)] border border-destructive/30 bg-destructive/5 px-3 py-2 text-caption text-destructive">
-                    {journeySaveError}
-                  </p>
+                  <FieldMessage message={journeySaveError} className="mb-3 mt-0 shrink-0" />
                 ) : null}
                 {renderJourneyStep()}
               </KycDialogBody>

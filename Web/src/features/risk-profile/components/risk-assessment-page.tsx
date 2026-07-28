@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
+import { FieldMessage } from "@/components/ui/ui-message";
 import { useAuth } from "@/contexts/auth-context";
 import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import {

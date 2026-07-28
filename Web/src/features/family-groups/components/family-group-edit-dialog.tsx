@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Archive, Camera, PencilLine, UsersRound } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
@@ -9,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldMessage } from "@/components/ui/ui-message";
 import {
   archiveFamilyGroup,
   updateFamilyGroup,
@@ -16,6 +18,7 @@ import {
 } from "@/features/family-groups/api/family-groups-api";
 import { FamilyGroupAvatarUploadDialog } from "@/features/family-groups/components/family-group-avatar-upload-dialog";
 import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
+import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
 import {
   FAMILY_GROUP_LIMITS,
   hasFamilyGroupFormErrors,
@@ -40,6 +43,7 @@ export function FamilyGroupEditDialog({
   onUpdated,
   onArchived,
 }: FamilyGroupEditDialogProps) {
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tag, setTag] = useState("");
@@ -87,6 +91,7 @@ export function FamilyGroupEditDialog({
         tag: normalizeOptionalText(tag),
       });
       handleOpenChange(false);
+      await invalidateFamilyQueries(queryClient, group.id);
       onUpdated();
     } catch (submitError) {
       setError(resolveFamilyGroupApiError(submitError, copy.familyGroups.errors.updateFailed));
@@ -102,6 +107,7 @@ export function FamilyGroupEditDialog({
       await archiveFamilyGroup(group.id);
       setArchiveOpen(false);
       handleOpenChange(false);
+      await invalidateFamilyQueries(queryClient);
       onArchived?.();
     } catch (archiveError) {
       setError(resolveFamilyGroupApiError(archiveError, copy.familyGroups.errors.archiveFailed));
@@ -162,7 +168,7 @@ export function FamilyGroupEditDialog({
                 required
                 aria-invalid={Boolean(fieldErrors.title)}
               />
-              {fieldErrors.title ? <p className="text-compact text-destructive">{fieldErrors.title}</p> : null}
+              {fieldErrors.title ? <FieldMessage message={fieldErrors.title} /> : null}
             </div>
 
             <div className="space-y-2">
@@ -177,7 +183,7 @@ export function FamilyGroupEditDialog({
                 aria-invalid={Boolean(fieldErrors.description)}
               />
               {fieldErrors.description ? (
-                <p className="text-compact text-destructive">{fieldErrors.description}</p>
+                <FieldMessage message={fieldErrors.description} />
               ) : null}
             </div>
 
@@ -191,10 +197,10 @@ export function FamilyGroupEditDialog({
                 maxLength={FAMILY_GROUP_LIMITS.tagMax}
                 aria-invalid={Boolean(fieldErrors.tag)}
               />
-              {fieldErrors.tag ? <p className="text-compact text-destructive">{fieldErrors.tag}</p> : null}
+              {fieldErrors.tag ? <FieldMessage message={fieldErrors.tag} /> : null}
             </div>
 
-            {error ? <p className="text-compact text-destructive">{error}</p> : null}
+            {error ? <FieldMessage message={error} className="mt-0" /> : null}
           </div>
         </form>
 

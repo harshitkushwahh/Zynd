@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Check, Copy, Hash, Loader2, ShieldCheck, Wallet, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui"
 import { MfPaymentStatusBadges } from "@/features/invest/components/payment-dialog";
 import { MfSipPlanStatusBadge } from "@/features/invest/components/mf-sip-plan-status-badge";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
+import { invalidateInvestQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import { formatDate, formatDateTime, formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -213,6 +215,7 @@ export function MfSipPlanDetailDialog({
   onOpenChange,
   onPlanUpdated,
 }: MfSipPlanDetailDialogProps) {
+  const queryClient = useQueryClient();
   const { openSipMandate } = useMfPaymentOverlay();
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -276,6 +279,7 @@ export function MfSipPlanDetailDialog({
     try {
       const updated = await cancelMfSipPlan(plan.plan_id);
       setPlan(updated);
+      await invalidateInvestQueries(queryClient);
       onPlanUpdated?.();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : copy.mySips.cancelError);
@@ -293,6 +297,7 @@ export function MfSipPlanDetailDialog({
       await cancelMfMandate(plan.mandate.mandate_id);
       const updated = await fetchMfSipPlan(plan.plan_id);
       setPlan(updated);
+      await invalidateInvestQueries(queryClient);
       onPlanUpdated?.();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : copy.mySips.cancelError);

@@ -7,6 +7,7 @@ import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldMessage } from "@/components/ui/ui-message";
 import {
   Select,
   SelectContent,
@@ -204,7 +205,7 @@ export function KycNomineeFamilyGroupDialog({
           </div>
         ) : null}
 
-        {error ? <p className="text-compact text-destructive">{error}</p> : null}
+        {error ? <FieldMessage message={error} className="mt-0" /> : null}
       </div>
 
       <BrandDialogFooter>

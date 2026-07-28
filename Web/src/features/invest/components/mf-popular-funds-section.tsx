@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SectionTitle } from "@/components/ui/page-title";
@@ -26,13 +25,12 @@ export function MfPopularFundsSection({ funds, onSelectFund }: MfPopularFundsSec
       <div className="flex items-center justify-between gap-4">
         <SectionTitle>{copy.mutualFunds.popularFundsTitle}</SectionTitle>
         <Button
-          variant="ghost"
+          variant="muted"
           size="sm"
           nativeButton={false}
           render={<Link href="/dashboard/mutual-funds/all" />}
         >
           {copy.mutualFunds.viewAllFunds}
-          <ChevronRight className="size-4" />
         </Button>
       </div>
 

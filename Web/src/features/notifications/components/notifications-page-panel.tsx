@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 
 import { NotificationEmptyState } from "@/components/dashboard/notifications/notification-empty-state";
@@ -12,10 +12,7 @@ import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { useNotifications } from "@/contexts/notification-context";
-import {
-  fetchNotifications,
-  type NotificationItem,
-} from "@/features/notifications/api/notifications-api";
+import { useNotificationsListQuery } from "@/features/notifications/hooks/use-notifications-list-query";
 import {
   NOTIFICATION_FILTER_TAB_TRACK_CLASS,
   NOTIFICATION_SURFACE_RADIUS_CLASS,
@@ -37,71 +34,30 @@ export function NotificationsPagePanel() {
   const { markRead, markAllRead, refresh: refreshContext } = useNotifications();
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [page, setPage] = useState(1);
-  const [items, setItems] = useState<NotificationItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [allTotal, setAllTotal] = useState(0);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
+  const [allTotal, setAllTotal] = useState(0);
+
+  const listParams = useMemo(
+    () => ({
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+      unreadOnly: filter === "unread",
+    }),
+    [filter, page],
+  );
+
+  const {
+    items,
+    total,
+    unreadCount,
+    showSkeleton,
+    errorMessage,
+    isFetching,
+    refetch,
+    isShowingPreviousData,
+  } = useNotificationsListQuery(listParams);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  const loadNotifications = useCallback(async () => {
-    setError("");
-    try {
-      const response = await fetchNotifications({
-        limit: PAGE_SIZE,
-        offset: (page - 1) * PAGE_SIZE,
-        unreadOnly: filter === "unread",
-      });
-      setItems(response.items);
-      setTotal(response.total);
-      setUnreadCount(response.unread_count);
-      if (filter === "all") {
-        setAllTotal(response.total);
-      }
-    } catch {
-      setError("Could not load notifications. Please try again.");
-    }
-  }, [filter, page]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const response = await fetchNotifications({
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
-          unreadOnly: filter === "unread",
-        });
-        if (!cancelled) {
-          setItems(response.items);
-          setTotal(response.total);
-          setUnreadCount(response.unread_count);
-          if (filter === "all") {
-            setAllTotal(response.total);
-          }
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Could not load notifications. Please try again.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [filter, page]);
 
   useEffect(() => {
     setPage(1);
@@ -113,6 +69,12 @@ export function NotificationsPagePanel() {
     }
   }, [page, totalPages]);
 
+  useEffect(() => {
+    if (filter === "all" && total > 0) {
+      setAllTotal(total);
+    }
+  }, [filter, total]);
+
   const handleRefresh = async () => {
     if (refreshing) {
       return;
@@ -122,7 +84,7 @@ export function NotificationsPagePanel() {
     try {
       await Promise.all([
         refreshWithMinimumDuration(refreshContext),
-        loadNotifications(),
+        refetch(),
       ]);
     } finally {
       setRefreshing(false);
@@ -131,42 +93,23 @@ export function NotificationsPagePanel() {
 
   const handleMarkRead = async (notificationId: string) => {
     await markRead(notificationId);
-    setItems((current) =>
-      current.map((item) =>
-        item.id === notificationId
-          ? { ...item, read_at: item.read_at ?? new Date().toISOString() }
-          : item,
-      ),
-    );
-    setUnreadCount((count) => Math.max(0, count - 1));
   };
 
-  if (loading && items.length === 0) {
+  if (showSkeleton) {
     return <NotificationsPageSkeleton />;
   }
 
-  if (error && !loading && items.length === 0) {
+  if (errorMessage && items.length === 0) {
     return (
       <>
         <NotificationsBreadcrumb />
-        <FieldMessage message={error} />
+        <FieldMessage message={errorMessage} />
       </>
     );
   }
 
   const handleMarkAllRead = async () => {
     await markAllRead();
-    setItems((current) =>
-      current.map((item) => ({
-        ...item,
-        read_at: item.read_at ?? new Date().toISOString(),
-      })),
-    );
-    setUnreadCount(0);
-    if (filter === "unread") {
-      setItems([]);
-      setTotal(0);
-    }
   };
 
   return (
@@ -203,10 +146,10 @@ export function NotificationsPagePanel() {
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                disabled={refreshing}
+                disabled={refreshing || isFetching}
                 onClick={() => void handleRefresh()}
               >
-                <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+                <RefreshCw className={cn("size-3.5", (refreshing || isFetching) && "animate-spin")} />
                 Refresh
               </Button>
               {unreadCount > 0 ? (
@@ -240,7 +183,12 @@ export function NotificationsPagePanel() {
           </div>
         </div>
 
-        <div className="min-h-[16rem]">
+        <div
+          className={cn(
+            "min-h-[16rem] transition-opacity duration-200",
+            isShowingPreviousData && isFetching && "opacity-70",
+          )}
+        >
           {items.length === 0 ? (
             filter === "unread" ? (
               <NotificationUnreadEmptyState />

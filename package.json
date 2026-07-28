@@ -4,6 +4,8 @@
   "workspaces": [
     "Web",
     "Admin",
+    "Support",
+    "Distributor",
     "Mobile",
     "packages/*"
   ]

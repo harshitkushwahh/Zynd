@@ -4,6 +4,11 @@ export const GOAL_DEFAULT_PRIORITY = 3;
 export const GOAL_DEFAULT_RETURN_PCT = 12;
 export const GOAL_MIN_TARGET_AMOUNT = 1;
 export const GOAL_MAX_TARGET_AMOUNT = 100_000_000;
+export const GOAL_MIN_EXISTING_SAVINGS = 0;
+export const GOAL_MIN_RETURN_PCT = 0;
+export const GOAL_MAX_RETURN_PCT = 100;
+export const GOAL_RETURN_STEP = 0.5;
+export const GOAL_MAX_DURATION_MONTHS = 600;
 
 export function addMonthsToDate(base: Date, months: number) {
   const date = new Date(base);
@@ -27,11 +32,26 @@ export function clampGoalAmount(amount: number) {
   return Math.min(Math.max(amount, GOAL_MIN_TARGET_AMOUNT), GOAL_MAX_TARGET_AMOUNT);
 }
 
+export function clampGoalExistingSavings(amount: number, maxAmount = GOAL_MAX_TARGET_AMOUNT) {
+  return Math.min(Math.max(amount, GOAL_MIN_EXISTING_SAVINGS), maxAmount);
+}
+
+export function clampGoalReturn(returnPct: number) {
+  return Math.min(Math.max(returnPct, GOAL_MIN_RETURN_PCT), GOAL_MAX_RETURN_PCT);
+}
+
 export function clampGoalPriority(priority: number) {
   return Math.min(Math.max(priority, GOAL_MIN_PRIORITY), GOAL_MAX_PRIORITY);
 }
 
 export function goalAmountStep(amount: number) {
+  if (amount >= 10_00_000) return 50_000;
+  if (amount >= 1_00_000) return 5_000;
+  if (amount >= 10_000) return 1_000;
+  return 500;
+}
+
+export function goalExistingSavingsStep(amount: number) {
   if (amount >= 10_00_000) return 50_000;
   if (amount >= 1_00_000) return 5_000;
   if (amount >= 10_000) return 1_000;

@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/zynd-brand.css";
+@import "../styles/zynd-ai-bot-button.css";
 @import "../styles/kyc-dialog.css";
 
 @theme inline {

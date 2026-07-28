@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, Bell, CheckCheck, RefreshCw } from "lucide-react";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 
 import { NotificationUnreadEmptyState } from "@/components/dashboard/notifications/notification-unread-empty-state";
 import { NotificationEmptyState } from "@/components/dashboard/notifications/notification-empty-state";
@@ -186,12 +186,11 @@ export function NotificationPopover() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-9 w-full justify-center gap-1.5 text-compact"
+            className="h-9 w-full justify-center text-compact"
             nativeButton={false}
             render={<Link href="/dashboard/notifications" />}
           >
             View all notifications
-            <ArrowRight className="size-3.5" />
           </Button>
         </div>
       </PopoverContent>

@@ -6,7 +6,10 @@ export const DASHBOARD_HEADER_CLASS = "relative z-20 flex w-full min-h-14 shrink
 export const DASHBOARD_NAV_CLUSTER_CLASS =
   "flex shrink-0 items-center rounded-[var(--radius-full)] border border-border/80 bg-card p-1.5 shadow-zynd-low min-h-14";
 export const DASHBOARD_NAV_ITEM_CLASS =
-  "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[var(--radius-full)] px-3 text-[13px] leading-none font-medium";
+  "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[var(--radius-full)] px-3 text-[13px] leading-none font-medium transition-[background-color,color,box-shadow] duration-200 ease-out motion-reduce:transition-none";
+
+export const DASHBOARD_ACTIVE_PAGE_LABEL_CLASS =
+  "max-w-[9.5rem] truncate whitespace-nowrap text-[13px] font-medium leading-none";
 export const DASHBOARD_NAVBAR_CHROME_CLASS = "relative z-20 shrink-0 mb-7";
 export const DASHBOARD_MAIN_TOP_OFFSET = "-mt-7 pt-7";
 export const DASHBOARD_NAVBAR_FADE_HEIGHT = "h-7";

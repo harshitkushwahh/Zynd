@@ -12,6 +12,7 @@ type AdminSectionPageShellProps = {
   description?: string;
   icon?: LucideIcon;
   headerAside?: React.ReactNode;
+  titleAddon?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -21,6 +22,7 @@ export function AdminSectionPageShell({
   description,
   icon,
   headerAside,
+  titleAddon,
   children,
 }: AdminSectionPageShellProps) {
   return (
@@ -31,6 +33,7 @@ export function AdminSectionPageShell({
         description={description}
         icon={icon}
         aside={headerAside}
+        titleAddon={titleAddon}
       />
       {children}
     </div>

@@ -36,6 +36,19 @@ export function mergeInvestFunds(
   return merged;
 }
 
+/** Stop infinite scroll when the API repeats rows or returns an empty page. */
+export function resolveInvestFundsPageHasMore(
+  append: boolean,
+  previousCount: number,
+  mergedCount: number,
+  responseHasMore: boolean,
+  incomingCount: number,
+): boolean {
+  if (!responseHasMore || incomingCount === 0) return false;
+  if (append && mergedCount <= previousCount) return false;
+  return true;
+}
+
 /**
  * Top funds within a category: composite rank first, then 3Y return, then name
  * (matches backend `list_invest_funds` with `category` + `sort=rank`).

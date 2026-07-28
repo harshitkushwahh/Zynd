@@ -554,3 +554,72 @@
     background-color: color-mix(in srgb, var(--card) 18%, transparent);
   }
 }
+
+/* Support FAB — pointer + moving brand gradient + icon motion */
+.zynd-support-fab {
+  cursor: pointer;
+}
+
+.zynd-support-fab-gradient {
+  background-image: linear-gradient(
+    120deg,
+    var(--zynd-blue),
+    var(--zynd-emerald),
+    var(--zynd-blue),
+    var(--zynd-emerald)
+  );
+  background-size: 220% 220%;
+  animation: zynd-support-fab-gradient-motion 12s ease-in-out infinite;
+}
+
+.zynd-support-fab-icon {
+  animation: zynd-support-fab-icon-motion 2.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.zynd-support-fab:hover .zynd-support-fab-icon {
+  animation-duration: 1.4s;
+}
+
+@keyframes zynd-support-fab-gradient-motion {
+  0% {
+    background-position: 0% 40%;
+  }
+  50% {
+    background-position: 100% 60%;
+  }
+  100% {
+    background-position: 0% 40%;
+  }
+}
+
+@keyframes zynd-support-fab-icon-motion {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  20% {
+    transform: translateY(-1px) rotate(-8deg) scale(1.04);
+  }
+  40% {
+    transform: translateY(0) rotate(8deg) scale(1.04);
+  }
+  60% {
+    transform: translateY(-1px) rotate(-5deg) scale(1.02);
+  }
+  80% {
+    transform: translateY(0) rotate(3deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zynd-support-fab-gradient {
+    animation: none;
+    background-image: var(--gradient-brand);
+    background-size: auto;
+  }
+
+  .zynd-support-fab-icon {
+    animation: none;
+  }
+}

@@ -21,6 +21,7 @@ import {
 } from "@/features/invest/lib/mf-payment-session";
 import { copy } from "@/shared/config/copy";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useInvestCacheInvalidation } from "@/features/invest/hooks/use-invest-cache-invalidation";
 
 type MfOrderPayViewProps = {
   orderId: string;
@@ -86,6 +87,8 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   const redirectedRef = useRef(false);
   const abandonedRef = useRef(false);
   const returnedFromPayment = wasMfPaymentRedirected(orderId);
+
+  useInvestCacheInvalidation(`order-${orderId}`, order?.status === "SUCCEEDED");
 
   const loadOrder = useCallback(async () => {
     try {
@@ -275,6 +278,11 @@ export function MfOrderPaymentReturnView() {
     searchParams.get("order_id") ??
     searchParams.get("orderId") ??
     getLastMfPaymentOrderId();
+
+  useInvestCacheInvalidation(
+    orderId ? `order-return-${orderId}` : "order-return-pending",
+    order?.status === "SUCCEEDED",
+  );
 
   useEffect(() => {
     if (!orderId || resolvedRef.current) return;

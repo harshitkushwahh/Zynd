@@ -4,13 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CalendarClock, TrendingUp } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
@@ -418,18 +412,19 @@ export function MfSipCalculatorView() {
         </div>
 
         <Card className={cn("w-full", MF_SIP_CARD_CLASS)}>
-          <CardHeader className="pb-3">
-            <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
-            <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className={cn(MF_SIP_CARD_CONTENT_CLASS, "gap-4")}>
+            <div className="space-y-1">
+              <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
+              <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
+            </div>
+
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className={MF_SIP_INVESTED_DOT_CLASS} />
+                <span className={MF_SIP_INVESTED_DOT_CLASS} aria-hidden />
                 {copy.mutualFunds.sipChartInvested}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className={MF_SIP_GAIN_DOT_CLASS} />
+                <span className={MF_SIP_GAIN_DOT_CLASS} aria-hidden />
                 {copy.mutualFunds.sipChartGain}
               </span>
             </div>

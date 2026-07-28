@@ -17,6 +17,8 @@ from app.api.v1.goals.schemas import (
     GoalResponse,
     GoalTemplateListResponse,
     GoalTemplateResponse,
+    LinkableFamilyGoalItemResponse,
+    LinkableFamilyGoalListResponse,
     UpdateGoalRequest,
 )
 from app.application.goals.constants import MAX_ACTIVE_PERSONAL_GOALS
@@ -25,11 +27,14 @@ from app.application.goals.goal_calculator_service import calculate_goal_plan
 from app.application.goals.goal_service import (
     archive_personal_goal,
     create_personal_goal,
+    delete_personal_goal,
     get_personal_goal,
     list_personal_goals,
+    restore_personal_goal,
     update_personal_goal,
 )
 from app.application.goals.goal_template_service import list_goal_templates
+from app.application.goals.goal_funding_service import list_linkable_family_goals
 from app.core.database import get_db
 from app.infrastructure.persistence.goal_models import GoalStatus
 from app.infrastructure.persistence.models import User
@@ -70,9 +75,10 @@ async def post_calculate_goal(
             status_code=exc.status_code,
             detail={"code": exc.code, "message": exc.message},
         ) from exc
+    milestones = result.pop("milestones")
     return GoalCalculatorResponse(
         **result,
-        milestones=[GoalMilestoneResponse(**item) for item in result["milestones"]],
+        milestones=[GoalMilestoneResponse(**item) for item in milestones],
     )
 
 
@@ -114,11 +120,23 @@ async def create_goal(
             existing_savings_inr=body.existing_savings_inr,
             expected_return_pct=body.expected_return_pct,
             status=GoalStatus(body.status),
+            linked_product_id=body.linked_product_id,
         )
     except GoalError as exc:
         return _handle_goal_error(exc)
     await db.commit()
     return GoalResponse(**result)
+
+
+@router.get("/family/linkable", response_model=LinkableFamilyGoalListResponse)
+async def list_linkable_family_goals_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> LinkableFamilyGoalListResponse:
+    items = await list_linkable_family_goals(db, user_id=current_user.id)
+    return LinkableFamilyGoalListResponse(
+        items=[LinkableFamilyGoalItemResponse(**item) for item in items]
+    )
 
 
 @router.get("/{goal_id}", response_model=GoalResponse)
@@ -155,6 +173,8 @@ async def patch_goal(
             current_amount_inr=body.current_amount_inr,
             expected_return_pct=body.expected_return_pct,
             status=GoalStatus(body.status) if body.status else None,
+            linked_product_id=body.linked_product_id,
+            clear_linked_product=body.clear_linked_product,
         )
     except GoalError as exc:
         return _handle_goal_error(exc)
@@ -174,3 +194,30 @@ async def delete_goal(
         return _handle_goal_error(exc)
     await db.commit()
     return GoalResponse(**result)
+
+
+@router.post("/{goal_id}/restore", response_model=GoalResponse)
+async def restore_goal(
+    goal_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> GoalResponse:
+    try:
+        result = await restore_personal_goal(db, goal_id=goal_id, user_id=current_user.id)
+    except GoalError as exc:
+        return _handle_goal_error(exc)
+    await db.commit()
+    return GoalResponse(**result)
+
+
+@router.delete("/{goal_id}/permanent", status_code=204)
+async def delete_goal_permanently(
+    goal_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    try:
+        await delete_personal_goal(db, goal_id=goal_id, user_id=current_user.id)
+    except GoalError as exc:
+        return _handle_goal_error(exc)
+    await db.commit()

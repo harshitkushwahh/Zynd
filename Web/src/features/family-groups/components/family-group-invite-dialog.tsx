@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Copy, Link2, Mail, UserPlus } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldMessage } from "@/components/ui/ui-message";
 import {
   Select,
   SelectContent,
@@ -24,6 +26,7 @@ import {
   type InvitableFamilyGroupRole,
 } from "@/features/family-groups/api/family-groups-api";
 import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
+import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
 import {
   FAMILY_GROUP_LIMITS,
   hasFamilyGroupFormErrors,
@@ -54,6 +57,7 @@ export function FamilyGroupInviteDialog({
   memberLimit,
   onInviteCreated,
 }: FamilyGroupInviteDialogProps) {
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitableFamilyGroupRole>("viewer");
   const [badgeKey, setBadgeKey] = useState<string>("");
@@ -102,6 +106,7 @@ export function FamilyGroupInviteDialog({
 
       const invite = await createFamilyGroupInvite(groupId, input);
       setLatestShareUrl(invite.share_url ?? null);
+      await invalidateFamilyQueries(queryClient, groupId);
       onInviteCreated?.(invite);
       toast.success(copy.familyGroups.invite.successTitle);
       setEmail("");
@@ -173,7 +178,7 @@ export function FamilyGroupInviteDialog({
               aria-invalid={Boolean(fieldErrors.email)}
             />
           </div>
-          {fieldErrors.email ? <p className="text-compact text-destructive">{fieldErrors.email}</p> : null}
+          {fieldErrors.email ? <FieldMessage message={fieldErrors.email} /> : null}
 
           <Label htmlFor="family-invite-role" className="mt-2 sm:col-start-2 sm:row-start-1 sm:mt-0">
             {copy.familyGroups.invite.roleLabel}
@@ -223,7 +228,7 @@ export function FamilyGroupInviteDialog({
               aria-invalid={Boolean(fieldErrors.customBadgeLabel)}
             />
             {fieldErrors.customBadgeLabel ? (
-              <p className="text-compact text-destructive">{fieldErrors.customBadgeLabel}</p>
+              <FieldMessage message={fieldErrors.customBadgeLabel} />
             ) : null}
           </div>
         ) : null}
@@ -252,7 +257,7 @@ export function FamilyGroupInviteDialog({
           </p>
         ) : null}
 
-        {error ? <p className="text-compact text-destructive">{error}</p> : null}
+        {error ? <FieldMessage message={error} className="mt-0" /> : null}
       </form>
 
       <BrandDialogFooter>

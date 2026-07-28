@@ -18,7 +18,7 @@ export const MF_POPULAR_TOOLS: MfPopularTool[] = [
   },
   {
     id: "lumpsum-calc",
-    label: "Lumpsum calculator",
+    label: "One-time calculator",
     description: "Project one-time investment growth",
     href: "/dashboard/mutual-funds/calculators/lumpsum",
     icon: "lumpsum-calc",

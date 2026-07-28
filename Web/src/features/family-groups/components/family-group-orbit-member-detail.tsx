@@ -4,6 +4,7 @@ import { CheckCircle2, Crown, PieChart, ShieldCheck, Wallet, XCircle } from "luc
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { FamilyGroupMemberPreview } from "@/features/family-groups/api/family-groups-api";
 import { FamilyMemberRoleBadge } from "@/features/family-groups/components/family-member-role-badge";
 import {
@@ -42,24 +43,17 @@ function StatusPill({
 }) {
   return (
     <div className={cn("flex min-w-0 flex-1 flex-col gap-2 p-2.5", ORBIT_MEMBER_DETAIL_INNER_CLASS)}>
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-foreground/50">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.12em] text-primary-foreground/50">
         <Icon className="size-3 shrink-0" strokeWidth={2.25} />
         <span className="truncate">{label}</span>
       </div>
-      <Badge
-        variant="secondary"
-        className={cn(
-          "h-auto w-fit max-w-full gap-1 px-2 py-1 text-[10px] font-semibold leading-none",
-          positive && "border-success/20 bg-success text-success-foreground hover:bg-success",
-        )}
+      <StatusBadge
+        variant={positive ? "success" : "neutral"}
+        icon={positive ? CheckCircle2 : XCircle}
+        className="h-auto w-fit max-w-full px-2 py-1 text-[10px] font-semibold"
       >
-        {positive ? (
-          <CheckCircle2 className="size-3 shrink-0" strokeWidth={2.25} />
-        ) : (
-          <XCircle className="size-3 shrink-0" strokeWidth={2.25} />
-        )}
         <span className="truncate">{value}</span>
-      </Badge>
+      </StatusBadge>
     </div>
   );
 }
@@ -110,7 +104,7 @@ export function FamilyGroupOrbitMemberDetail({
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary-foreground/50">
+          <p className="text-[10px] font-semibold tracking-[0.14em] text-primary-foreground/50">
             {detailCopy.title}
           </p>
           {isCurrentUser ? (
@@ -185,7 +179,7 @@ export function FamilyGroupOrbitMemberDetail({
             <PieChart className="size-3.5 shrink-0" strokeWidth={2.25} />
             <span className="truncate text-compact">{detailCopy.viewContribution}</span>
           </span>
-          <Badge variant="secondary" className="shrink-0 text-[9px] uppercase tracking-wide">
+          <Badge variant="secondary" className="shrink-0 text-[9px] tracking-wide">
             {copy.familyGroups.dashboard.comingSoonBadge}
           </Badge>
         </Button>

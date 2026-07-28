@@ -413,6 +413,22 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         ],
         "notes": "Update predefined goal template metadata and visibility.",
     },
+    {
+        "permission": "distributor.clients.list",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/clients",
+        ],
+        "notes": "Distributor console investor list with masked PII.",
+    },
+    {
+        "permission": "distributor.clients.read",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/clients/{client_reference}",
+        ],
+        "notes": "Distributor console masked client profile aggregate.",
+    },
 ]
 
 

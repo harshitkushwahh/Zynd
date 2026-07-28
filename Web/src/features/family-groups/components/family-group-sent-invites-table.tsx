@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { PaginationPageMinimalCenter, Table, TableCard } from "@/components/core/table";
 import type { FamilyGroupInvite } from "@/features/family-groups/api/family-groups-api";
 import { FamilyGroupSentInvitesEmptyState } from "@/features/family-groups/components/family-group-sent-invites-empty-state";
@@ -17,11 +17,11 @@ type FamilyGroupSentInvitesTableProps = {
   onRevokeInvite: (invite: FamilyGroupInvite) => void;
 };
 
-function inviteStatusBadgeVariant(status: FamilyGroupInvite["status"]) {
-  if (status === "accepted") return "success" as const;
-  if (status === "pending") return "warning" as const;
-  if (status === "revoked" || status === "declined") return "destructive" as const;
-  return "outline" as const;
+function inviteStatusBadgeVariant(status: FamilyGroupInvite["status"]): StatusBadgeVariant {
+  if (status === "accepted") return "success";
+  if (status === "pending") return "warning";
+  if (status === "revoked" || status === "declined") return "destructive";
+  return "neutral";
 }
 
 function formatInviteStatus(status: FamilyGroupInvite["status"]) {
@@ -87,7 +87,9 @@ export function FamilyGroupSentInvitesTable({ invites, onRevokeInvite }: FamilyG
                 </p>
               </Table.Cell>
               <Table.Cell>
-                <Badge variant={inviteStatusBadgeVariant(invite.status)}>{formatInviteStatus(invite.status)}</Badge>
+                <StatusBadge variant={inviteStatusBadgeVariant(invite.status)}>
+                  {formatInviteStatus(invite.status)}
+                </StatusBadge>
               </Table.Cell>
               <Table.Cell>
                 <div className="flex flex-wrap gap-2">

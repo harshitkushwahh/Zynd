@@ -9,6 +9,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import { MF_FUND_SEARCH_MIN_CHARS } from "@/features/invest/lib/mf-fund-search";
 import { formatSignedReturn, resolveInvestAssetUrl } from "@/features/invest/lib/mf-format";
@@ -132,7 +133,9 @@ export function MfFundSearchList({
         ) : null}
 
         {error ? (
-          <div className="px-4 py-3 text-caption text-destructive">{error}</div>
+          <div className="px-4 py-1">
+            <FieldMessage message={error} className="mt-0" />
+          </div>
         ) : null}
 
         {showHint ? (

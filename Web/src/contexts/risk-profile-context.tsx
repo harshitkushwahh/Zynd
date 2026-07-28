@@ -9,15 +9,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/contexts/auth-context";
 import {
   discardRiskProfileDraft,
-  fetchAllRiskProfileAssessmentHistory,
-  fetchRiskProfileConfig,
-  fetchRiskProfileResult,
-  fetchRiskProfileSession,
-  fetchRiskProfileTiers,
   type RiskProfileAttemptState,
   type RiskProfileAssessmentHistoryItem,
   type RiskProfileConfig,
@@ -27,9 +23,17 @@ import {
   type RiskProfileTierConfig,
 } from "@/features/risk-profile/api/risk-profile-api";
 import {
-  buildGaugeSubArcsFromTiers,
+  DEFAULT_CONFIG,
   RISK_GAUGE_SUB_ARCS,
-  RISK_PROFILE_TRENDS_MIN_PROFILES,
+  useRiskProfileConfigQuery,
+  useRiskProfileHistoryQuery,
+  useRiskProfileResultQuery,
+  useRiskProfileSessionQuery,
+  useRiskProfileTiersQuery,
+} from "@/features/risk-profile/hooks/use-risk-profile-data-queries";
+import { invalidateRiskProfileQueries } from "@/features/risk-profile/lib/invalidate-risk-profile-queries";
+import {
+  buildGaugeSubArcsFromTiers,
 } from "@/features/risk-profile/lib/risk-tier-ui";
 import {
   clearRiskAssessmentDraft,
@@ -38,8 +42,8 @@ import {
   type RiskAssessmentDraft,
 } from "@/features/risk-profile/lib/risk-assessment-draft";
 import { getRiskProfileErrorMessage } from "@/features/risk-profile/lib/risk-profile-error";
+import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
-import { ApiError } from "@/lib/api-client";
 
 type RiskProfileContextValue = {
   profile: RiskProfileCurrent | null;
@@ -103,22 +107,36 @@ function getAssessmentDraftProgress(
 
 export function RiskProfileProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<RiskProfileCurrent | null>(null);
-  const [assessmentHistory, setAssessmentHistory] = useState<RiskProfileAssessmentHistoryItem[]>([]);
-  const [tiers, setTiers] = useState<RiskProfileTierConfig[]>([]);
-  const [config, setConfig] = useState<RiskProfileConfig>({
-    trends_min_profiles: RISK_PROFILE_TRENDS_MIN_PROFILES,
-    default_attempts: 6,
-    unlock_bonus_attempts: 3,
-  });
-  const [attemptState, setAttemptState] = useState<RiskProfileAttemptState | null>(null);
-  const [serverDraft, setServerDraft] = useState<RiskProfileDraft | null>(null);
+  const queryClient = useQueryClient();
+  const enabled = Boolean(user);
+
+  const resultQuery = useRiskProfileResultQuery(enabled);
+  const historyQuery = useRiskProfileHistoryQuery(enabled);
+  const sessionQuery = useRiskProfileSessionQuery(enabled);
+  const tiersQuery = useRiskProfileTiersQuery(enabled);
+  const configQuery = useRiskProfileConfigQuery(enabled);
+
   const [localDraft, setLocalDraft] = useState<RiskAssessmentDraft | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [completedAssessmentResult, setCompletedAssessmentResult] = useState<RiskProfileResult | null>(null);
   const [showCompletedAssessmentDialog, setShowCompletedAssessmentDialog] = useState(false);
   const [navbarCompletionPulse, setNavbarCompletionPulse] = useState(false);
+
+  const profile = resultQuery.data ?? null;
+  const assessmentHistory = historyQuery.data ?? [];
+  const tiers = tiersQuery.data?.items ?? [];
+  const config = configQuery.data ?? DEFAULT_CONFIG;
+  const sessionAttemptState = sessionQuery.data?.attempt_state ?? null;
+  const serverDraft = sessionQuery.data?.draft ?? null;
+  const attemptState = profile?.attempt_state ?? sessionAttemptState;
+
+  const loading =
+    enabled &&
+    resultQuery.isPending &&
+    !resultQuery.isFetched;
+
+  const error = resultQuery.isError
+    ? getRiskProfileErrorMessage(resultQuery.error, copy.riskProfile.errors.loadFailed)
+    : null;
 
   const refreshLocalDraft = useCallback(() => {
     if (!user?.id) {
@@ -128,126 +146,57 @@ export function RiskProfileProvider({ children }: { children: ReactNode }) {
     setLocalDraft(loadRiskAssessmentDraft(user.id));
   }, [user?.id]);
 
-  const refreshSession = useCallback(async () => {
-    if (!user) {
-      setAttemptState(null);
-      setServerDraft(null);
-      return;
-    }
-    try {
-      const session = await fetchRiskProfileSession();
-      setAttemptState(session.attempt_state);
-      setServerDraft(session.draft);
-    } catch {
-      setAttemptState(null);
-      setServerDraft(null);
-    }
+  useEffect(() => {
     refreshLocalDraft();
-  }, [refreshLocalDraft, user]);
+  }, [refreshLocalDraft]);
 
-  const refreshAssessmentHistory = useCallback(async () => {
-    if (!user) {
-      setAssessmentHistory([]);
+  const refreshSession = useCallback(async () => {
+    if (!enabled) {
+      queryClient.removeQueries({ queryKey: queryKeys.risk.session() });
       return;
     }
-    try {
-      const items = await fetchAllRiskProfileAssessmentHistory();
-      setAssessmentHistory(items);
-    } catch {
-      setAssessmentHistory([]);
-    }
-  }, [user]);
-
-  const gaugeSubArcs = useMemo(
-    () =>
-      tiers.length > 0
-        ? buildGaugeSubArcsFromTiers(tiers)
-        : RISK_GAUGE_SUB_ARCS,
-    [tiers],
-  );
-
-  const refreshReferenceData = useCallback(async () => {
-    if (!user) {
-      setTiers([]);
-      setConfig({
-        trends_min_profiles: RISK_PROFILE_TRENDS_MIN_PROFILES,
-        default_attempts: 6,
-        unlock_bonus_attempts: 3,
-      });
-      return;
-    }
-
-    const [tierResult, configResult] = await Promise.all([
-      fetchRiskProfileTiers().catch(() => ({ items: [] as RiskProfileTierConfig[] })),
-      fetchRiskProfileConfig().catch(
-        (): RiskProfileConfig => ({
-          trends_min_profiles: RISK_PROFILE_TRENDS_MIN_PROFILES,
-          default_attempts: 6,
-          unlock_bonus_attempts: 3,
-        }),
-      ),
-    ]);
-
-    setTiers(tierResult.items);
-    setConfig(configResult);
-  }, [user]);
+    await sessionQuery.refetch();
+    refreshLocalDraft();
+  }, [enabled, queryClient, refreshLocalDraft, sessionQuery]);
 
   const refreshProfile = useCallback(async () => {
-    if (!user) {
-      setProfile(null);
-      setAssessmentHistory([]);
-      setError(null);
+    if (!enabled) {
+      queryClient.removeQueries({ queryKey: queryKeys.risk.all() });
       return;
     }
-    setLoading(true);
-    try {
-      const [profileResult, historyItems] = await Promise.all([
-        fetchRiskProfileResult().catch((loadError) => {
-          if (loadError instanceof ApiError && loadError.status === 404) {
-            return null;
-          }
-          throw loadError;
-        }),
-        fetchAllRiskProfileAssessmentHistory().catch(() => [] as RiskProfileAssessmentHistoryItem[]),
-      ]);
-      setProfile(profileResult);
-      setAssessmentHistory(historyItems);
-      if (profileResult?.attempt_state) {
-        setAttemptState(profileResult.attempt_state);
-      }
-      setError(null);
-    } catch (loadError) {
-      setProfile(null);
-      setAssessmentHistory([]);
-      setError(getRiskProfileErrorMessage(loadError, copy.riskProfile.errors.pageLoadFailed));
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+    await Promise.all([resultQuery.refetch(), historyQuery.refetch()]);
+  }, [enabled, historyQuery, queryClient, resultQuery]);
 
   const retryLoad = useCallback(async () => {
-    setError(null);
-    await Promise.all([refreshSession(), refreshReferenceData(), refreshProfile()]);
-  }, [refreshProfile, refreshReferenceData, refreshSession]);
+    await invalidateRiskProfileQueries(queryClient);
+    await Promise.all([
+      resultQuery.refetch(),
+      historyQuery.refetch(),
+      sessionQuery.refetch(),
+      tiersQuery.refetch(),
+      configQuery.refetch(),
+    ]);
+    refreshLocalDraft();
+  }, [
+    configQuery,
+    historyQuery,
+    queryClient,
+    refreshLocalDraft,
+    resultQuery,
+    sessionQuery,
+    tiersQuery,
+  ]);
 
-  useEffect(() => {
-    void refreshReferenceData();
-  }, [refreshReferenceData]);
-
-  useEffect(() => {
-    void refreshSession();
-  }, [refreshSession]);
-
-  useEffect(() => {
-    void refreshProfile();
-  }, [refreshProfile]);
+  const gaugeSubArcs = useMemo(
+    () => (tiers.length > 0 ? buildGaugeSubArcsFromTiers(tiers) : RISK_GAUGE_SUB_ARCS),
+    [tiers],
+  );
 
   const clearAssessmentDraft = useCallback(async () => {
     if (user?.id) {
       clearRiskAssessmentDraft(user.id);
     }
     setLocalDraft(null);
-    setServerDraft(null);
     try {
       await discardRiskProfileDraft();
     } catch {
@@ -258,14 +207,10 @@ export function RiskProfileProvider({ children }: { children: ReactNode }) {
 
   const applyResult = useCallback(
     (result: RiskProfileCurrent) => {
-      setProfile(result);
-      if (result.attempt_state) {
-        setAttemptState(result.attempt_state);
-      }
-      setError(null);
-      void refreshAssessmentHistory();
+      queryClient.setQueryData(queryKeys.risk.result(), result);
+      void historyQuery.refetch();
     },
-    [refreshAssessmentHistory],
+    [historyQuery, queryClient],
   );
 
   const presentCompletedAssessment = useCallback((result: RiskProfileResult) => {

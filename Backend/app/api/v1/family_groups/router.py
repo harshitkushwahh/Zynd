@@ -16,6 +16,7 @@ from app.api.v1.family_groups.schemas import (
     FamilyGroupActivityListResponse,
     FamilyGroupActivityResponse,
     FamilyGroupDetailResponse,
+    FamilyGroupPortfolioResponse,
     FamilyGroupInviteActionRequest,
     FamilyGroupInviteListResponse,
     FamilyGroupInvitePreviewResponse,
@@ -66,6 +67,7 @@ from app.application.family_groups.membership_service import (
     update_group_member,
 )
 from app.application.family_groups.activity_service import list_family_group_activity
+from app.application.family_groups.family_group_portfolio_service import get_family_group_portfolio
 from app.application.family_groups.nominee_bridge_service import (
     add_nominee_to_family_group,
     preview_nominee_family_group_add,
@@ -88,7 +90,6 @@ from app.application.goals.errors import GoalError
 from app.application.goals.family_goal_service import (
     add_family_goal_contribution,
     archive_family_goal,
-    count_active_family_goals,
     create_family_goal,
     get_family_goal,
     get_family_goal_contributions,
@@ -289,7 +290,12 @@ async def get_family_group(
         invites: list[dict[str, object]] = []
         if payload.get("my_role") == FamilyGroupMemberRole.head.value:
             invites = await list_group_invites(db, group_id=group_id, user_id=current_user.id)
-        active_goals_count = await count_active_family_goals(db, group_id=group_id)
+        portfolio = await get_family_group_portfolio(
+            db,
+            group_id=group_id,
+            user_id=current_user.id,
+        )
+        active_goals_count = int(portfolio["active_goals_count"])
     except FamilyGroupError as exc:
         return _handle_family_group_error(exc)
 
@@ -298,7 +304,27 @@ async def get_family_group(
         members=[FamilyGroupMemberPreviewResponse.model_validate(member) for member in members],
         invites=[FamilyGroupInviteResponse.model_validate(invite) for invite in invites],
         active_goals_count=active_goals_count,
+        active_sips_count=int(portfolio["active_sips_count"]),
+        total_invested_inr=float(portfolio["total_invested_inr"]),
+        total_current_value_inr=float(portfolio["total_current_value_inr"]),
     )
+
+
+@router.get("/{group_id}/portfolio", response_model=FamilyGroupPortfolioResponse)
+async def get_family_group_portfolio_route(
+    group_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FamilyGroupPortfolioResponse:
+    try:
+        portfolio = await get_family_group_portfolio(
+            db,
+            group_id=group_id,
+            user_id=current_user.id,
+        )
+    except FamilyGroupError as exc:
+        return _handle_family_group_error(exc)
+    return FamilyGroupPortfolioResponse.model_validate(portfolio)
 
 
 @router.get("/{group_id}/activity", response_model=FamilyGroupActivityListResponse)

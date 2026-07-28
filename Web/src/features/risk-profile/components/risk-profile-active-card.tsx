@@ -19,28 +19,13 @@ import {
   resolveRiskTierVisual,
   resolveTierMessageParts,
 } from "@/features/risk-profile/lib/risk-tier-ui";
+import {
+  DASHBOARD_ACTIVE_PAGE_LABEL_CLASS,
+} from "@/components/dashboard/dashboard-layout";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type ActiveCardMode = "loading" | "completed" | "progress" | "profile" | "empty";
-
-const NAVBAR_CARD_FADE_CLASS = "animate-in fade-in duration-200";
-
-function ActiveCardFadeIn({
-  modeKey,
-  className,
-  children,
-}: {
-  modeKey: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div key={modeKey} className={cn(NAVBAR_CARD_FADE_CLASS, className)}>
-      {children}
-    </div>
-  );
-}
 
 function useActiveCardMode(): ActiveCardMode {
   const riskProfile = useRiskProfileOptional();
@@ -55,7 +40,11 @@ function useActiveCardMode(): ActiveCardMode {
 }
 
 /** Navbar active card for all `/dashboard/risk-profile` routes (settings + assessment). */
-export function RiskProfileActiveCard() {
+export function RiskProfileActiveCard({
+  triggerClassName,
+}: {
+  triggerClassName?: string;
+}) {
   const riskProfile = useRiskProfileOptional();
   const mode = useActiveCardMode();
   const profile = riskProfile?.profile;
@@ -93,29 +82,28 @@ export function RiskProfileActiveCard() {
           <button
             type="button"
             className={cn(
-              "inline-flex h-10 w-auto max-w-full items-center justify-center overflow-hidden rounded-[var(--radius-full)] outline-none",
-              "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+              triggerClassName ??
+                cn(
+                  DASHBOARD_NAV_ITEM_CLASS,
+                  "w-full max-w-[14.5rem] justify-center text-center outline-none text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+                ),
+              "overflow-hidden",
             )}
             aria-label={copy.riskProfile.settingsTitle}
           />
         }
       >
         {mode === "loading" ? (
-          <Loader2 className="size-4 shrink-0 animate-spin px-3 opacity-70" aria-hidden />
+          <Loader2 className="size-4 shrink-0 animate-spin opacity-70" aria-hidden />
         ) : mode === "completed" ? (
-          <ActiveCardFadeIn modeKey="completed">
-            <span className="inline-flex h-10 items-center gap-1.5 whitespace-nowrap px-3 text-[11px] font-semibold uppercase tracking-wide text-primary">
-              <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
-              {copy.riskProfile.navbarAssessmentComplete}
-            </span>
-          </ActiveCardFadeIn>
+          <span className="inline-flex h-10 items-center gap-1.5 whitespace-nowrap px-0 text-[11px] font-semibold uppercase tracking-wide text-primary transition-opacity duration-200">
+            <CheckCircle2 className="size-3.5 shrink-0" aria-hidden />
+            {copy.riskProfile.navbarAssessmentComplete}
+          </span>
         ) : mode === "progress" && progress ? (
           <RiskProfileLiquidProgress current={progress.current} total={progress.total} />
         ) : mode === "profile" && profile ? (
-          <ActiveCardFadeIn
-            modeKey={`profile-${profile.assessment_id}-${profile.tier}`}
-            className="inline-flex h-10 items-center gap-1.5 px-2"
-          >
+          <span className="inline-flex h-10 items-center gap-1.5 px-0 transition-opacity duration-200">
             <RiskProfileGauge
               score={profile.score}
               displayScore={displayScore}
@@ -125,25 +113,25 @@ export function RiskProfileActiveCard() {
             />
             <span
               className={cn(
-                "shrink-0 whitespace-nowrap text-[11px] font-semibold tracking-wide",
+                "max-w-[9.5rem] shrink-0 truncate whitespace-nowrap text-[11px] font-semibold tracking-wide",
                 tierVisual.textClass,
               )}
             >
               {formatRiskTierBadgeLabel(profile.tier)}
             </span>
-          </ActiveCardFadeIn>
+          </span>
         ) : (
-          <ActiveCardFadeIn modeKey="empty" className="inline-flex h-10 items-center gap-1.5 px-2">
+          <span className="inline-flex h-10 items-center gap-1.5 px-0 transition-opacity duration-200">
             <RiskProfileGauge
               score={RISK_PROFILE_PLACEHOLDER_SCORE}
               tier={RISK_PROFILE_PLACEHOLDER_TIER}
               size="navbar"
               showCaption={false}
             />
-            <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+            <span className={cn(DASHBOARD_ACTIVE_PAGE_LABEL_CLASS, "text-[11px] font-medium text-muted-foreground")}>
               {copy.riskProfile.startAction}
             </span>
-          </ActiveCardFadeIn>
+          </span>
         )}
       </HoverCardTrigger>
 

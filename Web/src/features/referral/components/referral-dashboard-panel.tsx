@@ -1,20 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
-import {
-  fetchReferralLeaderboard,
-  fetchReferralList,
-  fetchReferralMe,
-  type ReferralLeaderboardResponse,
-  type ReferralListItem,
-} from "@/features/referral/api/referral-api";
 import { ReferralEarningsOverviewCard } from "@/features/referral/components/referral-earnings-overview-card";
 import { ReferralHowItWorksCard } from "@/features/referral/components/referral-how-it-works-card";
 import { ReferralLeaderboardPreviewCard } from "@/features/referral/components/referral-leaderboard-preview-card";
 import { ReferralShareHeroCard } from "@/features/referral/components/referral-share-hero-card";
 import { ReferralSummaryStatCards } from "@/features/referral/components/referral-summary-stat-cards";
 import { ReferralYourReferralsCard } from "@/features/referral/components/referral-your-referrals-card";
+import { useReferralDashboardQuery } from "@/features/referral/hooks/use-referral-dashboard-query";
 import { buildReferralShareUrl } from "@/features/referral/lib/referral-storage";
 import { sumEarningsThisMonth, summarizeReferralList } from "@/features/referral/lib/referral-display";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
@@ -27,19 +19,17 @@ import { ReferralDashboardSkeleton } from "@/features/referral/components/referr
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { copy } from "@/shared/config/copy";
 
-type ReferralDashboardData = {
-  code: string;
-  share_url: string;
-  click_count: number;
-  signup_count: number;
-  kyc_verified_count: number;
-  first_investment_count: number;
-  qualified_count: number;
-  engaged_count: number;
-};
-
 type ReferralDashboardPanelProps = {
-  initialData?: ReferralDashboardData | null;
+  initialData?: {
+    code: string;
+    share_url: string;
+    click_count: number;
+    signup_count: number;
+    kyc_verified_count: number;
+    first_investment_count: number;
+    qualified_count: number;
+    engaged_count: number;
+  } | null;
 };
 
 const referralRouteLabel =
@@ -51,46 +41,19 @@ function ReferralBreadcrumb() {
 }
 
 export function ReferralDashboardPanel({ initialData = null }: ReferralDashboardPanelProps) {
-  const [data, setData] = useState(initialData);
-  const [referrals, setReferrals] = useState<ReferralListItem[]>([]);
-  const [leaderboard, setLeaderboard] = useState<ReferralLeaderboardResponse | null>(null);
-  const [loading, setLoading] = useState(!initialData);
-  const [error, setError] = useState("");
+  const { data, referrals, leaderboard, showSkeleton, error, isFetching, refetch } =
+    useReferralDashboardQuery();
 
-  const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [me, list, leaderboardData] = await Promise.all([
-        fetchReferralMe(),
-        fetchReferralList(),
-        fetchReferralLeaderboard("this_month"),
-      ]);
-      setData(me);
-      setReferrals(list.items);
-      setLeaderboard(leaderboardData);
-    } catch {
-      setError(copy.referral.loadFailed);
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (initialData) return;
-    void loadDashboard();
-  }, [initialData, loadDashboard]);
-
+  const resolvedData = data ?? initialData;
   const shareUrl =
-    data?.share_url ??
-    (data?.code ? buildReferralShareUrl(data.code) : "");
+    resolvedData?.share_url ??
+    (resolvedData?.code ? buildReferralShareUrl(resolvedData.code) : "");
 
-  if (loading && !error && !data) {
+  if (showSkeleton && !resolvedData) {
     return <ReferralDashboardSkeleton />;
   }
 
-  if (error || !data) {
+  if (error || !resolvedData) {
     return (
       <>
         <ReferralBreadcrumb />
@@ -98,8 +61,8 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
           title={copy.referral.loadFailedTitle}
           description={error || copy.referral.loadFailed}
           retryLabel={copy.referral.retry}
-          retryLoading={loading}
-          onRetry={() => void loadDashboard()}
+          retryLoading={isFetching}
+          onRetry={() => void refetch()}
           icon={ReferralRouteIcon}
         />
       </>
@@ -113,7 +76,7 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
       <ReferralBreadcrumb />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-stretch">
         <div className={REFERRAL_LEFT_COLUMN_CLASS}>
-          <ReferralShareHeroCard shareUrl={shareUrl} code={data.code} />
+          <ReferralShareHeroCard shareUrl={shareUrl} code={resolvedData.code} />
           <ReferralLeaderboardPreviewCard
             entries={leaderboard?.entries ?? []}
             totalParticipants={leaderboard?.entries.length ?? 0}
@@ -123,7 +86,7 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
 
         <div className={REFERRAL_RIGHT_COLUMN_CLASS}>
           <ReferralSummaryStatCards
-            stats={data}
+            stats={resolvedData}
             referrals={referrals}
             totalEarningsInr={earningsSummary.totalEarningsInr}
             earningsThisMonthInr={sumEarningsThisMonth(referrals)}

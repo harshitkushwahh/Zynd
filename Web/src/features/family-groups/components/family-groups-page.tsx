@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, UserPlus, UsersRound } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -11,7 +12,6 @@ import { PageTitle } from "@/components/ui/page-title";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   createFamilyGroup,
-  fetchFamilyGroups,
   type FamilyGroupListResponse,
 } from "@/features/family-groups/api/family-groups-api";
 import { FamilyGroupArchivedDialog } from "@/features/family-groups/components/family-group-archived-dialog";
@@ -23,11 +23,14 @@ import {
 import { FamilyGroupEditDialog } from "@/features/family-groups/components/family-group-edit-dialog";
 import { FamilyGroupTabs } from "@/features/family-groups/components/family-group-tabs";
 import { useFamilyGroupPinned } from "@/features/family-groups/hooks/use-family-group-pinned";
+import { useFamilyGroupsQuery } from "@/features/family-groups/hooks/use-family-groups-query";
 import { buildFamilyGroupHref } from "@/features/family-groups/lib/family-group-navigation";
 import { FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { useAuth } from "@/contexts/auth-context";
 import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
+import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
+import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -37,13 +40,12 @@ const FamilyRouteIcon = familyRoute.icon;
 export function FamilyGroupsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const requestedGroupId = searchParams.get("group");
   const { pinnedGroupId, togglePin } = useFamilyGroupPinned(user?.id);
+  const { data, showSkeleton, errorMessage, isFetching, refetch } = useFamilyGroupsQuery();
 
-  const [data, setData] = useState<FamilyGroupListResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -53,24 +55,10 @@ export function FamilyGroupsPage() {
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [switchingGroupId, setSwitchingGroupId] = useState<string | null>(null);
 
-  const loadGroups = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetchFamilyGroups();
-      setData(response);
-      return response;
-    } catch (loadError) {
-      setError(resolveFamilyGroupApiError(loadError, copy.familyGroups.errors.pageLoadFailedTitle));
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadGroups();
-  }, [loadGroups]);
+  async function refreshGroups() {
+    const result = await refetch();
+    return result.data ?? null;
+  }
 
   const selectedGroupId = useMemo(() => {
     if (!data?.items.length) return null;
@@ -108,11 +96,10 @@ export function FamilyGroupsPage() {
   const atLimit = Boolean(data && data.active_count >= data.limit);
 
   function handleSelectGroup(groupId: string) {
-    if (groupId !== selectedGroupId) {
-      setSwitchingGroupId(groupId);
-      router.replace(buildFamilyGroupHref(groupId), { scroll: false });
+    if (groupId === selectedGroupId) {
       return;
     }
+    setSwitchingGroupId(groupId);
     router.replace(buildFamilyGroupHref(groupId), { scroll: false });
   }
 
@@ -127,7 +114,7 @@ export function FamilyGroupsPage() {
   }
 
   async function handleMembershipChanged() {
-    const response = await loadGroups();
+    const response = await refreshGroups();
     if (!response) return;
 
     const stillExists = selectedGroupId
@@ -138,6 +125,10 @@ export function FamilyGroupsPage() {
       const nextGroupId = response.items[0]?.id ?? null;
       router.replace(buildFamilyGroupHref(nextGroupId), { scroll: false });
     }
+
+    if (selectedGroupId) {
+      await invalidateFamilyQueries(queryClient, selectedGroupId);
+    }
   }
 
   async function handleCreate(input: { title: string; description?: string; tag?: string }) {
@@ -146,25 +137,21 @@ export function FamilyGroupsPage() {
     try {
       const created = await createFamilyGroup(input);
       setCreateOpen(false);
-      const response = await loadGroups();
-      if (response) {
-        setData(response);
-      } else {
-        setData((current) => {
-          if (!current) {
-            return {
-              items: [created],
-              limit: 5,
-              active_count: 1,
-            };
-          }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.family.list() });
+      queryClient.setQueryData<FamilyGroupListResponse>(queryKeys.family.list(), (current) => {
+        if (!current) {
           return {
-            ...current,
-            items: [created, ...current.items],
-            active_count: current.active_count + 1,
+            items: [created],
+            limit: 5,
+            active_count: 1,
           };
-        });
-      }
+        }
+        return {
+          ...current,
+          items: [created, ...current.items.filter((item) => item.id !== created.id)],
+          active_count: current.active_count + 1,
+        };
+      });
       router.replace(buildFamilyGroupHref(created.id), { scroll: false });
     } catch (submitError) {
       setCreateError(resolveFamilyGroupApiError(submitError, copy.familyGroups.errors.createFailed));
@@ -185,7 +172,7 @@ export function FamilyGroupsPage() {
                 <FamilyRouteIcon className="size-4" strokeWidth={2.25} />
               </div>
               <div className="min-w-0">
-                {loading && !data ? (
+                {showSkeleton ? (
                   <div className="space-y-2" aria-hidden="true">
                     <Skeleton className="h-7 w-40" />
                     <Skeleton className="h-4 w-full max-w-xl" />
@@ -201,7 +188,7 @@ export function FamilyGroupsPage() {
               </div>
             </div>
 
-            {!loading && data && data.items.length === 0 ? (
+            {!showSkeleton && data && data.items.length === 0 ? (
               <Button
                 type="button"
                 onClick={() => setCreateOpen(true)}
@@ -224,7 +211,7 @@ export function FamilyGroupsPage() {
             ) : null}
           </div>
 
-          {loading && !data ? (
+          {showSkeleton ? (
             <div className="flex gap-2 overflow-hidden pb-1" aria-hidden="true">
               <Skeleton className="h-10 w-[10rem] shrink-0 rounded-full" />
               <Skeleton className="h-10 w-[9rem] shrink-0 rounded-full" />
@@ -245,14 +232,15 @@ export function FamilyGroupsPage() {
           ) : null}
         </div>
 
-        {loading && !data ? (
+        {showSkeleton ? (
           <FamilyGroupDashboardContentSkeleton />
-        ) : error && !data ? (
+        ) : errorMessage && !data ? (
           <LoadErrorCard
             title={copy.familyGroups.errors.pageLoadFailedTitle}
-            description={error}
+            description={errorMessage}
             retryLabel={copy.familyGroups.errors.retry}
-            onRetry={() => void loadGroups()}
+            retryLoading={isFetching}
+            onRetry={() => void refetch()}
           />
         ) : data && data.items.length > 0 && selectedGroupId ? (
           <FamilyGroupDashboard
@@ -312,7 +300,14 @@ export function FamilyGroupsPage() {
           if (!open) setEditGroupId(null);
         }}
         group={editGroup}
-        onUpdated={() => void loadGroups()}
+        onUpdated={() => {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.family.list() });
+          if (editGroupId ?? selectedGroupId) {
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.family.detail(editGroupId ?? selectedGroupId!),
+            });
+          }
+        }}
         onArchived={() => void handleMembershipChanged()}
       />
 

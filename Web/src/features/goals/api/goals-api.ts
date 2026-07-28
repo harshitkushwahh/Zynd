@@ -8,6 +8,7 @@ export type GoalTemplate = {
   name: string;
   description?: string | null;
   icon_key: string;
+  image_url?: string | null;
   default_tenure_months: number;
   suggested_return_pct?: number | null;
   is_active: boolean;
@@ -30,6 +31,14 @@ export type Goal = {
   expected_return_pct?: number | null;
   status: GoalStatus;
   progress_pct: number;
+  linked_product_id?: string | null;
+  linked_product_name?: string | null;
+  holdings_value_inr?: number | null;
+  invested_via_orders_inr?: number | null;
+  linked_sip_monthly_inr?: number | null;
+  effective_current_amount_inr?: number | null;
+  effective_progress_pct?: number | null;
+  projected_value_inr?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -61,6 +70,7 @@ export type CreateGoalInput = {
   existing_savings_inr?: number;
   expected_return_pct?: number;
   status?: "draft" | "active";
+  linked_product_id?: string;
 };
 
 export type UpdateGoalInput = {
@@ -73,6 +83,8 @@ export type UpdateGoalInput = {
   current_amount_inr?: number;
   expected_return_pct?: number;
   status?: GoalStatus;
+  linked_product_id?: string;
+  clear_linked_product?: boolean;
 };
 
 export type CalculateGoalInput = {
@@ -120,4 +132,31 @@ export async function archiveGoal(goalId: string) {
   return apiRequest<Goal>(`/goals/${goalId}`, {
     method: "DELETE",
   });
+}
+
+export async function restoreGoal(goalId: string) {
+  return apiRequest<Goal>(`/goals/${goalId}/restore`, {
+    method: "POST",
+  });
+}
+
+export async function deleteGoalPermanently(goalId: string) {
+  return apiRequest<void>(`/goals/${goalId}/permanent`, {
+    method: "DELETE",
+  });
+}
+
+export type LinkableFamilyGoal = {
+  goal_id: string;
+  goal_title: string;
+  target_amount_inr: number;
+  progress_pct: number;
+  group_id: string;
+  group_title: string;
+  my_role: string;
+  can_create_goals: boolean;
+};
+
+export async function fetchLinkableFamilyGoals() {
+  return apiRequest<{ items: LinkableFamilyGoal[] }>("/goals/family/linkable");
 }

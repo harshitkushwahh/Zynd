@@ -15,6 +15,7 @@ import {
   wasMfPaymentRedirected,
 } from "@/features/invest/lib/mf-payment-session";
 import { copy } from "@/shared/config/copy";
+import { useInvestCacheInvalidation } from "@/features/invest/hooks/use-invest-cache-invalidation";
 
 type MfSipMandateViewProps = {
   planId: string;
@@ -78,6 +79,8 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
   const redirectedRef = useRef(false);
   const abandonedRef = useRef(false);
   const returnedFromMandate = wasMfPaymentRedirected(planId);
+
+  useInvestCacheInvalidation(`sip-mandate-${planId}`, plan?.status === "ACTIVE");
 
   const loadPlan = useCallback(async () => {
     try {

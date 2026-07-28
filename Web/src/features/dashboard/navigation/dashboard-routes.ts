@@ -5,14 +5,16 @@ import {
   Gift,
   Gauge,
   HandCoins,
+  Headset,
+  Info,
   Landmark,
   LayoutDashboard,
   PieChart,
   Settings,
+  Target,
   Trophy,
   Umbrella,
   Users,
-  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,8 +29,10 @@ export type DashboardRoute = {
   enabled: boolean;
   /** When true, shown in nav but not navigable (coming soon). */
   disabled?: boolean;
-  /** When false, hidden from the top header nav only (sidebar/mobile keep the link). */
+  /** When false, hidden from the top header nav only. */
   showInTopNav?: boolean;
+  /** When false, hidden from the sidebar and mobile bottom nav. */
+  showInSidebar?: boolean;
 };
 
 export type DashboardPageMeta = {
@@ -40,7 +44,7 @@ export type DashboardPageMeta = {
 export const DASHBOARD_ROUTES: DashboardRoute[] = [
   {
     id: "portfolio-overview",
-    label: "Portfolio Overview",
+    label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
     description:
@@ -92,6 +96,7 @@ export const DASHBOARD_ROUTES: DashboardRoute[] = [
       "Review deposits, withdrawals, and investment activity across your account.",
     enabled: true,
     showInTopNav: false,
+    showInSidebar: false,
   },
   {
     id: "my-sips",
@@ -101,6 +106,7 @@ export const DASHBOARD_ROUTES: DashboardRoute[] = [
     description: "View and manage your active SIP plans and UPI mandates.",
     enabled: true,
     showInTopNav: false,
+    showInSidebar: false,
   },
   {
     id: "goals",
@@ -153,6 +159,18 @@ export const NOTIFICATIONS_PAGE_META: DashboardPageMeta = {
   icon: Bell,
 };
 
+export const HELP_PAGE_META: DashboardPageMeta = {
+  title: copy.support.helpCenterLabel,
+  description: copy.support.helpPageDescription,
+  icon: Headset,
+};
+
+export const ABOUT_PAGE_META: DashboardPageMeta = {
+  title: copy.about.pageTitle,
+  description: copy.about.pageDescription,
+  icon: Info,
+};
+
 export const DEFAULT_DASHBOARD_HREF = DASHBOARD_ROUTES[0].href;
 
 /** @deprecated Use `DASHBOARD_ROUTES` */
@@ -176,7 +194,9 @@ export function resolveDashboardRoute(pathname: string): DashboardRoute | undefi
   if (
     pathname.startsWith("/dashboard/settings") ||
     pathname.startsWith("/dashboard/kyc") ||
-    pathname.startsWith("/dashboard/notifications")
+    pathname.startsWith("/dashboard/notifications") ||
+    pathname.startsWith("/dashboard/help") ||
+    pathname.startsWith("/dashboard/about")
   ) {
     return undefined;
   }
@@ -198,6 +218,14 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
 
   if (pathname.startsWith("/dashboard/notifications")) {
     return NOTIFICATIONS_PAGE_META;
+  }
+
+  if (pathname.startsWith("/dashboard/help")) {
+    return HELP_PAGE_META;
+  }
+
+  if (pathname.startsWith("/dashboard/about")) {
+    return ABOUT_PAGE_META;
   }
 
   if (pathname.startsWith("/dashboard/referral/leaderboard")) {
@@ -285,6 +313,30 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
       title: copy.riskProfile.dialogTitle,
       description: copy.riskProfile.startAssessmentDescription,
       icon: Gauge,
+    };
+  }
+
+  if (pathname === "/dashboard/goals/personal") {
+    return {
+      title: copy.goals.personalGoalsListTitle,
+      description: copy.goals.personalGoalsListDescription,
+      icon: Target,
+    };
+  }
+
+  if (pathname === "/dashboard/goals/family") {
+    return {
+      title: copy.goals.familyGoalsListTitle,
+      description: copy.goals.familyGoalsListDescription,
+      icon: Target,
+    };
+  }
+
+  if (pathname.startsWith("/dashboard/goals/") && pathname !== "/dashboard/goals") {
+    return {
+      title: copy.goals.detailTitle,
+      description: copy.goals.detailDescription,
+      icon: Target,
     };
   }
 

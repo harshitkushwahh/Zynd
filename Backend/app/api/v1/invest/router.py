@@ -528,6 +528,7 @@ async def create_mf_order(
             idempotency_key=body.idempotency_key,
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
+            family_goal_id=body.family_goal_id,
         )
         product = await db.get(Product, order.product_id)
         await db.commit()
@@ -664,6 +665,7 @@ async def checkout_mf_cart(
             idempotency_key=body.idempotency_key,
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
+            family_goal_id=body.family_goal_id,
         )
         product_ids = {order.product_id for order in orders}
         products = {
@@ -698,6 +700,7 @@ async def checkout_mf_sip_cart(
             idempotency_key=body.idempotency_key,
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
+            family_goal_id=body.family_goal_id,
         )
         product_ids = {plan.product_id for plan in plans}
         products = {
@@ -916,6 +919,7 @@ async def create_mf_sip_plan(
             idempotency_key=body.idempotency_key,
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
+            family_goal_id=body.family_goal_id,
         )
         product = await db.get(Product, plan.product_id)
         await db.commit()

@@ -61,6 +61,7 @@ class GoalTemplate(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     icon_key: Mapped[str] = mapped_column(String(32), nullable=False, default="target")
+    image_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     default_tenure_months: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     suggested_return_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(6, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -96,6 +97,12 @@ class Goal(Base):
     template_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("goal_templates.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    linked_product_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

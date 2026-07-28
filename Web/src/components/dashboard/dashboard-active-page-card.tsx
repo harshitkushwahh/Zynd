@@ -2,7 +2,11 @@
 
 import { Loader2, Plus } from "lucide-react";
 
-import { DASHBOARD_NAV_CLUSTER_CLASS, DASHBOARD_NAV_ITEM_CLASS } from "@/components/dashboard/dashboard-layout";
+import {
+  DASHBOARD_ACTIVE_PAGE_LABEL_CLASS,
+  DASHBOARD_NAV_ITEM_CLASS,
+} from "@/components/dashboard/dashboard-layout";
+import { NavbarActiveCardShell } from "@/components/dashboard/navbar-active-card-shell";
 import { useDashboardRoute } from "@/features/dashboard/navigation/use-dashboard-route";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfCartAmcAvatarStack } from "@/features/invest/components/mf-cart-amc-avatar-stack";
@@ -10,8 +14,6 @@ import { useMfCartNavbarMeta } from "@/features/invest/hooks/use-mf-cart-navbar-
 import { useMfFundNavbarMeta } from "@/features/invest/hooks/use-mf-fund-navbar-meta";
 import { RiskProfileActiveCard } from "@/features/risk-profile/components/risk-profile-active-card";
 import { useRiskProfileActiveCard } from "@/features/risk-profile/hooks/use-risk-profile-active-card";
-import { ReferralActiveCard } from "@/features/referral/components/referral-active-card";
-import { useReferralActiveCard } from "@/features/referral/hooks/use-referral-active-card";
 import { copy } from "@/shared/config/copy";
 import {
   HoverCard,
@@ -20,20 +22,23 @@ import {
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 
-const NAVBAR_CARD_FADE_CLASS = "animate-in fade-in duration-200 motion-reduce:animate-none";
+const NAVBAR_CARD_CONTENT_CLASS =
+  "inline-flex h-10 items-center gap-1.5 transition-opacity duration-200 ease-out motion-reduce:transition-none";
 
-function ActiveCardFadeIn({
-  modeKey,
-  className,
+function NavbarIconSlot({
+  loading,
   children,
 }: {
-  modeKey: string;
-  className?: string;
-  children: React.ReactNode;
+  loading?: boolean;
+  children?: React.ReactNode;
 }) {
   return (
-    <span key={modeKey} className={cn(NAVBAR_CARD_FADE_CLASS, className)}>
-      {children}
+    <span className="flex size-4 shrink-0 items-center justify-center">
+      {loading ? (
+        <Loader2 className="size-4 animate-spin opacity-70" aria-hidden="true" />
+      ) : (
+        children
+      )}
     </span>
   );
 }
@@ -79,119 +84,124 @@ export function DashboardActivePageCard() {
         ? "empty"
         : "default";
   const { isRiskProfileSection } = useRiskProfileActiveCard(pathname);
-  const { isReferralSection } = useReferralActiveCard(pathname);
 
-  if (isRiskProfileSection) {
-    return (
-      <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
-        <RiskProfileActiveCard />
-      </div>
-    );
-  }
+  const measureKey = [
+    pathname,
+    isRiskProfileSection ? "risk" : "default",
+    cartCardMode,
+    activeCardLabel ?? "",
+    showFundAmc ? fund!.amc_name : "",
+    isLoading ? "loading" : "ready",
+  ].join("|");
 
-  if (isReferralSection) {
-    return (
-      <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
-        <ReferralActiveCard pathname={pathname} />
-      </div>
-    );
-  }
+  const triggerClassName = cn(
+    DASHBOARD_NAV_ITEM_CLASS,
+    "w-full max-w-[14.5rem] justify-center text-center outline-none",
+    "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+  );
 
   return (
-    <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
-      <HoverCard>
-        <HoverCardTrigger
-          delay={200}
-          closeDelay={120}
-          render={
-            <button
-              type="button"
-              className={cn(
-                DASHBOARD_NAV_ITEM_CLASS,
-                "w-auto justify-center text-center outline-none",
-                "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
-              )}
-              aria-label={`${ariaLabel} page info`}
-            />
-          }
-        >
-          {isCartPage ? (
-            cartCardMode === "loading" ? (
-              <Loader2 className="size-4 shrink-0 animate-spin opacity-70" aria-hidden="true" />
+    <NavbarActiveCardShell measureKey={measureKey}>
+      {isRiskProfileSection ? (
+        <RiskProfileActiveCard triggerClassName={triggerClassName} />
+      ) : (
+        <HoverCard>
+          <HoverCardTrigger
+            delay={200}
+            closeDelay={120}
+            render={
+              <button
+                type="button"
+                className={triggerClassName}
+                aria-label={`${ariaLabel} page info`}
+              />
+            }
+          >
+            {isCartPage ? (
+              cartCardMode === "loading" ? (
+                <span className={cn(NAVBAR_CARD_CONTENT_CLASS, "min-w-[5.5rem] px-0")}>
+                  <NavbarIconSlot loading />
+                </span>
+              ) : (
+                <span
+                  className={cn(
+                    NAVBAR_CARD_CONTENT_CLASS,
+                    "min-w-[5.5rem] justify-center",
+                    cartCardMode === "empty" && "px-0",
+                  )}
+                >
+                  {cartCardMode === "amcs" ? (
+                    <MfCartAmcAvatarStack items={visibleItems} overflowCount={overflowCount} />
+                  ) : (
+                    <>
+                      <Plus className="size-4 shrink-0" strokeWidth={2.25} />
+                      <span className={DASHBOARD_ACTIVE_PAGE_LABEL_CLASS}>
+                        {copy.mutualFunds.cartNavbarEmptyLabel}
+                      </span>
+                    </>
+                  )}
+                </span>
+              )
             ) : (
-              <ActiveCardFadeIn
-                modeKey={cartCardMode === "amcs" ? `cart-amcs-${cartCount}` : "cart-empty"}
-                className="inline-flex min-w-[5.5rem] items-center justify-center gap-1.5"
-              >
-                {cartCardMode === "amcs" ? (
-                  <MfCartAmcAvatarStack items={visibleItems} overflowCount={overflowCount} />
-                ) : (
-                  <>
-                    <Plus className="size-4 shrink-0" strokeWidth={2.25} />
-                    <span className="whitespace-nowrap text-[13px] font-medium leading-none">
-                      {copy.mutualFunds.cartNavbarEmptyLabel}
-                    </span>
-                  </>
-                )}
-              </ActiveCardFadeIn>
-            )
-          ) : isLoading ? (
-            <Loader2 className="size-4 shrink-0 animate-spin opacity-70" aria-hidden="true" />
-          ) : showFundAmc ? (
-            <ActiveCardFadeIn
-              modeKey={`fund-${fund!.amc_name}`}
-              className="inline-flex items-center gap-1.5"
-            >
-              <MfFundAmcAvatar
-                amcLogoUrl={fund!.amc_logo_url}
-                amcName={fund!.amc_name}
-                size="sm"
-                className="size-6 shrink-0 p-0.5"
-              />
-              {activeCardLabel ? (
-                <span className="whitespace-nowrap text-[13px] font-medium leading-none">{activeCardLabel}</span>
-              ) : null}
-            </ActiveCardFadeIn>
-          ) : (
-            <ActiveCardFadeIn modeKey={pageMeta.title} className="inline-flex items-center gap-1.5">
-              <Icon className="size-4 shrink-0" strokeWidth={2.25} />
-              {activeCardLabel ? (
-                <span className="whitespace-nowrap text-[13px] font-medium leading-none">{activeCardLabel}</span>
-              ) : null}
-            </ActiveCardFadeIn>
-          )}
-        </HoverCardTrigger>
-
-        <HoverCardContent side="bottom" align="end" className="w-72">
-          <div className="flex items-start gap-3">
-            {showCartAmcs ? (
-              <MfCartAmcAvatarStack
-                items={visibleItems}
-                overflowCount={overflowCount}
-                className="pt-0.5"
-              />
-            ) : showFundAmc ? (
-              <MfFundAmcAvatar
-                amcLogoUrl={fund!.amc_logo_url}
-                amcName={fund!.amc_name}
-                className="size-9 shrink-0 p-1"
-              />
-            ) : showCartEmptyLabel ? (
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-                <Plus className="size-4" strokeWidth={2.25} />
-              </div>
-            ) : (
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-                <Icon className="size-4" strokeWidth={2.25} />
-              </div>
+              <span className={cn(NAVBAR_CARD_CONTENT_CLASS, "w-full justify-center")}>
+                <NavbarIconSlot loading={isLoading && !showFundAmc}>
+                  {showFundAmc ? (
+                    <MfFundAmcAvatar
+                      amcLogoUrl={fund!.amc_logo_url}
+                      amcName={fund!.amc_name}
+                      size="sm"
+                      className="size-4 shrink-0 rounded-full p-0"
+                    />
+                  ) : (
+                    <Icon className="size-4 shrink-0" strokeWidth={2.25} />
+                  )}
+                </NavbarIconSlot>
+                {activeCardLabel ? (
+                  <span
+                    className={cn(
+                      DASHBOARD_ACTIVE_PAGE_LABEL_CLASS,
+                      isLoading && !showFundAmc && "text-transparent",
+                    )}
+                    aria-hidden={isLoading && !showFundAmc}
+                  >
+                    {isLoading && !showFundAmc ? pageMeta.title : activeCardLabel}
+                  </span>
+                ) : null}
+              </span>
             )}
-            <div className="min-w-0 space-y-1">
-              <p className="line-clamp-2 text-compact font-semibold text-foreground">{hoverTitle}</p>
-              <p className="text-caption leading-relaxed text-muted-foreground">{hoverDescription}</p>
+          </HoverCardTrigger>
+
+          <HoverCardContent side="bottom" align="end" className="w-72">
+            <div className="flex items-start gap-3">
+              {showCartAmcs ? (
+                <MfCartAmcAvatarStack
+                  items={visibleItems}
+                  overflowCount={overflowCount}
+                  className="pt-0.5"
+                />
+              ) : showFundAmc ? (
+                <MfFundAmcAvatar
+                  amcLogoUrl={fund!.amc_logo_url}
+                  amcName={fund!.amc_name}
+                  className="size-9 shrink-0 p-1"
+                />
+              ) : showCartEmptyLabel ? (
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
+                  <Plus className="size-4" strokeWidth={2.25} />
+                </div>
+              ) : (
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
+                  <Icon className="size-4" strokeWidth={2.25} />
+                </div>
+              )}
+              <div className="min-w-0 space-y-1">
+                <p className="line-clamp-2 text-compact font-semibold text-foreground">{hoverTitle}</p>
+                <p className="text-caption leading-relaxed text-muted-foreground">{hoverDescription}</p>
+              </div>
             </div>
-          </div>
-        </HoverCardContent>
-      </HoverCard>
-    </div>
+          </HoverCardContent>
+        </HoverCard>
+      )}
+    </NavbarActiveCardShell>
   );
 }

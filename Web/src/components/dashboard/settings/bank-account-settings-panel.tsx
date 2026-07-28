@@ -9,7 +9,7 @@ import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-pa
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import { SETTINGS_NAV } from "@/components/dashboard/settings/settings-sidebar";
 import { Button } from "@/components/ui/button";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import { useKycOptional } from "@/contexts/kyc-context";
 import { useInvestorBankAccounts } from "@/features/invest/hooks/use-investor-bank-accounts";
 import { setPrimaryInvestorBankAccount, disableInvestorBankAccount } from "@/features/invest/lib/investor-bank-accounts-api";
@@ -148,7 +148,9 @@ export function BankAccountSettingsPanel() {
             ) : null}
           </div>
 
-          {actionMessage ? <p className="text-caption text-success">{actionMessage}</p> : null}
+          {actionMessage ? (
+            <UiMessage variant="success" message={actionMessage} className="mt-0" />
+          ) : null}
           {actionError ? <FieldMessage message={actionError} /> : null}
 
           <div className="space-y-3">

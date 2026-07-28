@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldMessage } from "@/components/ui/ui-message";
 import type { CreateFamilyGroupInput } from "@/features/family-groups/api/family-groups-api";
 import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
 import {
@@ -93,7 +94,7 @@ export function FamilyGroupCreateDialog({
             autoFocus
             aria-invalid={Boolean(fieldErrors.title)}
           />
-          {fieldErrors.title ? <p className="text-compact text-destructive">{fieldErrors.title}</p> : null}
+          {fieldErrors.title ? <FieldMessage message={fieldErrors.title} /> : null}
         </div>
 
         <div className="space-y-2">
@@ -107,9 +108,7 @@ export function FamilyGroupCreateDialog({
             rows={3}
             aria-invalid={Boolean(fieldErrors.description)}
           />
-          {fieldErrors.description ? (
-            <p className="text-compact text-destructive">{fieldErrors.description}</p>
-          ) : null}
+          {fieldErrors.description ? <FieldMessage message={fieldErrors.description} /> : null}
         </div>
 
         <div className="space-y-2">
@@ -122,10 +121,10 @@ export function FamilyGroupCreateDialog({
             maxLength={FAMILY_GROUP_LIMITS.tagMax}
             aria-invalid={Boolean(fieldErrors.tag)}
           />
-          {fieldErrors.tag ? <p className="text-compact text-destructive">{fieldErrors.tag}</p> : null}
+          {fieldErrors.tag ? <FieldMessage message={fieldErrors.tag} /> : null}
         </div>
 
-        {error ? <p className="text-compact text-destructive">{error}</p> : null}
+        {error ? <FieldMessage message={error} className="mt-0" /> : null}
       </form>
 
       <BrandDialogFooter>

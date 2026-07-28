@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "@/components/auth/auth-shared";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import { useAuth } from "@/contexts/auth-context";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
 import { ApiError } from "@/lib/api-client";
@@ -339,7 +339,7 @@ export function ZyndPinSetupDialog({ open, onOpenChange, onCompleted }: ZyndPinS
               ) : null}
 
               {biometricEnabled ? (
-                <p className="text-center text-caption text-success">{copy.pin.biometricEnabledLabel}</p>
+                <UiMessage variant="success" message={copy.pin.biometricEnabledLabel} className="mt-0" />
               ) : null}
 
               <AuthSubmitFooter>

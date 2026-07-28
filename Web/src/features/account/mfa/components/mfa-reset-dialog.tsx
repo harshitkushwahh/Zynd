@@ -1,13 +1,13 @@
 "use client";
 
-import { Check, KeyRound, RefreshCw, ShieldCheck } from "lucide-react";
+import { KeyRound, RefreshCw, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import QRCode from "react-qr-code";
 
 import { AuthSubmitFooter } from "@/components/auth/auth-shared";
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import { useAuth } from "@/contexts/auth-context";
 import { ApiError } from "@/lib/api-client";
 import { mfaResetConfirm, mfaResetStart } from "@/lib/auth-api";
@@ -251,10 +251,11 @@ export function MfaResetDialog({ open, onOpenChange, onCompleted }: MfaResetDial
 
           {step === "backup" ? (
             <div className="space-y-5">
-              <div className="flex items-center gap-2 rounded-[var(--radius-card)] border border-success/20 bg-success/5 px-3 py-2.5 text-compact text-success">
-                <Check className="size-4 shrink-0" />
-                Your authenticator has been updated successfully.
-              </div>
+              <UiMessage
+                variant="success"
+                message="Your authenticator has been updated successfully."
+                className="mt-0"
+              />
 
               <div className="grid grid-cols-2 gap-2 font-mono text-compact">
                 {backupCodes.map((code) => (

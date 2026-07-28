@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
+import { FieldMessage } from "@/components/ui/ui-message";
 import {
   acceptFamilyGroupInvite,
   acceptFamilyGroupInviteById,
@@ -180,7 +181,7 @@ export function FamilyGroupJoinDialog({
           </div>
         ) : null}
 
-        {error ? <p className="text-compact text-destructive">{error}</p> : null}
+        {error ? <FieldMessage message={error} className="mt-0" /> : null}
       </div>
 
       <BrandDialogFooter>

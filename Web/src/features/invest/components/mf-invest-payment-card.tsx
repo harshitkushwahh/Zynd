@@ -13,6 +13,7 @@ import {
   upsertMfCartItem,
 } from "@/features/invest/api/invest-api";
 import { MfBankAccountPicker } from "@/features/invest/components/mf-bank-account-picker";
+import { MfFamilyGoalLinkPicker } from "@/features/invest/components/mf-family-goal-link-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
@@ -90,7 +91,7 @@ function ModeToggle({
             aria-selected={isActive}
             onClick={() => onChange(option.id)}
             className={cn(
-              "rounded-full px-3 py-2.5 text-compact font-medium transition-colors",
+              "rounded-full px-3 py-2 text-compact font-medium transition-colors",
               isActive
                 ? "bg-foreground text-background shadow-zynd-low"
                 : "text-muted-foreground hover:text-foreground",
@@ -142,7 +143,7 @@ function AmountInput({
 
   return (
     <div className="w-full min-w-0 px-2">
-      <div className="flex min-h-[5.5rem] items-center justify-center">
+      <div className="flex min-h-[4.25rem] items-center justify-center">
         <div className="inline-flex max-w-full min-w-0 items-center gap-0.5">
           <span
             className={cn(
@@ -226,7 +227,7 @@ function PaymentMethodRow({
   return (
     <button
       type="button"
-      className="group flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 px-3.5 py-3.5 text-left transition-colors hover:border-primary/25 hover:bg-muted/25"
+      className="group flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 px-3.5 py-2.5 text-left transition-colors hover:border-primary/25 hover:bg-muted/25"
     >
       <div
         className={cn(
@@ -277,6 +278,7 @@ export function MfInvestPaymentCard({
   const amount = controlledAmount ?? internalAmount;
   const setAmount = onAmountChange ?? setInternalAmount;
   const [installmentDay, setInstallmentDay] = useState<number>(20);
+  const [selectedFamilyGoalId, setSelectedFamilyGoalId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const interactive = canInvest && !preview;
@@ -370,6 +372,7 @@ export function MfInvestPaymentCard({
         amount_inr: amount,
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
+        family_goal_id: selectedFamilyGoalId ?? undefined,
       });
       openOrderPayment(order.order_id);
     } catch (err) {
@@ -437,6 +440,7 @@ export function MfInvestPaymentCard({
         installment_day: installmentDay,
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
+        family_goal_id: selectedFamilyGoalId ?? undefined,
       });
       openSipMandate(plan.plan_id);
     } catch (err) {
@@ -458,14 +462,14 @@ export function MfInvestPaymentCard({
     <div
       className={cn(
         MF_INVEST_PAYMENT_CARD_CLASS,
-        "flex min-h-[30rem] w-full min-w-0 flex-col overflow-x-hidden",
+        "flex min-h-[27rem] w-full min-w-0 flex-col overflow-x-hidden",
         sticky && "lg:sticky lg:top-6",
         !hasFund && "border-dashed",
         className,
       )}
     >
       {showFundName ? (
-        <div className="border-b border-zinc-200 bg-muted/10 px-6 py-4 dark:border-zinc-700/80">
+        <div className="border-b border-zinc-200 bg-muted/10 px-6 py-3 dark:border-zinc-700/80">
           <p
             className={cn(
               "line-clamp-2 text-body font-semibold leading-snug",
@@ -477,10 +481,10 @@ export function MfInvestPaymentCard({
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col justify-between gap-7 px-5 py-7">
+      <div className="flex flex-1 flex-col justify-between gap-5 px-5 pt-4 pb-5">
         {showSip ? <ModeToggle mode={mode} onChange={handleModeChange} /> : null}
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           <AmountInput amount={amount} mode={mode} onChange={handleAmountChange} />
           <QuickAmountChips amount={amount} mode={mode} onAdd={handleQuickAdd} />
 
@@ -494,7 +498,15 @@ export function MfInvestPaymentCard({
           ) : null}
         </div>
 
-        <div className="mt-auto space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700/80">
+        <div className="mt-auto space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700/80">
+          {interactive && canInvest ? (
+            <MfFamilyGoalLinkPicker
+              selectedGoalId={selectedFamilyGoalId}
+              onSelect={setSelectedFamilyGoalId}
+              disabled={submitting}
+            />
+          ) : null}
+
           {mode === "sip" && showSip ? (
             <MfBankAccountPicker
               label={copy.mutualFunds.paymentCardPayViaMandate}

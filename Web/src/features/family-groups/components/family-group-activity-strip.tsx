@@ -1,19 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Crown } from "lucide-react";
+import { Crown } from "lucide-react";
 
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { Button } from "@/components/ui/button";
-import {
-  fetchFamilyGroupActivity,
-  type FamilyGroupActivityItem,
-} from "@/features/family-groups/api/family-groups-api";
-import { formatRelativeActivityTime, familyMemberInitials, FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
-import { buildFamilyGroupActivityHref } from "@/features/family-groups/lib/family-group-navigation";
+import { type FamilyGroupActivityItem } from "@/features/family-groups/api/family-groups-api";
+import { useFamilyGroupActivityQuery } from "@/features/family-groups/hooks/use-family-group-dashboard-queries";
 import { FamilyGroupActivityEmptyState } from "@/features/family-groups/components/family-group-activity-empty-state";
-import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
+import { buildFamilyGroupActivityHref } from "@/features/family-groups/lib/family-group-navigation";
+import { formatRelativeActivityTime, familyMemberInitials, FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -69,28 +65,10 @@ export function FamilyGroupActivityStrip({
   className,
   layout = "horizontal",
 }: FamilyGroupActivityStripProps) {
-  const [items, setItems] = useState<FamilyGroupActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const loadActivity = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetchFamilyGroupActivity(groupId, {
-        limit: DASHBOARD_ACTIVITY_PREVIEW_LIMIT,
-      });
-      setItems(response.items);
-    } catch (loadError) {
-      setError(resolveFamilyGroupApiError(loadError, copy.familyGroups.activity.loadFailedTitle));
-    } finally {
-      setLoading(false);
-    }
-  }, [groupId]);
-
-  useEffect(() => {
-    void loadActivity();
-  }, [loadActivity]);
+  const { items, showSkeleton, errorMessage, refetch, isFetching } = useFamilyGroupActivityQuery(
+    groupId,
+    DASHBOARD_ACTIVITY_PREVIEW_LIMIT,
+  );
 
   return (
     <section
@@ -106,25 +84,25 @@ export function FamilyGroupActivityStrip({
           <p className="mt-1 text-compact text-muted-foreground">{copy.familyGroups.dashboard.activitySubtitle}</p>
         </div>
         <Button
-          variant="outline"
+          variant="muted"
           size="sm"
           nativeButton={false}
           render={<Link href={buildFamilyGroupActivityHref(groupId)} />}
         >
           {copy.familyGroups.dashboard.viewAllActivity}
-          <ArrowRight className="size-3.5" strokeWidth={2.25} />
         </Button>
       </div>
 
       <div className="mt-4 min-h-0 flex-1">
-        {loading ? (
+        {showSkeleton ? (
           <p className="text-compact text-muted-foreground">{copy.familyGroups.activity.loading}</p>
-        ) : error ? (
+        ) : errorMessage ? (
           <LoadErrorCard
             title={copy.familyGroups.activity.loadFailedTitle}
-            description={error}
+            description={errorMessage}
             retryLabel={copy.familyGroups.errors.retry}
-            onRetry={() => void loadActivity()}
+            retryLoading={isFetching}
+            onRetry={() => void refetch()}
           />
         ) : items.length === 0 ? (
           <FamilyGroupActivityEmptyState compact className="min-h-0 flex-1" />

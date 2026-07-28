@@ -1,16 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
 
-import {
-  fetchReferralLeaderboard,
-  fetchReferralList,
-  type ReferralLeaderboardPeriod,
-  type ReferralLeaderboardResponse,
-  type ReferralListItem,
-} from "@/features/referral/api/referral-api";
+import { type ReferralLeaderboardPeriod } from "@/features/referral/api/referral-api";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,9 +20,14 @@ import { ReferralLeaderboardPodium } from "@/features/referral/components/referr
 import { ReferralLeaderboardSidebar } from "@/features/referral/components/referral-leaderboard-sidebar";
 import { ReferralLeaderboardTable } from "@/features/referral/components/referral-leaderboard-table";
 import { ReferralLeaderboardSkeleton } from "@/features/referral/components/referral-skeleton";
+import {
+  useReferralLeaderboardQuery,
+  useReferralListQuery,
+} from "@/features/referral/hooks/use-referral-list-query";
 import { splitLeaderboardEntries, hasInsufficientLeaderboardTableData } from "@/features/referral/lib/referral-leaderboard-data";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { copy } from "@/shared/config/copy";
+import { cn } from "@/lib/utils";
 
 const referralRouteLabel =
   DASHBOARD_ROUTES.find((route) => route.id === "referral")?.label ?? "Referrals";
@@ -51,78 +50,20 @@ function ReferralLeaderboardBreadcrumb() {
 }
 
 export function ReferralLeaderboardPanel() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [period, setPeriod] = useState<ReferralLeaderboardPeriod>("this_month");
-  const [leaderboard, setLeaderboard] = useState<ReferralLeaderboardResponse | null>(null);
-  const [recentReferrals, setRecentReferrals] = useState<ReferralListItem[]>([]);
+  const {
+    leaderboard,
+    showSkeleton,
+    errorMessage,
+    isFetching,
+    refetch,
+    isShowingPreviousData,
+  } = useReferralLeaderboardQuery(period);
+  const { referrals: recentReferrals } = useReferralListQuery();
 
   const periodLabel =
     LEADERBOARD_PERIOD_OPTIONS.find((option) => option.value === period)?.label ??
     copy.referral.leaderboardPeriodThisMonth;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadReferrals() {
-      try {
-        const list = await fetchReferralList();
-        if (!cancelled) {
-          setRecentReferrals(list.items);
-        }
-      } catch {
-        if (!cancelled) {
-          setRecentReferrals([]);
-        }
-      }
-    }
-
-    void loadReferrals();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadLeaderboard() {
-      setLoading(true);
-      setError("");
-      try {
-        const data = await fetchReferralLeaderboard(period);
-        if (!cancelled) {
-          setLeaderboard(data);
-        }
-      } catch {
-        if (!cancelled) {
-          setError(copy.referral.loadFailed);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadLeaderboard();
-    return () => {
-      cancelled = true;
-    };
-  }, [period]);
-
-  const retryLeaderboard = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await fetchReferralLeaderboard(period);
-      setLeaderboard(data);
-    } catch {
-      setError(copy.referral.loadFailed);
-    } finally {
-      setLoading(false);
-    }
-  }, [period]);
 
   const totalEntries = leaderboard?.entries.length ?? 0;
   const { topThree, tableEntries } = useMemo(
@@ -131,20 +72,20 @@ export function ReferralLeaderboardPanel() {
   );
   const insufficientTableData = hasInsufficientLeaderboardTableData(totalEntries);
 
-  if (loading && !leaderboard) {
+  if (showSkeleton) {
     return <ReferralLeaderboardSkeleton />;
   }
 
-  if (error) {
+  if (errorMessage) {
     return (
       <>
         <ReferralLeaderboardBreadcrumb />
         <LoadErrorCard
           title={copy.referral.loadFailedTitle}
-          description={error}
+          description={errorMessage}
           retryLabel={copy.referral.retry}
-          retryLoading={loading}
-          onRetry={() => void retryLeaderboard()}
+          retryLoading={isFetching}
+          onRetry={() => void refetch()}
           icon={Trophy}
           backAction={
             <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/referral" />}>
@@ -160,7 +101,12 @@ export function ReferralLeaderboardPanel() {
     <>
       <ReferralLeaderboardBreadcrumb />
 
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+      <div
+        className={cn(
+          "flex flex-col gap-6 xl:flex-row xl:items-start transition-opacity duration-200",
+          isShowingPreviousData && isFetching && "opacity-70",
+        )}
+      >
         <div className="min-w-0 flex-1 space-y-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-3">

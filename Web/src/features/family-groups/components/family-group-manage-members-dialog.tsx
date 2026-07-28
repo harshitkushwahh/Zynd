@@ -4,6 +4,7 @@ import { UsersRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { BrandDialog } from "@/components/ui/brand-dialog";
+import { FieldMessage } from "@/components/ui/ui-message";
 import type { FamilyGroupDetail } from "@/features/family-groups/api/family-groups-api";
 import {
   FamilyGroupMemberRow,
@@ -128,7 +129,7 @@ export function FamilyGroupManageMembersDialog({
           </p>
         ) : null}
 
-        {saveError ? <p className="text-compact text-destructive">{saveError}</p> : null}
+        {saveError ? <FieldMessage message={saveError} className="mt-0" /> : null}
       </div>
     </BrandDialog>
   );

@@ -247,6 +247,7 @@ class CreateMfOrderRequest(BaseModel):
     amount_inr: float = Field(gt=0)
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
+    family_goal_id: Optional[UUID] = None
 
 
 class MfOrderResponse(BaseModel):
@@ -340,6 +341,7 @@ class BulkUpsertMfCartItemsRequest(BaseModel):
 class CheckoutMfCartRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
+    family_goal_id: Optional[UUID] = None
 
 
 class MfCheckoutOrderLineResponse(BaseModel):
@@ -405,6 +407,7 @@ class CreateMfSipPlanRequest(BaseModel):
     mandate_id: Optional[UUID] = None
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
+    family_goal_id: Optional[UUID] = None
 
 
 class MfSipPlanResponse(BaseModel):

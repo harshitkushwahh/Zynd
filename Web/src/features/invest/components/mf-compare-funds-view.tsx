@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight, GitCompare, TableProperties } from "lucide-react";
+import { ArrowUpRight, GitCompare, LineChart, TableProperties } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,9 +13,12 @@ import {
   type InvestFundSummary,
 } from "@/features/invest/api/invest-api";
 import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculator-disclaimer";
-import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
+import { MfCompareFundsNavChartSection } from "@/features/invest/components/mf-compare-funds-nav-chart";
+import { CompareFundsSlotTabs } from "@/features/invest/components/mf-compare-funds-slot-tabs";
 import { MfCompareFundsResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
+import { useCompareFundNavQueries } from "@/features/invest/hooks/use-compare-fund-nav-queries";
+import type { MfNavRange } from "@/features/invest/lib/mf-nav-history";
 import {
   MF_CALC_CARD_CLASS,
   MF_CALC_CARD_CONTENT_CLASS,
@@ -37,6 +40,58 @@ import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 const MAX_SLOTS = 3;
+
+type CompareResultsPanelTab = "performance" | "results";
+
+function CompareResultsPanelTabs({
+  value,
+  onChange,
+}: {
+  value: CompareResultsPanelTab;
+  onChange: (value: CompareResultsPanelTab) => void;
+}) {
+  const tabs: Array<{ id: CompareResultsPanelTab; label: string; icon: typeof LineChart }> = [
+    { id: "performance", label: copy.mutualFunds.compareResultsTabPerformance, icon: LineChart },
+    { id: "results", label: copy.mutualFunds.compareResultsTabTable, icon: TableProperties },
+  ];
+
+  return (
+    <div
+      role="tablist"
+      aria-label={copy.mutualFunds.compareTitle}
+      className="flex gap-1 rounded-[var(--radius-control)] border border-border/80 bg-muted/20 p-1"
+    >
+      {tabs.map((tab) => {
+        const active = value === tab.id;
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(tab.id)}
+            className={cn(
+              "inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-caption font-medium transition-colors",
+              active
+                ? "bg-foreground text-background shadow-zynd-low"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+            <span className="truncate">{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function orderFundsByProductIds(funds: InvestFundDetail[], productIds: string[]) {
+  return productIds
+    .map((id) => funds.find((fund) => fund.product_id === id))
+    .filter((fund): fund is InvestFundDetail => fund != null);
+}
 
 type CompareMetric = {
   key: string;
@@ -256,79 +311,6 @@ function CompareSelectedBadge({ count, max = MAX_SLOTS }: { count: number; max?:
   );
 }
 
-type CompareFundSlotProps = {
-  index: number;
-  fund: InvestFundSummary | null;
-  excludeProductIds: string[];
-  onChange: (fund: InvestFundSummary | null) => void;
-};
-
-function CompareFundSlot({ index, fund, excludeProductIds, onChange }: CompareFundSlotProps) {
-  const logoUrl = resolveInvestAssetUrl(fund?.amc_logo_url);
-  const return3y = formatSignedReturn(fund?.returns.return_3y);
-
-  return (
-    <div
-      className={cn(
-        MF_CALC_PANEL_CLASS,
-        "flex h-full flex-col gap-3",
-        fund ? "border-[color-mix(in_srgb,var(--primary)_20%,var(--border))]" : "border-dashed",
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
-              fund ? "sip-icon-badge" : "bg-muted text-muted-foreground",
-            )}
-          >
-            {index + 1}
-          </span>
-          <p className="text-caption font-medium text-foreground">
-            {copy.mutualFunds.compareSelectFund.replace("{slot}", String(index + 1))}
-          </p>
-        </div>
-        {fund ? (
-          <span className="size-2 shrink-0 rounded-full bg-[var(--success)]" aria-hidden />
-        ) : null}
-      </div>
-
-      <MfFundPicker
-        value={fund}
-        onChange={onChange}
-        excludeProductIds={excludeProductIds}
-        className="w-full"
-      />
-
-      {fund ? (
-        <div className="flex items-start gap-2.5 border-t border-[var(--sip-panel-border)] pt-3">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" className="size-9 shrink-0 rounded-full object-contain" />
-          ) : (
-            <div className="size-9 shrink-0 rounded-full bg-muted" />
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="line-clamp-2 text-caption font-medium leading-snug text-foreground">{fund.name}</p>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{fund.amc_name}</p>
-          </div>
-          <span
-            className={cn(
-              "shrink-0 text-[11px] font-semibold tabular-nums",
-              return3y.tone === "positive" && MF_CALC_GAIN_TEXT_CLASS,
-              return3y.tone === "negative" && "text-destructive",
-              return3y.tone === "muted" && "text-muted-foreground",
-            )}
-          >
-            3Y {return3y.text}
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 type CompareResultsTableProps = {
   funds: InvestFundDetail[];
 };
@@ -471,6 +453,8 @@ export function MfCompareFundsView() {
   const [disclaimer, setDisclaimer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chartRange, setChartRange] = useState<MfNavRange>("1y");
+  const [resultsPanelTab, setResultsPanelTab] = useState<CompareResultsPanelTab>("performance");
 
   const selectedIds = useMemo(
     () => slots.filter((slot): slot is InvestFundSummary => slot != null).map((slot) => slot.product_id),
@@ -478,6 +462,13 @@ export function MfCompareFundsView() {
   );
 
   const selectedCount = selectedIds.length;
+
+  const { series: navSeries, isLoading: navLoading } = useCompareFundNavQueries(funds);
+
+  const compareNavSeries = useMemo(
+    () => navSeries.map(({ fund, navPoints }) => ({ fund, navPoints })),
+    [navSeries],
+  );
 
   const loadComparison = useCallback(async (productIds: string[]) => {
     if (productIds.length === 0) {
@@ -491,7 +482,7 @@ export function MfCompareFundsView() {
     setError(null);
     try {
       const response = await compareMfFunds(productIds);
-      setFunds(response.funds);
+      setFunds(orderFundsByProductIds(response.funds, productIds));
       setDisclaimer(response.disclaimer);
     } catch (err) {
       setFunds([]);
@@ -508,14 +499,6 @@ export function MfCompareFundsView() {
     }, 300);
     return () => window.clearTimeout(timeout);
   }, [loadComparison, selectedIds]);
-
-  function updateSlot(index: number, fund: InvestFundSummary | null) {
-    setSlots((current) => {
-      const next = [...current];
-      next[index] = fund;
-      return next;
-    });
-  }
 
   const excludeIds = selectedIds;
 
@@ -542,17 +525,11 @@ export function MfCompareFundsView() {
               <CompareSelectedBadge count={selectedCount} />
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
-              {Array.from({ length: MAX_SLOTS }, (_, index) => (
-                <CompareFundSlot
-                  key={index}
-                  index={index}
-                  fund={slots[index]}
-                  excludeProductIds={excludeIds.filter((id) => id !== slots[index]?.product_id)}
-                  onChange={(fund) => updateSlot(index, fund)}
-                />
-              ))}
-            </div>
+            <CompareFundsSlotTabs
+              slots={slots}
+              onSlotsChange={setSlots}
+              excludeProductIds={excludeIds}
+            />
           </CardContent>
         </Card>
 
@@ -578,23 +555,41 @@ export function MfCompareFundsView() {
 
         {!loading && funds.length > 0 ? (
           <Card className={MF_CALC_CARD_CLASS}>
-            <CardContent className={MF_CALC_CARD_CONTENT_CLASS}>
-              <div className="flex items-center gap-2.5">
-                <span className={MF_CALC_ICON_BADGE_CLASS}>
-                  <TableProperties className="size-4" strokeWidth={2.25} />
-                </span>
-                <p className="text-body font-semibold tracking-tight text-foreground">
-                  {copy.mutualFunds.compareResultsTitle}
-                </p>
+            <CardContent className={cn(MF_CALC_CARD_CONTENT_CLASS, "gap-4")}>
+              <CompareResultsPanelTabs value={resultsPanelTab} onChange={setResultsPanelTab} />
+
+              <div
+                role="tabpanel"
+                className="min-w-0"
+                aria-label={
+                  resultsPanelTab === "performance"
+                    ? copy.mutualFunds.compareResultsTabPerformance
+                    : copy.mutualFunds.compareResultsTabTable
+                }
+              >
+                {resultsPanelTab === "performance" ? (
+                  <MfCompareFundsNavChartSection
+                    funds={funds}
+                    series={compareNavSeries}
+                    range={chartRange}
+                    onRangeChange={setChartRange}
+                    loading={navLoading}
+                    showHeader={false}
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-caption text-muted-foreground">
+                      {copy.mutualFunds.compareResultsTitle}
+                    </p>
+                    <CompareResultsTable funds={funds} />
+                    {disclaimer ? (
+                      <div className="border-t border-[var(--sip-panel-border)] pt-3">
+                        <MfCalculatorDisclaimer disclaimer={disclaimer} />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </div>
-
-              <CompareResultsTable funds={funds} />
-
-              {disclaimer ? (
-                <div className="border-t border-[var(--sip-panel-border)] pt-3">
-                  <MfCalculatorDisclaimer disclaimer={disclaimer} />
-                </div>
-              ) : null}
             </CardContent>
           </Card>
         ) : null}

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ReferralListRow } from "@/features/referral/components/referral-list-row";
@@ -38,14 +37,13 @@ export function ReferralYourReferralsCard({ referrals, className }: ReferralYour
       <div className="flex shrink-0 items-center justify-between gap-3">
         <p className="text-compact font-semibold text-foreground">{copy.referral.referralsTitle}</p>
         <Button
-          variant="outline"
+          variant="muted"
           size="sm"
           className="shrink-0"
           nativeButton={false}
           render={<Link href="/dashboard/referral/referrals" />}
         >
           {copy.referral.referralsViewAll}
-          <ArrowRight className="size-3.5" strokeWidth={2.25} />
         </Button>
       </div>
 

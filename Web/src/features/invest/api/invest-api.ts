@@ -382,6 +382,7 @@ export function createMfOrder(body: {
   amount_inr: number;
   idempotency_key: string;
   bank_account_id?: string;
+  family_goal_id?: string;
 }) {
   return apiRequest<MfOrder>("/invest/orders", {
     method: "POST",
@@ -501,14 +502,22 @@ export function clearMfCartTab(investmentType: "lumpsum" | "sip") {
   });
 }
 
-export function checkoutMfCart(body: { idempotency_key: string; bank_account_id?: string }) {
+export function checkoutMfCart(body: {
+  idempotency_key: string;
+  bank_account_id?: string;
+  family_goal_id?: string;
+}) {
   return apiRequest<MfCheckout>("/invest/cart/checkout", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
-export function checkoutMfSipCart(body: { idempotency_key: string; bank_account_id?: string }) {
+export function checkoutMfSipCart(body: {
+  idempotency_key: string;
+  bank_account_id?: string;
+  family_goal_id?: string;
+}) {
   return apiRequest<{ plans: MfSipPlan[] }>("/invest/cart/sip/checkout", {
     method: "POST",
     body: JSON.stringify(body),
@@ -607,6 +616,7 @@ export function createMfSipPlan(body: {
   mandate_id?: string;
   idempotency_key: string;
   bank_account_id?: string;
+  family_goal_id?: string;
 }) {
   return apiRequest<MfSipPlan>("/invest/sip/plans", {
     method: "POST",

@@ -7,14 +7,12 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
-  fetchNotifications,
-  fetchUnreadNotificationCount,
   markAllNotificationsRead,
   markNotificationRead,
   type NotificationItem,
@@ -25,9 +23,20 @@ import {
   type NotificationStreamPayload,
 } from "@/features/notifications/api/notification-stream";
 import { useNotificationNavigation } from "@/features/notifications/hooks/use-notification-navigation";
+import {
+  patchNotificationPreviewCache,
+  useNotificationsPreviewQuery,
+} from "@/features/notifications/hooks/use-notifications-list-query";
+import { useUnreadNotificationCountQuery } from "@/features/notifications/hooks/use-unread-notification-count-query";
+import {
+  markAllNotificationsReadInListCaches,
+  patchNotificationInListCaches,
+  prependNotificationToListCaches,
+} from "@/features/notifications/lib/patch-notifications-query-cache";
 import { useWebPushNotificationBridge } from "@/features/notifications/components/web-push-bridge";
 import { ToastNotificationIcon } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/auth-context";
+import { queryKeys } from "@/lib/query-keys";
 
 type NotificationContextValue = {
   notifications: NotificationItem[];
@@ -46,27 +55,35 @@ const STREAM_RECONNECT_MAX_MS = 30_000;
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? null;
+  const enabled = Boolean(userId);
+
+  const previewQuery = useNotificationsPreviewQuery(enabled);
+  const unreadQuery = useUnreadNotificationCountQuery(enabled);
+
+  const notifications = previewQuery.data?.items ?? [];
+  const unreadCount =
+    unreadQuery.data?.unread_count ?? previewQuery.data?.unread_count ?? 0;
+  const loading = previewQuery.isPending && !previewQuery.data;
+
   const toastedIdsRef = useRef<Set<string>>(new Set());
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
-
-  const markRead = useCallback(async (notificationId: string) => {
-    const updated = await markNotificationRead(notificationId);
-    setNotifications((current) =>
-      current.map((item) => (item.id === notificationId ? updated : item)),
-    );
-    setUnreadCount((count) => Math.max(0, count - 1));
-  }, []);
-
-  const navigateFromToast = useNotificationNavigation(undefined, { markReadOnNavigate: false });
   const notificationsRef = useRef<NotificationItem[]>([]);
 
   useEffect(() => {
     notificationsRef.current = notifications;
   }, [notifications]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    for (const item of notifications) {
+      toastedIdsRef.current.add(item.id);
+    }
+  }, [enabled, notifications]);
+
+  const navigateFromToast = useNotificationNavigation(undefined, { markReadOnNavigate: false });
 
   const applyStreamNotification = useCallback(
     (payload: NotificationStreamPayload) => {
@@ -74,15 +91,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const isNew = !notificationsRef.current.some((entry) => entry.id === item.id);
 
       if (isNew) {
-        setNotifications((current) => [item, ...current].slice(0, 20));
-        if (!item.read_at) {
-          setUnreadCount((current) => Math.max(current + 1, payload.unread_count));
-        } else {
-          setUnreadCount(payload.unread_count);
-        }
-      } else {
-        setUnreadCount(payload.unread_count);
+        patchNotificationPreviewCache(queryClient, (current) => {
+          if (!current) return current;
+          if (current.items.some((entry) => entry.id === item.id)) {
+            return { ...current, unread_count: payload.unread_count };
+          }
+          return {
+            ...current,
+            items: [item, ...current.items].slice(0, 20),
+            total: current.total + 1,
+            unread_count: payload.unread_count,
+          };
+        });
+        prependNotificationToListCaches(queryClient, item, payload.unread_count);
       }
+
+      queryClient.setQueryData(queryKeys.notifications.unread(), {
+        unread_count: payload.unread_count,
+      });
 
       if (toastedIdsRef.current.has(item.id)) {
         return;
@@ -100,7 +126,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [navigateFromToast],
+    [navigateFromToast, queryClient],
   );
 
   useWebPushNotificationBridge(applyStreamNotification);
@@ -109,50 +135,69 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   applyStreamNotificationRef.current = applyStreamNotification;
 
   const refresh = useCallback(async () => {
-    if (!user) {
-      setNotifications((current) => (current.length === 0 ? current : []));
-      setUnreadCount((count) => (count === 0 ? count : 0));
+    if (!userId) {
+      queryClient.removeQueries({ queryKey: queryKeys.notifications.all() });
       return;
     }
 
-    setLoading(true);
-    try {
-      const [list, unread] = await Promise.all([
-        fetchNotifications({ limit: 20 }),
-        fetchUnreadNotificationCount(),
-      ]);
-      setNotifications(list.items);
-      setUnreadCount(unread.unread_count);
-
-      for (const item of list.items) {
-        toastedIdsRef.current.add(item.id);
-      }
-    } catch {
-      // Keep last known state on transient failures.
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+    await Promise.all([previewQuery.refetch(), unreadQuery.refetch()]);
+  }, [previewQuery, queryClient, unreadQuery, userId]);
 
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
 
-  const userId = user?.id ?? null;
+  const markRead = useCallback(
+    async (notificationId: string) => {
+      const updated = await markNotificationRead(notificationId);
+      let wasUnread = false;
+      patchNotificationPreviewCache(queryClient, (current) => {
+        if (!current) return current;
+        wasUnread = current.items.some(
+          (item) => item.id === notificationId && !item.read_at,
+        );
+        return {
+          ...current,
+          items: current.items.map((item) => (item.id === notificationId ? updated : item)),
+          unread_count: wasUnread
+            ? Math.max(0, current.unread_count - 1)
+            : current.unread_count,
+        };
+      });
+      patchNotificationInListCaches(queryClient, notificationId, () => updated);
+      if (wasUnread) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unread(),
+          (current: { unread_count: number } | undefined) => ({
+            unread_count: Math.max(0, (current?.unread_count ?? unreadCount) - 1),
+          }),
+        );
+      }
+    },
+    [queryClient, unreadCount],
+  );
 
   const markAllRead = useCallback(async () => {
     await markAllNotificationsRead();
-    setNotifications((current) =>
-      current.map((item) => ({ ...item, read_at: item.read_at ?? new Date().toISOString() })),
-    );
-    setUnreadCount(0);
-  }, []);
+    const readAt = new Date().toISOString();
+    patchNotificationPreviewCache(queryClient, (current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) => ({
+          ...item,
+          read_at: item.read_at ?? readAt,
+        })),
+        unread_count: 0,
+      };
+    });
+    queryClient.setQueryData(queryKeys.notifications.unread(), { unread_count: 0 });
+    markAllNotificationsReadInListCaches(queryClient, readAt);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!userId) {
       toastedIdsRef.current.clear();
       reconnectAttemptRef.current = 0;
-      setNotifications((current) => (current.length === 0 ? current : []));
-      setUnreadCount((count) => (count === 0 ? count : 0));
       return;
     }
 
@@ -192,13 +237,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           {
             onConnected: () => {
               reconnectAttemptRef.current = 0;
+              const previewState = queryClient.getQueryState(queryKeys.notifications.preview());
+              const unreadState = queryClient.getQueryState(queryKeys.notifications.unread());
+              const now = Date.now();
+              const staleMs = 30_000;
+              const previewFresh =
+                previewState?.dataUpdatedAt != null &&
+                now - previewState.dataUpdatedAt < staleMs;
+              const unreadFresh =
+                unreadState?.dataUpdatedAt != null &&
+                now - unreadState.dataUpdatedAt < staleMs;
+              if (previewFresh && unreadFresh) {
+                return;
+              }
               void refreshRef.current();
             },
             onNotification: (payload) => {
               applyStreamNotificationRef.current(payload);
             },
             onUnreadCount: (count) => {
-              setUnreadCount((current) => (current === count ? current : count));
+              queryClient.setQueryData(queryKeys.notifications.unread(), { unread_count: count });
             },
             onDisconnect: scheduleReconnect,
           },
@@ -211,7 +269,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    void refreshRef.current();
     void startStream();
 
     const fallbackInterval = window.setInterval(() => {
@@ -230,7 +287,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       window.clearInterval(fallbackInterval);
       window.removeEventListener("focus", onFocus);
     };
-  }, [userId]);
+  }, [queryClient, userId]);
 
   const value = useMemo(
     () => ({

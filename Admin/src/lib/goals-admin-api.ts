@@ -6,6 +6,7 @@ export type AdminGoalTemplate = {
   name: string;
   description?: string | null;
   icon_key: string;
+  image_url?: string | null;
   default_tenure_months: number;
   suggested_return_pct?: number | null;
   is_active: boolean;
@@ -25,6 +26,8 @@ export async function updateAdminGoalTemplate(
     name: string;
     description: string | null;
     icon_key: string;
+    image_url?: string | null;
+    clear_image_url?: boolean;
     default_tenure_months: number;
     suggested_return_pct: number;
     is_active: boolean;

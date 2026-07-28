@@ -19,6 +19,7 @@ from app.application.goals.constants import (
 )
 from app.application.goals.errors import GoalError
 from app.application.goals.goal_calculator_service import calculate_goal_plan
+from app.application.goals.goal_portfolio_service import enrich_goal_payload, validate_linked_product
 from app.application.goals.goal_template_service import serialize_goal_template
 from app.infrastructure.persistence.goal_models import Goal, GoalStatus, GoalTemplate
 
@@ -55,6 +56,7 @@ def serialize_goal(goal: Goal) -> dict[str, Any]:
         else None,
         "status": goal.status.value,
         "progress_pct": progress_pct,
+        "linked_product_id": str(goal.linked_product_id) if goal.linked_product_id else None,
         "created_at": goal.created_at.isoformat() if goal.created_at else None,
         "updated_at": goal.updated_at.isoformat() if goal.updated_at else None,
     }
@@ -135,12 +137,18 @@ async def list_personal_goals(
     if not include_archived:
         query = query.where(Goal.status != GoalStatus.archived)
     result = await db.execute(query)
-    return [serialize_goal(row) for row in result.scalars().all()]
+    goals = list(result.scalars().all())
+    payloads: list[dict[str, Any]] = []
+    for goal in goals:
+        payload = serialize_goal(goal)
+        payloads.append(await enrich_goal_payload(db, goal, payload))
+    return payloads
 
 
 async def get_personal_goal(db: AsyncSession, *, goal_id: UUID, user_id: UUID) -> dict[str, Any]:
     goal = await _get_user_goal(db, goal_id=goal_id, user_id=user_id)
-    return serialize_goal(goal)
+    payload = serialize_goal(goal)
+    return await enrich_goal_payload(db, goal, payload)
 
 
 async def create_personal_goal(
@@ -156,6 +164,7 @@ async def create_personal_goal(
     existing_savings_inr: float = 0,
     expected_return_pct: float | None = None,
     status: GoalStatus = GoalStatus.active,
+    linked_product_id: UUID | None = None,
 ) -> dict[str, Any]:
     active_count = await _count_active_personal_goals(db, user_id=user_id)
     if active_count >= MAX_ACTIVE_PERSONAL_GOALS:
@@ -180,6 +189,9 @@ async def create_personal_goal(
         if not template or not template.is_active:
             raise GoalError(code="template_not_found", message="Goal template not found.", status_code=404)
 
+    if linked_product_id is not None:
+        await validate_linked_product(db, product_id=linked_product_id)
+
     calculate_goal_plan(
         target_amount_inr=target,
         target_date=target_date,
@@ -201,13 +213,16 @@ async def create_personal_goal(
         if expected_return_pct is not None
         else (template.suggested_return_pct if template else None),
         status=status,
+        linked_product_id=linked_product_id,
     )
     db.add(goal)
     await db.flush()
     result = await db.execute(
         select(Goal).options(selectinload(Goal.template)).where(Goal.id == goal.id)
     )
-    return serialize_goal(result.scalar_one())
+    created = result.scalar_one()
+    payload = serialize_goal(created)
+    return await enrich_goal_payload(db, created, payload)
 
 
 async def update_personal_goal(
@@ -224,6 +239,8 @@ async def update_personal_goal(
     expected_return_pct: float | None = None,
     current_amount_inr: float | None = None,
     status: GoalStatus | None = None,
+    linked_product_id: UUID | None = None,
+    clear_linked_product: bool = False,
 ) -> dict[str, Any]:
     goal = await _get_user_goal(db, goal_id=goal_id, user_id=user_id)
     if goal.family_group_id is not None:
@@ -263,6 +280,11 @@ async def update_personal_goal(
         goal.expected_return_pct = rate
     if status is not None:
         goal.status = status
+    if clear_linked_product:
+        goal.linked_product_id = None
+    elif linked_product_id is not None:
+        await validate_linked_product(db, product_id=linked_product_id)
+        goal.linked_product_id = linked_product_id
 
     calculate_goal_plan(
         target_amount_inr=goal.target_amount_inr,
@@ -275,7 +297,9 @@ async def update_personal_goal(
     result = await db.execute(
         select(Goal).options(selectinload(Goal.template)).where(Goal.id == goal.id)
     )
-    return serialize_goal(result.scalar_one())
+    updated = result.scalar_one()
+    payload = serialize_goal(updated)
+    return await enrich_goal_payload(db, updated, payload)
 
 
 async def archive_personal_goal(db: AsyncSession, *, goal_id: UUID, user_id: UUID) -> dict[str, Any]:
@@ -286,3 +310,42 @@ async def archive_personal_goal(db: AsyncSession, *, goal_id: UUID, user_id: UUI
         select(Goal).options(selectinload(Goal.template)).where(Goal.id == goal.id)
     )
     return serialize_goal(result.scalar_one())
+
+
+async def restore_personal_goal(db: AsyncSession, *, goal_id: UUID, user_id: UUID) -> dict[str, Any]:
+    goal = await _get_user_goal(db, goal_id=goal_id, user_id=user_id)
+    if goal.status != GoalStatus.archived:
+        raise GoalError(
+            code="not_archived",
+            message="Only archived goals can be restored.",
+            status_code=409,
+        )
+
+    active_count = await _count_active_personal_goals(db, user_id=user_id)
+    if active_count >= MAX_ACTIVE_PERSONAL_GOALS:
+        raise GoalError(
+            code="goal_limit_reached",
+            message=f"You can have at most {MAX_ACTIVE_PERSONAL_GOALS} active personal goals.",
+            status_code=409,
+        )
+
+    goal.status = GoalStatus.active
+    await db.flush()
+    result = await db.execute(
+        select(Goal).options(selectinload(Goal.template)).where(Goal.id == goal.id)
+    )
+    updated = result.scalar_one()
+    payload = serialize_goal(updated)
+    return await enrich_goal_payload(db, updated, payload)
+
+
+async def delete_personal_goal(db: AsyncSession, *, goal_id: UUID, user_id: UUID) -> None:
+    goal = await _get_user_goal(db, goal_id=goal_id, user_id=user_id)
+    if goal.status != GoalStatus.archived:
+        raise GoalError(
+            code="not_archived",
+            message="Only archived goals can be permanently deleted.",
+            status_code=409,
+        )
+    await db.delete(goal)
+    await db.flush()

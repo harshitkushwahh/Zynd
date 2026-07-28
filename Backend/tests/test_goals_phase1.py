@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.goals.goal_calculator_service import calculate_goal_plan
-from app.application.goals.goal_service import create_personal_goal, list_personal_goals, update_personal_goal, archive_personal_goal
+from app.application.goals.goal_service import create_personal_goal, list_personal_goals, update_personal_goal, archive_personal_goal, restore_personal_goal, delete_personal_goal
 from app.application.goals.goal_template_seed_service import ensure_goal_template_seed
 from app.application.goals.goal_template_service import list_goal_templates
 from app.main import app
@@ -52,6 +52,44 @@ async def test_update_and_archive_personal_goal(db_session: AsyncSession) -> Non
 
 
 @pytest.mark.asyncio
+async def test_restore_and_delete_archived_personal_goal(db_session: AsyncSession) -> None:
+    user = await _create_user(db_session, prefix="goals-restore-delete")
+    created = await create_personal_goal(
+        db_session,
+        user_id=user.id,
+        title="Archive cycle",
+        target_amount_inr=150_000,
+        target_date=_future_date(24),
+    )
+    await archive_personal_goal(
+        db_session,
+        goal_id=created["id"],
+        user_id=user.id,
+    )
+
+    restored = await restore_personal_goal(
+        db_session,
+        goal_id=created["id"],
+        user_id=user.id,
+    )
+    assert restored["status"] == "active"
+
+    await archive_personal_goal(
+        db_session,
+        goal_id=created["id"],
+        user_id=user.id,
+    )
+    await delete_personal_goal(
+        db_session,
+        goal_id=created["id"],
+        user_id=user.id,
+    )
+
+    items = await list_personal_goals(db_session, user_id=user.id, include_archived=True)
+    assert items == []
+
+
+@pytest.mark.asyncio
 async def test_goal_template_seed_is_idempotent(db_session: AsyncSession) -> None:
     await ensure_goal_template_seed(db_session)
     first = await list_goal_templates(db_session, include_inactive=True)
@@ -75,6 +113,30 @@ async def test_calculate_goal_plan_returns_required_sip(db_session: AsyncSession
     assert result["required_monthly_sip_inr"] > 0
     assert result["required_lumpsum_inr"] >= 0
     assert len(result["milestones"]) >= 1
+
+
+def test_calculate_goal_plan_accepts_float_inputs() -> None:
+    result = calculate_goal_plan(
+        target_amount_inr=500_000.0,
+        target_date=_future_date(36),
+        existing_savings_inr=0.0,
+        expected_return_pct=12.0,
+    )
+    assert result["required_monthly_sip_inr"] > 0
+    assert result["projected_value_inr"] >= result["target_amount_inr"] * 0.99
+
+
+def test_calculate_goal_plan_when_savings_cover_target() -> None:
+    target = Decimal("20000000")
+    result = calculate_goal_plan(
+        target_amount_inr=target,
+        target_date=_future_date(180),
+        existing_savings_inr=target,
+        expected_return_pct=Decimal("100"),
+    )
+    assert result["required_monthly_sip_inr"] == 0
+    assert result["required_lumpsum_inr"] == 0
+    assert result["projected_value_inr"] == float(target)
 
 
 @pytest.mark.asyncio

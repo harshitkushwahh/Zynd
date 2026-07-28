@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -35,6 +36,7 @@ import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui"
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
 import { markMfSipCartCheckoutPlans } from "@/features/invest/lib/mf-payment-session";
+import { invalidateInvestQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import {
   MF_CARD_RADIUS_CLASS,
@@ -208,7 +210,6 @@ function CartEmptyState({ tab }: { tab: CartTab }) {
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
         <Button nativeButton={false} render={<Link href="/dashboard/mutual-funds/all" />}>
           {copy.mutualFunds.cartBrowseFunds}
-          <ArrowRight className="size-4" />
         </Button>
         <Button
           variant="outline"
@@ -345,6 +346,7 @@ function CartCheckoutPanel({
 }
 
 export function MfCartView() {
+  const queryClient = useQueryClient();
   const { openCartCheckoutPayment, openSipMandate } = useMfPaymentOverlay();
   const [cart, setCart] = useState<MfCart | null>(null);
   const [tab, setTab] = useState<CartTab>("lumpsum");
@@ -444,6 +446,7 @@ export function MfCartView() {
         return;
       }
       markMfSipCartCheckoutPlans(result.plans.map((plan) => plan.plan_id));
+      void invalidateInvestQueries(queryClient);
       openSipMandate(firstPlan.plan_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.cartCheckoutFailed);

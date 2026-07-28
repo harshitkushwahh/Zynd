@@ -19,6 +19,7 @@ import {
 } from "@/features/invest/lib/mf-payment-session";
 import { copy } from "@/shared/config/copy";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useInvestCacheInvalidation } from "@/features/invest/hooks/use-invest-cache-invalidation";
 
 type MfCartCheckoutPayViewProps = {
   checkoutId: string;
@@ -77,6 +78,11 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
   const redirectedRef = useRef(false);
   const abandonedRef = useRef(false);
   const returnedFromPayment = wasMfPaymentRedirected(checkoutId);
+
+  useInvestCacheInvalidation(
+    `checkout-${checkoutId}`,
+    checkout?.status === "SUCCEEDED",
+  );
 
   const loadCheckout = useCallback(async () => {
     try {

@@ -1,38 +1,44 @@
 "use client";
 
+import { PieChart as PieChartIcon } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
-import { FamilyGroupComingSoonOverlay } from "@/features/family-groups/components/family-group-coming-soon-overlay";
+import { LoadErrorCard } from "@/components/ui/load-error-card";
+import {
+  type FamilyGroupPortfolioSlice,
+} from "@/features/family-groups/api/family-groups-api";
+import { useFamilyGroupPortfolioQuery } from "@/features/family-groups/hooks/use-family-group-dashboard-queries";
 import { FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-const DUMMY_PORTFOLIO_TOTAL_INR = 1_500_000;
-
-const PLACEHOLDER_SLICES = [
-  { id: "equity", label: "Equity Funds", value: 65, fill: "var(--zynd-emerald)" },
-  { id: "debt", label: "Debt Funds", value: 20, fill: "#38bdf8" },
-  { id: "hybrid", label: "Hybrid Funds", value: 10, fill: "#f59e0b" },
-  { id: "other", label: "Others", value: 5, fill: "#a78bfa" },
-] as const;
-
-type PortfolioSlice = (typeof PLACEHOLDER_SLICES)[number] & { amountInr: number };
+const SLICE_COLORS: Record<string, string> = {
+  equity: "var(--zynd-emerald)",
+  debt: "#38bdf8",
+  hybrid: "#f59e0b",
+  other: "#a78bfa",
+};
 
 type FamilyGroupPortfolioPanelProps = {
+  groupId: string;
   className?: string;
 };
 
-function sliceAmountInr(percent: number) {
-  return Math.round((DUMMY_PORTFOLIO_TOTAL_INR * percent) / 100);
+function sliceColor(slice: FamilyGroupPortfolioSlice) {
+  return SLICE_COLORS[slice.id] ?? SLICE_COLORS.other;
 }
 
-export function FamilyGroupPortfolioPanel({ className }: FamilyGroupPortfolioPanelProps) {
+export function FamilyGroupPortfolioPanel({ groupId, className }: FamilyGroupPortfolioPanelProps) {
   const dashboard = copy.familyGroups.dashboard;
-  const chartData: PortfolioSlice[] = PLACEHOLDER_SLICES.map((slice) => ({
-    ...slice,
-    amountInr: sliceAmountInr(slice.value),
-  }));
+  const { portfolio, showSkeleton, errorMessage, refetch, isFetching } =
+    useFamilyGroupPortfolioQuery(groupId);
+
+  const chartData =
+    portfolio?.slices.map((slice) => ({
+      ...slice,
+      fill: sliceColor(slice),
+    })) ?? [];
 
   return (
     <section
@@ -47,23 +53,46 @@ export function FamilyGroupPortfolioPanel({ className }: FamilyGroupPortfolioPan
         <p className="mt-1 text-compact text-muted-foreground">{dashboard.portfolioSubtitle}</p>
       </div>
 
-      <div className="relative mt-5 min-h-[18rem]">
-        <div className="pointer-events-none select-none blur-[5px]">
+      <div className="mt-5 min-h-[18rem]">
+        {showSkeleton ? (
+          <div className="flex h-[18rem] items-center justify-center text-compact text-muted-foreground">
+            {dashboard.portfolioLoading}
+          </div>
+        ) : errorMessage ? (
+          <LoadErrorCard
+            title={dashboard.portfolioLoadFailed}
+            description={errorMessage}
+            retryLabel={copy.familyGroups.errors.retry}
+            retryLoading={isFetching}
+            onRetry={() => void refetch()}
+          />
+        ) : !portfolio || portfolio.total_current_value_inr <= 0 ? (
+          <div className="flex h-[18rem] flex-col items-center justify-center gap-3 px-4 text-center">
+            <PieChartIcon className="size-8 text-muted-foreground/70" />
+            <div className="space-y-1">
+              <p className="text-compact font-medium text-foreground">
+                {dashboard.portfolioEmptyTitle}
+              </p>
+              <p className="text-compact text-muted-foreground">
+                {dashboard.portfolioEmptyDescription}
+              </p>
+            </div>
+          </div>
+        ) : (
           <div className="flex flex-col items-center">
             <div className="relative mx-auto size-[12.5rem] sm:size-[13.5rem]">
               <div className="pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center px-4 text-center">
                 <p className="text-body font-semibold tabular-nums tracking-tight text-foreground">
-                  {formatInr(DUMMY_PORTFOLIO_TOTAL_INR)}
+                  {formatInr(portfolio.total_current_value_inr)}
                 </p>
                 <p className="text-[11px] text-muted-foreground">{dashboard.totalValueLabel}</p>
               </div>
-
               <div className="relative z-10 size-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={chartData}
-                      dataKey="value"
+                      dataKey="value_pct"
                       nameKey="label"
                       cx="50%"
                       cy="50%"
@@ -90,17 +119,12 @@ export function FamilyGroupPortfolioPanel({ className }: FamilyGroupPortfolioPan
                 >
                   <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: slice.fill }} />
                   <span>{slice.label}</span>
-                  <span className="font-medium tabular-nums text-foreground">{slice.value}%</span>
+                  <span className="font-medium tabular-nums text-foreground">{slice.value_pct.toFixed(0)}%</span>
                 </span>
               ))}
             </div>
           </div>
-        </div>
-
-        <FamilyGroupComingSoonOverlay
-          title={dashboard.portfolioLockedTitle}
-          subtitle={dashboard.portfolioLockedSubtitle}
-        />
+        )}
       </div>
     </section>
   );

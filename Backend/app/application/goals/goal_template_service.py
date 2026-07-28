@@ -18,6 +18,7 @@ def serialize_goal_template(template: GoalTemplate) -> dict[str, Any]:
         "name": template.name,
         "description": template.description,
         "icon_key": template.icon_key,
+        "image_url": template.image_url,
         "default_tenure_months": template.default_tenure_months,
         "suggested_return_pct": float(template.suggested_return_pct)
         if template.suggested_return_pct is not None
@@ -60,6 +61,8 @@ async def update_goal_template(
     name: str | None = None,
     description: str | None = None,
     icon_key: str | None = None,
+    image_url: str | None = None,
+    clear_image_url: bool = False,
     default_tenure_months: int | None = None,
     suggested_return_pct: Decimal | None = None,
     is_active: bool | None = None,
@@ -75,6 +78,11 @@ async def update_goal_template(
         template.description = description.strip() or None
     if icon_key is not None:
         template.icon_key = icon_key.strip()
+    if clear_image_url:
+        template.image_url = None
+    elif image_url is not None:
+        cleaned_url = image_url.strip()
+        template.image_url = cleaned_url or None
     if default_tenure_months is not None:
         if default_tenure_months < 1:
             raise GoalError(code="invalid_tenure", message="Default tenure must be at least 1 month.")

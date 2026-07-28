@@ -239,6 +239,9 @@ async def _apply_fp_state(
                 product=ReferralInvestmentProduct.mutual_fund,
                 amount_inr=int(order.amount_inr),
             )
+        from app.application.goals.goal_funding_service import record_contribution_from_order
+
+        await record_contribution_from_order(session, order)
     elif mapped == MfOrderStatus.failed:
         order.failure_code = order.failure_code or "fp_terminal_failed"
         order.failure_reason = order.failure_reason or str(fp_state)

@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   MF_CALC_CARD_CLASS,
@@ -134,11 +134,11 @@ export function MfSipCalculatorResultsSkeleton() {
 export function MfSipCalculatorChartSkeleton() {
   return (
     <Card className={cn("w-full", MF_CALC_CARD_CLASS)}>
-      <CardHeader className="pb-3">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="mt-2 h-4 w-full max-w-md" />
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className={cn(MF_CALC_CARD_CONTENT_CLASS, "gap-4")}>
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-full max-w-md" />
+        </div>
         <div className="flex gap-4">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-4 w-20" />
@@ -196,9 +196,12 @@ export function MfLumpsumCalculatorResultsSkeleton() {
 export function MfLumpsumCalculatorPageSkeleton() {
   return (
     <MfToolsShellSkeleton>
-      <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-        <MfCalculatorInputsCardSkeleton panels={1} />
-        <MfLumpsumCalculatorResultsSkeleton />
+      <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+          <MfCalculatorInputsCardSkeleton panels={1} />
+          <MfLumpsumCalculatorResultsSkeleton />
+        </div>
+        <MfSipCalculatorChartSkeleton />
       </div>
     </MfToolsShellSkeleton>
   );

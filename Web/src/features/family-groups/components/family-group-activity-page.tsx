@@ -7,6 +7,7 @@ import { Clock3 } from "lucide-react";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
+import { FieldMessage } from "@/components/ui/ui-message";
 import { PageTitle } from "@/components/ui/page-title";
 import {
   fetchFamilyGroup,
@@ -224,7 +225,7 @@ export function FamilyGroupActivityPage() {
                     invites={group.invites ?? []}
                     onRevokeInvite={setRevokeInviteTarget}
                   />
-                  {saveError ? <p className="text-compact text-destructive">{saveError}</p> : null}
+                  {saveError ? <FieldMessage message={saveError} className="mt-0" /> : null}
                 </div>
               ) : null}
             </div>

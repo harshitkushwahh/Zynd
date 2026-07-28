@@ -6,11 +6,12 @@ import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
-import { fetchMfOrders, type MfOrder } from "@/features/invest/api/invest-api";
+import { type MfOrder } from "@/features/invest/api/invest-api";
 import { MfTransactionsFilterBar } from "@/features/invest/components/mf-transactions-filter-bar";
 import { MfTransactionsPageSkeleton } from "@/features/invest/components/mf-transactions-page-skeleton";
 import { MfTransactionsTable } from "@/features/invest/components/mf-transactions-table";
 import { MfOrderJourneyDialog } from "@/features/invest/components/payment-dialog";
+import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
 import {
   EMPTY_MF_TRANSACTION_FILTERS,
   applyMfTransactionFilters,
@@ -31,36 +32,15 @@ function TransactionsBreadcrumb() {
 }
 
 export function MfTransactionsPage() {
-  const [orders, setOrders] = useState<MfOrder[]>([]);
+  const { orders, showSkeleton, errorMessage, isPending } = useMfOrdersQuery();
   const [filters, setFilters] = useState<MfTransactionFilters>(EMPTY_MF_TRANSACTION_FILTERS);
   const [visibleCount, setVisibleCount] = useState(TRANSACTIONS_PAGE_SIZE);
-  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [journeyOpen, setJourneyOpen] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetchMfOrders()
-      .then((response) => {
-        if (!cancelled) setOrders(response.orders);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err.message || copy.transactions.loadError);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const sortedOrders = useMemo(() => sortMfTransactions(orders), [orders]);
   const filteredOrders = useMemo(
@@ -78,7 +58,7 @@ export function MfTransactionsPage() {
   }, [filters]);
 
   useEffect(() => {
-    if (loading) return;
+    if (isPending && orders.length === 0) return;
 
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
@@ -102,7 +82,7 @@ export function MfTransactionsPage() {
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [loading, hasMore, filteredOrders.length]);
+  }, [isPending, orders.length, hasMore, filteredOrders.length]);
 
   const handleFiltersChange = (nextFilters: MfTransactionFilters) => {
     setFilters(nextFilters);
@@ -137,17 +117,17 @@ export function MfTransactionsPage() {
         </div>
       </div>
 
-      {error ? <FieldMessage variant="error" message={error} className="mb-4" /> : null}
+      {errorMessage ? <FieldMessage variant="error" message={errorMessage} className="mb-4" /> : null}
 
-      {loading && orders.length === 0 && !error ? <MfTransactionsPageSkeleton /> : null}
+      {showSkeleton ? <MfTransactionsPageSkeleton /> : null}
 
-      {!loading && !error && orders.length === 0 ? (
+      {!showSkeleton && !errorMessage && orders.length === 0 ? (
         <div className="flex min-h-[280px] items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border px-6 text-center">
           <p className="text-compact text-muted-foreground">{copy.transactions.empty}</p>
         </div>
       ) : null}
 
-      {!loading && !error && orders.length > 0 ? (
+      {!showSkeleton && !errorMessage && orders.length > 0 ? (
         <>
           <MfTransactionsFilterBar filters={filters} onChange={handleFiltersChange} />
 

@@ -57,6 +57,8 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("family_groups.manage", "Moderate family groups and force-remove members"),
     ("goals.templates.read", "View predefined goal templates"),
     ("goals.templates.manage", "Update predefined goal templates"),
+    ("distributor.clients.list", "List investor clients in the distributor console"),
+    ("distributor.clients.read", "View masked investor client profiles in the distributor console"),
 ]
 
 ROLES: dict[str, dict[str, object]] = {
@@ -126,6 +128,14 @@ ROLES: dict[str, dict[str, object]] = {
             "mf.catalog.publish",
             "admin_actions.approve",
             "audit.read",
+        ],
+    },
+    "distributor_console": {
+        "name": "Distributor Console",
+        "description": "View masked investor profiles and activity for distributor partners.",
+        "permissions": [
+            "distributor.clients.list",
+            "distributor.clients.read",
         ],
     },
 }

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 export type DashboardBreadcrumbItem = {
   label: string;
   href?: string;
+  onClick?: () => void;
 };
 
 type DashboardBreadcrumbProps = {
@@ -44,10 +45,20 @@ export function DashboardBreadcrumb({ items, className }: DashboardBreadcrumbPro
             <span key={`${item.label}-${index}`} className="contents">
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                {isLast || !item.href ? (
+                {isLast ? (
                   <BreadcrumbPage>{item.label}</BreadcrumbPage>
-                ) : (
+                ) : item.onClick ? (
+                  <BreadcrumbLink
+                    render={
+                      <button type="button" onClick={item.onClick} />
+                    }
+                  >
+                    {item.label}
+                  </BreadcrumbLink>
+                ) : item.href ? (
                   <BreadcrumbLink render={<Link href={item.href} />}>{item.label}</BreadcrumbLink>
+                ) : (
+                  <BreadcrumbPage>{item.label}</BreadcrumbPage>
                 )}
               </BreadcrumbItem>
             </span>

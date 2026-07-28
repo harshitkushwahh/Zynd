@@ -13,6 +13,7 @@ class GoalTemplateResponse(BaseModel):
     name: str
     description: Optional[str] = None
     icon_key: str
+    image_url: Optional[str] = None
     default_tenure_months: int
     suggested_return_pct: Optional[float] = None
     is_active: bool
@@ -67,6 +68,14 @@ class GoalResponse(BaseModel):
     expected_return_pct: Optional[float] = None
     status: Literal["draft", "active", "achieved", "paused", "archived"]
     progress_pct: float
+    linked_product_id: Optional[UUID] = None
+    linked_product_name: Optional[str] = None
+    holdings_value_inr: Optional[float] = None
+    invested_via_orders_inr: Optional[float] = None
+    linked_sip_monthly_inr: Optional[float] = None
+    effective_current_amount_inr: Optional[float] = None
+    effective_progress_pct: Optional[float] = None
+    projected_value_inr: Optional[float] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -87,6 +96,7 @@ class CreateGoalRequest(BaseModel):
     existing_savings_inr: float = Field(default=0, ge=0)
     expected_return_pct: Optional[float] = Field(default=None, ge=0, le=100)
     status: Literal["draft", "active"] = "active"
+    linked_product_id: Optional[UUID] = None
 
 
 class UpdateGoalRequest(BaseModel):
@@ -99,6 +109,8 @@ class UpdateGoalRequest(BaseModel):
     current_amount_inr: Optional[float] = Field(default=None, ge=0)
     expected_return_pct: Optional[float] = Field(default=None, ge=0, le=100)
     status: Optional[Literal["draft", "active", "achieved", "paused", "archived"]] = None
+    linked_product_id: Optional[UUID] = None
+    clear_linked_product: bool = False
 
 
 class FamilyGoalResponse(GoalResponse):
@@ -162,3 +174,18 @@ class FamilyGoalContributionsResponse(BaseModel):
     total_contributed_inr: float
     member_totals: list[FamilyGoalMemberTotalResponse]
     items: list[FamilyGoalContributionItemResponse]
+
+
+class LinkableFamilyGoalItemResponse(BaseModel):
+    goal_id: UUID
+    goal_title: str
+    target_amount_inr: float
+    progress_pct: float
+    group_id: UUID
+    group_title: str
+    my_role: str
+    can_create_goals: bool
+
+
+class LinkableFamilyGoalListResponse(BaseModel):
+    items: list[LinkableFamilyGoalItemResponse]

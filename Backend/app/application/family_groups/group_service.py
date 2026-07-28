@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -28,7 +29,12 @@ from app.application.family_groups.display import (
     serialize_family_group,
 )
 from app.application.family_groups.member_insights_service import load_member_insights
+from app.application.family_groups.family_group_portfolio_service import (
+    load_member_goal_contribution_totals,
+    load_member_linked_sip_counts,
+)
 from app.application.family_groups.errors import FamilyGroupError
+from app.application.family_groups.activity_service import record_family_group_activity
 from app.infrastructure.persistence.family_group_models import (
     FamilyGroup,
     FamilyGroupActivityType,
@@ -336,6 +342,8 @@ async def list_group_members_preview(
     user_ids = [user_row.id for _member, user_row in rows]
     profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids)
     insights = await load_member_insights(db, user_ids)
+    contribution_totals = await load_member_goal_contribution_totals(db, group_id=group_id, user_ids=user_ids)
+    linked_sip_counts = await load_member_linked_sip_counts(db, group_id=group_id, user_ids=user_ids)
 
     members: list[dict[str, object]] = []
     for member, user_row in rows:
@@ -348,8 +356,9 @@ async def list_group_members_preview(
             phone = user_row.phone
             zynd_id = user_row.client_id
             details_masked = False
-            contribution_amount = None
-            group_sip_count = 0
+            contribution_total = contribution_totals.get(user_row.id, Decimal("0"))
+            contribution_amount = float(contribution_total) if contribution_total > 0 else None
+            group_sip_count = linked_sip_counts.get(user_row.id, 0)
         else:
             email = mask_member_email(user_row.email) or MASKED_DETAIL_PLACEHOLDER
             phone = mask_member_phone(user_row.phone) or MASKED_DETAIL_PLACEHOLDER

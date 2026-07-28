@@ -61,7 +61,7 @@ export function RiskProfilePage() {
 
         {loading ? (
           <RiskProfilePageSkeleton />
-        ) : error ? (
+        ) : error && !profile ? (
           <RiskProfileLoadErrorCard
             title={copy.riskProfile.errors.pageLoadFailedTitle}
             description={error}

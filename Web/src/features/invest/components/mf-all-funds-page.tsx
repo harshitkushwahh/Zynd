@@ -21,7 +21,7 @@ import {
   hasClientOnlyMfFundFilters,
   type MfFundFilters,
 } from "@/features/invest/lib/mf-fund-filters";
-import { MF_ALL_FUNDS_PAGE_SIZE, mergeInvestFunds } from "@/features/invest/lib/mf-fund-ranking";
+import { MF_ALL_FUNDS_PAGE_SIZE, mergeInvestFunds, resolveInvestFundsPageHasMore } from "@/features/invest/lib/mf-fund-ranking";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 
@@ -51,6 +51,24 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   const pageRef = useRef(1);
   const hasMoreRef = useRef(true);
   const categorySlugRef = useRef<string | null>(initialCategorySlug);
+  const loadPageRef = useRef<
+    (nextPage: number, append: boolean, categorySlug: string | null) => Promise<void>
+  >(async () => {});
+  const LOAD_MORE_ROOT_MARGIN_PX = 160;
+
+  const tryScheduleLoadMore = useCallback(() => {
+    if (!hasMoreRef.current || loadingMoreRef.current || refetchingRef.current) return;
+
+    const node = loadMoreRef.current;
+    const root = scrollContainerRef.current;
+    if (!node || !root) return;
+
+    const rootRect = root.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    if (nodeRect.top <= rootRect.bottom + LOAD_MORE_ROOT_MARGIN_PX) {
+      void loadPageRef.current(pageRef.current + 1, true, categorySlugRef.current);
+    }
+  }, []);
 
   const filteredFunds = useMemo(() => applyMfFundFilters(funds, filters), [funds, filters]);
   const tableTotalCount = hasClientOnlyMfFundFilters(filters) ? filteredFunds.length : total;
@@ -102,11 +120,28 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
           sort: "rank",
         });
 
-        setFunds((current) => (append ? mergeInvestFunds(current, response.items) : mergeInvestFunds([], response.items)));
+        let previousCount = 0;
+        let mergedCount = 0;
+        setFunds((current) => {
+          previousCount = current.length;
+          const merged = append
+            ? mergeInvestFunds(current, response.items)
+            : mergeInvestFunds([], response.items);
+          mergedCount = merged.length;
+          return merged;
+        });
+
+        const nextHasMore = resolveInvestFundsPageHasMore(
+          append,
+          previousCount,
+          mergedCount,
+          response.has_more,
+          response.items.length,
+        );
         pageRef.current = response.page;
-        hasMoreRef.current = response.has_more;
+        hasMoreRef.current = nextHasMore;
         setPage(response.page);
-        setHasMore(response.has_more);
+        setHasMore(nextHasMore);
         setTotal(response.total);
         hasLoadedOnceRef.current = true;
       } catch (err) {
@@ -117,10 +152,17 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
         setRefetching(false);
         loadingMoreRef.current = false;
         setLoadingMore(false);
+        queueMicrotask(() => {
+          tryScheduleLoadMore();
+        });
       }
     },
-    [],
+    [tryScheduleLoadMore],
   );
+
+  useEffect(() => {
+    loadPageRef.current = loadPage;
+  }, [loadPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,7 +184,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   }, [filters.categorySlug, loadPage]);
 
   useEffect(() => {
-    if (initialLoading) return;
+    if (initialLoading || !hasMore) return;
 
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
@@ -151,16 +193,14 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        if (!hasMoreRef.current) return;
-        if (loadingMoreRef.current || refetchingRef.current) return;
-        void loadPage(pageRef.current + 1, true, categorySlugRef.current);
+        tryScheduleLoadMore();
       },
-      { root, rootMargin: "120px" },
+      { root, rootMargin: `${LOAD_MORE_ROOT_MARGIN_PX}px`, threshold: 0 },
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [initialLoading, loadPage, filters.categorySlug]);
+  }, [initialLoading, hasMore, tryScheduleLoadMore, filters.categorySlug]);
 
   return (
     <div className={MF_PAGE_SECTION_CLASS}>

@@ -1,5 +1,5 @@
-import { ReferralLeaderboardSkeleton } from "@/features/referral/components/referral-skeleton";
+import { DashboardQueryRouteLoading } from "@/components/dashboard/dashboard-query-route-loading";
 
 export default function ReferralLeaderboardLoading() {
-  return <ReferralLeaderboardSkeleton />;
+  return <DashboardQueryRouteLoading />;
 }

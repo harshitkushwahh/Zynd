@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, Search, UserRound } from "lucide-react";
 
-import { ADMIN_NAVBAR_HEIGHT } from "@/components/dashboard/admin-dashboard-layout";
+import {
+  ADMIN_NAVBAR_INNER_CLASS,
+  ADMIN_NAVBAR_OUTER_CLASS,
+} from "@/components/dashboard/admin-dashboard-layout";
 import { AdminDashboardSearchDialog } from "@/components/dashboard/admin-dashboard-search-dialog";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,7 +38,7 @@ function getInitials(displayName: string, email: string) {
   return email.slice(0, 2).toUpperCase();
 }
 
-export function AdminDashboardNavbar() {
+export function AdminDashboardNavbar({ className }: { className?: string }) {
   const router = useRouter();
   const { user, displayName, signOut } = useAdminAuth();
   const { theme, setTheme } = useTheme();
@@ -63,12 +66,8 @@ export function AdminDashboardNavbar() {
 
   return (
     <>
-      <header
-        className={cn(
-          ADMIN_NAVBAR_HEIGHT,
-          "flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 md:px-6",
-        )}
-      >
+      <header className={cn(ADMIN_NAVBAR_OUTER_CLASS, className)}>
+        <div className={ADMIN_NAVBAR_INNER_CLASS}>
         <div className="flex min-w-0 items-center gap-2">
           <SidebarTrigger className="hidden md:inline-flex" />
 
@@ -154,6 +153,7 @@ export function AdminDashboardNavbar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
         </div>
       </header>
 

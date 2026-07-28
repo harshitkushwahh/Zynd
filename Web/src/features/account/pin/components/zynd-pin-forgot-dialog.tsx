@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { OtpInput } from "@/components/auth/auth-shared";
-import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
+import { FieldMessage } from "@/components/ui/ui-message";
 import { useAuth } from "@/contexts/auth-context";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
 import { ApiError } from "@/lib/api-client";

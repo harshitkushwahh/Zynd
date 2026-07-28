@@ -21,6 +21,7 @@ from app.application.goals.constants import (
 )
 from app.application.goals.errors import GoalError
 from app.application.goals.goal_calculator_service import calculate_goal_plan
+from app.application.goals.goal_portfolio_service import enrich_goal_payload
 from app.application.goals.goal_service import (
     _decimal,
     _validate_priority,
@@ -32,6 +33,7 @@ from app.application.goals.permissions import (
     can_contribute_to_family_goal,
     can_create_family_goal,
     can_manage_family_goal,
+    can_view_family_goals,
 )
 from app.infrastructure.persistence.family_group_models import (
     FamilyGroupActivityType,
@@ -100,6 +102,16 @@ def _serialize_family_goal(goal: Goal, *, contribution_total: Decimal | None = N
     return payload
 
 
+async def _serialize_family_goal_enriched(
+    db: AsyncSession,
+    goal: Goal,
+    *,
+    contribution_total: Decimal | None = None,
+) -> dict[str, Any]:
+    payload = _serialize_family_goal(goal, contribution_total=contribution_total)
+    return await enrich_goal_payload(db, goal, payload)
+
+
 async def list_family_goals(
     db: AsyncSession,
     *,
@@ -132,10 +144,16 @@ async def list_family_goals(
     )
     totals = {row[0]: Decimal(str(row[1])) for row in totals_result.all()}
 
-    return [
-        _serialize_family_goal(goal, contribution_total=totals.get(goal.id, Decimal("0")))
-        for goal in goals
-    ]
+    items: list[dict[str, Any]] = []
+    for goal in goals:
+        items.append(
+            await _serialize_family_goal_enriched(
+                db,
+                goal,
+                contribution_total=totals.get(goal.id, Decimal("0")),
+            )
+        )
+    return items
 
 
 async def get_family_goal(
@@ -151,7 +169,7 @@ async def get_family_goal(
 
     goal = await _get_family_goal(db, group_id=group_id, goal_id=goal_id)
     contribution_total = await _contribution_total(db, goal_id=goal.id)
-    return _serialize_family_goal(goal, contribution_total=contribution_total)
+    return await _serialize_family_goal_enriched(db, goal, contribution_total=contribution_total)
 
 
 async def create_family_goal(
@@ -234,7 +252,7 @@ async def create_family_goal(
     result = await db.execute(
         select(Goal).options(selectinload(Goal.template)).where(Goal.id == goal.id)
     )
-    return _serialize_family_goal(result.scalar_one(), contribution_total=Decimal("0"))
+    return await _serialize_family_goal_enriched(db, result.scalar_one(), contribution_total=Decimal("0"))
 
 
 async def update_family_goal(
@@ -305,7 +323,7 @@ async def update_family_goal(
         select(Goal).options(selectinload(Goal.template)).where(Goal.id == goal.id)
     )
     contribution_total = await _contribution_total(db, goal_id=goal.id)
-    return _serialize_family_goal(result.scalar_one(), contribution_total=contribution_total)
+    return await _serialize_family_goal_enriched(db, result.scalar_one(), contribution_total=contribution_total)
 
 
 async def archive_family_goal(
@@ -335,7 +353,7 @@ async def archive_family_goal(
         select(Goal).options(selectinload(Goal.template)).where(Goal.id == goal.id)
     )
     contribution_total = await _contribution_total(db, goal_id=goal.id)
-    return _serialize_family_goal(result.scalar_one(), contribution_total=contribution_total)
+    return await _serialize_family_goal_enriched(db, result.scalar_one(), contribution_total=contribution_total)
 
 
 async def add_family_goal_contribution(

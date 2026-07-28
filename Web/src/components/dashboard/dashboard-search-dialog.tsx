@@ -17,6 +17,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { FieldMessage } from "@/components/ui/ui-message";
 import { copy } from "@/shared/config/copy";
 
 type DashboardSearchDialogProps = {
@@ -93,7 +94,9 @@ export function DashboardSearchDialog({
           ) : null}
 
           {searchError ? (
-            <div className="px-3 py-2 text-caption text-destructive">{searchError}</div>
+            <div className="px-3 py-1">
+              <FieldMessage message={searchError} className="mt-0" />
+            </div>
           ) : null}
 
           {isFundSearch && funds.length > 0 ? (

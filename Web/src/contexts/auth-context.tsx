@@ -26,6 +26,7 @@ import {
 import { clearSessionHint } from "@/features/auth/api/auth-response";
 import { revokeWebPushDevice } from "@/features/notifications/lib/push-device-registration";
 import { isAuthFailure, setAccessToken } from "@/lib/api-client";
+import { clearQueryCache } from "@/lib/query-client";
 import { appConfig } from "@/shared/config/app-config";
 
 type AuthContextValue = {
@@ -134,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       setAccessToken(null);
+      clearQueryCache();
     }
   }, []);
 

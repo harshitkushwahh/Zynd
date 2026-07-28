@@ -55,9 +55,9 @@ export function MfYourInvestedCard({ data = MF_INVESTED_PREVIEW }: MfYourInveste
         MF_CARD_RADIUS_CLASS,
       )}
     >
-      <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent px-3.5 pb-3 pt-3.5">
+      <div className="px-3.5 pb-3 pt-3.5">
         <div className="flex min-w-0 items-start gap-2.5">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/15">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/15">
             <PieChart className="size-4 text-primary" strokeWidth={2.25} />
           </div>
           <div className="min-w-0 flex-1">

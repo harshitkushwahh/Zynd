@@ -90,6 +90,70 @@ export type FamilyGroupListResponse = {
 export type FamilyGroupDetail = FamilyGroupSummary & {
   members: FamilyGroupMemberPreview[];
   invites?: FamilyGroupInvite[];
+  active_goals_count?: number;
+  active_sips_count?: number;
+  total_invested_inr?: number;
+  total_current_value_inr?: number;
+};
+
+export type FamilyGroupPortfolioSlice = {
+  id: string;
+  label: string;
+  amount_inr: number;
+  value_pct: number;
+};
+
+export type FamilyGroupPortfolio = {
+  total_current_value_inr: number;
+  total_invested_inr: number;
+  active_sips_count: number;
+  active_goals_count: number;
+  goal_funded_inr: number;
+  has_holdings_data: boolean;
+  slices: FamilyGroupPortfolioSlice[];
+};
+
+export type FamilyGoal = {
+  id: string;
+  user_id: string;
+  family_group_id: string;
+  template_id?: string | null;
+  title: string;
+  tag?: string | null;
+  priority: number;
+  target_amount_inr: number;
+  target_date: string;
+  current_amount_inr: number;
+  existing_savings_inr: number;
+  expected_return_pct?: number | null;
+  status: string;
+  progress_pct: number;
+  created_by_user_id?: string | null;
+  contribution_total_inr?: number | null;
+  projected_value_inr?: number | null;
+  effective_current_amount_inr?: number | null;
+};
+
+export type FamilyGoalContributionItem = {
+  id: string;
+  user_id: string;
+  display_name: string;
+  amount_inr: number;
+  source_type: string;
+  note?: string | null;
+  contributed_at?: string | null;
+};
+
+export type FamilyGoalContributions = {
+  goal_id: string;
+  total_contributed_inr: number;
+  member_totals: Array<{
+    user_id: string;
+    display_name: string;
+    total_inr: number;
+    contribution_count: number;
+  }>;
+  items: FamilyGoalContributionItem[];
 };
 
 export type CreateFamilyGroupInput = {
@@ -354,4 +418,49 @@ export async function addNomineeToFamilyGroup(
       body: JSON.stringify(input),
     },
   );
+}
+
+export async function fetchFamilyGroupPortfolio(groupId: string) {
+  return apiRequest<FamilyGroupPortfolio>(`/family-groups/${groupId}/portfolio`);
+}
+
+export async function fetchFamilyGroupGoals(groupId: string, includeArchived = false) {
+  const query = includeArchived ? "?include_archived=true" : "";
+  return apiRequest<{ items: FamilyGoal[]; limit: number; active_count: number }>(
+    `/family-groups/${groupId}/goals${query}`,
+  );
+}
+
+export async function createFamilyGroupGoal(
+  groupId: string,
+  input: {
+    title: string;
+    target_amount_inr: number;
+    target_date: string;
+    template_id?: string;
+    tag?: string;
+    priority?: number;
+    existing_savings_inr?: number;
+    expected_return_pct?: number;
+  },
+) {
+  return apiRequest<FamilyGoal>(`/family-groups/${groupId}/goals`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchFamilyGoalContributions(groupId: string, goalId: string) {
+  return apiRequest<FamilyGoalContributions>(`/family-groups/${groupId}/goals/${goalId}/contributions`);
+}
+
+export async function addFamilyGoalContribution(
+  groupId: string,
+  goalId: string,
+  input: { amount_inr: number; note?: string },
+) {
+  return apiRequest<FamilyGoalContributions>(`/family-groups/${groupId}/goals/${goalId}/contributions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }

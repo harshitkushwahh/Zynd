@@ -153,13 +153,15 @@ export function MfFundsTable({
         size="sm"
         className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 shadow-none"
       >
-        <div
-          ref={scrollContainerRef}
-          className={cn(
-            "flex min-h-0 flex-1 flex-col overflow-auto overscroll-y-contain overscroll-x-auto",
-            refetching && "pointer-events-none opacity-60",
-          )}
-        >
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={scrollContainerRef}
+            className={cn(
+              "h-full min-h-0 overflow-auto overscroll-y-contain overscroll-x-auto",
+              (refetching || loadingMore) && "pointer-events-none",
+              refetching && "opacity-60",
+            )}
+          >
           <Table
             aria-label={copy.mutualFunds.allFundsTitle}
             size="sm"
@@ -271,23 +273,40 @@ export function MfFundsTable({
             />
           ) : null}
 
-          {sortedRows.length > 0 && hasMore ? (
-            <div ref={loadMoreRef} className="h-px shrink-0" aria-hidden="true" />
+          {sortedRows.length > 0 && hasMore && loadMoreRef ? (
+            <div ref={loadMoreRef} className="h-px w-full shrink-0" aria-hidden="true" />
           ) : null}
 
-          {sortedRows.length > 0 && hasMore ? (
+          {!loadingMore && sortedRows.length > 0 && !hasMore ? (
             <div
-              className="flex h-12 shrink-0 items-center justify-center gap-2 border-t border-border text-caption text-muted-foreground"
+              className={cn(
+                TABLE_LAYOUT_CLASS,
+                "border-t border-border py-4 text-center text-caption text-muted-foreground",
+              )}
               aria-live="polite"
-              aria-busy={loadingMore}
             >
-              {loadingMore ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  {copy.mutualFunds.loadingMore}
-                </>
-              ) : null}
+              {copy.mutualFunds.listEnd}
             </div>
+          ) : null}
+          </div>
+
+          {loadingMore ? (
+            <>
+              <div
+                className="pointer-events-none absolute inset-0 z-10 bg-[color-mix(in_srgb,var(--card)_40%,transparent)] backdrop-blur-[var(--blur-sm)] supports-[backdrop-filter]:bg-card/25"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-4"
+                aria-live="polite"
+                aria-busy
+              >
+                <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-caption text-muted-foreground shadow-zynd-low backdrop-blur-[var(--blur-sm)] supports-[backdrop-filter]:bg-card/85">
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                  {copy.mutualFunds.loadingMore}
+                </span>
+              </div>
+            </>
           ) : null}
         </div>
       </TableCard.Root>

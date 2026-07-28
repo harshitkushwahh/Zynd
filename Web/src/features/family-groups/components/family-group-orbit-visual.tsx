@@ -653,7 +653,7 @@ export function FamilyGroupOrbitVisual({
   if (!center) {
     return (
       <div className={cn("flex w-full flex-1 items-center justify-center", className)}>
-        <p className="text-compact text-primary-foreground/70">Add members to see your family orbit.</p>
+        <p className="text-compact text-primary-foreground/70">{copy.familyGroups.dashboard.orbitEmptyHint}</p>
       </div>
     );
   }
