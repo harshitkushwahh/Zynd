@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import {
   Bar,
   BarChart,
@@ -12,20 +12,25 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Download, HandCoins, IndianRupee, Lock, Wallet } from "lucide-react";
 
-import { Table, TableCard } from "@/components/application/table";
-import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
+import { Table, useDistributorTablePagination } from "@/components/application/table";
+import { BranchIncentivesMetrics } from "@/components/dist-management/branch-incentives-metrics";
+import {
+  BRANCH_INCENTIVES_TABLE_SUB_TAB_LABELS,
+  type BranchIncentivesTableSubTabId,
+} from "@/components/dist-management/branch-incentives-table-sub-tab-ids";
+import { BranchIncentivesTableSubTabs } from "@/components/dist-management/branch-incentives-table-sub-tabs";
+import { BranchPerfCardHeader } from "@/components/dist-management/branch-perf-card-header";
+import { BranchPerfChartTooltip } from "@/components/dist-management/branch-perf-chart-tooltip";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
-import { resolveDistributorPageIcon } from "@/components/dashboard/distributor-page-icons";
+import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
+import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
-import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import {
   BRANCH_COMMISSION_PERIOD_OPTIONS,
   DUMMY_BRANCH_COMMISSION_CATEGORIES,
@@ -33,13 +38,16 @@ import {
   DUMMY_BRANCH_COMMISSION_HOLDS,
   DUMMY_BRANCH_COMMISSION_TREND,
   getBranchCommissionDistributorRows,
-  getBranchCommissionTotals,
   type BranchCommissionHoldEntry,
   type BranchCommissionPeriod,
   type BranchDistributorCommissionRow,
 } from "@/lib/dummy/branch-commissions";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
+import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
+import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 const CHART_HEIGHT = 260;
 
@@ -81,12 +89,10 @@ function CategoryMixTooltip({
   if (!active || !payload?.length || !label) return null;
   const total = payload.reduce((sum, item) => sum + Number(item.value ?? 0), 0);
   return (
-    <div className="rounded-[var(--radius-control)] border border-border bg-popover px-3 py-2 shadow-sm">
-      <p className="text-caption font-medium text-foreground">{label}</p>
-      <p className="mt-1 text-compact font-semibold tabular-nums text-foreground">
-        {formatAum(total)} accrued
-      </p>
-    </div>
+    <BranchPerfChartTooltip
+      label={label}
+      rows={[{ label: "Accrued", value: formatAum(total) }]}
+    />
   );
 }
 
@@ -107,11 +113,13 @@ function TrendTooltip({
   const accrued = Number(payload.find((p) => p.dataKey === "accrued")?.value ?? 0);
   const paid = Number(payload.find((p) => p.dataKey === "paid")?.value ?? 0);
   return (
-    <div className="rounded-[var(--radius-control)] border border-border bg-popover px-3 py-2 shadow-sm">
-      <p className="text-caption font-medium text-foreground">{label}</p>
-      <p className="mt-1 text-caption text-muted-foreground">Accrued {formatAum(accrued)}</p>
-      <p className="text-caption text-muted-foreground">Paid {formatAum(paid)}</p>
-    </div>
+    <BranchPerfChartTooltip
+      label={label}
+      rows={[
+        { label: "Accrued", value: formatAum(accrued) },
+        { label: "Paid", value: formatAum(paid) },
+      ]}
+    />
   );
 }
 
@@ -119,21 +127,34 @@ function renderTrendTooltip(props: unknown) {
   return <TrendTooltip {...(props as Parameters<typeof TrendTooltip>[0])} />;
 }
 
-export function BranchCommissionsPanel({ iconName, title, description }: DistributorPageConfig) {
-  const { branchLabel } = useDistributorAuth();
-  const Icon = resolveDistributorPageIcon(iconName);
-
+export function BranchCommissionsPanel({
+  title,
+  description,
+  embedded = false,
+}: DistributorPageConfig & { embedded?: boolean }) {
   const [period, setPeriod] = useState<BranchCommissionPeriod>("mtd");
   const [distributorFilter, setDistributorFilter] = useState<string | "all">("all");
   const [holdFilter, setHoldFilter] = useState<"all" | "Hold" | "Release">("all");
+  const [holdDistributorFilter, setHoldDistributorFilter] = useState<string | "all">("all");
+  const [distributorSearch, setDistributorSearch] = useState("");
+  const [holdSearch, setHoldSearch] = useState("");
+  const [activeTableTab, setActiveTableTab] = useState<BranchIncentivesTableSubTabId>("by-distributor");
+  const [isTableTabPending, startTableTabTransition] = useTransition();
 
-  const totals = useMemo(() => getBranchCommissionTotals(period), [period]);
+  const onTableTabChange = useCallback((tab: BranchIncentivesTableSubTabId) => {
+    startTableTabTransition(() => {
+      setActiveTableTab(tab);
+    });
+  }, []);
+
   const distributorRows = useMemo(() => getBranchCommissionDistributorRows(period), [period]);
 
   const filteredDistributorRows = useMemo(() => {
-    if (distributorFilter === "all") return distributorRows;
-    return distributorRows.filter((row) => row.distributorId === distributorFilter);
-  }, [distributorFilter, distributorRows]);
+    return distributorRows.filter((row) => {
+      if (distributorFilter !== "all" && row.distributorId !== distributorFilter) return false;
+      return distributorTableSearchMatch(distributorSearch, row.name, row.arn, row.payoutStatus);
+    });
+  }, [distributorFilter, distributorRows, distributorSearch]);
 
   const categoryChartData = useMemo<CategoryChartRow[]>(
     () =>
@@ -150,69 +171,146 @@ export function BranchCommissionsPanel({ iconName, title, description }: Distrib
 
   const filteredHolds = useMemo(() => {
     let rows = DUMMY_BRANCH_COMMISSION_HOLDS;
-    if (distributorFilter !== "all") {
-      rows = rows.filter((row) => row.distributorId === distributorFilter);
+    if (holdDistributorFilter !== "all") {
+      rows = rows.filter((row) => row.distributorId === holdDistributorFilter);
     }
     if (holdFilter !== "all") {
       rows = rows.filter((row) => row.entryType === holdFilter);
     }
-    return rows;
-  }, [distributorFilter, holdFilter]);
+    return rows.filter((row) =>
+      distributorTableSearchMatch(
+        holdSearch,
+        row.distributorName,
+        row.reason,
+        row.txnRef,
+        row.entryType,
+        row.settlementStatus,
+      ),
+    );
+  }, [holdDistributorFilter, holdFilter, holdSearch]);
+
+  const {
+    pageItems: distributorPageItems,
+    pagination: distributorPagination,
+    setPage: setDistributorPage,
+  } = useDistributorTablePagination(filteredDistributorRows);
+  const {
+    pageItems: holdPageItems,
+    pagination: holdPagination,
+    setPage: setHoldPage,
+  } = useDistributorTablePagination(filteredHolds);
 
   const distributorFilterOptions = distributorRows.map((row) => ({
     value: row.distributorId,
     label: row.name,
   }));
 
-  const filtersDefault = period === "mtd" && distributorFilter === "all" && holdFilter === "all";
+  const filtersDefault = period === "mtd" && distributorFilter === "all" && distributorSearch.trim() === "";
+  const holdFiltersDefault =
+    holdFilter === "all" && holdDistributorFilter === "all" && holdSearch.trim() === "";
+
+  const distributorToolbar = (
+    <DistributorTableToolbar
+      onClearAll={() => {
+        setPeriod("mtd");
+        setDistributorFilter("all");
+        setDistributorSearch("");
+        setDistributorPage(1);
+      }}
+      clearDisabled={filtersDefault}
+      search={
+        <DistributorTableSearchCard
+          variant="card"
+          value={distributorSearch}
+          onChange={(value) => {
+            setDistributorSearch(value);
+            setDistributorPage(1);
+          }}
+          placeholder={ZYND_MITRA_COPY.searchPlaceholder}
+          aria-label={ZYND_MITRA_COPY.searchIncentiveAria}
+        />
+      }
+    >
+      <StatusFilterSelect
+        label="Period"
+        value={period}
+        options={BRANCH_COMMISSION_PERIOD_OPTIONS}
+        onValueChange={(value) => {
+          if (value !== "all") setPeriod(value);
+          setDistributorPage(1);
+        }}
+      />
+      <StatusFilterSelect
+        label={ZYND_MITRA_COPY.tableColumnMitra}
+        value={distributorFilter}
+        options={distributorFilterOptions}
+        onValueChange={(value) => {
+          setDistributorFilter(value);
+          setDistributorPage(1);
+        }}
+      />
+    </DistributorTableToolbar>
+  );
+
+  const holdToolbar = (
+    <DistributorTableToolbar
+      onClearAll={() => {
+        setHoldFilter("all");
+        setHoldDistributorFilter("all");
+        setHoldSearch("");
+        setHoldPage(1);
+      }}
+      clearDisabled={holdFiltersDefault}
+      search={
+        <DistributorTableSearchCard
+          variant="card"
+          value={holdSearch}
+          onChange={(value) => {
+            setHoldSearch(value);
+            setHoldPage(1);
+          }}
+          placeholder="Search holds & releases…"
+          aria-label="Search incentive holds and releases"
+        />
+      }
+    >
+      <StatusFilterSelect
+        label="Entry type"
+        value={holdFilter}
+        options={[
+          { value: "Hold", label: "Hold" },
+          { value: "Release", label: "Release" },
+        ]}
+        onValueChange={(value) => {
+          setHoldFilter(value);
+          setHoldPage(1);
+        }}
+      />
+      <StatusFilterSelect
+        label={ZYND_MITRA_COPY.tableColumnMitra}
+        value={holdDistributorFilter}
+        options={distributorFilterOptions}
+        onValueChange={(value) => {
+          setHoldDistributorFilter(value);
+          setHoldPage(1);
+        }}
+      />
+    </DistributorTableToolbar>
+  );
 
   return (
-    <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
-      <DistributorPageHeader
-        icon={Icon}
-        title={title}
-        description={`${description} Scope: ${branchLabel}.`}
-      />
+    <div className={cn(DISTRIBUTOR_PAGE_STACK_CLASS, "min-w-0")}>
+      {!embedded ? <DistributorPageHeader title={title} description={description} /> : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <DistributorMetricCard
-          icon={HandCoins}
-          label="Accrued"
-          value={formatAum(totals.accrued)}
-          hint={period === "mtd" ? "Month to date" : "Last calendar month"}
-        />
-        <DistributorMetricCard
-          icon={Wallet}
-          label="Released"
-          value={formatAum(totals.released)}
-          hint="Eligible after settlement"
-        />
-        <DistributorMetricCard
-          icon={Lock}
-          label="On hold"
-          value={formatAum(totals.onHold)}
-          hint="Pending txn or compliance"
-        />
-        <DistributorMetricCard
-          icon={IndianRupee}
-          label="Net payable"
-          value={formatAum(totals.netPayable)}
-          hint="Scheduled for payout run"
-        />
-      </div>
+      <BranchIncentivesMetrics period={period} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="branch-perf-card overflow-hidden p-0">
-          <div className="branch-perf-card__header">
-            <div>
-              <h3 className="branch-perf-card__title">Commission by scheme category</h3>
-              <p className="branch-perf-card__desc">MTD accrual split by distributor (demo)</p>
-            </div>
-          </div>
+          <BranchPerfCardHeader eyebrow="MTD accrual" title="Incentive by scheme category" />
           <div
             className="branch-perf-chart h-[260px] w-full min-w-0 px-2 pb-2"
             role="img"
-            aria-label="Commission by scheme category and distributor"
+            aria-label={ZYND_MITRA_COPY.schemeIncentiveAria}
           >
             <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
               <BarChart data={categoryChartData} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
@@ -258,16 +356,11 @@ export function BranchCommissionsPanel({ iconName, title, description }: Distrib
         </Card>
 
         <Card className="branch-perf-card overflow-hidden p-0">
-          <div className="branch-perf-card__header">
-            <div>
-              <h3 className="branch-perf-card__title">Branch accrual trend</h3>
-              <p className="branch-perf-card__desc">Accrued vs paid (last 6 months, demo)</p>
-            </div>
-          </div>
+          <BranchPerfCardHeader eyebrow="Last 6 months" title="Branch incentive trend" />
           <div
             className="branch-perf-chart h-[260px] w-full min-w-0 px-2 pb-4"
             role="img"
-            aria-label="Commission accrual trend"
+            aria-label="Incentive accrual trend"
           >
             <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
               <LineChart data={DUMMY_BRANCH_COMMISSION_TREND} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
@@ -320,12 +413,10 @@ export function BranchCommissionsPanel({ iconName, title, description }: Distrib
         </Card>
       </div>
 
-      <Card className="border-border p-4">
-        <h3 className="text-compact font-semibold text-foreground">MTD by category (branch)</h3>
-        <p className="mt-0.5 text-caption text-muted-foreground">
-          Share of total commission accrual for the selected period view.
-        </p>
-        <ul className="mt-4 space-y-4">
+      <Card className="branch-perf-card overflow-hidden p-0">
+        <BranchPerfCardHeader eyebrow="Category share" title="MTD by category (branch)" />
+        <div className="branch-perf-card__body">
+          <ul className="space-y-4">
           {DUMMY_BRANCH_COMMISSION_CATEGORIES.map((row) => (
             <li key={row.id}>
               <div className="flex items-center justify-between gap-3 text-caption">
@@ -342,134 +433,136 @@ export function BranchCommissionsPanel({ iconName, title, description }: Distrib
               </div>
             </li>
           ))}
-        </ul>
+          </ul>
+        </div>
       </Card>
 
-      <TableCard.Root>
-        <TableCard.Header
-          title="Commission by distributor"
-          description="Accruals, holds, and net payable for each mapped distributor."
-          contentTrailing={
-            <Button type="button" variant="outline" size="sm" className="gap-1.5">
-              <Download className="size-3.5" aria-hidden />
-              Export CSV
-            </Button>
-          }
-        />
-        <div className="border-b border-border px-4 py-3">
-          <DistributorTableToolbar
-            onClearAll={() => {
-              setPeriod("mtd");
-              setDistributorFilter("all");
-            }}
-            clearDisabled={filtersDefault}
-          >
-            <StatusFilterSelect
-              label="Period"
-              value={period}
-              options={BRANCH_COMMISSION_PERIOD_OPTIONS}
-              onValueChange={(value) => {
-                if (value !== "all") setPeriod(value);
-              }}
-            />
-            <StatusFilterSelect
-              label="Distributor"
-              value={distributorFilter}
-              options={distributorFilterOptions}
-              onValueChange={setDistributorFilter}
-            />
-          </DistributorTableToolbar>
-        </div>
-        <TableCard.Content>
-          <Table aria-label="Commission by distributor" size="md" className="min-w-[var(--table-min-width-3xl)]">
-            <Table.Header>
-              <Table.Head isRowHeader>Distributor</Table.Head>
-              <Table.Head>ARN</Table.Head>
-              <Table.Head className="text-right [&>div]:justify-end">Accrued</Table.Head>
-              <Table.Head className="text-right [&>div]:justify-end">Released</Table.Head>
-              <Table.Head className="text-right [&>div]:justify-end">On hold</Table.Head>
-              <Table.Head className="text-right [&>div]:justify-end">Net payable</Table.Head>
-              <Table.Head>Payout</Table.Head>
-            </Table.Header>
-            <Table.Body items={filteredDistributorRows}>
-              {(row) => (
-                <Table.Row id={row.distributorId}>
-                  <Table.Cell className="font-medium">{row.name}</Table.Cell>
-                  <Table.Cell className="font-mono text-caption">{row.arn}</Table.Cell>
-                  <Table.Cell className="text-right tabular-nums">{formatAum(row.accrued)}</Table.Cell>
-                  <Table.Cell className="text-right tabular-nums">{formatAum(row.released)}</Table.Cell>
-                  <Table.Cell className="text-right tabular-nums">
-                    {row.onHold > 0 ? formatAum(row.onHold) : "—"}
-                  </Table.Cell>
-                  <Table.Cell className="text-right tabular-nums">{formatAum(row.netPayable)}</Table.Cell>
-                  <Table.Cell>
-                    <StatusBadge variant={payoutStatusVariant(row.payoutStatus)}>
-                      {row.payoutStatus}
-                    </StatusBadge>
-                  </Table.Cell>
-                </Table.Row>
-              )}
-            </Table.Body>
-          </Table>
-        </TableCard.Content>
-      </TableCard.Root>
+      <div className="distributor-branch-distributor-work-subtabs">
+        <DistributorPageHeader
+          title={BRANCH_INCENTIVES_TABLE_SUB_TAB_LABELS[activeTableTab]}
+          titleAs="h3"
+          titleSwitchKey={activeTableTab}
+          titleClassName="text-caption font-medium uppercase tracking-wide text-muted-foreground"
+          className="distributor-client-activity-tab__subheader"
+        >
+          <BranchIncentivesTableSubTabs
+            value={activeTableTab}
+            onChange={onTableTabChange}
+            busy={isTableTabPending}
+          />
+        </DistributorPageHeader>
 
-      <TableCard.Root>
-        <TableCard.Header
-          title="Holds & releases"
-          description="Settlement-linked hold and release events (demo ledger)."
-        />
-        <div className="border-b border-border px-4 py-3">
-          <DistributorTableToolbar
-            onClearAll={() => setHoldFilter("all")}
-            clearDisabled={holdFilter === "all"}
-          >
-            <StatusFilterSelect
-              label="Entry type"
-              value={holdFilter}
-              options={[
-                { value: "Hold", label: "Hold" },
-                { value: "Release", label: "Release" },
-              ]}
-              onValueChange={setHoldFilter}
-            />
-          </DistributorTableToolbar>
-        </div>
-        <TableCard.Content>
-          <Table aria-label="Commission holds and releases" size="md" className="min-w-[var(--table-min-width-3xl)]">
-            <Table.Header>
-              <Table.Head isRowHeader>Distributor</Table.Head>
-              <Table.Head>Type</Table.Head>
-              <Table.Head className="text-right [&>div]:justify-end">Amount</Table.Head>
-              <Table.Head>Reason</Table.Head>
-              <Table.Head>Txn ref</Table.Head>
-              <Table.Head>Settlement</Table.Head>
-              <Table.Head>Effective</Table.Head>
-            </Table.Header>
-            <Table.Body items={filteredHolds}>
-              {(entry) => (
-                <Table.Row id={entry.id}>
-                  <Table.Cell className="font-medium">{entry.distributorName}</Table.Cell>
-                  <Table.Cell>
-                    <StatusBadge variant={holdEntryVariant(entry.entryType)}>{entry.entryType}</StatusBadge>
-                  </Table.Cell>
-                  <Table.Cell className="text-right tabular-nums">{formatAum(entry.amount)}</Table.Cell>
-                  <Table.Cell className="max-w-[16rem] text-muted-foreground">{entry.reason}</Table.Cell>
-                  <Table.Cell className="font-mono text-caption">{entry.txnRef}</Table.Cell>
-                  <Table.Cell>
-                    <StatusBadge variant={settlementVariant(entry.settlementStatus)}>
-                      {entry.settlementStatus}
-                    </StatusBadge>
-                  </Table.Cell>
-                  <Table.Cell className="text-muted-foreground">
-                    {formatDistributorDate(entry.effectiveAt)}
-                  </Table.Cell>
-                </Table.Row>
+        <div
+          key={activeTableTab}
+          role="tabpanel"
+          id={`branch-incentives-table-sub-panel-${activeTableTab}`}
+          aria-labelledby={`branch-incentives-table-sub-tab-${activeTableTab}`}
+          className={cn(
+            "distributor-client-activity-tab__panel distributor-client-activity-tab__panel--enter",
+            isTableTabPending && "distributor-client-activity-tab__panel--pending",
+          )}
+        >
+          {activeTableTab === "by-distributor" ? (
+            <DistributorTableOnlyShell
+              toolbar={distributorToolbar}
+              isEmpty={filteredDistributorRows.length === 0}
+              emptyTitle={ZYND_MITRA_COPY.emptyFiltered}
+              emptyDescription={ZYND_MITRA_COPY.adjustPeriodMitra}
+              tableSize="md"
+            >
+              {wrapDistributorTableBody(
+                <Table
+                  aria-label={ZYND_MITRA_COPY.incentiveByMitra}
+                  size="md"
+                  className="min-w-[var(--table-min-width-3xl)]"
+                  pagination={distributorPagination}
+                >
+                  <Table.Header>
+                    <Table.Head isRowHeader>{ZYND_MITRA_COPY.tableColumnMitra}</Table.Head>
+                    <Table.Head>ARN</Table.Head>
+                    <Table.Head className="text-right [&>div]:justify-end">Accrued</Table.Head>
+                    <Table.Head className="text-right [&>div]:justify-end">Released</Table.Head>
+                    <Table.Head className="text-right [&>div]:justify-end">On hold</Table.Head>
+                    <Table.Head className="text-right [&>div]:justify-end">Net payable</Table.Head>
+                    <Table.Head>Payout</Table.Head>
+                  </Table.Header>
+                  <Table.Body items={distributorPageItems}>
+                    {(row) => (
+                      <Table.Row id={row.distributorId}>
+                        <Table.Cell className="font-medium">{row.name}</Table.Cell>
+                        <Table.Cell className="font-mono text-caption">{row.arn}</Table.Cell>
+                        <Table.Cell className="text-right tabular-nums">{formatAum(row.accrued)}</Table.Cell>
+                        <Table.Cell className="text-right tabular-nums">{formatAum(row.released)}</Table.Cell>
+                        <Table.Cell className="text-right tabular-nums">
+                          {row.onHold > 0 ? formatAum(row.onHold) : "—"}
+                        </Table.Cell>
+                        <Table.Cell className="text-right tabular-nums">{formatAum(row.netPayable)}</Table.Cell>
+                        <Table.Cell>
+                          <StatusBadge variant={payoutStatusVariant(row.payoutStatus)}>
+                            {row.payoutStatus}
+                          </StatusBadge>
+                        </Table.Cell>
+                      </Table.Row>
+                    )}
+                  </Table.Body>
+                </Table>,
               )}
-            </Table.Body>
-          </Table>
-        </TableCard.Content>
-      </TableCard.Root>
+            </DistributorTableOnlyShell>
+          ) : null}
+
+          {activeTableTab === "holds-releases" ? (
+            <DistributorTableOnlyShell
+              toolbar={holdToolbar}
+              isEmpty={filteredHolds.length === 0}
+              emptyTitle="No hold or release entries match"
+              emptyDescription={ZYND_MITRA_COPY.adjustEntryMitra}
+              tableSize="md"
+            >
+              {wrapDistributorTableBody(
+                <Table
+                  aria-label="Incentive holds and releases"
+                  size="md"
+                  className="min-w-[var(--table-min-width-3xl)]"
+                  pagination={holdPagination}
+                >
+                  <Table.Header>
+                    <Table.Head isRowHeader>{ZYND_MITRA_COPY.tableColumnMitra}</Table.Head>
+                    <Table.Head>Type</Table.Head>
+                    <Table.Head className="text-right [&>div]:justify-end">Amount</Table.Head>
+                    <Table.Head>Reason</Table.Head>
+                    <Table.Head>Txn ref</Table.Head>
+                    <Table.Head>Settlement</Table.Head>
+                    <Table.Head>Effective</Table.Head>
+                  </Table.Header>
+                  <Table.Body items={holdPageItems}>
+                    {(entry) => (
+                      <Table.Row id={entry.id}>
+                        <Table.Cell className="font-medium">{entry.distributorName}</Table.Cell>
+                        <Table.Cell>
+                          <StatusBadge variant={holdEntryVariant(entry.entryType)}>
+                            {entry.entryType}
+                          </StatusBadge>
+                        </Table.Cell>
+                        <Table.Cell className="text-right tabular-nums">{formatAum(entry.amount)}</Table.Cell>
+                        <Table.Cell className="max-w-[16rem] text-muted-foreground">{entry.reason}</Table.Cell>
+                        <Table.Cell className="font-mono text-caption">{entry.txnRef}</Table.Cell>
+                        <Table.Cell>
+                          <StatusBadge variant={settlementVariant(entry.settlementStatus)}>
+                            {entry.settlementStatus}
+                          </StatusBadge>
+                        </Table.Cell>
+                        <Table.Cell className="text-muted-foreground">
+                          {formatDistributorDate(entry.effectiveAt)}
+                        </Table.Cell>
+                      </Table.Row>
+                    )}
+                  </Table.Body>
+                </Table>,
+              )}
+            </DistributorTableOnlyShell>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { DistributorHeadLeaveInboxCard } from "@/components/distributor-head/dis
 import { DistributorHeadStateTotalsCard } from "@/components/distributor-head/distributor-head-state-totals-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import {
   AdminDataTable,
   AdminTableBody,
@@ -43,7 +44,7 @@ export function DistributorHeadOverviewPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminMetricCardsGrid>
         <AdminMetricCard
           icon={Users2}
           label="Managers"
@@ -70,7 +71,7 @@ export function DistributorHeadOverviewPanel() {
           hint="Demo aggregate from managers"
           tone="success"
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="grid items-start gap-4 lg:grid-cols-3">
         <Card className="overflow-hidden lg:col-span-2">
@@ -135,7 +136,7 @@ export function DistributorHeadSalesPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <AdminMetricCardsGrid>
         <AdminMetricCard
           icon={TrendingUp}
           label="State sales MTD"
@@ -150,7 +151,7 @@ export function DistributorHeadSalesPanel() {
           hint="Demo ratio from latest row"
           tone="info"
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="space-y-4">
         <AdminSectionTitle description="Monthly lumpsum and SIP inflow across the state network.">

@@ -13,10 +13,11 @@ import {
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
 import { MfStatusChip, type MfStatusTone } from "@/components/mf/mf-status-chip";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -30,14 +31,6 @@ import {
   paginateItems,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ApiError } from "@/lib/api-client";
 import {
   fetchMfIngestionRuns,
@@ -76,7 +69,9 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES);
   const [runStatusFilter, setRunStatusFilter] = useState(ALL_STATUSES);
   const [jobPage, setJobPage] = useState(0);
+  const [jobPageSize, setJobPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [runPage, setRunPage] = useState(0);
+  const [runPageSize, setRunPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -118,8 +113,8 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   }, [jobSearch, jobs, phaseFilter]);
 
   const jobPagination = useMemo(
-    () => paginateItems(filteredJobs, jobPage, ADMIN_TABLE_PAGE_SIZE),
-    [filteredJobs, jobPage],
+    () => paginateItems(filteredJobs, jobPage, jobPageSize),
+    [filteredJobs, jobPage, jobPageSize],
   );
 
   const runStatuses = useMemo(
@@ -140,17 +135,39 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   }, [runStatusFilter, runs]);
 
   const runPagination = useMemo(
-    () => paginateItems(filteredRuns, runPage, ADMIN_TABLE_PAGE_SIZE),
-    [filteredRuns, runPage],
+    () => paginateItems(filteredRuns, runPage, runPageSize),
+    [filteredRuns, runPage, runPageSize],
+  );
+
+  const phaseOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: ALL_PHASES, label: "All phases" },
+      ...phases.map((phase) => ({
+        value: String(phase),
+        label: `Phase ${phase}`,
+      })),
+    ],
+    [phases],
+  );
+
+  const runStatusOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: ALL_STATUSES, label: "All statuses" },
+      ...runStatuses.map((status) => ({
+        value: status,
+        label: status,
+      })),
+    ],
+    [runStatuses],
   );
 
   useEffect(() => {
     setJobPage(0);
-  }, [jobSearch, phaseFilter]);
+  }, [jobSearch, phaseFilter, jobPageSize]);
 
   useEffect(() => {
     setRunPage(0);
-  }, [runStatusFilter]);
+  }, [runStatusFilter, runPageSize]);
 
   const succeededJobs = jobs.filter(
     (job) => (job.last_run?.status ?? "").toLowerCase() === "succeeded",
@@ -178,18 +195,10 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <AdminSectionTitle icon={Settings2}>Operations</AdminSectionTitle>
-        <Button variant="outline" size="sm" disabled={loading} onClick={() => void loadData()}>
-          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
-
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminMetricCardsGrid>
         <AdminMetricCard
           label="Scheduler jobs"
           value={jobs.length.toLocaleString()}
@@ -216,50 +225,65 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
           icon={Clock3}
           loading={loading}
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <AdminSectionTitle icon={Settings2} variant="section">
-            Scheduler jobs
-          </AdminSectionTitle>
+          <AdminSearchInput
+            containerClassName="max-w-sm"
+            placeholder="Search jobs"
+            value={jobSearch}
+            onChange={(event) => setJobSearch(event.target.value)}
+          />
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Select
+            <AdminSelect
               value={phaseFilter}
-              onValueChange={(value) => setPhaseFilter(value ?? ALL_PHASES)}
-            >
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="All phases">
-                  {phaseFilter === ALL_PHASES ? "All phases" : `Phase ${phaseFilter}`}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_PHASES}>All phases</SelectItem>
-                {phases.map((phase) => (
-                  <SelectItem key={phase} value={String(phase)}>
-                    Phase {phase}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <AdminSearchInput
-              containerClassName="max-w-sm sm:w-56"
-              placeholder="Search jobs"
-              value={jobSearch}
-              onChange={(event) => setJobSearch(event.target.value)}
+              onValueChange={setPhaseFilter}
+              options={phaseOptions}
+              placeholder="Phase"
+              className="min-w-select-sm"
             />
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={loading}
+              onClick={() => void loadData()}
+              aria-label="Refresh operations"
+            >
+              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+            </Button>
           </div>
         </div>
 
-        <AdminDataTable minWidth="4xl">
+        <AdminDataTable
+          minWidth="4xl"
+          footer={
+            <AdminTablePagination
+              page={jobPagination.page}
+              totalPages={jobPagination.totalPages}
+              hasPrevious={jobPagination.hasPrevious}
+              hasNext={jobPagination.hasNext}
+              disabled={loading}
+              totalCount={filteredJobs.length}
+              currentPageCount={jobPagination.items.length}
+              pageSize={jobPageSize}
+              onPageSizeChange={(next) => {
+                setJobPageSize(next);
+                setJobPage(0);
+              }}
+              onPrevious={() => setJobPage((page) => Math.max(0, page - 1))}
+              onNext={() => setJobPage((page) => page + 1)}
+            />
+          }
+        >
           <AdminTableHeader>
             <tr>
+              {canRunJobs ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
               <AdminTableHeadCell>Job</AdminTableHeadCell>
               <AdminTableHeadCell>Phase</AdminTableHeadCell>
               <AdminTableHeadCell>Schedule</AdminTableHeadCell>
               <AdminTableHeadCell>Last run</AdminTableHeadCell>
               <AdminTableHeadCell className="text-right">Processed</AdminTableHeadCell>
-              {canRunJobs ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
             </tr>
           </AdminTableHeader>
           <AdminTableBody>
@@ -270,6 +294,18 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
             ) : (
               jobPagination.items.map((job) => (
                 <AdminTableRow key={job.name}>
+                  {canRunJobs ? (
+                    <AdminTableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={actionLoading === job.name}
+                        onClick={() => void handleRunJob(job.name)}
+                      >
+                        {actionLoading === job.name ? "Running…" : "Run now"}
+                      </Button>
+                    </AdminTableCell>
+                  ) : null}
                   <AdminTableCell>
                     <p className="max-w-md font-medium text-foreground">{job.description}</p>
                     <p className="mt-0.5 font-mono text-caption text-muted-foreground">{job.name}</p>
@@ -305,63 +341,45 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
                   <AdminTableCell className="text-right tabular-nums">
                     {formatCount(job.last_run?.records_processed)}
                   </AdminTableCell>
-                  {canRunJobs ? (
-                    <AdminTableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading === job.name}
-                        onClick={() => void handleRunJob(job.name)}
-                      >
-                        {actionLoading === job.name ? "Running…" : "Run now"}
-                      </Button>
-                    </AdminTableCell>
-                  ) : null}
                 </AdminTableRow>
               ))
             )}
           </AdminTableBody>
         </AdminDataTable>
-
-        {!loading && filteredJobs.length > 0 ? (
-          <AdminTablePagination
-            page={jobPagination.page}
-            totalPages={jobPagination.totalPages}
-            hasPrevious={jobPagination.hasPrevious}
-            hasNext={jobPagination.hasNext}
-            disabled={loading}
-            onPrevious={() => setJobPage((page) => Math.max(0, page - 1))}
-            onNext={() => setJobPage((page) => page + 1)}
-          />
-        ) : null}
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <AdminSectionTitle icon={Clock3} variant="section">
-            Recent ingestion runs
-          </AdminSectionTitle>
-          <Select
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <AdminSelect
             value={runStatusFilter}
-            onValueChange={(value) => setRunStatusFilter(value ?? ALL_STATUSES)}
-          >
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All statuses">
-                {runStatusFilter === ALL_STATUSES ? "All statuses" : runStatusFilter}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_STATUSES}>All statuses</SelectItem>
-              {runStatuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {status}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onValueChange={setRunStatusFilter}
+            options={runStatusOptions}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
         </div>
 
-        <AdminDataTable minWidth="lg">
+        <AdminDataTable
+          minWidth="lg"
+          footer={
+            <AdminTablePagination
+              page={runPagination.page}
+              totalPages={runPagination.totalPages}
+              hasPrevious={runPagination.hasPrevious}
+              hasNext={runPagination.hasNext}
+              disabled={loading}
+              totalCount={filteredRuns.length}
+              currentPageCount={runPagination.items.length}
+              pageSize={runPageSize}
+              onPageSizeChange={(next) => {
+                setRunPageSize(next);
+                setRunPage(0);
+              }}
+              onPrevious={() => setRunPage((page) => Math.max(0, page - 1))}
+              onNext={() => setRunPage((page) => page + 1)}
+            />
+          }
+        >
           <AdminTableHeader>
             <tr>
               <AdminTableHeadCell>Job</AdminTableHeadCell>
@@ -403,18 +421,6 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
             )}
           </AdminTableBody>
         </AdminDataTable>
-
-        {!loading && filteredRuns.length > 0 ? (
-          <AdminTablePagination
-            page={runPagination.page}
-            totalPages={runPagination.totalPages}
-            hasPrevious={runPagination.hasPrevious}
-            hasNext={runPagination.hasNext}
-            disabled={loading}
-            onPrevious={() => setRunPage((page) => Math.max(0, page - 1))}
-            onNext={() => setRunPage((page) => page + 1)}
-          />
-        ) : null}
       </div>
     </div>
   );

@@ -20,8 +20,18 @@ import {
   AdminInfoDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
-import { AdminCardListSkeleton } from "@/components/ui/admin-skeletons";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
+import {
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTableRow,
+  AdminTableStateRow,
+} from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -325,7 +335,7 @@ export const CatalogRulesPanel = forwardRef<
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <AdminMetricCardsGrid columns="three">
         <AdminMetricCard
           label="Total rules"
           value={rules.length.toLocaleString()}
@@ -346,7 +356,7 @@ export const CatalogRulesPanel = forwardRef<
           tone="muted"
           loading={loading}
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="flex items-start gap-3 rounded-[var(--radius-control)] border border-warning/20 bg-warning/5 px-4 py-3">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
@@ -356,86 +366,81 @@ export const CatalogRulesPanel = forwardRef<
         </p>
       </div>
 
-      {rules.length > 0 ? (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-caption text-muted-foreground">
-            Preview impact before applying enabled rules to the catalog.
-          </p>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!hasEnabledRules}
-              onClick={() => void handlePreview()}
-            >
-              <Search className="size-3.5" />
-              Preview enabled
-            </Button>
-            {canPublish ? (
-              <Button size="sm" disabled={!hasEnabledRules} onClick={() => void handleApply()}>
-                <Play className="size-3.5" />
-                Apply enabled
-              </Button>
-            ) : null}
-            {canManageRules && !embedded ? (
-              <Button size="sm" variant="outline" onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="size-3.5" />
-                New rule
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!hasEnabledRules}
+          onClick={() => void handlePreview()}
+        >
+          <Search className="size-3.5" />
+          Preview enabled
+        </Button>
+        {canPublish ? (
+          <Button size="sm" disabled={!hasEnabledRules} onClick={() => void handleApply()}>
+            <Play className="size-3.5" />
+            Apply enabled
+          </Button>
+        ) : null}
+        {canManageRules && !embedded ? (
+          <Button size="sm" variant="outline" onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="size-3.5" />
+            New rule
+          </Button>
+        ) : null}
+      </div>
 
-      {loading ? (
-        <AdminCardListSkeleton count={3} lines={2} />
-      ) : rules.length === 0 ? (
-        <div className="rounded-[var(--radius-card)] border border-dashed border-border bg-muted/10 px-6 py-empty-state-sm text-center">
-          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <GitBranch className="size-6" strokeWidth={2} />
-          </div>
-          <p className="mt-4 text-compact font-medium text-foreground">No catalog rules configured</p>
-          <p className="mt-1 text-caption text-muted-foreground">
-            Use the info button for workflow guidance or create a rule to get started.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {rules.map((rule) => (
-            <div
-              key={rule.id}
-              className="rounded-[var(--radius-card)] border border-border bg-card p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-foreground">{rule.name}</p>
-                    <MfStatusChip
-                      label={rule.enabled ? "Enabled" : "Disabled"}
-                      tone={rule.enabled ? "success" : "neutral"}
-                      showIcon={false}
-                    />
-                  </div>
-                  <p className="text-caption text-muted-foreground">Priority {rule.priority}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => void handlePreview([rule.id])}>
-                    Preview
-                  </Button>
-                  {canManageRules ? (
-                    <Button size="sm" variant="outline" onClick={() => void toggleRule(rule)}>
-                      {rule.enabled ? "Disable" : "Enable"}
+      <AdminDataTable minWidth="3xl">
+        <AdminTableHeader>
+          <tr>
+            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+            <AdminTableHeadCell>Rule</AdminTableHeadCell>
+            <AdminTableHeadCell className="text-right">Priority</AdminTableHeadCell>
+            <AdminTableHeadCell>Status</AdminTableHeadCell>
+            <AdminTableHeadCell>Definition</AdminTableHeadCell>
+          </tr>
+        </AdminTableHeader>
+        <AdminTableBody>
+          {loading ? (
+            <AdminTableSkeletonRows columns={5} />
+          ) : rules.length === 0 ? (
+            <AdminTableStateRow colSpan={5}>
+              No catalog rules configured. Create a rule to get started.
+            </AdminTableStateRow>
+          ) : (
+            rules.map((rule) => (
+              <AdminTableRow key={rule.id}>
+                <AdminTableCell>
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void handlePreview([rule.id])}>
+                      Preview
                     </Button>
-                  ) : null}
-                </div>
-              </div>
-              <pre className="mt-3 max-h-scroll-sm overflow-auto rounded-[var(--radius-control)] bg-muted/40 p-3 font-mono text-caption">
-                {JSON.stringify({ conditions: rule.conditions, actions: rule.actions }, null, 2)}
-              </pre>
-            </div>
-          ))}
-        </div>
-      )}
+                    {canManageRules ? (
+                      <Button size="sm" variant="outline" onClick={() => void toggleRule(rule)}>
+                        {rule.enabled ? "Disable" : "Enable"}
+                      </Button>
+                    ) : null}
+                  </div>
+                </AdminTableCell>
+                <AdminTableCell className="font-medium text-foreground">{rule.name}</AdminTableCell>
+                <AdminTableCell className="text-right tabular-nums">{rule.priority}</AdminTableCell>
+                <AdminTableCell>
+                  <MfStatusChip
+                    label={rule.enabled ? "Enabled" : "Disabled"}
+                    tone={rule.enabled ? "success" : "neutral"}
+                    showIcon={false}
+                  />
+                </AdminTableCell>
+                <AdminTableCell>
+                  <pre className="max-h-28 max-w-md overflow-auto rounded-[var(--radius-control)] bg-muted/40 p-2 font-mono text-caption">
+                    {JSON.stringify({ conditions: rule.conditions, actions: rule.actions }, null, 2)}
+                  </pre>
+                </AdminTableCell>
+              </AdminTableRow>
+            ))
+          )}
+        </AdminTableBody>
+      </AdminDataTable>
 
       <RuleCreatorDialog
         open={createDialogOpen}

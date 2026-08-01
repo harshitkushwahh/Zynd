@@ -15,7 +15,8 @@ import { DistributorHeadManagerDetail } from "@/components/distributor-head/dist
 import { DistributorHeadDistributorDetail } from "@/components/distributor-head/distributor-head-distributor-detail";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { DistributorHeadStateBadges } from "@/components/distributor-head/distributor-head-state-badges";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import {
   DISTRIBUTOR_HEAD_TABS,
   distributorHeadTabHref,
@@ -26,14 +27,10 @@ import {
   getDistributorHeadManager,
   isDistributorHeadTabId,
 } from "@/lib/distributor-head-queries";
-import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
-import { DUMMY_STATE_HEAD } from "@/lib/dummy/distributor-head-data";
 
 type DistributorHeadPageProps = {
   segments?: string[];
 };
-
-const distributorHeadRoute = ADMIN_NAV_ROUTES.find((route) => route.id === "distributor-head");
 
 function resolveListTab(segments?: string[]): DistributorHeadTabId {
   const first = segments?.[0];
@@ -101,18 +98,10 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
       ? distributorDetail.name
       : "Distributor Head";
 
-  const pageDescription = managerDetail
-    ? `Manager profile, branches, and distributors under ${managerDetail.name} (demo).`
-    : distributorDetail
-      ? `Distributor profile and reporting line for ${distributorDetail.name} (demo).`
-      : (distributorHeadRoute?.description ??
-        `State head console for ${DUMMY_STATE_HEAD.state} (demo UI).`);
-
   return (
     <AdminSectionPageShell
       breadcrumbSegments={breadcrumbSegments}
       title={pageTitle}
-      description={pageDescription}
       titleAddon={isDetailView ? undefined : <DistributorHeadStateBadges />}
       headerAside={
         <div className="admin-page-icon-tile shrink-0">
@@ -121,20 +110,17 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
       }
     >
       <Tabs value={activeTabId} onValueChange={handleTabChange} className="gap-4">
-        <TabsList
-          variant="line"
-          className="h-auto w-fit max-w-full shrink-0 justify-start overflow-x-auto overflow-y-hidden border-b border-border"
-        >
+        <AdminTabList className="max-w-full">
           {DISTRIBUTOR_HEAD_TABS.map((tab) => {
             const Icon = tab.icon;
             return (
-              <TabsTrigger key={tab.id} value={tab.id} className="h-auto flex-none gap-2 px-4 py-2">
+              <AdminTabTrigger key={tab.id} value={tab.id} className="gap-2">
                 <Icon className="size-4" />
                 {tab.label}
-              </TabsTrigger>
+              </AdminTabTrigger>
             );
           })}
-        </TabsList>
+        </AdminTabList>
       </Tabs>
 
       {activeTabId === "overview" ? <DistributorHeadOverviewPanel /> : null}

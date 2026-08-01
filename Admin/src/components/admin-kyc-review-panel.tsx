@@ -13,6 +13,7 @@ import {
 import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminProfilePageSkeleton } from "@/components/ui/admin-skeletons";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -280,7 +281,7 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
           </div>
 
           {documentStats ? (
-            <div className="grid gap-4 sm:grid-cols-3">
+            <AdminMetricCardsGrid columns="three">
               <AdminMetricCard
                 label="Uploaded documents"
                 value={documentStats.total}
@@ -299,7 +300,7 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
                 icon={ShieldCheck}
                 tone="success"
               />
-            </div>
+            </AdminMetricCardsGrid>
           ) : null}
 
           {review.documents.length === 0 ? (

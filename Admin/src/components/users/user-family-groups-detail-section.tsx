@@ -1,11 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { UsersRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { AdminFamilyGroupSubCard } from "@/components/users/admin-family-group-sub-card";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
-import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { userFamilyGroupDetailHref } from "@/lib/admin-user-family-group-navigation";
 import { fetchAdminUserFamilyGroups, type AdminUserFamilyGroups } from "@/lib/family-groups-admin-api";
 import { formatTimestampDetail } from "@/lib/format-date";
 import { getErrorMessage } from "@/lib/errors";
@@ -13,7 +21,16 @@ import { PROFILE_SECTION_TITLE_CLASS } from "@/components/users/user-profile-typ
 
 type UserFamilyGroupsDetailSectionProps = {
   userId: string;
+  profilePath: string;
 };
+
+type FamilyGroupsFilter = "all" | "created" | "memberships";
+
+const FAMILY_GROUPS_FILTER_OPTIONS: Array<{ value: FamilyGroupsFilter; label: string }> = [
+  { value: "all", label: "All groups" },
+  { value: "created", label: "Groups created" },
+  { value: "memberships", label: "Memberships" },
+];
 
 function statusVariant(status: string): "success" | "neutral" | "info" {
   if (status === "active") return "success";
@@ -21,10 +38,21 @@ function statusVariant(status: string): "success" | "neutral" | "info" {
   return "info";
 }
 
-export function UserFamilyGroupsDetailSection({ userId }: UserFamilyGroupsDetailSectionProps) {
+function roleVariant(role: string): "success" | "neutral" | "info" {
+  if (role === "head") return "success";
+  if (role === "member") return "neutral";
+  return "info";
+}
+
+export function UserFamilyGroupsDetailSection({
+  userId,
+  profilePath,
+}: UserFamilyGroupsDetailSectionProps) {
+  const router = useRouter();
   const [payload, setPayload] = useState<AdminUserFamilyGroups | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState<FamilyGroupsFilter>("all");
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
@@ -44,6 +72,19 @@ export function UserFamilyGroupsDetailSection({ userId }: UserFamilyGroupsDetail
     void loadGroups();
   }, [loadGroups]);
 
+  const showCreated = filter === "all" || filter === "created";
+  const showMemberships = filter === "all" || filter === "memberships";
+
+  const hasCreated = (payload?.created_groups.length ?? 0) > 0;
+  const hasMemberships = (payload?.memberships.length ?? 0) > 0;
+
+  const hasVisibleGroups = useMemo(() => {
+    if (!payload) return false;
+    if (filter === "created") return hasCreated;
+    if (filter === "memberships") return hasMemberships;
+    return hasCreated || hasMemberships;
+  }, [filter, hasCreated, hasMemberships, payload]);
+
   if (loading) {
     return <AdminTableSkeleton columns={1} rows={3} minWidth="sm" />;
   }
@@ -52,7 +93,7 @@ export function UserFamilyGroupsDetailSection({ userId }: UserFamilyGroupsDetail
     return <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>;
   }
 
-  if (!payload || (payload.memberships.length === 0 && payload.created_groups.length === 0)) {
+  if (!payload || (!hasCreated && !hasMemberships)) {
     return (
       <p className="text-caption text-muted-foreground">
         This user is not part of any family groups yet.
@@ -61,52 +102,65 @@ export function UserFamilyGroupsDetailSection({ userId }: UserFamilyGroupsDetail
   }
 
   return (
-    <div className="space-y-5">
-      {payload.created_groups.length > 0 ? (
-        <div className="space-y-3">
-          <p className={PROFILE_SECTION_TITLE_CLASS}>Groups created</p>
-          <div className="space-y-2">
+    <div className="admin-user-family-groups-section space-y-5">
+      <div className="admin-user-family-groups-section__head">
+        <h2 className={PROFILE_SECTION_TITLE_CLASS}>Family groups</h2>
+        <Select value={filter} onValueChange={(value) => setFilter(value as FamilyGroupsFilter)}>
+          <SelectTrigger size="sm" className="min-w-[9.5rem]">
+            <SelectValue placeholder="Filter groups" />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {FAMILY_GROUPS_FILTER_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!hasVisibleGroups ? (
+        <p className="text-caption text-muted-foreground">No groups match this filter.</p>
+      ) : null}
+
+      {showCreated && hasCreated ? (
+        <div className="admin-user-family-groups-section__block space-y-2.5">
+          {filter === "all" ? (
+            <p className="admin-user-family-groups-section__label">Groups Created</p>
+          ) : null}
+          <div className="admin-family-group-sub-card-grid">
             {payload.created_groups.map((group) => (
-              <div
+              <AdminFamilyGroupSubCard
                 key={group.id}
-                className="rounded-[var(--radius-control)] border border-border/70 px-3 py-2.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-compact font-medium text-foreground">{group.title}</p>
-                  <StatusBadge variant={statusVariant(group.status)} showIcon={false}>
-                    {group.status}
-                  </StatusBadge>
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {group.member_count} members · created {formatTimestampDetail(group.created_at)}
-                </p>
-              </div>
+                group={group}
+                badgeLabel={group.status}
+                badgeVariant={statusVariant(group.status)}
+                meta={`${group.member_count} members · created ${formatTimestampDetail(group.created_at)}`}
+                onOpen={() => router.push(userFamilyGroupDetailHref(profilePath, group.id))}
+              />
             ))}
           </div>
         </div>
       ) : null}
 
-      {payload.memberships.length > 0 ? (
-        <div className="space-y-3">
-          <p className={PROFILE_SECTION_TITLE_CLASS}>Memberships</p>
-          <div className="space-y-2">
+      {showMemberships && hasMemberships ? (
+        <div className="admin-user-family-groups-section__block space-y-2.5">
+          {filter === "all" ? (
+            <p className="admin-user-family-groups-section__label">Memberships</p>
+          ) : null}
+          <div className="admin-family-group-sub-card-grid">
             {payload.memberships.map((membership) => (
-              <div
+              <AdminFamilyGroupSubCard
                 key={membership.group_id}
-                className="rounded-[var(--radius-control)] border border-border/70 px-3 py-2.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-compact font-medium text-foreground">{membership.title}</p>
-                  <StatusBadge variant={statusVariant(membership.status)} showIcon={false}>
-                    {membership.role}
-                  </StatusBadge>
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {membership.member_count} members
-                  {membership.badge_label ? ` · ${membership.badge_label}` : ""} · joined{" "}
-                  {formatTimestampDetail(membership.joined_at)}
-                </p>
-              </div>
+                group={membership}
+                badgeLabel={membership.role}
+                badgeKind={membership.role === "head" ? "head" : "status"}
+                badgeVariant={roleVariant(membership.role)}
+                meta={`${membership.member_count} members${
+                  membership.badge_label ? ` · ${membership.badge_label}` : ""
+                } · joined ${formatTimestampDetail(membership.joined_at)}`}
+                onOpen={() => router.push(userFamilyGroupDetailHref(profilePath, membership.group_id))}
+              />
             ))}
           </div>
         </div>

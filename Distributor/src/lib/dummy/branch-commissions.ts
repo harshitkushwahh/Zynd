@@ -1,3 +1,5 @@
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
+
 export type BranchCommissionPeriod = "mtd" | "last-month";
 
 export type BranchDistributorCommissionRow = {
@@ -187,7 +189,7 @@ export const DUMMY_BRANCH_COMMISSION_HOLDS: BranchCommissionHoldEntry[] = [
     distributorName: "Vikram Singh",
     entryType: "Hold",
     amount: 12_850,
-    reason: "Distributor onboarding incomplete — EUIN validation",
+    reason: ZYND_MITRA_COPY.onboardingIncomplete,
     txnRef: "—",
     settlementStatus: "Pending",
     effectiveAt: "2026-07-22T09:00:00.000Z",

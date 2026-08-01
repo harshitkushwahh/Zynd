@@ -1,22 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Clock3, Layers3, XCircle } from "lucide-react";
 import type { SortDescriptor } from "react-aria-components";
 
 import {
-  paginateTableItems,
   Table,
+  useDistributorTablePagination,
 } from "@/components/application/table";
-import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
-import { DistributorPageShell } from "@/components/dashboard/distributor-page-shell";
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
+import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
+import {
+  getScopedOrders,
+  type DistributorOrdersListScope,
+} from "@/lib/distributor-operations-orders-scope";
+import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DUMMY_ORDERS } from "@/lib/dummy/orders";
-import type { OrderStatus } from "@/lib/dummy/types";
+import type { DistributorOrder, OrderStatus } from "@/lib/dummy/types";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";
@@ -24,7 +26,6 @@ import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { orderStatusVariant } from "@/lib/status-meta";
 import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 10;
 const TABLE_MIN_CLASS = "min-w-[var(--table-min-width-4xl)]";
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
@@ -34,51 +35,83 @@ const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: "Failed", label: "Failed" },
 ];
 
+type OrderTypeFilter = DistributorOrder["orderType"] | "all";
+
+const ORDER_TYPE_OPTIONS: Array<{ value: OrderTypeFilter; label: string }> = [
+  { value: "Purchase", label: "Purchase" },
+  { value: "Redeem", label: "Redeem" },
+  { value: "Switch", label: "Switch" },
+];
+
 type OrdersPanelProps = DistributorPageConfig & {
   layout?: "page" | "table";
+  operationsListScope?: DistributorOrdersListScope;
+  /** @deprecated Use operationsListScope */
+  ordersListScope?: DistributorOrdersListScope;
 };
 
 export function OrdersPanel({
-  iconName,
-  title,
-  description,
-  layout = "page",
+  layout = "table",
+  operationsListScope,
+  ordersListScope,
 }: OrdersPanelProps) {
+  const listScope = operationsListScope ?? ordersListScope ?? "your-book";
+  const sourceOrders = useMemo(() => getScopedOrders(listScope), [listScope]);
+
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
-  const [page, setPage] = useState(1);
+  const [typeFilter, setTypeFilter] = useState<OrderTypeFilter>("all");
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
     column: "createdAt",
     direction: "descending",
   });
 
   const filtered = useMemo(() => {
-    if (statusFilter === "all") return DUMMY_ORDERS;
-    return DUMMY_ORDERS.filter((order) => order.status === statusFilter);
-  }, [statusFilter]);
+    return sourceOrders.filter((order) => {
+      if (statusFilter !== "all" && order.status !== statusFilter) return false;
+      if (typeFilter !== "all" && order.orderType !== typeFilter) return false;
+      return distributorTableSearchMatch(
+        searchQuery,
+        order.orderRef,
+        order.clientCode,
+        order.investorEmailMasked,
+        order.schemeName,
+        order.orderType,
+      );
+    });
+  }, [searchQuery, sourceOrders, statusFilter, typeFilter]);
 
   const sorted = useMemo(
     () => sortByDescriptor(filtered, sortDescriptor),
     [filtered, sortDescriptor],
   );
 
-  const { pageItems, totalPages, safePage } = useMemo(
-    () => paginateTableItems(sorted, page, PAGE_SIZE),
-    [sorted, page],
-  );
+  const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
-  const pendingCount = DUMMY_ORDERS.filter(
-    (o) => o.status === "Pending" || o.status === "Processing",
-  ).length;
-  const completedCount = DUMMY_ORDERS.filter((o) => o.status === "Completed").length;
-  const failedCount = DUMMY_ORDERS.filter((o) => o.status === "Failed").length;
+  const clearDisabled =
+    statusFilter === "all" && typeFilter === "all" && searchQuery.trim() === "";
 
   const toolbar = (
     <DistributorTableToolbar
       onClearAll={() => {
+        setSearchQuery("");
         setStatusFilter("all");
+        setTypeFilter("all");
         setPage(1);
       }}
-      clearDisabled={statusFilter === "all"}
+      clearDisabled={clearDisabled}
+      search={
+        <DistributorTableSearchCard
+          variant="card"
+          value={searchQuery}
+          onChange={(value) => {
+            setSearchQuery(value);
+            setPage(1);
+          }}
+          placeholder="Search orders…"
+          aria-label="Search orders"
+        />
+      }
     >
       <StatusFilterSelect
         label="Status"
@@ -89,23 +122,28 @@ export function OrdersPanel({
           setPage(1);
         }}
       />
+      <StatusFilterSelect
+        label="Order type"
+        value={typeFilter}
+        options={ORDER_TYPE_OPTIONS}
+        onValueChange={(value) => {
+          setTypeFilter(value);
+          setPage(1);
+        }}
+      />
     </DistributorTableToolbar>
   );
 
   const table = wrapDistributorTableBody(
     <Table
-      aria-label="Orders"
+      aria-label={listScope === "all" ? "All orders" : "Your orders"}
       className={TABLE_MIN_CLASS}
       sortDescriptor={sortDescriptor}
       onSortChange={(descriptor) => {
         setSortDescriptor(descriptor);
         setPage(1);
       }}
-      pagination={{
-        page: safePage,
-        totalPages,
-        onPageChange: setPage,
-      }}
+      pagination={pagination}
     >
       <Table.Header>
         <Table.Head id="orderRef" label="Order" isRowHeader allowsSorting />
@@ -151,58 +189,18 @@ export function OrdersPanel({
     </Table>,
   );
 
-  if (layout === "table") {
-    return (
-      <DistributorTableOnlyShell
-        toolbar={toolbar}
-        isEmpty={sorted.length === 0}
-        emptyTitle="No orders match your filters"
-        emptyDescription="Adjust the status filter or clear all to reset."
-      >
-        {table}
-      </DistributorTableOnlyShell>
-    );
+  if (layout === "page") {
+    return null;
   }
 
   return (
-    <DistributorPageShell
-      iconName={iconName}
-      title={title}
-      description={description}
+    <DistributorTableOnlyShell
+      toolbar={toolbar}
       isEmpty={sorted.length === 0}
       emptyTitle="No orders match your filters"
-      emptyDescription="Adjust the status filter or clear all to reset."
-      metrics={
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <DistributorMetricCard
-            icon={Layers3}
-            label="Total orders"
-            value={String(DUMMY_ORDERS.length)}
-            hint="In demo book"
-          />
-          <DistributorMetricCard
-            icon={Clock3}
-            label="Open"
-            value={String(pendingCount)}
-            hint="Pending or processing"
-          />
-          <DistributorMetricCard
-            icon={CheckCircle2}
-            label="Completed"
-            value={String(completedCount)}
-            hint="Successfully processed"
-          />
-          <DistributorMetricCard
-            icon={XCircle}
-            label="Failed"
-            value={String(failedCount)}
-            hint="Needs follow-up"
-          />
-        </div>
-      }
-      toolbar={toolbar}
+      emptyDescription="Adjust filters, search, or clear all to reset."
     >
       {table}
-    </DistributorPageShell>
+    </DistributorTableOnlyShell>
   );
 }

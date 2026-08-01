@@ -1,12 +1,14 @@
 "use client";
 
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
+import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import type { InvestorTableFilters } from "@/components/investors/investor-filters";
 import type {
   InvestorComplianceStatus,
   InvestorInvestmentStatus,
   InvestorOnboardingStatus,
+  InvestorServiceModel,
   InvestorType,
 } from "@/lib/dummy/types";
 
@@ -30,12 +32,18 @@ const TYPE_OPTIONS: Array<{ value: InvestorType; label: string }> = [
   { value: "Non Resident Individual", label: "NRI" },
 ];
 
+const SERVICE_MODEL_OPTIONS: Array<{ value: InvestorServiceModel; label: string }> = [
+  { value: "pm", label: "PM" },
+  { value: "diy", label: "DIY" },
+];
+
 type InvestorTableToolbarProps = {
   filters: InvestorTableFilters;
   onChange: (filters: InvestorTableFilters) => void;
   onClearAll: () => void;
   clearDisabled: boolean;
   showTypeFilter: boolean;
+  showServiceModelFilter?: boolean;
 };
 
 export function InvestorTableToolbar({
@@ -44,9 +52,22 @@ export function InvestorTableToolbar({
   onClearAll,
   clearDisabled,
   showTypeFilter,
+  showServiceModelFilter = false,
 }: InvestorTableToolbarProps) {
   return (
-    <DistributorTableToolbar onClearAll={onClearAll} clearDisabled={clearDisabled}>
+    <DistributorTableToolbar
+      onClearAll={onClearAll}
+      clearDisabled={clearDisabled}
+      search={
+        <DistributorTableSearchCard
+          variant="card"
+          value={filters.search}
+          onChange={(search) => onChange({ ...filters, search })}
+          placeholder="Search clients…"
+          aria-label="Search clients"
+        />
+      }
+    >
       <StatusFilterSelect
         label="Onboarding"
         value={filters.onboarding}
@@ -71,6 +92,14 @@ export function InvestorTableToolbar({
           value={filters.investorType}
           options={TYPE_OPTIONS}
           onValueChange={(investorType) => onChange({ ...filters, investorType })}
+        />
+      ) : null}
+      {showServiceModelFilter ? (
+        <StatusFilterSelect
+          label="Channel"
+          value={filters.serviceModel}
+          options={SERVICE_MODEL_OPTIONS}
+          onValueChange={(serviceModel) => onChange({ ...filters, serviceModel })}
         />
       ) : null}
     </DistributorTableToolbar>

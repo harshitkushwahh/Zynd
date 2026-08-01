@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { MoreHorizontal, RefreshCw } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { RiskProfileAssessmentDetailDialog } from "@/components/risk-profile/risk-profile-assessment-detail-dialog";
 import { RiskProfileUserCell } from "@/components/risk-profile/risk-profile-user-cell";
 import { RiskProfileUserReportsDialog } from "@/components/risk-profile/risk-profile-user-reports-dialog";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -17,7 +19,7 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   getOffsetPage,
 } from "@/components/ui/admin-table";
 import { Badge } from "@/components/ui/badge";
@@ -28,19 +30,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getErrorMessage } from "@/lib/errors";
 import { downloadAdminRiskProfileReport } from "@/lib/risk-profile-pdf-download";
 import { fetchUserRiskProfiles, type UserRiskProfileItem } from "@/lib/risk-profile-admin-api";
+import { cn } from "@/lib/utils";
 
-const TIERS = ["secure", "conservative", "moderate", "growth", "aggressive"];
+const ALL = "all";
+
+const TIER_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All tiers" },
+  { value: "secure", label: "Secure" },
+  { value: "conservative", label: "Conservative" },
+  { value: "moderate", label: "Moderate" },
+  { value: "growth", label: "Growth" },
+  { value: "aggressive", label: "Aggressive" },
+];
 
 function tierBadgeVariant(tier: string) {
   if (tier === "aggressive" || tier === "growth") return "warning" as const;
@@ -50,25 +55,30 @@ function tierBadgeVariant(tier: string) {
 
 export function RiskProfileUsersPanel() {
   const [items, setItems] = useState<UserRiskProfileItem[]>([]);
-  const [tier, setTier] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [tier, setTier] = useState(ALL);
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reportsUser, setReportsUser] = useState<UserRiskProfileItem | null>(null);
-  const [detailState, setDetailState] = useState<{ user: UserRiskProfileItem; assessmentId: string } | null>(null);
+  const [detailState, setDetailState] = useState<{
+    user: UserRiskProfileItem;
+    assessmentId: string;
+  } | null>(null);
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const result = await fetchUserRiskProfiles({
-        tier: tier === "all" ? undefined : tier,
-        limit: ADMIN_TABLE_PAGE_SIZE,
+        tier: tier === ALL ? undefined : tier,
+        limit: pageSize,
         offset,
       });
       setItems(result.items);
-      setHasMore(result.items.length === ADMIN_TABLE_PAGE_SIZE);
+      setHasMore(result.items.length === pageSize);
     } catch (err) {
       setItems([]);
       setHasMore(false);
@@ -76,16 +86,24 @@ export function RiskProfileUsersPanel() {
     } finally {
       setLoading(false);
     }
-  }, [tier, offset]);
+  }, [tier, offset, pageSize]);
 
   useEffect(() => {
     void loadProfiles();
   }, [loadProfiles]);
 
-  const handleTierChange = (value: string | null) => {
-    setTier(value ?? "all");
-    setOffset(0);
-  };
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return items;
+    return items.filter((item) =>
+      [item.display_name, item.email, item.client_id, item.tier]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [items, search]);
+
+  const showSkeleton = loading && items.length === 0;
 
   const openSingleReport = (item: UserRiskProfileItem) => {
     setDetailState({ user: item, assessmentId: item.assessment_id });
@@ -97,64 +115,81 @@ export function RiskProfileUsersPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <AdminSectionTitle>User risk profile</AdminSectionTitle>
-        <Select value={tier} onValueChange={handleTierChange}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter tier" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All tiers</SelectItem>
-            {TIERS.map((item) => (
-              <SelectItem key={item} value={item}>
-                {item}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by name, email, or ID"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={tier}
+            onValueChange={(value) => {
+              setTier(value);
+              setOffset(0);
+            }}
+            options={TIER_FILTER_OPTIONS}
+            placeholder="Tier"
+            className="min-w-select-sm"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void loadProfiles()}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
+        </div>
       </div>
 
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
-      <AdminDataTable minWidth="lg">
+      <AdminDataTable
+        minWidth="lg"
+        footer={
+          <AdminTablePagination
+            page={getOffsetPage(offset, pageSize)}
+            hasPrevious={offset > 0}
+            hasNext={hasMore}
+            disabled={loading}
+            currentPageCount={filteredItems.length}
+            hasMore={hasMore}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setOffset(0);
+            }}
+            onPrevious={() => setOffset((value) => Math.max(0, value - pageSize))}
+            onNext={() => setOffset((value) => value + pageSize)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             <AdminTableHeadCell>User</AdminTableHeadCell>
             <AdminTableHeadCell>Reports</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Latest score</AdminTableHeadCell>
             <AdminTableHeadCell>Latest tier</AdminTableHeadCell>
             <AdminTableHeadCell>Last completed</AdminTableHeadCell>
-            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows
-            colSpan={6}
-            loading={loading}
-            isEmpty={items.length === 0}
-            emptyMessage="No completed risk profiles yet."
-          >
-            {items.map((item) => {
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={6} />
+          ) : filteredItems.length === 0 ? (
+            <AdminTableStateRow colSpan={6}>
+              {items.length === 0
+                ? "No completed risk profiles yet."
+                : "No users match your search."}
+            </AdminTableStateRow>
+          ) : (
+            filteredItems.map((item) => {
               const isGroup = item.assessment_count > 1;
               return (
                 <AdminTableRow key={item.user_id}>
-                  <AdminTableCell>
-                    <RiskProfileUserCell user={item} />
-                  </AdminTableCell>
-                  <AdminTableCell>
-                    <Badge variant={isGroup ? "secondary" : "outline"}>
-                      {item.assessment_count} report{item.assessment_count === 1 ? "" : "s"}
-                    </Badge>
-                  </AdminTableCell>
-                  <AdminTableCell className="text-right tabular-nums">{item.score}</AdminTableCell>
-                  <AdminTableCell>
-                    <StatusBadge variant={tierBadgeVariant(item.tier)} showIcon={false} className="normal-case capitalize">
-                      {item.tier}
-                    </StatusBadge>
-                  </AdminTableCell>
-                  <AdminTableCell className="text-muted-foreground">
-                    {item.updated_at ? new Date(item.updated_at).toLocaleString() : "No data"}
-                  </AdminTableCell>
                   <AdminTableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -166,10 +201,14 @@ export function RiskProfileUsersPanel() {
                       />
                       <DropdownMenuContent align="end">
                         {isGroup ? (
-                          <DropdownMenuItem onClick={() => setReportsUser(item)}>View reports</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setReportsUser(item)}>
+                            View reports
+                          </DropdownMenuItem>
                         ) : (
                           <>
-                            <DropdownMenuItem onClick={() => openSingleReport(item)}>View report</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openSingleReport(item)}>
+                              View report
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void handleDownloadReport(item)}>
                               Download report
                             </DropdownMenuItem>
@@ -178,21 +217,33 @@ export function RiskProfileUsersPanel() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </AdminTableCell>
+                  <AdminTableCell>
+                    <RiskProfileUserCell user={item} />
+                  </AdminTableCell>
+                  <AdminTableCell>
+                    <Badge variant={isGroup ? "secondary" : "outline"}>
+                      {item.assessment_count} report{item.assessment_count === 1 ? "" : "s"}
+                    </Badge>
+                  </AdminTableCell>
+                  <AdminTableCell className="text-right tabular-nums">{item.score}</AdminTableCell>
+                  <AdminTableCell>
+                    <StatusBadge
+                      variant={tierBadgeVariant(item.tier)}
+                      showIcon={false}
+                      className="normal-case capitalize"
+                    >
+                      {item.tier}
+                    </StatusBadge>
+                  </AdminTableCell>
+                  <AdminTableCell className="text-muted-foreground">
+                    {item.updated_at ? new Date(item.updated_at).toLocaleString() : "No data"}
+                  </AdminTableCell>
                 </AdminTableRow>
               );
-            })}
-          </AdminTableRows>
+            })
+          )}
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={getOffsetPage(offset)}
-        hasPrevious={offset > 0}
-        hasNext={hasMore}
-        disabled={loading}
-        onPrevious={() => setOffset((value) => Math.max(0, value - ADMIN_TABLE_PAGE_SIZE))}
-        onNext={() => setOffset((value) => value + ADMIN_TABLE_PAGE_SIZE)}
-      />
 
       <RiskProfileUserReportsDialog
         open={Boolean(reportsUser)}

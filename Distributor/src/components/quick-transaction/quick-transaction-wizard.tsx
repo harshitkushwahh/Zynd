@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+
+import { useWizardKeyboardNavigation } from "@/hooks/use-wizard-keyboard-navigation";
 import {
   ArrowLeftRight,
   Ban,
@@ -23,11 +25,16 @@ import type { Selection, SortDescriptor } from "react-aria-components";
 
 import { paginateTableItems, Table, TableCard } from "@/components/application/table";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
-import { DistributorSelectionBadge } from "@/components/dashboard/distributor-selection-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { QuickTransactionSectionHeader } from "@/components/quick-transaction/quick-transaction-section-header";
+import { QuickTransactionWizardSkeleton } from "@/components/quick-transaction/quick-transaction-wizard-skeleton";
+import type { QuickTransactionWizardStepId } from "@/components/quick-transaction/quick-transaction-wizard-types";
+import { useQuickTransactionPageReveal } from "@/components/quick-transaction/use-quick-transaction-page-reveal";
+import { useQuickTransactionStepSwitch } from "@/components/quick-transaction/use-quick-transaction-step-switch";
+import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { amountInWordsInr } from "@/lib/amount-in-words";
 import { useDistributorNotifications } from "@/contexts/distributor-notifications-context";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
@@ -43,7 +50,7 @@ import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { onboardingStatusVariant } from "@/lib/status-meta";
 import { cn } from "@/lib/utils";
 
-type WizardStepId = "type" | "investors" | "funds" | "amount" | "review";
+type WizardStepId = QuickTransactionWizardStepId;
 
 const WIZARD_STEPS: Array<{ id: WizardStepId; label: string; description: string; icon: LucideIcon }> = [
   {
@@ -118,8 +125,10 @@ const PAYMENT_METHODS = [
   { id: "netbanking", label: "Net banking" },
 ] as const;
 
-/** Smaller page size so wizard tables show pagination with demo data */
-const QUICK_TXN_WIZARD_TABLE_PAGE_SIZE = 5;
+/** Investor table shows four rows per page in the wizard */
+const QUICK_TXN_INVESTOR_TABLE_PAGE_SIZE = 4;
+/** Fund table shows four rows per page in the wizard */
+const QUICK_TXN_FUND_TABLE_PAGE_SIZE = 4;
 
 function stepIndex(step: WizardStepId): number {
   return WIZARD_STEPS.findIndex((item) => item.id === step);
@@ -141,7 +150,8 @@ export function QuickTransactionWizard() {
   const router = useRouter();
   const { submitForInvestorConfirmation } = useDistributorTxnRequests();
   const { addNotification } = useDistributorNotifications();
-  const [step, setStep] = useState<WizardStepId>("type");
+  const { showSkeleton: showPageSkeleton } = useQuickTransactionPageReveal();
+  const { step, displayStep, goToStep, isSwitching, showPanelSkeleton } = useQuickTransactionStepSwitch();
   const [txnType, setTxnType] = useState<QuickTxnType>("one-time");
   const [investorSearch, setInvestorSearch] = useState("");
   const [selectedInvestorKeys, setSelectedInvestorKeys] = useState<Selection>(new Set());
@@ -194,7 +204,7 @@ export function QuickTransactionWizard() {
   );
 
   const { pageItems, totalPages, safePage } = useMemo(
-    () => paginateTableItems(investorsSorted, investorPage, QUICK_TXN_WIZARD_TABLE_PAGE_SIZE),
+    () => paginateTableItems(investorsSorted, investorPage, QUICK_TXN_INVESTOR_TABLE_PAGE_SIZE),
     [investorsSorted, investorPage],
   );
 
@@ -213,7 +223,7 @@ export function QuickTransactionWizard() {
     totalPages: fundTotalPages,
     safePage: fundSafePage,
   } = useMemo(
-    () => paginateTableItems(fundsSorted, fundPage, QUICK_TXN_WIZARD_TABLE_PAGE_SIZE),
+    () => paginateTableItems(fundsSorted, fundPage, QUICK_TXN_FUND_TABLE_PAGE_SIZE),
     [fundsSorted, fundPage],
   );
 
@@ -235,24 +245,24 @@ export function QuickTransactionWizard() {
     amountNumber <= selectedScheme.maxAmount;
 
   const canContinue = (() => {
-    if (step === "type") return txnType === "one-time" || txnType === "sip";
-    if (step === "investors") return selectedInvestorIds.length > 0;
-    if (step === "funds") return Boolean(selectedSchemeId);
-    if (step === "amount") return amountValid && paymentMethod.length > 0 && sipInstallmentsValid;
+    if (displayStep === "type") return txnType === "one-time" || txnType === "sip";
+    if (displayStep === "investors") return selectedInvestorIds.length > 0;
+    if (displayStep === "funds") return Boolean(selectedSchemeId);
+    if (displayStep === "amount") return amountValid && paymentMethod.length > 0 && sipInstallmentsValid;
     return true;
   })();
 
   const goNext = () => {
-    const idx = stepIndex(step);
+    const idx = stepIndex(displayStep);
     if (idx < WIZARD_STEPS.length - 1) {
-      setStep(WIZARD_STEPS[idx + 1].id);
+      goToStep(WIZARD_STEPS[idx + 1].id);
     }
   };
 
   const goBack = () => {
-    const idx = stepIndex(step);
+    const idx = stepIndex(displayStep);
     if (idx > 0) {
-      setStep(WIZARD_STEPS[idx - 1].id);
+      goToStep(WIZARD_STEPS[idx - 1].id);
     }
   };
 
@@ -285,19 +295,40 @@ export function QuickTransactionWizard() {
     router.push("/dashboard");
   };
 
-  const currentStepIndex = stepIndex(step);
+  useWizardKeyboardNavigation({
+    onContinue: displayStep === "review" ? handleSubmit : goNext,
+    onBack: goBack,
+    canContinue: canContinue && !isSwitching,
+    canBack: displayStep !== "type" && !isSwitching,
+  });
+
+  const currentStepIndex = stepIndex(displayStep);
   const journeyProgressPct = Math.round(((currentStepIndex + 1) / WIZARD_STEPS.length) * 100);
+
+  if (showPageSkeleton) {
+    return (
+      <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
+        <DistributorPageHeader title="Quick transaction" description="" />
+        <QuickTransactionWizardSkeleton panelStep={displayStep} />
+      </div>
+    );
+  }
 
   return (
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
-      <DistributorPageHeader
-        icon={Zap}
-        title="Quick transaction"
-        description="Place a demo lumpsum or SIP across investors in a guided flow."
-      />
+      <DistributorPageHeader title="Quick transaction" description="" />
 
-      <div className="quick-txn-wizard">
-        <nav className="quick-txn-wizard__journey" aria-label="Order journey">
+      <div
+        className={cn(
+          "quick-txn-wizard distributor-wizard-page--enter",
+          isSwitching && "quick-txn-wizard--switching",
+        )}
+      >
+        <nav
+          className="quick-txn-wizard__journey"
+          aria-label="Order journey"
+          aria-busy={isSwitching}
+        >
           <div className="quick-txn-journey-header">
             <div>
               <p className="quick-txn-journey-header__title">Order journey</p>
@@ -320,7 +351,7 @@ export function QuickTransactionWizard() {
           <ol className="quick-txn-journey-steps">
             {WIZARD_STEPS.map((item, index) => {
               const done = index < currentStepIndex;
-              const active = item.id === step;
+              const active = item.id === displayStep;
               const upcoming = index > currentStepIndex;
               const StepIcon = item.icon;
               const navigable = index <= currentStepIndex;
@@ -354,7 +385,7 @@ export function QuickTransactionWizard() {
                     disabled={!navigable}
                     aria-current={active ? "step" : undefined}
                     onClick={() => {
-                      if (navigable) setStep(item.id);
+                      if (navigable) goToStep(item.id);
                     }}
                   >
                     <span className="quick-txn-journey-step__icon" aria-hidden>
@@ -377,10 +408,17 @@ export function QuickTransactionWizard() {
         </nav>
 
         <div className="quick-txn-wizard__panel">
+          {showPanelSkeleton ? (
+            <QuickTransactionWizardSkeleton panelStep={displayStep} panelOnly />
+          ) : (
+            <div key={step} className="quick-txn-wizard__panel-layer">
           {step === "type" ? (
             <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">Choose transaction type</h2>
-              <p className="quick-txn-wizard__section-desc">One time and SIP are available in this demo flow.</p>
+              <QuickTransactionSectionHeader
+                title="Choose transaction type"
+                helpText="One time and SIP are available in this demo flow."
+                helpAriaLabel="Transaction type guidance"
+              />
               <div className="quick-txn-type-grid">
                 {TXN_TYPE_CARDS.map((card) => {
                   const Icon = card.icon;
@@ -397,6 +435,11 @@ export function QuickTransactionWizard() {
                         card.disabled && "quick-txn-type-card--disabled",
                       )}
                     >
+                      {selected ? (
+                        <span className="quick-txn-type-card__check" aria-hidden>
+                          <Check className="size-3.5" strokeWidth={3} />
+                        </span>
+                      ) : null}
                       <span className="quick-txn-type-card__icon">
                         {card.disabled ? (
                           <Ban className="size-5 text-muted-foreground/60" strokeWidth={2} />
@@ -415,17 +458,20 @@ export function QuickTransactionWizard() {
 
           {step === "investors" ? (
             <div className="quick-txn-wizard__section">
-              <div className="quick-txn-wizard__section-head">
-                <h2 className="quick-txn-wizard__section-title">Select investor</h2>
-                <DistributorSelectionBadge variant={selectedInvestors[0] ? "selected" : "empty"}>
-                  {selectedInvestors[0]
-                    ? `1 investor selected · ${selectedInvestors[0].clientCode}`
-                    : "No investor selected"}
-                </DistributorSelectionBadge>
-              </div>
-              <p className="quick-txn-wizard__section-desc">
-                Search your onboarded book and select one investor.
-              </p>
+              <QuickTransactionSectionHeader
+                title="Select investor"
+                helpText="Search your onboarded book and select one investor."
+                helpAriaLabel="Investor selection guidance"
+                trailing={
+                  <StatusBadge variant={selectedInvestors[0] ? "info" : "neutral"}>
+                    {selectedInvestors[0]
+                      ? selectedInvestors[0].clientCode
+                        ? `1 investor selected · ${selectedInvestors[0].clientCode}`
+                        : "1 investor selected"
+                      : "No investor selected"}
+                  </StatusBadge>
+                }
+              />
               <div className="quick-txn-investor-search">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -435,7 +481,7 @@ export function QuickTransactionWizard() {
                     setInvestorPage(1);
                   }}
                   placeholder="Search client code, email, PAN, mobile"
-                  className="h-10 w-full pl-9"
+                  className="h-9 w-full pl-9"
                   aria-label="Search investors"
                 />
               </div>
@@ -445,6 +491,7 @@ export function QuickTransactionWizard() {
                   size="md"
                   className="min-w-[var(--table-min-width-3xl)]"
                   selectionMode="single"
+                  selectionBehavior="replace"
                   selectedKeys={selectedInvestorKeys}
                   onSelectionChange={setSelectedInvestorKeys}
                   sortDescriptor={sortDescriptor}
@@ -473,23 +520,22 @@ export function QuickTransactionWizard() {
                   </Table.Header>
                   <Table.Body items={pageItems}>
                     {(investor) => (
-                      <Table.Row id={investor.id} size="md">
-                        <Table.Cell size="md" className="font-mono text-compact font-medium">
+                      <Table.Row id={investor.id}>
+                        <Table.Cell className="font-mono text-compact font-medium">
                           {investor.clientCode}
                         </Table.Cell>
-                        <Table.Cell size="md" className="text-muted-foreground">
+                        <Table.Cell className="text-muted-foreground">
                           {investor.emailMasked}
                         </Table.Cell>
-                        <Table.Cell size="md" className="text-compact">
+                        <Table.Cell className="text-compact">
                           {investor.investorType}
                         </Table.Cell>
-                        <Table.Cell size="md">
+                        <Table.Cell>
                           <StatusBadge variant={onboardingStatusVariant(investor.onboardingStatus)}>
                             {investor.onboardingStatus}
                           </StatusBadge>
                         </Table.Cell>
                         <Table.Cell
-                          size="md"
                           className={cn("text-compact text-muted-foreground", DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS)}
                         >
                           {formatDistributorDate(investor.createdAt)}
@@ -504,20 +550,20 @@ export function QuickTransactionWizard() {
 
           {step === "funds" ? (
             <div className="quick-txn-wizard__section">
-              <div className="quick-txn-wizard__section-head">
-                <h2 className="quick-txn-wizard__section-title">Select fund</h2>
-                <DistributorSelectionBadge
-                  variant={selectedScheme ? "selected" : "empty"}
-                  className="max-w-[min(100%,14rem)] truncate"
-                >
-                  {selectedScheme
-                    ? `1 fund selected · ${selectedScheme.irn}`
-                    : "No fund selected"}
-                </DistributorSelectionBadge>
-              </div>
-              <p className="quick-txn-wizard__section-desc">
-                Pick a scheme for this {txnType === "sip" ? "SIP" : "lumpsum"}.
-              </p>
+              <QuickTransactionSectionHeader
+                title="Select fund"
+                helpText={`Pick a scheme for this ${txnType === "sip" ? "SIP" : "lumpsum"}.`}
+                helpAriaLabel="Fund selection guidance"
+                trailing={
+                  <StatusBadge variant={selectedScheme ? "info" : "neutral"}>
+                    {selectedScheme
+                      ? selectedScheme.irn
+                        ? `1 fund selected · ${selectedScheme.irn}`
+                        : "1 fund selected"
+                      : "No fund selected"}
+                  </StatusBadge>
+                }
+              />
               <div className="quick-txn-investor-search">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -537,6 +583,7 @@ export function QuickTransactionWizard() {
                   size="md"
                   className="min-w-[var(--table-min-width-3xl)]"
                   selectionMode="single"
+                  selectionBehavior="replace"
                   selectedKeys={selectedSchemeKeys}
                   onSelectionChange={setSelectedSchemeKeys}
                   sortDescriptor={fundSortDescriptor}
@@ -571,26 +618,26 @@ export function QuickTransactionWizard() {
                   </Table.Header>
                   <Table.Body items={fundPageItems}>
                     {(scheme) => (
-                      <Table.Row id={scheme.id} size="md">
-                        <Table.Cell size="md">
+                      <Table.Row id={scheme.id}>
+                        <Table.Cell>
                           <div className="flex min-w-0 items-center gap-2.5">
                             <SchemeLogo scheme={scheme} compact />
                             <span className="min-w-0 truncate text-compact font-medium">{scheme.name}</span>
                           </div>
                         </Table.Cell>
-                        <Table.Cell size="md" className="text-compact text-muted-foreground">
+                        <Table.Cell className="text-compact text-muted-foreground">
                           {scheme.amc}
                         </Table.Cell>
-                        <Table.Cell size="md" className="text-compact">
+                        <Table.Cell className="text-compact">
                           {scheme.category}
                         </Table.Cell>
-                        <Table.Cell size="md" className="font-mono text-micro text-muted-foreground">
+                        <Table.Cell className="font-mono text-micro text-muted-foreground">
                           {scheme.irn}
                         </Table.Cell>
-                        <Table.Cell size="md" className="text-right text-compact tabular-nums">
+                        <Table.Cell className="text-right text-compact tabular-nums">
                           {formatAum(scheme.minAmount)}
                         </Table.Cell>
-                        <Table.Cell size="md" className="text-right text-compact tabular-nums">
+                        <Table.Cell className="text-right text-compact tabular-nums">
                           {formatAum(scheme.maxAmount)}
                         </Table.Cell>
                       </Table.Row>
@@ -603,12 +650,15 @@ export function QuickTransactionWizard() {
 
           {step === "amount" && selectedScheme ? (
             <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">Amount & payment</h2>
-              <p className="quick-txn-wizard__section-desc">
-                {txnType === "sip"
-                  ? "Enter installment amount, number of SIP installments, and payment method."
-                  : "Enter the transaction amount and payment method."}
-              </p>
+              <QuickTransactionSectionHeader
+                title="Amount & payment"
+                helpText={
+                  txnType === "sip"
+                    ? "Enter installment amount, number of SIP installments, and payment method."
+                    : "Enter the transaction amount and payment method."
+                }
+                helpAriaLabel="Amount and payment guidance"
+              />
 
               <div className="quick-txn-scheme-summary quick-txn-scheme-summary--compact">
                 <SchemeLogo scheme={selectedScheme} compact />
@@ -674,7 +724,6 @@ export function QuickTransactionWizard() {
                         <Button
                           key={method.id}
                           type="button"
-                          size="sm"
                           variant={paymentMethod === method.id ? "default" : "outline"}
                           className="quick-txn-payment-method-btn"
                           onClick={() => setPaymentMethod(method.id)}
@@ -703,11 +752,12 @@ export function QuickTransactionWizard() {
 
           {step === "review" ? (
             <div className="quick-txn-wizard__section">
-              <div className="quick-txn-wizard__section-head">
-                <h2 className="quick-txn-wizard__section-title">Review</h2>
-                <DistributorSelectionBadge variant="selected">Ready to submit</DistributorSelectionBadge>
-              </div>
-              <p className="quick-txn-wizard__section-desc">Confirm details before submitting (demo only).</p>
+              <QuickTransactionSectionHeader
+                title="Review"
+                helpText="Confirm details before submitting (demo only)."
+                helpAriaLabel="Review step guidance"
+                trailing={<StatusBadge variant="success">Ready to submit</StatusBadge>}
+              />
 
               <div className="quick-txn-review">
                 <div className="quick-txn-review-hero">
@@ -800,19 +850,26 @@ export function QuickTransactionWizard() {
               </div>
             </div>
           ) : null}
+            </div>
+          )}
 
           <div className="quick-txn-wizard__footer">
-            <Button type="button" variant="outline" onClick={goBack} disabled={step === "type"}>
+            <DistributorActionButton
+              type="button"
+              variant="outline"
+              onClick={goBack}
+              disabled={displayStep === "type" || isSwitching}
+            >
               Back
-            </Button>
-            {step === "review" ? (
-              <Button type="button" onClick={handleSubmit} disabled={!canContinue}>
+            </DistributorActionButton>
+            {displayStep === "review" ? (
+              <DistributorActionButton type="button" onClick={handleSubmit} disabled={!canContinue || isSwitching}>
                 Submit transaction
-              </Button>
+              </DistributorActionButton>
             ) : (
-              <Button type="button" onClick={goNext} disabled={!canContinue}>
+              <DistributorActionButton type="button" onClick={goNext} disabled={!canContinue || isSwitching}>
                 Continue
-              </Button>
+              </DistributorActionButton>
             )}
           </div>
         </div>

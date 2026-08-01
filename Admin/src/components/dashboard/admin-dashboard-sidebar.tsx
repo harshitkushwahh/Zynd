@@ -1,14 +1,16 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ChevronDown, ArrowUpRight } from "lucide-react";
+import { ChevronDown, ArrowUpRight, Pencil } from "lucide-react";
 
+import { AdminSidebarBrand } from "@/components/dashboard/admin-sidebar-brand";
+import { AdminSidebarUtilityNav } from "@/components/dashboard/admin-sidebar-utility-nav";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -16,8 +18,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
@@ -27,49 +27,22 @@ import {
   isAdminRouteActive,
   type AdminNavChildItem,
   type AdminNavDropdown,
+  type AdminNavGroup,
   type AdminNavRoute,
 } from "@/lib/admin-navigation";
 import { cn } from "@/lib/utils";
 
-function AdminSidebarBrand() {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
+const FOOTER_ROUTE_IDS = new Set(["settings"]);
 
-  return (
-    <Link
-      href="/dashboard"
-      className={cn(
-        "admin-sidebar-brand",
-        collapsed ? "admin-sidebar-brand--collapsed" : "admin-sidebar-brand--expanded",
-      )}
-      aria-label="ZYND Admin home"
-    >
-      {collapsed ? (
-        <Image
-          src="/zynda.png"
-          alt="ZYND"
-          width={32}
-          height={32}
-          className="size-8 object-contain object-center"
-          priority
-        />
-      ) : (
-        <Image
-          src="/zynda-h.png"
-          alt="ZYND Admin"
-          width={893}
-          height={242}
-          className="admin-sidebar-brand__logo-horizontal"
-          priority
-        />
-      )}
-    </Link>
-  );
+function filterGroupRoutes(group: AdminNavGroup): AdminNavGroup {
+  return {
+    ...group,
+    routes: group.routes.filter((route) => !FOOTER_ROUTE_IDS.has(route.id)),
+    trailingRoutes: group.trailingRoutes?.filter((route) => !FOOTER_ROUTE_IDS.has(route.id)),
+  };
 }
 
 function AdminSidebarNavItem({ route, active }: { route: AdminNavRoute; active: boolean }) {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
   const Icon = route.icon;
   const linkProps = route.external
     ? { target: "_blank" as const, rel: "noopener noreferrer" }
@@ -80,7 +53,7 @@ function AdminSidebarNavItem({ route, active }: { route: AdminNavRoute; active: 
       <SidebarMenuButton
         isActive={active}
         tooltip={route.label}
-        className="admin-sidebar-menu-button"
+        className={cn("admin-sidebar-menu-button", active && "admin-sidebar-menu-button--active")}
         render={
           route.external ? (
             <a href={route.href} {...linkProps} aria-current={active ? "page" : undefined} />
@@ -90,13 +63,9 @@ function AdminSidebarNavItem({ route, active }: { route: AdminNavRoute; active: 
         }
       >
         <Icon />
-        {!collapsed ? (
-          <>
-            <span>{route.label}</span>
-            {route.showTrailingArrow ? (
-              <ArrowUpRight className="ml-auto size-3.5 shrink-0 text-sidebar-foreground/50" />
-            ) : null}
-          </>
+        <span>{route.label}</span>
+        {route.showTrailingArrow ? (
+          <ArrowUpRight className="ml-auto size-3.5 shrink-0 text-sidebar-foreground/50" />
         ) : null}
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -113,7 +82,7 @@ function AdminSidebarChildItem({ item, active }: { item: AdminNavChildItem; acti
           size="sm"
           disabled
           tooltip={`${item.label} (not available yet)`}
-          className="admin-sidebar-menu-button h-7 cursor-not-allowed pl-6 opacity-50"
+          className="admin-sidebar-menu-button admin-sidebar-menu-button--child h-8 cursor-not-allowed pl-7 opacity-50"
         >
           <Icon className="size-3.5" />
           <span>{item.label}</span>
@@ -128,7 +97,10 @@ function AdminSidebarChildItem({ item, active }: { item: AdminNavChildItem; acti
         size="sm"
         isActive={active}
         tooltip={item.label}
-        className="admin-sidebar-menu-button h-7 pl-6"
+        className={cn(
+          "admin-sidebar-menu-button admin-sidebar-menu-button--child h-8 pl-7",
+          active && "admin-sidebar-menu-button--active",
+        )}
         render={<Link href={item.href} aria-current={active ? "page" : undefined} />}
       >
         <Icon className="size-3.5" />
@@ -141,11 +113,9 @@ function AdminSidebarChildItem({ item, active }: { item: AdminNavChildItem; acti
 function AdminSidebarDropdown({
   dropdown,
   pathname,
-  collapsed,
 }: {
   dropdown: AdminNavDropdown;
   pathname: string;
-  collapsed: boolean;
 }) {
   const sectionActive = isAdminDropdownActive(pathname, dropdown);
   const [open, setOpen] = useState(sectionActive);
@@ -155,26 +125,15 @@ function AdminSidebarDropdown({
     if (sectionActive) setOpen(true);
   }, [sectionActive]);
 
-  if (collapsed) {
-    return (
-      <AdminSidebarNavItem
-        route={{
-          id: dropdown.id,
-          label: dropdown.label,
-          href: dropdown.href,
-          icon: dropdown.icon,
-        }}
-        active={sectionActive}
-      />
-    );
-  }
-
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
         isActive={sectionActive}
         tooltip={dropdown.label}
-        className="admin-sidebar-menu-button"
+        className={cn(
+          "admin-sidebar-menu-button",
+          sectionActive && "admin-sidebar-menu-button--active",
+        )}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
@@ -188,7 +147,7 @@ function AdminSidebarDropdown({
         />
       </SidebarMenuButton>
       {open ? (
-        <SidebarMenu className="mt-0.5 gap-0.5 border-l border-sidebar-border/70 pl-2">
+        <SidebarMenu className="admin-sidebar-submenu mt-1 gap-0.5">
           {dropdown.children.map((child) => (
             <AdminSidebarChildItem
               key={child.id}
@@ -202,29 +161,52 @@ function AdminSidebarDropdown({
   );
 }
 
+function AdminSidebarSectionLabel({
+  label,
+  showEditAction = false,
+}: {
+  label: string;
+  showEditAction?: boolean;
+}) {
+  return (
+    <div className="admin-sidebar-section-head">
+      <SidebarGroupLabel className="admin-sidebar-section-label">{label}</SidebarGroupLabel>
+      {showEditAction ? (
+        <button
+          type="button"
+          className="admin-sidebar-section-head__action"
+          aria-label={`Customize ${label} menu`}
+        >
+          <Pencil className="size-3.5" strokeWidth={2.25} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminDashboardSidebar() {
   const pathname = usePathname();
   const { hasPermission } = useAdminAuth();
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
   const { overview, groups } = getAdminSidebarNav(hasPermission);
+  const visibleGroups = groups.map(filterGroupRoutes).filter(
+    (group) =>
+      group.routes.length > 0 ||
+      (group.dropdowns?.length ?? 0) > 0 ||
+      (group.trailingRoutes?.length ?? 0) > 0,
+  );
 
   return (
-    <Sidebar collapsible="icon" variant="sidebar" data-slot="admin-sidebar" className="admin-sidebar-chrome">
-      <SidebarHeader
-        className={cn(
-          "admin-sidebar-header",
-          collapsed && "admin-sidebar-header--collapsed",
-        )}
-      >
+    <Sidebar collapsible="none" data-slot="admin-sidebar" className="admin-sidebar-chrome hidden bg-transparent md:flex">
+      <SidebarHeader className="admin-sidebar-header">
         <AdminSidebarBrand />
       </SidebarHeader>
 
-      <SidebarContent className="admin-sidebar-content gap-1 py-2">
+      <SidebarContent className="admin-sidebar-content">
         {overview ? (
-          <SidebarGroup className="py-1">
+          <SidebarGroup className="admin-sidebar-group">
+            <AdminSidebarSectionLabel label="Menu" showEditAction />
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="admin-sidebar-menu">
                 <AdminSidebarNavItem
                   route={overview}
                   active={isAdminRouteActive(pathname, overview)}
@@ -234,15 +216,11 @@ export function AdminDashboardSidebar() {
           </SidebarGroup>
         ) : null}
 
-        {groups.map((group) => (
-          <SidebarGroup key={group.label} className="py-1">
-            {!collapsed ? (
-              <SidebarGroupLabel className="admin-sidebar-section-label h-7 px-3 text-tiny font-medium tracking-wide text-sidebar-foreground/50 uppercase">
-                {group.label}
-              </SidebarGroupLabel>
-            ) : null}
+        {visibleGroups.map((group, index) => (
+          <SidebarGroup key={group.label} className="admin-sidebar-group">
+            <AdminSidebarSectionLabel label={group.label} showEditAction={index === 0 && !overview} />
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="admin-sidebar-menu">
                 {group.routes.map((route) => (
                   <AdminSidebarNavItem
                     key={route.id}
@@ -255,7 +233,6 @@ export function AdminDashboardSidebar() {
                     key={dropdown.id}
                     dropdown={dropdown}
                     pathname={pathname}
-                    collapsed={collapsed}
                   />
                 ))}
                 {group.trailingRoutes?.map((route) => (
@@ -271,7 +248,11 @@ export function AdminDashboardSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarRail />
+      <SidebarFooter className="admin-sidebar-footer">
+        <div className="admin-sidebar-footer__card">
+          <AdminSidebarUtilityNav />
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

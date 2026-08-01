@@ -1,6 +1,5 @@
-import { BranchTeamPerformancePanel } from "@/components/dist-management/branch-team-performance-panel";
-import { DISTRIBUTOR_PAGE_CONFIG } from "@/lib/distributor-page-config";
+import { redirect } from "next/navigation";
 
-export default function BranchPerformancePage() {
-  return <BranchTeamPerformancePanel {...DISTRIBUTOR_PAGE_CONFIG.branchPerformance} />;
+export default function LegacyBranchPerformancePage() {
+  redirect("/dashboard/dist-management?tab=performance");
 }

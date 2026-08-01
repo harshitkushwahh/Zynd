@@ -18,7 +18,6 @@ export function AdminComingSoonPage({ routeId }: AdminComingSoonPageProps) {
     <div className="space-y-6">
       <AdminPageHeader
         title={route.label}
-        description={route.description}
         icon={route.icon}
       />
       <AdminEmptyState

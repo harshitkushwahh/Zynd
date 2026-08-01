@@ -130,7 +130,7 @@ const INVESTOR_SEEDS: InvestorSeed[] = [
     complianceStatus: "Compliant",
     investmentStatus: "Invested",
     investorType: "Resident Individual",
-    aum: 499.98,
+    aum: 2_125_000,
     createdAt: "2026-06-10T07:30:00.000Z",
   },
   {

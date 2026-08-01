@@ -1,80 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { ArrowUpRight } from "lucide-react";
 
+import { useClientDetailTabNavigation } from "@/components/clients/client-detail-tab-navigation";
+import { ClientRiskProfileHeroCard } from "@/components/clients/client-risk-profile-hero-card";
 import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { buildDemoClientRiskAssessments } from "@/lib/client-risk-assessments";
 import { hasAssessedRiskProfile, resolveClientRiskGauge } from "@/lib/client-risk-gauge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import type { DistributorClientProfile } from "@/lib/dummy/types";
 import { resolveRiskTierVisual } from "@/lib/risk-profile/risk-tier-ui";
-import { formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import {
-  DISTRIBUTOR_INSET_SECTION_HEADER_CLASS,
-  DISTRIBUTOR_INSET_SECTION_ROW_CLASS,
-  DISTRIBUTOR_LABEL_CAPS_INLINE_END_CLASS,
-  DISTRIBUTOR_LABEL_CAPS_SEMIBOLD_CENTER_CLASS,
-  DISTRIBUTOR_OVERLAY_HEADER_CLASS,
-  DISTRIBUTOR_RISK_CARD_INLINE_CLASS,
-} from "@/lib/distributor-layout";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 type ClientRiskProfileCardProps = {
   profile: DistributorClientProfile;
+  clientReference?: string;
   className?: string;
-  variant?: "default" | "inline";
+  variant?: "default" | "inline" | "sidebar";
 };
-
-type PastAssessmentRow = {
-  id: string;
-  tier: string;
-  displayScore: number;
-  date: string;
-};
-
-function buildPastAssessments(profile: DistributorClientProfile): PastAssessmentRow[] {
-  const current = resolveClientRiskGauge(profile);
-  const priorTier =
-    current.tier === "moderate"
-      ? "conservative"
-      : current.tier === "growth"
-        ? "moderate"
-        : "moderate";
-  const priorScore = Math.max(10, current.displayScore - 12);
-  const now = new Date().toISOString();
-
-  if (!hasAssessedRiskProfile(profile)) return [];
-
-  return [
-    {
-      id: "current",
-      tier: current.tier,
-      displayScore: current.displayScore,
-      date: now,
-    },
-    {
-      id: "prior",
-      tier: priorTier,
-      displayScore: priorScore,
-      date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 120).toISOString(),
-    },
-  ].map((row, index) => ({
-    ...row,
-    id: `${row.id}-${index}`,
-  }));
-}
 
 export function ClientRiskProfileCard({
   profile,
+  clientReference,
   className,
   variant = "default",
 }: ClientRiskProfileCardProps) {
@@ -82,104 +31,89 @@ export function ClientRiskProfileCard({
   const riskGauge = resolveClientRiskGauge(profile);
   const tierVisual = resolveRiskTierVisual(riskGauge.tier);
   const assessed = hasAssessedRiskProfile(profile);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const pastRows = buildPastAssessments(profile);
-  const inline = variant === "inline";
+  const reference = clientReference ?? profile.investor.clientCode;
+  const tabNavigation = useClientDetailTabNavigation();
+  const currentAssessment = useMemo(() => {
+    const rows = buildDemoClientRiskAssessments(profile);
+    return rows.find((row) => row.isCurrent) ?? rows[0] ?? null;
+  }, [profile]);
 
-  return (
-    <>
-      <Card
-        className={cn(
-          "relative flex flex-col border-border bg-card shadow-sm",
-          inline ? DISTRIBUTOR_RISK_CARD_INLINE_CLASS : "p-4",
-          className,
-        )}
-      >
-        <Button
+  const openRiskProfileTab = () => {
+    tabNavigation?.navigateToTab("risk");
+  };
+
+  if (variant === "sidebar") {
+    return (
+      <article className={cn("distributor-client-risk-sidebar-card", className)}>
+        <button
           type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="absolute top-1 right-1 size-6 text-muted-foreground hover:text-foreground"
+          className="distributor-client-risk-sidebar-card__main"
           disabled={!assessed}
-          onClick={() => setHistoryOpen(true)}
-          aria-label="Past risk assessments"
-        >
-          <ArrowUpRight className="size-3.5" />
-        </Button>
-        <p className={DISTRIBUTOR_LABEL_CAPS_INLINE_END_CLASS}>
-          {copy.riskProfile}
-        </p>
-        <div
-          className={cn(
-            "flex flex-col items-center",
-            inline ? "mt-1 py-0.5" : "mt-1 flex-1 py-2",
-          )}
+          onClick={() => assessed && openRiskProfileTab()}
+          aria-label={
+            assessed
+              ? `${tierVisual.label} risk profile, ${riskGauge.displayScore} out of 100. Open risk profile tab.`
+              : copy.riskProfile
+          }
         >
           {assessed ? (
-            inline ? (
-              <>
+            <>
+              <div className="distributor-client-risk-sidebar-card__header">
+                <p className="distributor-client-risk-sidebar-card__title">{copy.riskProfile.toUpperCase()}</p>
+                <ArrowUpRight
+                  className="distributor-client-risk-sidebar-card__header-arrow size-4 shrink-0"
+                  strokeWidth={2.25}
+                  aria-hidden
+                />
+              </div>
+              <div className="distributor-client-risk-sidebar-card__gauge">
                 <RiskProfileGauge
                   score={riskGauge.score}
                   tier={riskGauge.tier}
                   displayScore={riskGauge.displayScore}
-                  size="mini"
+                  size="compact"
                   showCaption={false}
+                  showTierScale={false}
                 />
-                <p className={cn("mt-1", DISTRIBUTOR_LABEL_CAPS_SEMIBOLD_CENTER_CLASS, tierVisual.textClass)}>
-                  {tierVisual.label}
-                </p>
-                <p className="text-caption tabular-nums text-muted-foreground">
+              </div>
+              <div className="distributor-client-risk-sidebar-card__summary">
+                <StatusBadge variant="info">{tierVisual.label.toUpperCase()}</StatusBadge>
+                <p className="distributor-client-risk-sidebar-card__score tabular-nums">
                   {riskGauge.displayScore}/100
                 </p>
-              </>
-            ) : (
-              <RiskProfileGauge
-                score={riskGauge.score}
-                tier={riskGauge.tier}
-                displayScore={riskGauge.displayScore}
-                size="compact"
-                showTierScale={false}
-              />
-            )
+              </div>
+            </>
           ) : (
-            <p className={cn("text-muted-foreground", inline ? "py-3 text-caption" : "py-6 text-compact")}>
-              Not assessed
-            </p>
+            <>
+              <div className="distributor-client-risk-sidebar-card__header">
+                <p className="distributor-client-risk-sidebar-card__title">{copy.riskProfile.toUpperCase()}</p>
+              </div>
+              <p className="distributor-client-risk-sidebar-card__empty">Not assessed</p>
+            </>
           )}
-        </div>
-      </Card>
+        </button>
+      </article>
+    );
+  }
 
-      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogHeader className="sr-only">
-          <DialogTitle>Past risk assessments</DialogTitle>
-          <DialogDescription>Historical risk profile results for this client.</DialogDescription>
-        </DialogHeader>
-        <DialogContent className="max-w-sm gap-0 p-0">
-          <div className={DISTRIBUTOR_OVERLAY_HEADER_CLASS}>
-            <h2 className="text-compact font-semibold">Past assessments</h2>
-            <p className="distributor-panel-card__description">
-              Read-only history (distributor view).
-            </p>
-          </div>
-          <ul className="divide-y divide-border">
-            {pastRows.map((row) => {
-              const visual = resolveRiskTierVisual(row.tier);
-              return (
-                <li key={row.id} className={DISTRIBUTOR_INSET_SECTION_ROW_CLASS}>
-                  <div>
-                    <p className={cn("font-medium", visual.textClass)}>
-                      {visual.label} · {row.displayScore}/100
-                    </p>
-                    <p className="text-caption text-muted-foreground">
-                      {formatDistributorDate(row.date)}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </DialogContent>
-      </Dialog>
-    </>
+  if (assessed && currentAssessment) {
+    return (
+      <ClientRiskProfileHeroCard
+        assessment={currentAssessment}
+        clientReference={reference}
+        className={className}
+      />
+    );
+  }
+
+  return (
+    <article
+      className={cn(
+        "distributor-client-risk-sidebar-card flex items-center justify-center p-6",
+        className,
+      )}
+    >
+      <p className="text-caption text-muted-foreground">Not assessed</p>
+    </article>
   );
 }

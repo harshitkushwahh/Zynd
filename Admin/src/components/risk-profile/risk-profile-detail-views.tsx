@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { RiskCategory, RiskQuestion, RiskTemplate } from "@/lib/risk-profile-admin-api";
 import { cn } from "@/lib/utils";
@@ -65,7 +66,7 @@ export function RiskCategoryDetailView({ category }: { category: RiskCategory })
         description={category.description}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <AdminMetricCardsGrid columns="three">
         <AdminMetricCard
           label="Weight"
           value={category.weight.toFixed(2)}
@@ -86,7 +87,7 @@ export function RiskCategoryDetailView({ category }: { category: RiskCategory })
           icon={ListOrdered}
           tone="muted"
         />
-      </div>
+      </AdminMetricCardsGrid>
     </div>
   );
 }
@@ -168,7 +169,7 @@ export function RiskTemplateDetailView({ template }: { template: RiskTemplate })
         description={template.description}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <AdminMetricCardsGrid>
         <AdminMetricCard
           label="Questions"
           value={template.total_questions.toLocaleString()}
@@ -182,7 +183,7 @@ export function RiskTemplateDetailView({ template }: { template: RiskTemplate })
           icon={ListOrdered}
           tone="muted"
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="space-y-3">
         <DetailSectionTitle>Category rules</DetailSectionTitle>

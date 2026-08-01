@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Gauge } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminDialogFooterActions, AdminFormDialog } from "@/components/ui/admin-dialog-presets";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   ADMIN_TABLE_PAGE_SIZE,
@@ -16,7 +17,7 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
@@ -37,12 +38,24 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
   const [minScore, setMinScore] = useState("");
   const [maxScore, setMaxScore] = useState("");
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
+
+  const filteredTiers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return tiers;
+    return tiers.filter((tier) =>
+      [tier.tier, tier.title, tier.message_body].join(" ").toLowerCase().includes(query),
+    );
+  }, [search, tiers]);
 
   const pagination = useMemo(
-    () => paginateItems(tiers, page, ADMIN_TABLE_PAGE_SIZE),
-    [tiers, page],
+    () => paginateItems(filteredTiers, page, pageSize),
+    [filteredTiers, page, pageSize],
   );
+
+  const showSkeleton = loading && tiers.length === 0;
 
   const loadTiers = useCallback(async () => {
     setLoading(true);
@@ -92,28 +105,69 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-4">
-      <AdminSectionTitle>Five-tier score bands (0–1000)</AdminSectionTitle>
+      <AdminSearchInput
+        containerClassName="max-w-sm"
+        placeholder="Search tiers"
+        value={search}
+        onChange={(event) => {
+          setSearch(event.target.value);
+          setPage(0);
+        }}
+      />
+
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <AdminDataTable minWidth="lg">
+      <AdminDataTable
+        minWidth="lg"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            disabled={loading}
+            totalCount={filteredTiers.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+            onNext={() => setPage((value) => value + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            <AdminTableHeadCell>Actions</AdminTableHeadCell>
             <AdminTableHeadCell>Tier</AdminTableHeadCell>
             <AdminTableHeadCell>Score band</AdminTableHeadCell>
             <AdminTableHeadCell>Message</AdminTableHeadCell>
-            <AdminTableHeadCell>Actions</AdminTableHeadCell>
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows
-            colSpan={4}
-            loading={loading}
-            isEmpty={tiers.length === 0}
-            emptyMessage="No tier messages configured."
-          >
-            {pagination.items.map((tier) => (
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={4} />
+          ) : filteredTiers.length === 0 ? (
+            <AdminTableStateRow colSpan={4}>
+              {tiers.length === 0
+                ? "No tier messages configured."
+                : "No tiers match your search."}
+            </AdminTableStateRow>
+          ) : (
+            pagination.items.map((tier) => (
               <AdminTableRow key={tier.tier}>
+                <AdminTableCell>
+                  {canManage ? (
+                    <Button size="sm" variant="outline" onClick={() => openEditor(tier)}>
+                      Edit
+                    </Button>
+                  ) : (
+                    "Read only"
+                  )}
+                </AdminTableCell>
                 <AdminTableCell>
                   <StatusBadge
                     variant={resolveRiskTierBadgeVariant(tier.tier)}
@@ -129,30 +183,11 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
                 <AdminTableCell className="max-w-md text-caption text-muted-foreground">
                   {tier.message_body}
                 </AdminTableCell>
-                <AdminTableCell>
-                  {canManage ? (
-                    <Button size="sm" variant="outline" onClick={() => openEditor(tier)}>
-                      Edit
-                    </Button>
-                  ) : (
-                    "Read only"
-                  )}
-                </AdminTableCell>
               </AdminTableRow>
-            ))}
-          </AdminTableRows>
+            ))
+          )}
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        hasPrevious={pagination.hasPrevious}
-        hasNext={pagination.hasNext}
-        disabled={loading}
-        onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-        onNext={() => setPage((value) => value + 1)}
-      />
 
       <AdminFormDialog
         open={Boolean(editing)}

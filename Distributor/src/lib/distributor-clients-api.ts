@@ -1,4 +1,7 @@
 import { apiRequest } from "@/lib/api-client";
+import { buildClientDocumentsForInvestor } from "@/lib/client-documents";
+import { buildKycAuditLogForClient } from "@/lib/client-kyc-audit-log";
+import { applyKycStepApplicability } from "@/lib/distributor-client-kyc-steps";
 import { DISTRIBUTOR_KYC_STEPS } from "@/lib/distributor-client-copy";
 import type {
   DistributorClientFamilyGroup,
@@ -172,13 +175,16 @@ function mapSipStatus(raw: string): SystematicPlanStatus {
   return "Cancelled";
 }
 
-function buildKycSteps(kyc: ApiClientDetail["kyc"]): DistributorClientKycStep[] {
+function buildKycSteps(
+  kyc: ApiClientDetail["kyc"],
+  kycCompliant: boolean,
+): DistributorClientKycStep[] {
   const stepStatuses = kyc?.step_statuses ?? {};
   const incomplete = new Map(
     (kyc?.incomplete_steps ?? []).map((step) => [step.key, step.status ?? "pending"])
   );
 
-  return DISTRIBUTOR_KYC_STEPS.map(({ id, label }) => {
+  const steps = DISTRIBUTOR_KYC_STEPS.map(({ id, label }) => {
     const statusRaw = incomplete.get(id) ?? stepStatuses[id] ?? "pending";
     if (statusRaw === "completed" || statusRaw === "verified") {
       return { id, label, status: "completed" as const };
@@ -188,6 +194,8 @@ function buildKycSteps(kyc: ApiClientDetail["kyc"]): DistributorClientKycStep[] 
     }
     return { id, label, status: "pending" as const };
   });
+
+  return applyKycStepApplicability(steps, kycCompliant);
 }
 
 function mapBankAccounts(rows: Array<Record<string, unknown>> | undefined) {
@@ -212,6 +220,20 @@ function mapAddressesFromKyc(kyc: ApiClientDetail["kyc"]): DistributorClientPers
     items.push({
       id,
       label,
+      line1:
+        block.line1 != null
+          ? String(block.line1)
+          : block.line_1 != null
+            ? String(block.line_1)
+            : block.address_line != null
+              ? String(block.address_line)
+              : null,
+      line2:
+        block.line2 != null
+          ? String(block.line2)
+          : block.line_2 != null
+            ? String(block.line_2)
+            : null,
       city: block.city != null ? String(block.city) : null,
       state: block.state != null ? String(block.state) : null,
       postalCode: block.pincode != null ? String(block.pincode) : null,
@@ -229,6 +251,18 @@ function mapAddressesFromKyc(kyc: ApiClientDetail["kyc"]): DistributorClientPers
     items.push({
       id: String(row.id ?? `addr-${index}`),
       label: String(row.nature ?? "Address"),
+      line1:
+        row.line1 != null
+          ? String(row.line1)
+          : row.line_1 != null
+            ? String(row.line_1)
+            : null,
+      line2:
+        row.line2 != null
+          ? String(row.line2)
+          : row.line_2 != null
+            ? String(row.line_2)
+            : null,
       city: row.city != null ? String(row.city) : null,
       state: row.state != null ? String(row.state) : null,
       postalCode: row.postal_code != null ? String(row.postal_code) : null,
@@ -301,6 +335,7 @@ function mapGoals(rows: Array<Record<string, unknown>>): DistributorClientGoal[]
   return rows.map((row) => ({
     id: String(row.id),
     title: String(row.title ?? "Goal"),
+    category: row.category != null ? String(row.category) : undefined,
     targetAmount: Number(row.target_amount_inr ?? 0),
     currentAmount: Number(row.current_amount_inr ?? 0),
     progressPct: Number(row.progress_pct ?? 0),
@@ -405,13 +440,18 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
   systematicPlans: DistributorSystematicPlan[];
 } {
   const investor = mapApiClientListItem(payload.summary);
-  const kycSteps = buildKycSteps(payload.kyc);
+  const kycSteps = buildKycSteps(payload.kyc, payload.summary.kyc_compliant);
+  const kycInitiatedAt = payload.summary.created_at ?? new Date().toISOString();
+  const kycAuditLog = buildKycAuditLogForClient(investor, kycSteps, kycInitiatedAt);
+  const clientDocuments = buildClientDocumentsForInvestor(investor, kycSteps);
   const investments = payload.investments ?? undefined;
 
   return {
     investor,
     displayName: payload.display_name,
     emailDisplay: payload.email_display,
+    contactEmail: payload.email_display,
+    contactPhone: payload.phone_masked ?? "Phone not on file",
     profileImageUrl: payload.profile_image_url,
     riskProfileLabel: payload.risk_profile_label,
     riskProfile: payload.risk_profile?.score
@@ -425,7 +465,10 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
       : null,
     mfaEnabled: payload.mfa_enabled,
     kycOverallStatus: payload.kyc_overall_status,
+    kycInitiatedAt,
     kycSteps,
+    kycAuditLog,
+    clientDocuments,
     holdings: mapHoldings(investments?.holdings),
     goals: mapGoals(payload.goals ?? []),
     familyGroups: mapFamilyGroups(payload.family_groups ?? []),

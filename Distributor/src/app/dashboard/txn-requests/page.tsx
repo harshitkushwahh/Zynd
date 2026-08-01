@@ -1,6 +1,7 @@
-import { TxnRequestsPanel } from "@/components/txn-requests/txn-requests-panel";
-import { DISTRIBUTOR_PAGE_CONFIG } from "@/lib/distributor-page-config";
+import { redirect } from "next/navigation";
+
+import { distributorOperationsSectionHref } from "@/lib/distributor-operations-sections";
 
 export default function TxnRequestsPage() {
-  return <TxnRequestsPanel {...DISTRIBUTOR_PAGE_CONFIG.txnRequests} />;
+  redirect(distributorOperationsSectionHref("txn-requests"));
 }

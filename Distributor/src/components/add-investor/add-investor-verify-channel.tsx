@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ADD_INVESTOR_DEMO_OTP } from "@/lib/add-investor/add-investor-journey";
 import { delay } from "@/lib/add-investor/add-investor-demo";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { cn } from "@/lib/utils";
 
 type AddInvestorVerifyChannelProps = {
@@ -20,6 +21,8 @@ type AddInvestorVerifyChannelProps = {
   inputValid: boolean;
   /** Adjusts helper copy for distributor onboarding vs investor. */
   audience?: "investor" | "distributor";
+  /** Nested inside the combined onboarding card. */
+  embedded?: boolean;
 };
 
 const CHANNEL_META: Record<
@@ -45,8 +48,8 @@ const CHANNEL_META: Record<
 };
 
 const DISTRIBUTOR_CHANNEL_DESC: Partial<Record<AddInvestorVerifyChannelProps["channel"], string>> = {
-  email: "Enter the distributor work email and confirm with the inbox OTP.",
-  mobile: "Indian mobile number and SMS OTP for login and txn alerts.",
+  email: ZYND_MITRA_COPY.verifyEmailOtpDesc,
+  mobile: ZYND_MITRA_COPY.verifyMobileOtpDesc,
 };
 
 export function AddInvestorVerifyChannel({
@@ -57,6 +60,7 @@ export function AddInvestorVerifyChannel({
   onOtpChange,
   inputValid,
   audience = "investor",
+  embedded = false,
 }: AddInvestorVerifyChannelProps) {
   const [otpSent, setOtpSent] = useState(false);
   const [sending, setSending] = useState(false);
@@ -96,6 +100,7 @@ export function AddInvestorVerifyChannel({
     <div
       className={cn(
         "add-investor-verify",
+        embedded && "add-investor-verify--embedded",
         verified && "add-investor-verify--verified",
         otpSent && !verified && "add-investor-verify--pending",
       )}
@@ -105,8 +110,23 @@ export function AddInvestorVerifyChannel({
           <Icon className="size-5" strokeWidth={2.25} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="quick-txn-wizard__section-title">{meta.title}</h2>
-          <p className="quick-txn-wizard__section-desc add-investor-verify__intro-desc">{description}</p>
+          {embedded ? (
+            <h3
+              className="add-investor-onboarding__block-title"
+              id={`add-investor-onboarding-${channel}`}
+            >
+              {meta.title}
+            </h3>
+          ) : (
+            <h2 className="quick-txn-wizard__section-title">{meta.title}</h2>
+          )}
+          <p
+            className={cn(
+              embedded ? "add-investor-onboarding__block-desc" : "quick-txn-wizard__section-desc add-investor-verify__intro-desc",
+            )}
+          >
+            {description}
+          </p>
         </div>
         {verified ? (
           <CheckCircle2 className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />

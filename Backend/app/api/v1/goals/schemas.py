@@ -189,3 +189,83 @@ class LinkableFamilyGoalItemResponse(BaseModel):
 
 class LinkableFamilyGoalListResponse(BaseModel):
     items: list[LinkableFamilyGoalItemResponse]
+
+
+class AdminGoalLinkedProductResponse(BaseModel):
+    product_id: str
+    product_name: Optional[str] = None
+    isin: Optional[str] = None
+
+
+class AdminGoalInvestmentHoldingResponse(BaseModel):
+    holding_id: int
+    user_id: str
+    owner_display_name: str
+    scheme_name: str
+    matched_scheme_name: Optional[str] = None
+    folio_number: str
+    isin: str
+    units: float
+    nav_value: Optional[float] = None
+    market_value_inr: Optional[float] = None
+    as_of_date: Optional[str] = None
+    amc_name: Optional[str] = None
+    source: str
+
+
+class AdminGoalInvestmentSipPlanResponse(BaseModel):
+    plan_id: str
+    user_id: str
+    owner_display_name: str
+    product_id: str
+    product_name: Optional[str] = None
+    amount_inr: float
+    frequency: str
+    installment_day: Optional[int] = None
+    status: str
+    next_installment_date: Optional[str] = None
+    is_goal_linked: bool
+    created_at: Optional[str] = None
+    activated_at: Optional[str] = None
+
+
+class AdminGoalInvestmentOrderResponse(BaseModel):
+    order_id: str
+    user_id: str
+    owner_display_name: str
+    product_id: str
+    product_name: Optional[str] = None
+    order_type: str
+    amount_inr: float
+    status: str
+    is_goal_linked: bool
+    created_at: Optional[str] = None
+    settled_at: Optional[str] = None
+
+
+class AdminGoalInvestmentContributionResponse(BaseModel):
+    id: str
+    user_id: str
+    owner_display_name: str
+    amount_inr: float
+    source_type: str
+    note: Optional[str] = None
+    contributed_at: Optional[str] = None
+
+
+class AdminGoalInvestmentsSummaryResponse(BaseModel):
+    holdings_value_inr: float
+    invested_via_orders_inr: float
+    linked_sip_monthly_inr: float
+    contributions_total_inr: float
+    has_linked_investment: bool
+
+
+class AdminGoalInvestmentsResponse(BaseModel):
+    goal_id: UUID
+    linked_product: Optional[AdminGoalLinkedProductResponse] = None
+    holdings: list[AdminGoalInvestmentHoldingResponse]
+    sip_plans: list[AdminGoalInvestmentSipPlanResponse]
+    orders: list[AdminGoalInvestmentOrderResponse]
+    contributions: list[AdminGoalInvestmentContributionResponse]
+    summary: AdminGoalInvestmentsSummaryResponse

@@ -36,6 +36,9 @@ export type DistributorOrder = {
   amount: number;
   status: OrderStatus;
   createdAt: string;
+  /** False for platform-wide rows in “All orders”. Defaults to true. */
+  inDistributorBook?: boolean;
+  operationChannel?: "one-time" | "sip" | "redemption";
 };
 
 export type SystematicPlanStatus = "Active" | "Paused" | "Cancelled";
@@ -51,6 +54,8 @@ export type DistributorSystematicPlan = {
   frequency: "Monthly" | "Weekly" | "Quarterly";
   status: SystematicPlanStatus;
   nextDueAt: string;
+  /** False for platform-wide rows in “All orders”. Defaults to true. */
+  inDistributorBook?: boolean;
 };
 
 export type TxnRequestStatus = "Pending" | "Approved" | "Rejected";
@@ -64,6 +69,8 @@ export type DistributorTxnRequest = {
   amount: number | null;
   status: TxnRequestStatus;
   createdAt: string;
+  /** False for platform-wide rows in “All orders”. Defaults to true. */
+  inDistributorBook?: boolean;
 };
 
 export type DistributorTransactionGroup = {
@@ -75,14 +82,51 @@ export type DistributorTransactionGroup = {
   totalAmount: number;
   status: "Draft" | "Submitted" | "Completed";
   createdAt: string;
+  /** False for platform-wide rows in “All orders”. Defaults to true. */
+  inDistributorBook?: boolean;
 };
 
-export type DistributorKycStepStatus = "completed" | "pending" | "failed";
+export type DistributorKycStepStatus = "completed" | "pending" | "failed" | "not_applicable";
+
+export type DistributorClientDocumentStatus = "uploaded" | "missing" | "not_required";
+
+export type DistributorClientDocumentCategory =
+  | "pan"
+  | "address_proof"
+  | "bank_proof"
+  | "signature"
+  | "esign"
+  | "kyc_form";
+
+export type DistributorClientDocument = {
+  id: string;
+  category: DistributorClientDocumentCategory;
+  label: string;
+  fileName: string | null;
+  identifierMasked: string | null;
+  uploadedAt: string | null;
+  status: DistributorClientDocumentStatus;
+  source: string;
+};
 
 export type DistributorClientKycStep = {
   id: string;
   label: string;
   status: DistributorKycStepStatus;
+  /** False when step is skipped for KRA-compliant investors (DigiLocker, signature). */
+  applicable?: boolean;
+};
+
+export type DistributorClientKycAuditActor = "investor" | "system";
+
+export type DistributorClientKycAuditEntry = {
+  id: string;
+  occurredAt: string;
+  action: string;
+  stepLabel: string | null;
+  detail: string;
+  actor: DistributorClientKycAuditActor;
+  source: string;
 };
 
 export type DistributorClientOAuthConnection = {
@@ -103,6 +147,8 @@ export type DistributorClientBankAccount = {
 export type DistributorClientAddress = {
   id: string;
   label: string;
+  line1?: string | null;
+  line2?: string | null;
   city?: string | null;
   state?: string | null;
   postalCode?: string | null;
@@ -134,9 +180,33 @@ export type DistributorClientHolding = {
   asOfDate?: string | null;
 };
 
+export type DistributorClientGoalType =
+  | "home"
+  | "education"
+  | "car"
+  | "wedding"
+  | "retirement"
+  | "custom";
+
+export type DistributorClientGoalPriority = "high" | "medium" | "low";
+
+export type DistributorClientGoalMemberContribution = {
+  userId: string;
+  displayName: string;
+  amount: number;
+};
+
 export type DistributorClientGoal = {
   id: string;
   title: string;
+  /** Display category (e.g. Retirement, Education). */
+  category?: string;
+  /** Structured goal template (home, car, wedding, custom, etc.). */
+  goalType?: DistributorClientGoalType;
+  priority?: DistributorClientGoalPriority;
+  createdByDisplayName?: string;
+  createdByRole?: "owner" | "member";
+  memberContributions?: DistributorClientGoalMemberContribution[];
   targetAmount: number;
   currentAmount: number;
   progressPct: number;
@@ -153,6 +223,12 @@ export type DistributorClientFamilyMember = {
   emailMasked?: string;
   profileImageUrl?: string | null;
   badgeLabel?: string | null;
+  /** Full contact when member is a client in your book (distributor view). */
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  linkedInvestorId?: string | null;
+  inYourBook?: boolean;
+  portfolioContribution?: number;
 };
 
 export type DistributorClientFamilyGroup = {
@@ -168,6 +244,8 @@ export type DistributorClientFamilyGroup = {
   headDisplayName?: string | null;
   headUserId?: string | null;
   members: DistributorClientFamilyMember[];
+  /** Family-scoped goals (owners see full detail on group page). */
+  goals?: DistributorClientGoal[];
 };
 
 export type DistributorClientRiskProfile = {
@@ -175,6 +253,8 @@ export type DistributorClientRiskProfile = {
   tier: string;
   score: number;
   displayScore: number;
+  /** ISO timestamp of latest assessment (stable in demo data). */
+  assessedAt?: string;
 };
 
 export type DistributorClientRiskAssessment = {
@@ -220,16 +300,27 @@ export type DistributorClientProfile = {
   investor: DistributorInvestor;
   displayName: string;
   emailDisplay: string;
+  /** Full email on client detail (distributor view). */
+  contactEmail: string;
+  /** Full phone on client detail (distributor view). */
+  contactPhone: string;
   profileImageUrl?: string | null;
   riskProfileLabel: string;
   riskProfile?: DistributorClientRiskProfile | null;
   mfaEnabled: boolean;
   kycOverallStatus: string;
+  /** ISO timestamp when the investor started KYC on Zynd. */
+  kycInitiatedAt: string;
   kycSteps: DistributorClientKycStep[];
+  kycAuditLog: DistributorClientKycAuditEntry[];
+  clientDocuments: DistributorClientDocument[];
   holdings: DistributorClientHolding[];
   goals: DistributorClientGoal[];
   familyGroups: DistributorClientFamilyGroup[];
   referrals: DistributorClientReferralSummary;
   sessions: DistributorClientSession[];
   personalInfo: DistributorClientPersonalInfo;
+  /** Demo / API activity for client detail SIPs & Transactions tab */
+  orders?: DistributorOrder[];
+  systematicPlans?: DistributorSystematicPlan[];
 };

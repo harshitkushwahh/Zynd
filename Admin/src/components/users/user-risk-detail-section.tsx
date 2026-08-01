@@ -1,14 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Gauge } from "lucide-react";
 
+import { AdminUserRiskProfileLayout } from "@/components/users/admin-user-risk-profile-layout";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
 import { getErrorMessage } from "@/lib/errors";
 import { ApiError } from "@/lib/api-client";
-import { fetchUserRiskProfile, type UserRiskProfileDetail } from "@/lib/risk-profile-admin-api";
-import { PROFILE_SECTION_TITLE_CLASS } from "@/components/users/user-profile-typography";
+import {
+  fetchUserRiskProfile,
+  fetchUserRiskProfileAssessments,
+  type UserRiskProfileAssessmentItem,
+  type UserRiskProfileDetail,
+} from "@/lib/risk-profile-admin-api";
 
 type UserRiskDetailSectionProps = {
   userId: string;
@@ -16,6 +20,7 @@ type UserRiskDetailSectionProps = {
 
 export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
   const [profile, setProfile] = useState<UserRiskProfileDetail | null>(null);
+  const [assessments, setAssessments] = useState<UserRiskProfileAssessmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -23,10 +28,15 @@ export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
     setLoading(true);
     setError("");
     try {
-      const result = await fetchUserRiskProfile(userId);
-      setProfile(result);
+      const [profileResult, assessmentsResult] = await Promise.all([
+        fetchUserRiskProfile(userId),
+        fetchUserRiskProfileAssessments(userId),
+      ]);
+      setProfile(profileResult);
+      setAssessments(assessmentsResult.items);
     } catch (err) {
       setProfile(null);
+      setAssessments([]);
       if (err instanceof ApiError && err.status === 404) {
         setError("");
         return;
@@ -42,7 +52,7 @@ export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
   }, [loadProfile]);
 
   if (loading) {
-    return <AdminTableSkeleton columns={1} rows={3} minWidth="sm" />;
+    return <AdminTableSkeleton columns={1} rows={4} minWidth="sm" />;
   }
 
   if (error) {
@@ -58,40 +68,6 @@ export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-3">
-        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Gauge className="size-5" />
-        </div>
-        <div>
-          <p className={PROFILE_SECTION_TITLE_CLASS}>{profile.tier_config.title}</p>
-          <p className="mt-1 text-caption capitalize text-muted-foreground">{profile.tier}</p>
-          <p className="mt-3 text-compact text-muted-foreground">{profile.tier_config.message_body}</p>
-        </div>
-      </div>
-
-      <dl className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <dt className="text-caption text-muted-foreground">Score</dt>
-          <dd className="text-compact font-medium text-foreground">{profile.score} / 1000</dd>
-        </div>
-        <div>
-          <dt className="text-caption text-muted-foreground">Score band</dt>
-          <dd className="text-compact font-medium text-foreground">
-            {profile.tier_config.min_score}–{profile.tier_config.max_score}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-caption text-muted-foreground">Computed</dt>
-          <dd className="text-compact text-foreground">
-            {profile.computed_at ? new Date(profile.computed_at).toLocaleString() : "—"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-caption text-muted-foreground">Assessment ID</dt>
-          <dd className="font-mono text-caption text-muted-foreground">{profile.assessment_id}</dd>
-        </div>
-      </dl>
-    </div>
+    <AdminUserRiskProfileLayout userId={userId} profile={profile} assessments={assessments} />
   );
 }

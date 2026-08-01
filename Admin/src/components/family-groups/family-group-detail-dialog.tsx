@@ -8,7 +8,8 @@ import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminDetailDialogSkeleton } from "@/components/ui/admin-skeletons";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import {
   adminArchiveFamilyGroup,
   adminRemoveFamilyGroupMember,
@@ -171,11 +172,11 @@ export function FamilyGroupDetailDialog({
             ) : null}
 
             <Tabs defaultValue="members" className="gap-3">
-              <TabsList variant="line" className="w-fit justify-start">
-                <TabsTrigger value="members">Members</TabsTrigger>
-                <TabsTrigger value="invites">Invites</TabsTrigger>
-                <TabsTrigger value="activity">Activity</TabsTrigger>
-              </TabsList>
+              <AdminTabList variant="secondary">
+                <AdminTabTrigger value="members">Members</AdminTabTrigger>
+                <AdminTabTrigger value="invites">Invites</AdminTabTrigger>
+                <AdminTabTrigger value="activity">Activity</AdminTabTrigger>
+              </AdminTabList>
 
               <TabsContent value="members" className="mt-0 space-y-2">
                 {detail.members.length === 0 ? (

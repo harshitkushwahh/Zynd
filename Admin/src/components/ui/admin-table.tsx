@@ -6,33 +6,41 @@ import {
   ADMIN_TABLE_MIN_WIDTH,
   type AdminTableMinWidth,
 } from "@/components/ui/admin-design-tokens";
+import { AdminSelect } from "@/components/ui/admin-select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export const ADMIN_TABLE_PAGE_SIZE = 10;
 
+export const ADMIN_TABLE_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+
 export function AdminDataTable({
   children,
   minWidth = "default",
   minWidthClassName,
   className,
+  footer,
 }: {
   children: React.ReactNode;
   minWidth?: AdminTableMinWidth;
   minWidthClassName?: string;
   className?: string;
+  footer?: React.ReactNode;
 }) {
   return (
-    <div className={cn("overflow-x-auto rounded-[var(--radius-card)] border border-border", className)}>
-      <table
-        className={cn(
-          "w-full text-left text-compact",
-          minWidthClassName ?? ADMIN_TABLE_MIN_WIDTH[minWidth],
-        )}
-      >
-        {children}
-      </table>
+    <div className={cn("admin-table-shell overflow-hidden rounded-[var(--radius-card)] border border-border", className)}>
+      <div className="overflow-x-auto">
+        <table
+          className={cn(
+            "w-full text-left text-compact",
+            minWidthClassName ?? ADMIN_TABLE_MIN_WIDTH[minWidth],
+          )}
+        >
+          {children}
+        </table>
+      </div>
+      {footer}
     </div>
   );
 }
@@ -92,7 +100,7 @@ export function AdminTableCell({
   colSpan?: number;
 }) {
   return (
-    <td className={cn("px-4 py-3", className)} colSpan={colSpan}>
+    <td className={cn("px-4 py-3 align-middle", className)} colSpan={colSpan}>
       {children}
     </td>
   );
@@ -187,6 +195,42 @@ export function AdminTableRows({
   return children;
 }
 
+export function formatAdminTableRange({
+  page,
+  pageSize = ADMIN_TABLE_PAGE_SIZE,
+  totalCount,
+  currentPageCount,
+  hasMore,
+}: {
+  page: number;
+  pageSize?: number;
+  totalCount?: number;
+  currentPageCount?: number;
+  hasMore?: boolean;
+}): string | null {
+  const visibleCount = currentPageCount ?? 0;
+
+  if (totalCount === 0 || (totalCount == null && visibleCount === 0)) {
+    return "0 results";
+  }
+
+  const start = page * pageSize + 1;
+  const end =
+    totalCount != null
+      ? Math.min((page + 1) * pageSize, totalCount)
+      : page * pageSize + visibleCount;
+
+  if (totalCount != null) {
+    return `${start.toLocaleString()}–${end.toLocaleString()} of ${totalCount.toLocaleString()}`;
+  }
+
+  if (visibleCount <= 0) return null;
+
+  return hasMore
+    ? `${start.toLocaleString()}–${end.toLocaleString()}+`
+    : `${start.toLocaleString()}–${end.toLocaleString()}`;
+}
+
 export function AdminTablePagination({
   page,
   totalPages,
@@ -196,6 +240,12 @@ export function AdminTablePagination({
   onNext,
   disabled = false,
   className,
+  totalCount,
+  currentPageCount,
+  hasMore,
+  pageSize = ADMIN_TABLE_PAGE_SIZE,
+  pageSizeOptions = ADMIN_TABLE_PAGE_SIZE_OPTIONS,
+  onPageSizeChange,
 }: {
   page: number;
   totalPages?: number;
@@ -205,29 +255,77 @@ export function AdminTablePagination({
   onNext: () => void;
   disabled?: boolean;
   className?: string;
+  totalCount?: number;
+  currentPageCount?: number;
+  hasMore?: boolean;
+  pageSize?: number;
+  pageSizeOptions?: readonly number[];
+  onPageSizeChange?: (pageSize: number) => void;
 }) {
-  const showTotalPages = totalPages != null && totalPages > 0;
+  const rangeLabel = formatAdminTableRange({
+    page,
+    pageSize,
+    totalCount,
+    currentPageCount,
+    hasMore,
+  });
+  const showPageSize = onPageSizeChange != null && pageSizeOptions.length > 0;
+  const showTotalPages = totalPages != null && totalPages > 0 && rangeLabel == null;
 
   return (
-    <div className={cn("flex items-center justify-end gap-2", className)}>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={disabled || !hasPrevious}
-        onClick={onPrevious}
-      >
-        <ChevronLeft className="size-3.5" />
-        Previous
-      </Button>
-      <span className="px-1 text-caption text-muted-foreground">
-        Page {page + 1}
-        {showTotalPages ? ` of ${totalPages}` : ""}
-      </span>
-      <Button variant="outline" size="sm" disabled={disabled || !hasNext} onClick={onNext}>
-        Next
-        <ChevronRight className="size-3.5" />
-      </Button>
-    </div>
+    <footer
+      className={cn("admin-table-pagination", className)}
+      aria-label="Table pagination"
+    >
+      <div className="admin-table-pagination__leading">
+        {showPageSize ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-caption text-muted-foreground">Rows per page</span>
+            <AdminSelect
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                const next = Number(value);
+                if (!Number.isNaN(next)) onPageSizeChange(next);
+              }}
+              options={pageSizeOptions.map((option) => ({
+                value: String(option),
+                label: String(option),
+              }))}
+              triggerClassName="min-w-[4.25rem]"
+              aria-label="Rows per page"
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {rangeLabel ? (
+        <p className="admin-table-pagination__range text-caption text-muted-foreground">
+          {rangeLabel}
+        </p>
+      ) : showTotalPages ? (
+        <p className="admin-table-pagination__range text-caption text-muted-foreground">
+          Page {page + 1} of {totalPages}
+        </p>
+      ) : (
+        <span className="admin-table-pagination__range" aria-hidden />
+      )}
+
+      <div className="admin-table-pagination__controls flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled || !hasPrevious}
+          onClick={onPrevious}
+        >
+          <ChevronLeft className="size-3.5" />
+          Previous
+        </Button>
+        <Button variant="outline" size="sm" disabled={disabled || !hasNext} onClick={onNext}>
+          Next
+          <ChevronRight className="size-3.5" />
+        </Button>
+      </div>
+    </footer>
   );
 }
 

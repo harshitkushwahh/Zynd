@@ -12,6 +12,7 @@ import {
   AdminInfoDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminFormSkeleton } from "@/components/ui/admin-skeletons";
 import { Button } from "@/components/ui/button";
 import {
@@ -304,7 +305,7 @@ export const ComplianceSettingsPanel = forwardRef<
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <AdminMetricCardsGrid>
         <AdminMetricCard
           label="Distributor ARN"
           value={settings?.distributor_arn?.trim() || "No data"}
@@ -317,7 +318,7 @@ export const ComplianceSettingsPanel = forwardRef<
           icon={ShieldCheck}
           tone={settings?.distributor_euin ? "info" : "muted"}
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
         <div className="flex flex-wrap items-start gap-3 border-b border-border bg-muted/15 px-5 py-4">

@@ -19,8 +19,11 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "ZYND Distributor — Partner Console",
-  description: "Distributor console for investors, orders, and transactions.",
+  title: {
+    default: "Zynd Mitra",
+    template: "%s · Zynd Mitra",
+  },
+  description: "Zynd Mitra console for investors, orders, and transactions.",
 };
 
 export default function RootLayout({

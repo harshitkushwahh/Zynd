@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { SYSTEM_RESIDENT_INVESTORS_HREF } from "@/lib/distributor-client-routes";
+import { buildYourClientsListHref } from "@/lib/distributor-clients-list-scope";
 
 export default function AllInvestorsRedirectPage() {
-  redirect(SYSTEM_RESIDENT_INVESTORS_HREF);
+  redirect(buildYourClientsListHref("all"));
 }

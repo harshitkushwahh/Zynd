@@ -27,10 +27,9 @@ import { ContentRulesPanel } from "@/components/mf/content-rules-panel";
 import { FundContentPanel } from "@/components/mf/fund-content-panel";
 import { MfOperationsPanel } from "@/components/mf/mf-operations-panel";
 import { lifecycleTone, MfStatusChip } from "@/components/mf/mf-status-chip";
-import { AdminSectionBreadcrumb } from "@/components/dashboard/admin-section-breadcrumb";
+import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
 import { SchemeStagingPanel } from "@/components/mf/scheme-staging-panel";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminDrawer } from "@/components/ui/admin-drawer";
 import {
   AdminDialogFooterActions,
@@ -58,7 +57,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminFormSkeleton, AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -69,14 +70,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -98,9 +93,14 @@ import {
 
 type TabKey = "overview" | "health" | "staging" | "categories" | "funds" | "content" | "bulk" | "operations";
 
-const FUND_PAGE_SIZE = 25;
 const ALL = "all";
 
+const FUND_LIFECYCLE_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All lifecycle" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "DRAFT", label: "Draft" },
+  { value: "INACTIVE", label: "Inactive" },
+];
 
 function formatPercent(value: number | null | undefined) {
   if (value == null) return "NA";
@@ -424,23 +424,35 @@ function FundDetailDrawer({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {navHistory ? <NavSparkline points={navHistory.points} /> : null}
-                  <div className="max-h-scroll-sm overflow-y-auto rounded-[var(--radius-control)] border border-border">
-                    <table className="w-full text-caption">
-                      <thead className="sticky top-0 bg-muted">
+                  <div className="max-h-scroll-sm overflow-y-auto">
+                    <AdminDataTable minWidth="sm">
+                      <AdminTableHeader>
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium">Date</th>
-                          <th className="px-3 py-2 text-right font-medium">NAV</th>
+                          <AdminTableHeadCell>Date</AdminTableHeadCell>
+                          <AdminTableHeadCell className="text-right">NAV</AdminTableHeadCell>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {(navHistory?.points ?? []).slice().reverse().slice(0, 30).map((point) => (
-                          <tr key={point.date} className="border-t border-border">
-                            <td className="px-3 py-1.5">{new Date(point.date).toLocaleDateString()}</td>
-                            <td className="px-3 py-1.5 text-right">{formatNav(point.nav)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                      </AdminTableHeader>
+                      <AdminTableBody>
+                        {(navHistory?.points ?? []).length === 0 ? (
+                          <AdminTableStateRow colSpan={2}>No NAV history.</AdminTableStateRow>
+                        ) : (
+                          (navHistory?.points ?? [])
+                            .slice()
+                            .reverse()
+                            .slice(0, 30)
+                            .map((point) => (
+                              <AdminTableRow key={point.date}>
+                                <AdminTableCell>
+                                  {new Date(point.date).toLocaleDateString()}
+                                </AdminTableCell>
+                                <AdminTableCell className="text-right tabular-nums">
+                                  {formatNav(point.nav)}
+                                </AdminTableCell>
+                              </AdminTableRow>
+                            ))
+                        )}
+                      </AdminTableBody>
+                    </AdminDataTable>
                   </div>
                 </CardContent>
               </Card>
@@ -481,6 +493,7 @@ export default function MutualFundsAdminPage() {
   const [categories, setCategories] = useState<MfCategoryAdmin[]>([]);
   const [funds, setFunds] = useState<MfFundAdmin[]>([]);
   const [fundPage, setFundPage] = useState(1);
+  const [fundPageSize, setFundPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [fundTotal, setFundTotal] = useState(0);
   const [fundHasMore, setFundHasMore] = useState(false);
   const [fundSearch, setFundSearch] = useState("");
@@ -493,6 +506,10 @@ export default function MutualFundsAdminPage() {
   const [amcs, setAmcs] = useState<MfAmc[]>([]);
   const [amcSearch, setAmcSearch] = useState("");
   const [amcPage, setAmcPage] = useState(0);
+  const [amcPageSize, setAmcPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [categoryPage, setCategoryPage] = useState(0);
+  const [categoryPageSize, setCategoryPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const tabs = useMemo(
     () =>
       [
@@ -519,7 +536,7 @@ export default function MutualFundsAdminPage() {
         tasks.push(
           fetchMfFunds({
             page: fundPage,
-            page_size: FUND_PAGE_SIZE,
+            page_size: fundPageSize,
             q: fundSearch || undefined,
             lifecycle_status: fundLifecycle || undefined,
             category_slug: fundCategory || undefined,
@@ -542,6 +559,7 @@ export default function MutualFundsAdminPage() {
     fundCategory,
     fundLifecycle,
     fundPage,
+    fundPageSize,
     fundSearch,
   ]);
 
@@ -632,7 +650,18 @@ export default function MutualFundsAdminPage() {
     }
   }, [defaultTab, tab, tabs]);
 
-  const fundTotalPages = Math.max(1, Math.ceil(fundTotal / FUND_PAGE_SIZE));
+  const fundTotalPages = Math.max(1, Math.ceil(fundTotal / fundPageSize));
+
+  const fundCategoryOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: ALL, label: "All categories" },
+      ...categories.map((category) => ({
+        value: category.slug,
+        label: category.name,
+      })),
+    ],
+    [categories],
+  );
 
   const overviewMetrics = useMemo(
     () => [
@@ -680,13 +709,32 @@ export default function MutualFundsAdminPage() {
   }, [amcSearch, amcs]);
 
   const amcPagination = useMemo(
-    () => paginateItems(filteredAmcs, amcPage, ADMIN_TABLE_PAGE_SIZE),
-    [amcPage, filteredAmcs],
+    () => paginateItems(filteredAmcs, amcPage, amcPageSize),
+    [amcPage, amcPageSize, filteredAmcs],
+  );
+
+  const filteredCategories = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) return categories;
+    return categories.filter(
+      (category) =>
+        category.name.toLowerCase().includes(query) ||
+        category.slug.toLowerCase().includes(query),
+    );
+  }, [categories, categorySearch]);
+
+  const categoryPagination = useMemo(
+    () => paginateItems(filteredCategories, categoryPage, categoryPageSize),
+    [categoryPage, categoryPageSize, filteredCategories],
   );
 
   useEffect(() => {
     setAmcPage(0);
-  }, [amcSearch]);
+  }, [amcSearch, amcPageSize]);
+
+  useEffect(() => {
+    setCategoryPage(0);
+  }, [categorySearch, categoryPageSize]);
 
   const hasAnyMfAccess = canReadCatalog || canReadAmcs || canReadJobs;
 
@@ -697,32 +745,20 @@ export default function MutualFundsAdminPage() {
           You do not have permission to view mutual fund administration.
         </AdminFeedbackMessage>
       ) : (
-        <div className="space-y-6">
-          <AdminSectionBreadcrumb segments={[{ label: "Mutual funds" }]} />
-
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="font-heading text-h3 font-semibold text-foreground">Mutual funds</h1>
-              <p className="mt-1 text-caption text-muted-foreground">
-                Catalog, content, AMCs, and ingestion operations.
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="rounded-[var(--radius-card)] border border-border bg-primary/10 p-3 text-primary">
-                <TrendingUp className="size-5" />
-              </div>
-            </div>
-          </div>
-
+        <AdminSectionPageShell
+          breadcrumbSegments={[{ label: "Mutual funds" }]}
+          title="Mutual funds"
+          icon={TrendingUp}
+        >
           <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-6">
-            <TabsList variant="line" className="w-fit justify-start border-b border-border">
+            <AdminTabList>
               {tabs.map(({ key, label, icon: Icon }) => (
-                <TabsTrigger key={key} value={key} className="gap-2 px-4 py-2">
+                <AdminTabTrigger key={key} value={key} className="gap-2">
                   <Icon className="size-4 shrink-0" />
                   {label}
-                </TabsTrigger>
+                </AdminTabTrigger>
               ))}
-            </TabsList>
+            </AdminTabList>
 
             <div className="min-w-0">
               {error ? (
@@ -738,7 +774,7 @@ export default function MutualFundsAdminPage() {
 
               {canReadCatalog ? (
                 <TabsContent value="overview" className="mt-0 space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <AdminMetricCardsGrid>
                     {overviewMetrics.map((metric) => (
                       <AdminMetricCard
                         key={metric.key}
@@ -749,21 +785,20 @@ export default function MutualFundsAdminPage() {
                         loading={loading}
                       />
                     ))}
-                  </div>
+                  </AdminMetricCardsGrid>
 
                   <div className="space-y-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <AdminSectionTitle icon={Building2}>AMCs</AdminSectionTitle>
+                      <AdminSearchInput
+                        containerClassName="max-w-sm"
+                        placeholder="Search AMCs"
+                        value={amcSearch}
+                        onChange={(event) => {
+                          setAmcSearch(event.target.value);
+                          setAmcPage(0);
+                        }}
+                      />
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        <AdminSearchInput
-                          containerClassName="max-w-sm sm:w-56"
-                          placeholder="Search AMCs"
-                          value={amcSearch}
-                          onChange={(event) => {
-                            setAmcSearch(event.target.value);
-                            setAmcPage(0);
-                          }}
-                        />
                         <StatusBadge variant="info" showIcon={false}>
                           {(overview?.total_categories ?? categories.length).toLocaleString()} categories
                         </StatusBadge>
@@ -773,12 +808,36 @@ export default function MutualFundsAdminPage() {
                       </div>
                     </div>
 
-                    <AdminDataTable minWidth="default">
+                    <AdminDataTable
+                      minWidth="default"
+                      footer={
+                        <AdminTablePagination
+                          page={amcPagination.page}
+                          totalPages={amcPagination.totalPages}
+                          hasPrevious={amcPagination.hasPrevious}
+                          hasNext={amcPagination.hasNext}
+                          disabled={loading}
+                          totalCount={filteredAmcs.length}
+                          currentPageCount={amcPagination.items.length}
+                          pageSize={amcPageSize}
+                          onPageSizeChange={(next) => {
+                            setAmcPageSize(next);
+                            setAmcPage(0);
+                          }}
+                          onPrevious={() => setAmcPage((page) => Math.max(0, page - 1))}
+                          onNext={() => setAmcPage((page) => page + 1)}
+                        />
+                      }
+                    >
                       <AdminTableHeader>
                         <tr>
-                          <AdminTableHeadCell>AMC</AdminTableHeadCell>
-                          <AdminTableHeadCell>Status</AdminTableHeadCell>
-                          <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+                          <AdminTableHeadCell className="w-[5rem] max-w-[5rem] whitespace-nowrap text-right">
+                            Actions
+                          </AdminTableHeadCell>
+                          <AdminTableHeadCell className="min-w-[22rem] w-[70%]">AMC</AdminTableHeadCell>
+                          <AdminTableHeadCell className="w-[12rem] whitespace-nowrap">
+                            Status
+                          </AdminTableHeadCell>
                         </tr>
                       </AdminTableHeader>
                       <AdminTableBody>
@@ -789,29 +848,7 @@ export default function MutualFundsAdminPage() {
                         ) : (
                           amcPagination.items.map((amc) => (
                             <AdminTableRow key={amc.id}>
-                              <AdminTableCell>
-                                <div className="flex min-w-0 items-start gap-3">
-                                  <AmcLogo name={amc.name} logoUrl={amc.logo_url} className="mt-0.5" />
-                                  <div className="min-w-0">
-                                    <p className="font-medium text-foreground">{amc.name}</p>
-                                    <p className="mt-0.5 text-caption text-muted-foreground">
-                                      {amc.slug} · AMFI {amc.amc_code ?? "—"}
-                                    </p>
-                                  </div>
-                                </div>
-                              </AdminTableCell>
-                              <AdminTableCell>
-                                <div className="flex flex-wrap gap-1">
-                                  <MfStatusChip
-                                    label={amc.is_active ? "Empanelled" : "Not empanelled"}
-                                    tone={amc.is_active ? "success" : "warning"}
-                                  />
-                                  {amc.admin_kill_switch ? (
-                                    <MfStatusChip label="Kill switch" tone="danger" />
-                                  ) : null}
-                                </div>
-                              </AdminTableCell>
-                              <AdminTableCell className="text-right">
+                              <AdminTableCell className="w-[5rem] max-w-[5rem] text-right">
                                 {canManageAmcs || canManageContent ? (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger
@@ -864,23 +901,33 @@ export default function MutualFundsAdminPage() {
                                   <span className="text-muted-foreground">—</span>
                                 )}
                               </AdminTableCell>
+                              <AdminTableCell className="min-w-[22rem] w-[70%]">
+                                <div className="flex min-w-0 items-start gap-3">
+                                  <AmcLogo name={amc.name} logoUrl={amc.logo_url} className="mt-0.5" />
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-foreground">{amc.name}</p>
+                                    <p className="mt-0.5 text-caption text-muted-foreground">
+                                      {amc.slug} · AMFI {amc.amc_code ?? "—"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </AdminTableCell>
+                              <AdminTableCell className="w-[12rem] whitespace-nowrap">
+                                <div className="flex flex-wrap gap-1">
+                                  <MfStatusChip
+                                    label={amc.is_active ? "Empanelled" : "Not empanelled"}
+                                    tone={amc.is_active ? "success" : "warning"}
+                                  />
+                                  {amc.admin_kill_switch ? (
+                                    <MfStatusChip label="Kill switch" tone="danger" />
+                                  ) : null}
+                                </div>
+                              </AdminTableCell>
                             </AdminTableRow>
                           ))
                         )}
                       </AdminTableBody>
                     </AdminDataTable>
-
-                    {!loading && filteredAmcs.length > 0 ? (
-                      <AdminTablePagination
-                        page={amcPagination.page}
-                        totalPages={amcPagination.totalPages}
-                        hasPrevious={amcPagination.hasPrevious}
-                        hasNext={amcPagination.hasNext}
-                        disabled={loading}
-                        onPrevious={() => setAmcPage((page) => Math.max(0, page - 1))}
-                        onNext={() => setAmcPage((page) => page + 1)}
-                      />
-                    ) : null}
                   </div>
                 </TabsContent>
               ) : null}
@@ -904,38 +951,59 @@ export default function MutualFundsAdminPage() {
 
               {canReadCatalog ? (
                 <TabsContent value="categories" className="mt-0 space-y-4">
-                  <AdminDataTable minWidth="xl">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <AdminSearchInput
+                      containerClassName="max-w-sm"
+                      placeholder="Search categories"
+                      value={categorySearch}
+                      onChange={(event) => setCategorySearch(event.target.value)}
+                    />
+                  </div>
+
+                  <AdminDataTable
+                    minWidth="xl"
+                    footer={
+                      <AdminTablePagination
+                        page={categoryPagination.page}
+                        totalPages={categoryPagination.totalPages}
+                        hasPrevious={categoryPagination.hasPrevious}
+                        hasNext={categoryPagination.hasNext}
+                        disabled={loading}
+                        totalCount={filteredCategories.length}
+                        currentPageCount={categoryPagination.items.length}
+                        pageSize={categoryPageSize}
+                        onPageSizeChange={(next) => {
+                          setCategoryPageSize(next);
+                          setCategoryPage(0);
+                        }}
+                        onPrevious={() => setCategoryPage((page) => Math.max(0, page - 1))}
+                        onNext={() => setCategoryPage((page) => page + 1)}
+                      />
+                    }
+                  >
                     <AdminTableHeader>
                       <tr>
+                        <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
                         <AdminTableHeadCell>Category</AdminTableHeadCell>
                         <AdminTableHeadCell>Slug</AdminTableHeadCell>
                         <AdminTableHeadCell className="text-right">Order</AdminTableHeadCell>
                         <AdminTableHeadCell className="text-right">Funds</AdminTableHeadCell>
                         <AdminTableHeadCell className="text-right">Active</AdminTableHeadCell>
                         <AdminTableHeadCell>Visible</AdminTableHeadCell>
-                        <AdminTableHeadCell className="text-right">Curate</AdminTableHeadCell>
                       </tr>
                     </AdminTableHeader>
                     <AdminTableBody>
                       {loading ? (
                         <AdminTableSkeletonRows columns={7} />
-                      ) : categories.length === 0 ? (
-                        <AdminTableStateRow colSpan={7}>No categories found.</AdminTableStateRow>
+                      ) : categoryPagination.items.length === 0 ? (
+                        <AdminTableStateRow colSpan={7}>
+                          {categories.length === 0
+                            ? "No categories found."
+                            : "No categories match your search."}
+                        </AdminTableStateRow>
                       ) : (
-                        categories.map((category) => (
+                        categoryPagination.items.map((category) => (
                           <AdminTableRow key={category.id}>
-                            <AdminTableCell className="font-medium text-foreground">{category.name}</AdminTableCell>
-                            <AdminTableCell className="text-muted-foreground">{category.slug}</AdminTableCell>
-                            <AdminTableCell className="text-right">{category.display_order}</AdminTableCell>
-                            <AdminTableCell className="text-right">{category.fund_count}</AdminTableCell>
-                            <AdminTableCell className="text-right">{category.active_fund_count}</AdminTableCell>
-                            <AdminTableCell>
-                              <MfStatusChip
-                                label={category.is_visible ? "Visible" : "Hidden"}
-                                tone={category.is_visible ? "success" : "neutral"}
-                                showIcon={false}
-                              />
-                            </AdminTableCell>
                             <AdminTableCell className="text-right">
                               <Button
                                 size="sm"
@@ -951,6 +1019,18 @@ export default function MutualFundsAdminPage() {
                               >
                                 Curate
                               </Button>
+                            </AdminTableCell>
+                            <AdminTableCell className="font-medium text-foreground">{category.name}</AdminTableCell>
+                            <AdminTableCell className="text-muted-foreground">{category.slug}</AdminTableCell>
+                            <AdminTableCell className="text-right">{category.display_order}</AdminTableCell>
+                            <AdminTableCell className="text-right">{category.fund_count}</AdminTableCell>
+                            <AdminTableCell className="text-right">{category.active_fund_count}</AdminTableCell>
+                            <AdminTableCell>
+                              <MfStatusChip
+                                label={category.is_visible ? "Visible" : "Hidden"}
+                                tone={category.is_visible ? "success" : "neutral"}
+                                showIcon={false}
+                              />
                             </AdminTableCell>
                           </AdminTableRow>
                         ))
@@ -990,62 +1070,60 @@ export default function MutualFundsAdminPage() {
                     />
 
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                      <Select
+                      <AdminSelect
                         value={fundLifecycle || ALL}
                         onValueChange={(value) => {
-                          setFundLifecycle(value === ALL ? "" : (value ?? ""));
+                          setFundLifecycle(value === ALL ? "" : value);
                           setFundPage(1);
                         }}
-                      >
-                        <SelectTrigger className="w-44">
-                          <SelectValue placeholder="All lifecycle">
-                            {fundLifecycle || "All lifecycle"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL}>All lifecycle</SelectItem>
-                          <SelectItem value="ACTIVE">Active</SelectItem>
-                          <SelectItem value="DRAFT">Draft</SelectItem>
-                          <SelectItem value="INACTIVE">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Select
+                        options={FUND_LIFECYCLE_OPTIONS}
+                        placeholder="Lifecycle"
+                        className="min-w-select-sm"
+                      />
+                      <AdminSelect
                         value={fundCategory || ALL}
                         onValueChange={(value) => {
-                          setFundCategory(value === ALL ? "" : (value ?? ""));
+                          setFundCategory(value === ALL ? "" : value);
                           setFundPage(1);
                         }}
-                      >
-                        <SelectTrigger className="w-44">
-                          <SelectValue placeholder="All categories">
-                            {categories.find((category) => category.slug === fundCategory)?.name ??
-                              "All categories"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL}>All categories</SelectItem>
-                          {categories.map((category) => (
-                            <SelectItem key={category.id} value={category.slug}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        options={fundCategoryOptions}
+                        placeholder="Category"
+                        className="min-w-select-sm"
+                      />
                     </div>
                   </div>
 
-                  <AdminDataTable minWidth="3xl">
+                  <AdminDataTable
+                    minWidth="3xl"
+                    footer={
+                      <AdminTablePagination
+                        page={fundPage - 1}
+                        totalPages={fundTotalPages}
+                        hasPrevious={fundPage > 1}
+                        hasNext={fundHasMore}
+                        disabled={loading}
+                        totalCount={fundTotal}
+                        currentPageCount={funds.length}
+                        pageSize={fundPageSize}
+                        onPageSizeChange={(next) => {
+                          setFundPageSize(next);
+                          setFundPage(1);
+                        }}
+                        onPrevious={() => setFundPage((page) => Math.max(1, page - 1))}
+                        onNext={() => setFundPage((page) => page + 1)}
+                      />
+                    }
+                  >
                     <AdminTableHeader>
                       <tr>
+                        {canManageCatalog ? (
+                          <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+                        ) : null}
                         <AdminTableHeadCell>Scheme</AdminTableHeadCell>
                         <AdminTableHeadCell>AMC</AdminTableHeadCell>
                         <AdminTableHeadCell>Status</AdminTableHeadCell>
                         <AdminTableHeadCell className="text-right">3Y</AdminTableHeadCell>
                         <AdminTableHeadCell className="text-right">NAV</AdminTableHeadCell>
-                        {canManageCatalog ? (
-                          <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
-                        ) : null}
                       </tr>
                     </AdminTableHeader>
                     <AdminTableBody>
@@ -1064,6 +1142,21 @@ export default function MutualFundsAdminPage() {
                             key={fund.fund_id}
                             onClick={() => setSelectedFundId(fund.fund_id)}
                           >
+                            {canManageCatalog ? (
+                              <AdminTableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={actionLoading === `fund-${fund.fund_id}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleToggleFundActive(fund);
+                                  }}
+                                >
+                                  {fund.fund_active ? "Disable" : "Enable"}
+                                </Button>
+                              </AdminTableCell>
+                            ) : null}
                             <AdminTableCell>
                               <p className="font-medium text-foreground">{fund.scheme_name}</p>
                               <p className="mt-0.5 text-caption text-muted-foreground">
@@ -1109,39 +1202,12 @@ export default function MutualFundsAdminPage() {
                                 {formatNav(fund.latest_nav)}
                               </span>
                             </AdminTableCell>
-                            {canManageCatalog ? (
-                              <AdminTableCell className="text-right">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={actionLoading === `fund-${fund.fund_id}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleToggleFundActive(fund);
-                                  }}
-                                >
-                                  {fund.fund_active ? "Disable" : "Enable"}
-                                </Button>
-                              </AdminTableCell>
-                            ) : null}
                           </AdminTableRow>
                           );
                         })
                       )}
                     </AdminTableBody>
                   </AdminDataTable>
-
-                  {!loading && funds.length > 0 ? (
-                    <AdminTablePagination
-                      page={fundPage - 1}
-                      totalPages={fundTotalPages}
-                      hasPrevious={fundPage > 1}
-                      hasNext={fundHasMore}
-                      disabled={loading}
-                      onPrevious={() => setFundPage((page) => Math.max(1, page - 1))}
-                      onNext={() => setFundPage((page) => page + 1)}
-                    />
-                  ) : null}
                 </TabsContent>
               ) : null}
 
@@ -1168,7 +1234,7 @@ export default function MutualFundsAdminPage() {
               ) : null}
             </div>
           </Tabs>
-        </div>
+        </AdminSectionPageShell>
       )}
 
       {selectedFundId != null ? (

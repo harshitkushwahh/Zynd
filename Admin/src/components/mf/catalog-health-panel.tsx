@@ -29,15 +29,9 @@ import {
 } from "@/components/ui/admin-table";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ApiError } from "@/lib/api-client";
 import {
@@ -115,6 +109,7 @@ export function CatalogHealthPanel({
   const [issues, setIssues] = useState<MfCatalogHealthIssue[]>([]);
   const [activeCheck, setActiveCheck] = useState<string | null>(null);
   const [issuePage, setIssuePage] = useState(1);
+  const [issuePageSize, setIssuePageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [issueTotal, setIssueTotal] = useState(0);
   const [issueHasMore, setIssueHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -127,7 +122,7 @@ export function CatalogHealthPanel({
     try {
       const [health, issueResult] = await Promise.all([
         fetchMfCatalogHealth(),
-        fetchMfCatalogHealthIssues(activeCheck ?? undefined, issuePage, ADMIN_TABLE_PAGE_SIZE),
+        fetchMfCatalogHealthIssues(activeCheck ?? undefined, issuePage, issuePageSize),
       ]);
       setSummary(health);
       setIssues(issueResult.items);
@@ -138,7 +133,7 @@ export function CatalogHealthPanel({
     } finally {
       setLoading(false);
     }
-  }, [activeCheck, issuePage]);
+  }, [activeCheck, issuePage, issuePageSize]);
 
   useEffect(() => {
     void loadHealth();
@@ -146,7 +141,7 @@ export function CatalogHealthPanel({
 
   useEffect(() => {
     setIssuePage(1);
-  }, [activeCheck]);
+  }, [activeCheck, issuePageSize]);
 
   const healthMetrics = useMemo(
     () => [
@@ -182,17 +177,23 @@ export function CatalogHealthPanel({
     [summary],
   );
 
-  const issueTotalPages = Math.max(1, Math.ceil(issueTotal / ADMIN_TABLE_PAGE_SIZE));
-  const activeCheckLabel =
-    activeCheck == null
-      ? "All issues"
-      : (summary?.checks.find((check) => check.key === activeCheck)?.label ?? activeCheck);
+  const issueTotalPages = Math.max(1, Math.ceil(issueTotal / issuePageSize));
+  const checkOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: ALL_CHECKS, label: "All issues" },
+      ...(summary?.checks ?? []).map((check) => ({
+        value: check.key,
+        label: `${check.label} (${check.count})`,
+      })),
+    ],
+    [summary?.checks],
+  );
 
   return (
     <section className="space-y-4">
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminMetricCardsGrid>
         {healthMetrics.map((metric) => (
           <AdminMetricCard
             key={metric.key}
@@ -203,27 +204,17 @@ export function CatalogHealthPanel({
             loading={loading}
           />
         ))}
-      </div>
+      </AdminMetricCardsGrid>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <AdminSectionTitle icon={ShieldAlert}>Health issues</AdminSectionTitle>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <Select
+          <AdminSelect
             value={activeCheck ?? ALL_CHECKS}
-            onValueChange={(value) => setActiveCheck(value === ALL_CHECKS ? null : (value ?? null))}
-          >
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="All issues">{activeCheckLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_CHECKS}>All issues</SelectItem>
-              {(summary?.checks ?? []).map((check) => (
-                <SelectItem key={check.key} value={check.key}>
-                  {check.label} ({check.count})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onValueChange={(value) => setActiveCheck(value === ALL_CHECKS ? null : value)}
+            options={checkOptions}
+            placeholder="All issues"
+            className="min-w-select-md"
+          />
           <Button
             variant="outline"
             size="icon"
@@ -253,7 +244,27 @@ export function CatalogHealthPanel({
         />
       ) : null}
 
-      <AdminDataTable minWidth="xl">
+      <AdminDataTable
+        minWidth="xl"
+        footer={
+          <AdminTablePagination
+            page={issuePage - 1}
+            totalPages={issueTotalPages}
+            hasPrevious={issuePage > 1}
+            hasNext={issueHasMore}
+            disabled={loading}
+            totalCount={issueTotal}
+            currentPageCount={issues.length}
+            pageSize={issuePageSize}
+            onPageSizeChange={(next) => {
+              setIssuePageSize(next);
+              setIssuePage(1);
+            }}
+            onPrevious={() => setIssuePage((page) => Math.max(1, page - 1))}
+            onNext={() => setIssuePage((page) => page + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Scheme / AMC</AdminTableHeadCell>
@@ -306,18 +317,6 @@ export function CatalogHealthPanel({
           )}
         </AdminTableBody>
       </AdminDataTable>
-
-      {!loading && issues.length > 0 ? (
-        <AdminTablePagination
-          page={issuePage - 1}
-          totalPages={issueTotalPages}
-          hasPrevious={issuePage > 1}
-          hasNext={issueHasMore}
-          disabled={loading}
-          onPrevious={() => setIssuePage((page) => Math.max(1, page - 1))}
-          onNext={() => setIssuePage((page) => page + 1)}
-        />
-      ) : null}
     </section>
   );
 }

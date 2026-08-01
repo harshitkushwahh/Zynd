@@ -1,89 +1,82 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  ArrowLeftRight,
-  CalendarClock,
-  LayoutGrid,
-  PieChart,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { useCallback, useState, useTransition } from "react";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { BranchDistributorSectionTabs } from "@/components/dist-management/branch-distributor-section-tabs";
 import {
+  BRANCH_DISTRIBUTOR_TAB_LABELS,
+  type BranchDistributorTabId,
+} from "@/components/dist-management/branch-distributor-tab-ids";
+import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
+import {
+  DISTRIBUTOR_BRANCH_DISTRIBUTOR_TABS_ASIDE_CLASS,
+  DISTRIBUTOR_BRANCH_DISTRIBUTOR_TABS_BODY_CLASS,
+  DISTRIBUTOR_BRANCH_DISTRIBUTOR_TABS_MAIN_CLASS,
   DISTRIBUTOR_TABS_CONTENT_CLASS,
-  DISTRIBUTOR_TABS_ROOT_CLASS,
 } from "@/lib/distributor-layout";
+import { cn } from "@/lib/utils";
 
-export const BRANCH_DISTRIBUTOR_TAB_IDS = [
-  "overview",
-  "portfolio",
-  "clients",
-  "transactions",
-  "sips",
-] as const;
-
-export type BranchDistributorTabId = (typeof BRANCH_DISTRIBUTOR_TAB_IDS)[number];
-
-const TAB_LABELS: Record<BranchDistributorTabId, string> = {
-  overview: "Overview",
-  portfolio: "Book portfolio",
-  clients: "Clients",
-  transactions: "Transactions",
-  sips: "SIPs & STPs",
-};
-
-const TAB_ICONS: Record<BranchDistributorTabId, LucideIcon> = {
-  overview: LayoutGrid,
-  portfolio: PieChart,
-  clients: Users,
-  transactions: ArrowLeftRight,
-  sips: CalendarClock,
-};
+export {
+  BRANCH_DISTRIBUTOR_TAB_IDS,
+  type BranchDistributorTabId,
+} from "@/components/dist-management/branch-distributor-tab-ids";
 
 type BranchDistributorDetailTabsShellProps = {
   defaultTab?: BranchDistributorTabId;
   panels: Record<BranchDistributorTabId, ReactNode>;
+  aside: ReactNode;
 };
 
 export function BranchDistributorDetailTabsShell({
   defaultTab = "overview",
   panels,
+  aside,
 }: BranchDistributorDetailTabsShellProps) {
-  return (
-    <Tabs defaultValue={defaultTab} className={DISTRIBUTOR_TABS_ROOT_CLASS}>
-      <div className="border-b border-border">
-        <TabsList
-          variant="line"
-          aria-label="Distributor profile sections"
-          className={cn(
-            "h-auto w-full min-w-0 justify-start gap-0 overflow-x-auto rounded-none bg-transparent p-0",
-            "[&::-webkit-scrollbar]:h-1",
-          )}
-        >
-          {BRANCH_DISTRIBUTOR_TAB_IDS.map((tabId) => {
-            const Icon = TAB_ICONS[tabId];
-            return (
-              <TabsTrigger
-                key={tabId}
-                value={tabId}
-                className="shrink-0 gap-1.5 rounded-none px-3 py-2.5 text-caption after:bottom-0 data-active:text-foreground"
-              >
-                <Icon className="size-3.5 opacity-80" aria-hidden />
-                {TAB_LABELS[tabId]}
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-      </div>
+  const [activeTab, setActiveTab] = useState<BranchDistributorTabId>(defaultTab);
+  const [isTabPending, startTabTransition] = useTransition();
 
-      {BRANCH_DISTRIBUTOR_TAB_IDS.map((tabId) => (
-        <TabsContent key={tabId} value={tabId} className={DISTRIBUTOR_TABS_CONTENT_CLASS}>
-          {panels[tabId]}
-        </TabsContent>
-      ))}
-    </Tabs>
+  const onTabChange = useCallback((value: BranchDistributorTabId) => {
+    startTabTransition(() => {
+      setActiveTab(value);
+    });
+  }, []);
+
+  return (
+    <div className="distributor-branch-distributor-tabs-root">
+      <DistributorPageHeader
+        title={BRANCH_DISTRIBUTOR_TAB_LABELS[activeTab]}
+        titleAs="h2"
+        titleSwitchKey={activeTab}
+        titleClassName="distributor-client-detail-tab-panel__title"
+        className="distributor-client-detail-tabs-header"
+      >
+        <BranchDistributorSectionTabs
+          value={activeTab}
+          onChange={onTabChange}
+          busy={isTabPending}
+        />
+      </DistributorPageHeader>
+
+      <div className={DISTRIBUTOR_BRANCH_DISTRIBUTOR_TABS_BODY_CLASS}>
+        <aside className={DISTRIBUTOR_BRANCH_DISTRIBUTOR_TABS_ASIDE_CLASS}>{aside}</aside>
+        <div className={DISTRIBUTOR_BRANCH_DISTRIBUTOR_TABS_MAIN_CLASS}>
+          <div
+            key={activeTab}
+            role="tabpanel"
+            aria-labelledby={`branch-distributor-tab-${activeTab}`}
+            id={`branch-distributor-panel-${activeTab}`}
+            tabIndex={0}
+            className={cn(
+              DISTRIBUTOR_TABS_CONTENT_CLASS,
+              "distributor-client-detail-tab-panel",
+              isTabPending && "distributor-client-detail-tab-panel--pending",
+            )}
+          >
+            {panels[activeTab]}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -14,21 +14,14 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   getOffsetPage,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { AUDIT_EVENT_GROUPS, formatAuditEvent } from "@/lib/admin-audit-events";
 import { fetchRiskAuditLogs, type RiskAuditLogItem } from "@/lib/risk-profile-admin-api";
 import { cn } from "@/lib/utils";
@@ -60,11 +53,19 @@ export function RiskProfileAuditPanel() {
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState(ALL);
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
 
-  const riskEventTypes = useMemo(() => {
+  const eventFilterOptions = useMemo<AdminSelectOption[]>(() => {
     const group = AUDIT_EVENT_GROUPS.find((item) => item.label === RISK_PROFILE_GROUP);
-    return group?.types ?? [];
+    const types = group?.types ?? [];
+    return [
+      { value: ALL, label: "All risk events" },
+      ...types.map((eventType) => ({
+        value: eventType,
+        label: formatAuditEvent(eventType),
+      })),
+    ];
   }, []);
 
   const loadLogs = useCallback(async () => {
@@ -73,11 +74,11 @@ export function RiskProfileAuditPanel() {
     try {
       const result = await fetchRiskAuditLogs({
         event_type: eventFilter === ALL ? undefined : eventFilter,
-        limit: ADMIN_TABLE_PAGE_SIZE,
+        limit: pageSize,
         offset,
       });
       setLogs(result.items);
-      setHasMore(result.items.length === ADMIN_TABLE_PAGE_SIZE);
+      setHasMore(result.items.length === pageSize);
     } catch (err) {
       setLogs([]);
       setHasMore(false);
@@ -85,7 +86,7 @@ export function RiskProfileAuditPanel() {
     } finally {
       setLoading(false);
     }
-  }, [eventFilter, offset]);
+  }, [eventFilter, offset, pageSize]);
 
   useEffect(() => {
     void loadLogs();
@@ -96,18 +97,7 @@ export function RiskProfileAuditPanel() {
     [logs, search],
   );
 
-  const handleEventFilterChange = (value: string | null) => {
-    setEventFilter(value ?? ALL);
-    setOffset(0);
-  };
-
-  const handleSearch = () => {
-    if (offset !== 0) {
-      setOffset(0);
-      return;
-    }
-    void loadLogs();
-  };
+  const showSkeleton = loading && logs.length === 0;
 
   return (
     <div className="space-y-4">
@@ -117,28 +107,19 @@ export function RiskProfileAuditPanel() {
           placeholder="Search events, user, IP, or date"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") handleSearch();
-          }}
         />
 
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={eventFilter} onValueChange={handleEventFilterChange}>
-            <SelectTrigger size="sm" className="min-w-select-xl">
-              <SelectValue placeholder="Event type" />
-            </SelectTrigger>
-            <SelectContent className="max-h-scroll-md">
-              <SelectItem value={ALL}>All risk events</SelectItem>
-              <SelectGroup>
-                <SelectLabel>{RISK_PROFILE_GROUP}</SelectLabel>
-                {riskEventTypes.map((eventType) => (
-                  <SelectItem key={eventType} value={eventType}>
-                    {formatAuditEvent(eventType)}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <AdminSelect
+            value={eventFilter}
+            onValueChange={(value) => {
+              setEventFilter(value);
+              setOffset(0);
+            }}
+            options={eventFilterOptions}
+            placeholder="Event type"
+            className="min-w-select-xl"
+          />
 
           <Button variant="outline" size="icon" onClick={() => void loadLogs()} aria-label="Refresh">
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
@@ -148,7 +129,26 @@ export function RiskProfileAuditPanel() {
 
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
-      <AdminDataTable minWidth="lg">
+      <AdminDataTable
+        minWidth="lg"
+        footer={
+          <AdminTablePagination
+            page={getOffsetPage(offset, pageSize)}
+            hasPrevious={offset > 0}
+            hasNext={hasMore}
+            disabled={loading}
+            currentPageCount={filteredLogs.length}
+            hasMore={hasMore}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setOffset(0);
+            }}
+            onPrevious={() => setOffset((value) => Math.max(0, value - pageSize))}
+            onNext={() => setOffset((value) => value + pageSize)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Event</AdminTableHeadCell>
@@ -158,13 +158,12 @@ export function RiskProfileAuditPanel() {
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows
-            colSpan={4}
-            loading={loading}
-            isEmpty={filteredLogs.length === 0}
-            emptyMessage="No audit events match your filters."
-          >
-            {filteredLogs.map((log) => (
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={4} />
+          ) : filteredLogs.length === 0 ? (
+            <AdminTableStateRow colSpan={4}>No audit events match your filters.</AdminTableStateRow>
+          ) : (
+            filteredLogs.map((log) => (
               <AdminTableRow key={log.id}>
                 <AdminTableCell className="font-medium text-foreground">
                   {formatAuditEvent(log.event_type)}
@@ -175,21 +174,14 @@ export function RiskProfileAuditPanel() {
                 <AdminTableCell className="text-muted-foreground">
                   {formatTimestampDetail(log.created_at)}
                 </AdminTableCell>
-                <AdminTableCell className="text-muted-foreground">{log.ip_address ?? "—"}</AdminTableCell>
+                <AdminTableCell className="text-muted-foreground">
+                  {log.ip_address ?? "—"}
+                </AdminTableCell>
               </AdminTableRow>
-            ))}
-          </AdminTableRows>
+            ))
+          )}
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={getOffsetPage(offset)}
-        hasPrevious={offset > 0}
-        hasNext={hasMore}
-        disabled={loading}
-        onPrevious={() => setOffset((value) => Math.max(0, value - ADMIN_TABLE_PAGE_SIZE))}
-        onNext={() => setOffset((value) => value + ADMIN_TABLE_PAGE_SIZE)}
-      />
     </div>
   );
 }

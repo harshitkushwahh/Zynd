@@ -1,6 +1,7 @@
-import { SystematicPlansPanel } from "@/components/systematic-plans/systematic-plans-panel";
-import { DISTRIBUTOR_PAGE_CONFIG } from "@/lib/distributor-page-config";
+import { redirect } from "next/navigation";
+
+import { distributorOperationsSectionHref } from "@/lib/distributor-operations-sections";
 
 export default function SystematicPlansPage() {
-  return <SystematicPlansPanel {...DISTRIBUTOR_PAGE_CONFIG.systematicPlans} />;
+  redirect(distributorOperationsSectionHref("systematic-plans"));
 }

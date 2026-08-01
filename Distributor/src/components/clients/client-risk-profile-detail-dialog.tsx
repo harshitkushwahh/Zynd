@@ -125,7 +125,7 @@ export function ClientRiskProfileDetailDialog({
               </div>
             </div>
             {summary ? (
-              <div className="rounded-[var(--radius-card)] border border-border bg-muted/20 px-4 py-4">
+              <div className="rounded-[var(--radius-5xl)] border border-border bg-muted/20 px-4 py-4">
                 <div className="flex gap-3">
                   <Lightbulb className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
                   <div>

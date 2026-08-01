@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, type ChangeEvent } from "react";
-import { CheckCircle2, FileUp, Loader2 } from "lucide-react";
+import { CheckCircle2, FileUp, Loader2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ADD_DISTRIBUTOR_ACCEPTED_DOC_TYPES } from "@/lib/add-distributor/add-distributor-journey";
@@ -14,6 +14,7 @@ type AddDistributorDocumentUploadProps = {
   fileName: string | null;
   onFileSelect: (fileName: string | null) => void;
   uploading?: boolean;
+  variant?: "default" | "wizard";
 };
 
 export function AddDistributorDocumentUpload({
@@ -23,32 +24,37 @@ export function AddDistributorDocumentUpload({
   fileName,
   onFileSelect,
   uploading = false,
+  variant = "default",
 }: AddDistributorDocumentUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const uploaded = Boolean(fileName);
+  const isWizard = variant === "wizard";
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     onFileSelect(file ? file.name : null);
   };
 
+  const openPicker = () => inputRef.current?.click();
+
   return (
     <div
       className={cn(
         "add-distributor-doc",
         uploaded && "add-distributor-doc--uploaded",
+        isWizard && "add-distributor-doc--wizard",
       )}
     >
       <div className="add-distributor-doc__head">
         <span className="add-distributor-doc__icon" aria-hidden>
           <FileUp className="size-5" strokeWidth={2.25} />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-compact font-medium text-foreground">{label}</p>
-          <p className="text-caption text-muted-foreground">{description}</p>
+        <div className="min-w-0 flex-1 text-left">
+          <p className="add-distributor-doc__label">{label}</p>
+          <p className="add-distributor-doc__description">{description}</p>
         </div>
         {uploaded ? (
-          <CheckCircle2 className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+          <CheckCircle2 className="add-distributor-doc__status-icon size-5 shrink-0" aria-hidden />
         ) : null}
       </div>
 
@@ -63,7 +69,7 @@ export function AddDistributorDocumentUpload({
 
       {uploaded ? (
         <div className="add-distributor-doc__file">
-          <p className="truncate font-mono text-caption text-foreground">{fileName}</p>
+          <p className="add-distributor-doc__file-name">{fileName}</p>
           <Button
             type="button"
             variant="outline"
@@ -77,14 +83,23 @@ export function AddDistributorDocumentUpload({
             Replace
           </Button>
         </div>
-      ) : (
-        <Button
+      ) : isWizard ? (
+        <button
           type="button"
-          variant="outline"
-          className="w-full sm:w-auto"
+          className="add-distributor-doc__dropzone"
           disabled={uploading}
-          onClick={() => inputRef.current?.click()}
+          onClick={openPicker}
         >
+          <Upload className="add-distributor-doc__dropzone-icon size-5" strokeWidth={2.25} aria-hidden />
+          <span className="add-distributor-doc__dropzone-title">
+            {uploading ? "Uploading…" : "Choose file"}
+          </span>
+          {!uploaded ? (
+            <span className="add-distributor-doc__dropzone-meta">No file chosen</span>
+          ) : null}
+        </button>
+      ) : (
+        <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={uploading} onClick={openPicker}>
           {uploading ? (
             <>
               <Loader2 className="size-4 animate-spin" aria-hidden />

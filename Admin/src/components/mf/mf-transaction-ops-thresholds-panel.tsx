@@ -6,24 +6,35 @@ import {
   Activity,
   AlertTriangle,
   CalendarClock,
+  Info,
+  RefreshCw,
   ShoppingCart,
   ShieldCheck,
   Timer,
   Webhook,
+  type LucideIcon,
 } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
-import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { ApiError } from "@/lib/api-client";
+import {
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTableRow,
+  AdminTableSkeletonRows,
+  AdminTableStateRow,
+} from "@/components/ui/admin-table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   expireStaleMfCheckouts,
   fetchMfTransactionOverview,
   type MfTransactionOverview,
 } from "@/lib/mf-transactions-admin-api";
-
+import { cn } from "@/lib/utils";
 
 function orderBadgeVariant(status: string): StatusBadgeVariant {
   if (status === "succeeded" || status === "active") return "success";
@@ -39,12 +50,115 @@ function formatOrderStatusLabel(status: string) {
 }
 
 function formatDurationHint(minutes: number | undefined) {
-  if (minutes == null) return undefined;
+  if (minutes == null) return null;
   if (minutes >= 60 && minutes % 60 === 0) {
     const hours = minutes / 60;
     return hours === 1 ? "1 hour" : `${hours} hours`;
   }
-  return undefined;
+  return `${minutes} min`;
+}
+
+type OpsThresholdRow = {
+  key: string;
+  category: string;
+  label: string;
+  value: string;
+  description: string;
+  icon: LucideIcon;
+  statusLabel: string;
+  statusVariant: StatusBadgeVariant;
+};
+
+function buildOpsRows(overview: MfTransactionOverview | null): OpsThresholdRow[] {
+  const countStatus = (count: number): Pick<OpsThresholdRow, "statusLabel" | "statusVariant"> =>
+    count > 0
+      ? { statusLabel: "Attention", statusVariant: "warning" }
+      : { statusLabel: "Healthy", statusVariant: "success" };
+
+  return [
+    {
+      key: "stuck-orders",
+      category: "Pipeline",
+      label: "Stuck orders",
+      value: (overview?.stuck_orders ?? 0).toLocaleString(),
+      description: "Orders idle longer than the stuck threshold.",
+      icon: Activity,
+      ...countStatus(overview?.stuck_orders ?? 0),
+    },
+    {
+      key: "stuck-checkouts",
+      category: "Pipeline",
+      label: "Stuck checkouts",
+      value: (overview?.stuck_checkouts ?? 0).toLocaleString(),
+      description: "Checkouts waiting beyond the payment expiry window.",
+      icon: ShoppingCart,
+      ...countStatus(overview?.stuck_checkouts ?? 0),
+    },
+    {
+      key: "failed-orders",
+      category: "Pipeline",
+      label: "Failed orders (24h)",
+      value: (overview?.failed_orders_24h ?? 0).toLocaleString(),
+      description: "Orders that failed in the last 24 hours.",
+      icon: AlertTriangle,
+      ...countStatus(overview?.failed_orders_24h ?? 0),
+    },
+    {
+      key: "failed-webhooks",
+      category: "Pipeline",
+      label: "Failed webhooks (24h)",
+      value: (overview?.failed_webhooks_24h ?? 0).toLocaleString(),
+      description: "Webhook events that failed in the last 24 hours.",
+      icon: Webhook,
+      ...countStatus(overview?.failed_webhooks_24h ?? 0),
+    },
+    {
+      key: "stuck-mandates",
+      category: "Pipeline",
+      label: "Stuck mandates",
+      value: (overview?.stuck_mandates ?? 0).toLocaleString(),
+      description: "Mandates awaiting provider sync.",
+      icon: ShieldCheck,
+      ...countStatus(overview?.stuck_mandates ?? 0),
+    },
+    {
+      key: "stuck-sip-plans",
+      category: "Pipeline",
+      label: "Stuck SIP plans",
+      value: (overview?.stuck_sip_plans ?? 0).toLocaleString(),
+      description: "SIP plans awaiting advancement.",
+      icon: CalendarClock,
+      ...countStatus(overview?.stuck_sip_plans ?? 0),
+    },
+    {
+      key: "stuck-threshold",
+      category: "Threshold",
+      label: "Stuck threshold",
+      value:
+        overview?.stuck_threshold_minutes != null
+          ? `${overview.stuck_threshold_minutes} min`
+          : "—",
+      description: "Orders idle longer than this are flagged as stuck.",
+      icon: Timer,
+      statusLabel: "Config",
+      statusVariant: "info",
+    },
+    {
+      key: "payment-expiry",
+      category: "Threshold",
+      label: "Payment expiry",
+      value:
+        overview?.payment_expiry_minutes != null
+          ? `${overview.payment_expiry_minutes} min`
+          : "—",
+      description: formatDurationHint(overview?.payment_expiry_minutes)
+        ? `Checkout payment window (${formatDurationHint(overview?.payment_expiry_minutes)}).`
+        : "Checkout payment window before expiry.",
+      icon: Timer,
+      statusLabel: "Config",
+      statusVariant: "info",
+    },
+  ];
 }
 
 export function MfTransactionOpsThresholdsPanel({
@@ -67,6 +181,7 @@ export function MfTransactionOpsThresholdsPanel({
     try {
       setOverview(await fetchMfTransactionOverview());
     } catch (err) {
+      setOverview(null);
       setError(getErrorMessage(err, "Could not load ops thresholds."));
     } finally {
       setLoading(false);
@@ -82,9 +197,12 @@ export function MfTransactionOpsThresholdsPanel({
     return Object.entries(overview.order_counts).sort(([, left], [, right]) => right - left);
   }, [overview?.order_counts]);
 
+  const rows = useMemo(() => buildOpsRows(overview), [overview]);
+
   const handleExpireStale = async () => {
     if (!canManage) return;
     setActionLoading("expire");
+    setError("");
     setMessage("");
     try {
       const result = await expireStaleMfCheckouts();
@@ -97,134 +215,115 @@ export function MfTransactionOpsThresholdsPanel({
     }
   };
 
-  const overviewMetrics = [
-    {
-      key: "stuck-orders",
-      label: "Stuck orders",
-      value: (overview?.stuck_orders ?? 0).toLocaleString(),
-      icon: Activity,
-      tone: (overview?.stuck_orders ?? 0) > 0 ? ("warning" as const) : ("success" as const),
-    },
-    {
-      key: "stuck-checkouts",
-      label: "Stuck checkouts",
-      value: (overview?.stuck_checkouts ?? 0).toLocaleString(),
-      icon: ShoppingCart,
-      tone: (overview?.stuck_checkouts ?? 0) > 0 ? ("warning" as const) : ("success" as const),
-    },
-    {
-      key: "failed-orders",
-      label: "Failed orders (24h)",
-      value: (overview?.failed_orders_24h ?? 0).toLocaleString(),
-      icon: AlertTriangle,
-      tone: (overview?.failed_orders_24h ?? 0) > 0 ? ("warning" as const) : ("muted" as const),
-    },
-    {
-      key: "failed-webhooks",
-      label: "Failed webhooks (24h)",
-      value: (overview?.failed_webhooks_24h ?? 0).toLocaleString(),
-      icon: Webhook,
-      tone: (overview?.failed_webhooks_24h ?? 0) > 0 ? ("warning" as const) : ("muted" as const),
-    },
-  ];
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {overviewMetrics.map((metric) => (
-          <AdminMetricCard
-            key={metric.key}
-            label={metric.label}
-            value={metric.value}
-            icon={metric.icon}
-            tone={metric.tone}
-            loading={loading}
-          />
-        ))}
-      </div>
-
-      <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
-        <div className="flex flex-col gap-3 border-b border-border bg-muted/15 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <AdminSectionTitle
-            icon={Timer}
-            variant="section"
-            description="Reconciliation windows and stuck pipeline counts."
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {orderStatusCounts.map(([status, count]) => (
+            <StatusBadge
+              key={status}
+              variant={orderBadgeVariant(status)}
+              showIcon={false}
+              className="normal-case"
+            >
+              {formatOrderStatusLabel(status)} · {count.toLocaleString()}
+            </StatusBadge>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={loading}
+            onClick={() => void loadData()}
+            aria-label="Refresh ops thresholds"
           >
-            Ops thresholds
-          </AdminSectionTitle>
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            {orderStatusCounts.map(([status, count]) => (
-              <StatusBadge
-                key={status}
-                variant={orderBadgeVariant(status)}
-                showIcon={false}
-                className="normal-case"
-              >
-                {formatOrderStatusLabel(status)} · {count.toLocaleString()}
-              </StatusBadge>
-            ))}
-            {canManage ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={actionLoading === "expire"}
-                onClick={() => void handleExpireStale()}
-              >
-                <Timer className="size-3.5" />
-                {actionLoading === "expire" ? "Expiring…" : "Expire stale checkouts"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="px-5 py-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <AdminMetricCard
-              label="Stuck threshold"
-              value={
-                overview?.stuck_threshold_minutes != null
-                  ? `${overview.stuck_threshold_minutes} min`
-                  : "No data"
-              }
-              hint="Orders idle longer than this are flagged"
-              icon={Timer}
-              tone="muted"
-              loading={loading}
-            />
-            <AdminMetricCard
-              label="Payment expiry"
-              value={
-                overview?.payment_expiry_minutes != null
-                  ? `${overview.payment_expiry_minutes} min`
-                  : "No data"
-              }
-              hint={formatDurationHint(overview?.payment_expiry_minutes)}
-              icon={Activity}
-              tone="muted"
-              loading={loading}
-            />
-            <AdminMetricCard
-              label="Stuck mandates"
-              value={(overview?.stuck_mandates ?? 0).toLocaleString()}
-              hint="Mandates awaiting provider sync"
-              icon={ShieldCheck}
-              tone={(overview?.stuck_mandates ?? 0) > 0 ? "warning" : "success"}
-              loading={loading}
-            />
-            <AdminMetricCard
-              label="Stuck SIP plans"
-              value={(overview?.stuck_sip_plans ?? 0).toLocaleString()}
-              hint="SIP plans awaiting advancement"
-              icon={CalendarClock}
-              tone={(overview?.stuck_sip_plans ?? 0) > 0 ? "warning" : "success"}
-              loading={loading}
-            />
-          </div>
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
+          {canManage ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={actionLoading === "expire" || loading}
+              onClick={() => void handleExpireStale()}
+            >
+              <Timer className="size-3.5" />
+              {actionLoading === "expire" ? "Expiring…" : "Expire stale checkouts"}
+            </Button>
+          ) : null}
         </div>
       </div>
+
+      <AdminDataTable minWidth="lg">
+        <AdminTableHeader>
+          <tr>
+            <AdminTableHeadCell>Metric</AdminTableHeadCell>
+            <AdminTableHeadCell>Category</AdminTableHeadCell>
+            <AdminTableHeadCell className="text-right">Value</AdminTableHeadCell>
+            <AdminTableHeadCell>Status</AdminTableHeadCell>
+          </tr>
+        </AdminTableHeader>
+        <AdminTableBody>
+          {loading ? (
+            <AdminTableSkeletonRows columns={4} rows={8} />
+          ) : !overview ? (
+            <AdminTableStateRow colSpan={4}>
+              Could not load ops thresholds.
+            </AdminTableStateRow>
+          ) : (
+            rows.map((row) => {
+              const Icon = row.icon;
+              return (
+                <AdminTableRow key={row.key}>
+                  <AdminTableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted/70 text-muted-foreground">
+                        <Icon className="size-3.5" strokeWidth={2.25} />
+                      </div>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className="font-medium text-foreground">{row.label}</p>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                                aria-label={`About ${row.label}`}
+                              >
+                                <Info className="size-3.5" />
+                              </Button>
+                            }
+                          />
+                          <TooltipContent
+                            side="top"
+                            className="max-w-64 text-pretty leading-relaxed"
+                          >
+                            {row.description}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </AdminTableCell>
+                  <AdminTableCell className="text-muted-foreground">{row.category}</AdminTableCell>
+                  <AdminTableCell className="text-right font-medium tabular-nums text-foreground">
+                    {row.value}
+                  </AdminTableCell>
+                  <AdminTableCell>
+                    <StatusBadge variant={row.statusVariant} showIcon={false}>
+                      {row.statusLabel}
+                    </StatusBadge>
+                  </AdminTableCell>
+                </AdminTableRow>
+              );
+            })
+          )}
+        </AdminTableBody>
+      </AdminDataTable>
     </div>
   );
 }

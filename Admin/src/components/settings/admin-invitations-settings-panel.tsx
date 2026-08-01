@@ -159,12 +159,12 @@ export function AdminInvitationsSettingsPanel() {
       <AdminDataTable minWidth="default">
         <AdminTableHeader>
           <tr>
+            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             <AdminTableHeadCell>Invitee</AdminTableHeadCell>
             <AdminTableHeadCell>Role</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
             <AdminTableHeadCell>Sent by</AdminTableHeadCell>
             <AdminTableHeadCell>Expires</AdminTableHeadCell>
-            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
@@ -175,26 +175,6 @@ export function AdminInvitationsSettingsPanel() {
           ) : (
             invitations.map((invitation) => (
               <AdminTableRow key={invitation.id}>
-                <AdminTableCell>
-                  <div className="min-w-0">
-                    <p className="truncate text-compact font-medium text-foreground">
-                      {invitation.email}
-                    </p>
-                    <p className="truncate text-caption text-muted-foreground">
-                      {formatInviteName(invitation)}
-                    </p>
-                  </div>
-                </AdminTableCell>
-                <AdminTableCell>{invitation.role_name ?? invitation.role_key}</AdminTableCell>
-                <AdminTableCell>
-                  <StatusBadge variant={invitationStatusVariant(invitation.status)}>
-                    {invitation.status}
-                  </StatusBadge>
-                </AdminTableCell>
-                <AdminTableCell>{invitation.inviter_name ?? "—"}</AdminTableCell>
-                <AdminTableCell>
-                  {new Date(invitation.expires_at).toLocaleString()}
-                </AdminTableCell>
                 <AdminTableCell className="text-right">
                   {invitation.status === "pending" ? (
                     <div className="flex justify-end gap-2">
@@ -220,6 +200,26 @@ export function AdminInvitationsSettingsPanel() {
                   ) : (
                     <span className="text-caption text-muted-foreground">—</span>
                   )}
+                </AdminTableCell>
+                <AdminTableCell>
+                  <div className="min-w-0">
+                    <p className="truncate text-compact font-medium text-foreground">
+                      {invitation.email}
+                    </p>
+                    <p className="truncate text-caption text-muted-foreground">
+                      {formatInviteName(invitation)}
+                    </p>
+                  </div>
+                </AdminTableCell>
+                <AdminTableCell>{invitation.role_name ?? invitation.role_key}</AdminTableCell>
+                <AdminTableCell>
+                  <StatusBadge variant={invitationStatusVariant(invitation.status)}>
+                    {invitation.status}
+                  </StatusBadge>
+                </AdminTableCell>
+                <AdminTableCell>{invitation.inviter_name ?? "—"}</AdminTableCell>
+                <AdminTableCell>
+                  {new Date(invitation.expires_at).toLocaleString()}
                 </AdminTableCell>
               </AdminTableRow>
             ))

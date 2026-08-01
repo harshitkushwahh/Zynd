@@ -5,7 +5,7 @@ import {
 import { getDistributorClientProfile } from "@/lib/dummy/client-profile";
 import { DUMMY_ORDERS } from "@/lib/dummy/orders";
 import { DUMMY_SYSTEMATIC_PLANS } from "@/lib/dummy/systematic-plans";
-import type { DistributorInvestor, DistributorOrder, DistributorSystematicPlan } from "@/lib/dummy/types";
+import type { DistributorProfileAddress } from "@/lib/distributor-profile";
 
 export type BranchDistributorBookHolding = {
   id: string;
@@ -17,7 +17,11 @@ export type BranchDistributorBookHolding = {
 };
 
 export type BranchDistributorProfile = BranchDistributorRecord & {
+  avatarUrl?: string | null;
+  mobile: string;
   mobileMasked: string;
+  branchName: string;
+  address: DistributorProfileAddress;
   euin: string;
   activeSipCount: number;
   mtdInflow: number;
@@ -46,11 +50,31 @@ const PROFILE_EXTRAS: Record<
   string,
   Pick<
     BranchDistributorProfile,
-    "mobileMasked" | "euin" | "activeSipCount" | "mtdInflow" | "lumpsumMtd" | "onboardingCompletePct"
+    | "avatarUrl"
+    | "mobile"
+    | "mobileMasked"
+    | "branchName"
+    | "address"
+    | "euin"
+    | "activeSipCount"
+    | "mtdInflow"
+    | "lumpsumMtd"
+    | "onboardingCompletePct"
   >
 > = {
   "bd-1": {
+    avatarUrl: null,
+    mobile: "+91 98201 44780",
     mobileMasked: "*****88201",
+    branchName: "Mumbai · Andheri",
+    address: {
+      line1: "Unit 402, Peninsula Business Park",
+      line2: "Senapati Bapat Marg, Lower Parel",
+      city: "Mumbai",
+      state: "Maharashtra",
+      postalCode: "400013",
+      country: "India",
+    },
     euin: "E884120",
     activeSipCount: 342,
     mtdInflow: 18_40_000,
@@ -58,7 +82,18 @@ const PROFILE_EXTRAS: Record<
     onboardingCompletePct: 94,
   },
   "bd-2": {
+    avatarUrl: "/pm.png",
+    mobile: "+91 98210 44102",
     mobileMasked: "*****44102",
+    branchName: "Mumbai · Andheri",
+    address: {
+      line1: "Zynd Distributor Hub, Veera Desai Road",
+      line2: "Andheri West",
+      city: "Mumbai",
+      state: "Maharashtra",
+      postalCode: "400053",
+      country: "India",
+    },
     euin: "E884221",
     activeSipCount: 198,
     mtdInflow: 9_80_000,
@@ -66,7 +101,18 @@ const PROFILE_EXTRAS: Record<
     onboardingCompletePct: 91,
   },
   "bd-3": {
+    avatarUrl: null,
+    mobile: "+91 98190 90331",
     mobileMasked: "*****90331",
+    branchName: "Mumbai · Andheri",
+    address: {
+      line1: "Office 18, Lokhandwala Complex",
+      line2: "Andheri West",
+      city: "Mumbai",
+      state: "Maharashtra",
+      postalCode: "400053",
+      country: "India",
+    },
     euin: "E884019",
     activeSipCount: 14,
     mtdInflow: 1_20_000,

@@ -1,34 +1,11 @@
 import type { ReactNode } from "react";
 
-import { TableCard, TableEmptyState } from "@/components/application/table";
+import { DistributorTableCardShell, type DistributorTableCardShellProps } from "@/components/dashboard/distributor-table-card-shell";
 
-type DistributorTableOnlyShellProps = {
-  toolbar?: ReactNode;
-  isEmpty: boolean;
-  emptyTitle?: string;
-  emptyDescription?: string;
-  tableSize?: "sm" | "md";
-  children: ReactNode;
-};
+export type DistributorTableOnlyShellProps = DistributorTableCardShellProps;
 
-export function DistributorTableOnlyShell({
-  toolbar,
-  isEmpty,
-  emptyTitle = "Nothing to show",
-  emptyDescription,
-  tableSize = "sm",
-  children,
-}: DistributorTableOnlyShellProps) {
-  return (
-    <div className="min-w-0 space-y-4">
-      {toolbar}
-      <TableCard.Root size={tableSize}>
-        {isEmpty ? (
-          <TableEmptyState title={emptyTitle} description={emptyDescription} />
-        ) : (
-          children
-        )}
-      </TableCard.Root>
-    </div>
-  );
+export function DistributorTableOnlyShell(props: DistributorTableOnlyShellProps) {
+  return <DistributorTableCardShell {...props} />;
 }
+
+export { DistributorTableCardShell };

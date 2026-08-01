@@ -1,22 +1,51 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
+import { useWizardKeyboardNavigation } from "@/hooks/use-wizard-keyboard-navigation";
 import {
+  BadgeCheck,
   Check,
   CheckCircle2,
+  Home,
+  Landmark,
   Loader2,
-  QrCode,
-  UserPlus,
+  ShieldCheck,
+  UserRound,
+  Users,
 } from "lucide-react";
 
-import { AddInvestorOtpField } from "@/components/add-investor/add-investor-otp-field";
-import { AddInvestorVerifyChannel } from "@/components/add-investor/add-investor-verify-channel";
+import {
+  AddInvestorAddressPanel,
+  formatAddInvestorAddressReviewItems,
+} from "@/components/add-investor/add-investor-address-panel";
+import {
+  AddInvestorBankPanel,
+  formatAddInvestorBankReviewItems,
+} from "@/components/add-investor/add-investor-bank-panel";
+import { AddInvestorWizardStepFooter } from "@/components/add-investor/add-investor-wizard-step-footer";
+import { AddInvestorCompliancePanelShell } from "@/components/add-investor/add-investor-compliance-panel-shell";
+import { AddInvestorOnboardingPanel } from "@/components/add-investor/add-investor-onboarding-panel";
+import { AddInvestorPanPanel } from "@/components/add-investor/add-investor-pan-panel";
+import {
+  AddInvestorPersonalInfoPanel,
+  formatAddInvestorPersonalReviewItems,
+} from "@/components/add-investor/add-investor-personal-info-panel";
+import { AddInvestorEsignPanel } from "@/components/add-investor/add-investor-esign-panel";
+import { AddInvestorDigilockerPanel } from "@/components/add-investor/add-investor-digilocker-panel";
+import { AddInvestorNomineePanel } from "@/components/add-investor/add-investor-nominee-panel";
+import {
+  AddInvestorReviewPanel,
+  type AddInvestorReviewSection,
+} from "@/components/add-investor/add-investor-review-panel";
+import { AddInvestorSignaturePanel } from "@/components/add-investor/add-investor-signature-panel";
+import { AddInvestorSuccessDialog } from "@/components/add-investor/add-investor-success-dialog";
+import { AddInvestorWizardSkeleton } from "@/components/add-investor/add-investor-wizard-skeleton";
+import { useAddInvestorPageReveal } from "@/components/add-investor/use-add-investor-page-reveal";
+import { useAddInvestorStepSwitch } from "@/components/add-investor/use-add-investor-step-switch";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
-import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import {
   Select,
   SelectContent,
@@ -24,54 +53,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import {
   ADD_INVESTOR_DEMO_OTP,
-  ADD_INVESTOR_PERSONAL_OPTIONS,
+  ADD_INVESTOR_JOURNEY_PHASE_LABEL,
   addInvestorStepIndex,
   buildAddInvestorJourneySteps,
   emptyAddressDraft,
+  emptyBankDraft,
   emptyPersonalDraft,
+  isAddInvestorAddressFieldsValid,
+  isAddInvestorBankDraftValid,
+  isAddInvestorPersonalDraftValid,
+  normalizeAddInvestorPersonalDraft,
   type AddInvestorAddressDraft,
+  type AddInvestorBankDraft,
   type AddInvestorPanName,
   type AddInvestorPersonalDraft,
   type AddInvestorReadiness,
   type AddInvestorStepId,
 } from "@/lib/add-investor/add-investor-journey";
 import {
+  areAddInvestorNomineesValid,
+  formatAddInvestorNomineeSummary,
+  type AddInvestorNomineeRecord,
+} from "@/lib/add-investor/add-investor-nominee";
+import {
   delay,
   DIGILOCKER_PREFILL_ADDRESS,
   normalizeMobileInput,
-  normalizePanInput,
   verifyDemoPan,
 } from "@/lib/add-investor/add-investor-demo";
-import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
+import {
+  createDemoInvestorClientCode,
+  type AddInvestorSuccessState,
+} from "@/lib/add-investor/add-investor-success";
+import type { AddInvestorSignatureTab } from "@/lib/add-investor/add-investor-signature";
 import { YOUR_CLIENTS_LIST_HREF } from "@/lib/distributor-client-routes";
-import { formatDistributorDate } from "@/lib/format";
+import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { cn } from "@/lib/utils";
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function ReadinessBadge({ readiness }: { readiness: AddInvestorReadiness }) {
-  const isKra = readiness.code === "kyc_registered";
-  return (
-    <div
-      className={cn(
-        "add-investor-readiness",
-        isKra ? "add-investor-readiness--kra" : "add-investor-readiness--new",
-      )}
-    >
-      <p className="add-investor-readiness__label">{readiness.label}</p>
-      <p className="add-investor-readiness__hint">{readiness.hint}</p>
-    </div>
-  );
-}
-
 export function AddInvestorWizard() {
   const router = useRouter();
-  const [stepId, setStepId] = useState<AddInvestorStepId>("email");
+  const { showSkeleton: showPageSkeleton } = useAddInvestorPageReveal();
+  const { stepId, displayStepId, goToStep: switchToStep, isSwitching, showPanelSkeleton } =
+    useAddInvestorStepSwitch();
   const [email, setEmail] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
   const [mobile, setMobile] = useState("");
@@ -91,7 +120,124 @@ export function AddInvestorWizard() {
   const [address, setAddress] = useState<AddInvestorAddressDraft>(emptyAddressDraft());
   const [addressFromDigilocker, setAddressFromDigilocker] = useState(false);
   const [personal, setPersonal] = useState<AddInvestorPersonalDraft>(emptyPersonalDraft());
+  const [signatureDataUrl, setSignatureDataUrl] = useState("");
+  const [signatureMode, setSignatureMode] = useState<AddInvestorSignatureTab | null>(null);
+  const signatureUploaded = signatureDataUrl.trim().length > 0;
+  const [nominees, setNominees] = useState<AddInvestorNomineeRecord[]>([]);
+  const [nomineeSubWizardActive, setNomineeSubWizardActive] = useState(false);
+  const [bank, setBank] = useState<AddInvestorBankDraft>(emptyBankDraft());
+  const [esignDone, setEsignDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [successState, setSuccessState] = useState<AddInvestorSuccessState | null>(null);
+  const [maxReachedStepIndex, setMaxReachedStepIndex] = useState(0);
+
+  const isNewToKyc = requiresDigilocker !== false;
+
+  const accountHolderName = useMemo(() => {
+    if (!panName) {
+      return "";
+    }
+    return [panName.firstName, middleName, panName.lastName].filter(Boolean).join(" ");
+  }, [middleName, panName]);
+
+  const reviewHero = useMemo(
+    () => ({
+      name: accountHolderName || "Investor",
+      pan,
+      kycPathLabel: isNewToKyc ? "New to KYC" : "KRA registered",
+    }),
+    [accountHolderName, isNewToKyc, pan],
+  );
+
+  const reviewSections = useMemo(() => {
+    const sections: AddInvestorReviewSection[] = [
+      {
+        id: "contact",
+        title: "Contact & access",
+        icon: ShieldCheck,
+        items: [
+          { label: "Email", value: email },
+          { label: "Mobile", value: `+91 ${mobile}` },
+          { label: "MFA", value: "Authenticator enrolled", tone: "success" },
+        ],
+      },
+      {
+        id: "address",
+        title: "Address",
+        icon: Home,
+        items: formatAddInvestorAddressReviewItems(address),
+      },
+      {
+        id: "personal",
+        title: "Personal details",
+        icon: UserRound,
+        items: formatAddInvestorPersonalReviewItems(personal),
+      },
+      {
+        id: "nominee",
+        title: "Nominee",
+        icon: Users,
+        items: [
+          nominees.length === 0
+            ? { label: "Nomination", value: "None added", tone: "muted" }
+            : {
+                label: "Nomination",
+                value: formatAddInvestorNomineeSummary(nominees),
+              },
+        ],
+      },
+      {
+        id: "bank",
+        title: "Bank account",
+        icon: Landmark,
+        wide: true,
+        items: formatAddInvestorBankReviewItems(bank),
+      },
+    ];
+
+    if (isNewToKyc) {
+      sections.splice(1, 0, {
+        id: "kyc-verification",
+        title: "KYC verification",
+        icon: BadgeCheck,
+        items: [
+          {
+            label: "DigiLocker",
+            value: digilockerDone ? "Aadhaar fetched" : "Pending",
+            tone: digilockerDone ? "success" : "warning",
+          },
+          {
+            label: "Signature",
+            value: signatureUploaded
+              ? signatureMode === "draw"
+                ? "Drawn"
+                : "Uploaded"
+              : "Pending",
+            tone: signatureUploaded ? "success" : "warning",
+          },
+          {
+            label: "E-sign",
+            value: esignDone ? "Completed" : "Pending",
+            tone: esignDone ? "success" : "warning",
+          },
+        ],
+      });
+    }
+
+    return sections;
+  }, [
+    address,
+    bank,
+    digilockerDone,
+    email,
+    esignDone,
+    isNewToKyc,
+    mobile,
+    nominees,
+    personal,
+    signatureMode,
+    signatureUploaded,
+  ]);
 
   const journeySteps = useMemo(
     () => buildAddInvestorJourneySteps(requiresDigilocker ?? true),
@@ -99,61 +245,106 @@ export function AddInvestorWizard() {
   );
 
   const currentIndex = addInvestorStepIndex(journeySteps, stepId);
+  const safeCurrentIndex = Math.max(currentIndex, 0);
   const journeyProgressPct =
     journeySteps.length > 0
-      ? Math.round(((Math.max(currentIndex, 0) + 1) / journeySteps.length) * 100)
+      ? Math.round(((safeCurrentIndex + 1) / journeySteps.length) * 100)
       : 0;
 
-  const goToStep = (id: AddInvestorStepId) => setStepId(id);
+  useEffect(() => {
+    if (currentIndex < 0 && journeySteps.length > 0) {
+      const fallbackIndex = Math.min(maxReachedStepIndex, journeySteps.length - 1);
+      switchToStep(journeySteps[fallbackIndex].id);
+    }
+  }, [currentIndex, journeySteps, maxReachedStepIndex, switchToStep]);
+
+  useEffect(() => {
+    if (currentIndex >= 0) {
+      setMaxReachedStepIndex((prev) => Math.max(prev, currentIndex));
+    }
+  }, [currentIndex]);
+
+  const markStepReached = (index: number) => {
+    setMaxReachedStepIndex((prev) => Math.max(prev, index));
+  };
+
+  const goToStep = (id: AddInvestorStepId) => {
+    const idx = addInvestorStepIndex(journeySteps, id);
+    if (idx >= 0 && idx <= maxReachedStepIndex) {
+      switchToStep(id);
+    }
+  };
 
   const goNext = () => {
     const idx = addInvestorStepIndex(journeySteps, stepId);
     if (idx >= 0 && idx < journeySteps.length - 1) {
-      setStepId(journeySteps[idx + 1].id);
+      const nextIdx = idx + 1;
+      markStepReached(nextIdx);
+      switchToStep(journeySteps[nextIdx].id);
     }
   };
 
   const goBack = () => {
     const idx = addInvestorStepIndex(journeySteps, stepId);
     if (idx > 0) {
-      setStepId(journeySteps[idx - 1].id);
+      switchToStep(journeySteps[idx - 1].id);
     }
   };
 
   const canContinue = (() => {
     switch (stepId) {
-      case "email":
-        return isValidEmail(email) && emailOtp === ADD_INVESTOR_DEMO_OTP;
-      case "mobile":
-        return mobile.length === 10 && mobileOtp === ADD_INVESTOR_DEMO_OTP;
-      case "mfa":
-        return mfaBound && mfaCode.length === 6;
+      case "onboarding":
+        return (
+          isValidEmail(email) &&
+          emailOtp === ADD_INVESTOR_DEMO_OTP &&
+          mobile.length === 10 &&
+          mobileOtp === ADD_INVESTOR_DEMO_OTP &&
+          mfaBound &&
+          mfaCode.length === 6
+        );
       case "pan":
-        return panVerified && Boolean(panName);
+        return panVerified && Boolean(panName?.firstName.trim()) && Boolean(panName?.lastName.trim());
       case "digilocker":
         return digilockerDone;
+      case "signature-upload":
+        return signatureUploaded;
       case "address":
         return (
-          address.line1.trim().length > 2 &&
-          address.city.trim().length > 1 &&
-          address.state.trim().length > 1 &&
-          address.pincode.length === 6
+          isAddInvestorAddressFieldsValid(address.permanent) &&
+          (address.correspondenceSame || isAddInvestorAddressFieldsValid(address.correspondence))
         );
       case "personal-info":
-        return (
-          Boolean(personal.gender) &&
-          Boolean(personal.maritalStatus) &&
-          Boolean(personal.occupation) &&
-          Boolean(personal.incomeSlab) &&
-          Boolean(personal.pepExposed) &&
-          personal.placeOfBirth.trim().length > 1
-        );
+        return isAddInvestorPersonalDraftValid(personal);
+      case "nominee":
+        return areAddInvestorNomineesValid(nominees) && !nomineeSubWizardActive;
+      case "bank":
+        return isAddInvestorBankDraftValid(bank);
+      case "esign":
+        return esignDone;
       case "review":
         return true;
       default:
         return false;
     }
   })();
+
+  const handlePanChange = (value: string) => {
+    setPan(value);
+    setPanVerified(false);
+    setPanName(null);
+    setMiddleName("");
+    setReadiness(null);
+    setRequiresDigilocker(null);
+    resetCompliancePath();
+    const panIdx = addInvestorStepIndex(journeySteps, "pan");
+    if (panIdx >= 0) {
+      setMaxReachedStepIndex(panIdx);
+    }
+  };
+
+  const updatePanName = (patch: Partial<AddInvestorPanName>) => {
+    setPanName((current) => (current ? { ...current, ...patch } : null));
+  };
 
   const handleVerifyPan = async () => {
     setPanError("");
@@ -169,26 +360,42 @@ export function AddInvestorWizard() {
       return;
     }
     setPanName(result.panName);
+    setMiddleName("");
     setReadiness(result.readiness);
     setRequiresDigilocker(!result.kycAlreadyRegistered);
     setPanVerified(true);
+    markStepReached(addInvestorStepIndex(journeySteps, "pan"));
   };
 
   const handlePanContinue = () => {
     if (!panVerified) return;
-    if (requiresDigilocker) {
-      goToStep("digilocker");
-    } else {
+    if (!isNewToKyc) {
       setAddress(emptyAddressDraft());
       setAddressFromDigilocker(false);
-      goToStep("address");
     }
+    goNext();
+  };
+
+  const resetCompliancePath = () => {
+    setDigilockerDone(false);
+    setSignatureDataUrl("");
+    setSignatureMode(null);
+    setAddress(emptyAddressDraft());
+    setAddressFromDigilocker(false);
+    setPersonal(emptyPersonalDraft());
+    setNominees([]);
+    setBank(emptyBankDraft());
+    setEsignDone(false);
   };
 
   const handleDigilockerConnect = async () => {
     setDigilockerLoading(true);
     await delay(1200);
-    setAddress({ ...DIGILOCKER_PREFILL_ADDRESS });
+    setAddress({
+      permanent: { ...DIGILOCKER_PREFILL_ADDRESS },
+      correspondence: { ...DIGILOCKER_PREFILL_ADDRESS },
+      correspondenceSame: true,
+    });
     setAddressFromDigilocker(true);
     setDigilockerDone(true);
     setDigilockerLoading(false);
@@ -197,33 +404,148 @@ export function AddInvestorWizard() {
   const handleSubmit = async () => {
     setSubmitting(true);
     await delay(600);
+    setSuccessState({
+      clientCode: createDemoInvestorClientCode(),
+      investorName: accountHolderName || email,
+      email,
+      mobile,
+      pan,
+      kycPath: isNewToKyc ? "New to KYC" : "KRA registered",
+    });
     setSubmitting(false);
+  };
+
+  const handleSuccessDone = () => {
+    setSuccessState(null);
     router.push(YOUR_CLIENTS_LIST_HREF);
   };
 
-  const updateAddress = (patch: Partial<AddInvestorAddressDraft>) => {
-    setAddress((current) => ({ ...current, ...patch }));
+  const updatePersonal = (patch: Partial<AddInvestorPersonalDraft>) => {
+    setPersonal((current) => normalizeAddInvestorPersonalDraft({ ...current, ...patch }));
   };
 
-  const updatePersonal = (patch: Partial<AddInvestorPersonalDraft>) => {
-    setPersonal((current) => ({ ...current, ...patch }));
+  const updateBank = (patch: Partial<AddInvestorBankDraft>) => {
+    setBank((current) => ({ ...current, ...patch }));
   };
+
+  const handleKeyboardContinue = () => {
+    if (stepId === "review") {
+      void handleSubmit();
+      return;
+    }
+    if (stepId === "pan") {
+      if (panVerified) {
+        handlePanContinue();
+      } else if (pan.length === 10 && !panLoading) {
+        void handleVerifyPan();
+      }
+      return;
+    }
+    goNext();
+  };
+
+  useWizardKeyboardNavigation({
+    enabled: stepId !== "onboarding",
+    onContinue: handleKeyboardContinue,
+    onBack: goBack,
+    canContinue: (() => {
+      if (isSwitching) return false;
+      if (stepId === "review") return !submitting && !successState;
+      if (stepId === "pan") {
+        return panVerified ? true : pan.length === 10 && !panLoading;
+      }
+      return canContinue;
+    })(),
+    canBack: safeCurrentIndex > 0 && !isSwitching,
+  });
+
+  const complianceFooter = (() => {
+    if (stepId === "pan") {
+      if (panVerified) {
+        return (
+          <AddInvestorWizardStepFooter
+            onBack={goBack}
+            onContinue={handlePanContinue}
+            canBack={safeCurrentIndex > 0}
+          />
+        );
+      }
+
+      return (
+        <>
+          <DistributorActionButton
+            type="button"
+            variant="outline"
+            onClick={goBack}
+            disabled={safeCurrentIndex <= 0}
+          >
+            Back
+          </DistributorActionButton>
+          <DistributorActionButton
+            type="button"
+            onClick={() => void handleVerifyPan()}
+            disabled={pan.length !== 10 || panLoading}
+          >
+            {panLoading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                Fetching name…
+              </>
+            ) : (
+              "Verify PAN & fetch name"
+            )}
+          </DistributorActionButton>
+        </>
+      );
+    }
+
+    if (stepId === "review") {
+      return (
+        <AddInvestorWizardStepFooter
+          onBack={goBack}
+          onContinue={() => void handleSubmit()}
+          canBack={currentIndex > 0}
+          continueDisabled={submitting || Boolean(successState)}
+          continueLabel={submitting ? "Completing profile…" : "Complete Profile"}
+        />
+      );
+    }
+
+    return (
+      <AddInvestorWizardStepFooter
+        onBack={goBack}
+        onContinue={goNext}
+        canBack={currentIndex > 0}
+        continueDisabled={!canContinue}
+      />
+    );
+  })();
+
+  if (showPageSkeleton) {
+    return (
+      <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
+        <DistributorPageHeader title="Add investor" description="" />
+        <AddInvestorWizardSkeleton panelStep={displayStepId} />
+      </div>
+    );
+  }
 
   return (
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
-      <DistributorPageHeader
-        icon={UserPlus}
-        title="Add investor"
-        description="Guided onboarding — account verification, MFA, PAN, and KYC aligned with the investor web app."
-      />
+      <DistributorPageHeader title="Add investor" description="" />
 
-      <div className="quick-txn-wizard add-investor-wizard">
-        <nav className="quick-txn-wizard__journey" aria-label="Add investor journey">
+      <div
+        className={cn(
+          "quick-txn-wizard add-investor-wizard distributor-wizard-page--enter",
+          isSwitching && "quick-txn-wizard--switching",
+        )}
+      >
+        <nav className="quick-txn-wizard__journey" aria-label="Add investor journey" aria-busy={isSwitching}>
           <div className="quick-txn-journey-header">
             <div>
               <p className="quick-txn-journey-header__title">Investor journey</p>
               <p className="quick-txn-journey-header__meta">
-                Step {Math.max(currentIndex, 0) + 1} of {journeySteps.length}
+                Step {safeCurrentIndex + 1} of {journeySteps.length}
               </p>
             </div>
             <span className="quick-txn-journey-header__pct">{journeyProgressPct}%</span>
@@ -239,57 +561,65 @@ export function AddInvestorWizard() {
           </div>
           <ol className="quick-txn-journey-steps">
             {journeySteps.map((item, index) => {
-              const done = index < currentIndex;
-              const active = item.id === stepId;
-              const upcoming = index > currentIndex;
+              const active = item.id === displayStepId;
+              const done = index <= maxReachedStepIndex && !active;
+              const upcoming = index > maxReachedStepIndex;
               const StepIcon = item.icon;
-              const navigable = index <= currentIndex;
+              const navigable = index <= maxReachedStepIndex;
+              const showPhaseLabel =
+                index === 0 || journeySteps[index - 1]?.phase !== item.phase;
 
               return (
-                <li
-                  key={item.id}
-                  className={cn(
-                    "quick-txn-journey-step",
-                    active && "quick-txn-journey-step--active",
-                    done && "quick-txn-journey-step--done",
-                    upcoming && "quick-txn-journey-step--upcoming",
-                  )}
-                >
-                  <div className="quick-txn-journey-step__rail" aria-hidden>
-                    <span className="quick-txn-journey-step__marker">
-                      {done ? <Check className="size-3.5" strokeWidth={3} /> : index + 1}
-                    </span>
-                    {index < journeySteps.length - 1 ? (
-                      <span
-                        className={cn(
-                          "quick-txn-journey-step__line",
-                          done && "quick-txn-journey-step__line--done",
-                        )}
-                      />
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="quick-txn-journey-step__body"
-                    disabled={!navigable}
-                    aria-current={active ? "step" : undefined}
-                    onClick={() => {
-                      if (navigable) goToStep(item.id);
-                    }}
+                <li key={item.id} className="quick-txn-journey-step-group">
+                  {showPhaseLabel ? (
+                    <p className="quick-txn-journey-phase-label">
+                      {ADD_INVESTOR_JOURNEY_PHASE_LABEL[item.phase]}
+                    </p>
+                  ) : null}
+                  <div
+                    className={cn(
+                      "quick-txn-journey-step",
+                      active && "quick-txn-journey-step--active",
+                      done && "quick-txn-journey-step--done",
+                      upcoming && "quick-txn-journey-step--upcoming",
+                    )}
                   >
-                    <span className="quick-txn-journey-step__icon" aria-hidden>
-                      <StepIcon className="size-4" strokeWidth={active ? 2.25 : 2} />
-                    </span>
-                    <span className="min-w-0 flex-1 text-left">
-                      <span className="quick-txn-journey-step__label">{item.label}</span>
-                      <span className="quick-txn-journey-step__desc">{item.description}</span>
-                    </span>
-                    {active ? (
-                      <span className="quick-txn-journey-step__pill">Current</span>
-                    ) : done ? (
-                      <CheckCircle2 className="quick-txn-journey-step__done-icon size-4 shrink-0" strokeWidth={2.25} aria-hidden />
-                    ) : null}
-                  </button>
+                    <div className="quick-txn-journey-step__rail" aria-hidden>
+                      <span className="quick-txn-journey-step__marker">
+                        {done ? <Check className="size-3.5" strokeWidth={3} /> : index + 1}
+                      </span>
+                      {index < journeySteps.length - 1 ? (
+                        <span
+                          className={cn(
+                            "quick-txn-journey-step__line",
+                            done && "quick-txn-journey-step__line--done",
+                          )}
+                        />
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      className="quick-txn-journey-step__body"
+                      disabled={!navigable}
+                      aria-current={active ? "step" : undefined}
+                      onClick={() => {
+                        if (navigable) goToStep(item.id);
+                      }}
+                    >
+                      <span className="quick-txn-journey-step__icon" aria-hidden>
+                        <StepIcon className="size-4" strokeWidth={active ? 2.25 : 2} />
+                      </span>
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="quick-txn-journey-step__label">{item.label}</span>
+                        <span className="quick-txn-journey-step__desc">{item.description}</span>
+                      </span>
+                      {active ? (
+                        <span className="quick-txn-journey-step__pill">Current</span>
+                      ) : done ? (
+                        <CheckCircle2 className="quick-txn-journey-step__done-icon size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                      ) : null}
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -297,404 +627,193 @@ export function AddInvestorWizard() {
         </nav>
 
         <div className="quick-txn-wizard__panel">
-          {stepId === "email" ? <AddInvestorVerifyChannel channel="email" value={email} onValueChange={setEmail} otp={emailOtp} onOtpChange={setEmailOtp} inputValid={isValidEmail(email)} /> : null}
-
-          {stepId === "mobile" ? (
-            <AddInvestorVerifyChannel
-              channel="mobile"
-              value={mobile}
-              onValueChange={(value) => setMobile(normalizeMobileInput(value))}
-              otp={mobileOtp}
-              onOtpChange={setMobileOtp}
-              inputValid={mobile.length === 10}
+          {showPanelSkeleton ? (
+            <AddInvestorWizardSkeleton panelStep={displayStepId} panelOnly />
+          ) : (
+            <>
+          <div
+            className={cn(
+              "add-investor-wizard__step-panel",
+              stepId !== "onboarding" && "add-investor-wizard__step-panel--hidden",
+            )}
+            aria-hidden={stepId !== "onboarding"}
+          >
+            <AddInvestorOnboardingPanel
+              email={email}
+              onEmailChange={setEmail}
+              emailOtp={emailOtp}
+              onEmailOtpChange={setEmailOtp}
+              emailValid={isValidEmail(email)}
+              mobile={mobile}
+              onMobileChange={(value) => setMobile(normalizeMobileInput(value))}
+              mobileOtp={mobileOtp}
+              onMobileOtpChange={setMobileOtp}
+              mobileValid={mobile.length === 10}
+              mfaBound={mfaBound}
+              onMfaBoundChange={setMfaBound}
+              mfaCode={mfaCode}
+              onMfaCodeChange={setMfaCode}
+              onFinished={goNext}
             />
-          ) : null}
+          </div>
 
-          {stepId === "mfa" ? (
-            <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">Authenticator app</h2>
-              <p className="quick-txn-wizard__section-desc">
-                Required before KYC (same gate as the investor web app). Scan the QR code, then enter a 6-digit
-                code.
-              </p>
-              <div className="add-investor-mfa">
-                <div className="add-investor-mfa__qr" aria-hidden>
-                  <QrCode className="size-16 text-muted-foreground/70" strokeWidth={1.25} />
-                </div>
-                <div className="add-investor-mfa__meta">
-                  <p className="text-compact font-medium text-foreground">Demo secret</p>
-                  <p className="font-mono text-caption text-muted-foreground">ZYND-DIST-DEMO-MFA-KEY</p>
-                  <div className="mt-3 flex items-center gap-2">
-                    <Switch
-                      id="add-investor-mfa-bound"
-                      checked={mfaBound}
-                      onCheckedChange={setMfaBound}
-                    />
-                    <Label htmlFor="add-investor-mfa-bound" className="text-caption">
-                      I added this account to my authenticator
-                    </Label>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-6">
-                <FieldLabel>Authenticator code</FieldLabel>
-                <AddInvestorOtpField
-                  id="add-investor-mfa-otp"
-                  value={mfaCode}
-                  onChange={setMfaCode}
-                  disabled={!mfaBound}
+          <div
+            className={cn(
+              "add-investor-wizard__step-panel",
+              stepId === "onboarding" && "add-investor-wizard__step-panel--hidden",
+            )}
+            aria-hidden={stepId === "onboarding"}
+          >
+            <AddInvestorCompliancePanelShell
+              journeySteps={journeySteps}
+              stepId={stepId}
+              footer={complianceFooter}
+            >
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel",
+                  stepId !== "pan" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "pan"}
+              >
+                <AddInvestorPanPanel
+                  pan={pan}
+                  onPanChange={handlePanChange}
+                  middleName={middleName}
+                  onMiddleNameChange={setMiddleName}
+                  onFirstNameChange={(value) => updatePanName({ firstName: value })}
+                  onLastNameChange={(value) => updatePanName({ lastName: value })}
+                  panVerified={panVerified}
+                  panLoading={panLoading}
+                  panError={panError}
+                  panName={panName}
+                  readiness={readiness}
                 />
               </div>
-            </div>
-          ) : null}
 
-          {stepId === "pan" ? (
-            <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">PAN verification</h2>
-              <p className="quick-txn-wizard__section-desc">
-                Name is fetched via Kyckart after PAN validation — same as web KYC. Try{" "}
-                <span className="font-mono">ABCPK1234A</span> (KRA registered) or{" "}
-                <span className="font-mono">ABCPN1234A</span> (new to KYC).
-              </p>
-              {readiness ? <ReadinessBadge readiness={readiness} /> : null}
-              <div className="add-investor-pan-card">
-                <p className="add-investor-pan-card__label">Name from registry</p>
-                {panVerified && panName ? (
-                  <div className="add-investor-pan-card__name">
-                    <p className="text-body font-semibold text-foreground">
-                      {panName.firstName} {middleName ? `${middleName} ` : ""}
-                      {panName.lastName}
-                    </p>
-                    <p className="text-caption text-muted-foreground">
-                      DOB {formatDistributorDate(panName.dateOfBirth)} · {panName.panCategory}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-caption text-muted-foreground">
-                    Verify PAN to fetch investor name from Kyckart.
-                  </p>
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel",
+                  stepId !== "digilocker" && "add-investor-wizard__step-panel--hidden",
                 )}
+                aria-hidden={stepId !== "digilocker"}
+              >
+                <AddInvestorDigilockerPanel
+                  loading={digilockerLoading}
+                  done={digilockerDone}
+                  onConnect={handleDigilockerConnect}
+                />
               </div>
-              <FieldGroup className="mt-4">
-                <Field>
-                  <FieldLabel htmlFor="add-investor-pan">PAN</FieldLabel>
-                  <Input
-                    id="add-investor-pan"
-                    value={pan}
-                    onChange={(event) => {
-                      setPan(normalizePanInput(event.target.value));
-                      setPanVerified(false);
-                      setPanName(null);
-                      setReadiness(null);
-                      setRequiresDigilocker(null);
-                    }}
-                    placeholder="ABCPK1234A"
-                    className="font-mono uppercase"
-                  />
-                  {panError ? <p className="text-caption text-destructive">{panError}</p> : null}
-                </Field>
-                {panVerified ? (
-                  <Field>
-                    <FieldLabel htmlFor="add-investor-middle">Middle name (optional)</FieldLabel>
-                    <Input
-                      id="add-investor-middle"
-                      value={middleName}
-                      onChange={(event) => setMiddleName(event.target.value)}
-                    />
-                  </Field>
-                ) : null}
-              </FieldGroup>
-              {!panVerified ? (
-                <Button type="button" className="mt-4" disabled={pan.length !== 10 || panLoading} onClick={handleVerifyPan}>
-                  {panLoading ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                      Fetching name…
-                    </>
-                  ) : (
-                    "Verify PAN & fetch name"
-                  )}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
 
-          {stepId === "digilocker" ? (
-            <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">DigiLocker</h2>
-              <p className="quick-txn-wizard__section-desc">
-                New-to-KYC investors complete Aadhaar fetch through DigiLocker before address review.
-              </p>
-              <div className="add-investor-digilocker">
-                <p className="text-compact font-medium text-foreground">Connect DigiLocker</p>
-                <p className="mt-1 text-caption text-muted-foreground">
-                  Demo flow simulates redirect and prefills permanent address from Aadhaar.
-                </p>
-                <Button
-                  type="button"
-                  className="mt-4"
-                  disabled={digilockerLoading || digilockerDone}
-                  onClick={handleDigilockerConnect}
-                >
-                  {digilockerLoading ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                      Connecting…
-                    </>
-                  ) : digilockerDone ? (
-                    "DigiLocker connected"
-                  ) : (
-                    "Continue with DigiLocker"
-                  )}
-                </Button>
-                {digilockerDone ? (
-                  <p className="mt-3 text-caption text-emerald-700 dark:text-emerald-400">
-                    Address fetched — continue to review prefilled address.
-                  </p>
-                ) : null}
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel",
+                  stepId !== "signature-upload" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "signature-upload"}
+              >
+                <AddInvestorSignaturePanel
+                  signatureDataUrl={signatureDataUrl}
+                  signatureMode={signatureMode}
+                  onSignatureChange={(dataUrl, mode) => {
+                    setSignatureDataUrl(dataUrl);
+                    setSignatureMode(mode);
+                  }}
+                />
               </div>
-            </div>
-          ) : null}
 
-          {stepId === "address" ? (
-            <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">Address</h2>
-              <p className="quick-txn-wizard__section-desc">
-                {addressFromDigilocker
-                  ? "Prefilled from DigiLocker — same as web KYC after Aadhaar fetch."
-                  : "KRA-registered path — enter permanent address manually (DigiLocker skipped)."}
-              </p>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="addr-line1">Address line 1</FieldLabel>
-                  <Input
-                    id="addr-line1"
-                    value={address.line1}
-                    readOnly={addressFromDigilocker}
-                    onChange={(e) => updateAddress({ line1: e.target.value })}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="addr-line2">Address line 2</FieldLabel>
-                  <Input
-                    id="addr-line2"
-                    value={address.line2}
-                    readOnly={addressFromDigilocker}
-                    onChange={(e) => updateAddress({ line2: e.target.value })}
-                  />
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="addr-city">City</FieldLabel>
-                    <Input
-                      id="addr-city"
-                      value={address.city}
-                      readOnly={addressFromDigilocker}
-                      onChange={(e) => updateAddress({ city: e.target.value })}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="addr-state">State</FieldLabel>
-                    <Input
-                      id="addr-state"
-                      value={address.state}
-                      readOnly={addressFromDigilocker}
-                      onChange={(e) => updateAddress({ state: e.target.value })}
-                    />
-                  </Field>
-                </div>
-                <Field>
-                  <FieldLabel htmlFor="addr-pin">PIN code</FieldLabel>
-                  <Input
-                    id="addr-pin"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={address.pincode}
-                    readOnly={addressFromDigilocker}
-                    onChange={(e) => updateAddress({ pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
-                  />
-                </Field>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="addr-same"
-                    checked={address.correspondenceSame}
-                    onCheckedChange={(checked) => updateAddress({ correspondenceSame: checked })}
-                  />
-                  <Label htmlFor="addr-same" className="text-caption">
-                    Correspondence address same as permanent
-                  </Label>
-                </div>
-              </FieldGroup>
-            </div>
-          ) : null}
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel add-investor-compliance-wizard__step add-investor-compliance-wizard__step--address",
+                  stepId !== "address" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "address"}
+              >
+                <AddInvestorAddressPanel
+                  address={address}
+                  onAddressChange={setAddress}
+                  permanentReadOnly={addressFromDigilocker}
+                  prefilledFromDigilocker={addressFromDigilocker}
+                />
+              </div>
 
-          {stepId === "personal-info" ? (
-            <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">Personal & compliance</h2>
-              <p className="quick-txn-wizard__section-desc">
-                PEP, income, and occupation — aligned with web KYC personal info step.
-              </p>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel>Gender</FieldLabel>
-                  <Select value={personal.gender} onValueChange={(v) => updatePersonal({ gender: v ?? "" })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ADD_INVESTOR_PERSONAL_OPTIONS.gender.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>Marital status</FieldLabel>
-                  <Select
-                    value={personal.maritalStatus}
-                    onValueChange={(v) => updatePersonal({ maritalStatus: v ?? "" })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ADD_INVESTOR_PERSONAL_OPTIONS.maritalStatus.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>Occupation</FieldLabel>
-                  <Select value={personal.occupation} onValueChange={(v) => updatePersonal({ occupation: v ?? "" })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select occupation" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ADD_INVESTOR_PERSONAL_OPTIONS.occupation.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>Income slab</FieldLabel>
-                  <Select value={personal.incomeSlab} onValueChange={(v) => updatePersonal({ incomeSlab: v ?? "" })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select income" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ADD_INVESTOR_PERSONAL_OPTIONS.incomeSlab.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>Politically exposed person (PEP)</FieldLabel>
-                  <Select value={personal.pepExposed} onValueChange={(v) => updatePersonal({ pepExposed: v ?? "no" })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ADD_INVESTOR_PERSONAL_OPTIONS.pepExposed.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="pob">Place of birth</FieldLabel>
-                  <Input
-                    id="pob"
-                    value={personal.placeOfBirth}
-                    onChange={(e) => updatePersonal({ placeOfBirth: e.target.value })}
-                    placeholder="City, state"
-                  />
-                </Field>
-              </FieldGroup>
-            </div>
-          ) : null}
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel add-investor-compliance-wizard__step add-investor-compliance-wizard__step--personal",
+                  stepId !== "personal-info" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "personal-info"}
+              >
+                <AddInvestorPersonalInfoPanel
+                  personal={normalizeAddInvestorPersonalDraft(personal)}
+                  onPersonalChange={updatePersonal}
+                />
+              </div>
 
-          {stepId === "review" ? (
-            <div className="quick-txn-wizard__section">
-              <h2 className="quick-txn-wizard__section-title">Review & invite</h2>
-              <p className="quick-txn-wizard__section-desc">
-                Confirm details before sending the investor invite (demo — no API calls).
-              </p>
-              <dl className="add-investor-review">
-                <div className="add-investor-review__row">
-                  <dt>Email</dt>
-                  <dd>{email}</dd>
-                </div>
-                <div className="add-investor-review__row">
-                  <dt>Mobile</dt>
-                  <dd>+91 {mobile}</dd>
-                </div>
-                <div className="add-investor-review__row">
-                  <dt>MFA</dt>
-                  <dd>Authenticator enrolled</dd>
-                </div>
-                <div className="add-investor-review__row">
-                  <dt>PAN / name</dt>
-                  <dd>
-                    {pan} · {panName?.firstName} {panName?.lastName}
-                  </dd>
-                </div>
-                <div className="add-investor-review__row">
-                  <dt>KYC path</dt>
-                  <dd>{requiresDigilocker ? "DigiLocker + address" : "KRA — manual address"}</dd>
-                </div>
-                <div className="add-investor-review__row">
-                  <dt>Address</dt>
-                  <dd>
-                    {address.line1}, {address.city}, {address.state} {address.pincode}
-                  </dd>
-                </div>
-                <div className="add-investor-review__row">
-                  <dt>Compliance</dt>
-                  <dd>
-                    {personal.occupation}, {personal.incomeSlab}, PEP: {personal.pepExposed}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          ) : null}
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel add-investor-compliance-wizard__step add-investor-compliance-wizard__step--nominee",
+                  stepId !== "nominee" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "nominee"}
+              >
+                <AddInvestorNomineePanel
+                  nominees={nominees}
+                  onNomineesChange={setNominees}
+                  onSubWizardActiveChange={setNomineeSubWizardActive}
+                />
+              </div>
 
-          <div className="quick-txn-wizard__footer">
-            <Button type="button" variant="outline" onClick={goBack} disabled={currentIndex <= 0}>
-              Back
-            </Button>
-            {stepId === "pan" && panVerified ? (
-              <Button type="button" onClick={handlePanContinue}>
-                Continue
-              </Button>
-            ) : stepId === "review" ? (
-              <Button type="button" disabled={submitting} onClick={handleSubmit}>
-                {submitting ? "Sending invite…" : "Send investor invite"}
-              </Button>
-            ) : stepId === "pan" ? (
-              <Button type="button" disabled>
-                Continue
-              </Button>
-            ) : (
-              <Button type="button" onClick={goNext} disabled={!canContinue}>
-                Continue
-              </Button>
-            )}
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel",
+                  stepId !== "bank" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "bank"}
+              >
+                <AddInvestorBankPanel
+                  bank={bank}
+                  onBankChange={updateBank}
+                  accountHolderName={accountHolderName}
+                />
+              </div>
+
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel",
+                  stepId !== "esign" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "esign"}
+              >
+                <AddInvestorEsignPanel done={esignDone} onSign={() => setEsignDone(true)} />
+              </div>
+
+              <div
+                className={cn(
+                  "add-investor-wizard__step-panel add-investor-compliance-wizard__step add-investor-compliance-wizard__step--review",
+                  stepId !== "review" && "add-investor-wizard__step-panel--hidden",
+                )}
+                aria-hidden={stepId !== "review"}
+              >
+                <AddInvestorReviewPanel hero={reviewHero} sections={reviewSections} />
+              </div>
+            </AddInvestorCompliancePanelShell>
           </div>
+            </>
+          )}
         </div>
       </div>
+
+      <AddInvestorSuccessDialog
+        open={Boolean(successState)}
+        state={successState}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            handleSuccessDone();
+          }
+        }}
+        onDone={handleSuccessDone}
+      />
     </div>
   );
 }

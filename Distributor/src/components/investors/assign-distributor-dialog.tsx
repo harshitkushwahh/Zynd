@@ -41,6 +41,7 @@ import {
   getBranchDistributorsForAssignment,
 } from "@/lib/resident-distributor-assignment";
 import { cn } from "@/lib/utils";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 type AssignDistributorDialogProps = {
   investor: DistributorInvestor | null;
@@ -183,10 +184,9 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogHeader className="sr-only">
-        <DialogTitle>Assign distributor</DialogTitle>
+        <DialogTitle>{ZYND_MITRA_COPY.assign}</DialogTitle>
         <DialogDescription>
-          Send the investor a confirmation email. The distributor is linked only after they approve via
-          the magic link.
+          {ZYND_MITRA_COPY.assignDialogDesc}
         </DialogDescription>
       </DialogHeader>
       <DialogContent className="assign-distributor-dialog max-w-md gap-0 p-0">
@@ -196,9 +196,9 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
               <UserPlus className="size-5" aria-hidden />
             </span>
             <div className="min-w-0 space-y-1">
-              <h2 className="text-compact font-semibold text-foreground">Assign distributor</h2>
+              <h2 className="text-compact font-semibold text-foreground">{ZYND_MITRA_COPY.assign}</h2>
               <p className="distributor-panel-card__description leading-relaxed">
-                We email the investor a secure link. Their distributor is linked only after they confirm.
+                {ZYND_MITRA_COPY.assignDialogBody}
               </p>
             </div>
           </div>
@@ -212,7 +212,7 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
           {phase === "form" ? (
             <FieldGroup className="gap-4">
               <Field>
-                <FieldLabel>Branch distributor</FieldLabel>
+                <FieldLabel>{ZYND_MITRA_COPY.branchMitra}</FieldLabel>
                 <Select value={distributorId} onValueChange={(v) => setDistributorId(v ?? "")}>
                   <SelectTrigger className="w-full bg-background">
                     <SelectValue placeholder="Select who will serve this investor" />
@@ -286,7 +286,7 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
 
               <dl className="divide-y divide-border rounded-lg border border-border text-caption">
                 <div className="flex justify-between gap-3 px-3 py-2.5">
-                  <dt className="text-muted-foreground">Proposed distributor</dt>
+                  <dt className="text-muted-foreground">{ZYND_MITRA_COPY.proposedMitra}</dt>
                   <dd className="text-right font-medium text-foreground">{assignment.distributorName}</dd>
                 </div>
                 <div className="flex justify-between gap-3 px-3 py-2.5">
@@ -310,7 +310,7 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
                 {confirming ? (
                   <>
                     <Loader2 className="size-4 animate-spin" aria-hidden />
-                    Linking distributor…
+                    {ZYND_MITRA_COPY.linkingMitra}
                   </>
                 ) : (
                   "Demo: investor opens magic link"
@@ -325,7 +325,7 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
                 <span className="flex size-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 className="size-7" strokeWidth={2.25} aria-hidden />
                 </span>
-                <p className="mt-3 text-compact font-semibold text-foreground">Distributor linked</p>
+                <p className="mt-3 text-compact font-semibold text-foreground">{ZYND_MITRA_COPY.mitraLinked}</p>
                 <p className="mt-1 max-w-xs text-caption text-muted-foreground leading-relaxed">
                   {assignment.distributorName} is now on this investor&apos;s book. They can reach out for
                   advice and transactions through the app.
@@ -334,7 +334,7 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
 
               <dl className="divide-y divide-border rounded-lg border border-border text-caption">
                 <div className="flex justify-between gap-3 px-3 py-2.5">
-                  <dt className="text-muted-foreground">Distributor</dt>
+                  <dt className="text-muted-foreground">{ZYND_MITRA_COPY.singular}</dt>
                   <dd className="text-right font-medium text-foreground">{assignment.distributorName}</dd>
                 </div>
                 <div className="flex justify-between gap-3 px-3 py-2.5">

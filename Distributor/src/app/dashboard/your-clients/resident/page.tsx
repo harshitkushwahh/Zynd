@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { SYSTEM_RESIDENT_INVESTORS_HREF } from "@/lib/distributor-client-routes";
+import { buildYourClientsListHref } from "@/lib/distributor-clients-list-scope";
 
-/** Legacy URL — residential list lives under Investors. */
+/** Legacy URL — platform list lives on Your clients (All investors tab). */
 export default function LegacyYourClientsResidentRedirect() {
-  redirect(SYSTEM_RESIDENT_INVESTORS_HREF);
+  redirect(buildYourClientsListHref("all"));
 }

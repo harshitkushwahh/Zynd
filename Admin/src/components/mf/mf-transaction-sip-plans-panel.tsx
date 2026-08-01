@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, RotateCcw } from "lucide-react";
+import { RefreshCw, RotateCcw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AmcLogo } from "@/components/mf/amc-logo";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -23,26 +24,17 @@ import {
 } from "@/components/ui/admin-table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ApiError } from "@/lib/api-client";
 import { userInitials } from "@/lib/admin-capabilities";
 import {
   fetchMfTransactionSipPlans,
   syncMfTransactionSipPlan,
   type MfTransactionSipPlan,
 } from "@/lib/mf-transactions-admin-api";
+import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const SIP_STATUS_OPTIONS = [
+const SIP_STATUS_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "PENDING", label: "Pending" },
   { value: "REVIEW", label: "Review" },
@@ -50,8 +42,7 @@ const SIP_STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Active" },
   { value: "CANCELLED", label: "Cancelled" },
   { value: "FAILED", label: "Failed" },
-] as const;
-
+];
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -62,22 +53,42 @@ function formatDate(value?: string | null) {
   });
 }
 
+function matchesSearch(plan: MfTransactionSipPlan, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    plan.product_name,
+    plan.product_id,
+    plan.user_display_name,
+    plan.user_email,
+    plan.client_id,
+    plan.status,
+    plan.next_action,
+    plan.frequency,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(normalized);
+}
+
 export function MfTransactionSipPlansPanel({
   canRead,
   canManage,
-  title = "SIP plans",
 }: {
   canRead: boolean;
   canManage: boolean;
-  title?: string;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [plans, setPlans] = useState<MfTransactionSipPlan[]>([]);
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const loadData = useCallback(async () => {
     if (!canRead) return;
@@ -102,12 +113,20 @@ export function MfTransactionSipPlansPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter]);
+  }, [statusFilter, search, pageSize]);
+
+  const filteredPlans = useMemo(
+    () => plans.filter((plan) => matchesSearch(plan, search)),
+    [plans, search],
+  );
 
   const pagination = useMemo(
-    () => paginateItems(plans, page, ADMIN_TABLE_PAGE_SIZE),
-    [page, plans],
+    () => paginateItems(filteredPlans, page, pageSize),
+    [filteredPlans, page, pageSize],
   );
+
+  const columnCount = canManage ? 7 : 6;
+  const showSkeleton = loading && plans.length === 0;
 
   const handleSyncPlan = async (planId: string) => {
     if (!canManage) return;
@@ -125,52 +144,95 @@ export function MfTransactionSipPlansPanel({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by fund, customer, or ID"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value)}
+            options={SIP_STATUS_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void loadData()}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
+        </div>
+      </div>
+
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSectionTitle icon={CalendarClock}>{title}</AdminSectionTitle>
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? ALL)}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="All statuses">
-              {SIP_STATUS_OPTIONS.find((option) => option.value === statusFilter)?.label ??
-                "All statuses"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Filter by status</SelectLabel>
-              {SIP_STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <AdminDataTable minWidth="5xl">
+      <AdminDataTable
+        minWidth="5xl"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            disabled={loading}
+            totalCount={filteredPlans.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+            onNext={() => setPage((value) => value + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            {canManage ? (
+              <AdminTableHeadCell className="w-[5.5rem]">Actions</AdminTableHeadCell>
+            ) : null}
             <AdminTableHeadCell>Fund</AdminTableHeadCell>
             <AdminTableHeadCell>Customer</AdminTableHeadCell>
             <AdminTableHeadCell>Amount</AdminTableHeadCell>
             <AdminTableHeadCell>Frequency</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
             <AdminTableHeadCell>Next installment</AdminTableHeadCell>
-            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {loading ? (
-            <AdminTableSkeletonRows columns={canManage ? 7 : 6} />
-          ) : pagination.items.length === 0 ? (
-            <AdminTableStateRow colSpan={canManage ? 7 : 6}>No SIP plans found.</AdminTableStateRow>
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={columnCount} />
+          ) : filteredPlans.length === 0 ? (
+            <AdminTableStateRow colSpan={columnCount}>
+              {plans.length === 0
+                ? "No SIP plans found."
+                : "No SIP plans match your search."}
+            </AdminTableStateRow>
           ) : (
             pagination.items.map((plan) => (
               <AdminTableRow key={plan.plan_id}>
+                {canManage ? (
+                  <AdminTableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actionLoading === `sync-${plan.plan_id}`}
+                      onClick={() => void handleSyncPlan(plan.plan_id)}
+                    >
+                      <RotateCcw className="size-3.5" />
+                      Sync
+                    </Button>
+                  </AdminTableCell>
+                ) : null}
                 <AdminTableCell>
                   <div className="flex items-center gap-3">
                     <AmcLogo
@@ -224,36 +286,11 @@ export function MfTransactionSipPlansPanel({
                 <AdminTableCell className="text-muted-foreground">
                   {formatDate(plan.next_installment_date)}
                 </AdminTableCell>
-                {canManage ? (
-                  <AdminTableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading === `sync-${plan.plan_id}`}
-                      onClick={() => void handleSyncPlan(plan.plan_id)}
-                    >
-                      <RotateCcw className="size-3.5" />
-                      Sync
-                    </Button>
-                  </AdminTableCell>
-                ) : null}
               </AdminTableRow>
             ))
           )}
         </AdminTableBody>
       </AdminDataTable>
-
-      {!loading && plans.length > 0 ? (
-        <AdminTablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          hasPrevious={pagination.hasPrevious}
-          hasNext={pagination.hasNext}
-          disabled={loading}
-          onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-          onNext={() => setPage((value) => value + 1)}
-        />
-      ) : null}
     </div>
   );
 }

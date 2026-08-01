@@ -31,7 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -203,10 +204,6 @@ export function ZyndLogsPanel() {
 
       <AdminPageHeader
         title={zyndLogsRoute?.label ?? "Zynd Logs"}
-        description={
-          zyndLogsRoute?.description ??
-          "Cybrilla, Fintech Primitive, and KYC Kart integration audit logs."
-        }
         aside={
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => void handleExport()}>
@@ -239,13 +236,13 @@ export function ZyndLogsPanel() {
         onValueChange={(value) => setActiveTab(value as LogTab)}
         className="gap-6"
       >
-        <TabsList variant="line" className="h-auto w-fit justify-start border-b border-border">
+        <AdminTabList>
           {LOG_TABS.map((tab) => (
-            <TabsTrigger key={tab.key} value={tab.key} className="px-4 py-2.5">
+            <AdminTabTrigger key={tab.key} value={tab.key}>
               {tab.label}
-            </TabsTrigger>
+            </AdminTabTrigger>
           ))}
-        </TabsList>
+        </AdminTabList>
 
         {LOG_TABS.map((tab) => (
           <TabsContent key={tab.key} value={tab.key} className="mt-0 space-y-4">

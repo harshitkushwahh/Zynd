@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Lock, MoreHorizontal, CheckCircle2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Lock, MoreHorizontal, CheckCircle2, RefreshCw } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { LockedProfileUserCell } from "@/components/risk-profile/risk-profile-locked-user-cell";
 import { RiskProfileUnlockJourneyDialog } from "@/components/risk-profile/risk-profile-unlock-journey-dialog";
 import {
@@ -11,6 +10,8 @@ import {
   AdminFormDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -20,7 +21,7 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   getOffsetPage,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
@@ -39,12 +40,15 @@ import {
   requestRiskProfileUnlock,
   type LockedRiskProfileUser,
 } from "@/lib/risk-profile-admin-api";
+import { cn } from "@/lib/utils";
 
 const RISK_PROFILE_UNLOCK_ATTEMPTS = 3;
 
 export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
   const [items, setItems] = useState<LockedRiskProfileUser[]>([]);
+  const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,18 +59,16 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
   const [saving, setSaving] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
 
-  const page = getOffsetPage(offset);
-
   const loadLockedUsers = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const result = await fetchLockedRiskProfiles({
-        limit: ADMIN_TABLE_PAGE_SIZE,
+        limit: pageSize,
         offset,
       });
       setItems(result.items);
-      setHasMore(result.items.length === ADMIN_TABLE_PAGE_SIZE);
+      setHasMore(result.items.length === pageSize);
     } catch (err) {
       setItems([]);
       setHasMore(false);
@@ -74,7 +76,7 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [offset]);
+  }, [offset, pageSize]);
 
   useEffect(() => {
     void loadLockedUsers();
@@ -129,38 +131,78 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
     }
   };
 
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return items;
+    return items.filter((item) =>
+      [item.display_name, item.email, item.client_id].join(" ").toLowerCase().includes(query),
+    );
+  }, [items, search]);
+
+  const columnCount = canManage ? 5 : 4;
+  const showSkeleton = loading && items.length === 0;
+
   return (
     <div className="space-y-4">
-      <AdminSectionTitle>Locked profiles</AdminSectionTitle>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by name, email, or ID"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => void loadLockedUsers()}
+          aria-label="Refresh"
+        >
+          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+        </Button>
+      </div>
 
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <AdminDataTable minWidth="lg">
+      <AdminDataTable
+        minWidth="lg"
+        footer={
+          <AdminTablePagination
+            page={getOffsetPage(offset, pageSize)}
+            hasPrevious={offset > 0}
+            hasNext={hasMore}
+            disabled={loading}
+            currentPageCount={filteredItems.length}
+            hasMore={hasMore}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setOffset(0);
+            }}
+            onPrevious={() => setOffset((value) => Math.max(0, value - pageSize))}
+            onNext={() => setOffset((value) => value + pageSize)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
             <AdminTableHeadCell>User</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Completed</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Granted</AdminTableHeadCell>
             <AdminTableHeadCell>Locked at</AdminTableHeadCell>
-            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows
-            colSpan={canManage ? 5 : 4}
-            loading={loading}
-            isEmpty={items.length === 0}
-            emptyMessage="No locked risk profiles."
-          >
-            {items.map((item) => (
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={columnCount} />
+          ) : filteredItems.length === 0 ? (
+            <AdminTableStateRow colSpan={columnCount}>
+              {items.length === 0 ? "No locked risk profiles." : "No users match your search."}
+            </AdminTableStateRow>
+          ) : (
+            filteredItems.map((item) => (
               <AdminTableRow key={item.user_id}>
-                <AdminTableCell>
-                  <LockedProfileUserCell user={item} />
-                </AdminTableCell>
-                <AdminTableCell className="text-right">{item.completed_count}</AdminTableCell>
-                <AdminTableCell className="text-right">{item.granted_attempts}</AdminTableCell>
-                <AdminTableCell>{item.locked_at ? new Date(item.locked_at).toLocaleString() : "—"}</AdminTableCell>
                 {canManage ? (
                   <AdminTableCell className="text-right">
                     <DropdownMenu>
@@ -172,26 +214,29 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
                         }
                       />
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setJourneyUser(item)}>View journey</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openRevokeDialog(item)}>Revoke lock</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setJourneyUser(item)}>
+                          View journey
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openRevokeDialog(item)}>
+                          Revoke lock
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </AdminTableCell>
                 ) : null}
+                <AdminTableCell>
+                  <LockedProfileUserCell user={item} />
+                </AdminTableCell>
+                <AdminTableCell className="text-right">{item.completed_count}</AdminTableCell>
+                <AdminTableCell className="text-right">{item.granted_attempts}</AdminTableCell>
+                <AdminTableCell>
+                  {item.locked_at ? new Date(item.locked_at).toLocaleString() : "—"}
+                </AdminTableCell>
               </AdminTableRow>
-            ))}
-          </AdminTableRows>
+            ))
+          )}
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={page}
-        hasPrevious={offset > 0}
-        hasNext={hasMore}
-        disabled={loading}
-        onPrevious={() => setOffset((value) => Math.max(0, value - ADMIN_TABLE_PAGE_SIZE))}
-        onNext={() => setOffset((value) => value + ADMIN_TABLE_PAGE_SIZE)}
-      />
 
       <AdminFormDialog
         open={Boolean(selectedUser)}

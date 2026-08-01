@@ -1,4 +1,5 @@
 import type { DistributorPageIconName } from "@/components/dashboard/distributor-page-icons";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 export type DistributorPageConfig = {
   iconName: DistributorPageIconName;
@@ -7,25 +8,20 @@ export type DistributorPageConfig = {
 };
 
 export const DISTRIBUTOR_PAGE_CONFIG = {
-  dashboard: {
-    iconName: "layoutDashboard",
-    title: "Dashboard",
-    description: "Snapshot of your demo investor book and operations activity.",
-  },
   yourClients: {
     iconName: "users",
     title: "Your clients",
-    description: "Investors you onboarded or added to your book — not the full platform directory.",
+    description: "",
   },
   yourClientsTable: {
     iconName: "users",
     title: "Your clients",
-    description: "Only clients linked to your distributor ARN (demo).",
+    description: ZYND_MITRA_COPY.yourBookArn,
   },
   yourOperations: {
     iconName: "layers3",
     title: "Your operations",
-    description: "Overview of orders, plans, approvals, and transaction groups.",
+    description: "",
   },
   orders: {
     iconName: "layers3",
@@ -40,17 +36,16 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
   txnRequests: {
     iconName: "arrowLeftRight",
     title: "Txn Requests",
-    description: "Pending and recent transaction requests awaiting distributor action.",
+    description: ZYND_MITRA_COPY.txnAwaitingMitra,
   },
   allInvestors: {
     iconName: "users",
     title: "All Investors",
-    description:
-      "Full investor book for this distributor — onboarding, compliance, and investment status at a glance.",
+    description: ZYND_MITRA_COPY.fullBookDesc,
   },
   residentInvestors: {
     iconName: "users",
-    title: "Residential",
+    title: "All investors",
     description: "All resident individuals on Zynd — PM and DIY users across the platform (demo).",
   },
   nriInvestors: {
@@ -66,22 +61,57 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
   notifications: {
     iconName: "bell",
     title: "Notifications",
-    description: "Alerts for transaction requests, investors, orders, and systematic plans.",
+    description: "",
   },
   settings: {
     iconName: "settings",
     title: "Settings",
-    description: "Account details and console preferences for this distributor workspace.",
+    description: "",
   },
   branchDistributors: {
     iconName: "users2",
-    title: "Distributors",
-    description: "Distributors mapped to your branch.",
+    title: ZYND_MITRA_COPY.plural,
+    description: "",
+  },
+  payouts: {
+    iconName: "wallet",
+    title: "My work",
+    description: "",
+  },
+  payrollDetail: {
+    iconName: "wallet",
+    title: "Payroll history",
+    description: "",
+  },
+  leaveDetail: {
+    iconName: "wallet",
+    title: "Leave history",
+    description: "",
+  },
+  attendanceDetail: {
+    iconName: "wallet",
+    title: "Work attendance",
+    description: "",
+  },
+  compliance: {
+    iconName: "clipboardCheck",
+    title: "Compliance",
+    description: "",
+  },
+  leads: {
+    iconName: "userRoundPlus",
+    title: "Leads",
+    description: "",
+  },
+  reports: {
+    iconName: "fileSpreadsheet",
+    title: "Reports",
+    description: "",
   },
   branchCommissions: {
     iconName: "indianRupee",
-    title: "Commissions",
-    description: "Commission accruals, holds, and payout history.",
+    title: "Incentives",
+    description: "Branch incentive accrual, holds, and payout roll-up.",
   },
   branchReports: {
     iconName: "fileText",
@@ -91,7 +121,7 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
   branchPerformance: {
     iconName: "barChart3",
     title: "Team performance",
-    description: "Targets vs actuals for each distributor.",
+    description: ZYND_MITRA_COPY.targetsPerMitra,
   },
 } as const satisfies Record<string, DistributorPageConfig>;
 

@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getErrorMessage } from "@/lib/errors";
 
+import { AdminAuthButton } from "@/components/auth/admin-auth-button";
+import { AdminGlobalLoading } from "@/components/auth/admin-global-loading";
+import { AdminLoginVisualPanel } from "@/components/auth/admin-login-visual-panel";
 import { OtpInput } from "@/components/auth/otp-input";
 import { PasswordInput } from "@/components/auth/password-input";
 import { TurnstileWidget, isTurnstileRequired } from "@/components/auth/turnstile-widget";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
@@ -18,10 +20,9 @@ import { isAuthenticatedResponse } from "@/lib/auth-api";
 import { isValidEmail, isValidOtp, isValidPassword } from "@/lib/admin-validation";
 import { clampToMaxLength, inputRuleProps, INPUT_RULES } from "@/lib/input-rules";
 
-const underlineInputClass = "auth-input-underline";
+const underlineInputClass = "auth-input-underline admin-login-form__input";
 
 type LoginStep = "credentials" | "mfa";
-
 
 export function AdminLoginCard() {
   const router = useRouter();
@@ -46,6 +47,10 @@ export function AdminLoginCard() {
       router.replace("/dashboard");
     }
   }, [loading, router, user]);
+
+  if (loading || user) {
+    return <AdminGlobalLoading />;
+  }
 
   const handleCredentialsSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -119,150 +124,169 @@ export function AdminLoginCard() {
   };
 
   return (
-    <Card className="admin-login-card w-full max-w-login-card ring-0">
-      <div className="admin-login-accent" aria-hidden="true" />
+    <div className="admin-login-split-card">
+      <AdminLoginVisualPanel />
 
-      <CardContent className="px-8 pb-8 pt-7">
-        <div className="mb-7 flex flex-col items-center gap-3.5 text-center">
-          <Image
-            src="/logo.png"
-            alt="ZYND"
-            width={56}
-            height={56}
-            className="admin-login-logo"
-            priority
-          />
-          <h1 className="font-heading text-h4 font-semibold tracking-tight text-foreground">
-            <span className="admin-login-title-brand">ZYND</span> Admin Console
-          </h1>
-        </div>
-
-        {step === "credentials" ? (
-          <form onSubmit={(event) => void handleCredentialsSubmit(event)}>
-            <FieldGroup className="gap-5">
-              <Field data-invalid={!!emailError}>
-                <FieldLabel htmlFor="admin-email" className="sr-only">
-                  Email
-                </FieldLabel>
-                <Input
-                  id="admin-email"
-                  type="email"
-                  autoComplete="username"
-                  placeholder="Email"
-                  required
-                  value={email}
-                  onChange={(event) => {
-                    setEmail(clampToMaxLength(event.target.value, "email"));
-                    if (emailError) setEmailError("");
-                  }}
-                  aria-invalid={!!emailError}
-                  className={underlineInputClass}
-                  {...inputRuleProps("email")}
-                />
-                <FieldError>{emailError}</FieldError>
-              </Field>
-
-              <Field data-invalid={!!passwordError}>
-                <FieldLabel htmlFor="admin-password" className="sr-only">
-                  Password
-                </FieldLabel>
-                <PasswordInput
-                  id="admin-password"
-                  autoComplete="current-password"
-                  placeholder="Password"
-                  required
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(clampToMaxLength(event.target.value, "password"));
-                    if (passwordError) setPasswordError("");
-                  }}
-                  aria-invalid={!!passwordError}
-                  className={underlineInputClass}
-                  {...inputRuleProps("password")}
-                />
-                <FieldError>{passwordError}</FieldError>
-              </Field>
-            </FieldGroup>
-
-            {captchaRequired ? (
-              <>
-                <TurnstileWidget
-                  resetKey={`admin-login-${turnstileResetKey}`}
-                  onVerify={setTurnstileToken}
-                  onExpire={() => setTurnstileToken("")}
-                  className="mt-4"
-                />
-                {turnstileError ? (
-                  <p className="mt-2 text-caption text-destructive">{turnstileError}</p>
-                ) : null}
-              </>
-            ) : null}
-
-            {formError ? <p className="mt-4 text-caption text-destructive">{formError}</p> : null}
-
-            <Button
-              type="submit"
-              className="mt-7 h-11 w-full"
-              size="lg"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Please wait..." : "Continue"}
-            </Button>
-          </form>
-        ) : (
-          <form onSubmit={(event) => void handleMfaSubmit(event)}>
-            {email.trim() ? (
-              <p className="mb-5 truncate text-center text-caption text-muted-foreground">
-                {email.trim()}
+      <div className="admin-login-form-panel">
+        <div className="admin-login-form-panel__inner">
+          <header className="admin-login-form-panel__header">
+            <Image
+              src="/zynda.png"
+              alt="ZYND"
+              width={56}
+              height={56}
+              className="admin-login-form-panel__logo"
+              priority
+            />
+            <h1 className="admin-login-form-panel__title">
+              {step === "credentials" ? "Welcome Back!" : "Verify your identity"}
+            </h1>
+            {step === "mfa" ? (
+              <p className="admin-login-form-panel__hint">
+                Enter the 6-digit code from your authenticator app for{" "}
+                <span className="admin-login-form-panel__hint-emphasis">{email.trim()}</span>.
               </p>
             ) : null}
+          </header>
 
-            <FieldGroup className="gap-4">
-              <Field data-invalid={!!otpError}>
-                <FieldLabel htmlFor="admin-otp" className="sr-only">
-                  Authentication code
-                </FieldLabel>
-                <OtpInput
-                  id="admin-otp"
-                  value={otp}
-                  error={!!otpError}
-                  onChange={(value) => {
-                    setOtp(value);
-                    if (otpError) setOtpError("");
+          {step === "credentials" ? (
+            <form onSubmit={(event) => void handleCredentialsSubmit(event)} className="admin-login-form">
+              <FieldGroup className="admin-login-form__fields">
+                <Field data-invalid={!!emailError}>
+                  <FieldLabel htmlFor="admin-email" className="sr-only">
+                    Email
+                  </FieldLabel>
+                  <Input
+                    id="admin-email"
+                    type="email"
+                    autoComplete="username"
+                    placeholder="Email"
+                    required
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(clampToMaxLength(event.target.value, "email"));
+                      if (emailError) setEmailError("");
+                    }}
+                    aria-invalid={!!emailError}
+                    className={underlineInputClass}
+                    {...inputRuleProps("email")}
+                  />
+                  <FieldError>{emailError}</FieldError>
+                </Field>
+
+                <Field data-invalid={!!passwordError}>
+                  <FieldLabel htmlFor="admin-password" className="sr-only">
+                    Password
+                  </FieldLabel>
+                  <PasswordInput
+                    id="admin-password"
+                    autoComplete="current-password"
+                    placeholder="Password"
+                    required
+                    value={password}
+                    onChange={(event) => {
+                      setPassword(clampToMaxLength(event.target.value, "password"));
+                      if (passwordError) setPasswordError("");
+                    }}
+                    aria-invalid={!!passwordError}
+                    className={underlineInputClass}
+                    {...inputRuleProps("password")}
+                  />
+                  <FieldError>{passwordError}</FieldError>
+                </Field>
+              </FieldGroup>
+
+              {captchaRequired ? (
+                <>
+                  <TurnstileWidget
+                    resetKey={`admin-login-${turnstileResetKey}`}
+                    onVerify={setTurnstileToken}
+                    onExpire={() => setTurnstileToken("")}
+                    className="mt-4"
+                  />
+                  {turnstileError ? (
+                    <AdminFeedbackMessage
+                      variant="destructive"
+                      onDismiss={() => setTurnstileError("")}
+                    >
+                      {turnstileError}
+                    </AdminFeedbackMessage>
+                  ) : null}
+                </>
+              ) : null}
+
+              {formError ? (
+                <AdminFeedbackMessage variant="destructive" onDismiss={() => setFormError("")}>
+                  {formError}
+                </AdminFeedbackMessage>
+              ) : null}
+
+              <AdminAuthButton type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Please wait..." : "Login Now"}
+              </AdminAuthButton>
+
+              <p className="admin-login-form-panel__footer">
+                Need access?{" "}
+                <span className="admin-login-form-panel__footer-emphasis">Contact admin</span>
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={(event) => void handleMfaSubmit(event)} className="admin-login-form">
+              <FieldGroup className="admin-login-form__fields">
+                <Field data-invalid={!!otpError}>
+                  <FieldLabel htmlFor="admin-otp" className="sr-only">
+                    Authentication code
+                  </FieldLabel>
+                  <OtpInput
+                    id="admin-otp"
+                    value={otp}
+                    error={!!otpError}
+                    onChange={(value) => {
+                      setOtp(value);
+                      if (otpError) setOtpError("");
+                    }}
+                  />
+                </Field>
+              </FieldGroup>
+
+              {otpError ? (
+                <AdminFeedbackMessage variant="destructive" onDismiss={() => setOtpError("")}>
+                  {otpError}
+                </AdminFeedbackMessage>
+              ) : null}
+
+              {formError ? (
+                <AdminFeedbackMessage variant="destructive" onDismiss={() => setFormError("")}>
+                  {formError}
+                </AdminFeedbackMessage>
+              ) : null}
+
+              <div className="admin-login-form__actions">
+                <AdminAuthButton
+                  type="submit"
+                  disabled={isSubmitting || !isValidOtp(otp)}
+                >
+                  {isSubmitting ? "Please wait..." : "Verify & Login"}
+                </AdminAuthButton>
+
+                <button
+                  type="button"
+                  className="admin-login-form__link"
+                  onClick={() => {
+                    setStep("credentials");
+                    setOtp("");
+                    setOtpError("");
+                    setFormError("");
                   }}
-                />
-                <FieldError>{otpError}</FieldError>
-              </Field>
-            </FieldGroup>
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </form>
+          )}
 
-            {formError ? <p className="mt-3 text-caption text-destructive">{formError}</p> : null}
-
-            <div className="mt-7 space-y-4">
-              <Button
-                type="submit"
-                className="h-11 w-full"
-                size="lg"
-                disabled={isSubmitting || !isValidOtp(otp)}
-              >
-                {isSubmitting ? "Please wait..." : "Continue"}
-              </Button>
-
-              <button
-                type="button"
-                className="auth-link mx-auto"
-                onClick={() => {
-                  setStep("credentials");
-                  setOtp("");
-                  setOtpError("");
-                  setFormError("");
-                }}
-              >
-                Back
-              </button>
-            </div>
-          </form>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }

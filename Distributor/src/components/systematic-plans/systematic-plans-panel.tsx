@@ -4,16 +4,21 @@ import { useMemo, useState } from "react";
 import { CalendarClock, CheckCircle2, PauseCircle, XCircle } from "lucide-react";
 import type { SortDescriptor } from "react-aria-components";
 
-import { paginateTableItems, Table } from "@/components/application/table";
+import { Table, useDistributorTablePagination } from "@/components/application/table";
 import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
 import { DistributorPageShell } from "@/components/dashboard/distributor-page-shell";
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
+import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
+import {
+  getScopedSystematicPlans,
+  type DistributorOrdersListScope,
+} from "@/lib/distributor-operations-orders-scope";
+import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DUMMY_SYSTEMATIC_PLANS } from "@/lib/dummy/systematic-plans";
-import type { SystematicPlanStatus } from "@/lib/dummy/types";
+import type { DistributorSystematicPlan, SystematicPlanStatus } from "@/lib/dummy/types";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";
@@ -27,49 +32,86 @@ const STATUS_OPTIONS: Array<{ value: SystematicPlanStatus; label: string }> = [
   { value: "Cancelled", label: "Cancelled" },
 ];
 
+type PlanTypeFilter = DistributorSystematicPlan["planType"] | "all";
+
+const PLAN_TYPE_OPTIONS: Array<{ value: PlanTypeFilter; label: string }> = [
+  { value: "SIP", label: "SIP" },
+  { value: "STP", label: "STP" },
+  { value: "SWP", label: "SWP" },
+];
+
 type SystematicPlansPanelProps = DistributorPageConfig & {
   layout?: "page" | "table";
+  operationsListScope?: DistributorOrdersListScope;
 };
 
 export function SystematicPlansPanel({
-  iconName,
   title,
   description,
   layout = "page",
+  operationsListScope = "your-book",
 }: SystematicPlansPanelProps) {
+  const sourcePlans = useMemo(
+    () => getScopedSystematicPlans(operationsListScope),
+    [operationsListScope],
+  );
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<SystematicPlanStatus | "all">("all");
-  const [page, setPage] = useState(1);
+  const [planTypeFilter, setPlanTypeFilter] = useState<PlanTypeFilter>("all");
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
     column: "nextDueAt",
     direction: "ascending",
   });
 
   const filtered = useMemo(() => {
-    if (statusFilter === "all") return DUMMY_SYSTEMATIC_PLANS;
-    return DUMMY_SYSTEMATIC_PLANS.filter((plan) => plan.status === statusFilter);
-  }, [statusFilter]);
+    return sourcePlans.filter((plan) => {
+      if (statusFilter !== "all" && plan.status !== statusFilter) return false;
+      if (planTypeFilter !== "all" && plan.planType !== planTypeFilter) return false;
+      return distributorTableSearchMatch(
+        searchQuery,
+        plan.planRef,
+        plan.clientCode,
+        plan.investorEmailMasked,
+        plan.schemeName,
+        plan.planType,
+      );
+    });
+  }, [planTypeFilter, searchQuery, sourcePlans, statusFilter]);
 
   const sorted = useMemo(
     () => sortByDescriptor(filtered, sortDescriptor),
     [filtered, sortDescriptor],
   );
 
-  const { pageItems, totalPages, safePage } = useMemo(
-    () => paginateTableItems(sorted, page),
-    [sorted, page],
-  );
+  const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
-  const activeCount = DUMMY_SYSTEMATIC_PLANS.filter((p) => p.status === "Active").length;
-  const pausedCount = DUMMY_SYSTEMATIC_PLANS.filter((p) => p.status === "Paused").length;
-  const cancelledCount = DUMMY_SYSTEMATIC_PLANS.filter((p) => p.status === "Cancelled").length;
+  const activeCount = sourcePlans.filter((p) => p.status === "Active").length;
+  const pausedCount = sourcePlans.filter((p) => p.status === "Paused").length;
+  const cancelledCount = sourcePlans.filter((p) => p.status === "Cancelled").length;
 
   const toolbar = (
     <DistributorTableToolbar
       onClearAll={() => {
+        setSearchQuery("");
         setStatusFilter("all");
+        setPlanTypeFilter("all");
         setPage(1);
       }}
-      clearDisabled={statusFilter === "all"}
+      clearDisabled={
+        statusFilter === "all" && planTypeFilter === "all" && searchQuery.trim() === ""
+      }
+      search={
+        <DistributorTableSearchCard
+          variant="card"
+          value={searchQuery}
+          onChange={(value) => {
+            setSearchQuery(value);
+            setPage(1);
+          }}
+          placeholder="Search plans…"
+          aria-label="Search systematic plans"
+        />
+      }
     >
       <StatusFilterSelect
         label="Status"
@@ -77,6 +119,15 @@ export function SystematicPlansPanel({
         options={STATUS_OPTIONS}
         onValueChange={(value) => {
           setStatusFilter(value);
+          setPage(1);
+        }}
+      />
+      <StatusFilterSelect
+        label="Plan type"
+        value={planTypeFilter}
+        options={PLAN_TYPE_OPTIONS}
+        onValueChange={(value) => {
+          setPlanTypeFilter(value);
           setPage(1);
         }}
       />
@@ -92,11 +143,7 @@ export function SystematicPlansPanel({
           setSortDescriptor(descriptor);
           setPage(1);
         }}
-        pagination={{
-          page: safePage,
-          totalPages,
-          onPageChange: setPage,
-        }}
+        pagination={pagination}
       >
         <Table.Header>
           <Table.Head id="planRef" label="Plan" isRowHeader allowsSorting />
@@ -150,7 +197,7 @@ export function SystematicPlansPanel({
         toolbar={toolbar}
         isEmpty={sorted.length === 0}
         emptyTitle="No plans match your filters"
-        emptyDescription="Adjust the status filter or clear all to reset."
+        emptyDescription="Adjust filters, search, or clear all to reset."
       >
         {table}
       </DistributorTableOnlyShell>
@@ -159,18 +206,17 @@ export function SystematicPlansPanel({
 
   return (
     <DistributorPageShell
-      iconName={iconName}
       title={title}
       description={description}
       isEmpty={sorted.length === 0}
       emptyTitle="No plans match your filters"
-      emptyDescription="Adjust the status filter or clear all to reset."
+      emptyDescription="Adjust filters, search, or clear all to reset."
       metrics={
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <DistributorMetricCard
             icon={CalendarClock}
             label="Total plans"
-            value={String(DUMMY_SYSTEMATIC_PLANS.length)}
+            value={String(sourcePlans.length)}
             hint="SIP, STP, and SWP"
           />
           <DistributorMetricCard

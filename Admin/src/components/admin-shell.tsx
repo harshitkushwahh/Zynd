@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { AdminConsoleShellSkeleton } from "@/components/ui/admin-skeletons";
+import { AdminGlobalLoading } from "@/components/auth/admin-global-loading";
 import { AdminZyndPinLockScreen } from "@/components/admin-zynd-pin-lock-screen";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { useAdminZyndPinOptional } from "@/contexts/admin-zynd-pin-context";
@@ -20,7 +20,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [loading, router, user]);
 
   if (loading) {
-    return <AdminConsoleShellSkeleton />;
+    return <AdminGlobalLoading />;
   }
 
   if (!user) {

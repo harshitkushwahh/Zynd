@@ -175,7 +175,7 @@
   --success: var(--zynd-emerald);
   --success-foreground: var(--zynd-white);
   --warning: var(--zynd-accent-amber);
-  --warning-foreground: var(--zynd-neutral-900);
+  --warning-foreground: var(--zynd-white);
   --info: var(--zynd-blue);
   --info-foreground: var(--zynd-white);
   --border: var(--zynd-neutral-200);
@@ -222,7 +222,7 @@
   --success: var(--zynd-emerald);
   --success-foreground: var(--zynd-white);
   --warning: var(--zynd-accent-amber);
-  --warning-foreground: var(--zynd-dark-bg);
+  --warning-foreground: var(--zynd-white);
   --info: var(--zynd-blue);
   --info-foreground: var(--zynd-white);
   --border: var(--zynd-dark-border);

@@ -2,7 +2,6 @@
 
 import { Card } from "@/components/ui/card";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
-import { resolveDistributorPageIcon } from "@/components/dashboard/distributor-page-icons";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
@@ -12,18 +11,15 @@ type BranchManagerPlaceholderPanelProps = DistributorPageConfig & {
 };
 
 export function BranchManagerPlaceholderPanel({
-  iconName,
   title,
   description,
   bullets,
 }: BranchManagerPlaceholderPanelProps) {
   const { branchLabel } = useDistributorAuth();
-  const Icon = resolveDistributorPageIcon(iconName);
 
   return (
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
       <DistributorPageHeader
-        icon={Icon}
         title={title}
         description={`${description} Scope: ${branchLabel}.`}
       />

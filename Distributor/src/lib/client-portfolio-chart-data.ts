@@ -3,6 +3,7 @@ export type PortfolioChartPeriod = "1D" | "1M" | "6M" | "1Y" | "3Y" | "5Y" | "10
 export type PortfolioChartPoint = {
   label: string;
   value: number;
+  invested: number;
 };
 
 export const PORTFOLIO_CHART_PERIODS: PortfolioChartPeriod[] = [
@@ -43,10 +44,14 @@ function formatYear(date: Date) {
 function buildPoints(
   clientId: string,
   currentValue: number,
+  investedAmount: number,
   period: PortfolioChartPeriod,
 ): PortfolioChartPoint[] {
   const seed = hashSeed(`${clientId}-${period}`);
   const endValue = Math.max(currentValue, 0);
+  const endInvested = Math.max(investedAmount, 0);
+  const investedRatio =
+    endValue > 0 && endInvested > 0 ? endInvested / endValue : 0.82;
   const startScale =
     period === "1D"
       ? 0.998
@@ -63,6 +68,8 @@ function buildPoints(
                 : 0.32;
   const base = endValue > 0 ? endValue * startScale : 10000;
   const target = endValue > 0 ? endValue : base * 1.12;
+  const investedTarget = endInvested > 0 ? endInvested : target * investedRatio;
+  const investedBase = investedTarget * startScale * 0.94;
   const now = new Date();
 
   const configs: Record<
@@ -114,14 +121,25 @@ function buildPoints(
     const progress = count <= 1 ? 1 : i / (count - 1);
     const wave = Math.sin((i + (seed % 11)) * 0.65) * 0.035;
     const value = base + (target - base) * progress + target * wave * progress;
+    const investedWave = Math.sin((i + (seed % 7)) * 0.4) * 0.015;
+    const investedRaw =
+      investedBase +
+      (investedTarget - investedBase) * progress +
+      investedTarget * investedWave * progress;
+    const roundedValue = Math.max(0, Math.round(value));
     points.push({
       label: labelAt(date),
-      value: Math.max(0, Math.round(value)),
+      value: roundedValue,
+      invested: Math.max(0, Math.min(roundedValue, Math.round(investedRaw))),
     });
   }
 
   if (points.length > 0 && endValue > 0) {
-    points[points.length - 1] = { ...points[points.length - 1], value: endValue };
+    points[points.length - 1] = {
+      ...points[points.length - 1],
+      value: endValue,
+      invested: investedTarget,
+    };
   }
 
   return points;
@@ -131,8 +149,9 @@ export function getPortfolioChartSeries(
   clientId: string,
   currentValue: number,
   period: PortfolioChartPeriod,
+  investedAmount = 0,
 ): PortfolioChartPoint[] {
-  return buildPoints(clientId, currentValue, period);
+  return buildPoints(clientId, currentValue, investedAmount, period);
 }
 
 export function portfolioChartPeriodDescription(period: PortfolioChartPeriod): string {
@@ -150,4 +169,17 @@ export function portfolioChartPeriodDescription(period: PortfolioChartPeriod): s
 
 export function portfolioChartPeriodTabLabel(period: PortfolioChartPeriod): string {
   return period;
+}
+
+export function portfolioChartPeriodSelectLabel(period: PortfolioChartPeriod): string {
+  const labels: Record<PortfolioChartPeriod, string> = {
+    "1D": "1 day",
+    "1M": "1 month",
+    "6M": "6 months",
+    "1Y": "1 year",
+    "3Y": "3 years",
+    "5Y": "5 years",
+    "10Y": "All time",
+  };
+  return labels[period];
 }

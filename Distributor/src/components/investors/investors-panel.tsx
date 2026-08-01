@@ -9,7 +9,7 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import { DistributorPageShell } from "@/components/dashboard/distributor-page-shell";
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
-import { paginateTableItems, Table } from "@/components/application/table";
+import { useDistributorTablePagination, Table } from "@/components/application/table";
 import {
   applyInvestorTableFilters,
   DEFAULT_INVESTOR_TABLE_FILTERS,
@@ -38,8 +38,13 @@ import { fetchDistributorClients } from "@/lib/distributor-clients-api";
 import { env } from "@/lib/env";
 import type { InvestorType } from "@/lib/dummy/types";
 import { formatDistributorDate } from "@/lib/format";
-import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
+import {
+  DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS,
+  DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_WIDE_CLASS,
+  DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
+} from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import {
   complianceStatusVariant,
@@ -54,6 +59,7 @@ type InvestorsPanelProps = DistributorPageConfig & {
   investorScope: "distributor-book" | "system-residents";
   listOrigin: DistributorClientListOrigin;
   showServiceModel?: boolean;
+  showServiceModelFilter?: boolean;
 };
 
 export function InvestorsPanel({
@@ -65,6 +71,7 @@ export function InvestorsPanel({
   investorScope,
   listOrigin,
   showServiceModel = false,
+  showServiceModelFilter = false,
 }: InvestorsPanelProps) {
   const router = useRouter();
   const { isBranchManager } = useDistributorAuth();
@@ -76,7 +83,6 @@ export function InvestorsPanel({
   );
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [filters, setFilters] = useState<InvestorTableFilters>(DEFAULT_INVESTOR_TABLE_FILTERS);
-  const [page, setPage] = useState(1);
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
     column: "createdAt",
     direction: "descending",
@@ -127,10 +133,7 @@ export function InvestorsPanel({
     [filtered, sortDescriptor],
   );
 
-  const { pageItems, totalPages, safePage } = useMemo(
-    () => paginateTableItems(sorted, page),
-    [sorted, page],
-  );
+  const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
   const openClientDetail = (investorId: string) => {
     router.push(distributorClientDetailHref(listOrigin, investorId));
@@ -144,6 +147,9 @@ export function InvestorsPanel({
 
   const clearDisabled = investorFiltersAreDefault(filters);
   const isLoadingApi = env.useBackendClients && apiInvestors === null;
+  const clientCodeColumnClass = showServiceModel
+    ? DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_WIDE_CLASS
+    : DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS;
 
   const handleClearAll = () => {
     setFilters(DEFAULT_INVESTOR_TABLE_FILTERS);
@@ -160,6 +166,7 @@ export function InvestorsPanel({
       onClearAll={handleClearAll}
       clearDisabled={clearDisabled}
       showTypeFilter={!investorType}
+      showServiceModelFilter={showServiceModelFilter}
     />
   );
 
@@ -181,16 +188,18 @@ export function InvestorsPanel({
         setSortDescriptor(descriptor);
         setPage(1);
       }}
-      pagination={{
-        page: safePage,
-        totalPages,
-        onPageChange: setPage,
-      }}
+      pagination={pagination}
     >
       <Table.Header>
-        <Table.Head id="emailMasked" label="Email" isRowHeader allowsSorting />
+        <Table.Head id="emailMasked" label="Email" allowsSorting />
         <Table.Head id="panMasked" label="PAN" allowsSorting />
-        <Table.Head id="clientCode" label="Client code" allowsSorting />
+        <Table.Head
+          id="clientCode"
+          label="Client code"
+          isRowHeader
+          allowsSorting
+          className={clientCodeColumnClass}
+        />
         <Table.Head id="mobileMasked" label="Mobile" allowsSorting />
         <Table.Head id="onboardingStatus" label="Onboarding" allowsSorting />
         <Table.Head id="complianceStatus" label="Compliance" allowsSorting />
@@ -199,7 +208,7 @@ export function InvestorsPanel({
           <Table.Head id="serviceModel" label="Channel" allowsSorting />
         ) : null}
         {showManagerAssignment ? (
-          <Table.Head id="distributorAssign" label="Distributor" />
+          <Table.Head id="distributorAssign" label={ZYND_MITRA_COPY.singular} />
         ) : null}
         <Table.Head id="investorType" label="Type" allowsSorting />
         <Table.Head
@@ -220,7 +229,9 @@ export function InvestorsPanel({
             <Table.Cell className="font-mono text-caption text-muted-foreground">
               {investor.panMasked}
             </Table.Cell>
-            <Table.Cell className="font-mono text-caption">{investor.clientCode}</Table.Cell>
+            <Table.Cell className={cn("font-mono text-caption", clientCodeColumnClass)}>
+              {investor.clientCode}
+            </Table.Cell>
             <Table.Cell className="text-muted-foreground">{investor.mobileMasked}</Table.Cell>
             <Table.Cell>
               <StatusBadge variant={onboardingStatusVariant(investor.onboardingStatus)}>
@@ -291,7 +302,6 @@ export function InvestorsPanel({
 
   return (
     <DistributorPageShell
-        iconName={iconName}
         title={title}
         description={description}
         isEmpty={!isLoadingApi && sorted.length === 0}

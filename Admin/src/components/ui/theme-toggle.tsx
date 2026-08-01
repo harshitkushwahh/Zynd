@@ -8,10 +8,34 @@ type ThemeToggleProps = {
   theme: "light" | "dark";
   onThemeChange: (theme: "light" | "dark") => void;
   className?: string;
+  variant?: "switch" | "icon";
 };
 
-export function ThemeToggle({ theme, onThemeChange, className }: ThemeToggleProps) {
+export function ThemeToggle({
+  theme,
+  onThemeChange,
+  className,
+  variant = "switch",
+}: ThemeToggleProps) {
   const isDark = theme === "dark";
+
+  if (variant === "icon") {
+    const Icon = isDark ? Moon : Sun;
+
+    return (
+      <button
+        type="button"
+        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        onClick={() => onThemeChange(isDark ? "light" : "dark")}
+        className={cn(
+          "inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent transition-colors hover:bg-muted/55 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+          className,
+        )}
+      >
+        <Icon className="size-4" strokeWidth={2.25} />
+      </button>
+    );
+  }
 
   return (
     <button

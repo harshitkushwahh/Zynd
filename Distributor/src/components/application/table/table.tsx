@@ -3,17 +3,16 @@
 import type {
   ComponentPropsWithRef,
   HTMLAttributes,
+  ReactElement,
   ReactNode,
-  Ref,
-  TdHTMLAttributes,
   ThHTMLAttributes,
 } from "react";
-import { createContext, isValidElement, useContext } from "react";
+import { Children, cloneElement, createContext, isValidElement, useContext, useState } from "react";
 import { ArrowDown, ChevronsUpDown } from "lucide-react";
 import type {
-  CellProps as AriaCellProps,
   ColumnProps as AriaColumnProps,
   RowProps as AriaRowProps,
+  Selection,
   TableHeaderProps as AriaTableHeaderProps,
   TableProps as AriaTableProps,
 } from "react-aria-components";
@@ -29,28 +28,70 @@ import {
 
 import { TableSelectionCheckbox } from "@/components/application/table/table-selection-checkbox";
 
-import { cn } from "@/lib/utils";
 import {
   DISTRIBUTOR_TABLE_CARD_HEADER_MD_CLASS,
   DISTRIBUTOR_TABLE_CARD_HEADER_SM_CLASS,
+  DISTRIBUTOR_TABLE_CARD_SURFACE_CLASS,
 } from "@/lib/distributor-layout";
 
-import { PaginationPageMinimalCenter, type TablePaginationProps } from "@/components/application/table/pagination";
+import {
+  DistributorTablePaginationFooter,
+  shouldShowDistributorTablePagination,
+  type TablePaginationProps,
+} from "@/components/application/table/pagination";
+import { cn } from "@/lib/utils";
 
-const TableContext = createContext<{ size: "sm" | "md" }>({ size: "sm" });
+const TableContext = createContext<{ size: "sm" | "md"; variant: "default" | "card-rows" }>({
+  size: "sm",
+  variant: "default",
+});
+
+function TableSelectionHeaderColumn({ selectionMode }: { selectionMode: "single" | "multiple" | undefined }) {
+  return (
+    <AriaColumn
+      id="selection"
+      aria-label="Select row"
+      className="distributor-table__selection-head w-10 min-w-10 max-w-10 px-2"
+    >
+      {selectionMode === "multiple" ? (
+        <TableSelectionCheckbox aria-label="Select all rows" />
+      ) : (
+        <span className="sr-only">Select</span>
+      )}
+    </AriaColumn>
+  );
+}
+
+function TableSelectionBodyCell() {
+  return (
+    <AriaCell
+      className="distributor-table__selection-cell w-10 min-w-10 max-w-10 px-2 py-[var(--distributor-table-row-padding-y)] align-middle"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <TableSelectionCheckbox aria-label="Select row" />
+    </AriaCell>
+  );
+}
 
 const TableCardRoot = ({
   children,
   className,
   size = "sm",
+  variant = "default",
   ...props
-}: HTMLAttributes<HTMLDivElement> & { size?: "sm" | "md" }) => {
+}: HTMLAttributes<HTMLDivElement> & {
+  size?: "sm" | "md";
+  variant?: "default" | "card-rows";
+}) => {
   return (
-    <TableContext.Provider value={{ size }}>
+    <TableContext.Provider value={{ size, variant }}>
       <div
         data-slot="distributor-table-card"
+        data-table-variant={variant === "card-rows" ? "card-rows" : undefined}
         className={cn(
-          "max-w-full min-w-0 overflow-hidden rounded-[var(--radius-card)] border border-border bg-card",
+          "max-w-full min-w-0 overflow-hidden border border-border bg-card",
+          DISTRIBUTOR_TABLE_CARD_SURFACE_CLASS,
+          variant === "card-rows" && "distributor-table-card--card-rows",
           className,
         )}
         {...props}
@@ -114,14 +155,22 @@ const TableCardContent = ({
   children,
   className,
   ...props
-}: HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn("max-w-full overflow-x-auto overscroll-x-contain", className)}
-    {...props}
-  >
-    {children}
-  </div>
-);
+}: HTMLAttributes<HTMLDivElement>) => {
+  const { variant } = useContext(TableContext);
+
+  return (
+    <div
+      className={cn(
+        "max-w-full min-w-0 overflow-x-auto overflow-y-hidden overscroll-x-contain",
+        variant === "card-rows" && "distributor-table-card__content--card-rows distributor-table-card__scroll-x",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+};
 
 interface TableRootProps
   extends AriaTableProps,
@@ -136,40 +185,152 @@ const TableRoot = ({
   pagination,
   selectionBehavior,
   selectionMode,
+  selectedKeys,
+  onSelectionChange,
+  children,
   ...props
 }: TableRootProps) => {
   const context = useContext(TableContext);
+  const isCardRows = context?.variant === "card-rows";
+  const tableSize = context?.size ?? size;
+  const [internalSelectedKeys, setInternalSelectedKeys] = useState<Selection>(() => new Set());
+
+  const resolvedSelectionMode =
+    selectionMode ?? (isCardRows ? "multiple" : undefined);
 
   const resolvedSelectionBehavior =
     selectionBehavior ??
-    (selectionMode != null && selectionMode !== "none" ? "toggle" : undefined);
+    (resolvedSelectionMode === "single"
+      ? "replace"
+      : resolvedSelectionMode != null && resolvedSelectionMode !== "none"
+        ? "toggle"
+        : undefined);
+
+  const showSelectionColumn =
+    resolvedSelectionMode != null && resolvedSelectionMode !== "none";
+
+  const resolvedSelectedKeys =
+    selectedKeys ??
+    (isCardRows && resolvedSelectionMode === "multiple" ? internalSelectedKeys : undefined);
+
+  const resolvedOnSelectionChange =
+    onSelectionChange ??
+    (isCardRows && resolvedSelectionMode === "multiple" && selectedKeys === undefined
+      ? setInternalSelectedKeys
+      : onSelectionChange);
+
+  const selectionHeaderColumn = showSelectionColumn ? (
+    <TableSelectionHeaderColumn
+      key="distributor-table-selection-column"
+      selectionMode={resolvedSelectionMode === "multiple" ? "multiple" : "single"}
+    />
+  ) : null;
+
+  const selectionBodyCell = showSelectionColumn ? (
+    <TableSelectionBodyCell key="distributor-table-selection-cell" />
+  ) : null;
+
+  const prependSelectionToRow = <T extends object>(row: ReactNode): ReactNode => {
+    if (!selectionBodyCell || !isValidElement(row) || row.type !== AriaRow) {
+      return row;
+    }
+
+    const rowElement = row as ReactElement<AriaRowProps<T>>;
+    const { children: rowChildren, ...rowProps } = rowElement.props;
+
+    if (typeof rowChildren === "function") {
+      return row;
+    }
+
+    return cloneElement(rowElement, rowProps, selectionBodyCell, ...Children.toArray(rowChildren));
+  };
+
+  const wrapTableBodyChildren = (bodyChildren: ReactNode): ReactNode => {
+    if (!showSelectionColumn || bodyChildren == null) {
+      return bodyChildren;
+    }
+    if (typeof bodyChildren === "function") {
+      const renderRow = bodyChildren as (item: object) => ReactNode;
+      const wrapped = (item: object) => prependSelectionToRow(renderRow(item));
+      return wrapped as unknown as ReactNode;
+    }
+    return Children.map(bodyChildren, (child) => prependSelectionToRow(child));
+  };
+
+  const tableChildren = Children.map(children, (child) => {
+    if (!isValidElement(child)) {
+      return child;
+    }
+
+    if (child.type === AriaTableHeader && selectionHeaderColumn) {
+      const headerProps = child.props as TableHeaderProps;
+      const { children: headerChildren, ...restHeaderProps } = headerProps;
+      return cloneElement(
+        child as ReactElement<TableHeaderProps>,
+        restHeaderProps,
+        selectionHeaderColumn,
+        headerChildren,
+      );
+    }
+
+    if (child.type === AriaTableBody && showSelectionColumn) {
+      const bodyProps = child.props as { children?: ReactNode };
+      return cloneElement(child as ReactElement<{ children?: ReactNode }>, {
+        ...bodyProps,
+        children: wrapTableBodyChildren(bodyProps.children),
+      });
+    }
+
+    return child;
+  });
 
   const table = (
-    <TableContext.Provider value={{ size: context?.size ?? size }}>
+    <TableContext.Provider value={{ size: tableSize, variant: context?.variant ?? "default" }}>
       <AriaTable
         data-slot="distributor-table"
-        selectionMode={selectionMode}
+        data-table-size={tableSize}
+        data-table-variant={isCardRows ? "card-rows" : undefined}
+        selectionMode={resolvedSelectionMode}
         selectionBehavior={resolvedSelectionBehavior}
+        selectedKeys={resolvedSelectedKeys}
+        onSelectionChange={resolvedOnSelectionChange}
         className={(state) =>
-          cn("w-full", typeof className === "function" ? className(state) : className)
+          cn(
+            "distributor-table w-full",
+            isCardRows && "distributor-table--card-rows",
+            showSelectionColumn && "distributor-table--with-selection",
+            typeof className === "function" ? className(state) : className,
+          )
         }
         {...props}
-      />
+      >
+        {tableChildren}
+      </AriaTable>
     </TableContext.Provider>
   );
 
+  const paginationFooter =
+    pagination && shouldShowDistributorTablePagination(pagination) ? (
+      <DistributorTablePaginationFooter
+        {...pagination}
+        page={Math.min(pagination.page, pagination.totalPages)}
+      />
+    ) : null;
+
+  if (!isCardRows) {
+    return (
+      <>
+        <TableCardContent>{table}</TableCardContent>
+        {paginationFooter}
+      </>
+    );
+  }
+
   return (
-    <>
+    <div className="distributor-table-card__table-block">
       <TableCardContent>{table}</TableCardContent>
-      {pagination &&
-      (pagination.alwaysVisible || pagination.totalPages > 1) ? (
-        <PaginationPageMinimalCenter
-          page={Math.min(pagination.page, pagination.totalPages)}
-          total={pagination.totalPages}
-          onPageChange={pagination.onPageChange}
-        />
-      ) : null}
-    </>
+      {paginationFooter}
+    </div>
   );
 };
 TableRoot.displayName = "Table";
@@ -179,48 +340,6 @@ interface TableHeaderProps extends Omit<AriaTableHeaderProps<object>, "children"
   size?: "sm" | "md";
   children?: ReactNode;
 }
-
-const TableHeader = ({
-  children,
-  bordered = true,
-  className,
-  size: sizeProp,
-  ...props
-}: TableHeaderProps) => {
-  const context = useContext(TableContext);
-  const { selectionBehavior, selectionMode } = useTableOptions();
-  const size = sizeProp ?? context.size;
-  const showSelectionColumn =
-    selectionMode != null && selectionMode !== "none" && selectionBehavior === "toggle";
-
-  return (
-    <AriaTableHeader
-      {...props}
-      className={(state) =>
-        cn(
-          "relative bg-muted/25",
-          size === "sm" ? "h-8" : "h-9",
-          bordered &&
-            "[&>tr>th]:after:pointer-events-none [&>tr>th]:after:absolute [&>tr>th]:after:inset-x-0 [&>tr>th]:after:bottom-0 [&>tr>th]:after:h-px [&>tr>th]:after:bg-border",
-          typeof className === "function" ? className(state) : className,
-        )
-      }
-    >
-      {showSelectionColumn ? (
-        <AriaColumn className="w-11 min-w-11 px-3">
-          {selectionMode === "multiple" ? (
-            <TableSelectionCheckbox aria-label="Select all" />
-          ) : (
-            <span className="sr-only">Select</span>
-          )}
-        </AriaColumn>
-      ) : null}
-      {children}
-    </AriaTableHeader>
-  );
-};
-
-TableHeader.displayName = "TableHeader";
 
 interface TableHeadProps
   extends AriaColumnProps,
@@ -239,7 +358,7 @@ const TableHead = ({ className, label, children, ...props }: TableHeadProps) => 
       {...props}
       className={(state) =>
         cn(
-          "relative p-0 px-3 py-1.5 text-left outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset md:px-4",
+          "distributor-table__head relative text-left outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset",
           selectionBehavior === "toggle" && "nth-2:pl-3",
           state.allowsSorting && "cursor-pointer select-none",
           typeof className === "function" ? className(state) : className,
@@ -272,101 +391,27 @@ const TableHead = ({ className, label, children, ...props }: TableHeadProps) => 
 
 TableHead.displayName = "TableHead";
 
-interface TableRowProps<T extends object> extends Omit<AriaRowProps<T>, "children"> {
-  highlightSelectedRow?: boolean;
-  size?: "sm" | "md";
-  children?: ReactNode;
-}
-
-const TableRow = <T extends object>({
-  children,
-  className,
-  highlightSelectedRow = true,
-  size: sizeProp,
-  ...props
-}: TableRowProps<T>) => {
-  const context = useContext(TableContext);
-  const { selectionBehavior, selectionMode } = useTableOptions();
-  const size = sizeProp ?? context.size;
-  const showSelectionColumn =
-    selectionMode != null && selectionMode !== "none" && selectionBehavior === "toggle";
-
-  return (
-    <AriaRow
-      {...props}
-      className={(state) =>
-        cn(
-          "relative outline-none transition-colors after:pointer-events-none hover:bg-muted/20 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring/40",
-          size === "sm" ? "min-h-9" : "min-h-10",
-          highlightSelectedRow && "selected:bg-muted/30",
-          "[&>td]:after:absolute [&>td]:after:inset-x-0 [&>td]:after:bottom-0 [&>td]:after:h-px [&>td]:after:w-full [&>td]:after:bg-border/70 last:[&>td]:after:hidden",
-          typeof className === "function" ? className(state) : className,
-        )
-      }
-    >
-      {showSelectionColumn ? (
-        <AriaCell className="w-11 min-w-11 px-3">
-          <TableSelectionCheckbox aria-label="Select row" />
-        </AriaCell>
-      ) : null}
-      {children}
-    </AriaRow>
-  );
-};
-
-TableRow.displayName = "TableRow";
-
-interface TableCellProps
-  extends AriaCellProps,
-    Omit<TdHTMLAttributes<HTMLTableCellElement>, "children" | "className" | "style" | "id"> {
-  ref?: Ref<HTMLTableCellElement>;
-  size?: "sm" | "md";
-}
-
-const TableCell = ({ className, children, size: sizeProp, ...props }: TableCellProps) => {
-  const context = useContext(TableContext);
-  const { selectionBehavior } = useTableOptions();
-  const size = sizeProp ?? context.size;
-
-  return (
-    <AriaCell
-      {...props}
-      className={(state) =>
-        cn(
-          "relative text-caption leading-snug text-foreground outline-none focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring/40",
-          "[&_p]:text-caption [&_p]:leading-snug",
-          size === "sm" && "px-3 py-1.5 md:px-4",
-          size === "md" && "px-3 py-2 md:px-4",
-          selectionBehavior === "toggle" && "nth-2:pl-3",
-          typeof className === "function" ? className(state) : className,
-        )
-      }
-    >
-      {children}
-    </AriaCell>
-  );
-};
-
-TableCell.displayName = "TableCell";
-
 const TableCard = {
   Root: TableCardRoot,
   Header: TableCardHeader,
   Content: TableCardContent,
 };
 
+type TableHeaderComponent = typeof AriaTableHeader &
+  ((props: TableHeaderProps) => ReturnType<typeof AriaTableHeader>);
+
 const Table = TableRoot as typeof TableRoot & {
   Body: typeof AriaTableBody;
-  Cell: typeof TableCell;
+  Cell: typeof AriaCell;
   Head: typeof TableHead;
-  Header: typeof TableHeader;
-  Row: typeof TableRow;
+  Header: TableHeaderComponent;
+  Row: typeof AriaRow;
 };
 
 Table.Body = AriaTableBody;
-Table.Cell = TableCell;
+Table.Cell = AriaCell;
 Table.Head = TableHead;
-Table.Header = TableHeader;
-Table.Row = TableRow;
+Table.Header = AriaTableHeader as TableHeaderComponent;
+Table.Row = AriaRow;
 
 export { Table, TableCard };

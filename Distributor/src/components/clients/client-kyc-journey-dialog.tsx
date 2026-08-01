@@ -1,7 +1,7 @@
 "use client";
 
 import { ClientKycJourneyPanel } from "@/components/clients/client-kyc-journey-panel";
-import type { DistributorClientKycStep } from "@/lib/dummy/types";
+import type { DistributorClientKycAuditEntry, DistributorClientKycStep } from "@/lib/dummy/types";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,9 @@ type ClientKycJourneyDialogProps = {
   steps: DistributorClientKycStep[];
   overallStatus: string;
   investorType?: string;
+  kycCompliant?: boolean;
+  kycInitiatedAt?: string;
+  kycAuditLog?: DistributorClientKycAuditEntry[];
 };
 
 export function ClientKycJourneyDialog({
@@ -25,6 +28,9 @@ export function ClientKycJourneyDialog({
   steps,
   overallStatus,
   investorType,
+  kycCompliant = false,
+  kycInitiatedAt,
+  kycAuditLog = [],
 }: ClientKycJourneyDialogProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.kyc;
 
@@ -34,12 +40,15 @@ export function ClientKycJourneyDialog({
         <DialogTitle>{copy.title}</DialogTitle>
         <DialogDescription>KYC step completion for this investor.</DialogDescription>
       </DialogHeader>
-      <DialogContent className="max-w-md gap-0 p-0">
+      <DialogContent className="max-h-[min(90vh,44rem)] max-w-3xl gap-0 overflow-y-auto p-0">
         <div className="p-5">
           <ClientKycJourneyPanel
             steps={steps}
             overallStatus={overallStatus}
             investorType={investorType}
+            kycCompliant={kycCompliant}
+            kycInitiatedAt={kycInitiatedAt ?? new Date().toISOString()}
+            kycAuditLog={kycAuditLog}
           />
         </div>
       </DialogContent>

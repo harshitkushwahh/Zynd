@@ -13,6 +13,7 @@ import { DistributorHeadManagerIncentivesCard } from "@/components/distributor-h
 import { DistributorHeadManagerLeavePanel } from "@/components/distributor-head/distributor-head-manager-leave-panel";
 import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,7 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import {
   DUMMY_STATE_HEAD,
   type DistributorHeadManager,
@@ -159,7 +161,7 @@ export function DistributorHeadManagerDetail({ manager }: DistributorHeadManager
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminMetricCardsGrid>
         <AdminMetricCard
           label="Branches"
           value={formatDistributorHeadCount(branches.length)}
@@ -192,7 +194,7 @@ export function DistributorHeadManagerDetail({ manager }: DistributorHeadManager
           icon={IndianRupee}
           tone="muted"
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="grid gap-4 lg:grid-cols-5">
         <div className="lg:col-span-2">
@@ -251,23 +253,20 @@ export function DistributorHeadManagerDetail({ manager }: DistributorHeadManager
             <AdminSectionTitle variant="section" className="pb-2 sm:pb-3">
               {bookTab === "distributors" ? "Distributors" : "Manager clients"}
             </AdminSectionTitle>
-            <TabsList
-              variant="line"
-              className="h-auto w-fit max-w-full shrink-0 justify-end overflow-x-auto overflow-y-hidden border-b-0 pb-0"
-            >
-              <TabsTrigger value="distributors" className="h-auto flex-none gap-2 px-4 py-2">
+            <AdminTabList variant="secondary" className="justify-end border-b-0">
+              <AdminTabTrigger value="distributors" className="gap-2">
                 Distributors
                 <Badge variant="secondary" className="h-5 px-1.5 tabular-nums font-normal">
                   {team.length}
                 </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="clients" className="h-auto flex-none gap-2 px-4 py-2">
+              </AdminTabTrigger>
+              <AdminTabTrigger value="clients" className="gap-2">
                 Manager clients
                 <Badge variant="secondary" className="h-5 px-1.5 tabular-nums font-normal">
                   {clients.length}
                 </Badge>
-              </TabsTrigger>
-            </TabsList>
+              </AdminTabTrigger>
+            </AdminTabList>
           </div>
 
           <TabsContent value="distributors" className="mt-0 space-y-4">

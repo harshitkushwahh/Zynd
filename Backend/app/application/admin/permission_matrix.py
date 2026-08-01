@@ -41,6 +41,8 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "routes": [
             "GET /admin/users",
             "GET /admin/users/{user_id}",
+            "GET /admin/users/{user_id}/profile-detail",
+            "GET /admin/users/{user_id}/goals",
         ],
         "notes": "List and view user account summaries.",
     },

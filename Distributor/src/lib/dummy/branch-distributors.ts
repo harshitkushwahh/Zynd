@@ -1,3 +1,5 @@
+export type BranchDistributorStatus = "Active" | "Former" | "Paused";
+
 export type BranchDistributorRecord = {
   id: string;
   name: string;
@@ -5,7 +7,7 @@ export type BranchDistributorRecord = {
   arn: string;
   clientCount: number;
   aum: number;
-  status: "Active" | "Onboarding" | "Suspended";
+  status: BranchDistributorStatus;
   joinedAt: string;
 };
 
@@ -37,7 +39,17 @@ export const DUMMY_BRANCH_DISTRIBUTORS: BranchDistributorRecord[] = [
     arn: "ARN-884019",
     clientCount: 12,
     aum: 38_50_000,
-    status: "Onboarding",
+    status: "Paused",
     joinedAt: "2026-06-02T00:00:00.000Z",
+  },
+  {
+    id: "bd-4",
+    name: "Arjun Patel",
+    email: "arjun@zynd.distributor",
+    arn: "ARN-883902",
+    clientCount: 54,
+    aum: 92_00_000,
+    status: "Former",
+    joinedAt: "2022-11-18T00:00:00.000Z",
   },
 ];

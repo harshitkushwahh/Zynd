@@ -8,7 +8,8 @@ import { FamilyGroupsAuditPanel } from "@/components/family-groups/family-groups
 import { FamilyGroupsDirectoryPanel } from "@/components/family-groups/family-groups-directory-panel";
 import { FamilyGroupsInvitesPanel } from "@/components/family-groups/family-groups-invites-panel";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   FAMILY_GROUPS_TABS,
@@ -16,13 +17,10 @@ import {
   resolveFamilyGroupsTab,
   type FamilyGroupsTabId,
 } from "@/lib/admin-family-groups-navigation";
-import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
 
 type FamilyGroupsPageProps = {
   tabSlug?: string;
 };
-
-const familyGroupsRoute = ADMIN_NAV_ROUTES.find((route) => route.id === "family-groups");
 
 export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
   const router = useRouter();
@@ -62,7 +60,6 @@ export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
     <AdminSectionPageShell
       breadcrumbSegments={[{ label: "Platform" }, { label: "Family Groups" }]}
       title="Family Groups"
-      description={familyGroupsRoute?.description}
       headerAside={
         <div className="admin-page-icon-tile shrink-0">
           <UsersRound className="size-5" />
@@ -70,17 +67,17 @@ export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
       }
     >
       <Tabs value={activeTabId} onValueChange={handleTabChange} className="gap-4">
-        <TabsList variant="line" className="w-fit justify-start border-b border-border">
+        <AdminTabList>
           {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             return (
-              <TabsTrigger key={tab.id} value={tab.id} className="gap-2 px-4 py-2">
+              <AdminTabTrigger key={tab.id} value={tab.id} className="gap-2">
                 <Icon className="size-4" />
                 {tab.label}
-              </TabsTrigger>
+              </AdminTabTrigger>
             );
           })}
-        </TabsList>
+        </AdminTabList>
       </Tabs>
 
       {activeTabId === "groups" ? <FamilyGroupsDirectoryPanel canManage={canManage} /> : null}

@@ -6,7 +6,7 @@ const RISK_TIER_BADGE_VARIANTS: Record<RiskTierId, StatusBadgeVariant> = {
   secure: "info",
   conservative: "success",
   moderate: "warning",
-  growth: "warning",
+  growth: "info",
   aggressive: "destructive",
 };
 

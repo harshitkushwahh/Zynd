@@ -54,6 +54,7 @@ export function DistributorTxnRequestsProvider({ children }: { children: ReactNo
         amount: input.amount,
         status: "Pending",
         createdAt: new Date().toISOString(),
+        inDistributorBook: true,
       };
       return [newRequest, ...current];
     });

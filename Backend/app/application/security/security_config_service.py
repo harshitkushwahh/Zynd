@@ -26,6 +26,78 @@ DEFAULT_SECURITY_CONFIG: dict[str, Any] = {
     "risk.high_action": "block_login",
 }
 
+SECURITY_CONFIG_NUMBER_BOUNDS: dict[str, tuple[int, int]] = {
+    "lockout.captcha_after_attempt": (1, 50),
+    "lockout.max_attempts": (1, 100),
+    "lockout.duration_minutes": (1, 1440),
+    "lockout.backoff_start_attempt": (1, 100),
+    "lockout.backoff_base_seconds": (1, 300),
+    "lockout.ip_block_threshold": (1, 1000),
+    "risk.medium_score": (1, 99),
+    "risk.high_score": (2, 100),
+}
+
+SECURITY_CONFIG_ALLOWED_STRINGS: dict[str, set[str]] = {
+    "risk.medium_action": {"step_up_mfa", "block_login"},
+    "risk.high_action": {"step_up_mfa", "block_login"},
+}
+
+
+def validate_security_config_value(key: str, value: Any) -> Any:
+    if key not in DEFAULT_SECURITY_CONFIG:
+        raise ValueError("Unknown security config key.")
+
+    if key in SECURITY_CONFIG_NUMBER_BOUNDS:
+        if isinstance(value, bool):
+            raise ValueError(f"{key} must be a whole number.")
+        if isinstance(value, int):
+            parsed = value
+        elif isinstance(value, float):
+            if not value.is_integer():
+                raise ValueError(f"{key} must be a whole number.")
+            parsed = int(value)
+        elif isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed.lstrip("-").isdigit() or trimmed in {"-", ""}:
+                raise ValueError(f"{key} must be a whole number.")
+            parsed = int(trimmed)
+        else:
+            raise ValueError(f"{key} must be a whole number.")
+
+        minimum, maximum = SECURITY_CONFIG_NUMBER_BOUNDS[key]
+        if parsed < minimum or parsed > maximum:
+            raise ValueError(f"{key} must be between {minimum} and {maximum}.")
+        return parsed
+
+    if key in SECURITY_CONFIG_ALLOWED_STRINGS:
+        parsed = str(value)
+        allowed = SECURITY_CONFIG_ALLOWED_STRINGS[key]
+        if parsed not in allowed:
+            raise ValueError(f"{key} must be one of: {', '.join(sorted(allowed))}.")
+        return parsed
+
+    return value
+
+
+async def validate_security_config_update(
+    db: AsyncSession,
+    *,
+    key: str,
+    value: Any,
+) -> Any:
+    parsed = validate_security_config_value(key, value)
+
+    if key == "risk.medium_score":
+        high_score = int(await get_security_config_value(db, "risk.high_score", 70))
+        if parsed >= high_score:
+            raise ValueError("risk.medium_score must be lower than risk.high_score.")
+    elif key == "risk.high_score":
+        medium_score = int(await get_security_config_value(db, "risk.medium_score", 40))
+        if parsed <= medium_score:
+            raise ValueError("risk.high_score must be higher than risk.medium_score.")
+
+    return parsed
+
 
 async def ensure_security_config_seed(db: AsyncSession) -> None:
     for key, value in DEFAULT_SECURITY_CONFIG.items():
@@ -134,20 +206,19 @@ async def apply_security_config_update(
     approved_by: UUID | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
-    if key not in DEFAULT_SECURITY_CONFIG:
-        raise ValueError("Unknown security config key.")
+    parsed = await validate_security_config_update(db, key=key, value=value)
 
     result = await db.execute(
         select(SecurityConfig).where(SecurityConfig.key == key, SecurityConfig.is_active.is_(True))
     )
     row = result.scalar_one_or_none()
     if not row:
-        row = SecurityConfig(key=key, value={"value": value})
+        row = SecurityConfig(key=key, value={"value": parsed})
         db.add(row)
         await db.flush()
 
     old_value = row.value.get("value", row.value) if isinstance(row.value, dict) else row.value
-    row.value = {"value": value}
+    row.value = {"value": parsed}
     row.version += 1
     row.updated_by = changed_by
 
@@ -155,7 +226,7 @@ async def apply_security_config_update(
         SecurityConfigHistory(
             config_key=key,
             old_value={"value": old_value},
-            new_value={"value": value},
+            new_value={"value": parsed},
             changed_by=changed_by,
             approved_by=approved_by,
             reason=reason,
@@ -163,4 +234,4 @@ async def apply_security_config_update(
     )
     await db.flush()
     await invalidate_security_config_cache(key)
-    return {"key": key, "value": value, "version": row.version}
+    return {"key": key, "value": parsed, "version": row.version}

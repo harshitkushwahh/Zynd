@@ -18,12 +18,14 @@ import {
   signOutDistributor,
 } from "@/lib/distributor-auth-api";
 import {
+  DISTRIBUTOR_DEMO_AGENTS,
   findDistributorAgent,
   type DistributorAgent,
 } from "@/lib/distributor-agents";
 import { getManagerBranchLabel, isBranchManager } from "@/lib/distributor-persona";
 import type { DistributorSessionUser } from "@/lib/distributor-session-types";
 import { env } from "@/lib/env";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 const SESSION_STORAGE_KEY = "zynd-distributor-session";
 
@@ -44,7 +46,21 @@ function toSessionUser(agent: DistributorAgent): DistributorSessionUser {
   return { ...rest, authMode: "demo" };
 }
 
+function mergeDemoSessionWithAgentCatalog(
+  session: DistributorSessionUser | null,
+): DistributorSessionUser | null {
+  if (!session || session.authMode === "api") return session;
+  const agent = DISTRIBUTOR_DEMO_AGENTS.find((entry) => entry.id === session.id);
+  if (!agent) return session;
+  const { password: _password, ...rest } = agent;
+  return { ...session, ...rest, authMode: "demo" as const };
+}
+
 function readStoredSession(): DistributorSessionUser | null {
+  return mergeDemoSessionWithAgentCatalog(readStoredSessionRaw());
+}
+
+function readStoredSessionRaw(): DistributorSessionUser | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -130,7 +146,7 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
     await new Promise((resolve) => setTimeout(resolve, 350));
     const agent = findDistributorAgent(email, password);
     if (!agent) {
-      throw new Error("Invalid email or password. Use a demo distributor account.");
+      throw new Error(ZYND_MITRA_COPY.demoAccountError);
     }
     const sessionUser = toSessionUser(agent);
     persistSession(sessionUser);
@@ -147,7 +163,7 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      displayName: user?.name ?? "Distributor",
+      displayName: user?.name ?? ZYND_MITRA_COPY.defaultRoleLabel,
       isBranchManager: isBranchManager(user),
       branchLabel: getManagerBranchLabel(user),
       signIn,

@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell } from "lucide-react";
 
 import { DistributorNotificationFilterTabs } from "@/components/notifications/distributor-notification-filter-tabs";
 import { DistributorNotificationListItem } from "@/components/notifications/distributor-notification-list-item";
+import { DistributorNotificationMarkAllReadButton } from "@/components/notifications/distributor-notification-mark-all-read-button";
+import { DistributorNotificationsEmptyState } from "@/components/notifications/distributor-notifications-empty-state";
+import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -17,6 +20,7 @@ import { useDistributorNotifications } from "@/contexts/distributor-notification
 import {
   DISTRIBUTOR_NOTIFICATION_POPOVER_BODY_CLASS,
   DISTRIBUTOR_NOTIFICATION_POPOVER_CLASS,
+  DISTRIBUTOR_NOTIFICATION_POPOVER_FILTERS_CLASS,
   DISTRIBUTOR_NOTIFICATION_POPOVER_FOOTER_CLASS,
   DISTRIBUTOR_NOTIFICATION_POPOVER_HEADER_CLASS,
   DISTRIBUTOR_POPOVER_BADGE_CLASS,
@@ -41,9 +45,13 @@ export function DistributorNotificationPopover() {
           render={
             <PopoverTrigger
               aria-label="Notifications"
-              className={cn(
-                "relative inline-flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-              )}
+              render={
+                <DistributorActionButton
+                  type="button"
+                  variant="icon"
+                  className="relative shrink-0"
+                />
+              }
             />
           }
         >
@@ -65,55 +73,35 @@ export function DistributorNotificationPopover() {
       >
         <div className={DISTRIBUTOR_NOTIFICATION_POPOVER_HEADER_CLASS}>
           <div className="distributor-notification-popover__title-row">
-            <div className="min-w-0">
-              <p className="distributor-notification-popover__title">Notifications</p>
-              <p className="distributor-notification-popover__description">
-                {unreadCount > 0 ? (
-                  <>
-                    <span className="distributor-notification-popover__unread-accent">
-                      {unreadCount} unread update{unreadCount === 1 ? "" : "s"}
-                    </span>
-                  </>
-                ) : (
-                  "Stay on top of distributor activity"
-                )}
-              </p>
-            </div>
-            {unreadCount > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 shrink-0 gap-1.5 px-2 text-caption"
-                onClick={markAllRead}
-              >
-                <CheckCheck className="size-3.5" strokeWidth={2.25} />
-                Mark all read
-              </Button>
-            ) : null}
+            <p className="distributor-notification-popover__title">Notifications</p>
+            <DistributorNotificationMarkAllReadButton
+              unreadCount={unreadCount}
+              onClick={markAllRead}
+              className="h-8 px-2.5 text-caption"
+            />
           </div>
+        </div>
 
+        <div className={DISTRIBUTOR_NOTIFICATION_POPOVER_FILTERS_CLASS}>
           <DistributorNotificationFilterTabs
-            className="distributor-notification-popover__filters"
             filter={filter}
             onFilterChange={setFilter}
-            allCount={notifications.length}
-            unreadCount={unreadCount}
           />
         </div>
 
         <div className={DISTRIBUTOR_NOTIFICATION_POPOVER_BODY_CLASS}>
           {filtered.length === 0 ? (
-            <p className="distributor-notification-popover__empty">
-              {filter === "unread" ? "No unread notifications" : "No notifications yet"}
-            </p>
+            <div className="distributor-notification-popover__empty-wrap">
+              <DistributorNotificationsEmptyState filter={filter} compact />
+            </div>
           ) : (
-            <ul className="divide-y divide-border/70">
+            <ul className="distributor-notifications-list distributor-notifications-list--popover">
               {filtered.map((item) => (
                 <DistributorNotificationListItem
                   key={item.id}
                   item={item}
                   onMarkRead={markRead}
+                  variant="popover"
                 />
               ))}
             </ul>

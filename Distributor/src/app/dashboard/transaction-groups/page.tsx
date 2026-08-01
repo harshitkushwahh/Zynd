@@ -1,6 +1,7 @@
-import { TransactionGroupsPanel } from "@/components/transaction-groups/transaction-groups-panel";
-import { DISTRIBUTOR_PAGE_CONFIG } from "@/lib/distributor-page-config";
+import { redirect } from "next/navigation";
+
+import { distributorOperationsSectionHref } from "@/lib/distributor-operations-sections";
 
 export default function TransactionGroupsPage() {
-  return <TransactionGroupsPanel {...DISTRIBUTOR_PAGE_CONFIG.transactionGroups} />;
+  redirect(distributorOperationsSectionHref("transaction-groups"));
 }

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import {
   RiskCategoryDetailView,
   RISK_CATEGORY_DETAIL_ICON,
@@ -15,6 +14,9 @@ import {
   AdminFormDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -24,7 +26,7 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
@@ -45,6 +47,13 @@ import {
   type RiskCategory,
 } from "@/lib/risk-profile-admin-api";
 
+const ALL = "all";
+const STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All statuses" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
 export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }) {
   const [categories, setCategories] = useState<RiskCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,14 +68,31 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
   const [weight, setWeight] = useState("0.25");
   const [sortOrder, setSortOrder] = useState("0");
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(ALL);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
+
+  const filteredCategories = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return categories.filter((category) => {
+      if (statusFilter === "active" && !category.is_active) return false;
+      if (statusFilter === "inactive" && category.is_active) return false;
+      if (!query) return true;
+      return [category.name, category.slug, category.description ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [categories, search, statusFilter]);
 
   const pagination = useMemo(
-    () => paginateItems(categories, page, ADMIN_TABLE_PAGE_SIZE),
-    [categories, page],
+    () => paginateItems(filteredCategories, page, pageSize),
+    [filteredCategories, page, pageSize],
   );
 
   const tableColumnCount = 6;
+  const showSkeleton = loading && categories.length === 0;
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -167,60 +193,86 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <AdminSectionTitle>Categories</AdminSectionTitle>
-        {canManage ? (
-          <Button
-            size="sm"
-            onClick={() => {
-              resetCreateForm();
-              setCreateDialogOpen(true);
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search categories"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(0);
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value);
+              setPage(0);
             }}
-          >
-            <Plus className="size-3.5" />
-            Add category
-          </Button>
-        ) : null}
+            options={STATUS_FILTER_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
+          {canManage ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                resetCreateForm();
+                setCreateDialogOpen(true);
+              }}
+            >
+              <Plus className="size-3.5" />
+              Add category
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <AdminDataTable minWidth="md">
+      <AdminDataTable
+        minWidth="md"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            disabled={loading}
+            totalCount={filteredCategories.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+            onNext={() => setPage((value) => value + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             <AdminTableHeadCell>Name</AdminTableHeadCell>
             <AdminTableHeadCell>Slug</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Weight</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Questions</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
-            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows
-            colSpan={tableColumnCount}
-            loading={loading}
-            isEmpty={categories.length === 0}
-            emptyMessage="No categories yet."
-            skeletonRows={4}
-          >
-            {pagination.items.map((category) => (
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={tableColumnCount} rows={4} />
+          ) : filteredCategories.length === 0 ? (
+            <AdminTableStateRow colSpan={tableColumnCount}>
+              {categories.length === 0 ? "No categories yet." : "No categories match your filters."}
+            </AdminTableStateRow>
+          ) : (
+            pagination.items.map((category) => (
               <AdminTableRow key={category.id}>
-                <AdminTableCell>
-                  <p className="font-medium text-foreground">{category.name}</p>
-                  {category.description ? (
-                    <p className="mt-0.5 text-caption text-muted-foreground">{category.description}</p>
-                  ) : null}
-                </AdminTableCell>
-                <AdminTableCell className="font-mono text-caption">{category.slug}</AdminTableCell>
-                <AdminTableCell className="text-right">{category.weight.toFixed(4)}</AdminTableCell>
-                <AdminTableCell className="text-right">{category.question_count ?? 0}</AdminTableCell>
-                <AdminTableCell>
-                  <StatusBadge variant={category.is_active ? "success" : "neutral"} showIcon={false}>
-                    {category.is_active ? "Active" : "Inactive"}
-                  </StatusBadge>
-                </AdminTableCell>
                 <AdminTableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -256,21 +308,25 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </AdminTableCell>
+                <AdminTableCell>
+                  <p className="font-medium text-foreground">{category.name}</p>
+                  {category.description ? (
+                    <p className="mt-0.5 text-caption text-muted-foreground">{category.description}</p>
+                  ) : null}
+                </AdminTableCell>
+                <AdminTableCell className="font-mono text-caption">{category.slug}</AdminTableCell>
+                <AdminTableCell className="text-right">{category.weight.toFixed(4)}</AdminTableCell>
+                <AdminTableCell className="text-right">{category.question_count ?? 0}</AdminTableCell>
+                <AdminTableCell>
+                  <StatusBadge variant={category.is_active ? "success" : "neutral"} showIcon={false}>
+                    {category.is_active ? "Active" : "Inactive"}
+                  </StatusBadge>
+                </AdminTableCell>
               </AdminTableRow>
-            ))}
-          </AdminTableRows>
+            ))
+          )}
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        hasPrevious={pagination.hasPrevious}
-        hasNext={pagination.hasNext}
-        disabled={loading}
-        onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-        onNext={() => setPage((value) => value + 1)}
-      />
 
       <AdminFormDialog
         open={createDialogOpen}

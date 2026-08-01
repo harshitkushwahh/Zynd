@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Shield, UserRound, X } from "lucide-react";
+import { Shield, UserRound } from "lucide-react";
 
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 
@@ -31,7 +31,7 @@ export function PlatformRoleBadge({ role }: { role: string }) {
 
 export function InvestmentStatusBadge({ hasInvested }: { hasInvested: boolean }) {
   return (
-    <StatusBadge variant={hasInvested ? "success" : "neutral"} showIcon={hasInvested}>
+    <StatusBadge variant={hasInvested ? "success" : "neutral"}>
       {hasInvested ? "Invested" : "Not invested"}
     </StatusBadge>
   );
@@ -39,25 +39,17 @@ export function InvestmentStatusBadge({ hasInvested }: { hasInvested: boolean })
 
 export function MfaStatusBadge({ enabled }: { enabled: boolean }) {
   return (
-    <StatusBadge variant={enabled ? "success" : "neutral"} showIcon={false}>
-      {enabled ? "Enabled" : "Not enabled"}
+    <StatusBadge variant={enabled ? "success" : "neutral"}>
+      {enabled ? "MFA enabled" : "MFA not enabled"}
     </StatusBadge>
   );
 }
 
 export function KycComplianceBadge({ compliant }: { compliant: boolean }) {
   return (
-    <span
-      className="inline-flex items-center justify-center"
-      aria-label={compliant ? "KYC compliant" : "KYC not compliant"}
-      title={compliant ? "KYC compliant" : "KYC not compliant"}
-    >
-      {compliant ? (
-        <CheckCircle2 className="size-4 text-success" strokeWidth={2.25} />
-      ) : (
-        <X className="size-4 text-muted-foreground" strokeWidth={2.25} />
-      )}
-    </span>
+    <StatusBadge variant={compliant ? "success" : "neutral"}>
+      {compliant ? "Compliant" : "Not compliant"}
+    </StatusBadge>
   );
 }
 

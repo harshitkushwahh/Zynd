@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ADMIN_TABLE_PAGE_SIZE,
@@ -14,95 +14,89 @@ import {
   AdminTableStateRow,
   getOffsetPage,
 } from "@/components/ui/admin-table";
-import { MoreHorizontal, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AdminUserProfileAvatar } from "@/components/users/admin-user-profile-avatar";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
-import { Badge } from "@/components/ui/badge";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { userInitials } from "@/lib/admin-capabilities";
+import { useAdminUsersDirectoryQuery } from "@/hooks/use-admin-users-directory-query";
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";
-import { fetchAdminUsers, type AdminUserListItem } from "@/lib/admin-api";
-import { ApiError } from "@/lib/api-client";
-import { UserStatusBadge, MfaStatusBadge, KycComplianceBadge } from "@/components/users/user-status-badge";
+import { cn } from "@/lib/utils";
+import {
+  InvestmentStatusBadge,
+  KycComplianceBadge,
+  MfaStatusBadge,
+  PlatformRoleBadge,
+  UserStatusBadge,
+} from "@/components/users/user-status-badge";
 
 const ALL = "all";
+const USER_CELL_CLASS = "w-[15rem] max-w-[15rem] overflow-hidden";
+const ZYND_ID_CELL_CLASS = "w-[10rem] max-w-[10rem] overflow-hidden";
 
+const STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All statuses" },
+  { value: "active", label: "Active" },
+  { value: "suspended", label: "Suspended" },
+  { value: "pending", label: "Pending" },
+];
 
-function roleLabel(role: string) {
-  return role === "admin" ? "Admin" : "Customer";
-}
+const ROLE_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All roles" },
+  { value: "user", label: "Customer" },
+  { value: "admin", label: "Admin" },
+];
+
+const INVESTMENT_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All investors" },
+  { value: "invested", label: "Invested" },
+  { value: "not_invested", label: "Not invested" },
+];
 
 type UsersDirectoryPanelProps = Record<string, never>;
 
 export function UsersDirectoryPanel(_props: UsersDirectoryPanelProps) {
   const router = useRouter();
-  const [users, setUsers] = useState<AdminUserListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [emailFilter, setEmailFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [roleFilter, setRoleFilter] = useState(ALL);
   const [investmentFilter, setInvestmentFilter] = useState(ALL);
   const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const items = await fetchAdminUsers({
-        email: emailFilter.trim() || undefined,
-        status: statusFilter === ALL ? undefined : statusFilter,
-        limit: ADMIN_TABLE_PAGE_SIZE,
-        offset,
-      });
-      const filtered = items.filter((item) => {
-        if (roleFilter !== ALL && item.role !== roleFilter) return false;
-        if (investmentFilter === "invested" && !item.has_invested) return false;
-        if (investmentFilter === "not_invested" && item.has_invested) return false;
-        return true;
-      });
-      setUsers(filtered);
-      setHasMore(items.length === ADMIN_TABLE_PAGE_SIZE);
-    } catch (err) {
-      setUsers([]);
-      setError(getErrorMessage(err, "Could not load users."));
-    } finally {
-      setLoading(false);
-    }
-  }, [emailFilter, investmentFilter, offset, roleFilter, statusFilter]);
+  const { data, isLoading, isFetching, error, refetch } = useAdminUsersDirectoryQuery({
+    emailFilter,
+    statusFilter,
+    roleFilter,
+    investmentFilter,
+    offset,
+    pageSize,
+  });
 
-  useEffect(() => {
-    void loadUsers();
-  }, [loadUsers]);
+  const users = data?.users ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const showSkeleton = isLoading && users.length === 0;
+  const errorMessage = error ? getErrorMessage(error, "Could not load users.") : "";
 
   const handleSearch = () => {
     if (offset === 0) {
-      void loadUsers();
+      void refetch();
       return;
     }
     setOffset(0);
   };
 
-  const handleOpenProfile = (user: AdminUserListItem) => {
-    router.push(`/dashboard/users/${clientIdToProfilePath(user.client_id)}`);
+  const handleOpenProfile = (user: (typeof users)[number]) => {
+    router.push(`/dashboard/users/${clientIdToProfilePath(user.client_id)}/portfolio`);
+  };
+
+  const handlePageSizeChange = (nextPageSize: number) => {
+    setPageSize(nextPageSize);
+    setOffset(0);
   };
 
   return (
@@ -119,163 +113,140 @@ export function UsersDirectoryPanel(_props: UsersDirectoryPanelProps) {
           />
 
           <div className="flex flex-wrap items-center gap-2">
-            <Select
+            <AdminSelect
               value={statusFilter}
               onValueChange={(value) => {
-                setStatusFilter(value ?? ALL);
+                setStatusFilter(value);
                 setOffset(0);
               }}
-            >
-              <SelectTrigger size="sm" className="min-w-select-sm">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
+              options={STATUS_FILTER_OPTIONS}
+              placeholder="Status"
+              className="min-w-select-sm"
+            />
 
-            <Select
+            <AdminSelect
               value={roleFilter}
               onValueChange={(value) => {
-                setRoleFilter(value ?? ALL);
+                setRoleFilter(value);
                 setOffset(0);
               }}
-            >
-              <SelectTrigger size="sm" className="min-w-select-sm">
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All roles</SelectItem>
-                <SelectItem value="user">Customer</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
+              options={ROLE_FILTER_OPTIONS}
+              placeholder="Role"
+              className="min-w-select-sm"
+            />
 
-            <Select
+            <AdminSelect
               value={investmentFilter}
               onValueChange={(value) => {
-                setInvestmentFilter(value ?? ALL);
+                setInvestmentFilter(value);
                 setOffset(0);
               }}
-            >
-              <SelectTrigger size="sm" className="min-w-select-md">
-                <SelectValue placeholder="Investment" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All investors</SelectItem>
-                <SelectItem value="invested">Invested</SelectItem>
-                <SelectItem value="not_invested">Not invested</SelectItem>
-              </SelectContent>
-            </Select>
+              options={INVESTMENT_FILTER_OPTIONS}
+              placeholder="Investment"
+              className="min-w-select-md"
+            />
 
-            <Button variant="outline" size="icon" onClick={() => void loadUsers()} aria-label="Refresh">
-              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void refetch()}
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
             </Button>
           </div>
         </div>
 
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {errorMessage ? (
+          <AdminFeedbackMessage variant="destructive">{errorMessage}</AdminFeedbackMessage>
+        ) : null}
 
-        <AdminDataTable minWidth="5xl">
+        <AdminDataTable
+          minWidth="5xl"
+          footer={
+            <AdminTablePagination
+              page={getOffsetPage(offset, pageSize)}
+              hasPrevious={offset > 0}
+              hasNext={hasMore}
+              disabled={isFetching && users.length === 0}
+              currentPageCount={users.length}
+              hasMore={hasMore}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              onPrevious={() => setOffset((value) => Math.max(0, value - pageSize))}
+              onNext={() => setOffset((value) => value + pageSize)}
+            />
+          }
+        >
           <AdminTableHeader>
             <tr>
-              <AdminTableHeadCell>User</AdminTableHeadCell>
-              <AdminTableHeadCell>Email</AdminTableHeadCell>
+              <AdminTableHeadCell className={USER_CELL_CLASS}>User</AdminTableHeadCell>
+              <AdminTableHeadCell className={ZYND_ID_CELL_CLASS}>Zynd ID</AdminTableHeadCell>
               <AdminTableHeadCell>Status</AdminTableHeadCell>
               <AdminTableHeadCell>Role</AdminTableHeadCell>
               <AdminTableHeadCell>Invested</AdminTableHeadCell>
               <AdminTableHeadCell className="text-center">KYC</AdminTableHeadCell>
-              <AdminTableHeadCell>Joined</AdminTableHeadCell>
               <AdminTableHeadCell>MFA</AdminTableHeadCell>
-              <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+              <AdminTableHeadCell>Joined</AdminTableHeadCell>
             </tr>
           </AdminTableHeader>
           <AdminTableBody>
-            {loading ? (
-              <AdminTableSkeletonRows columns={9} />
+            {showSkeleton ? (
+              <AdminTableSkeletonRows columns={8} />
             ) : users.length === 0 ? (
-              <AdminTableStateRow colSpan={9}>No users match your filters.</AdminTableStateRow>
+              <AdminTableStateRow colSpan={8}>No users match your filters.</AdminTableStateRow>
             ) : (
               users.map((user) => (
                 <AdminTableRow key={user.user_id} onClick={() => handleOpenProfile(user)}>
-                      <AdminTableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar size="sm">
-                            <AvatarFallback className="bg-primary/10 text-caption font-medium text-primary">
-                              {userInitials(user.email)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-medium text-foreground">{user.display_name}</span>
+                      <AdminTableCell className={USER_CELL_CLASS}>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <AdminUserProfileAvatar
+                            name={user.display_name}
+                            email={user.email}
+                            imageSrc={user.profile_image_url}
+                            size="md"
+                            className="shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span
+                              className="block truncate text-compact text-foreground"
+                              title={user.email}
+                            >
+                              {user.email}
+                            </span>
+                          </div>
                         </div>
                       </AdminTableCell>
-                      <AdminTableCell className="text-muted-foreground">{user.email}</AdminTableCell>
+                      <AdminTableCell className={cn("text-muted-foreground", ZYND_ID_CELL_CLASS)}>
+                        <span className="block truncate font-mono text-compact" title={user.client_id}>
+                          {user.client_id}
+                        </span>
+                      </AdminTableCell>
                       <AdminTableCell>
                         <UserStatusBadge status={user.status} />
                       </AdminTableCell>
                       <AdminTableCell>
-                        <Badge variant={user.role === "admin" ? "default" : "secondary"}>
-                          {roleLabel(user.role)}
-                        </Badge>
+                        <PlatformRoleBadge role={user.role} />
                       </AdminTableCell>
                       <AdminTableCell>
-                        <Badge
-                          variant="outline"
-                          className={
-                            user.has_invested
-                              ? "border-success/30 bg-success/10 text-success"
-                              : "text-muted-foreground"
-                          }
-                        >
-                          {user.has_invested ? "Invested" : "Not invested"}
-                        </Badge>
+                        <InvestmentStatusBadge hasInvested={user.has_invested} />
                       </AdminTableCell>
                       <AdminTableCell className="text-center">
-                        <KycComplianceBadge compliant={user.kyc_compliant} />
-                      </AdminTableCell>
-                      <AdminTableCell className="text-muted-foreground">
-                        {new Date(user.created_at).toLocaleDateString()}
+                        <div className="flex justify-center">
+                          <KycComplianceBadge compliant={user.kyc_compliant} />
+                        </div>
                       </AdminTableCell>
                       <AdminTableCell>
                         <MfaStatusBadge enabled={user.mfa_enrolled} />
                       </AdminTableCell>
-                      <AdminTableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Actions for ${user.email}`}
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            }
-                          />
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenProfile(user)}>
-                              View profile
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                      <AdminTableCell className="text-muted-foreground">
+                        {new Date(user.created_at).toLocaleDateString()}
                       </AdminTableCell>
                     </AdminTableRow>
                 ))
               )}
           </AdminTableBody>
         </AdminDataTable>
-
-        <AdminTablePagination
-          page={getOffsetPage(offset)}
-          hasPrevious={offset > 0}
-          hasNext={hasMore}
-          disabled={loading}
-          onPrevious={() => setOffset((value) => Math.max(0, value - ADMIN_TABLE_PAGE_SIZE))}
-          onNext={() => setOffset((value) => value + ADMIN_TABLE_PAGE_SIZE)}
-        />
     </div>
   );
 }

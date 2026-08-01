@@ -5,6 +5,7 @@ import { Building2, IndianRupee, Mail, MapPin, UserRound, Users2 } from "lucide-
 
 import { DistributorHeadStatusBadge } from "@/components/distributor-head/distributor-head-badge";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DUMMY_STATE_HEAD,
@@ -39,7 +40,7 @@ export function DistributorHeadDistributorDetail({ distributor }: DistributorHea
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminMetricCardsGrid>
         <AdminMetricCard
           label="Investor clients"
           value={formatDistributorHeadCount(distributor.clientCount)}
@@ -68,7 +69,7 @@ export function DistributorHeadDistributorDetail({ distributor }: DistributorHea
           icon={Building2}
           tone="muted"
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <Card>
         <CardHeader className="pb-3">

@@ -11,6 +11,7 @@ import {
 
 import {
   DISTRIBUTOR_DUMMY_NOTIFICATIONS,
+  inferDistributorNotificationKind,
   type DistributorNotification,
 } from "@/lib/dummy/notifications";
 
@@ -51,6 +52,7 @@ export function DistributorNotificationsProvider({ children }: { children: React
         id: `n-${Date.now()}`,
         title: input.title,
         body: input.body,
+        kind: inferDistributorNotificationKind(input.title, input.body),
         createdAt: new Date().toISOString(),
         read: false,
       },

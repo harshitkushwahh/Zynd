@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Circle,
   Info,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -32,7 +33,7 @@ const variantConfig: Record<
     icon: AlertCircle,
     containerClassName: "border-destructive/30 bg-destructive/10",
     iconClassName: "text-destructive",
-    textClassName: "text-destructive",
+    textClassName: "text-foreground",
   },
   info: {
     icon: Info,
@@ -54,6 +55,7 @@ type AdminFeedbackMessageProps = {
   title?: string;
   icon?: LucideIcon;
   showIcon?: boolean;
+  onDismiss?: () => void;
   className?: string;
 };
 
@@ -63,6 +65,7 @@ export function AdminFeedbackMessage({
   title,
   icon,
   showIcon = true,
+  onDismiss,
   className,
 }: AdminFeedbackMessageProps) {
   const config = variantConfig[variant];
@@ -75,12 +78,12 @@ export function AdminFeedbackMessage({
         config.containerClassName,
         className,
       )}
-      role="status"
+      role={variant === "destructive" ? "alert" : "status"}
     >
       {showIcon ? (
         <Icon className={cn("mt-0.5 size-4 shrink-0", config.iconClassName)} strokeWidth={2.25} />
       ) : null}
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {title ? (
           <p className={cn("font-medium text-compact", config.textClassName)}>{title}</p>
         ) : null}
@@ -94,6 +97,16 @@ export function AdminFeedbackMessage({
           {children}
         </p>
       </div>
+      {onDismiss ? (
+        <button
+          type="button"
+          className="admin-feedback-message__dismiss"
+          onClick={onDismiss}
+          aria-label="Dismiss message"
+        >
+          <X className="size-4" strokeWidth={2.25} aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

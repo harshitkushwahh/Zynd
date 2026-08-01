@@ -9,6 +9,7 @@ import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
 import { AdminDetailDialogSkeleton } from "@/components/ui/admin-skeletons";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -174,7 +175,7 @@ export function MfMandateDetailDialog({
               </div>
 
               {counts ? (
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <AdminMetricCardsGrid>
                   <AdminMetricCard
                     label="Total SIP plans"
                     value={counts.total.toLocaleString()}
@@ -200,7 +201,7 @@ export function MfMandateDetailDialog({
                     icon={ShieldCheck}
                     tone={counts.cancelled > 0 ? "warning" : "muted"}
                   />
-                </div>
+                </AdminMetricCardsGrid>
               ) : null}
 
               {detail.failure_reason ? (

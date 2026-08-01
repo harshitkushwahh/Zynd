@@ -1,8 +1,8 @@
 "use client";
 
-import { Building2 } from "lucide-react";
-
+import { DistributorInfoBadge } from "@/components/ui/distributor-info-badge";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
+import { formatDistributorBranchName } from "@/lib/distributor-branch-display";
 import { cn } from "@/lib/utils";
 
 type DistributorBranchBadgeProps = {
@@ -16,23 +16,15 @@ export function DistributorBranchBadge({ className }: DistributorBranchBadgeProp
     return null;
   }
 
-  const branchCode = user?.branchCode?.trim();
+  const branchCode = user?.branchCode?.trim() || undefined;
+  const displayName = formatDistributorBranchName(branchLabel);
 
   return (
-    <div
-      className={cn("distributor-branch-badge", className)}
-      title={branchLabel}
-      aria-label={`Branch: ${branchLabel}${branchCode ? ` (${branchCode})` : ""}`}
-    >
-      <span className="distributor-branch-badge__icon" aria-hidden>
-        <Building2 className="size-3.5" strokeWidth={2.25} />
-      </span>
-      <span className="distributor-branch-badge__body">
-        {branchCode ? (
-          <span className="distributor-branch-badge__code">{branchCode}</span>
-        ) : null}
-        <span className="distributor-branch-badge__name">{branchLabel}</span>
-      </span>
-    </div>
+    <DistributorInfoBadge
+      className={cn(className)}
+      code={branchCode || undefined}
+      label={displayName}
+      aria-label={`Branch: ${displayName}${branchCode ? ` (${branchCode})` : ""}`}
+    />
   );
 }

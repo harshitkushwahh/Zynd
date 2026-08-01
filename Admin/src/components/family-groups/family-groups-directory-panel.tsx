@@ -131,12 +131,12 @@ export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryP
       <AdminDataTable minWidth="lg">
         <AdminTableHeader>
           <tr>
+            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             <AdminTableHeadCell>Group</AdminTableHeadCell>
             <AdminTableHeadCell>Head</AdminTableHeadCell>
             <AdminTableHeadCell>Members</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
             <AdminTableHeadCell>Created</AdminTableHeadCell>
-            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
@@ -148,6 +148,22 @@ export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryP
           >
             {items.map((group) => (
               <AdminTableRow key={group.id}>
+                <AdminTableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Row actions">
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setSelectedGroupId(group.id)}>
+                        View details
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </AdminTableCell>
                 <AdminTableCell>
                   <div>
                     <p className="font-medium text-foreground">{group.title}</p>
@@ -176,22 +192,6 @@ export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryP
                   </StatusBadge>
                 </AdminTableCell>
                 <AdminTableCell>{formatTimestampDetail(group.created_at)}</AdminTableCell>
-                <AdminTableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      }
-                    />
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setSelectedGroupId(group.id)}>
-                        View details
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </AdminTableCell>
               </AdminTableRow>
             ))}
           </AdminTableRows>

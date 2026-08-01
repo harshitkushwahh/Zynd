@@ -87,7 +87,7 @@ export function DistributorSettingsNotificationsPanel() {
         <p className="text-compact text-primary">Preferences saved on this device.</p>
       ) : null}
 
-      <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+      <ul className="divide-y divide-border rounded-[var(--radius-5xl)] border border-border">
         {PREF_ITEMS.map((item) => {
           const switchId = `notification-pref-${item.key}`;
           return (

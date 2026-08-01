@@ -1,5 +1,7 @@
-import { SystemResidentialInvestorsPage } from "@/components/investors/system-residential-investors-page";
+import { redirect } from "next/navigation";
+
+import { buildYourClientsListHref } from "@/lib/distributor-clients-list-scope";
 
 export default function ResidentInvestorsPage() {
-  return <SystemResidentialInvestorsPage />;
+  redirect(buildYourClientsListHref("all"));
 }

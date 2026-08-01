@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 import {
   AdminDashboardMobileNav,
   AdminDashboardSidebar,
@@ -8,33 +10,30 @@ import { AdminDashboardNavbar } from "@/components/dashboard/admin-dashboard-nav
 import {
   ADMIN_MAIN_COLUMN_CLASS,
   ADMIN_MAIN_SCROLL_CLASS,
-  ADMIN_NAVBAR_HEIGHT,
   ADMIN_SHELL_CLASS,
   adminMainContentClass,
 } from "@/components/dashboard/admin-dashboard-layout";
 import { AdminZyndPinLockScreen } from "@/components/admin-zynd-pin-lock-screen";
-import { SidebarInset, SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAdminZyndPinOptional } from "@/contexts/admin-zynd-pin-context";
 import { cn } from "@/lib/utils";
 
 function AdminDashboardMainColumn({ children }: { children: React.ReactNode }) {
-  const { state, isMobile } = useSidebar();
-  const collapsed = state === "collapsed";
-
-  const navbarOffsetClass = isMobile
-    ? "left-0"
-    : collapsed
-      ? "left-(--sidebar-width-icon)"
-      : "left-(--sidebar-width)";
-
   return (
     <div className={ADMIN_MAIN_COLUMN_CLASS}>
-      <AdminDashboardNavbar className={navbarOffsetClass} />
-      <div className={cn(ADMIN_NAVBAR_HEIGHT, "shrink-0")} aria-hidden />
+      <div className="admin-dashboard-main-card-shell">
+        <div className="admin-dashboard-main-top">
+          <AdminDashboardNavbar />
+        </div>
 
-      <SidebarInset className={ADMIN_MAIN_SCROLL_CLASS}>
-        <div className={adminMainContentClass(collapsed)}>{children}</div>
-      </SidebarInset>
+        <div className="admin-dashboard-main-card">
+          <div className="admin-dashboard-main-card__inset">
+            <main className={ADMIN_MAIN_SCROLL_CLASS}>
+              <div className={adminMainContentClass()}>{children}</div>
+            </main>
+          </div>
+        </div>
+      </div>
 
       <AdminDashboardMobileNav />
     </div>
@@ -47,6 +46,12 @@ export function AdminDashboardShell({ children }: { children: React.ReactNode })
   return (
     <SidebarProvider
       data-slot="admin-dashboard-shell"
+      defaultOpen
+      style={
+        {
+          "--sidebar-width": "13rem",
+        } as React.CSSProperties
+      }
       className={cn(ADMIN_SHELL_CLASS, "flex h-dvh w-full min-h-0 overflow-hidden")}
     >
       {pinContext?.locked ? <AdminZyndPinLockScreen /> : null}

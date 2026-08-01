@@ -35,7 +35,6 @@ export function AdminTabbedSectionPage({ sectionId, tabSlug }: AdminTabbedSectio
         { label: activeTab.label },
       ]}
       title={activeTab.label}
-      description={activeTab.description}
       icon={TabIcon}
     >
       {!canRead ? (

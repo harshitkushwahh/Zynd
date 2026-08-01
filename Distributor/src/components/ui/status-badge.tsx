@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { DISTRIBUTOR_SELECTION_BADGE_CLASS } from "@/lib/distributor-layout";
 
 export type StatusBadgeVariant =
   | "success"
@@ -31,15 +31,17 @@ const variantConfig: Record<
 type StatusBadgeProps = {
   variant: StatusBadgeVariant;
   children: React.ReactNode;
-  className?: string;
+  /** Optional icon override (defaults to the variant icon). */
+  icon?: LucideIcon;
 };
 
-export function StatusBadge({ variant, children, className }: StatusBadgeProps) {
+/** Compact status chip with icon — single badge UI for the Distributor app. */
+export function StatusBadge({ variant, children, icon }: StatusBadgeProps) {
   const config = variantConfig[variant];
-  const Icon = config.icon;
+  const Icon = icon ?? config.icon;
 
   return (
-    <Badge variant={config.badgeVariant} className={cn(className)}>
+    <Badge variant={config.badgeVariant} className={DISTRIBUTOR_SELECTION_BADGE_CLASS}>
       <Icon strokeWidth={2.25} />
       {children}
     </Badge>

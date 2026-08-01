@@ -1,44 +1,74 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { RotateCw } from "lucide-react";
 import {
   Area,
   AreaChart,
   CartesianGrid,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
+import { Button } from "@/components/ui/button";
+import { DistributorChartTooltip } from "@/components/ui/distributor-chart-tooltip";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import {
   getPortfolioChartSeries,
   PORTFOLIO_CHART_PERIODS,
-  portfolioChartPeriodDescription,
-  portfolioChartPeriodTabLabel,
+  portfolioChartPeriodSelectLabel,
   type PortfolioChartPeriod,
   type PortfolioChartPoint,
 } from "@/lib/client-portfolio-chart-data";
+import { resolvePortfolioChartAnchorValue } from "@/lib/distributor-client-portfolio-demo";
 import { formatAum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const CHART_HEIGHT = 240;
+const CHART_POINT_WIDTH_PX = 56;
+const CHART_X_AXIS_HEIGHT = 24;
 
 type ChartTooltipProps = {
   active?: boolean;
-  payload?: ReadonlyArray<{ value?: number | string; payload?: PortfolioChartPoint }>;
+  payload?: ReadonlyArray<{
+    value?: number | string;
+    dataKey?: string;
+    payload?: PortfolioChartPoint;
+  }>;
   label?: string | number;
 };
 
 function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
-  const value = Number(payload[0]?.value ?? 0);
+  const copy = DISTRIBUTOR_CLIENT_COPY.portfolio;
+  const byKey = Object.fromEntries(
+    payload.map((entry) => [entry.dataKey ?? "value", Number(entry.value ?? 0)]),
+  );
+
   return (
-    <div className="rounded-[var(--radius-control)] border border-border bg-popover px-3 py-2 shadow-sm">
+    <DistributorChartTooltip>
       {label ? <p className="text-caption text-muted-foreground">{label}</p> : null}
-      <p className="text-compact font-semibold tabular-nums text-foreground">{formatAum(value)}</p>
-    </div>
+      {byKey.invested != null ? (
+        <p className="text-compact tabular-nums text-foreground">
+          <span className="text-muted-foreground">{copy.invested}: </span>
+          {formatAum(byKey.invested)}
+        </p>
+      ) : null}
+      {byKey.value != null ? (
+        <p className="text-compact font-semibold tabular-nums text-foreground">
+          <span className="font-normal text-muted-foreground">{copy.currentValue}: </span>
+          {formatAum(byKey.value)}
+        </p>
+      ) : null}
+    </DistributorChartTooltip>
   );
 }
 
@@ -47,127 +77,308 @@ function renderChartTooltip(props: unknown) {
 }
 
 function yDomain(points: PortfolioChartPoint[]): [number, number] {
-  const values = points.map((point) => point.value);
+  const values = points.flatMap((point) => [point.value, point.invested]);
   const min = Math.min(...values);
   const max = Math.max(...values, 1);
-  const pad = (max - min) * 0.08 || max * 0.08;
+  const pad = (max - min) * 0.1 || max * 0.1;
   return [Math.max(0, min - pad), max + pad];
 }
 
 type ClientPortfolioValueChartProps = {
   clientId: string;
   currentValue: number;
+  investedAmount: number;
   className?: string;
+  hideToolbar?: boolean;
+  period?: PortfolioChartPeriod;
+  onPeriodChange?: (period: PortfolioChartPeriod) => void;
+  refreshKey?: number;
+  onRefresh?: () => void;
 };
 
-export function ClientPortfolioValueChart({
-  clientId,
-  currentValue,
+export function usePortfolioValueChartControls(initialPeriod: PortfolioChartPeriod = "1Y") {
+  const [period, setPeriod] = useState<PortfolioChartPeriod>(initialPeriod);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refresh = useCallback(() => {
+    setRefreshKey((key) => key + 1);
+  }, []);
+  return { period, setPeriod, refreshKey, refresh };
+}
+
+type ClientPortfolioChartToolbarProps = {
+  period: PortfolioChartPeriod;
+  onPeriodChange: (period: PortfolioChartPeriod) => void;
+  onRefresh?: () => void;
+  className?: string;
+  layout?: "default" | "inline";
+  showLegend?: boolean;
+  showRefresh?: boolean;
+};
+
+export function ClientPortfolioChartToolbar({
+  period,
+  onPeriodChange,
+  onRefresh,
   className,
-}: ClientPortfolioValueChartProps) {
+  layout = "default",
+  showLegend = true,
+  showRefresh = true,
+}: ClientPortfolioChartToolbarProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.portfolio;
-  const [period, setPeriod] = useState<PortfolioChartPeriod>("1Y");
-  const gradientId = useId().replace(/:/g, "");
-
-  const series = useMemo(
-    () => getPortfolioChartSeries(clientId, currentValue, period),
-    [clientId, currentValue, period],
-  );
-
-  const domain = useMemo(() => yDomain(series), [series]);
-  const tickInterval = Math.max(0, Math.floor(series.length / 6) - 1);
-  const isEmpty = currentValue <= 0;
 
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-[var(--radius-card)] border border-border bg-card",
+        "distributor-client-portfolio-chart__toolbar",
+        layout === "inline" && "distributor-client-portfolio-chart__toolbar--inline",
+        !showLegend && !showRefresh && "distributor-client-portfolio-chart__toolbar--period-only",
         className,
       )}
     >
-      <div className="flex flex-wrap items-end justify-between gap-2 px-4 py-4">
-        <div>
-          <p className="text-compact font-medium text-foreground">{copy.chartTitle}</p>
-          <p className="text-caption text-muted-foreground">
-            {portfolioChartPeriodDescription(period)}
-          </p>
-        </div>
-        <p className="text-compact font-semibold tabular-nums text-foreground">
-          {formatAum(currentValue)}
-        </p>
-      </div>
+      <Select
+        value={period}
+        onValueChange={(value) => {
+          if (value) onPeriodChange(value as PortfolioChartPeriod);
+        }}
+      >
+        <SelectTrigger
+          size="sm"
+          className="distributor-client-portfolio-chart__period-trigger min-w-[7.5rem] rounded-full border-border bg-muted/40"
+          aria-label="Chart period"
+        >
+          <SelectValue placeholder="Period" />
+        </SelectTrigger>
+        <SelectContent align="start">
+          {PORTFOLIO_CHART_PERIODS.map((option) => (
+            <SelectItem key={option} value={option}>
+              {portfolioChartPeriodSelectLabel(option)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-      {isEmpty ? (
-        <div className="mx-4 mb-4 flex h-[240px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 px-4 text-center text-caption text-muted-foreground">
-          {copy.chartEmpty}
+      {showLegend ? (
+        <div className="distributor-client-portfolio-chart__legend">
+          <StatusBadge variant="neutral">{copy.invested}</StatusBadge>
+          <StatusBadge variant="info">{copy.currentValue}</StatusBadge>
         </div>
-      ) : (
-        <>
-          <div
-            className="h-[240px] w-full min-w-0 [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible"
-            role="img"
-            aria-label={copy.chartTitle}
-          >
-            <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
-              <AreaChart data={series} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
-                <defs>
-                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  minTickGap={20}
-                  interval={tickInterval}
-                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                />
-                <YAxis domain={domain} hide />
-                <Tooltip
-                  content={renderChartTooltip}
-                  cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="var(--primary)"
-                  strokeWidth={2}
-                  fill={`url(#${gradientId})`}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 2, fill: "var(--card)", stroke: "var(--primary)" }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      ) : null}
 
-          <div className="border-t border-border px-4 py-3">
-            <div className="flex gap-1 overflow-x-auto rounded-lg bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {PORTFOLIO_CHART_PERIODS.map((tab) => {
-                const active = period === tab;
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setPeriod(tab)}
-                    className={cn(
-                      "min-w-[2.75rem] shrink-0 flex-1 rounded-md px-2 py-2 text-caption font-medium transition-colors sm:min-w-0",
-                      active
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    aria-pressed={active}
-                  >
-                    {portfolioChartPeriodTabLabel(tab)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      )}
+      {showRefresh ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="distributor-client-portfolio-chart__refresh shrink-0 text-muted-foreground"
+          aria-label="Refresh portfolio chart"
+          title="Refresh chart snapshot"
+          onClick={onRefresh}
+        >
+          <RotateCw className="size-4" strokeWidth={2.25} />
+        </Button>
+      ) : null}
     </div>
+  );
+}
+
+export function ClientPortfolioValueChart({
+  clientId,
+  currentValue,
+  investedAmount,
+  className,
+  hideToolbar = false,
+  period: periodProp,
+  onPeriodChange,
+  refreshKey: refreshKeyProp,
+  onRefresh: onRefreshProp,
+}: ClientPortfolioValueChartProps) {
+  const copy = DISTRIBUTOR_CLIENT_COPY.portfolio;
+  const [periodInternal, setPeriodInternal] = useState<PortfolioChartPeriod>("1Y");
+  const [refreshKeyInternal, setRefreshKeyInternal] = useState(0);
+  const period = periodProp ?? periodInternal;
+  const setPeriod = onPeriodChange ?? setPeriodInternal;
+  const refreshKey = refreshKeyProp ?? refreshKeyInternal;
+  const [plotLayout, setPlotLayout] = useState({ width: 0, height: 0 });
+  const valueGradientId = useId().replace(/:/g, "");
+  const investedGradientId = `${valueGradientId}-invested`;
+  const chartAnchor = resolvePortfolioChartAnchorValue(clientId, currentValue);
+  const chartInvested =
+    investedAmount > 0 ? investedAmount : Math.round(chartAnchor * 0.82);
+
+  const series = useMemo(
+    () => getPortfolioChartSeries(clientId, chartAnchor, period, chartInvested),
+    [chartAnchor, chartInvested, clientId, period, refreshKey],
+  );
+
+  const domain = useMemo(() => yDomain(series), [series]);
+  const plotScrollRef = useRef<HTMLDivElement>(null);
+  const axisScrollRef = useRef<HTMLDivElement>(null);
+
+  const contentMinWidth = series.length * CHART_POINT_WIDTH_PX;
+  const innerWidth = Math.max(plotLayout.width, contentMinWidth);
+  const canScrollX = contentMinWidth > plotLayout.width && plotLayout.width > 0;
+  const chartReady = plotLayout.width > 0 && plotLayout.height > 0;
+
+  const syncAxisScroll = useCallback(() => {
+    const plot = plotScrollRef.current;
+    const axis = axisScrollRef.current;
+    if (plot && axis) {
+      axis.scrollLeft = plot.scrollLeft;
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = plotScrollRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      setPlotLayout({ width: el.clientWidth, height: el.clientHeight });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = plotScrollRef.current;
+    const axis = axisScrollRef.current;
+    if (!el || !canScrollX) return;
+    el.scrollLeft = el.scrollWidth - el.clientWidth;
+    if (axis) {
+      axis.scrollLeft = el.scrollLeft;
+    }
+  }, [canScrollX, innerWidth, period, refreshKey]);
+
+  const onRefresh = useCallback(() => {
+    if (onRefreshProp) {
+      onRefreshProp();
+      return;
+    }
+    setRefreshKeyInternal((key) => key + 1);
+  }, [onRefreshProp]);
+
+  return (
+    <article
+      className={cn("distributor-client-portfolio-chart", className)}
+      aria-label={copy.chartTitle}
+    >
+      {!hideToolbar ? (
+        <ClientPortfolioChartToolbar
+          period={period}
+          onPeriodChange={setPeriod}
+          onRefresh={onRefresh}
+        />
+      ) : null}
+
+      <div className="distributor-client-portfolio-chart__plot-body">
+        <div className="distributor-client-portfolio-chart__plot-stack">
+          <div
+            ref={plotScrollRef}
+            className="distributor-client-portfolio-chart__plot-scroll"
+            tabIndex={canScrollX ? 0 : undefined}
+            role={canScrollX ? "region" : undefined}
+            aria-label={
+              canScrollX
+                ? `${copy.chartTitle} — scroll horizontally for earlier periods`
+                : undefined
+            }
+            onScroll={syncAxisScroll}
+          >
+            {chartReady ? (
+              <div
+                className="distributor-client-portfolio-chart__plot-inner"
+                style={{ width: innerWidth }}
+              >
+                <AreaChart
+                  key={`plot-${innerWidth}-${plotLayout.height}-${period}`}
+                  width={innerWidth}
+                  height={plotLayout.height}
+                  data={series}
+                  margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+                >
+                  <defs>
+                    <linearGradient id={investedGradientId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#c4b5a0" stopOpacity={0.38} />
+                      <stop offset="100%" stopColor="#c4b5a0" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id={valueGradientId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1e3a38" stopOpacity={0.42} />
+                      <stop offset="100%" stopColor="#1e3a38" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
+                  <YAxis domain={domain} hide width={0} />
+                  <Tooltip
+                    content={renderChartTooltip}
+                    cursor={{
+                      stroke: "var(--border)",
+                      strokeWidth: 1,
+                      strokeDasharray: "4 4",
+                    }}
+                    wrapperStyle={{ zIndex: 1 }}
+                  />
+                  <Area
+                    type="stepAfter"
+                    dataKey="invested"
+                    stroke="#8a8175"
+                    strokeWidth={1.75}
+                    fill={`url(#${investedGradientId})`}
+                    dot={false}
+                    activeDot={{
+                      r: 3.5,
+                      strokeWidth: 2,
+                      fill: "var(--card)",
+                      stroke: "#8a8175",
+                    }}
+                  />
+                  <Area
+                    type="stepAfter"
+                    dataKey="value"
+                    stroke="#1e3a38"
+                    strokeWidth={2}
+                    fill={`url(#${valueGradientId})`}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 2, fill: "var(--card)", stroke: "#1e3a38" }}
+                  />
+                </AreaChart>
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            ref={axisScrollRef}
+            className="distributor-client-portfolio-chart__plot-axis"
+            aria-hidden
+          >
+            {chartReady ? (
+              <div
+                className="distributor-client-portfolio-chart__plot-inner"
+                style={{ width: innerWidth }}
+              >
+                <AreaChart
+                  key={`axis-${innerWidth}-${period}`}
+                  width={innerWidth}
+                  height={CHART_X_AXIS_HEIGHT}
+                  data={series}
+                  margin={{ top: 0, right: 12, left: 4, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    interval={canScrollX ? 0 : "preserveStartEnd"}
+                    minTickGap={canScrollX ? 32 : 24}
+                    tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  />
+                  <YAxis hide domain={[0, 1]} width={0} />
+                </AreaChart>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }

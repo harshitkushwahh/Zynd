@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { GitBranch, Info, Pencil, Plus, ShieldCheck } from "lucide-react";
 
@@ -12,9 +12,9 @@ import {
   ComplianceSettingsPanel,
   type ComplianceSettingsPanelHandle,
 } from "@/components/mf/compliance-settings-panel";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 
 type ContentSection = "compliance" | "rules";
 
@@ -48,34 +48,25 @@ export function ContentRulesPanel({
   const complianceRef = useRef<ComplianceSettingsPanelHandle>(null);
   const rulesRef = useRef<CatalogRulesPanelHandle>(null);
 
-  const activeItem = useMemo(
-    () => CONTENT_NAV_ITEMS.find((item) => item.value === section) ?? CONTENT_NAV_ITEMS[0],
-    [section],
-  );
-
   return (
     <Tabs
       value={section}
       onValueChange={(value) => setSection(value as ContentSection)}
       className="space-y-4"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <AdminSectionTitle icon={activeItem.icon}>{activeItem.label}</AdminSectionTitle>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <AdminTabList variant="secondary" className="w-full lg:w-fit">
+          {CONTENT_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <AdminTabTrigger key={item.value} value={item.value} className="gap-2">
+                <Icon className="size-4 shrink-0" />
+                {item.label}
+              </AdminTabTrigger>
+            );
+          })}
+        </AdminTabList>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <TabsList
-            variant="line"
-            className="h-auto w-full shrink-0 justify-end border-b border-border bg-transparent lg:w-fit"
-          >
-            {CONTENT_NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <TabsTrigger key={item.value} value={item.value} className="gap-2 px-4 py-2">
-                  <Icon className="size-4 shrink-0" />
-                  {item.label}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
           <Button
             variant="outline"
             size="icon"

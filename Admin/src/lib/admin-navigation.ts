@@ -373,6 +373,7 @@ export function getAdminPageTitle(pathname: string) {
   if (pathname === "/dashboard/security-config" || pathname.startsWith("/dashboard/security-config/")) {
     const slug = pathname.replace("/dashboard/security-config", "").replace(/^\//, "").split("/")[0];
     if (slug === "risk") return "Security · Adaptive risk";
+    if (slug === "ops-thresholds") return "Security · Ops thresholds";
     if (slug === "other") return "Security · Other";
     return "Security · Login lockout";
   }

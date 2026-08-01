@@ -7,22 +7,29 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.admin.document_kyc_service import get_user_kyc_review
+from app.application.admin.kyc_admin_detail_helpers import (
+    build_compliance_issues,
+    build_kyc_audit_log,
+    derive_esign_step_status,
+)
 from app.application.investor.investor_bank_account_service import serialize_bank_account
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status, journey_to_bootstrap_dict
 from app.application.mf.cas_import_service import list_user_external_holdings
 from app.application.mf.mf_cart_service import get_cart_summary
-from app.application.mf.mf_order_service import list_user_orders, serialize_order
+from app.application.mf.mf_order_service import list_user_orders, load_order_fund_metadata, serialize_order
 from app.application.mf.mf_sip_plan_service import list_user_sip_plans, serialize_sip_plan
 from app.application.mf.mf_transaction_ops_service import list_orders_admin
+from app.application.mf.public_asset_service import resolve_amc_logo_url
+from app.core.config import get_settings
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
     InvestorBankAccount,
     InvestorProfile,
     InvestorRelatedParty,
 )
-from app.infrastructure.persistence.mf_models import Product
+from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product
 from app.infrastructure.persistence.models import KycJourneyState, User, UserKycStatus
-from app.infrastructure.persistence.mf_transaction_models import MfMandate
+from app.infrastructure.persistence.mf_transaction_models import MfInvestmentAccount, MfMandate
 
 KYC_STEP_LABELS: dict[str, str] = {
     "pan": "PAN verification",
@@ -217,6 +224,8 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
 
     bootstrap = journey_to_bootstrap_dict(journey, status)
     step_statuses = bootstrap.get("stepStatuses") if isinstance(bootstrap.get("stepStatuses"), dict) else {}
+    step_statuses = dict(step_statuses)
+    step_statuses["esign"] = derive_esign_step_status(journey, status)
     overall_status = step_statuses.get("overall", "none")
 
     kyc_review = await get_user_kyc_review(db, user_id=user_id)
@@ -230,13 +239,20 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     )
 
     profile = await db.get(InvestorProfile, user_id)
+    mf_account = await db.scalar(
+        select(MfInvestmentAccount).where(MfInvestmentAccount.user_id == user_id)
+    )
     investor_banks: list[dict[str, Any]] = []
     investor_addresses: list[dict[str, Any]] = []
     investor_nominees: list[dict[str, Any]] = []
     investor_profile_status: str | None = None
+    investor_profile_id: str | None = None
+    mf_investment_profile_id: str | None = None
+    mf_investment_profile_status: str | None = None
 
     if profile:
         investor_profile_status = profile.status.value
+        investor_profile_id = profile.external_profile_id
         bank_rows = (
             await db.scalars(
                 select(InvestorBankAccount)
@@ -264,6 +280,10 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
         ).all()
         investor_nominees = [_serialize_investor_nominee(row) for row in nominee_rows]
 
+    if mf_account:
+        mf_investment_profile_id = mf_account.fp_mfia_id
+        mf_investment_profile_status = mf_account.status.value
+
     pan_info = _serialize_pan_draft(bootstrap.get("panDraft"))
     bank_draft = _serialize_bank_draft(bootstrap.get("bankDraft"))
     contact_draft = _serialize_contact_draft(bootstrap.get("contactDraft"))
@@ -271,12 +291,28 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     nominee_draft = _serialize_nominee_draft(bootstrap.get("nomineeDraft"))
     signature_draft = _serialize_signature_draft(bootstrap.get("signatureDraft"))
 
+    kyc_already_registered = bool(bootstrap.get("kycAlreadyRegistered"))
+    documents = kyc_review["documents"]
+
     return {
         "overall_status": overall_status,
         "last_completed_step": bootstrap.get("lastCompletedStep"),
         "active_step_index": bootstrap.get("activeStepIndex"),
         "step_statuses": step_statuses,
         "incomplete_steps": _incomplete_steps(step_statuses, overall_status),
+        "kyc_already_registered": kyc_already_registered,
+        "readiness_code": bootstrap.get("readinessCode"),
+        "readiness_reason": bootstrap.get("readinessReason"),
+        "kyc_initiated_at": journey.created_at.isoformat() if journey and journey.created_at else None,
+        "esign_details_status": bootstrap.get("esignDetailsStatus"),
+        "proof_details_status": bootstrap.get("proofDetailsStatus"),
+        "compliance_issues": build_compliance_issues(journey, step_statuses),
+        "audit_log": build_kyc_audit_log(
+            journey=journey,
+            status=status,
+            step_statuses=step_statuses,
+            documents=documents,
+        ),
         "pan": pan_info,
         "address": contact_draft,
         "investor_addresses": investor_addresses,
@@ -291,8 +327,32 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
         "external_kyc_status": bootstrap.get("externalKycStatus"),
         "kyc_form_status": bootstrap.get("kycFormStatus"),
         "investor_profile_status": investor_profile_status,
-        "documents": kyc_review["documents"],
+        "investor_profile_id": investor_profile_id,
+        "mf_investment_profile_id": mf_investment_profile_id,
+        "mf_investment_profile_status": mf_investment_profile_status,
+        "documents": documents,
     }
+
+
+async def _load_fund_amc_metadata(
+    db: AsyncSession,
+    fund_ids: set[int],
+) -> tuple[dict[int, str], dict[int, str | None]]:
+    if not fund_ids:
+        return {}, {}
+
+    settings = get_settings()
+    result = await db.execute(
+        select(MutualFund.id, FundAmc.name, FundAmc.logo_url, FundAmc.slug)
+        .join(FundAmc, MutualFund.amc_id == FundAmc.id)
+        .where(MutualFund.id.in_(fund_ids))
+    )
+    amc_names: dict[int, str] = {}
+    amc_logos: dict[int, str | None] = {}
+    for fund_id, name, logo_url, slug in result:
+        amc_names[fund_id] = name
+        amc_logos[fund_id] = resolve_amc_logo_url(logo_url, slug, settings)
+    return amc_names, amc_logos
 
 
 async def _build_investments_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
@@ -308,13 +368,22 @@ async def _build_investments_detail(db: AsyncSession, user_id: UUID) -> dict[str
     } if product_ids else {}
 
     sip_plans: list[dict[str, Any]] = []
+    sip_fund_ids = {plan.fund_id for plan in plans}
+    sip_amc_names, sip_amc_logos = await _load_fund_amc_metadata(db, sip_fund_ids)
     for plan in plans:
         mandate = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
         sip_plans.append(
-            serialize_sip_plan(plan, product_name=products.get(plan.product_id), mandate=mandate)
+            serialize_sip_plan(
+                plan,
+                product_name=products.get(plan.product_id),
+                mandate=mandate,
+                amc_name=sip_amc_names.get(plan.fund_id),
+                amc_logo_url=sip_amc_logos.get(plan.fund_id),
+            )
         )
 
     succeeded_orders_raw = await list_user_orders(db, user_id=user_id, limit=100)
+    purchase_amc_names, purchase_amc_logos = await load_order_fund_metadata(db, succeeded_orders_raw)
     succeeded_product_ids = {order.product_id for order in succeeded_orders_raw if order.status.value == "SUCCEEDED"}
     succeeded_products = {
         row.id: row.name
@@ -323,7 +392,12 @@ async def _build_investments_detail(db: AsyncSession, user_id: UUID) -> dict[str
         ).scalars()
     } if succeeded_product_ids else {}
     succeeded_orders = [
-        serialize_order(order, product_name=succeeded_products.get(order.product_id))
+        serialize_order(
+            order,
+            product_name=succeeded_products.get(order.product_id),
+            amc_name=purchase_amc_names.get(order.fund_id),
+            amc_logo_url=purchase_amc_logos.get(order.fund_id),
+        )
         for order in succeeded_orders_raw
         if order.status.value == "SUCCEEDED"
     ]

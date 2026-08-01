@@ -1,4 +1,7 @@
 import { DUMMY_BRANCH_DISTRIBUTORS } from "@/lib/dummy/branch-distributors";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
+
+export type BranchReportRollupPeriod = "mtd" | "last-month";
 
 export type BranchAumSalesRollup = {
   distributorId: string;
@@ -9,6 +12,14 @@ export type BranchAumSalesRollup = {
   sipInflowMtd: number;
   redemptionsMtd: number;
 };
+
+export const BRANCH_REPORT_ROLLUP_PERIOD_OPTIONS: Array<{
+  value: BranchReportRollupPeriod;
+  label: string;
+}> = [
+  { value: "mtd", label: "Month to date" },
+  { value: "last-month", label: "Last month" },
+];
 
 export type BranchReportTrendPoint = {
   month: string;
@@ -48,7 +59,7 @@ export type BranchScheduledReport = {
   enabled: boolean;
 };
 
-export const DUMMY_BRANCH_AUM_SALES_ROLLUP: BranchAumSalesRollup[] = [
+const MTD_BRANCH_AUM_SALES_ROLLUP: BranchAumSalesRollup[] = [
   {
     distributorId: "bd-1",
     name: "Riya Mehta",
@@ -76,6 +87,50 @@ export const DUMMY_BRANCH_AUM_SALES_ROLLUP: BranchAumSalesRollup[] = [
     sipInflowMtd: 4_20_000,
     redemptionsMtd: 1_10_000,
   },
+];
+
+const LAST_MONTH_BRANCH_AUM_SALES_ROLLUP: BranchAumSalesRollup[] = [
+  {
+    distributorId: "bd-1",
+    name: "Riya Mehta",
+    aum: 4_71_00_000,
+    aumChangeMtdPct: 1.9,
+    netSalesMtd: 54_20_000,
+    sipInflowMtd: 39_50_000,
+    redemptionsMtd: 7_60_000,
+  },
+  {
+    distributorId: "bd-2",
+    name: "Neha Desai",
+    aum: 2_11_00_000,
+    aumChangeMtdPct: 1.2,
+    netSalesMtd: 46_80_000,
+    sipInflowMtd: 26_40_000,
+    redemptionsMtd: 4_90_000,
+  },
+  {
+    distributorId: "bd-3",
+    name: "Vikram Singh",
+    aum: 36_20_000,
+    aumChangeMtdPct: 4.8,
+    netSalesMtd: 9_40_000,
+    sipInflowMtd: 3_85_000,
+    redemptionsMtd: 95_000,
+  },
+];
+
+export const DUMMY_BRANCH_AUM_SALES_ROLLUP = MTD_BRANCH_AUM_SALES_ROLLUP;
+
+export function getBranchAumSalesRollup(period: BranchReportRollupPeriod): BranchAumSalesRollup[] {
+  return period === "mtd" ? MTD_BRANCH_AUM_SALES_ROLLUP : LAST_MONTH_BRANCH_AUM_SALES_ROLLUP;
+}
+
+export const BRANCH_KYC_STAGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "Address verification", label: "Address verification" },
+  { value: "Mobile OTP pending", label: "Mobile OTP pending" },
+  { value: "PAN + DigiLocker", label: "PAN + DigiLocker" },
+  { value: "Risk profile incomplete", label: "Risk profile incomplete" },
+  { value: "NRI documentation", label: "NRI documentation" },
 ];
 
 export const DUMMY_BRANCH_REPORT_TREND: BranchReportTrendPoint[] = [
@@ -192,7 +247,7 @@ export const DUMMY_BRANCH_SCHEDULED_REPORTS: BranchScheduledReport[] = [
   {
     id: "sr-1",
     name: "Daily branch AUM snapshot",
-    description: "Closing AUM by distributor and product category for HO finance.",
+    description: ZYND_MITRA_COPY.reportClosingAumDesc,
     frequency: "Every business day · 7:00 AM IST",
     recipients: ["ho-finance@zynd.in", "branch-ops-west@zynd.in"],
     lastSentAt: "2026-07-27T01:30:00.000Z",
@@ -202,7 +257,7 @@ export const DUMMY_BRANCH_SCHEDULED_REPORTS: BranchScheduledReport[] = [
   {
     id: "sr-2",
     name: "Weekly net sales roll-up",
-    description: "Gross inflow, redemptions, and net sales by distributor.",
+    description: ZYND_MITRA_COPY.reportNetSalesDesc,
     frequency: "Mondays · 8:30 AM IST",
     recipients: ["ho-sales@zynd.in", "arjun@zynd.distributor"],
     lastSentAt: "2026-07-21T03:00:00.000Z",

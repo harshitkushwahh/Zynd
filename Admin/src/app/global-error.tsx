@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import Image from "next/image";
+
+import "./globals.css";
 
 export default function GlobalError({
   error,
@@ -15,24 +18,31 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body className="min-h-full bg-muted text-foreground antialiased">
-        <div className="flex min-h-full items-center justify-center px-4 py-empty-state-sm">
-          <div className="w-full max-w-lg space-y-4 rounded-card border border-destructive/20 bg-card p-6 shadow-zynd-low">
-            <h1 className="text-xl font-semibold">ZYND Admin failed to load</h1>
-            <p className="text-compact text-muted-foreground">
+      <body className="admin-error-shell min-h-full antialiased">
+        <div className="admin-error-card">
+          <Image
+            src="/zynda-h.png"
+            alt="ZYND"
+            width={160}
+            height={44}
+            className="admin-error-card__logo"
+            priority
+          />
+
+          <h1 className="admin-error-card__title">Something went wrong</h1>
+
+          <div className="admin-error-card__detail">
+            <p className="admin-error-card__message">
               {error.message || "An unexpected error occurred."}
             </p>
             {error.digest ? (
-              <p className="font-mono text-caption text-muted-foreground">Error ID: {error.digest}</p>
+              <p className="admin-error-card__digest">Error ID: {error.digest}</p>
             ) : null}
-            <button
-              type="button"
-              className="rounded-control bg-primary px-4 py-2 text-compact font-medium text-primary-foreground"
-              onClick={() => reset()}
-            >
-              Try again
-            </button>
           </div>
+
+          <button type="button" className="admin-error-card__action admin-auth-button admin-auth-button--primary" onClick={() => reset()}>
+            Try again
+          </button>
         </div>
       </body>
     </html>

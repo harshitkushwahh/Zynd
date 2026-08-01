@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import {
   RiskQuestionDetailView,
   RISK_QUESTION_DETAIL_ICON,
@@ -20,6 +19,9 @@ import {
   AdminFormDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -29,7 +31,7 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
@@ -64,6 +66,7 @@ import {
 type OptionDraft = { label: string; score_value: string };
 type DialogMode = "create" | "edit";
 
+const ALL = "all";
 const EMPTY_OPTION = (): OptionDraft => ({ label: "", score_value: "0" });
 const TABLE_COLUMN_COUNT = 4;
 
@@ -126,17 +129,50 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
   const [options, setOptions] = useState<OptionDraft[]>([EMPTY_OPTION(), EMPTY_OPTION()]);
   const [saving, setSaving] = useState(false);
   const [togglingQuestionId, setTogglingQuestionId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState(ALL);
   const [page, setPage] = useState(0);
-
-  const pagination = useMemo(
-    () => paginateItems(questions, page, ADMIN_TABLE_PAGE_SIZE),
-    [questions, page],
-  );
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const activeCategories = useMemo(
     () => categories.filter((category) => category.is_active),
     [categories],
   );
+
+  const categoryFilterOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: ALL, label: "All categories" },
+      ...categories.map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+    ],
+    [categories],
+  );
+
+  const filteredQuestions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return questions.filter((question) => {
+      if (categoryFilter !== ALL && question.category_id !== categoryFilter) return false;
+      if (!query) return true;
+      return [
+        question.prompt,
+        question.help_text ?? "",
+        question.category_name ?? "",
+        question.category_slug ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [categoryFilter, questions, search]);
+
+  const pagination = useMemo(
+    () => paginateItems(filteredQuestions, page, pageSize),
+    [filteredQuestions, page, pageSize],
+  );
+
+  const showSkeleton = loading && questions.length === 0;
 
   const formCategories = useMemo(
     () => resolveFormCategories(activeCategories, categories, categoryId, editingQuestion),
@@ -288,63 +324,83 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
   return (
     <RiskProfileBulkImportRoot canManage={canManage} onImportComplete={loadData}>
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <AdminSectionTitle>Question bank</AdminSectionTitle>
-          {canManage ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <RiskProfileBulkImportActions />
-              <Button size="sm" onClick={openCreateDialog} disabled={!activeCategories.length}>
-                <Plus className="size-3.5" />
-                Add question
-              </Button>
-            </div>
-          ) : null}
-        </div>
-
         <RiskProfileBulkImportFeedback />
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <AdminSearchInput
+            containerClassName="max-w-sm"
+            placeholder="Search questions"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(0);
+            }}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminSelect
+              value={categoryFilter}
+              onValueChange={(value) => {
+                setCategoryFilter(value);
+                setPage(0);
+              }}
+              options={categoryFilterOptions}
+              placeholder="Category"
+              className="min-w-select-md"
+            />
+            {canManage ? (
+              <>
+                <RiskProfileBulkImportActions />
+                <Button size="sm" onClick={openCreateDialog} disabled={!activeCategories.length}>
+                  <Plus className="size-3.5" />
+                  Add question
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
 
         {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
         {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-        <AdminDataTable minWidth="lg">
+        <AdminDataTable
+          minWidth="lg"
+          footer={
+            <AdminTablePagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              hasPrevious={pagination.hasPrevious}
+              hasNext={pagination.hasNext}
+              disabled={loading}
+              totalCount={filteredQuestions.length}
+              currentPageCount={pagination.items.length}
+              pageSize={pageSize}
+              onPageSizeChange={(next) => {
+                setPageSize(next);
+                setPage(0);
+              }}
+              onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+              onNext={() => setPage((value) => value + 1)}
+            />
+          }
+        >
           <AdminTableHeader>
             <tr>
+              <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
               <AdminTableHeadCell>Question</AdminTableHeadCell>
               <AdminTableHeadCell>Category</AdminTableHeadCell>
               <AdminTableHeadCell>Active</AdminTableHeadCell>
-              <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             </tr>
           </AdminTableHeader>
           <AdminTableBody>
-            <AdminTableRows
-              colSpan={TABLE_COLUMN_COUNT}
-              loading={loading}
-              isEmpty={questions.length === 0}
-              emptyMessage="No questions yet."
-            >
-              {pagination.items.map((question) => (
+            {showSkeleton ? (
+              <AdminTableSkeletonRows columns={TABLE_COLUMN_COUNT} />
+            ) : filteredQuestions.length === 0 ? (
+              <AdminTableStateRow colSpan={TABLE_COLUMN_COUNT}>
+                {questions.length === 0 ? "No questions yet." : "No questions match your filters."}
+              </AdminTableStateRow>
+            ) : (
+              pagination.items.map((question) => (
                 <AdminTableRow key={question.id}>
-                  <AdminTableCell>
-                    <p className="font-medium text-foreground">{question.prompt}</p>
-                    {question.help_text ? (
-                      <p className="mt-0.5 text-caption text-muted-foreground">{question.help_text}</p>
-                    ) : null}
-                  </AdminTableCell>
-                  <AdminTableCell>{question.category_name ?? question.category_slug}</AdminTableCell>
-                  <AdminTableCell>
-                    {canManage ? (
-                      <Switch
-                        checked={question.is_active}
-                        disabled={togglingQuestionId === question.id}
-                        onCheckedChange={(checked) => void handleToggleActive(question, checked)}
-                        aria-label={question.is_active ? "Deactivate question" : "Activate question"}
-                      />
-                    ) : (
-                      <StatusBadge variant={question.is_active ? "success" : "neutral"} showIcon={false}>
-                        {question.is_active ? "Active" : "Inactive"}
-                      </StatusBadge>
-                    )}
-                  </AdminTableCell>
                   <AdminTableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -380,21 +436,32 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </AdminTableCell>
+                  <AdminTableCell>
+                    <p className="font-medium text-foreground">{question.prompt}</p>
+                    {question.help_text ? (
+                      <p className="mt-0.5 text-caption text-muted-foreground">{question.help_text}</p>
+                    ) : null}
+                  </AdminTableCell>
+                  <AdminTableCell>{question.category_name ?? question.category_slug}</AdminTableCell>
+                  <AdminTableCell>
+                    {canManage ? (
+                      <Switch
+                        checked={question.is_active}
+                        disabled={togglingQuestionId === question.id}
+                        onCheckedChange={(checked) => void handleToggleActive(question, checked)}
+                        aria-label={question.is_active ? "Deactivate question" : "Activate question"}
+                      />
+                    ) : (
+                      <StatusBadge variant={question.is_active ? "success" : "neutral"} showIcon={false}>
+                        {question.is_active ? "Active" : "Inactive"}
+                      </StatusBadge>
+                    )}
+                  </AdminTableCell>
                 </AdminTableRow>
-              ))}
-            </AdminTableRows>
+              ))
+            )}
           </AdminTableBody>
         </AdminDataTable>
-
-        <AdminTablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          hasPrevious={pagination.hasPrevious}
-          hasNext={pagination.hasNext}
-          disabled={loading}
-          onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-          onNext={() => setPage((value) => value + 1)}
-        />
 
         <AdminDetailDialog
           open={Boolean(viewQuestion)}

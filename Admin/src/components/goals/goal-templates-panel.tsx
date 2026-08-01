@@ -113,12 +113,12 @@ export function GoalTemplatesPanel() {
       <AdminDataTable>
         <AdminTableHeader>
           <AdminTableRow>
+            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             <AdminTableHeadCell>Name</AdminTableHeadCell>
             <AdminTableHeadCell>Slug</AdminTableHeadCell>
             <AdminTableHeadCell>Tenure</AdminTableHeadCell>
             <AdminTableHeadCell>Return</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
-            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
           </AdminTableRow>
         </AdminTableHeader>
         <AdminTableBody>
@@ -132,6 +132,15 @@ export function GoalTemplatesPanel() {
               const draft = draftFor(template);
               return (
                 <AdminTableRow key={template.id}>
+                  <AdminTableCell className="text-right">
+                    <Button
+                      size="sm"
+                      disabled={savingId === template.id}
+                      onClick={() => void handleSave(template)}
+                    >
+                      {savingId === template.id ? "Saving…" : "Save"}
+                    </Button>
+                  </AdminTableCell>
                   <AdminTableCell>
                     <div className="space-y-2">
                       <Input
@@ -181,15 +190,6 @@ export function GoalTemplatesPanel() {
                         {(draft.is_active ?? template.is_active) ? "Active" : "Inactive"}
                       </StatusBadge>
                     </div>
-                  </AdminTableCell>
-                  <AdminTableCell className="text-right">
-                    <Button
-                      size="sm"
-                      disabled={savingId === template.id}
-                      onClick={() => void handleSave(template)}
-                    >
-                      {savingId === template.id ? "Saving…" : "Save"}
-                    </Button>
                   </AdminTableCell>
                 </AdminTableRow>
               );

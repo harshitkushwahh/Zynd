@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DistributorOptionBox,
+  DistributorOptionBoxContent,
+  DistributorOptionBoxItem,
+  DistributorOptionBoxTrigger,
+  DistributorOptionBoxValue,
+} from "@/components/ui/distributor-option-box";
 
 const ALL_OPTION_VALUE = "__all__";
 
@@ -26,27 +26,27 @@ export function StatusFilterSelect<T extends string>({
   const selectValue = value === "all" ? ALL_OPTION_VALUE : value;
 
   return (
-    <Select
+    <DistributorOptionBox
       value={selectValue}
       onValueChange={(next) =>
         onValueChange((next === ALL_OPTION_VALUE ? "all" : next) as T | "all")
       }
     >
-      <SelectTrigger size="sm" className="min-w-[9rem] bg-background">
-        <SelectValue placeholder={label}>
+      <DistributorOptionBoxTrigger>
+        <DistributorOptionBoxValue placeholder={label}>
           {value === "all"
             ? label
             : options.find((option) => option.value === value)?.label}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL_OPTION_VALUE}>All</SelectItem>
+        </DistributorOptionBoxValue>
+      </DistributorOptionBoxTrigger>
+      <DistributorOptionBoxContent>
+        <DistributorOptionBoxItem value={ALL_OPTION_VALUE}>All</DistributorOptionBoxItem>
         {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
+          <DistributorOptionBoxItem key={option.value} value={option.value}>
             {option.label}
-          </SelectItem>
+          </DistributorOptionBoxItem>
         ))}
-      </SelectContent>
-    </Select>
+      </DistributorOptionBoxContent>
+    </DistributorOptionBox>
   );
 }

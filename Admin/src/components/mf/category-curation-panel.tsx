@@ -1,13 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ListFilter, Star, Trash2 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 
 import { AdminConfirmDialog, AdminFormDialog } from "@/components/ui/admin-dialog-presets";
 import { Button } from "@/components/ui/button";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
+import {
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTableRow,
+  AdminTableStateRow,
+} from "@/components/ui/admin-table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
@@ -24,6 +34,8 @@ import {
 } from "@/lib/mf-admin-api";
 import { cn } from "@/lib/utils";
 
+
+const NO_AMC = "__none__";
 
 type ConfirmState =
   | { kind: "remove-fund"; productId: string; schemeName: string }
@@ -86,8 +98,19 @@ export function CategoryCurationPanel({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [addProductId, setAddProductId] = useState("");
-  const [bulkAmcId, setBulkAmcId] = useState("");
+  const [bulkAmcId, setBulkAmcId] = useState(NO_AMC);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+
+  const amcOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: NO_AMC, label: "Bulk add from AMC..." },
+      ...amcs.map((amc) => ({
+        value: String(amc.id),
+        label: amc.name,
+      })),
+    ],
+    [amcs],
+  );
 
   const loadFunds = useCallback(async () => {
     setLoading(true);
@@ -308,21 +331,16 @@ export function CategoryCurationPanel({
               </Button>
             </div>
             <div className="flex gap-2">
-              <select
-                className="h-8 flex-1 rounded-[var(--radius-control)] border border-input bg-transparent px-2.5 text-compact"
+              <AdminSelect
                 value={bulkAmcId}
-                onChange={(event) => setBulkAmcId(event.target.value)}
-              >
-                <option value="">Bulk add from AMC...</option>
-                {amcs.map((amc) => (
-                  <option key={amc.id} value={amc.id}>
-                    {amc.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setBulkAmcId}
+                options={amcOptions}
+                placeholder="Bulk add from AMC..."
+                className="min-w-0 flex-1"
+              />
               <Button
                 variant="outline"
-                disabled={saving || !bulkAmcId}
+                disabled={saving || bulkAmcId === NO_AMC}
                 onClick={() => {
                   const amc = amcs.find((item) => String(item.id) === bulkAmcId);
                   if (!amc) return;
@@ -335,93 +353,98 @@ export function CategoryCurationPanel({
           </div>
         ) : null}
 
-        <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border">
-          <table className="w-full text-compact">
-            <thead className="bg-muted">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">#</th>
-                <th className="px-4 py-3 text-left font-medium">Scheme</th>
-                <th className="px-4 py-3 text-left font-medium">Featured</th>
-                <th className="px-4 py-3 text-right font-medium">3Y</th>
-                {canManage ? <th className="px-4 py-3 text-right font-medium">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <AdminTableSkeletonRows columns={canManage ? 5 : 4} rows={5} dense />
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={canManage ? 5 : 4} className="px-4 py-6 text-muted-foreground">
-                    No funds in this category yet.
-                  </td>
-                </tr>
-              ) : (
-                items.map((item, index) => (
-                  <tr key={item.product_id} className="border-t border-border">
-                    <td className="px-4 py-3">{index + 1}</td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{item.scheme_name}</p>
-                      <p className="text-caption text-muted-foreground">{item.isin ?? item.product_id}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+        <AdminDataTable minWidth="lg">
+          <AdminTableHeader>
+            <tr>
+              {canManage ? (
+                <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+              ) : null}
+              <AdminTableHeadCell>#</AdminTableHeadCell>
+              <AdminTableHeadCell>Scheme</AdminTableHeadCell>
+              <AdminTableHeadCell>Featured</AdminTableHeadCell>
+              <AdminTableHeadCell className="text-right">3Y</AdminTableHeadCell>
+            </tr>
+          </AdminTableHeader>
+          <AdminTableBody>
+            {loading ? (
+              <AdminTableSkeletonRows columns={canManage ? 5 : 4} rows={5} dense />
+            ) : items.length === 0 ? (
+              <AdminTableStateRow colSpan={canManage ? 5 : 4}>
+                No funds in this category yet.
+              </AdminTableStateRow>
+            ) : (
+              items.map((item, index) => (
+                <AdminTableRow key={item.product_id}>
+                  {canManage ? (
+                    <AdminTableCell>
+                      <div className="flex justify-end gap-1">
                         <Button
                           size="sm"
-                          variant={item.is_featured ? "default" : "outline"}
-                          disabled={!canManage || saving}
-                          onClick={() => toggleFeatured(index)}
+                          variant="outline"
+                          disabled={saving || index === 0}
+                          onClick={() => moveItem(index, -1)}
                         >
-                          <Star className="size-3.5" />
+                          <ArrowUp className="size-3.5" />
                         </Button>
-                        <Input
-                          className="h-8 w-16"
-                          placeholder="Rank"
-                          defaultValue={item.featured_rank ?? ""}
-                          disabled={!canManage}
-                          onBlur={(event) => updateFeaturedRank(index, event.target.value)}
-                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={saving || index === items.length - 1}
+                          onClick={() => moveItem(index, 1)}
+                        >
+                          <ArrowDown className="size-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={saving}
+                          onClick={() =>
+                            setConfirmState({
+                              kind: "remove-fund",
+                              productId: item.product_id,
+                              schemeName: item.scheme_name ?? item.product_id,
+                            })
+                          }
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {item.return_3y != null ? `${item.return_3y.toFixed(2)}%` : "—"}
-                    </td>
-                    {canManage ? (
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="outline" disabled={saving || index === 0} onClick={() => moveItem(index, -1)}>
-                            <ArrowUp className="size-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={saving || index === items.length - 1}
-                            onClick={() => moveItem(index, 1)}
-                          >
-                            <ArrowDown className="size-3.5" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={saving}
-                            onClick={() =>
-                              setConfirmState({
-                                kind: "remove-fund",
-                                productId: item.product_id,
-                                schemeName: item.scheme_name ?? item.product_id,
-                              })
-                            }
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </AdminTableCell>
+                  ) : null}
+                  <AdminTableCell>{index + 1}</AdminTableCell>
+                  <AdminTableCell>
+                    <p className="font-medium">{item.scheme_name}</p>
+                    <p className="text-caption text-muted-foreground">
+                      {item.isin ?? item.product_id}
+                    </p>
+                  </AdminTableCell>
+                  <AdminTableCell>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={item.is_featured ? "default" : "outline"}
+                        disabled={!canManage || saving}
+                        onClick={() => toggleFeatured(index)}
+                      >
+                        <Star className="size-3.5" />
+                      </Button>
+                      <Input
+                        className="h-8 w-16"
+                        placeholder="Rank"
+                        defaultValue={item.featured_rank ?? ""}
+                        disabled={!canManage}
+                        onBlur={(event) => updateFeaturedRank(index, event.target.value)}
+                      />
+                    </div>
+                  </AdminTableCell>
+                  <AdminTableCell className="text-right tabular-nums">
+                    {item.return_3y != null ? `${item.return_3y.toFixed(2)}%` : "—"}
+                  </AdminTableCell>
+                </AdminTableRow>
+              ))
+            )}
+          </AdminTableBody>
+        </AdminDataTable>
 
         {canManage ? (
           <Button variant="outline" disabled={saving || loading} onClick={() => void handleSaveFeaturedRanks()}>

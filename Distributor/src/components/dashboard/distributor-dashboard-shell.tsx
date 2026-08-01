@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { Suspense } from "react";
 
 import {
   DistributorDashboardMobileNav,
@@ -8,6 +9,7 @@ import {
 } from "@/components/dashboard/distributor-dashboard-sidebar";
 import { DistributorDashboardNavbar } from "@/components/dashboard/distributor-dashboard-navbar";
 import { DistributorDashboardBreadcrumb } from "@/components/dashboard/distributor-dashboard-breadcrumb";
+import { DistributorDocumentTitleSync } from "@/components/dashboard/distributor-document-title-sync";
 import { QuickTransactionSuccessDialogHost } from "@/components/quick-transaction/quick-transaction-success-dialog";
 import {
   DISTRIBUTOR_MAIN_CONTENT_CLASS,
@@ -22,14 +24,9 @@ import { SidebarInset, SidebarProvider, useSidebar } from "@/components/ui/sideb
 import { cn } from "@/lib/utils";
 
 function DistributorDashboardMainColumn({ children }: { children: React.ReactNode }) {
-  const { state, isMobile } = useSidebar();
-  const collapsed = state === "collapsed";
+  const { isMobile } = useSidebar();
 
-  const navbarOffsetClass = isMobile
-    ? "left-0"
-    : collapsed
-      ? "left-(--sidebar-width-icon)"
-      : "left-(--sidebar-width)";
+  const navbarOffsetClass = isMobile ? "left-0" : "left-(--sidebar-width-icon)";
 
   return (
     <div className={DISTRIBUTOR_MAIN_COLUMN_CLASS}>
@@ -37,8 +34,11 @@ function DistributorDashboardMainColumn({ children }: { children: React.ReactNod
       <div className={cn(DISTRIBUTOR_NAVBAR_HEIGHT, "shrink-0")} aria-hidden />
 
       <SidebarInset className={DISTRIBUTOR_MAIN_SCROLL_CLASS}>
+        <DistributorDocumentTitleSync />
         <div className={DISTRIBUTOR_MAIN_CONTENT_CLASS}>
-          <DistributorDashboardBreadcrumb />
+          <Suspense fallback={<div className="distributor-breadcrumb-row" aria-hidden />}>
+            <DistributorDashboardBreadcrumb />
+          </Suspense>
           {children}
         </div>
       </SidebarInset>
@@ -53,6 +53,9 @@ export function DistributorDashboardShell({ children }: { children: React.ReactN
     <SidebarProvider
       data-slot="distributor-dashboard-shell"
       className={DISTRIBUTOR_SHELL_CLASS}
+      open={false}
+      onOpenChange={() => {}}
+      defaultOpen={false}
       style={
         {
           "--sidebar-width": DISTRIBUTOR_SIDEBAR_EXPANDED_WIDTH,

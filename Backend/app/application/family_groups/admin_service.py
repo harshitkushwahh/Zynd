@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.application.auth.audit_service import write_audit
 from app.application.family_groups.activity_service import record_family_group_activity
@@ -13,6 +15,22 @@ from app.application.family_groups.display import (
     now_utc,
     resolve_member_display_name,
     resolve_family_group_avatar_url,
+)
+from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
+from app.application.family_groups.family_group_portfolio_service import (
+    get_family_group_portfolio_for_admin,
+    load_family_group_mf_holdings,
+    load_family_group_one_time_payments,
+    load_family_group_progress_chart,
+    load_family_group_sip_addons,
+    load_member_goal_contribution_totals,
+    load_member_invested_totals,
+    load_member_linked_sip_counts,
+)
+from app.application.goals.family_goal_service import (
+    _contribution_total,
+    _serialize_family_goal_enriched,
+    count_active_family_goals,
 )
 from app.application.family_groups.errors import FamilyGroupError
 from app.application.family_groups.family_notification_service import notify_family_member_removed
@@ -30,6 +48,7 @@ from app.infrastructure.persistence.family_group_models import (
     FamilyGroupStatus,
 )
 from app.infrastructure.persistence.models import AuditEventType, User
+from app.infrastructure.persistence.goal_models import Goal, GoalStatus
 
 
 def _user_display_name(user: User | None) -> str | None:
@@ -77,6 +96,89 @@ async def _serialize_admin_group_summary(db: AsyncSession, group: FamilyGroup) -
         "updated_at": group.updated_at,
         "archived_at": group.archived_at,
     }
+
+
+async def _family_group_aggregate_progress_pct(db: AsyncSession, group_id: UUID) -> int:
+    rows = await db.execute(
+        select(Goal.current_amount_inr, Goal.target_amount_inr).where(
+            Goal.family_group_id == group_id,
+            Goal.status.in_(
+                [GoalStatus.draft, GoalStatus.active, GoalStatus.paused, GoalStatus.achieved]
+            ),
+        )
+    )
+    progress_values: list[float] = []
+    for current, target in rows.all():
+        target_amount = Decimal(str(target or 0))
+        if target_amount <= 0:
+            continue
+        current_amount = Decimal(str(current or 0))
+        pct = float((current_amount / target_amount * Decimal("100")).quantize(Decimal("0.1")))
+        progress_values.append(min(100.0, pct))
+    if not progress_values:
+        return 0
+    return int(round(sum(progress_values) / len(progress_values)))
+
+
+async def _load_family_group_members_preview(
+    db: AsyncSession,
+    group_id: UUID,
+    *,
+    limit: int = 4,
+) -> list[dict[str, Any]]:
+    result = await db.execute(
+        select(FamilyGroupMember, User)
+        .join(User, User.id == FamilyGroupMember.user_id)
+        .where(
+            FamilyGroupMember.group_id == group_id,
+            FamilyGroupMember.status == FamilyGroupMemberStatus.active,
+        )
+        .order_by(
+            case((FamilyGroupMember.role == FamilyGroupMemberRole.head, 0), else_=1),
+            FamilyGroupMember.joined_at.asc(),
+        )
+        .limit(limit)
+    )
+    rows = list(result.all())
+    user_ids = [user.id for _member, user in rows]
+    profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=user_ids)
+    preview: list[dict[str, Any]] = []
+    for member, user in rows:
+        preview.append(
+            {
+                "user_id": user.id,
+                "display_name": resolve_member_display_name(member, user),
+                "role": member.role.value,
+                "profile_image_url": profile_images.get(user.id),
+            }
+        )
+    return preview
+
+
+async def _serialize_admin_user_family_group_card(
+    db: AsyncSession,
+    group: FamilyGroup,
+    *,
+    role: str | None = None,
+    badge_label: str | None = None,
+    joined_at: Any | None = None,
+) -> dict[str, Any]:
+    summary = await _serialize_admin_group_summary(db, group)
+    avatar_url = await resolve_family_group_avatar_url(db, avatar_document_id=group.avatar_document_id)
+    card: dict[str, Any] = {
+        **summary,
+        "description": group.description,
+        "avatar_url": avatar_url,
+        "members_preview": await _load_family_group_members_preview(db, group.id),
+        "active_goals_count": await count_active_family_goals(db, group_id=group.id),
+        "progress_pct": await _family_group_aggregate_progress_pct(db, group.id),
+    }
+    if role is not None:
+        card["group_id"] = group.id
+        card["role"] = role
+        card["badge_label"] = badge_label
+        card["joined_at"] = joined_at
+    return card
 
 
 async def list_admin_family_groups(
@@ -182,6 +284,176 @@ async def get_admin_family_group_detail(
     }
 
 
+async def get_admin_family_group_analytics(
+    db: AsyncSession,
+    *,
+    group_id: UUID,
+) -> dict[str, Any]:
+    await _mark_expired_invites(db, group_id=group_id)
+    group = await _get_group_or_raise(db, group_id)
+    summary = await _serialize_admin_group_summary(db, group)
+    avatar_url = await resolve_family_group_avatar_url(db, avatar_document_id=group.avatar_document_id)
+    portfolio = await get_family_group_portfolio_for_admin(db, group_id=group_id)
+    progress_pct = await _family_group_aggregate_progress_pct(db, group_id)
+
+    member_rows = await db.execute(
+        select(FamilyGroupMember, User)
+        .join(User, User.id == FamilyGroupMember.user_id)
+        .where(
+            FamilyGroupMember.group_id == group_id,
+            FamilyGroupMember.status == FamilyGroupMemberStatus.active,
+        )
+        .order_by(
+            case((FamilyGroupMember.role == FamilyGroupMemberRole.head, 0), else_=1),
+            FamilyGroupMember.joined_at.asc(),
+        )
+    )
+    rows = list(member_rows.all())
+    user_ids = [user_row.id for _member, user_row in rows]
+    profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=user_ids)
+    contribution_totals = await load_member_goal_contribution_totals(
+        db, group_id=group_id, user_ids=user_ids
+    )
+    invested_totals = await load_member_invested_totals(db, user_ids=user_ids)
+    linked_sip_counts = await load_member_linked_sip_counts(db, group_id=group_id, user_ids=user_ids)
+
+    group_contribution_total = sum(contribution_totals.values(), Decimal("0"))
+    group_invested_total = sum(invested_totals.values(), Decimal("0"))
+    share_base = group_contribution_total if group_contribution_total > 0 else group_invested_total
+
+    members: list[dict[str, Any]] = []
+    contribution_chart: list[dict[str, Any]] = []
+    for member, user_row in rows:
+        contribution_amount = contribution_totals.get(user_row.id, Decimal("0"))
+        invested_amount = invested_totals.get(user_row.id, Decimal("0"))
+        share_source = contribution_amount if group_contribution_total > 0 else invested_amount
+        share_pct = (
+            float((share_source / share_base * Decimal("100")).quantize(Decimal("0.1")))
+            if share_base > 0 and share_source > 0
+            else 0.0
+        )
+        display_name = resolve_member_display_name(member, user_row)
+        member_payload = {
+            "user_id": user_row.id,
+            "display_name": display_name,
+            "display_nickname": member.display_nickname,
+            "email_masked": mask_referee_email(user_row.email),
+            "role": member.role.value,
+            "badge_key": member.badge_key,
+            "badge_label": member.badge_label,
+            "profile_image_url": profile_images.get(user_row.id),
+            "joined_at": member.joined_at,
+            "invested_amount_inr": float(invested_amount) if invested_amount > 0 else None,
+            "goal_contribution_inr": float(contribution_amount) if contribution_amount > 0 else None,
+            "portfolio_share_pct": share_pct,
+            "linked_sip_count": linked_sip_counts.get(user_row.id, 0),
+        }
+        members.append(member_payload)
+        chart_value = float(contribution_amount if contribution_amount > 0 else invested_amount)
+        if chart_value > 0:
+            contribution_chart.append(
+                {
+                    "user_id": user_row.id,
+                    "label": display_name.split(" ")[0] if display_name else "Member",
+                    "full_name": display_name,
+                    "amount_inr": chart_value,
+                }
+            )
+
+    goal_rows = await db.execute(
+        select(Goal)
+        .options(selectinload(Goal.template))
+        .where(
+            Goal.family_group_id == group_id,
+            Goal.status != GoalStatus.archived,
+        )
+        .order_by(Goal.priority.asc(), Goal.target_date.asc(), Goal.created_at.desc())
+    )
+    goals: list[dict[str, Any]] = []
+    for goal in goal_rows.scalars().all():
+        contribution_total = await _contribution_total(db, goal_id=goal.id)
+        goal_payload = await _serialize_family_goal_enriched(
+            db,
+            goal,
+            contribution_total=contribution_total,
+        )
+        target_amount = Decimal(str(goal.target_amount_inr or 0))
+        current_amount = Decimal(str(goal.current_amount_inr or 0))
+        progress = (
+            float(
+                min(
+                    Decimal("100"),
+                    (current_amount / target_amount * Decimal("100")).quantize(Decimal("0.1")),
+                )
+            )
+            if target_amount > 0
+            else 0.0
+        )
+        goal_payload["progress_pct"] = progress
+        goals.append(goal_payload)
+
+    activity_rows = await db.execute(
+        select(FamilyGroupActivity)
+        .where(FamilyGroupActivity.group_id == group_id)
+        .order_by(FamilyGroupActivity.created_at.desc(), FamilyGroupActivity.id.desc())
+        .limit(100)
+    )
+    activity = [
+        {
+            "id": row.id,
+            "event_type": row.event_type.value,
+            "message": row.message,
+            "actor_user_id": row.actor_user_id,
+            "target_user_id": row.target_user_id,
+            "created_at": row.created_at,
+        }
+        for row in activity_rows.scalars().all()
+    ]
+
+    member_labels = {
+        user_row.id: resolve_member_display_name(member, user_row)
+        for member, user_row in rows
+    }
+    progress_chart = await load_family_group_progress_chart(
+        db,
+        group_id=group_id,
+        member_ids=user_ids,
+    )
+    sip_addons = await load_family_group_sip_addons(
+        db,
+        group_id=group_id,
+        member_labels=member_labels,
+    )
+    mf_holdings = await load_family_group_mf_holdings(
+        db,
+        member_labels=member_labels,
+    )
+    one_time_payments = await load_family_group_one_time_payments(
+        db,
+        group_id=group_id,
+        member_labels=member_labels,
+    )
+
+    creator = await db.get(User, group.created_by_user_id)
+    return {
+        **summary,
+        "description": group.description,
+        "avatar_url": avatar_url,
+        "creator_display_name": _user_display_name(creator),
+        "creator_email_masked": mask_referee_email(creator.email) if creator else None,
+        "progress_pct": progress_pct,
+        "portfolio": portfolio,
+        "members": members,
+        "goals": goals,
+        "contribution_chart": contribution_chart,
+        "activity": activity,
+        "progress_chart": progress_chart,
+        "sip_addons": sip_addons,
+        "mf_holdings": mf_holdings,
+        "one_time_payments": one_time_payments,
+    }
+
+
 async def list_admin_family_group_invites(
     db: AsyncSession,
     *,
@@ -246,16 +518,13 @@ async def list_admin_user_family_groups(
     memberships: list[dict[str, Any]] = []
     for group, member in membership_rows.all():
         memberships.append(
-            {
-                "group_id": group.id,
-                "title": group.title,
-                "tag": group.tag,
-                "status": group.status.value,
-                "role": member.role.value,
-                "badge_label": member.badge_label,
-                "member_count": await count_active_members(db, group.id),
-                "joined_at": member.joined_at,
-            }
+            await _serialize_admin_user_family_group_card(
+                db,
+                group,
+                role=member.role.value,
+                badge_label=member.badge_label,
+                joined_at=member.joined_at,
+            )
         )
 
     created_rows = await db.execute(
@@ -265,7 +534,7 @@ async def list_admin_user_family_groups(
     )
     created_groups: list[dict[str, Any]] = []
     for group in created_rows.scalars().all():
-        created_groups.append(await _serialize_admin_group_summary(db, group))
+        created_groups.append(await _serialize_admin_user_family_group_card(db, group))
 
     return {
         "user_id": user_id,

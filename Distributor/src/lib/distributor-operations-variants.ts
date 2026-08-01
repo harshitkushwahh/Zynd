@@ -29,8 +29,7 @@ export const DISTRIBUTOR_OPERATIONS_VARIANTS: Record<
   ],
   "transaction-groups": [
     { id: "one-time", label: "One time" },
-    { id: "group-transaction", label: "Group transaction", dividerBefore: true },
-    { id: "sips", label: "SIPs" },
+    { id: "sip", label: "SIP" },
   ],
 };
 

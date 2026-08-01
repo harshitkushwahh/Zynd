@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.admin.family_groups_schemas import (
     AdminFamilyGroupActionResponse,
+    AdminFamilyGroupAnalyticsResponse,
     AdminFamilyGroupAuditLogItemResponse,
     AdminFamilyGroupAuditLogListResponse,
     AdminFamilyGroupDetailResponse,
@@ -21,6 +22,7 @@ from app.api.v1.auth.deps import get_client_ip, require_permission
 from app.application.family_groups.admin_service import (
     admin_force_archive_family_group,
     admin_force_remove_group_member,
+    get_admin_family_group_analytics,
     get_admin_family_group_detail,
     list_admin_family_group_invites,
     list_admin_family_groups,
@@ -162,6 +164,19 @@ async def get_admin_user_family_groups(
     except FamilyGroupError as exc:
         raise _handle_family_group_error(exc) from exc
     return AdminUserFamilyGroupsResponse(**payload)
+
+
+@router.get("/{group_id}/analytics", response_model=AdminFamilyGroupAnalyticsResponse)
+async def get_admin_family_group_analytics_route(
+    group_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("family_groups.read"))],
+) -> AdminFamilyGroupAnalyticsResponse:
+    try:
+        payload = await get_admin_family_group_analytics(db, group_id=group_id)
+    except FamilyGroupError as exc:
+        raise _handle_family_group_error(exc) from exc
+    return AdminFamilyGroupAnalyticsResponse(**payload)
 
 
 @router.get("/{group_id}", response_model=AdminFamilyGroupDetailResponse)

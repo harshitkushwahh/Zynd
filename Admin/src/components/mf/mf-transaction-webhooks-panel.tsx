@@ -134,11 +134,11 @@ export function MfTransactionWebhooksPanel({
       <AdminDataTable minWidth="xl">
         <AdminTableHeader>
           <tr>
+            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
             <AdminTableHeadCell>Event</AdminTableHeadCell>
             <AdminTableHeadCell>Type</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
             <AdminTableHeadCell>Received</AdminTableHeadCell>
-            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
@@ -149,6 +149,18 @@ export function MfTransactionWebhooksPanel({
           ) : (
             webhookPagination.items.map((event, index) => (
               <AdminTableRow key={event.event_id ?? `webhook-${index}`}>
+                {canManage ? (
+                  <AdminTableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actionLoading === `replay-${event.event_id}`}
+                      onClick={() => void handleReplayWebhook(event.event_id)}
+                    >
+                      Replay
+                    </Button>
+                  </AdminTableCell>
+                ) : null}
                 <AdminTableCell>
                   <p className="font-medium text-foreground">#{event.event_id}</p>
                   <p className="mt-0.5 text-caption text-muted-foreground">
@@ -166,18 +178,6 @@ export function MfTransactionWebhooksPanel({
                 <AdminTableCell className="text-muted-foreground">
                   {event.received_at ? new Date(event.received_at).toLocaleString() : "No data"}
                 </AdminTableCell>
-                {canManage ? (
-                  <AdminTableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading === `replay-${event.event_id}`}
-                      onClick={() => void handleReplayWebhook(event.event_id)}
-                    >
-                      Replay
-                    </Button>
-                  </AdminTableCell>
-                ) : null}
               </AdminTableRow>
             ))
           )}

@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { env } from "@/lib/env";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 export function DistributorChangePasswordSettingsPanel() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -33,7 +34,7 @@ export function DistributorChangePasswordSettingsPanel() {
     window.setTimeout(() => {
       setLoading(false);
       if (env.useBackendClients) {
-        setError("Password change is not wired for the distributor console yet.");
+        setError(ZYND_MITRA_COPY.passwordNotWired);
         return;
       }
       setCurrentPassword("");
@@ -81,9 +82,9 @@ export function DistributorChangePasswordSettingsPanel() {
           required
         />
       </div>
-      <Button type="submit" disabled={loading}>
+      <DistributorActionButton type="submit" variant="primary" disabled={loading}>
         {loading ? "Updating…" : "Update password"}
-      </Button>
+      </DistributorActionButton>
     </form>
   );
 }

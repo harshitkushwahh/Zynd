@@ -3,14 +3,19 @@ import {
   BarChart3,
   Bell,
   CalendarClock,
+  ClipboardCheck,
+  FileSpreadsheet,
   FileText,
   FolderKanban,
+  HandCoins,
   IndianRupee,
   Layers3,
   LayoutDashboard,
   Settings,
+  UserRoundPlus,
   Users,
   Users2,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +32,11 @@ export const DISTRIBUTOR_PAGE_ICON_NAMES = [
   "fileText",
   "indianRupee",
   "barChart3",
+  "wallet",
+  "handCoins",
+  "clipboardCheck",
+  "userRoundPlus",
+  "fileSpreadsheet",
 ] as const;
 
 export type DistributorPageIconName = (typeof DISTRIBUTOR_PAGE_ICON_NAMES)[number];
@@ -44,6 +54,11 @@ export const DISTRIBUTOR_PAGE_ICONS: Record<DistributorPageIconName, LucideIcon>
   fileText: FileText,
   indianRupee: IndianRupee,
   barChart3: BarChart3,
+  wallet: Wallet,
+  handCoins: HandCoins,
+  clipboardCheck: ClipboardCheck,
+  userRoundPlus: UserRoundPlus,
+  fileSpreadsheet: FileSpreadsheet,
 };
 
 export function resolveDistributorPageIcon(name: DistributorPageIconName): LucideIcon {

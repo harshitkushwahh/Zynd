@@ -12,7 +12,10 @@ from app.application.mf.catalog_bulk_service import execute_bulk_catalog_job
 from app.application.mf.catalog_rules_service import apply_catalog_rules
 from app.application.compliance.deletion_executor_service import run_deletion_executor
 from app.application.security.key_rotation_service import rotate_mfa_secrets_to_current_version
-from app.application.security.security_config_service import apply_security_config_update
+from app.application.security.security_config_service import (
+    apply_security_config_update,
+    validate_security_config_update,
+)
 from app.infrastructure.persistence.models import (
     AdminActionRequest,
     AdminActionStatus,
@@ -49,6 +52,21 @@ async def create_admin_action_request(
     reason: str | None = None,
     ip: str | None = None,
 ) -> dict[str, Any]:
+    if action_type == AdminActionType.security_config_update:
+        key = payload.get("key")
+        if not isinstance(key, str) or not key:
+            raise ValueError("Missing security config key.")
+        if "value" not in payload:
+            raise ValueError("Missing security config value.")
+        payload = {
+            **payload,
+            "value": await validate_security_config_update(
+                db,
+                key=key,
+                value=payload.get("value"),
+            ),
+        }
+
     request = AdminActionRequest(
         action_type=action_type,
         status=AdminActionStatus.pending,

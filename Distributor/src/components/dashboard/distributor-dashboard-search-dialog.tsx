@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { fetchDistributorClients } from "@/lib/distributor-clients-api";
+import { distributorOperationsSectionHref } from "@/lib/distributor-operations-sections";
 import {
   getInvestorListHref,
   searchDistributorInvestors,
@@ -27,6 +28,8 @@ import { env } from "@/lib/env";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import type { DistributorInvestor } from "@/lib/dummy/types";
 import { cn } from "@/lib/utils";
+
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 type DistributorDashboardSearchDialogProps = {
   open: boolean;
@@ -138,7 +141,7 @@ export function DistributorDashboardSearchDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogHeader className="sr-only">
-        <DialogTitle>Distributor search</DialogTitle>
+        <DialogTitle>{ZYND_MITRA_COPY.searchTitle}</DialogTitle>
         <DialogDescription>
           Search console pages and demo investor or order records.
         </DialogDescription>
@@ -215,7 +218,7 @@ export function DistributorDashboardSearchDialog({
                   title={order.orderRef}
                   subtitle={order.schemeName}
                   meta={order.clientCode}
-                  onClick={() => navigate("/dashboard/orders")}
+                  onClick={() => navigate(distributorOperationsSectionHref("orders"))}
                 />
               ))}
             </SearchGroup>
@@ -229,7 +232,7 @@ export function DistributorDashboardSearchDialog({
                   title={plan.planRef}
                   subtitle={plan.schemeName}
                   meta={plan.planType}
-                  onClick={() => navigate("/dashboard/systematic-plans")}
+                  onClick={() => navigate(distributorOperationsSectionHref("systematic-plans"))}
                 />
               ))}
             </SearchGroup>
@@ -243,7 +246,7 @@ export function DistributorDashboardSearchDialog({
                   title={request.requestRef}
                   subtitle={request.requestType}
                   meta={request.clientCode}
-                  onClick={() => navigate("/dashboard/txn-requests")}
+                  onClick={() => navigate(distributorOperationsSectionHref("txn-requests"))}
                 />
               ))}
             </SearchGroup>
@@ -257,7 +260,7 @@ export function DistributorDashboardSearchDialog({
                   title={group.groupRef}
                   subtitle={group.label}
                   meta={group.status}
-                  onClick={() => navigate("/dashboard/transaction-groups")}
+                  onClick={() => navigate(distributorOperationsSectionHref("transaction-groups"))}
                 />
               ))}
             </SearchGroup>

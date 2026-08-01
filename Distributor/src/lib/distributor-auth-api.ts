@@ -1,4 +1,5 @@
 import { apiRequest, refreshSession, setAccessToken } from "@/lib/api-client";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 export type DistributorBackendUser = {
   id: string;
@@ -51,7 +52,7 @@ export async function loginDistributor(email: string, password: string) {
 
   if (result.user.role !== "admin") {
     setAccessToken(null);
-    throw new Error("This account does not have distributor console access.");
+    throw new Error(ZYND_MITRA_COPY.noConsoleAccess);
   }
 
   setAccessToken(result.access_token);

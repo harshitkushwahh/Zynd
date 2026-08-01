@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Home } from "lucide-react";
 
 import {
@@ -24,7 +24,8 @@ export function DistributorDashboardBreadcrumb({
   className,
 }: DistributorDashboardBreadcrumbProps) {
   const pathname = usePathname();
-  const segments = getDistributorBreadcrumbSegments(pathname);
+  const searchParams = useSearchParams();
+  const segments = getDistributorBreadcrumbSegments(pathname, searchParams);
 
   return (
     <Breadcrumb className={cn(distributorBreadcrumbOffsetClass(), className)}>

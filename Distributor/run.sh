@@ -15,4 +15,10 @@ if [ -f .env ]; then
   done < .env
 fi
 
+# Turbopack caches compiled CSS under .next; a bad distributor.css parse can stick until this is removed.
+# ZYND_DISTRIBUTOR_CLEAN=0 skips the wipe (faster restarts once CSS is stable).
+if [ "${ZYND_DISTRIBUTOR_CLEAN:-1}" != "0" ]; then
+  rm -rf .next
+fi
+
 exec npm run dev -- --port "${PORT}"

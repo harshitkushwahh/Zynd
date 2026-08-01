@@ -6,13 +6,17 @@ import {
   Landmark,
   Mail,
   Phone,
+  ScanFace,
   UserRound,
 } from "lucide-react";
 
+import type { AddInvestorWizardProgressStep } from "@/components/add-investor/add-investor-wizard-progress";
+
 export type AddDistributorStepId =
   | "email"
-  | "name"
   | "mobile"
+  | "pan"
+  | "name"
   | "bank"
   | "address"
   | "documents"
@@ -28,25 +32,31 @@ export type AddDistributorJourneyStep = {
 export const ADD_DISTRIBUTOR_JOURNEY_STEPS: AddDistributorJourneyStep[] = [
   {
     id: "email",
-    label: "Email verification",
+    label: "Email",
     description: "Work email & OTP",
     icon: Mail,
   },
   {
-    id: "name",
-    label: "Distributor name",
-    description: "First, middle, last",
-    icon: UserRound,
-  },
-  {
     id: "mobile",
-    label: "Mobile verification",
+    label: "Mobile",
     description: "Number & SMS OTP",
     icon: Phone,
   },
   {
+    id: "pan",
+    label: "PAN",
+    description: "Income tax ID",
+    icon: ScanFace,
+  },
+  {
+    id: "name",
+    label: "Details",
+    description: "Legal name",
+    icon: UserRound,
+  },
+  {
     id: "bank",
-    label: "Bank account",
+    label: "Bank",
     description: "Payout settlement",
     icon: Landmark,
   },
@@ -58,8 +68,8 @@ export const ADD_DISTRIBUTOR_JOURNEY_STEPS: AddDistributorJourneyStep[] = [
   },
   {
     id: "documents",
-    label: "KYC documents",
-    description: "PAN & Aadhaar upload",
+    label: "Documents",
+    description: "PAN & Aadhaar",
     icon: FileUp,
   },
   {
@@ -74,6 +84,14 @@ export function addDistributorStepIndex(stepId: AddDistributorStepId): number {
   return ADD_DISTRIBUTOR_JOURNEY_STEPS.findIndex((item) => item.id === stepId);
 }
 
+export function addDistributorWizardProgressSteps(): AddInvestorWizardProgressStep[] {
+  return ADD_DISTRIBUTOR_JOURNEY_STEPS.map(({ id, label, icon }) => ({
+    id,
+    label,
+    icon,
+  }));
+}
+
 export type AddDistributorNameDraft = {
   firstName: string;
   middleName: string;
@@ -86,6 +104,7 @@ export type AddDistributorBankDraft = {
   confirmAccountNumber: string;
   ifsc: string;
   bankName: string;
+  branchName: string;
 };
 
 export type AddDistributorAddressDraft = {
@@ -113,6 +132,7 @@ export function emptyBankDraft(): AddDistributorBankDraft {
     confirmAccountNumber: "",
     ifsc: "",
     bankName: "",
+    branchName: "",
   };
 }
 

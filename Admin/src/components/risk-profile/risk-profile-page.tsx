@@ -12,7 +12,8 @@ import { RiskProfileTemplatesPanel } from "@/components/risk-profile/risk-profil
 import { RiskProfileTiersPanel } from "@/components/risk-profile/risk-profile-tiers-panel";
 import { RiskProfileUsersPanel } from "@/components/risk-profile/risk-profile-users-panel";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   RISK_PROFILE_TABS,
@@ -20,13 +21,10 @@ import {
   riskProfileTabHref,
   type RiskProfileTabId,
 } from "@/lib/admin-risk-profile-navigation";
-import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
 
 type RiskProfilePageProps = {
   tabSlug?: string;
 };
-
-const riskProfileRoute = ADMIN_NAV_ROUTES.find((route) => route.id === "risk-profile");
 
 export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
   const router = useRouter();
@@ -75,25 +73,20 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
     <AdminSectionPageShell
       breadcrumbSegments={[{ label: "Platform" }, { label: "Risk Profile" }]}
       title="Risk Profile"
-      description={riskProfileRoute?.description}
-      headerAside={
-        <div className="admin-page-icon-tile shrink-0">
-          <Gauge className="size-5" />
-        </div>
-      }
+      icon={Gauge}
     >
       <Tabs value={activeTabId} onValueChange={handleTabChange} className="gap-4">
-        <TabsList variant="line" className="w-fit justify-start border-b border-border">
+        <AdminTabList>
           {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             return (
-              <TabsTrigger key={tab.id} value={tab.id} className="gap-2 px-4 py-2">
+              <AdminTabTrigger key={tab.id} value={tab.id} className="gap-2">
                 <Icon className="size-4" />
                 {tab.label}
-              </TabsTrigger>
+              </AdminTabTrigger>
             );
           })}
-        </TabsList>
+        </AdminTabList>
       </Tabs>
 
       {activeTabId === "categories" ? <RiskProfileCategoriesPanel canManage={canManageCategories} /> : null}

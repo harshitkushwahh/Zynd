@@ -10,7 +10,8 @@ import { AdminCardListSkeleton } from "@/components/ui/admin-skeletons";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   MF_INTEGRATION_PROVIDERS,
@@ -59,7 +60,7 @@ function EnvironmentTabTrigger({
   const isRuntimeActive = environment === activeEnvironment;
 
   return (
-    <TabsTrigger value={environment} disabled={disabled}>
+    <AdminTabTrigger value={environment} disabled={disabled}>
       <span className="flex items-center gap-1.5">
         {environmentLabel(environment)}
         {isRuntimeActive ? (
@@ -69,7 +70,7 @@ function EnvironmentTabTrigger({
           />
         ) : null}
       </span>
-    </TabsTrigger>
+    </AdminTabTrigger>
   );
 }
 
@@ -185,7 +186,7 @@ function IntegrationProviderCard({
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                <TabsList aria-label={`${meta?.label ?? provider.id} environment`}>
+                <AdminTabList aria-label={`${meta?.label ?? provider.id} environment`}>
                   <EnvironmentTabTrigger
                     environment="test"
                     activeEnvironment={provider.active_environment}
@@ -196,7 +197,7 @@ function IntegrationProviderCard({
                     activeEnvironment={provider.active_environment}
                     disabled={isSwitching}
                   />
-                </TabsList>
+                </AdminTabList>
                 <Link
                   href={`${ZYND_LOGS_HREF}?provider=${meta?.logsFilter ?? provider.id}`}
                   className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}

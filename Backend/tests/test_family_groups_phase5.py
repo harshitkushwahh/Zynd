@@ -100,8 +100,20 @@ async def test_list_admin_user_family_groups(db_session: AsyncSession) -> None:
     payload = await list_admin_user_family_groups(db_session, user_id=head.id)
     assert payload["user_id"] == head.id
     assert len(payload["memberships"]) == 1
-    assert payload["memberships"][0]["group_id"] == created["id"]
+    membership = payload["memberships"][0]
+    assert membership["group_id"] == created["id"]
+    assert membership["role"] == "head"
+    assert "members_preview" in membership
+    assert "active_goals_count" in membership
+    assert "progress_pct" in membership
     assert len(payload["created_groups"]) == 1
+    created_card = payload["created_groups"][0]
+    assert created_card["id"] == created["id"]
+    assert "description" in created_card
+    assert "avatar_url" in created_card
+    assert "members_preview" in created_card
+    assert "active_goals_count" in created_card
+    assert "progress_pct" in created_card
 
 
 @pytest.mark.asyncio

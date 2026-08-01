@@ -1,154 +1,59 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
+import type { SortDescriptor } from "react-aria-components";
 
 import { ClientDetailEmptyState } from "@/components/clients/client-detail-empty-state";
+import { Table, useDistributorTablePagination } from "@/components/application/table";
+import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
+import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
+import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
+import { DistributorGrowthBadge } from "@/components/ui/distributor-growth-badge";
+import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import type { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
+import { DISTRIBUTOR_CLIENT_COPY as CLIENT_COPY } from "@/lib/distributor-client-copy";
+import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
+import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import type { DistributorClientHolding } from "@/lib/dummy/types";
 import {
   formatAum,
-  formatDistributorDate,
   formatDistributorNav,
   formatDistributorUnits,
 } from "@/lib/format";
+import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { cn } from "@/lib/utils";
-import { DISTRIBUTOR_LABEL_CAPS_CLASS } from "@/lib/distributor-layout";
 
 type PortfolioCopy = (typeof DISTRIBUTOR_CLIENT_COPY)["portfolio"];
 
-function holdingReturns(holding: DistributorClientHolding) {
-  const amount = holding.currentValue - holding.investedAmount;
-  const pct =
-    holding.investedAmount > 0 ? (amount / holding.investedAmount) * 100 : 0;
-  return { amount, pct };
+type PortfolioHoldingRow = DistributorClientHolding & {
+  returnsAmount: number;
+  returnsPct: number;
+};
+
+function toHoldingRows(holdings: DistributorClientHolding[]): PortfolioHoldingRow[] {
+  return holdings.map((holding) => {
+    const returnsAmount = holding.currentValue - holding.investedAmount;
+    const returnsPct =
+      holding.investedAmount > 0 ? (returnsAmount / holding.investedAmount) * 100 : 0;
+    return { ...holding, returnsAmount, returnsPct };
+  });
 }
 
-function HoldingMetric({
-  label,
-  value,
-  valueClassName,
-  subValue,
-  subValueClassName,
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-  subValue?: string;
-  subValueClassName?: string;
-}) {
+function ReturnsCell({ amount, pct }: { amount: number; pct: number }) {
+  const positive = amount >= 0;
   return (
-    <div className="min-w-0 lg:text-right">
-      <p className={cn(DISTRIBUTOR_LABEL_CAPS_CLASS, "lg:sr-only")}>
-        {label}
-      </p>
+    <div className="flex flex-col items-end gap-1 text-right tabular-nums">
       <p
         className={cn(
-          "text-compact font-medium tabular-nums text-foreground",
-          valueClassName,
+          "text-compact font-medium",
+          positive ? "text-[var(--distributor-growth-badge-fg)]" : "text-destructive",
         )}
       >
-        {value}
+        {formatAum(amount)}
       </p>
-      {subValue ? (
-        <p className={cn("text-caption tabular-nums text-muted-foreground", subValueClassName)}>
-          {subValue}
-        </p>
-      ) : null}
+      <DistributorGrowthBadge value={pct} showIcon={false} decimals={2} />
     </div>
-  );
-}
-
-function HoldingsTableHeader({ copy }: { copy: PortfolioCopy }) {
-  const columns = [
-    { label: copy.holdingsColumnScheme, align: "left" as const },
-    { label: copy.holdingsColumnUnits, align: "right" as const },
-    { label: copy.holdingsColumnNav, align: "right" as const },
-    { label: copy.holdingsColumnInvested, align: "right" as const },
-    { label: copy.holdingsColumnCurrent, align: "right" as const },
-    { label: copy.holdingsColumnRedeemable, align: "right" as const },
-    { label: copy.holdingsColumnReturns, align: "right" as const },
-  ];
-
-  return (
-    <div className="hidden border-t border-border bg-muted/30 lg:grid lg:grid-cols-[minmax(0,2fr)_repeat(6,minmax(0,1fr))] lg:gap-3 lg:px-4 lg:py-2.5">
-      {columns.map((column) => (
-        <p
-          key={column.label}
-          className={cn(
-            DISTRIBUTOR_LABEL_CAPS_CLASS,
-            column.align === "right" && "text-right",
-          )}
-        >
-          {column.label}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-function ClientPortfolioHoldingRow({
-  holding,
-  copy,
-}: {
-  holding: DistributorClientHolding;
-  copy: PortfolioCopy;
-}) {
-  const returns = holdingReturns(holding);
-  const returnsPositive = returns.amount >= 0;
-  const schemeSubtitle = [
-    holding.amcName ?? copy.holdingsUnknownAmc,
-    holding.folioNumber ? copy.holdingsFolio(holding.folioNumber) : null,
-    holding.asOfDate
-      ? copy.holdingsAsOf(formatDistributorDate(holding.asOfDate))
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  const navDisplay =
-    holding.navPerUnit != null && holding.navPerUnit > 0
-      ? formatDistributorNav(holding.navPerUnit)
-      : "—";
-
-  return (
-    <li className="border-t border-border px-4 py-4 first:border-t-0 lg:py-3">
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,2fr)_repeat(6,minmax(0,1fr))] lg:items-center lg:gap-3">
-        <div className="min-w-0">
-          <p className="text-compact font-medium leading-snug text-foreground">
-            {holding.schemeName}
-          </p>
-          <p className="mt-1 text-caption leading-snug text-muted-foreground">{schemeSubtitle}</p>
-          {holding.isin ? (
-            <p className="mt-0.5 font-mono text-micro text-muted-foreground">{holding.isin}</p>
-          ) : null}
-        </div>
-
-        <HoldingMetric
-          label={copy.holdingsColumnUnits}
-          value={formatDistributorUnits(holding.units)}
-        />
-        <HoldingMetric label={copy.holdingsColumnNav} value={navDisplay} />
-        <HoldingMetric
-          label={copy.holdingsColumnInvested}
-          value={formatAum(holding.investedAmount)}
-        />
-        <HoldingMetric
-          label={copy.holdingsColumnCurrent}
-          value={formatAum(holding.currentValue)}
-        />
-        <HoldingMetric
-          label={copy.holdingsColumnRedeemable}
-          value={formatAum(holding.redeemableValue)}
-        />
-        <HoldingMetric
-          label={copy.holdingsColumnReturns}
-          value={formatAum(returns.amount)}
-          subValue={`${returnsPositive ? "+" : ""}${returns.pct.toFixed(2)}%`}
-          valueClassName={returnsPositive ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}
-          subValueClassName={returnsPositive ? "text-emerald-600/90 dark:text-emerald-400/90" : "text-destructive/90"}
-        />
-      </div>
-    </li>
   );
 }
 
@@ -157,31 +62,183 @@ export function ClientPortfolioHoldingsList({
   copy,
   emptyMessage,
   emptyIcon: EmptyIcon,
+  className,
 }: {
   holdings: DistributorClientHolding[];
   copy: PortfolioCopy;
   emptyMessage?: string;
   emptyIcon?: LucideIcon;
+  className?: string;
 }) {
+  const rows = useMemo(() => toHoldingRows(holdings), [holdings]);
+
+  const amcOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const holding of holdings) {
+      const name = holding.amcName?.trim();
+      if (name) names.add(name);
+    }
+    return [...names].sort().map((name) => ({ value: name, label: name }));
+  }, [holdings]);
+
+  const [search, setSearch] = useState("");
+  const [amcFilter, setAmcFilter] = useState<string | "all">("all");
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: "schemeName",
+    direction: "ascending",
+  });
+
+  const filtered = useMemo(() => {
+    return rows.filter((row) => {
+      if (amcFilter !== "all" && row.amcName !== amcFilter) return false;
+      return distributorTableSearchMatch(
+        search,
+        row.schemeName,
+        row.amcName ?? "",
+        row.folioNumber ?? "",
+        row.isin ?? "",
+      );
+    });
+  }, [amcFilter, rows, search]);
+
+  const sorted = useMemo(
+    () => sortByDescriptor(filtered, sortDescriptor),
+    [filtered, sortDescriptor],
+  );
+
+  const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
+
   if (holdings.length === 0) {
-    return (
-      <div>
-        <HoldingsTableHeader copy={copy} />
-        {emptyMessage && EmptyIcon ? (
-          <ClientDetailEmptyState message={emptyMessage} icon={EmptyIcon} />
-        ) : null}
-      </div>
-    );
+    return emptyMessage && EmptyIcon ? (
+      <ClientDetailEmptyState message={emptyMessage} icon={EmptyIcon} />
+    ) : null;
   }
 
+  const toolbar = (
+    <DistributorTableToolbar
+      onClearAll={() => {
+        setSearch("");
+        setAmcFilter("all");
+        setPage(1);
+      }}
+      clearDisabled={search.trim() === "" && amcFilter === "all"}
+      search={
+        <DistributorTableSearchCard
+          variant="card"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder={copy.holdingsSearchPlaceholder}
+          aria-label={copy.holdingsSearchPlaceholder}
+        />
+      }
+    >
+      {amcOptions.length > 0 ? (
+        <StatusFilterSelect
+          label={copy.holdingsAmcFilterLabel}
+          value={amcFilter}
+          options={amcOptions}
+          onValueChange={(value) => {
+            setAmcFilter(value);
+            setPage(1);
+          }}
+        />
+      ) : null}
+    </DistributorTableToolbar>
+  );
+
+  const table = wrapDistributorTableBody(
+    <Table
+      aria-label={copy.holdingsTitle}
+      className="min-w-[var(--table-min-width-3xl)]"
+      sortDescriptor={sortDescriptor}
+      onSortChange={(descriptor) => {
+        setSortDescriptor(descriptor);
+        setPage(1);
+      }}
+      pagination={pagination}
+    >
+      <Table.Header>
+        <Table.Head id="schemeName" label={copy.holdingsColumnScheme} isRowHeader allowsSorting />
+        <Table.Head
+          id="units"
+          label={copy.holdingsColumnUnits}
+          allowsSorting
+          className="text-right [&>div]:justify-end"
+        />
+        <Table.Head
+          id="navPerUnit"
+          label={copy.holdingsColumnNav}
+          allowsSorting
+          className="text-right [&>div]:justify-end"
+        />
+        <Table.Head
+          id="investedAmount"
+          label={copy.holdingsColumnInvested}
+          allowsSorting
+          className="text-right [&>div]:justify-end"
+        />
+        <Table.Head
+          id="currentValue"
+          label={copy.holdingsColumnCurrent}
+          allowsSorting
+          className="text-right [&>div]:justify-end"
+        />
+        <Table.Head
+          id="redeemableValue"
+          label={copy.holdingsColumnRedeemable}
+          allowsSorting
+          className="text-right [&>div]:justify-end"
+        />
+        <Table.Head
+          id="returnsAmount"
+          label={copy.holdingsColumnReturns}
+          allowsSorting
+          className="text-right [&>div]:justify-end"
+        />
+      </Table.Header>
+      <Table.Body items={pageItems}>
+        {(holding) => {
+          const navDisplay =
+            holding.navPerUnit != null && holding.navPerUnit > 0
+              ? formatDistributorNav(holding.navPerUnit)
+              : "—";
+
+          return (
+            <Table.Row id={holding.id}>
+              <Table.Cell>
+                <span className="font-medium text-foreground">{holding.schemeName}</span>
+              </Table.Cell>
+              <Table.Cell className="text-right tabular-nums text-muted-foreground">
+                {formatDistributorUnits(holding.units)}
+              </Table.Cell>
+              <Table.Cell className="text-right tabular-nums text-muted-foreground">
+                {navDisplay}
+              </Table.Cell>
+              <Table.Cell className="text-right tabular-nums">{formatAum(holding.investedAmount)}</Table.Cell>
+              <Table.Cell className="text-right tabular-nums">{formatAum(holding.currentValue)}</Table.Cell>
+              <Table.Cell className="text-right tabular-nums">{formatAum(holding.redeemableValue)}</Table.Cell>
+              <Table.Cell>
+                <ReturnsCell amount={holding.returnsAmount} pct={holding.returnsPct} />
+              </Table.Cell>
+            </Table.Row>
+          );
+        }}
+      </Table.Body>
+    </Table>,
+  );
+
   return (
-    <div>
-      <HoldingsTableHeader copy={copy} />
-      <ul>
-        {holdings.map((holding) => (
-          <ClientPortfolioHoldingRow key={holding.id} holding={holding} copy={copy} />
-        ))}
-      </ul>
-    </div>
+    <DistributorTableOnlyShell
+      className={cn("distributor-client-portfolio-holdings-table", className)}
+      toolbar={toolbar}
+      isEmpty={sorted.length === 0}
+      emptyTitle={copy.holdingsEmptyFiltered}
+      emptyDescription={CLIENT_COPY.activity.filtersEmptyDescription}
+    >
+      {table}
+    </DistributorTableOnlyShell>
   );
 }

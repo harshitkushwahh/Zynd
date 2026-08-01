@@ -7,9 +7,6 @@ import { usePathname } from "next/navigation";
 import {
   DISTRIBUTOR_SIDEBAR_CHROME_CLASS,
   DISTRIBUTOR_SIDEBAR_COLLAPSED_UI_CLASS,
-  DISTRIBUTOR_SIDEBAR_HEADER_CLASS,
-  DISTRIBUTOR_SIDEBAR_HEADER_COLLAPSED_CLASS,
-  distributorSidebarContentTopClass,
 } from "@/lib/distributor-layout";
 import {
   Sidebar,
@@ -17,66 +14,41 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DISTRIBUTOR_NAV_FLAT,
-  DISTRIBUTOR_NAV_GROUPS,
   DISTRIBUTOR_SETTINGS_ROUTE,
-  DISTRIBUTOR_WORKSPACE_ROUTES,
-  getDistributorNavGroups,
+  getDistributorSidebarNavItems,
   isDistributorRouteActive,
   isDistributorWorkspaceRouteActive,
   type DistributorNavItem,
 } from "@/lib/distributor-navigation";
 import { cn } from "@/lib/utils";
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
+import zynddLogo from "../../../public/zyndd.png";
 
 function DistributorSidebarBrand() {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   return (
     <Link
       href="/dashboard"
-      className={cn(
-        "distributor-sidebar-brand",
-        collapsed ? "distributor-sidebar-brand--collapsed" : "distributor-sidebar-brand--expanded",
-      )}
-      aria-label="ZYND Distributor home"
+      className="distributor-sidebar-brand distributor-sidebar-brand--logo-only"
+      aria-label={ZYND_MITRA_COPY.consoleHome}
     >
-      <span
-        className={cn(
-          "distributor-sidebar-brand__logo-wrap",
-          collapsed
-            ? "distributor-sidebar-brand__logo-wrap--collapsed"
-            : "distributor-sidebar-brand__logo-wrap--expanded",
-        )}
-      >
+      <span className="distributor-sidebar-brand__logo-wrap">
         <Image
-          src="/logo.png"
+          src={zynddLogo}
           alt="ZYND"
           width={32}
           height={32}
-          className={cn(
-            "size-full object-contain",
-            collapsed ? "object-center" : "object-left",
-          )}
+          className="distributor-sidebar-brand__logo"
           priority
         />
       </span>
-      {!collapsed ? (
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="distributor-sidebar-brand__title">ZYND</span>
-          <span className="distributor-sidebar-brand__subtitle">Distributor Console</span>
-        </span>
-      ) : null}
     </Link>
   );
 }
@@ -93,19 +65,20 @@ function DistributorSidebarNavItem({
   disabled?: boolean;
 }) {
   const Icon = route.icon;
+  const tooltip = disabled ? `${route.label} (coming soon)` : route.label;
 
   if (disabled) {
     return (
       <SidebarMenuItem>
         <SidebarMenuButton
           isActive={false}
-          tooltip={`${route.label} (coming soon)`}
+          tooltip={tooltip}
           className="distributor-sidebar-menu-button distributor-sidebar-menu-button--disabled"
           aria-disabled
+          aria-label={route.label}
           disabled
         >
           <Icon strokeWidth={1.75} />
-          <span>{route.label}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     );
@@ -114,13 +87,14 @@ function DistributorSidebarNavItem({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
-        isActive={false}
-        tooltip={route.label}
+        isActive={active}
+        tooltip={tooltip}
         className="distributor-sidebar-menu-button"
-        render={<Link href={href} aria-current={active ? "page" : undefined} />}
+        render={
+          <Link href={href} aria-current={active ? "page" : undefined} aria-label={route.label} />
+        }
       >
         <Icon strokeWidth={active ? 2.25 : 1.75} />
-        <span>{route.label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
@@ -128,78 +102,51 @@ function DistributorSidebarNavItem({
 
 export function DistributorDashboardSidebar() {
   const pathname = usePathname();
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
   const { isBranchManager } = useDistributorAuth();
-  const navGroups = getDistributorNavGroups(isBranchManager);
+  const navItems = getDistributorSidebarNavItems(isBranchManager);
 
   return (
     <Sidebar
       collapsible="icon"
+      variant="sidebar"
       data-slot="distributor-sidebar"
-      className={cn(DISTRIBUTOR_SIDEBAR_COLLAPSED_UI_CLASS, DISTRIBUTOR_SIDEBAR_CHROME_CLASS)}
+      className={cn(
+        DISTRIBUTOR_SIDEBAR_COLLAPSED_UI_CLASS,
+        DISTRIBUTOR_SIDEBAR_CHROME_CLASS,
+        "distributor-sidebar-rail",
+      )}
     >
-      <SidebarHeader
-        className={
-          collapsed ? DISTRIBUTOR_SIDEBAR_HEADER_COLLAPSED_CLASS : DISTRIBUTOR_SIDEBAR_HEADER_CLASS
-        }
-      >
+      <SidebarHeader className="distributor-sidebar-rail__section distributor-sidebar-rail__brand">
         <DistributorSidebarBrand />
       </SidebarHeader>
 
-      <SidebarContent
-        className={cn(
-          distributorSidebarContentTopClass(collapsed),
-          "transition-[padding] duration-200 ease-linear",
-        )}
-      >
-        <SidebarGroup>
-          <SidebarGroupLabel
-            className={cn(
-              "distributor-sidebar-section-label distributor-sidebar-section-label--first group-data-[collapsible=icon]:hidden",
-            )}
-          >
-            Workspace
-          </SidebarGroupLabel>
+      <SidebarContent className="distributor-sidebar-rail__section distributor-sidebar-rail__nav">
+        <SidebarGroup className="distributor-sidebar-nav-group">
           <SidebarGroupContent>
-            <SidebarMenu>
-              {DISTRIBUTOR_WORKSPACE_ROUTES.map((route) => (
+            <SidebarMenu className="distributor-sidebar-rail__menu">
+              {navItems.map((route) => (
                 <DistributorSidebarNavItem
                   key={route.id}
                   route={route}
                   href={route.href}
-                  active={isDistributorWorkspaceRouteActive(pathname, route)}
+                  disabled={route.disabled}
+                  active={
+                    route.disabled
+                      ? false
+                      : route.id === "dashboard" ||
+                          route.id === "your-clients" ||
+                          route.id === "your-operations"
+                        ? isDistributorWorkspaceRouteActive(pathname, route)
+                        : isDistributorRouteActive(pathname, route.href, route.id)
+                  }
                 />
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {navGroups.map((group) => (
-          <SidebarGroup key={group.id}>
-            <SidebarGroupLabel
-              className="distributor-sidebar-section-label group-data-[collapsible=icon]:hidden"
-            >
-              {group.label}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((route) => (
-                  <DistributorSidebarNavItem
-                    key={route.id}
-                    route={route}
-                    href={route.href}
-                    disabled={route.disabled}
-                    active={!route.disabled && isDistributorRouteActive(pathname, route.href)}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="distributor-sidebar-rail__section distributor-sidebar-rail__footer">
         <SidebarMenu>
           <DistributorSidebarNavItem
             route={DISTRIBUTOR_SETTINGS_ROUTE}
@@ -208,8 +155,6 @@ export function DistributorDashboardSidebar() {
           />
         </SidebarMenu>
       </SidebarFooter>
-
-      <SidebarRail />
     </Sidebar>
   );
 }
@@ -217,7 +162,7 @@ export function DistributorDashboardSidebar() {
 export function DistributorDashboardMobileNav() {
   const pathname = usePathname();
   const mobileRoutes = DISTRIBUTOR_NAV_FLAT.filter((route) =>
-    ["dashboard", "your-clients", "orders", "systematic-plans", "txn-requests"].includes(route.id),
+    ["dashboard", "your-clients", "your-operations"].includes(route.id),
   );
 
   return (
@@ -225,7 +170,10 @@ export function DistributorDashboardMobileNav() {
       <div className="distributor-mobile-nav__inner">
         {mobileRoutes.map((route) => {
           const Icon = route.icon;
-          const active = isDistributorRouteActive(pathname, route.href);
+          const active =
+            route.id === "your-operations" || route.id === "your-clients"
+              ? isDistributorWorkspaceRouteActive(pathname, route)
+              : isDistributorRouteActive(pathname, route.href);
           return (
             <Link
               key={route.id}

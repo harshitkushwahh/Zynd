@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/errors";
 import {
   AlertTriangle,
@@ -32,12 +33,10 @@ import {
 } from "@/components/ui/admin-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import {
   approveAdminAction,
-  fetchAdminActions,
-  fetchPendingDeletions,
-  fetchSecurityReviews,
   rejectAdminAction,
   resolveSecurityReview,
   runDeletionExecutor,
@@ -48,6 +47,10 @@ import {
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import {
+  adminComplianceQueryKey,
+  useAdminComplianceQuery,
+} from "@/hooks/use-admin-compliance-query";
 
 
 function formatLabel(value: string) {
@@ -91,7 +94,7 @@ function TabCount({ count, active }: { count: number; active?: boolean }) {
         "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-micro font-semibold tabular-nums",
         count > 0
           ? active
-            ? "bg-primary text-primary-foreground"
+            ? "bg-white/20 text-white"
             : "bg-warning/15 text-warning"
           : "bg-muted text-muted-foreground",
       )}
@@ -129,10 +132,20 @@ export function UserCompliancePanel({
   canExecuteDeletions,
   canApproveActions,
 }: UserCompliancePanelProps) {
-  const [reviews, setReviews] = useState<SecurityReviewItem[]>([]);
-  const [deletions, setDeletions] = useState<PendingDeletionItem[]>([]);
-  const [pendingActions, setPendingActions] = useState<AdminActionItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const complianceParams = {
+    canReadReviews,
+    canExecuteDeletions,
+    canApproveActions,
+  };
+  const { data, isLoading, isFetching, error: queryError, refetch } =
+    useAdminComplianceQuery(complianceParams);
+
+  const reviews = data?.reviews ?? [];
+  const deletions = data?.deletions ?? [];
+  const pendingActions = data?.pendingActions ?? [];
+  const loading = isLoading && !data;
+
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -170,37 +183,15 @@ export function UserCompliancePanel({
     reviews.length,
   ]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const tasks: Promise<unknown>[] = [];
-      if (canReadReviews) {
-        tasks.push(fetchSecurityReviews("open").then(setReviews));
-      } else {
-        setReviews([]);
-      }
-      if (canExecuteDeletions) {
-        tasks.push(fetchPendingDeletions().then(setDeletions));
-      } else {
-        setDeletions([]);
-      }
-      if (canApproveActions) {
-        tasks.push(fetchAdminActions("pending").then(setPendingActions));
-      } else {
-        setPendingActions([]);
-      }
-      await Promise.all(tasks);
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not load compliance data."));
-    } finally {
-      setLoading(false);
-    }
-  }, [canApproveActions, canExecuteDeletions, canReadReviews]);
+  const loadData = async () => {
+    await queryClient.invalidateQueries({ queryKey: adminComplianceQueryKey(complianceParams) });
+  };
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    if (queryError) {
+      setError(getErrorMessage(queryError, "Could not load compliance data."));
+    }
+  }, [queryError]);
 
   useEffect(() => {
     if (!visibleTabs.some((tab) => tab.key === activeTab)) {
@@ -350,31 +341,31 @@ export function UserCompliancePanel({
         className="gap-4"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList variant="line" className="h-auto w-fit justify-start border-b border-border">
+          <AdminTabList variant="secondary">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               return (
-                <TabsTrigger
+                <AdminTabTrigger
                   key={tab.key}
                   value={tab.key}
-                  className="gap-2 px-4 py-2.5"
+                  className="gap-2"
                 >
                   <Icon className="size-4 shrink-0" />
                   {tab.label}
                   <TabCount count={tab.count} active={activeTab === tab.key} />
-                </TabsTrigger>
+                </AdminTabTrigger>
               );
             })}
-          </TabsList>
+          </AdminTabList>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              disabled={loading}
-              onClick={() => void loadData()}
+              disabled={isFetching}
+              onClick={() => void refetch()}
             >
-              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
               Refresh
             </Button>
           </div>
@@ -397,13 +388,13 @@ export function UserCompliancePanel({
             <AdminDataTable minWidth="lg">
               <AdminTableHeader>
                 <tr>
+                  {canResolveReviews ? (
+                    <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+                  ) : null}
                   <AdminTableHeadCell>User</AdminTableHeadCell>
                   <AdminTableHeadCell>Reason</AdminTableHeadCell>
                   <AdminTableHeadCell>Flagged</AdminTableHeadCell>
                   <AdminTableHeadCell>Status</AdminTableHeadCell>
-                  {canResolveReviews ? (
-                    <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
-                  ) : null}
                 </tr>
               </AdminTableHeader>
               <AdminTableBody>
@@ -424,27 +415,6 @@ export function UserCompliancePanel({
                 ) : (
                   reviewPagination.items.map((item) => (
                     <AdminTableRow key={item.id}>
-                      <AdminTableCell>
-                        <div className="space-y-1">
-                          <p className="font-medium text-foreground">{item.user_email}</p>
-                          <Link
-                            href={userProfileHref(item.user_id)}
-                            className="inline-flex items-center gap-1 text-caption text-primary hover:underline"
-                          >
-                            View profile
-                            <ExternalLink className="size-3" />
-                          </Link>
-                        </div>
-                      </AdminTableCell>
-                      <AdminTableCell className="text-muted-foreground">
-                        {formatLabel(item.reason)}
-                      </AdminTableCell>
-                      <AdminTableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatDateTime(item.created_at)}
-                      </AdminTableCell>
-                      <AdminTableCell>
-                        <StatusBadge variant="warning">{formatLabel(item.status)}</StatusBadge>
-                      </AdminTableCell>
                       {canResolveReviews ? (
                         <AdminTableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -466,6 +436,27 @@ export function UserCompliancePanel({
                           </div>
                         </AdminTableCell>
                       ) : null}
+                      <AdminTableCell>
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">{item.user_email}</p>
+                          <Link
+                            href={userProfileHref(item.user_id)}
+                            className="inline-flex items-center gap-1 text-caption text-primary hover:underline"
+                          >
+                            View profile
+                            <ExternalLink className="size-3" />
+                          </Link>
+                        </div>
+                      </AdminTableCell>
+                      <AdminTableCell className="text-muted-foreground">
+                        {formatLabel(item.reason)}
+                      </AdminTableCell>
+                      <AdminTableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatDateTime(item.created_at)}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <StatusBadge variant="warning">{formatLabel(item.status)}</StatusBadge>
+                      </AdminTableCell>
                     </AdminTableRow>
                   ))
                 )}
@@ -598,11 +589,11 @@ export function UserCompliancePanel({
             <AdminDataTable minWidth="xl">
               <AdminTableHeader>
                 <tr>
+                  <AdminTableHeadCell className="text-right">Decision</AdminTableHeadCell>
                   <AdminTableHeadCell>Action</AdminTableHeadCell>
                   <AdminTableHeadCell>Target</AdminTableHeadCell>
                   <AdminTableHeadCell>Requested by</AdminTableHeadCell>
                   <AdminTableHeadCell>Requested</AdminTableHeadCell>
-                  <AdminTableHeadCell className="text-right">Decision</AdminTableHeadCell>
                 </tr>
               </AdminTableHeader>
               <AdminTableBody>
@@ -623,6 +614,25 @@ export function UserCompliancePanel({
                 ) : (
                   actionPagination.items.map((item) => (
                     <AdminTableRow key={item.id}>
+                      <AdminTableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            disabled={actionLoading === `approve-${item.id}`}
+                            onClick={() => void handleApproveAction(item.id)}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={actionLoading === `reject-${item.id}`}
+                            onClick={() => void handleRejectAction(item.id)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </AdminTableCell>
                       <AdminTableCell>
                         <p className="font-medium text-foreground">
                           {formatLabel(item.action_type)}
@@ -646,25 +656,6 @@ export function UserCompliancePanel({
                       </AdminTableCell>
                       <AdminTableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDateTime(item.created_at)}
-                      </AdminTableCell>
-                      <AdminTableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            disabled={actionLoading === `approve-${item.id}`}
-                            onClick={() => void handleApproveAction(item.id)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={actionLoading === `reject-${item.id}`}
-                            onClick={() => void handleRejectAction(item.id)}
-                          >
-                            Reject
-                          </Button>
-                        </div>
                       </AdminTableCell>
                     </AdminTableRow>
                   ))

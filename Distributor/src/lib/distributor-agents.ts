@@ -8,6 +8,7 @@ export type DistributorAgent = {
   branchId?: string;
   branchName?: string;
   branchCode?: string;
+  avatarUrl?: string | null;
 };
 
 export const DISTRIBUTOR_DEMO_AGENTS: DistributorAgent[] = [
@@ -19,7 +20,7 @@ export const DISTRIBUTOR_DEMO_AGENTS: DistributorAgent[] = [
     initials: "RM",
     role: "distributor",
     branchId: "branch-andheri",
-    branchName: "Mumbai — Andheri",
+    branchName: "Mumbai · Andheri",
     branchCode: "MUM-AND",
   },
   {
@@ -30,8 +31,9 @@ export const DISTRIBUTOR_DEMO_AGENTS: DistributorAgent[] = [
     initials: "AK",
     role: "branch_manager",
     branchId: "branch-andheri",
-    branchName: "Mumbai — Andheri",
+    branchName: "Mumbai · Andheri",
     branchCode: "MUM-AND",
+    avatarUrl: "/client.jpeg",
   },
 ];
 

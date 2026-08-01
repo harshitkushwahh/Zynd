@@ -61,19 +61,32 @@ export type AdminFamilyGroupDetail = AdminFamilyGroupSummary & {
   activity: AdminFamilyGroupActivity[];
 };
 
+export type AdminFamilyGroupMemberPreview = {
+  user_id: string;
+  display_name: string;
+  role: string;
+  profile_image_url: string | null;
+};
+
+export type AdminUserFamilyGroupCard = AdminFamilyGroupSummary & {
+  description: string | null;
+  avatar_url: string | null;
+  members_preview: AdminFamilyGroupMemberPreview[];
+  active_goals_count: number;
+  progress_pct: number;
+};
+
+export type AdminUserFamilyGroupMembership = AdminUserFamilyGroupCard & {
+  group_id: string;
+  role: string;
+  badge_label: string | null;
+  joined_at: string;
+};
+
 export type AdminUserFamilyGroups = {
   user_id: string;
-  memberships: Array<{
-    group_id: string;
-    title: string;
-    tag: string | null;
-    status: string;
-    role: string;
-    badge_label: string | null;
-    member_count: number;
-    joined_at: string;
-  }>;
-  created_groups: AdminFamilyGroupSummary[];
+  memberships: AdminUserFamilyGroupMembership[];
+  created_groups: AdminUserFamilyGroupCard[];
 };
 
 export type AdminFamilyGroupAuditLogItem = {
@@ -104,6 +117,130 @@ export async function fetchAdminFamilyGroups(params?: {
 
 export async function fetchAdminFamilyGroupDetail(groupId: string) {
   return apiRequest<AdminFamilyGroupDetail>(`/admin/family-groups/${groupId}`);
+}
+
+export type AdminFamilyGroupPortfolioSlice = {
+  id: string;
+  label: string;
+  amount_inr: number;
+  value_pct: number;
+};
+
+export type AdminFamilyGroupPortfolio = {
+  total_current_value_inr: number;
+  total_invested_inr: number;
+  total_returns_inr: number;
+  active_sips_count: number;
+  active_goals_count: number;
+  goal_funded_inr: number;
+  goal_declared_savings_inr: number;
+  goal_contributions_inr: number;
+  has_holdings_data: boolean;
+  slices: AdminFamilyGroupPortfolioSlice[];
+};
+
+export type AdminFamilyGroupAnalyticsMember = {
+  user_id: string;
+  display_name: string;
+  display_nickname: string | null;
+  email_masked: string;
+  role: string;
+  badge_key: string | null;
+  badge_label: string | null;
+  profile_image_url: string | null;
+  joined_at: string;
+  invested_amount_inr: number | null;
+  goal_contribution_inr: number | null;
+  portfolio_share_pct: number;
+  linked_sip_count: number;
+};
+
+export type AdminFamilyGroupContributionChartPoint = {
+  user_id: string;
+  label: string;
+  full_name: string;
+  amount_inr: number;
+};
+
+export type AdminFamilyGroupProgressChartPoint = {
+  period_key: string;
+  year: number;
+  label: string;
+  goal_progress_inr: number;
+  invested_inr: number;
+};
+
+export type AdminFamilyGroupSipAddon = {
+  plan_id: string;
+  user_id: string;
+  member_label: string;
+  goal_title: string | null;
+  amount_inr: number;
+  frequency: string;
+  is_goal_linked: boolean;
+};
+
+export type AdminFamilyGroupMfHolding = {
+  holding_id: number;
+  user_id: string;
+  member_label: string;
+  member_display_name: string;
+  scheme_name: string;
+  matched_scheme_name: string | null;
+  folio_number: string;
+  isin: string;
+  units: number;
+  nav_value: number | null;
+  market_value_inr: number | null;
+  as_of_date: string | null;
+  amc_name: string | null;
+  source: string;
+};
+
+export type AdminFamilyGroupOneTimePayment = {
+  contribution_id: string;
+  user_id: string;
+  member_label: string;
+  member_display_name: string;
+  goal_title: string;
+  amount_inr: number;
+  source_type: string;
+  contributed_at: string | null;
+};
+
+export type AdminFamilyGroupAnalyticsGoal = {
+  id: string;
+  title: string;
+  status: string;
+  target_amount_inr: number | null;
+  current_amount_inr: number | null;
+  existing_savings_inr: number | null;
+  progress_pct: number;
+  target_date: string | null;
+  contribution_total_inr: number | null;
+  priority?: number | null;
+  tag?: string | null;
+};
+
+export type AdminFamilyGroupAnalytics = AdminFamilyGroupSummary & {
+  description: string | null;
+  avatar_url: string | null;
+  creator_display_name: string | null;
+  creator_email_masked: string | null;
+  progress_pct: number;
+  portfolio: AdminFamilyGroupPortfolio;
+  members: AdminFamilyGroupAnalyticsMember[];
+  goals: AdminFamilyGroupAnalyticsGoal[];
+  contribution_chart: AdminFamilyGroupContributionChartPoint[];
+  activity: AdminFamilyGroupActivity[];
+  progress_chart: AdminFamilyGroupProgressChartPoint[];
+  sip_addons: AdminFamilyGroupSipAddon[];
+  mf_holdings: AdminFamilyGroupMfHolding[];
+  one_time_payments: AdminFamilyGroupOneTimePayment[];
+};
+
+export async function fetchAdminFamilyGroupAnalytics(groupId: string) {
+  return apiRequest<AdminFamilyGroupAnalytics>(`/admin/family-groups/${groupId}/analytics`);
 }
 
 export async function fetchAdminFamilyGroupInvites(params?: {

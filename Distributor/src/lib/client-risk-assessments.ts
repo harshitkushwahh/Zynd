@@ -9,7 +9,7 @@ export function buildDemoClientRiskAssessments(
 
   const current = resolveClientRiskGauge(profile);
   const currentVisual = resolveRiskTierVisual(current.tier);
-  const now = new Date().toISOString();
+  const nowMs = Date.now();
   const priorTier =
     current.tier === "moderate"
       ? "conservative"
@@ -18,14 +18,39 @@ export function buildDemoClientRiskAssessments(
         : "moderate";
   const priorScore = Math.max(10, current.displayScore - 12);
   const priorVisual = resolveRiskTierVisual(priorTier);
+  const investorId = profile.investor.id;
+
+  const historical = [
+    { monthsAgo: 20, displayScore: Math.max(8, current.displayScore - 28), tier: "conservative" as const },
+    { monthsAgo: 15, displayScore: Math.max(10, current.displayScore - 22), tier: "conservative" as const },
+    { monthsAgo: 10, displayScore: Math.max(12, current.displayScore - 16), tier: priorTier },
+    { monthsAgo: 4, displayScore: Math.max(14, current.displayScore - 8), tier: priorTier },
+  ];
+
+  const historyRows: DistributorClientRiskAssessment[] = historical.map((row, index) => {
+    const visual = resolveRiskTierVisual(row.tier);
+    const completedAt = new Date(nowMs - row.monthsAgo * 30 * 24 * 60 * 60 * 1000).toISOString();
+    return {
+      assessmentId: `${investorId}-risk-hist-${index}`,
+      score: row.displayScore * 10,
+      displayScore: row.displayScore,
+      tier: row.tier,
+      completedAt,
+      questionsAnswered: 12,
+      totalQuestions: 12,
+      messageSummary: `${visual.label} risk profile`,
+      messageRecommendation: `Historical ${visual.label.toLowerCase()} tolerance.`,
+      isCurrent: false,
+    };
+  });
 
   return [
     {
-      assessmentId: `${profile.investor.id}-risk-current`,
+      assessmentId: `${investorId}-risk-current`,
       score: current.score,
       displayScore: current.displayScore,
       tier: current.tier,
-      completedAt: now,
+      completedAt: new Date(nowMs).toISOString(),
       questionsAnswered: 12,
       totalQuestions: 12,
       messageSummary: `${currentVisual.label} risk profile`,
@@ -33,17 +58,18 @@ export function buildDemoClientRiskAssessments(
       isCurrent: true,
     },
     {
-      assessmentId: `${profile.investor.id}-risk-prior`,
+      assessmentId: `${investorId}-risk-prior`,
       score: priorScore * 10,
       displayScore: priorScore,
       tier: priorTier,
-      completedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 120).toISOString(),
+      completedAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 120).toISOString(),
       questionsAnswered: 12,
       totalQuestions: 12,
       messageSummary: `${priorVisual.label} risk profile`,
       messageRecommendation: `Prior assessment indicated ${priorVisual.label.toLowerCase()} tolerance.`,
       isCurrent: false,
     },
+    ...historyRows,
   ];
 }
 

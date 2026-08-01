@@ -16,13 +16,16 @@ import { AdminPermissionsSettingsPanel } from "@/components/settings/admin-permi
 import { AdminRolesSettingsPanel } from "@/components/settings/admin-roles-settings-panel";
 import { UserCompliancePanel } from "@/components/users/user-compliance-panel";
 import { UsersDirectoryPanel } from "@/components/users/users-directory-panel";
+import { AdminPageHeader } from "@/components/dashboard/admin-page-header";
 import {
   AdminSectionBreadcrumb,
   userManagementBreadcrumbSegments,
 } from "@/components/dashboard/admin-section-breadcrumb";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   fetchAdminActions,
@@ -59,6 +62,9 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
   const [activeTabKey, setActiveTabKey] = useState<UserManagementTabKey>(
     activeTab?.key ?? "people",
   );
+  const [mountedTabKeys, setMountedTabKeys] = useState<Set<UserManagementTabKey>>(
+    () => new Set([activeTab?.key ?? "people"]),
+  );
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [registeredUsers, setRegisteredUsers] = useState(0);
   const [openReviews, setOpenReviews] = useState(0);
@@ -76,6 +82,10 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
   useEffect(() => {
     if (!activeTab) return;
     setActiveTabKey(activeTab.key);
+    setMountedTabKeys((current) => {
+      if (current.has(activeTab.key)) return current;
+      return new Set(current).add(activeTab.key);
+    });
     const href = userManagementTabHref(activeTab);
     const currentHref = tabSlug ? `/dashboard/users/${tabSlug}` : "/dashboard/users";
     if (href !== currentHref) {
@@ -87,8 +97,11 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
     const nextTab = visibleTabs.find((tab) => tab.key === value);
     if (!nextTab) return;
     setActiveTabKey(nextTab.key);
+    setMountedTabKeys((current) => new Set(current).add(nextTab.key));
     router.push(userManagementTabHref(nextTab));
   };
+
+  const keepTabMounted = (key: UserManagementTabKey) => mountedTabKeys.has(key);
 
   const loadPageMetrics = useCallback(async () => {
     if (!showPageMetrics) return;
@@ -134,20 +147,14 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
   }, [loadPageMetrics]);
 
   return (
-    <div className="space-y-6">
+    <div className="admin-section-page-shell">
       <AdminSectionBreadcrumb segments={userManagementBreadcrumbSegments()} />
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="font-heading text-h3 font-semibold text-foreground">Users</h1>
-          <p className="mt-1 text-caption text-muted-foreground">
-            Customer accounts, compliance, KYC, and access administration
-          </p>
-        </div>
-      </div>
+      <AdminPageHeader title="Users" icon={Users} />
 
+      <div className="admin-section-page-shell__content">
       {showPageMetrics ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminMetricCardsGrid>
           {canReadUsers ? (
             <AdminMetricCard
               label="Registered users"
@@ -182,7 +189,7 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
               loading={metricsLoading}
             />
           ) : null}
-        </div>
+        </AdminMetricCardsGrid>
       ) : null}
 
       {!activeTab || visibleTabs.length === 0 ? (
@@ -195,27 +202,27 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
           onValueChange={handleTabChange}
           className="gap-6"
         >
-          <TabsList variant="line" className="w-fit justify-start border-b border-border">
+          <AdminTabList>
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               return (
-                <TabsTrigger key={tab.key} value={tab.key} className="gap-2 px-4 py-2">
+                <AdminTabTrigger key={tab.key} value={tab.key} className="gap-2">
                   <Icon className="size-4 shrink-0" />
                   {tab.label}
-                </TabsTrigger>
+                </AdminTabTrigger>
               );
             })}
-          </TabsList>
+          </AdminTabList>
 
           <div className="min-w-0">
             {canReadUsers ? (
-              <TabsContent value="people" className="mt-0">
+              <TabsContent value="people" className="mt-0" keepMounted={keepTabMounted("people")}>
                 <UsersDirectoryPanel />
               </TabsContent>
             ) : null}
 
             {showComplianceMetrics ? (
-              <TabsContent value="compliance" className="mt-0">
+              <TabsContent value="compliance" className="mt-0" keepMounted={keepTabMounted("compliance")}>
                 <UserCompliancePanel
                   canReadReviews={canReadReviews}
                   canResolveReviews={canResolveReviews}
@@ -226,7 +233,7 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
             ) : null}
 
             {canReadDocuments ? (
-              <TabsContent value="kyc" className="mt-0">
+              <TabsContent value="kyc" className="mt-0" keepMounted={keepTabMounted("kyc")}>
                 <AdminKycReviewPanel
                   hasDownload={hasPermission("documents.download")}
                   hasVerify={hasPermission("documents.verify")}
@@ -236,16 +243,16 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
 
             {canManageRbac ? (
               <>
-                <TabsContent value="roles" className="mt-0">
+                <TabsContent value="roles" className="mt-0" keepMounted={keepTabMounted("roles")}>
                   <AdminRolesSettingsPanel />
                 </TabsContent>
-                <TabsContent value="permissions" className="mt-0">
+                <TabsContent value="permissions" className="mt-0" keepMounted={keepTabMounted("permissions")}>
                   <AdminPermissionsSettingsPanel />
                 </TabsContent>
-                <TabsContent value="action-types" className="mt-0">
+                <TabsContent value="action-types" className="mt-0" keepMounted={keepTabMounted("action-types")}>
                   <AdminActionTypesSettingsPanel />
                 </TabsContent>
-                <TabsContent value="access-overview" className="mt-0">
+                <TabsContent value="access-overview" className="mt-0" keepMounted={keepTabMounted("access-overview")}>
                   <AdminAccessOverviewSettingsPanel />
                 </TabsContent>
               </>
@@ -253,6 +260,7 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
           </div>
         </Tabs>
       )}
+      </div>
     </div>
   );
 }

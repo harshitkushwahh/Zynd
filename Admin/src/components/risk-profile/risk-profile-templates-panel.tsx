@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MoreHorizontal, Plus, Sparkles } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import {
   RISK_TEMPLATE_DETAIL_ICON,
   RiskTemplateDetailView,
@@ -15,6 +14,9 @@ import {
   AdminFormDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -24,7 +26,7 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
@@ -58,7 +60,14 @@ import {
 
 type RuleDraft = { category_id: string; question_count: string };
 
+const ALL = "all";
 const TABLE_COLUMN_COUNT = 5;
+
+const MODE_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All modes" },
+  { value: "manual", label: "Manual" },
+  { value: "auto", label: "Auto" },
+];
 
 function templateModeBadge(mode: RiskTemplate["selection_mode"]) {
   return (
@@ -149,12 +158,29 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
   const [rules, setRules] = useState<RuleDraft[]>([{ category_id: "", question_count: "1" }]);
   const [saving, setSaving] = useState(false);
   const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [modeFilter, setModeFilter] = useState(ALL);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
+
+  const filteredTemplates = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return templates.filter((template) => {
+      if (modeFilter !== ALL && template.selection_mode !== modeFilter) return false;
+      if (!query) return true;
+      return [template.name, template.description ?? "", template.selection_mode]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [modeFilter, search, templates]);
 
   const pagination = useMemo(
-    () => paginateItems(templates, page, ADMIN_TABLE_PAGE_SIZE),
-    [templates, page],
+    () => paginateItems(filteredTemplates, page, pageSize),
+    [filteredTemplates, page, pageSize],
   );
+
+  const showSkeleton = loading && templates.length === 0;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -337,9 +363,27 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <AdminSectionTitle>Assessment templates</AdminSectionTitle>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search templates"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(0);
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={modeFilter}
+            onValueChange={(value) => {
+              setModeFilter(value);
+              setPage(0);
+            }}
+            options={MODE_FILTER_OPTIONS}
+            placeholder="Mode"
+            className="min-w-select-sm"
+          />
           <Button size="sm" variant="outline" onClick={() => void handleAutoSelect()}>
             <Sparkles className="size-3.5" />
             Test auto-select
@@ -363,50 +407,46 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <AdminDataTable minWidth="lg">
+      <AdminDataTable
+        minWidth="lg"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            disabled={loading}
+            totalCount={filteredTemplates.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+            onNext={() => setPage((value) => value + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             <AdminTableHeadCell>Template</AdminTableHeadCell>
             <AdminTableHeadCell>Mode</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Questions</AdminTableHeadCell>
             <AdminTableHeadCell>Default</AdminTableHeadCell>
-            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows
-            colSpan={TABLE_COLUMN_COUNT}
-            loading={loading}
-            isEmpty={templates.length === 0}
-            emptyMessage="No templates yet."
-            skeletonRows={4}
-          >
-            {pagination.items.map((template) => (
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={TABLE_COLUMN_COUNT} rows={4} />
+          ) : filteredTemplates.length === 0 ? (
+            <AdminTableStateRow colSpan={TABLE_COLUMN_COUNT}>
+              {templates.length === 0 ? "No templates yet." : "No templates match your filters."}
+            </AdminTableStateRow>
+          ) : (
+            pagination.items.map((template) => (
               <AdminTableRow key={template.id}>
-                <AdminTableCell>
-                  <p className="font-medium text-foreground">{template.name}</p>
-                  {template.description ? (
-                    <p className="mt-0.5 text-caption text-muted-foreground">{template.description}</p>
-                  ) : null}
-                </AdminTableCell>
-                <AdminTableCell>{templateModeBadge(template.selection_mode)}</AdminTableCell>
-                <AdminTableCell className="text-right">{template.total_questions}</AdminTableCell>
-                <AdminTableCell>
-                  {canManage ? (
-                    <Switch
-                      checked={template.is_default}
-                      disabled={!template.is_active || togglingTemplateId === template.id}
-                      onCheckedChange={(checked) => void handleToggleDefault(template, checked)}
-                      aria-label={
-                        template.is_default ? `Remove ${template.name} as default` : `Set ${template.name} as default`
-                      }
-                    />
-                  ) : (
-                    <StatusBadge variant={template.is_default ? "success" : "neutral"} showIcon={false}>
-                      {template.is_default ? "Default" : "—"}
-                    </StatusBadge>
-                  )}
-                </AdminTableCell>
                 <AdminTableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -422,10 +462,14 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
                       }
                     />
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setViewTemplate(template)}>View template</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setViewTemplate(template)}>
+                        View template
+                      </DropdownMenuItem>
                       {canManage ? (
                         <>
-                          <DropdownMenuItem onClick={() => openEditDialog(template)}>Edit template</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditDialog(template)}>
+                            Edit template
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             variant="destructive"
                             disabled={!template.is_active}
@@ -438,21 +482,37 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </AdminTableCell>
+                <AdminTableCell>
+                  <p className="font-medium text-foreground">{template.name}</p>
+                  {template.description ? (
+                    <p className="mt-0.5 text-caption text-muted-foreground">{template.description}</p>
+                  ) : null}
+                </AdminTableCell>
+                <AdminTableCell>{templateModeBadge(template.selection_mode)}</AdminTableCell>
+                <AdminTableCell className="text-right">{template.total_questions}</AdminTableCell>
+                <AdminTableCell>
+                  {canManage ? (
+                    <Switch
+                      checked={template.is_default}
+                      disabled={!template.is_active || togglingTemplateId === template.id}
+                      onCheckedChange={(checked) => void handleToggleDefault(template, checked)}
+                      aria-label={
+                        template.is_default
+                          ? `Remove ${template.name} as default`
+                          : `Set ${template.name} as default`
+                      }
+                    />
+                  ) : (
+                    <StatusBadge variant={template.is_default ? "success" : "neutral"} showIcon={false}>
+                      {template.is_default ? "Default" : "—"}
+                    </StatusBadge>
+                  )}
+                </AdminTableCell>
               </AdminTableRow>
-            ))}
-          </AdminTableRows>
+            ))
+          )}
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        hasPrevious={pagination.hasPrevious}
-        hasNext={pagination.hasNext}
-        disabled={loading}
-        onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-        onNext={() => setPage((value) => value + 1)}
-      />
 
       <AdminDetailDialog
         open={Boolean(viewTemplate)}

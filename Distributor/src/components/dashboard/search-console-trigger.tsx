@@ -28,14 +28,14 @@ export function SearchConsoleTrigger({
               variant="ghost"
               size="sm"
               className={cn(
-                "hidden h-8 justify-start border border-border/40 bg-muted/30 text-muted-foreground shadow-none hover:border-border hover:bg-background focus-visible:border-border focus-visible:bg-background focus-visible:ring-0 md:inline-flex",
+                "distributor-search-console-trigger hidden justify-start text-muted-foreground shadow-none hover:text-foreground focus-visible:ring-0 md:inline-flex",
                 isLeading ? "w-52 lg:w-60" : "w-52 lg:w-60",
               )}
               onClick={onOpen}
             >
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="truncate text-muted-foreground">Search console...</span>
-              <kbd className="ml-auto hidden rounded border border-border bg-muted px-1.5 py-0.5 text-caption text-muted-foreground lg:inline">
+              <kbd className="distributor-search-console-trigger__kbd ml-auto hidden lg:inline">
                 ⌘K
               </kbd>
             </Button>
@@ -51,7 +51,7 @@ export function SearchConsoleTrigger({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="border border-border/40 bg-muted/30 shadow-none hover:border-border hover:bg-background focus-visible:border-border focus-visible:bg-background focus-visible:ring-0 md:hidden"
+              className="distributor-search-console-trigger shadow-none focus-visible:ring-0 md:hidden"
               aria-label="Search console"
               onClick={onOpen}
             >
