@@ -1,16 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Pencil, Plus, Search, Shield, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
 import { RoleEditorDialog, type RoleEditorValues } from "@/components/users/role-editor-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
-import { AdminCardSkeleton } from "@/components/ui/admin-skeletons";
+import {
+  ADMIN_TABLE_PAGE_SIZE,
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTablePagination,
+  AdminTableRow,
+  AdminTableStateRow,
+  paginateItems,
+} from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { groupCapabilityKeys } from "@/lib/admin-capabilities";
 import {
   createAdminRole,
@@ -19,91 +30,6 @@ import {
   type AdminPermission,
   type AdminRole,
 } from "@/lib/admin-api";
-import { ApiError } from "@/lib/api-client";
-
-
-function RoleCard({
-  role,
-  actionLoading,
-  onEdit,
-  onDelete,
-}: {
-  role: AdminRole;
-  actionLoading: string | null;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const groups = groupCapabilityKeys(role.permissions).filter((group) => group.enabledCount > 0);
-
-  return (
-    <article className="group overflow-hidden rounded-[var(--radius-card)] border border-border bg-background transition-colors hover:border-primary/20 hover:bg-muted/10">
-      <div className="flex items-start gap-3 p-4">
-        <div className="rounded-[var(--radius-control)] bg-primary/10 p-2.5 text-primary ring-1 ring-primary/15">
-          <Shield className="size-4" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-compact font-semibold text-foreground">{role.name}</h3>
-                <StatusBadge variant={role.is_system ? "neutral" : "info"} showIcon={false}>
-                  {role.is_system ? "Built-in" : "Custom"}
-                </StatusBadge>
-              </div>
-              <p className="mt-1.5 text-caption leading-relaxed text-muted-foreground">
-                {role.description}
-              </p>
-            </div>
-
-            <div className="flex shrink-0 gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-              <Button variant="ghost" size="icon-sm" aria-label={`Edit ${role.name}`} onClick={onEdit}>
-                <Pencil className="size-3.5" />
-              </Button>
-              {!role.is_system ? (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Delete ${role.name}`}
-                  disabled={actionLoading === `delete-${role.key}`}
-                  onClick={onDelete}
-                >
-                  <Trash2 className="size-3.5 text-destructive" />
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-1.5">
-            <StatusBadge variant="info" showIcon={false}>
-              {role.permissions.length}{" "}
-              {role.permissions.length === 1 ? "capability" : "capabilities"}
-            </StatusBadge>
-            {groups.slice(0, 3).map((group) => (
-              <StatusBadge key={group.id} variant="neutral" showIcon={false}>
-                {group.label}
-              </StatusBadge>
-            ))}
-            {groups.length > 3 ? (
-              <StatusBadge variant="neutral" showIcon={false}>
-                +{groups.length - 3} more
-              </StatusBadge>
-            ) : null}
-          </div>
-
-          <Button
-            className="mt-4 h-8 w-full sm:w-auto"
-            variant="outline"
-            size="sm"
-            onClick={onEdit}
-          >
-            Manage access
-          </Button>
-        </div>
-      </div>
-    </article>
-  );
-}
 
 type RolesPermissionsPanelProps = {
   roles: AdminRole[];
@@ -129,6 +55,8 @@ export function RolesPermissionsPanel({
   const [editorError, setEditorError] = useState("");
   const [message, setMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const sortedRoles = useMemo(
     () => [...roles].sort((a, b) => a.name.localeCompare(b.name)),
@@ -154,6 +82,15 @@ export function RolesPermissionsPanel({
       return haystack.includes(query);
     });
   }, [searchQuery, sortedRoles]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery, pageSize]);
+
+  const pagination = useMemo(
+    () => paginateItems(filteredRoles, page, pageSize),
+    [filteredRoles, page, pageSize],
+  );
 
   const openCreate = () => {
     setEditorMode("create");
@@ -226,7 +163,7 @@ export function RolesPermissionsPanel({
             onChange={(event) => setSearchQuery(event.target.value)}
           />
 
-          <div className="flex items-center gap-3 lg:shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
             <Button onClick={openCreate}>
               <Plus className="size-3.5" />
@@ -237,52 +174,112 @@ export function RolesPermissionsPanel({
 
         {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
-        {loading ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <AdminCardSkeleton key={index} lines={2} />
-            ))}
-          </div>
-        ) : sortedRoles.length === 0 ? (
-          <div className="flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-border px-6 py-empty-state-lg text-center">
-            <div className="rounded-full bg-muted/40 p-3 text-muted-foreground">
-              <Shield className="size-6" />
-            </div>
-            <p className="mt-3 text-compact font-semibold text-foreground">No roles yet</p>
-            <p className="mt-1 max-w-sm text-caption text-muted-foreground">
-              Create your first role to control what admins can do in the console.
-            </p>
-            <Button className="mt-4" onClick={openCreate}>
-              <Plus className="size-3.5" />
-              Create role
-            </Button>
-          </div>
-        ) : filteredRoles.length === 0 ? (
-          <div className="flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-border px-6 py-empty-state-lg text-center">
-            <div className="rounded-full bg-muted/40 p-3 text-muted-foreground">
-              <Search className="size-6" />
-            </div>
-            <p className="mt-3 text-compact font-semibold text-foreground">No matching roles</p>
-            <p className="mt-1 max-w-sm text-caption text-muted-foreground">
-              Try a different search term or clear the search to see all roles.
-            </p>
-            <Button className="mt-4" variant="outline" onClick={() => setSearchQuery("")}>
-              Clear search
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {filteredRoles.map((role) => (
-              <RoleCard
-                key={role.key}
-                role={role}
-                actionLoading={actionLoading}
-                onEdit={() => openEdit(role)}
-                onDelete={() => void handleDelete(role)}
-              />
-            ))}
-          </div>
-        )}
+        <AdminDataTable
+          minWidth="xl"
+          footer={
+            <AdminTablePagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              hasPrevious={pagination.hasPrevious}
+              hasNext={pagination.hasNext}
+              disabled={loading}
+              totalCount={filteredRoles.length}
+              currentPageCount={pagination.items.length}
+              pageSize={pageSize}
+              onPageSizeChange={(next) => {
+                setPageSize(next);
+                setPage(0);
+              }}
+              onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+              onNext={() => setPage((value) => value + 1)}
+            />
+          }
+        >
+          <AdminTableHeader>
+            <tr>
+              <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+              <AdminTableHeadCell>Role</AdminTableHeadCell>
+              <AdminTableHeadCell>Type</AdminTableHeadCell>
+              <AdminTableHeadCell>Capabilities</AdminTableHeadCell>
+              <AdminTableHeadCell>Access areas</AdminTableHeadCell>
+            </tr>
+          </AdminTableHeader>
+          <AdminTableBody>
+            {loading ? (
+              <AdminTableSkeletonRows columns={5} />
+            ) : sortedRoles.length === 0 ? (
+              <AdminTableStateRow colSpan={5}>
+                No roles yet. Create a role to control admin access.
+              </AdminTableStateRow>
+            ) : filteredRoles.length === 0 ? (
+              <AdminTableStateRow colSpan={5}>No roles match your search.</AdminTableStateRow>
+            ) : (
+              pagination.items.map((role) => {
+                const groups = groupCapabilityKeys(role.permissions).filter(
+                  (group) => group.enabledCount > 0,
+                );
+
+                return (
+                  <AdminTableRow key={role.key}>
+                    <AdminTableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEdit(role)}
+                        >
+                          <Pencil className="size-3.5" />
+                          Manage
+                        </Button>
+                        {!role.is_system ? (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label={`Delete ${role.name}`}
+                            disabled={actionLoading === `delete-${role.key}`}
+                            onClick={() => void handleDelete(role)}
+                          >
+                            <Trash2 className="size-3.5 text-destructive" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <p className="font-medium text-foreground">{role.name}</p>
+                      <p className="mt-0.5 line-clamp-1 text-caption text-muted-foreground">
+                        {role.description}
+                      </p>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <StatusBadge variant={role.is_system ? "neutral" : "info"} showIcon={false}>
+                        {role.is_system ? "Built-in" : "Custom"}
+                      </StatusBadge>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <StatusBadge variant="info" showIcon={false}>
+                        {role.permissions.length}
+                      </StatusBadge>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <div className="flex flex-wrap gap-1.5">
+                        {groups.slice(0, 3).map((group) => (
+                          <StatusBadge key={group.id} variant="neutral" showIcon={false}>
+                            {group.label}
+                          </StatusBadge>
+                        ))}
+                        {groups.length > 3 ? (
+                          <StatusBadge variant="neutral" showIcon={false}>
+                            +{groups.length - 3} more
+                          </StatusBadge>
+                        ) : null}
+                      </div>
+                    </AdminTableCell>
+                  </AdminTableRow>
+                );
+              })
+            )}
+          </AdminTableBody>
+        </AdminDataTable>
       </div>
 
       <RoleEditorDialog

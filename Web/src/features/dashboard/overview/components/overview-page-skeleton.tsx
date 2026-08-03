@@ -2,6 +2,9 @@
 
 import type { ReactNode } from "react";
 
+import { OverviewHoldingsCardSkeleton } from "@/features/dashboard/overview/components/overview-holdings-card";
+import { OverviewPortfolioFlowCardSkeleton } from "@/features/dashboard/overview/components/overview-portfolio-flow-card";
+import { OverviewRiskCardSkeleton } from "@/features/dashboard/overview/components/overview-risk-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GOAL_PROGRESS_CARD_WIDTH_CLASS } from "@/features/goals/components/goal-progress-card";
 import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
@@ -30,24 +33,20 @@ function CardShell({
 export function OverviewPageSkeleton() {
   return (
     <div className="w-full min-w-0" aria-busy="true" aria-live="polite">
-      <div className="mb-6 space-y-2">
+      <div className="mb-4">
         <Skeleton className="h-7 w-56 max-w-full" />
-        <Skeleton className="h-4 w-80 max-w-full" />
+      </div>
+
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-4">
+        <OverviewProfileCardSkeleton className="shrink-0" />
+        <OverviewPortfolioFlowCardSkeleton className="min-w-0 flex-1 lg:min-w-[27rem]" />
+        <OverviewHoldingsCardSkeleton className="min-w-0 lg:w-[17rem] lg:shrink-0 xl:w-[18rem]" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,1.15fr)] xl:items-start">
         <div className="flex min-w-0 flex-col gap-4">
-          <div className="grid grid-cols-[minmax(9rem,10.5rem)_minmax(0,1fr)] gap-3 sm:gap-4">
-            <CardShell className="aspect-square min-h-[9.5rem]">
-              <div className="flex h-full flex-col items-center justify-between">
-                <div className="flex w-full items-center justify-between">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="size-3.5" />
-                </div>
-                <Skeleton className="h-14 w-20" />
-                <Skeleton className="h-3 w-12" />
-              </div>
-            </CardShell>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] sm:gap-4">
+            <OverviewRiskCardSkeleton />
 
             <CardShell className="min-h-[9.5rem]">
               <div className="flex items-center justify-between">
@@ -122,25 +121,6 @@ export function OverviewPageSkeleton() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <CardShell>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Skeleton className="size-7 rounded-full" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-3 w-48" />
-                </div>
-              </div>
-              <Skeleton className="h-7 w-28 rounded-[var(--radius-control)]" />
-            </div>
-            <Skeleton className="mt-4 h-[5.5rem] w-full rounded-[var(--radius-control)]" />
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <Skeleton key={index} className="h-[4.25rem] rounded-[var(--radius-control)]" />
-              ))}
-            </div>
-          </CardShell>
-
           <CardShell className="p-0">
             <div className="flex items-center justify-between px-4 pt-3.5">
               <div className="flex items-center gap-2">

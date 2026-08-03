@@ -130,6 +130,11 @@ class AdminUserSummaryResponse(BaseModel):
     suspended_at: Optional[datetime] = None
     suspension_reason_code: Optional[str] = None
     mfa_enrolled: bool
+    pin_enrolled: bool = False
+    phone_verified: bool = False
+    fund_movement_eligible: bool = False
+    last_login_at: Optional[datetime] = None
+    last_login_method: Optional[str] = None
     created_at: datetime
 
 
@@ -362,6 +367,8 @@ class AdminUserListResponse(BaseModel):
 class AuditLogItemResponse(BaseModel):
     id: UUID
     user_id: Optional[UUID] = None
+    user_email: Optional[str] = None
+    client_id: Optional[str] = None
     event_type: str
     ip_address: Optional[str] = None
     metadata: dict

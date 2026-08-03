@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Lock, MoreHorizontal, CheckCircle2, RefreshCw } from "lucide-react";
 
 import { LockedProfileUserCell } from "@/components/risk-profile/risk-profile-locked-user-cell";
@@ -36,21 +37,22 @@ import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/errors";
 import {
   confirmRiskProfileUnlock,
-  fetchLockedRiskProfiles,
   requestRiskProfileUnlock,
   type LockedRiskProfileUser,
 } from "@/lib/risk-profile-admin-api";
+import {
+  lockedRiskProfilesQueryKey,
+  useLockedRiskProfilesQuery,
+} from "@/hooks/use-risk-profile-queries";
 import { cn } from "@/lib/utils";
 
 const RISK_PROFILE_UNLOCK_ATTEMPTS = 3;
 
 export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
-  const [items, setItems] = useState<LockedRiskProfileUser[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [selectedUser, setSelectedUser] = useState<LockedRiskProfileUser | null>(null);
@@ -59,28 +61,17 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
   const [saving, setSaving] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
 
-  const loadLockedUsers = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await fetchLockedRiskProfiles({
-        limit: pageSize,
-        offset,
-      });
-      setItems(result.items);
-      setHasMore(result.items.length === pageSize);
-    } catch (err) {
-      setItems([]);
-      setHasMore(false);
-      setError(getErrorMessage(err, "Could not load locked risk profiles."));
-    } finally {
-      setLoading(false);
-    }
-  }, [offset, pageSize]);
+  const queryParams = { limit: pageSize, offset };
+  const { data, isPending, isFetching, error: queryError } = useLockedRiskProfilesQuery(queryParams);
+  const items = data?.items ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const showSkeleton = isPending && !data;
+  const loadError = queryError
+    ? getErrorMessage(queryError, "Could not load locked risk profiles.")
+    : "";
 
-  useEffect(() => {
-    void loadLockedUsers();
-  }, [loadLockedUsers]);
+  const refreshLockedUsers = () =>
+    queryClient.invalidateQueries({ queryKey: lockedRiskProfilesQueryKey(queryParams) });
 
   const openRevokeDialog = (user: LockedRiskProfileUser) => {
     setSelectedUser(user);
@@ -123,7 +114,7 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
       });
       setMessage(`Granted ${RISK_PROFILE_UNLOCK_ATTEMPTS} attempt(s) to ${selectedUser.email}.`);
       closeRevokeDialog();
-      await loadLockedUsers();
+      await refreshLockedUsers();
     } catch (err) {
       setError(getErrorMessage(err, "Could not unlock risk profile attempts."));
     } finally {
@@ -140,7 +131,6 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
   }, [items, search]);
 
   const columnCount = canManage ? 5 : 4;
-  const showSkeleton = loading && items.length === 0;
 
   return (
     <div className="space-y-4">
@@ -154,14 +144,16 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
         <Button
           variant="outline"
           size="icon"
-          onClick={() => void loadLockedUsers()}
+          onClick={() => void refreshLockedUsers()}
           aria-label="Refresh"
         >
-          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
         </Button>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error || loadError ? (
+        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+      ) : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
@@ -171,7 +163,7 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
             page={getOffsetPage(offset, pageSize)}
             hasPrevious={offset > 0}
             hasNext={hasMore}
-            disabled={loading}
+            disabled={isFetching}
             currentPageCount={filteredItems.length}
             hasMore={hasMore}
             pageSize={pageSize}

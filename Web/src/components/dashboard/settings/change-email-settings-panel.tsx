@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 
 import { AuthenticatorVerifyDialog } from "@/features/account/mfa";
+import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { SettingsDetailSection } from "@/components/dashboard/settings/settings-detail-row";
 import { OtpInput } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
@@ -75,7 +76,7 @@ export function ChangeEmailSettingsPanel({
     setStep("form");
   };
 
-  const submitEmailStart = async (totpCode?: string) => {
+  const submitEmailStart = async (verification?: StepUpVerification) => {
     setLoading(true);
     setError("");
     setAuthError("");
@@ -85,7 +86,8 @@ export function ChangeEmailSettingsPanel({
       const result = await changeEmailStart({
         newEmail,
         currentPassword,
-        totpCode,
+        totpCode: verification?.totpCode,
+        smsOtp: verification?.smsOtp,
       });
       setChangeToken(result.change_token);
       otpCooldown.startCooldown(result.retry_after_seconds);
@@ -131,8 +133,8 @@ export function ChangeEmailSettingsPanel({
     void submitEmailStart();
   };
 
-  const handleAuthenticatorVerify = (totpCode: string) => {
-    void submitEmailStart(totpCode);
+  const handleStepUpVerify = (verification: StepUpVerification) => {
+    void submitEmailStart(verification);
   };
 
   const handleResendCode = async () => {
@@ -326,7 +328,7 @@ export function ChangeEmailSettingsPanel({
         submitLabel={copy.settings.changeEmailSubmit}
         loading={loading}
         error={authError}
-        onSubmit={handleAuthenticatorVerify}
+        onSubmit={handleStepUpVerify}
       />
     </>
   );

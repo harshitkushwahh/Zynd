@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
 
 import { RiskProfileAssessmentDetailDialog } from "@/components/risk-profile/risk-profile-assessment-detail-dialog";
@@ -33,7 +34,11 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getErrorMessage } from "@/lib/errors";
 import { downloadAdminRiskProfileReport } from "@/lib/risk-profile-pdf-download";
-import { fetchUserRiskProfiles, type UserRiskProfileItem } from "@/lib/risk-profile-admin-api";
+import {
+  riskProfileUsersQueryKey,
+  useRiskProfileUsersQuery,
+} from "@/hooks/use-risk-profile-queries";
+import { type UserRiskProfileItem } from "@/lib/risk-profile-admin-api";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";
@@ -54,13 +59,11 @@ function tierBadgeVariant(tier: string) {
 }
 
 export function RiskProfileUsersPanel() {
-  const [items, setItems] = useState<UserRiskProfileItem[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [tier, setTier] = useState(ALL);
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reportsUser, setReportsUser] = useState<UserRiskProfileItem | null>(null);
   const [detailState, setDetailState] = useState<{
@@ -68,29 +71,18 @@ export function RiskProfileUsersPanel() {
     assessmentId: string;
   } | null>(null);
 
-  const loadProfiles = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await fetchUserRiskProfiles({
-        tier: tier === ALL ? undefined : tier,
-        limit: pageSize,
-        offset,
-      });
-      setItems(result.items);
-      setHasMore(result.items.length === pageSize);
-    } catch (err) {
-      setItems([]);
-      setHasMore(false);
-      setError(getErrorMessage(err, "Could not load user risk profiles."));
-    } finally {
-      setLoading(false);
-    }
-  }, [tier, offset, pageSize]);
-
-  useEffect(() => {
-    void loadProfiles();
-  }, [loadProfiles]);
+  const queryParams = {
+    tier: tier === ALL ? undefined : tier,
+    limit: pageSize,
+    offset,
+  };
+  const { data, isPending, isFetching, error: queryError } = useRiskProfileUsersQuery(queryParams);
+  const items = data?.items ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const showSkeleton = isPending && !data && items.length === 0;
+  const loadError = queryError
+    ? getErrorMessage(queryError, "Could not load user risk profiles.")
+    : "";
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -102,8 +94,6 @@ export function RiskProfileUsersPanel() {
         .includes(query),
     );
   }, [items, search]);
-
-  const showSkeleton = loading && items.length === 0;
 
   const openSingleReport = (item: UserRiskProfileItem) => {
     setDetailState({ user: item, assessmentId: item.assessment_id });
@@ -136,15 +126,19 @@ export function RiskProfileUsersPanel() {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => void loadProfiles()}
+            onClick={() =>
+              void queryClient.invalidateQueries({ queryKey: riskProfileUsersQueryKey(queryParams) })
+            }
             aria-label="Refresh"
           >
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
           </Button>
         </div>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error || loadError ? (
+        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+      ) : null}
 
       <AdminDataTable
         minWidth="lg"
@@ -153,7 +147,7 @@ export function RiskProfileUsersPanel() {
             page={getOffsetPage(offset, pageSize)}
             hasPrevious={offset > 0}
             hasNext={hasMore}
-            disabled={loading}
+            disabled={isFetching}
             currentPageCount={filteredItems.length}
             hasMore={hasMore}
             pageSize={pageSize}

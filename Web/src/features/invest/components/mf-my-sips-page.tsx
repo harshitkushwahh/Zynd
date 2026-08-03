@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { type MfSipPlan } from "@/features/invest/api/invest-api";
 import { MfMySipsFilterBar } from "@/features/invest/components/mf-my-sips-filter-bar";
@@ -116,6 +117,7 @@ export function MfMySipsPage() {
   return (
     <div className={MF_PAGE_SECTION_CLASS}>
       <MySipsBreadcrumb />
+      <FundEligibilityBanner />
 
       <div className="mb-6 flex items-start gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">

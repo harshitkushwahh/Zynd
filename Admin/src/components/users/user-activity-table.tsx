@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { formatTimestampDetail } from "@/lib/format-date";
@@ -30,14 +31,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchAuditLogs, type AuditLogItem } from "@/lib/admin-api";
+import {
+  adminUserActivityQueryKey,
+  useAdminUserActivityQuery,
+} from "@/hooks/use-admin-user-activity-query";
 import { AUDIT_EVENT_GROUPS, formatAuditEvent } from "@/lib/admin-audit-events";
-import { ApiError } from "@/lib/api-client";
+import { type AuditLogItem } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";
-
-
 
 function matchesSearch(log: AuditLogItem, query: string) {
   const normalized = query.trim().toLowerCase();
@@ -63,39 +65,24 @@ function matchesGroupFilter(log: AuditLogItem, groupKey: string) {
 }
 
 export function UserActivityTable({ userId }: { userId: string }) {
-  const [logs, setLogs] = useState<AuditLogItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState(ALL);
   const [groupFilter, setGroupFilter] = useState(ALL);
   const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
 
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const items = await fetchAuditLogs({
-        user_id: userId,
-        event_type: eventFilter === ALL ? undefined : eventFilter,
-        limit: ADMIN_TABLE_PAGE_SIZE,
-        offset,
-      });
-      setLogs(items);
-      setHasMore(items.length === ADMIN_TABLE_PAGE_SIZE);
-    } catch (err) {
-      setLogs([]);
-      setHasMore(false);
-      setError(getErrorMessage(err, "Could not load activity."));
-    } finally {
-      setLoading(false);
-    }
-  }, [eventFilter, offset, userId]);
+  const queryParams = {
+    userId,
+    eventFilter,
+    offset,
+    pageSize: ADMIN_TABLE_PAGE_SIZE,
+  };
+  const { data, isPending, isFetching, error: queryError } = useAdminUserActivityQuery(queryParams);
 
-  useEffect(() => {
-    void loadLogs();
-  }, [loadLogs]);
+  const logs = data?.items ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const showSkeleton = isPending && logs.length === 0;
+  const error = queryError ? getErrorMessage(queryError, "Could not load activity.") : "";
 
   const filteredLogs = useMemo(
     () => logs.filter((log) => matchesGroupFilter(log, groupFilter) && matchesSearch(log, search)),
@@ -111,12 +98,8 @@ export function UserActivityTable({ userId }: { userId: string }) {
     setGroupFilter(value ?? ALL);
   };
 
-  const handleSearch = () => {
-    if (offset !== 0) {
-      setOffset(0);
-      return;
-    }
-    void loadLogs();
+  const handleRefresh = () => {
+    void queryClient.invalidateQueries({ queryKey: adminUserActivityQueryKey(queryParams) });
   };
 
   return (
@@ -127,9 +110,6 @@ export function UserActivityTable({ userId }: { userId: string }) {
           placeholder="Search events, IP, or date"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") handleSearch();
-          }}
         />
 
         <div className="flex flex-wrap items-center gap-2">
@@ -166,8 +146,8 @@ export function UserActivityTable({ userId }: { userId: string }) {
             </SelectContent>
           </Select>
 
-          <Button variant="outline" size="icon" onClick={() => void loadLogs()} aria-label="Refresh">
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          <Button variant="outline" size="icon" onClick={handleRefresh} aria-label="Refresh">
+            <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -183,7 +163,7 @@ export function UserActivityTable({ userId }: { userId: string }) {
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {loading ? (
+          {showSkeleton ? (
             <AdminTableSkeletonRows columns={3} />
           ) : filteredLogs.length === 0 ? (
             <AdminTableStateRow colSpan={3}>No activity matches your filters.</AdminTableStateRow>
@@ -204,10 +184,10 @@ export function UserActivityTable({ userId }: { userId: string }) {
       </AdminDataTable>
 
       <AdminTablePagination
-        page={getOffsetPage(offset)}
+        page={getOffsetPage(offset, ADMIN_TABLE_PAGE_SIZE)}
         hasPrevious={offset > 0}
         hasNext={hasMore}
-        disabled={loading}
+        disabled={isFetching}
         onPrevious={() => setOffset((value) => Math.max(0, value - ADMIN_TABLE_PAGE_SIZE))}
         onNext={() => setOffset((value) => value + ADMIN_TABLE_PAGE_SIZE)}
       />

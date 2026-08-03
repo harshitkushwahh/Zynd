@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
   bulkUpsertMfCartItems,
   fetchInvestConfig,
@@ -259,6 +260,8 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
           },
         ]}
       />
+
+      <FundEligibilityBanner />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">

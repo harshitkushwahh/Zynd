@@ -18,6 +18,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { PageTitle } from "@/components/ui/page-title";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -472,6 +473,7 @@ export function MfCartView() {
   return (
     <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-6 pb-8")}>
       <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
+      <FundEligibilityBanner />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">

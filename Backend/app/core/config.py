@@ -128,7 +128,11 @@ class Settings(BaseSettings):
     otp_send_limit_per_ip: int = 20
     otp_send_window_seconds: int = 3600
 
-    sms_provider: Literal["", "stub"] = ""
+    sms_provider: Literal["", "stub", "twilio"] = ""
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    twilio_messaging_service_sid: str = ""
 
     @property
     def resolved_mfa_encryption_key(self) -> str:

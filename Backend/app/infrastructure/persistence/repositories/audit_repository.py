@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.infrastructure.persistence.models import AuditEventType, AuditLog
 
@@ -38,7 +39,11 @@ class SqlAlchemyAuditRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        query = select(AuditLog).order_by(AuditLog.created_at.desc())
+        query = (
+            select(AuditLog)
+            .options(selectinload(AuditLog.user))
+            .order_by(AuditLog.created_at.desc())
+        )
         if user_id:
             query = query.where(AuditLog.user_id == user_id)
         if event_type:
@@ -47,10 +52,13 @@ class SqlAlchemyAuditRepository:
         result = await self._session.execute(query)
         items: list[dict[str, Any]] = []
         for row in result.scalars():
+            user = row.user
             items.append(
                 {
                     "id": row.id,
                     "user_id": row.user_id,
+                    "user_email": user.email if user else None,
+                    "client_id": user.client_id if user else None,
                     "event_type": row.event_type.value,
                     "ip_address": row.ip_address,
                     "metadata": row.metadata_ or {},

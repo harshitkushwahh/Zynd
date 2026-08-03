@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check, Copy, Download, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import QRCode from "react-qr-code";
@@ -81,7 +82,7 @@ async function copyText(value: string) {
 }
 
 export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDialogProps) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [step, setStep] = useState<EnrollStep>("start");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -133,6 +134,7 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
       if (user?.id) {
         saveMfaBackupCodes(user.id, result.backup_codes);
       }
+      await refreshUser();
       setStep("backup");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.mfa.enroll.invalidCode);
@@ -342,6 +344,34 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
                   </Button>
                 </div>
               </div>
+
+              {user && !user.pin_enrolled ? (
+                <div className="rounded-[var(--radius-card)] border border-border bg-background p-4">
+                  <p className="text-compact font-medium text-foreground">
+                    {copy.mfa.enroll.nextPinTitle}
+                  </p>
+                  <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
+                    {copy.mfa.enroll.nextPinDescription}
+                  </p>
+                  <Button asChild className="mt-3 w-full sm:w-auto">
+                    <Link href="/dashboard/settings?section=zynd-pin">
+                      {copy.mfa.enroll.nextPinAction}
+                    </Link>
+                  </Button>
+                </div>
+              ) : user?.fund_movement_eligible ? (
+                <div className="rounded-[var(--radius-card)] border border-success/25 bg-success/5 p-4">
+                  <p className="text-compact font-medium text-foreground">
+                    {copy.mfa.enroll.investReadyTitle}
+                  </p>
+                  <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
+                    {copy.mfa.enroll.investReadyDescription}
+                  </p>
+                  <Button asChild className="mt-3 w-full sm:w-auto">
+                    <Link href="/dashboard/invest">{copy.mfa.enroll.investReadyAction}</Link>
+                  </Button>
+                </div>
+              ) : null}
 
               <AuthSubmitFooter hint={copy.mfa.backupCodesOfflineHint}>
                 <Button

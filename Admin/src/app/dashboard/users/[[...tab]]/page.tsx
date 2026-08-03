@@ -16,11 +16,7 @@ export default function UsersRoutePage({ params }: UsersRoutePageProps) {
   const { tab } = use(params);
   const segment = tab?.[0];
 
-  if (!segment) {
-    return <UserManagementPage />;
-  }
-
-  if (USER_MANAGEMENT_TAB_SLUGS.has(segment)) {
+  if (!segment || USER_MANAGEMENT_TAB_SLUGS.has(segment)) {
     return <UserManagementPage tabSlug={segment} />;
   }
 

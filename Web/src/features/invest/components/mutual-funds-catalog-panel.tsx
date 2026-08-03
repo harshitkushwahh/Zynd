@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 
 import { FieldMessage } from "@/components/ui/ui-message";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
   type InvestFundSummary,
   type InvestHomeResponse,
@@ -75,6 +76,7 @@ export function MutualFundsCatalogPanel() {
   return (
     <div className={MF_PAGE_SECTION_CLASS}>
       <MfBreadcrumb />
+      <FundEligibilityBanner />
 
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1">

@@ -189,7 +189,7 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     label: "Zynd Logs",
     href: "/dashboard/zynd-logs",
     icon: ScrollText,
-    description: "Cybrilla, Fintech Primitive, and KYC Kart integration audit logs",
+    description: "Platform audit logs plus Cybrilla, Fintech Primitive, and KYC Kart integration logs",
     permissions: ["audit.read"],
   },
 ];

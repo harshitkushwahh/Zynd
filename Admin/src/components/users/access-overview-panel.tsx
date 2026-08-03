@@ -273,6 +273,7 @@ export function AccessOverviewPanel({ roles, permissionCatalog }: AccessOverview
   const [roleQuery, setRoleQuery] = useState("");
   const [detailRole, setDetailRole] = useState<AdminRole | null>(null);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const sortedRoles = useMemo(
     () => [...roles].sort((a, b) => a.name.localeCompare(b.name)),
@@ -301,11 +302,11 @@ export function AccessOverviewPanel({ roles, permissionCatalog }: AccessOverview
 
   useEffect(() => {
     setPage(0);
-  }, [roleQuery]);
+  }, [roleQuery, pageSize]);
 
   const pagination = useMemo(
-    () => paginateItems(filteredRoles, page, ADMIN_TABLE_PAGE_SIZE),
-    [filteredRoles, page],
+    () => paginateItems(filteredRoles, page, pageSize),
+    [filteredRoles, page, pageSize],
   );
 
   const openRoleDetail = (role: AdminRole) => {
@@ -340,7 +341,25 @@ export function AccessOverviewPanel({ roles, permissionCatalog }: AccessOverview
           onChange={(event) => setRoleQuery(event.target.value)}
         />
 
-        <AdminDataTable>
+        <AdminDataTable
+          footer={
+            <AdminTablePagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              hasPrevious={pagination.hasPrevious}
+              hasNext={pagination.hasNext}
+              totalCount={filteredRoles.length}
+              currentPageCount={pagination.items.length}
+              pageSize={pageSize}
+              onPageSizeChange={(next) => {
+                setPageSize(next);
+                setPage(0);
+              }}
+              onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+              onNext={() => setPage((value) => value + 1)}
+            />
+          }
+        >
           <AdminTableHeader>
             <tr>
               <AdminTableHeadCell>Role</AdminTableHeadCell>
@@ -397,17 +416,6 @@ export function AccessOverviewPanel({ roles, permissionCatalog }: AccessOverview
             )}
           </AdminTableBody>
         </AdminDataTable>
-
-        {filteredRoles.length > 0 ? (
-          <AdminTablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            hasPrevious={pagination.hasPrevious}
-            hasNext={pagination.hasNext}
-            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-            onNext={() => setPage((value) => value + 1)}
-          />
-        ) : null}
       </div>
 
       <RoleAccessDetailDialog

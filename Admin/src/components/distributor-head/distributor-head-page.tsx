@@ -11,8 +11,8 @@ import {
 } from "@/components/distributor-head/distributor-head-tab-panels";
 import { DistributorHeadManagersPanel } from "@/components/distributor-head/distributor-head-managers-panel";
 import { DistributorHeadDistributorsPanel } from "@/components/distributor-head/distributor-head-distributors-panel";
-import { DistributorHeadManagerDetail } from "@/components/distributor-head/distributor-head-manager-detail";
-import { DistributorHeadDistributorDetail } from "@/components/distributor-head/distributor-head-distributor-detail";
+import { DistributorHeadManagerView } from "@/components/distributor-head/distributor-head-manager-view";
+import { DistributorHeadDistributorView } from "@/components/distributor-head/distributor-head-distributor-view";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { DistributorHeadStateBadges } from "@/components/distributor-head/distributor-head-state-badges";
 import { Tabs } from "@/components/ui/tabs";
@@ -55,6 +55,8 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
   const tabSlug = segments?.[0];
   const entityId = segments?.[1];
   const listTabId = resolveListTab(segments);
+  const managerProfileTabSlug = listTabId === "managers" ? segments?.[2] : undefined;
+  const distributorProfileTabSlug = listTabId === "distributors" ? segments?.[2] : undefined;
   const activeTabId = useMemo(() => resolveActiveTabId(segments), [segments]);
 
   const managerDetail =
@@ -126,14 +128,20 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
       {activeTabId === "overview" ? <DistributorHeadOverviewPanel /> : null}
       {activeTabId === "managers" && !entityId ? <DistributorHeadManagersPanel /> : null}
       {activeTabId === "managers" && entityId && managerDetail ? (
-        <DistributorHeadManagerDetail manager={managerDetail} />
+        <DistributorHeadManagerView
+          manager={managerDetail}
+          profileTabSlug={managerProfileTabSlug}
+        />
       ) : null}
       {activeTabId === "managers" && entityId && !managerDetail ? (
         <p className="text-compact text-muted-foreground">Manager not found in demo data.</p>
       ) : null}
       {activeTabId === "distributors" && !entityId ? <DistributorHeadDistributorsPanel /> : null}
       {activeTabId === "distributors" && entityId && distributorDetail ? (
-        <DistributorHeadDistributorDetail distributor={distributorDetail} />
+        <DistributorHeadDistributorView
+          distributor={distributorDetail}
+          profileTabSlug={distributorProfileTabSlug}
+        />
       ) : null}
       {activeTabId === "distributors" && entityId && !distributorDetail ? (
         <p className="text-compact text-muted-foreground">Distributor not found in demo data.</p>

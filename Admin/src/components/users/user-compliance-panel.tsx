@@ -16,7 +16,6 @@ import {
 
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import {
@@ -154,8 +153,11 @@ export function UserCompliancePanel({
   const [deletionQuery, setDeletionQuery] = useState("");
   const [actionQuery, setActionQuery] = useState("");
   const [reviewPage, setReviewPage] = useState(0);
+  const [reviewPageSize, setReviewPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [deletionPage, setDeletionPage] = useState(0);
+  const [deletionPageSize, setDeletionPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [actionPage, setActionPage] = useState(0);
+  const [actionPageSize, setActionPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const visibleTabs = useMemo(() => {
     const tabs: Array<{ key: ComplianceTab; label: string; icon: LucideIcon; count: number }> = [];
@@ -201,15 +203,15 @@ export function UserCompliancePanel({
 
   useEffect(() => {
     setReviewPage(0);
-  }, [reviews.length, reviewQuery]);
+  }, [reviews.length, reviewQuery, reviewPageSize]);
 
   useEffect(() => {
     setDeletionPage(0);
-  }, [deletions.length, deletionQuery]);
+  }, [deletions.length, deletionQuery, deletionPageSize]);
 
   useEffect(() => {
     setActionPage(0);
-  }, [pendingActions.length, actionQuery]);
+  }, [pendingActions.length, actionQuery, actionPageSize]);
 
   const filteredReviews = useMemo(
     () =>
@@ -250,16 +252,16 @@ export function UserCompliancePanel({
   );
 
   const reviewPagination = useMemo(
-    () => paginateItems(filteredReviews, reviewPage, ADMIN_TABLE_PAGE_SIZE),
-    [filteredReviews, reviewPage],
+    () => paginateItems(filteredReviews, reviewPage, reviewPageSize),
+    [filteredReviews, reviewPage, reviewPageSize],
   );
   const deletionPagination = useMemo(
-    () => paginateItems(filteredDeletions, deletionPage, ADMIN_TABLE_PAGE_SIZE),
-    [deletionPage, filteredDeletions],
+    () => paginateItems(filteredDeletions, deletionPage, deletionPageSize),
+    [deletionPage, deletionPageSize, filteredDeletions],
   );
   const actionPagination = useMemo(
-    () => paginateItems(filteredActions, actionPage, ADMIN_TABLE_PAGE_SIZE),
-    [actionPage, filteredActions],
+    () => paginateItems(filteredActions, actionPage, actionPageSize),
+    [actionPage, actionPageSize, filteredActions],
   );
 
   const handleResolveReview = async (itemId: string, status: "reviewed" | "dismissed") => {
@@ -374,18 +376,35 @@ export function UserCompliancePanel({
         {canReadReviews ? (
           <TabsContent value="reviews" className="mt-0 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSectionTitle variant="section">
-                Security review queue
-              </AdminSectionTitle>
               <AdminSearchInput
-                containerClassName="max-w-sm sm:w-56"
+                containerClassName="max-w-sm"
                 placeholder="Search reviews"
                 value={reviewQuery}
                 onChange={(event) => setReviewQuery(event.target.value)}
               />
             </div>
 
-            <AdminDataTable minWidth="lg">
+            <AdminDataTable
+              minWidth="lg"
+              footer={
+                <AdminTablePagination
+                  page={reviewPagination.page}
+                  totalPages={reviewPagination.totalPages}
+                  hasPrevious={reviewPagination.hasPrevious}
+                  hasNext={reviewPagination.hasNext}
+                  disabled={loading}
+                  totalCount={filteredReviews.length}
+                  currentPageCount={reviewPagination.items.length}
+                  pageSize={reviewPageSize}
+                  onPageSizeChange={(next) => {
+                    setReviewPageSize(next);
+                    setReviewPage(0);
+                  }}
+                  onPrevious={() => setReviewPage((page) => Math.max(0, page - 1))}
+                  onNext={() => setReviewPage((page) => page + 1)}
+                />
+              }
+            >
               <AdminTableHeader>
                 <tr>
                   {canResolveReviews ? (
@@ -462,44 +481,48 @@ export function UserCompliancePanel({
                 )}
               </AdminTableBody>
             </AdminDataTable>
-
-            {!loading && filteredReviews.length > 0 ? (
-              <AdminTablePagination
-                page={reviewPagination.page}
-                totalPages={reviewPagination.totalPages}
-                hasPrevious={reviewPagination.hasPrevious}
-                hasNext={reviewPagination.hasNext}
-                onPrevious={() => setReviewPage((page) => Math.max(0, page - 1))}
-                onNext={() => setReviewPage((page) => page + 1)}
-              />
-            ) : null}
           </TabsContent>
         ) : null}
 
         {canExecuteDeletions ? (
           <TabsContent value="deletions" className="mt-0 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSectionTitle variant="section">
-                Account deletions
-              </AdminSectionTitle>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button
-                  size="sm"
-                  disabled={actionLoading === "deletion-executor"}
-                  onClick={() => void handleRunDeletionExecutor()}
-                >
-                  {actionLoading === "deletion-executor" ? "Running..." : "Run deletion executor"}
-                </Button>
-                <AdminSearchInput
-                  containerClassName="max-w-sm sm:w-56"
-                  placeholder="Search deletions"
-                  value={deletionQuery}
-                  onChange={(event) => setDeletionQuery(event.target.value)}
-                />
-              </div>
+              <AdminSearchInput
+                containerClassName="max-w-sm"
+                placeholder="Search deletions"
+                value={deletionQuery}
+                onChange={(event) => setDeletionQuery(event.target.value)}
+              />
+              <Button
+                size="sm"
+                disabled={actionLoading === "deletion-executor"}
+                onClick={() => void handleRunDeletionExecutor()}
+              >
+                {actionLoading === "deletion-executor" ? "Running..." : "Run deletion executor"}
+              </Button>
             </div>
 
-            <AdminDataTable minWidth="md">
+            <AdminDataTable
+              minWidth="md"
+              footer={
+                <AdminTablePagination
+                  page={deletionPagination.page}
+                  totalPages={deletionPagination.totalPages}
+                  hasPrevious={deletionPagination.hasPrevious}
+                  hasNext={deletionPagination.hasNext}
+                  disabled={loading}
+                  totalCount={filteredDeletions.length}
+                  currentPageCount={deletionPagination.items.length}
+                  pageSize={deletionPageSize}
+                  onPageSizeChange={(next) => {
+                    setDeletionPageSize(next);
+                    setDeletionPage(0);
+                  }}
+                  onPrevious={() => setDeletionPage((page) => Math.max(0, page - 1))}
+                  onNext={() => setDeletionPage((page) => page + 1)}
+                />
+              }
+            >
               <AdminTableHeader>
                 <tr>
                   <AdminTableHeadCell>Account</AdminTableHeadCell>
@@ -558,35 +581,41 @@ export function UserCompliancePanel({
                 )}
               </AdminTableBody>
             </AdminDataTable>
-
-            {!loading && filteredDeletions.length > 0 ? (
-              <AdminTablePagination
-                page={deletionPagination.page}
-                totalPages={deletionPagination.totalPages}
-                hasPrevious={deletionPagination.hasPrevious}
-                hasNext={deletionPagination.hasNext}
-                onPrevious={() => setDeletionPage((page) => Math.max(0, page - 1))}
-                onNext={() => setDeletionPage((page) => page + 1)}
-              />
-            ) : null}
           </TabsContent>
         ) : null}
 
         {canApproveActions ? (
           <TabsContent value="actions" className="mt-0 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSectionTitle variant="section">
-                Pending admin actions
-              </AdminSectionTitle>
               <AdminSearchInput
-                containerClassName="max-w-sm sm:w-56"
+                containerClassName="max-w-sm"
                 placeholder="Search actions"
                 value={actionQuery}
                 onChange={(event) => setActionQuery(event.target.value)}
               />
             </div>
 
-            <AdminDataTable minWidth="xl">
+            <AdminDataTable
+              minWidth="xl"
+              footer={
+                <AdminTablePagination
+                  page={actionPagination.page}
+                  totalPages={actionPagination.totalPages}
+                  hasPrevious={actionPagination.hasPrevious}
+                  hasNext={actionPagination.hasNext}
+                  disabled={loading}
+                  totalCount={filteredActions.length}
+                  currentPageCount={actionPagination.items.length}
+                  pageSize={actionPageSize}
+                  onPageSizeChange={(next) => {
+                    setActionPageSize(next);
+                    setActionPage(0);
+                  }}
+                  onPrevious={() => setActionPage((page) => Math.max(0, page - 1))}
+                  onNext={() => setActionPage((page) => page + 1)}
+                />
+              }
+            >
               <AdminTableHeader>
                 <tr>
                   <AdminTableHeadCell className="text-right">Decision</AdminTableHeadCell>
@@ -662,17 +691,6 @@ export function UserCompliancePanel({
                 )}
               </AdminTableBody>
             </AdminDataTable>
-
-            {!loading && filteredActions.length > 0 ? (
-              <AdminTablePagination
-                page={actionPagination.page}
-                totalPages={actionPagination.totalPages}
-                hasPrevious={actionPagination.hasPrevious}
-                hasNext={actionPagination.hasNext}
-                onPrevious={() => setActionPage((page) => Math.max(0, page - 1))}
-                onNext={() => setActionPage((page) => page + 1)}
-              />
-            ) : null}
           </TabsContent>
         ) : null}
       </Tabs>

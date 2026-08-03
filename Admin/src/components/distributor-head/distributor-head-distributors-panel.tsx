@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { DistributorHeadListToolbar } from "@/components/distributor-head/distributor-head-list-toolbar";
 import { DistributorHeadStatusBadge } from "@/components/distributor-head/distributor-head-badge";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -15,16 +15,9 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
-  AdminTableRows,
+  AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { DUMMY_DISTRIBUTORS, DUMMY_MANAGERS } from "@/lib/dummy/distributor-head-data";
 import {
   distributorHeadDistributorHref,
@@ -34,6 +27,14 @@ import { formatDistributorHeadInr } from "@/lib/distributor-head-format";
 
 const STATUS_ALL = "all";
 const MANAGER_ALL = "all";
+const TABLE_COLUMN_COUNT = 8;
+
+const STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: STATUS_ALL, label: "All statuses" },
+  { value: "Active", label: "Active" },
+  { value: "Onboarding", label: "Onboarding" },
+  { value: "Suspended", label: "Suspended" },
+];
 
 export function DistributorHeadDistributorsPanel() {
   const router = useRouter();
@@ -41,6 +42,15 @@ export function DistributorHeadDistributorsPanel() {
   const [statusFilter, setStatusFilter] = useState(STATUS_ALL);
   const [managerFilter, setManagerFilter] = useState(MANAGER_ALL);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
+
+  const managerFilterOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: MANAGER_ALL, label: "All managers" },
+      ...DUMMY_MANAGERS.map((manager) => ({ value: manager.id, label: manager.name })),
+    ],
+    [],
+  );
 
   const filtered = useMemo(() => {
     return DUMMY_DISTRIBUTORS.filter((row) => {
@@ -52,8 +62,8 @@ export function DistributorHeadDistributorsPanel() {
   }, [managerFilter, search, statusFilter]);
 
   const pagination = useMemo(
-    () => paginateItems(filtered, page, ADMIN_TABLE_PAGE_SIZE),
-    [filtered, page],
+    () => paginateItems(filtered, page, pageSize),
+    [filtered, page, pageSize],
   );
 
   const handleSearchChange = (value: string) => {
@@ -61,61 +71,59 @@ export function DistributorHeadDistributorsPanel() {
     setPage(0);
   };
 
-  const colSpan = 8;
-
   return (
     <div className="space-y-4">
-      <AdminSectionTitle description="Every distributor in the state. Filter by manager or status, then open a profile.">
-        All distributors
-      </AdminSectionTitle>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by name, ARN, manager, or branch"
+          value={search}
+          onChange={(event) => handleSearchChange(event.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={managerFilter}
+            onValueChange={(value) => {
+              setManagerFilter(value);
+              setPage(0);
+            }}
+            options={managerFilterOptions}
+            placeholder="Manager"
+            className="min-w-select-md"
+          />
+          <AdminSelect
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value);
+              setPage(0);
+            }}
+            options={STATUS_FILTER_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
+        </div>
+      </div>
 
-      <DistributorHeadListToolbar
-        searchPlaceholder="Search by name, ARN, manager, or branch"
-        searchValue={search}
-        onSearchChange={handleSearchChange}
-        filters={
-          <>
-            <Select
-              value={managerFilter}
-              onValueChange={(value) => {
-                setManagerFilter(value ?? MANAGER_ALL);
-                setPage(0);
-              }}
-            >
-              <SelectTrigger size="sm" className="min-w-select-md">
-                <SelectValue placeholder="Manager" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={MANAGER_ALL}>All managers</SelectItem>
-                {DUMMY_MANAGERS.map((manager) => (
-                  <SelectItem key={manager.id} value={manager.id}>
-                    {manager.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => {
-                setStatusFilter(value ?? STATUS_ALL);
-                setPage(0);
-              }}
-            >
-              <SelectTrigger size="sm" className="min-w-select-sm">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={STATUS_ALL}>All statuses</SelectItem>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Onboarding">Onboarding</SelectItem>
-                <SelectItem value="Suspended">Suspended</SelectItem>
-              </SelectContent>
-            </Select>
-          </>
+      <AdminDataTable
+        minWidth="6xl"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            totalCount={filtered.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+            onNext={() => setPage((current) => current + 1)}
+          />
         }
-      />
-
-      <AdminDataTable minWidth="6xl">
+      >
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Name</AdminTableHeadCell>
@@ -129,12 +137,12 @@ export function DistributorHeadDistributorsPanel() {
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows
-            colSpan={colSpan}
-            isEmpty={pagination.items.length === 0}
-            emptyMessage="No distributors match your search or filters."
-          >
-            {pagination.items.map((row) => (
+          {pagination.items.length === 0 ? (
+            <AdminTableStateRow colSpan={TABLE_COLUMN_COUNT}>
+              No distributors match your search or filters.
+            </AdminTableStateRow>
+          ) : (
+            pagination.items.map((row) => (
               <AdminTableRow
                 key={row.id}
                 onClick={() => router.push(distributorHeadDistributorHref(row.id))}
@@ -159,19 +167,10 @@ export function DistributorHeadDistributorsPanel() {
                   <DistributorHeadStatusBadge status={row.status} />
                 </AdminTableCell>
               </AdminTableRow>
-            ))}
-          </AdminTableRows>
+            ))
+          )}
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        hasPrevious={pagination.hasPrevious}
-        hasNext={pagination.hasNext}
-        onPrevious={() => setPage((current) => Math.max(0, current - 1))}
-        onNext={() => setPage((current) => current + 1)}
-      />
     </div>
   );
 }

@@ -282,29 +282,49 @@ def _user_summary_dict(
 
 
 async def get_user_summary(db: AsyncSession, user_id: UUID) -> dict[str, Any] | None:
+    from app.application.admin.user_security_summary_service import (
+        build_admin_security_summary,
+        get_user_last_login_summary,
+    )
+
     user = await db.get(User, user_id)
     if not user:
         return None
     invested_ids = await _invested_user_ids(db, [user.id])
     profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=[user.id])
-    return _user_summary_dict(
-        user,
-        has_invested=user.id in invested_ids,
-        profile_image_url=profile_images.get(user.id),
-    )
+    last_login = await get_user_last_login_summary(db, user.id)
+    security = build_admin_security_summary(user, last_login)
+    return {
+        **_user_summary_dict(
+            user,
+            has_invested=user.id in invested_ids,
+            profile_image_url=profile_images.get(user.id),
+        ),
+        **security,
+    }
 
 
 async def get_user_summary_by_reference(db: AsyncSession, reference: str) -> dict[str, Any] | None:
+    from app.application.admin.user_security_summary_service import (
+        build_admin_security_summary,
+        get_user_last_login_summary,
+    )
+
     user = await get_user_by_reference(db, reference)
     if not user:
         return None
     invested_ids = await _invested_user_ids(db, [user.id])
     profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=[user.id])
-    return _user_summary_dict(
-        user,
-        has_invested=user.id in invested_ids,
-        profile_image_url=profile_images.get(user.id),
-    )
+    last_login = await get_user_last_login_summary(db, user.id)
+    security = build_admin_security_summary(user, last_login)
+    return {
+        **_user_summary_dict(
+            user,
+            has_invested=user.id in invested_ids,
+            profile_image_url=profile_images.get(user.id),
+        ),
+        **security,
+    }
 
 
 async def create_admin_user(

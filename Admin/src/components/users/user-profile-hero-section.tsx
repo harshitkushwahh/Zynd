@@ -19,9 +19,8 @@ import {
   computeAdminKycProgress,
   resolveKycHeroComplianceBadge,
 } from "@/lib/admin-user-kyc-progress";
-import { ApiError } from "@/lib/api-client";
-import { fetchUserRiskProfile, type UserRiskProfileDetail } from "@/lib/risk-profile-admin-api";
 import { resolveRiskTierVisual } from "@/lib/risk-profile-gauge-ui";
+import { useAdminUserRiskProfileQuery } from "@/hooks/use-admin-user-risk-profile-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -112,7 +111,30 @@ function resolveIdentityDisplayName(
   return summary.display_name;
 }
 
-function UserProfileHeroClientIdCopy({ clientId }: { clientId: string }) {
+function formatLastLoginMethod(method: string | null | undefined) {
+  switch (method) {
+    case "sms":
+      return "SMS OTP";
+    case "authenticator":
+      return "Authenticator";
+    case "backup":
+      return "Backup code";
+    case "oauth":
+      return "OAuth";
+    case "password":
+      return "Password";
+    default:
+      return null;
+  }
+}
+
+function formatLastLoginAt(value: string | null | undefined) {
+  if (!value) return null;
+  return new Date(value).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
   const [copied, setCopied] = useState(false);
 
   const onCopy = useCallback(async () => {
@@ -352,33 +374,9 @@ function UserProfileHeroRiskCard({
   canReadRiskProfile: boolean;
   onOpenRiskTab?: () => void;
 }) {
-  const [profile, setProfile] = useState<UserRiskProfileDetail | null>(null);
-  const [loading, setLoading] = useState(canReadRiskProfile);
-
-  const loadProfile = useCallback(async () => {
-    if (!canReadRiskProfile) {
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await fetchUserRiskProfile(userId);
-      setProfile(result);
-    } catch (err) {
-      setProfile(null);
-      if (!(err instanceof ApiError && err.status === 404)) {
-        // Risk card stays empty on load errors; detail tab shows the message.
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [canReadRiskProfile, userId]);
-
-  useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
+  const { data, isPending } = useAdminUserRiskProfileQuery(canReadRiskProfile ? userId : "");
+  const profile = data?.profile ?? null;
+  const showSkeleton = canReadRiskProfile && isPending && !data;
 
   if (!canReadRiskProfile) {
     return (
@@ -389,7 +387,7 @@ function UserProfileHeroRiskCard({
     );
   }
 
-  if (loading) {
+  if (showSkeleton) {
     return (
       <UserProfileHeroRiskCardShell onOpenRiskTab={onOpenRiskTab}>
         <div className="admin-user-profile-hero__risk-card-layout">
@@ -474,6 +472,20 @@ export function UserProfileHeroSection({
               <UserStatusBadge status={summary.status} />
               <MfaStatusBadge enabled={summary.mfa_enrolled} />
             </div>
+            {summary.last_login_method || summary.pin_enrolled || summary.phone_verified ? (
+              <div className="space-y-1 text-caption text-muted-foreground">
+                {summary.pin_enrolled ? <p>PIN enrolled</p> : <p>PIN not set</p>}
+                {summary.phone_verified ? <p>Phone verified</p> : <p>Phone not verified</p>}
+                {formatLastLoginMethod(summary.last_login_method) ? (
+                  <p>
+                    Last sign-in: {formatLastLoginMethod(summary.last_login_method)}
+                    {formatLastLoginAt(summary.last_login_at)
+                      ? ` · ${formatLastLoginAt(summary.last_login_at)}`
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>

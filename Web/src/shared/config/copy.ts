@@ -157,6 +157,13 @@ export const copy = {
     mfaNotSetUpBadge: "Not Set Up",
     mfaEnrolledOn: (when: string) => `Enrolled on ${when}.`,
     mfaEnableHint: "Enable MFA before you transfer or invest funds.",
+    securityMethodsTitle: "Sign-in verification",
+    securityMethodsAuthenticator: "Authenticator app",
+    securityMethodsSmsFallback: "SMS fallback",
+    securityMethodsSmsLogin: "Mobile OTP at sign-in",
+    securityMethodsPasswordOnly: "Password",
+    securityMethodsSmsUnavailable:
+      "SMS fallback is unavailable until your mobile number is verified, or if disabled by platform policy.",
     changeAuthenticator: "Change Authenticator",
     disableMfa: "Disable MFA",
     backupCodesTitle: "Backup Codes",
@@ -326,15 +333,15 @@ export const copy = {
       cancel: "Continue KYC",
     },
     mfaGate: {
-      title: "Set up MFA first",
+      title: "Verify your contact details first",
       description:
-        "Two-factor authentication is required before you can start KYC verification.",
-      setupButton: "Set up MFA",
+        "Verify your email and mobile number before you can start KYC verification.",
+      setupButton: "Open settings",
       menuDisabledHint: "Complete account verification before starting KYC",
     },
     entryGate: {
       title: "Complete account setup",
-      description: "Verify your contact details and secure your account before starting KYC.",
+      description: "Verify your email and mobile number before starting KYC.",
       menuDisabledHint: "Complete account setup before starting KYC",
       email: "Verify your email address.",
       phone: "Verify your mobile number.",
@@ -750,8 +757,18 @@ export const copy = {
     done: "Done",
   },
   mfa: {
-    fundEligibilityTitle: "Enable MFA to Move Funds",
-    fundEligibilityDescription: "Two-factor authentication is required before transfers or investments.",
+    fundEligibilityEmailTitle: "Verify your email to move funds",
+    fundEligibilityEmailDescription:
+      "Confirm your email address in Settings before transfers or investments.",
+    fundEligibilityPhoneTitle: "Verify your mobile number to move funds",
+    fundEligibilityPhoneDescription:
+      "Add and verify a mobile number in Settings before transfers or investments.",
+    fundEligibilityTitle: "Verify your contact to move funds",
+    fundEligibilityDescription:
+      "Verify your email and mobile number before transfers or investments.",
+    fundEligibilityContactTitle: "Verify your contact to move funds",
+    fundEligibilityContactDescription:
+      "Add and verify a mobile number before you can transfer or invest.",
     setupButton: "Set Up MFA",
     backupCodesOfflineHint: "Keep these codes offline. You will not see them again.",
     backupAccess: {
@@ -771,7 +788,7 @@ export const copy = {
     preparing: "Preparing...",
     enroll: {
       startTitle: "Enable two-factor authentication",
-      startDescription: "Required before you can transfer or invest funds.",
+      startDescription: "Add an extra layer of security to your account. Optional for investing — SMS verification is used at login and for sensitive actions.",
       confirmTitle: "Scan your authenticator",
       confirmDescription: "Scan the QR code or copy the setup key.",
       backupTitle: "Save your backup codes",
@@ -784,6 +801,12 @@ export const copy = {
       verifyAndEnable: "Verify and enable MFA",
       successTitle: "MFA is enabled",
       successDescription: "Two-factor authentication is active on your account.",
+      nextPinTitle: "Next: set up Zynd PIN",
+      nextPinDescription: "Add a 4-digit PIN to unlock fund transfers and investments.",
+      nextPinAction: "Set up Zynd PIN",
+      investReadyTitle: "You're ready to invest",
+      investReadyDescription: "MFA and Zynd PIN are set. You can now transfer and invest funds.",
+      investReadyAction: "Go to Invest",
       downloadBackupCodesJson: "Download JSON",
       couldNotStart: "Could not start MFA enrollment.",
       invalidCode: "Invalid authenticator code.",
@@ -815,12 +838,24 @@ export const copy = {
       submit: "Generate new backup codes",
       couldNotRegenerate: "Could not regenerate backup codes.",
     },
+    secondFactor: {
+      smsLoginTitle: "Verify your mobile",
+      smsLoginDescription: "Enter the code sent to your mobile number to finish signing in.",
+      smsLoginResend: "Resend code",
+      smsLoginUseAuthenticator: "Use authenticator app instead",
+      stepUpTitle: "Confirm it's you",
+      stepUpDescription: "Verify with your authenticator or a code sent to your mobile.",
+      stepUpSendSms: "Send code to mobile",
+      stepUpUseAuthenticator: "Use authenticator app",
+      invalidSmsCode: "Invalid or expired SMS code.",
+      couldNotSendSms: "Could not send verification code.",
+    },
   },
   pin: {
     lockTitle: "Enter your Zynd PIN",
     lockDescription: "Unlock your account to continue.",
     setupTitle: "Set up Zynd PIN",
-    setupDescription: "Required before you can transfer or invest funds.",
+    setupDescription: "Optional quick unlock for sensitive actions on this device.",
     setupSteps: {
       verifyTitle: "Verify it's you",
       verifyDescription: "Confirm your password and authenticator code to continue.",
@@ -1013,11 +1048,21 @@ export const copy = {
     sectionFallback: `Manage this section of your ${APP_NAME} dashboard.`,
     defaultDescription: `Your ${APP_NAME} wealth dashboard.`,
     overview: {
-      welcomeMorning: "Good morning {emoji}, {name}",
-      welcomeAfternoon: "Good afternoon {emoji}, {name}",
-      welcomeEvening: "Good evening {emoji}, {name}",
-      welcomeNight: "Good night {emoji}, {name}",
-      welcomeSubtitle: "Track your wealth, SIPs, goals, and family portfolio in one place.",
+      welcomeMorning: "Good morning, {name}",
+      welcomeAfternoon: "Good afternoon, {name}",
+      welcomeEvening: "Good evening, {name}",
+      welcomeNight: "Good night, {name}",
+      profileSubtitle: "Investor",
+      profileKycLabel: "KYC",
+      profileMfaLabel: "MFA",
+      profileKycTooltipComplete:
+        "Know Your Customer (KYC). Your identity is verified so you can invest.",
+      profileKycTooltipPending:
+        "Know Your Customer (KYC). Complete identity verification to start investing.",
+      profileMfaTooltipComplete:
+        "Multi-factor authentication (MFA). An extra login check is enabled on your account.",
+      profileMfaTooltipPending:
+        "Multi-factor authentication (MFA). Add an authenticator app for extra account security.",
       recentTransactionsTitle: "Transactions",
       recentTransactionsDescription: "Latest mutual fund orders",
       recentTransactionsViewAll: "View all",
@@ -1025,6 +1070,9 @@ export const copy = {
       recentTransactionsLoadError: "Unable to load recent transactions.",
       riskTitle: "Risk profile",
       riskEmpty: "Take assessment",
+      riskEmptyHint: "Discover your investing style",
+      riskTierLabel: "Risk tier",
+      riskScoreLabel: "Score",
       riskView: "View",
       familyTitle: "Family",
       familyEmpty: "Create a group",
@@ -1053,6 +1101,10 @@ export const copy = {
       portfolioPreviewNote: "Preview snapshot — live sync coming soon",
       portfolioExploreCta: "Explore funds",
       portfolioChartLabel: "Growth",
+      portfolioChartRangeLabel: "Portfolio chart range",
+      portfolioFlowTooltipGain: "Gain",
+      holdingsInvestmentsTitle: "Investments",
+      holdingsLastMonthLabel: "Last month",
       portfolioAllocationTitle: "Allocation",
       portfolioChartTabsLabel: "Portfolio charts",
       portfolioChartTabGrowth: "Growth",
@@ -1762,6 +1814,14 @@ export const copy = {
     mfaChallenge: {
       title: "Two-factor authentication",
       description: "Enter the code from your authenticator app.",
+    },
+    smsOtpLogin: {
+      title: "Verify your mobile",
+      description: "Enter the code sent to your mobile number to finish signing in.",
+    },
+    stepUp: {
+      title: "Confirm it's you",
+      description: "Verify with your authenticator or a code sent to your mobile.",
     },
     oauthLink: {
       title: "Confirm account linking",

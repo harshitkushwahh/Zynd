@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -20,11 +19,9 @@ import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
+import { useMountedTabs } from "@/hooks/use-mounted-tabs";
+import { useTxnRequestsSummaryQuery } from "@/hooks/use-txn-requests-summary-query";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
-import {
-  fetchMfTransactionOrders,
-  fetchMfTransactionSipPlans,
-} from "@/lib/mf-transactions-admin-api";
 import {
   getTransactionSection,
   isSectionTabEnabled,
@@ -36,116 +33,55 @@ type TxnRequestsSectionPageProps = {
   tabSlug?: string;
 };
 
-const PENDING_ORDER_STATUSES = new Set([
-  "pending",
-  "submitted",
-  "payment_pending",
-  "processing",
-]);
-const FAILED_ORDER_STATUSES = new Set(["failed", "cancelled"]);
-const PENDING_SIP_STATUSES = new Set(["PENDING", "REVIEW", "CONSENT_PENDING"]);
-const FAILED_SIP_STATUSES = new Set(["FAILED", "CANCELLED"]);
-
 function TxnRequestsSummaryCards({ canRead }: { canRead: boolean }) {
-  const [loading, setLoading] = useState(true);
-  const [lumpsumCount, setLumpsumCount] = useState(0);
-  const [sipCount, setSipCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [failedCount, setFailedCount] = useState(0);
+  const { data, isPending } = useTxnRequestsSummaryQuery(canRead);
+  const showSkeleton = isPending && !data;
 
-  const loadSummary = useCallback(async () => {
-    if (!canRead) return;
-    setLoading(true);
-    try {
-      const [ordersResult, plansResult] = await Promise.all([
-        fetchMfTransactionOrders({
-          order_type: "LUMPSUM",
-          checkout_type: "SINGLE",
-          limit: 50,
-        }),
-        fetchMfTransactionSipPlans({ limit: 50 }),
-      ]);
-
-      const orders = ordersResult.orders;
-      const plans = plansResult.plans;
-
-      setLumpsumCount(orders.length);
-      setSipCount(plans.length);
-      setPendingCount(
-        orders.filter((item) => PENDING_ORDER_STATUSES.has(item.status.toLowerCase())).length +
-          plans.filter((item) => PENDING_SIP_STATUSES.has(item.status.toUpperCase())).length,
-      );
-      setFailedCount(
-        orders.filter((item) => FAILED_ORDER_STATUSES.has(item.status.toLowerCase())).length +
-          plans.filter((item) => FAILED_SIP_STATUSES.has(item.status.toUpperCase())).length,
-      );
-    } catch {
-      setLumpsumCount(0);
-      setSipCount(0);
-      setPendingCount(0);
-      setFailedCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [canRead]);
-
-  useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
-
-  const metrics = useMemo(
-    () => [
-      {
-        key: "lumpsum",
-        label: "Lumpsum requests",
-        value: lumpsumCount.toLocaleString(),
-        infoDescription: "Single-checkout lumpsum transaction requests.",
-        icon: IndianRupee,
-        tone: "info" as const,
-        accent: true,
-      },
-      {
-        key: "sip",
-        label: "SIP requests",
-        value: sipCount.toLocaleString(),
-        infoDescription: "SIP creation and registration requests.",
-        icon: Repeat,
-        tone: "default" as const,
-      },
-      {
-        key: "pending",
-        label: "In progress",
-        value: pendingCount.toLocaleString(),
-        infoDescription: "Pending or processing lumpsum and SIP requests.",
-        icon: LoaderCircle,
-        tone: pendingCount > 0 ? ("warning" as const) : ("muted" as const),
-      },
-      {
-        key: "failed",
-        label: "Failed / cancelled",
-        value: failedCount.toLocaleString(),
-        infoDescription: "Failed or cancelled lumpsum and SIP requests.",
-        icon: AlertTriangle,
-        tone: failedCount > 0 ? ("warning" as const) : ("success" as const),
-      },
-    ],
-    [failedCount, lumpsumCount, pendingCount, sipCount],
-  );
+  const summary = data ?? {
+    lumpsumCount: 0,
+    sipCount: 0,
+    pendingCount: 0,
+    failedCount: 0,
+  };
 
   return (
     <AdminMetricCardsGrid columns="four" className="!mt-0">
-      {metrics.map((metric) => (
-        <AdminMetricCard
-          key={metric.key}
-          label={metric.label}
-          value={metric.value}
-          infoDescription={metric.infoDescription}
-          icon={metric.icon}
-          tone={metric.tone}
-          accent={metric.accent}
-          loading={loading}
-        />
-      ))}
+      <AdminMetricCard
+        key="lumpsum"
+        label="Lumpsum requests"
+        value={summary.lumpsumCount.toLocaleString()}
+        infoDescription="Single-checkout lumpsum transaction requests."
+        icon={IndianRupee}
+        tone="info"
+        accent
+        loading={showSkeleton}
+      />
+      <AdminMetricCard
+        key="sip"
+        label="SIP requests"
+        value={summary.sipCount.toLocaleString()}
+        infoDescription="SIP creation and registration requests."
+        icon={Repeat}
+        loading={showSkeleton}
+      />
+      <AdminMetricCard
+        key="pending"
+        label="In progress"
+        value={summary.pendingCount.toLocaleString()}
+        infoDescription="Pending or processing lumpsum and SIP requests."
+        icon={LoaderCircle}
+        tone={summary.pendingCount > 0 ? "warning" : "muted"}
+        loading={showSkeleton}
+      />
+      <AdminMetricCard
+        key="failed"
+        label="Failed / cancelled"
+        value={summary.failedCount.toLocaleString()}
+        infoDescription="Failed or cancelled lumpsum and SIP requests."
+        icon={AlertTriangle}
+        tone={summary.failedCount > 0 ? "warning" : "success"}
+        loading={showSkeleton}
+      />
     </AdminMetricCardsGrid>
   );
 }
@@ -154,36 +90,21 @@ export function TxnRequestsSectionPage({ tabSlug }: TxnRequestsSectionPageProps)
   const router = useRouter();
   const { hasPermission } = useAdminAuth();
   const section = getTransactionSection("txn-requests");
+  const resolvedTab = section ? resolveSectionTab(section, tabSlug) : null;
+  const { activeTab: activeTabSlug, selectTab, keepMounted } = useMountedTabs(
+    resolvedTab?.slug ?? "lumpsum",
+    resolvedTab?.slug,
+  );
 
-  if (!section) return null;
+  if (!section || !resolvedTab) return null;
 
   const canRead = section.permissions.some((permission) => hasPermission(permission));
   const canManage = hasPermission("mf.transactions.manage");
-  const activeTab = resolveSectionTab(section, tabSlug);
 
-  if (!activeTab) return null;
-
-  const renderTabContent = () => {
-    if (!isSectionTabEnabled(activeTab)) {
-      return <AdminTabDisabled label={activeTab.label} description={activeTab.description} />;
-    }
-
-    switch (activeTab.slug) {
-      case "lumpsum":
-        return (
-          <MfTransactionOrdersPanel
-            canRead={canRead}
-            canManage={canManage}
-            orderType="LUMPSUM"
-            checkoutType="SINGLE"
-            emptyMessage="No lumpsum transaction requests found."
-          />
-        );
-      case "sip":
-        return <MfTransactionSipPlansPanel canRead={canRead} canManage={canManage} />;
-      default:
-        return <AdminTabComingSoon label={activeTab.label} description={activeTab.description} />;
-    }
+  const handleTabChange = (value: string) => {
+    selectTab(value);
+    const nextTab = section.tabs.find((tab) => tab.slug === value);
+    if (nextTab) router.push(sectionTabHref(section, nextTab));
   };
 
   return (
@@ -200,14 +121,7 @@ export function TxnRequestsSectionPage({ tabSlug }: TxnRequestsSectionPageProps)
         <div className="space-y-5">
           <TxnRequestsSummaryCards canRead={canRead} />
 
-          <Tabs
-            value={activeTab.slug}
-            onValueChange={(value) => {
-              const nextTab = section.tabs.find((tab) => tab.slug === value);
-              if (nextTab) router.push(sectionTabHref(section, nextTab));
-            }}
-            className="space-y-4"
-          >
+          <Tabs value={activeTabSlug} onValueChange={handleTabChange} className="space-y-4">
             <AdminTabList>
               {section.tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -225,7 +139,29 @@ export function TxnRequestsSectionPage({ tabSlug }: TxnRequestsSectionPageProps)
               })}
             </AdminTabList>
 
-            <TabsContent value={activeTab.slug}>{renderTabContent()}</TabsContent>
+            {section.tabs.map((tab) => (
+              <TabsContent
+                key={tab.slug}
+                value={tab.slug}
+                keepMounted={keepMounted(tab.slug)}
+              >
+                {!isSectionTabEnabled(tab) ? (
+                  <AdminTabDisabled label={tab.label} description={tab.description} />
+                ) : tab.slug === "lumpsum" ? (
+                  <MfTransactionOrdersPanel
+                    canRead={canRead}
+                    canManage={canManage}
+                    orderType="LUMPSUM"
+                    checkoutType="SINGLE"
+                    emptyMessage="No lumpsum transaction requests found."
+                  />
+                ) : tab.slug === "sip" ? (
+                  <MfTransactionSipPlansPanel canRead={canRead} canManage={canManage} />
+                ) : (
+                  <AdminTabComingSoon label={tab.label} description={tab.description} />
+                )}
+              </TabsContent>
+            ))}
           </Tabs>
         </div>
       )}

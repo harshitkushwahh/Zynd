@@ -7,6 +7,7 @@ import {
   AuthenticatorVerifyDialog,
   PasswordVerifyDialog,
 } from "@/features/account/mfa";
+import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import {
@@ -143,7 +144,10 @@ export function PersonalDetailsSettingsPanel({
     }
   };
 
-  const submitDisconnect = async (currentPassword: string, totpCode?: string) => {
+  const submitDisconnect = async (
+    currentPassword: string,
+    verification?: StepUpVerification
+  ) => {
     if (!disconnectProvider) return;
 
     setActionLoading(disconnectProvider);
@@ -156,7 +160,8 @@ export function PersonalDetailsSettingsPanel({
       const result = await disconnectOAuth({
         provider: disconnectProvider,
         currentPassword,
-        totpCode,
+        totpCode: verification?.totpCode,
+        smsOtp: verification?.smsOtp,
       });
       setConnections(result);
       setSuccess(`${disconnectProvider === "google" ? "Google" : "Apple"} account disconnected.`);
@@ -382,7 +387,7 @@ export function PersonalDetailsSettingsPanel({
         submitLabel={copy.settings.disconnectSubmit}
         loading={actionLoading !== null}
         error={authError}
-        onSubmit={(totpCode) => void submitDisconnect(pendingPassword, totpCode)}
+        onSubmit={(verification) => void submitDisconnect(pendingPassword, verification)}
       />
     </SettingsContentCard>
   );

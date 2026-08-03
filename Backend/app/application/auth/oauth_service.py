@@ -268,6 +268,7 @@ async def disconnect_oauth(
     provider: OAuthProvider,
     current_password: str,
     totp_code: str | None,
+    sms_otp: str | None = None,
     ip: str | None,
 ) -> dict[str, Any]:
     from app.application.auth.account_service import verify_step_up
@@ -278,6 +279,7 @@ async def disconnect_oauth(
         session_id=session_id,
         current_password=current_password,
         totp_code=totp_code,
+        sms_otp=sms_otp,
         ip=ip,
     )
 

@@ -32,6 +32,8 @@ import {
   confirmOAuthLink,
   isAuthenticatedResponse,
   resendOAuthLinkOtp,
+  resendLoginSmsOtp,
+  sendMfaLoginSms,
   signupComplete,
   signupResendEmailOtp,
   signupSendMobileOtp,
@@ -40,6 +42,7 @@ import {
   signupVerifyEmail,
   signupVerifyMobile,
   verifyMfaLogin,
+  verifyLoginSms,
 } from "@/lib/auth-api";
 import {
   AUTH_STEP_COPY,
@@ -106,6 +109,16 @@ function useAuthDialogFlowState(onClose: () => void) {
   const [backupCode, setBackupCode] = useState("");
   const [useBackupCode, setUseBackupCode] = useState(false);
   const [mfaError, setMfaError] = useState("");
+  const [mfaSmsFallbackAvailable, setMfaSmsFallbackAvailable] = useState(false);
+  const [mfaMaskedPhone, setMfaMaskedPhone] = useState("");
+  const [useMfaSmsOtp, setUseMfaSmsOtp] = useState(false);
+  const [mfaSmsOtp, setMfaSmsOtp] = useState("");
+  const [mfaSmsSent, setMfaSmsSent] = useState(false);
+
+  const [loginToken, setLoginToken] = useState("");
+  const [maskedPhone, setMaskedPhone] = useState("");
+  const [loginSmsOtp, setLoginSmsOtp] = useState("");
+  const [loginSmsOtpError, setLoginSmsOtpError] = useState("");
 
   const [linkToken, setLinkToken] = useState("");
   const [emailHint, setEmailHint] = useState("");
@@ -117,6 +130,8 @@ function useAuthDialogFlowState(onClose: () => void) {
   const emailOtpCooldown = useOtpResendCooldown(storageKeys.signupEmailOtpCooldown);
   const mobileOtpCooldown = useOtpResendCooldown(storageKeys.signupMobileOtpCooldown);
   const oauthLinkCooldown = useOtpResendCooldown(storageKeys.oauthLinkOtpCooldown);
+  const loginSmsOtpCooldown = useOtpResendCooldown(storageKeys.loginSmsOtpCooldown);
+  const mfaLoginSmsOtpCooldown = useOtpResendCooldown(storageKeys.mfaLoginSmsOtpCooldown);
 
   const setTurnstileToken = useCallback((token: string) => {
     setTurnstileTokenState(token);
@@ -228,6 +243,15 @@ function useAuthDialogFlowState(onClose: () => void) {
     setBackupCode("");
     setUseBackupCode(false);
     setMfaError("");
+    setMfaSmsFallbackAvailable(false);
+    setMfaMaskedPhone("");
+    setUseMfaSmsOtp(false);
+    setMfaSmsOtp("");
+    setMfaSmsSent(false);
+    setLoginToken("");
+    setMaskedPhone("");
+    setLoginSmsOtp("");
+    setLoginSmsOtpError("");
     setLinkToken("");
     setEmailHint("");
     setOauthLinkProvider("google");
@@ -249,7 +273,21 @@ function useAuthDialogFlowState(onClose: () => void) {
         setMfaCode("");
         setBackupCode("");
         setUseBackupCode(false);
+        setUseMfaSmsOtp(false);
+        setMfaSmsOtp("");
+        setMfaSmsSent(false);
+        setMfaSmsFallbackAvailable(Boolean(result.sms_fallback_available));
+        setMfaMaskedPhone(result.masked_phone ?? "");
         setStep("mfa-challenge");
+        return;
+      }
+      if (result.next === "sms_otp_required") {
+        setLoginToken(result.login_token);
+        setMaskedPhone(result.masked_phone);
+        setLoginSmsOtp("");
+        setLoginSmsOtpError("");
+        loginSmsOtpCooldown.startCooldown(result.retry_after_seconds ?? 30);
+        setStep("sms-otp-login");
         return;
       }
       if (result.next === "oauth_link_confirmation_required") {
@@ -266,7 +304,7 @@ function useAuthDialogFlowState(onClose: () => void) {
       clearReferralCode();
       finishAuth();
     },
-    [completeAuth, finishAuth, oauthLinkCooldown]
+    [completeAuth, finishAuth, loginSmsOtpCooldown, oauthLinkCooldown]
   );
 
   const completeSignup = useCallback(async () => {
@@ -385,11 +423,15 @@ function useAuthDialogFlowState(onClose: () => void) {
   const handleMfaSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
-      if (!useBackupCode && !isValidOtp(mfaCode)) {
+      if (useMfaSmsOtp) {
+        if (!isValidOtp(mfaSmsOtp)) {
+          setMfaError(copy.auth.otpMobileError);
+          return;
+        }
+      } else if (!useBackupCode && !isValidOtp(mfaCode)) {
         setMfaError(copy.auth.otpAuthenticatorError);
         return;
-      }
-      if (useBackupCode && backupCode.trim().length < 8) {
+      } else if (useBackupCode && backupCode.trim().length < 8) {
         setMfaError("Enter a valid backup code.");
         return;
       }
@@ -399,8 +441,9 @@ function useAuthDialogFlowState(onClose: () => void) {
       try {
         const result = await verifyMfaLogin({
           mfaToken,
-          totpCode: useBackupCode ? undefined : mfaCode,
+          totpCode: useMfaSmsOtp || useBackupCode ? undefined : mfaCode,
           backupCode: useBackupCode ? backupCode : undefined,
+          smsOtp: useMfaSmsOtp ? mfaSmsOtp : undefined,
         });
         completeAuth(result.user);
         finishAuth();
@@ -410,7 +453,95 @@ function useAuthDialogFlowState(onClose: () => void) {
         setIsSubmitting(false);
       }
     },
-    [backupCode, completeAuth, finishAuth, mfaCode, mfaToken, useBackupCode]
+    [
+      backupCode,
+      completeAuth,
+      finishAuth,
+      mfaCode,
+      mfaSmsOtp,
+      mfaToken,
+      useBackupCode,
+      useMfaSmsOtp,
+    ]
+  );
+
+  const handleSendMfaLoginSms = useCallback(async () => {
+    if (!mfaToken || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setMfaError("");
+    try {
+      const result = await sendMfaLoginSms(mfaToken);
+      mfaLoginSmsOtpCooldown.startCooldown(result.retry_after_seconds);
+      setUseMfaSmsOtp(true);
+      setUseBackupCode(false);
+      setMfaSmsOtp("");
+      setMfaSmsSent(true);
+    } catch (error) {
+      syncOtpCooldownFromError(error, mfaLoginSmsOtpCooldown.syncFromError);
+      setMfaError(getAuthErrorMessage(error, copy.mfa.secondFactor.couldNotSendSms));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, mfaLoginSmsOtpCooldown, mfaToken]);
+
+  const handleResendMfaLoginSms = useCallback(async () => {
+    if (!mfaLoginSmsOtpCooldown.canResend || isSubmitting || !mfaToken) return;
+
+    setIsSubmitting(true);
+    setMfaError("");
+    try {
+      const result = await sendMfaLoginSms(mfaToken);
+      mfaLoginSmsOtpCooldown.startCooldown(result.retry_after_seconds);
+      setMfaSmsOtp("");
+    } catch (error) {
+      syncOtpCooldownFromError(error, mfaLoginSmsOtpCooldown.syncFromError);
+      setMfaError(getAuthErrorMessage(error, copy.mfa.secondFactor.couldNotSendSms));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, mfaLoginSmsOtpCooldown, mfaToken]);
+
+  const handleResendLoginSmsOtp = useCallback(async () => {
+    if (!loginSmsOtpCooldown.canResend || isSubmitting || !loginToken) return;
+
+    setIsSubmitting(true);
+    setLoginSmsOtpError("");
+    try {
+      const result = await resendLoginSmsOtp(loginToken);
+      loginSmsOtpCooldown.startCooldown(result.retry_after_seconds);
+      setLoginSmsOtp("");
+    } catch (error) {
+      syncOtpCooldownFromError(error, loginSmsOtpCooldown.syncFromError);
+      setLoginSmsOtpError(getAuthErrorMessage(error, copy.mfa.secondFactor.couldNotSendSms));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, loginSmsOtpCooldown, loginToken]);
+
+  const handleLoginSmsOtpSubmit = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (!isValidOtp(loginSmsOtp)) {
+        setLoginSmsOtpError(copy.auth.otpMobileError);
+        return;
+      }
+
+      setIsSubmitting(true);
+      setLoginSmsOtpError("");
+      try {
+        const result = await verifyLoginSms({ loginToken, otp: loginSmsOtp });
+        completeAuth(result.user);
+        finishAuth();
+      } catch (error) {
+        setLoginSmsOtpError(
+          getAuthErrorMessage(error, copy.mfa.secondFactor.invalidSmsCode)
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [completeAuth, finishAuth, loginSmsOtp, loginToken]
   );
 
   const handleResendOAuthLinkOtp = useCallback(async () => {
@@ -757,6 +888,20 @@ function useAuthDialogFlowState(onClose: () => void) {
     setUseBackupCode,
     mfaError,
     setMfaError,
+    mfaSmsFallbackAvailable,
+    mfaMaskedPhone,
+    useMfaSmsOtp,
+    setUseMfaSmsOtp,
+    mfaSmsOtp,
+    setMfaSmsOtp,
+    mfaSmsSent,
+    mfaLoginSmsOtpCooldown,
+    maskedPhone,
+    loginSmsOtp,
+    setLoginSmsOtp,
+    loginSmsOtpError,
+    setLoginSmsOtpError,
+    loginSmsOtpCooldown,
     emailHint,
     oauthLinkProvider,
     oauthLinkOtp,
@@ -774,6 +919,10 @@ function useAuthDialogFlowState(onClose: () => void) {
     resetForm,
     handleEmailContinue,
     handleMfaSubmit,
+    handleSendMfaLoginSms,
+    handleResendMfaLoginSms,
+    handleLoginSmsOtpSubmit,
+    handleResendLoginSmsOtp,
     handleResendOAuthLinkOtp,
     handleOAuthLinkSubmit,
     handleResendEmailOtp,

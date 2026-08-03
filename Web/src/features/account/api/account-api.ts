@@ -29,6 +29,7 @@ export async function changePassword(payload: {
   currentPassword: string;
   newPassword: string;
   totpCode?: string;
+  smsOtp?: string;
 }) {
   return apiRequest<{ ok: boolean }>("/auth/account/change-password", {
     method: "POST",
@@ -36,6 +37,7 @@ export async function changePassword(payload: {
       current_password: payload.currentPassword,
       new_password: payload.newPassword,
       totp_code: payload.totpCode ?? null,
+      sms_otp: payload.smsOtp ?? null,
     }),
   });
 }
@@ -44,6 +46,7 @@ export async function changeEmailStart(payload: {
   newEmail: string;
   currentPassword: string;
   totpCode?: string;
+  smsOtp?: string;
 }) {
   return apiRequest<{ change_token: string; retry_after_seconds: number; expires_in: number }>(
     "/auth/account/change-email/start",
@@ -53,6 +56,7 @@ export async function changeEmailStart(payload: {
         new_email: payload.newEmail,
         current_password: payload.currentPassword,
         totp_code: payload.totpCode ?? null,
+        sms_otp: payload.smsOtp ?? null,
       }),
     }
   );
@@ -75,6 +79,7 @@ export async function changeEmailConfirm(changeToken: string, otp: string) {
 export async function requestAccountDeletion(payload: {
   currentPassword: string;
   totpCode?: string;
+  smsOtp?: string;
 }) {
   return apiRequest<{ ok: boolean; deletion_scheduled_at: string | null }>(
     "/auth/account/delete-request",
@@ -83,6 +88,7 @@ export async function requestAccountDeletion(payload: {
       body: JSON.stringify({
         current_password: payload.currentPassword,
         totp_code: payload.totpCode ?? null,
+        sms_otp: payload.smsOtp ?? null,
       }),
     }
   );

@@ -95,6 +95,7 @@ class AppleLoginRequest(BaseModel):
 class MfaDisableRequest(BaseModel):
     current_password: str = Field(min_length=8, max_length=128)
     totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
+    sms_otp: Optional[str] = Field(default=None, min_length=6, max_length=6)
 
 
 class MfaDisableResponse(BaseModel):
@@ -105,6 +106,20 @@ class MfaVerifyRequest(BaseModel):
     mfa_token: str
     totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
     backup_code: Optional[str] = Field(default=None, min_length=8, max_length=12)
+    sms_otp: Optional[str] = Field(default=None, min_length=6, max_length=6)
+
+
+class MfaLoginSendSmsRequest(BaseModel):
+    mfa_token: str
+
+
+class LoginSmsVerifyRequest(BaseModel):
+    login_token: str
+    otp: str = Field(min_length=6, max_length=6)
+
+
+class LoginSmsResendRequest(BaseModel):
+    login_token: str
 
 
 class OAuthLinkConfirmRequest(BaseModel):
@@ -131,6 +146,19 @@ class MfaResetConfirmRequest(BaseModel):
 class StepUpRequest(BaseModel):
     current_password: str = Field(min_length=8, max_length=128)
     totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
+    sms_otp: Optional[str] = Field(default=None, min_length=6, max_length=6)
+
+
+class StepUpSmsSendResponse(BaseModel):
+    ok: bool = True
+    retry_after_seconds: int
+    expires_in: int
+    masked_phone: str
+
+
+class StepUpOptionsResponse(BaseModel):
+    sms_fallback_available: bool
+    masked_phone: Optional[str] = None
 
 
 class VerifyPasswordRequest(BaseModel):
@@ -141,12 +169,14 @@ class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
     totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
+    sms_otp: Optional[str] = Field(default=None, min_length=6, max_length=6)
 
 
 class ChangeEmailStartRequest(BaseModel):
     new_email: EmailStr
     current_password: str = Field(min_length=8, max_length=128)
     totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
+    sms_otp: Optional[str] = Field(default=None, min_length=6, max_length=6)
 
 
 class ChangeEmailConfirmRequest(BaseModel):
@@ -215,6 +245,16 @@ class MfaRequiredResponse(BaseModel):
     next: Literal["mfa_required"] = "mfa_required"
     mfa_token: str
     expires_in: int = 300
+    sms_fallback_available: bool = False
+    masked_phone: Optional[str] = None
+
+
+class SmsOtpRequiredResponse(BaseModel):
+    next: Literal["sms_otp_required"] = "sms_otp_required"
+    login_token: str
+    masked_phone: str
+    expires_in: int = 300
+    retry_after_seconds: int = 0
 
 
 class OAuthLinkRequiredResponse(BaseModel):
@@ -266,6 +306,28 @@ class MfaRegenerateBackupCodesResponse(BaseModel):
 class FundEligibilityResponse(BaseModel):
     eligible: bool
     reasons: list[str]
+
+
+class FundEligibilityStatusResponse(BaseModel):
+    eligible: bool
+    reasons: list[str]
+    next_action: Optional[
+        Literal["verify_email", "verify_phone", "setup_mfa", "setup_pin"]
+    ] = None
+    email_verified: bool
+    mfa_enrolled: bool
+    pin_enrolled: bool
+    phone_verified: bool
+
+
+class AuthSecurityPolicyResponse(BaseModel):
+    login_sms_otp_when_mfa_disabled: bool
+    step_up_sms_fallback_enabled: bool
+    fund_require_mfa: bool
+    fund_require_pin: bool
+    mfa_enrolled: bool
+    pin_enrolled: bool
+    phone_verified: bool
 
 
 class PinSetupRequest(BaseModel):
@@ -386,9 +448,15 @@ class OAuthDisconnectRequest(BaseModel):
     provider: Literal["google", "apple"]
     current_password: str = Field(min_length=8, max_length=128)
     totp_code: Optional[str] = Field(default=None, min_length=6, max_length=6)
+    sms_otp: Optional[str] = Field(default=None, min_length=6, max_length=6)
 
 
-LoginFlowResponse = Union[AuthResponse, MfaRequiredResponse, OAuthLinkRequiredResponse]
+LoginFlowResponse = Union[
+    AuthResponse,
+    MfaRequiredResponse,
+    SmsOtpRequiredResponse,
+    OAuthLinkRequiredResponse,
+]
 
 
 class AdminInviteValidateResponse(BaseModel):

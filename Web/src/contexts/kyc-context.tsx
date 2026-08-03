@@ -60,12 +60,6 @@ function getKycBlockReasons(user: NonNullable<ReturnType<typeof useAuth>["user"]
   if (!user.phone_verified_at) {
     reasons.push("phone_not_verified");
   }
-  if (!user.mfa_enrolled) {
-    reasons.push("mfa_required");
-  }
-  if (!user.pin_enrolled) {
-    reasons.push("pin_required");
-  }
   return reasons;
 }
 

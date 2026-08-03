@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/errors";
 import { Shield, UserX } from "lucide-react";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
@@ -29,19 +30,17 @@ import {
   USER_PROFILE_TABS,
   type UserProfileTabKey,
 } from "@/lib/admin-user-profile-navigation";
+import { useMountedTabs } from "@/hooks/use-mounted-tabs";
+import {
+  adminUserProfileQueryKey,
+  useAdminUserProfileQuery,
+} from "@/hooks/use-admin-user-profile-query";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   assignAdminUserRole,
-  fetchAdminRoles,
-  fetchAdminUserProfileDetail,
-  fetchAdminUserRoles,
-  fetchAdminUserSummary,
   revokeAdminUserRole,
   suspendAdminUser,
   unsuspendAdminUser,
-  type AdminRole,
-  type AdminUserProfileDetail,
-  type AdminUserSummary,
 } from "@/lib/admin-api";
 
 export function UserProfileView({
@@ -52,6 +51,7 @@ export function UserProfileView({
   profileTabSlug?: string;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { hasPermission } = useAdminAuth();
   const canReadUsers = hasPermission("users.read");
   const canSuspend = hasPermission("users.suspend");
@@ -65,12 +65,29 @@ export function UserProfileView({
   const canManageFamilyGroups = hasPermission("family_groups.manage");
   const canReadAudit = hasPermission("audit.read");
 
-  const [summary, setSummary] = useState<AdminUserSummary | null>(null);
-  const [profileDetail, setProfileDetail] = useState<AdminUserProfileDetail | null>(null);
-  const [roles, setRoles] = useState<AdminRole[]>([]);
-  const [assignedRoles, setAssignedRoles] = useState<string[]>([]);
-  const [mountedTabKeys, setMountedTabKeys] = useState<Set<UserProfileTabKey>>(() => new Set());
-  const [loading, setLoading] = useState(true);
+  const profileQueryParams = useMemo(
+    () => ({
+      clientId,
+      canReadUsers,
+      canManageRbac,
+    }),
+    [canManageRbac, canReadUsers, clientId],
+  );
+
+  const {
+    data: profileData,
+    isPending: profilePending,
+    error: profileQueryError,
+  } = useAdminUserProfileQuery(profileQueryParams);
+  const summary = profileData?.summary ?? null;
+  const profileDetail = profileData?.profileDetail ?? null;
+  const roles = profileData?.roles ?? [];
+  const assignedRoles = profileData?.assignedRoles ?? [];
+  const showPageSkeleton = profilePending && !profileData;
+  const profileError = profileQueryError
+    ? getErrorMessage(profileQueryError, "Could not load user profile.")
+    : "";
+
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -82,42 +99,16 @@ export function UserProfileView({
   const [accountActionsDialogOpen, setAccountActionsDialogOpen] = useState(false);
 
   const loadDetails = useCallback(async () => {
-    if (!canReadUsers) return;
-    setLoading(true);
-    setError("");
-    setMessage("");
-    try {
-      const [summaryResult, detailResult] = await Promise.all([
-        fetchAdminUserSummary(clientId),
-        fetchAdminUserProfileDetail(clientId),
-      ]);
-      setSummary(summaryResult);
-      setProfileDetail(detailResult);
-
-      const tasks: Promise<unknown>[] = [];
-      if (canManageRbac) {
-        tasks.push(fetchAdminRoles().then(setRoles));
-        if (summaryResult.role === "admin") {
-          tasks.push(
-            fetchAdminUserRoles(clientId).then((result) => setAssignedRoles(result.roles)),
-          );
-        } else {
-          setAssignedRoles([]);
-        }
-      }
-      await Promise.all(tasks);
-    } catch (err) {
-      setSummary(null);
-      setProfileDetail(null);
-      setError(getErrorMessage(err, "Could not load user profile."));
-    } finally {
-      setLoading(false);
-    }
-  }, [canManageRbac, canReadUsers, clientId]);
+    await queryClient.invalidateQueries({
+      queryKey: adminUserProfileQueryKey(clientId, canManageRbac),
+    });
+  }, [canManageRbac, clientId, queryClient]);
 
   useEffect(() => {
-    void loadDetails();
-  }, [loadDetails]);
+    if (profileQueryError) {
+      setError(getErrorMessage(profileQueryError, "Could not load user profile."));
+    }
+  }, [profileQueryError]);
 
   const roleNameByKey = new Map(roles.map((role) => [role.key, role.name]));
   const availableRoles = roles.filter((role) => !assignedRoles.includes(role.key));
@@ -149,27 +140,36 @@ export function UserProfileView({
     investments: Boolean(profileDetail?.investments) || showPortfolioWithoutInvestments,
   });
 
-  const activeTabKey = activeProfileTab?.key ?? visibleProfileTabs[0]?.key ?? "portfolio";
+  const { activeTab: activeTabKey, selectTab, keepMounted } = useMountedTabs<UserProfileTabKey>(
+    activeProfileTab?.key ?? visibleProfileTabs[0]?.key ?? "portfolio",
+    activeProfileTab?.key,
+  );
 
   useEffect(() => {
-    if (!activeProfileTab) return;
-    setMountedTabKeys((current) => {
-      if (current.has(activeProfileTab.key)) return current;
-      const next = new Set(current);
-      next.add(activeProfileTab.key);
-      return next;
-    });
-  }, [activeProfileTab]);
+    if (showPageSkeleton || visibleProfileTabs.length === 0) return;
 
-  useEffect(() => {
-    if (!activeProfileTab || loading) return;
-    if (profileTabSlug === activeProfileTab.slug) return;
-    router.replace(userProfileTabHref(profilePath, activeProfileTab), { scroll: false });
-  }, [activeProfileTab, loading, profilePath, profileTabSlug, router]);
+    const urlTab = profileTabSlug
+      ? visibleProfileTabs.find((tab) => tab.slug === profileTabSlug)
+      : undefined;
+
+    if (!profileTabSlug || !urlTab) {
+      const tab =
+        visibleProfileTabs.find((item) => item.key === activeTabKey) ?? visibleProfileTabs[0];
+      router.replace(userProfileTabHref(profilePath, tab), { scroll: false });
+    }
+  }, [
+    activeTabKey,
+    profilePath,
+    profileTabSlug,
+    router,
+    showPageSkeleton,
+    visibleProfileTabs,
+  ]);
 
   const handleProfileTabChange = (value: string) => {
     const tab = visibleProfileTabs.find((item) => item.key === value);
     if (!tab) return;
+    selectTab(tab.key);
     router.push(userProfileTabHref(profilePath, tab), { scroll: false });
   };
 
@@ -214,7 +214,9 @@ export function UserProfileView({
     setError("");
     try {
       const result = await assignAdminUserRole(clientId, roleToAssign);
-      setAssignedRoles(result.roles);
+      queryClient.setQueryData(adminUserProfileQueryKey(clientId, canManageRbac), (current) =>
+        current ? { ...current, assignedRoles: result.roles } : current,
+      );
       setRoleToAssign("");
       setMessage(`Added ${roleNameByKey.get(roleToAssign) ?? roleToAssign}.`);
     } catch (err) {
@@ -230,7 +232,9 @@ export function UserProfileView({
     setError("");
     try {
       const result = await revokeAdminUserRole(clientId, roleKey);
-      setAssignedRoles(result.roles);
+      queryClient.setQueryData(adminUserProfileQueryKey(clientId, canManageRbac), (current) =>
+        current ? { ...current, assignedRoles: result.roles } : current,
+      );
       setMessage(`Removed ${roleNameByKey.get(roleKey) ?? roleKey}.`);
     } catch (err) {
       setError(getErrorMessage(err, "Could not revoke role."));
@@ -251,12 +255,12 @@ export function UserProfileView({
         <AdminSectionBreadcrumb
           segments={userManagementBreadcrumbSegments([
             {
-              label: loading ? "Loading..." : (summary?.display_name ?? clientId),
+              label: showPageSkeleton ? "Loading..." : (summary?.display_name ?? clientId),
             },
           ])}
         />
 
-        {!loading && summary && (canManageRbac || canSuspend) ? (
+        {!showPageSkeleton && summary && (canManageRbac || canSuspend) ? (
           <div className="flex flex-wrap items-center gap-2">
             {canSuspend ? (
               <Button
@@ -284,10 +288,12 @@ export function UserProfileView({
         ) : null}
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error || profileError ? (
+        <AdminFeedbackMessage variant="destructive">{error || profileError}</AdminFeedbackMessage>
+      ) : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      {loading ? (
+      {showPageSkeleton ? (
         <AdminProfilePageSkeleton />
       ) : summary ? (
         <>
@@ -358,7 +364,7 @@ export function UserProfileView({
             {(canReadMf && profileDetail?.investments) || showPortfolioWithoutInvestments ? (
               <TabsContent
                 value="portfolio"
-                keepMounted={mountedTabKeys.has("portfolio") || activeTabKey === "portfolio"}
+                keepMounted={keepMounted("portfolio")}
                 className="mt-0 space-y-4"
               >
                 {canReadMf && profileDetail?.investments ? (
@@ -370,7 +376,7 @@ export function UserProfileView({
             {canReadFamilyGroups ? (
               <TabsContent
                 value="family"
-                keepMounted={mountedTabKeys.has("family") || activeTabKey === "family"}
+                keepMounted={keepMounted("family")}
                 className="mt-0"
               >
                 <UserFamilyGroupsDetailSection userId={summary.user_id} profilePath={profilePath} />
@@ -380,7 +386,7 @@ export function UserProfileView({
             {canReadUsers ? (
               <TabsContent
                 value="goals"
-                keepMounted={mountedTabKeys.has("goals") || activeTabKey === "goals"}
+                keepMounted={keepMounted("goals")}
                 className="mt-0"
               >
                 <UserGoalsDetailSection userRef={clientId} />
@@ -388,7 +394,7 @@ export function UserProfileView({
             ) : null}
 
             {canReadKyc && profileDetail?.kyc ? (
-              <TabsContent value="kyc" keepMounted={mountedTabKeys.has("kyc") || activeTabKey === "kyc"} className="mt-0">
+              <TabsContent value="kyc" keepMounted={keepMounted("kyc")} className="mt-0">
                 <UserKycDetailSection
                   kyc={profileDetail.kyc}
                   hasDownload={canDownloadDocs}
@@ -397,13 +403,13 @@ export function UserProfileView({
             ) : null}
 
             {canReadRiskProfile ? (
-              <TabsContent value="risk" keepMounted={mountedTabKeys.has("risk") || activeTabKey === "risk"} className="mt-0">
+              <TabsContent value="risk" keepMounted={keepMounted("risk")} className="mt-0">
                 <UserRiskDetailSection userId={summary.user_id} />
               </TabsContent>
             ) : null}
 
             {canReadAudit ? (
-              <TabsContent value="activity" keepMounted={mountedTabKeys.has("activity") || activeTabKey === "activity"} className="mt-0">
+              <TabsContent value="activity" keepMounted={keepMounted("activity")} className="mt-0">
                 <UserActivityTable userId={summary.user_id} />
               </TabsContent>
             ) : null}

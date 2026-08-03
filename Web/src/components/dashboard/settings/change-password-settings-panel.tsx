@@ -4,6 +4,7 @@ import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { AuthenticatorVerifyDialog } from "@/features/account/mfa";
+import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { PasswordCriteriaList } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export function ChangePasswordSettingsPanel({
     setNewPassword("");
   };
 
-  const submitPasswordChange = async (totpCode?: string) => {
+  const submitPasswordChange = async (verification?: StepUpVerification) => {
     setLoading(true);
     setError("");
     setAuthError("");
@@ -51,7 +52,8 @@ export function ChangePasswordSettingsPanel({
       await changePassword({
         currentPassword,
         newPassword,
-        totpCode,
+        totpCode: verification?.totpCode,
+        smsOtp: verification?.smsOtp,
       });
       resetForm();
       setSuccess(copy.settings.changePasswordSuccess);
@@ -87,8 +89,8 @@ export function ChangePasswordSettingsPanel({
     void submitPasswordChange();
   };
 
-  const handleAuthenticatorVerify = (totpCode: string) => {
-    void submitPasswordChange(totpCode);
+  const handleStepUpVerify = (verification: StepUpVerification) => {
+    void submitPasswordChange(verification);
   };
 
   const canSubmit =
@@ -173,7 +175,7 @@ export function ChangePasswordSettingsPanel({
         submitLabel={copy.settings.changePasswordSubmit}
         loading={loading}
         error={authError}
-        onSubmit={handleAuthenticatorVerify}
+        onSubmit={handleStepUpVerify}
       />
     </>
   );

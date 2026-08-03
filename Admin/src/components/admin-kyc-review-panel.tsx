@@ -10,12 +10,20 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
-import { AdminProfilePageSkeleton } from "@/components/ui/admin-skeletons";
+import { AdminProfilePageSkeleton, AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
+import {
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTableRow,
+  AdminTableStateRow,
+} from "@/components/ui/admin-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -204,22 +212,18 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <AdminSectionTitle variant="section">
-          KYC document review
-        </AdminSectionTitle>
-
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Client ID or user reference"
+          value={userRef}
+          onChange={(event) => setUserRef(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && userRef.trim()) {
+              void loadReview();
+            }
+          }}
+        />
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <AdminSearchInput
-            containerClassName="max-w-sm sm:w-56"
-            placeholder="Client ID or user reference"
-            value={userRef}
-            onChange={(event) => setUserRef(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && userRef.trim()) {
-                void loadReview();
-              }
-            }}
-          />
           <Button
             disabled={loading || !userRef.trim()}
             onClick={() => void loadReview()}
@@ -303,82 +307,99 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
             </AdminMetricCardsGrid>
           ) : null}
 
-          {review.documents.length === 0 ? (
-            <KycDocumentsEmptyState />
-          ) : (
-            <div className="grid gap-3">
-              {review.documents.map((document) => (
-                <article
-                  key={document.id}
-                  className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-border bg-muted/10 p-4 lg:flex-row lg:items-center lg:justify-between"
-                >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="rounded-[var(--radius-control)] bg-background p-2 text-primary ring-1 ring-border">
-                        <FileText className="size-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-foreground">
-                            {formatDocumentType(document.doc_type)}
-                          </p>
-                          <StatusBadge variant="neutral" showIcon={false}>
-                            v{document.version}
-                          </StatusBadge>
-                          <StatusBadge
-                            variant={documentReviewStatusVariant(
-                              document.kyc_review_status ?? document.status ?? "",
-                            )}
-                          >
-                            {document.kyc_review_status ?? document.status}
-                          </StatusBadge>
+          <AdminDataTable minWidth="3xl">
+            <AdminTableHeader>
+              <tr>
+                {hasDownload || hasVerify ? (
+                  <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+                ) : null}
+                <AdminTableHeadCell>Document</AdminTableHeadCell>
+                <AdminTableHeadCell>File</AdminTableHeadCell>
+                <AdminTableHeadCell>Status</AdminTableHeadCell>
+                <AdminTableHeadCell>Uploaded</AdminTableHeadCell>
+              </tr>
+            </AdminTableHeader>
+            <AdminTableBody>
+              {loading ? (
+                <AdminTableSkeletonRows columns={hasDownload || hasVerify ? 5 : 4} />
+              ) : review.documents.length === 0 ? (
+                <AdminTableStateRow colSpan={hasDownload || hasVerify ? 5 : 4}>
+                  <KycDocumentsEmptyState />
+                </AdminTableStateRow>
+              ) : (
+                review.documents.map((document) => (
+                  <AdminTableRow key={document.id}>
+                    {hasDownload || hasVerify ? (
+                      <AdminTableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          {hasDownload ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={actionLoading === `preview-${document.id}`}
+                              onClick={() => void handlePreview(document.id)}
+                            >
+                              Preview
+                            </Button>
+                          ) : null}
+                          {hasVerify ? (
+                            <>
+                              <Button
+                                size="sm"
+                                disabled={
+                                  actionLoading === `verify-${document.id}` ||
+                                  isDocumentVerified(document)
+                                }
+                                onClick={() => void handleVerify(document.id)}
+                              >
+                                Verify
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={actionLoading === `reject-${document.id}`}
+                                onClick={() => void handleReject(document.id)}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          ) : null}
                         </div>
-                        <p className="mt-1 truncate text-caption text-muted-foreground">
-                          {document.original_filename}
-                        </p>
-                        <p className="mt-1 text-caption text-muted-foreground">
-                          {document.mime_type} · Uploaded {formatDateTime(document.created_at)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      {hasDownload ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={actionLoading === `preview-${document.id}`}
-                          onClick={() => void handlePreview(document.id)}
-                        >
-                          Preview
-                        </Button>
-                      ) : null}
-                      {hasVerify ? (
-                        <>
-                          <Button
-                            size="sm"
-                            disabled={
-                              actionLoading === `verify-${document.id}` ||
-                              isDocumentVerified(document)
-                            }
-                            onClick={() => void handleVerify(document.id)}
-                          >
-                            Verify
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={actionLoading === `reject-${document.id}`}
-                            onClick={() => void handleReject(document.id)}
-                          >
-                            Reject
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </article>
-                ))}
-            </div>
-          )}
+                      </AdminTableCell>
+                    ) : null}
+                    <AdminTableCell>
+                      <p className="font-medium text-foreground">
+                        {formatDocumentType(document.doc_type)}
+                      </p>
+                      <p className="mt-0.5 text-caption text-muted-foreground">
+                        v{document.version}
+                      </p>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <p className="truncate font-medium text-foreground">
+                        {document.original_filename}
+                      </p>
+                      <p className="mt-0.5 text-caption text-muted-foreground">
+                        {document.mime_type}
+                      </p>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <StatusBadge
+                        variant={documentReviewStatusVariant(
+                          document.kyc_review_status ?? document.status ?? "",
+                        )}
+                      >
+                        {document.kyc_review_status ?? document.status}
+                      </StatusBadge>
+                    </AdminTableCell>
+                    <AdminTableCell className="whitespace-nowrap text-muted-foreground">
+                      {formatDateTime(document.created_at)}
+                    </AdminTableCell>
+                  </AdminTableRow>
+                ))
+              )}
+            </AdminTableBody>
+          </AdminDataTable>
         </div>
       ) : (
         <KycLookupEmptyState />

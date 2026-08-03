@@ -9,8 +9,9 @@ import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page
 import { MfTransactionOpsThresholdsPanel } from "@/components/mf/mf-transaction-ops-thresholds-panel";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSecurityConfigSettingsPanel } from "@/components/settings/admin-security-config-settings-panel";
-import { Tabs } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
+import { useMountedTabs } from "@/hooks/use-mounted-tabs";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   resolveSecurityConfigTab,
@@ -40,10 +41,13 @@ export function AdminSecurityConfigPage({ tabSlug }: AdminSecurityConfigPageProp
   );
 
   const activeTab = resolveSecurityConfigTab(tabSlug, hasOtherItems);
-  const [activeTabId, setActiveTabId] = useState<SecurityConfigTabId>(activeTab.id);
+  const { activeTab: activeTabId, selectTab, keepMounted } = useMountedTabs<SecurityConfigTabId>(
+    activeTab.id,
+    activeTab.id,
+  );
 
   useEffect(() => {
-    setActiveTabId(activeTab.id);
+    selectTab(activeTab.id);
     const href = securityConfigTabHref(activeTab);
     const currentHref = tabSlug
       ? `/dashboard/security-config/${tabSlug}`
@@ -51,12 +55,12 @@ export function AdminSecurityConfigPage({ tabSlug }: AdminSecurityConfigPageProp
     if (href !== currentHref) {
       router.replace(href);
     }
-  }, [activeTab, router, tabSlug]);
+  }, [activeTab, router, selectTab, tabSlug]);
 
   const handleTabChange = (value: string) => {
     const nextTab = visibleTabs.find((tab) => tab.id === value);
     if (!nextTab) return;
-    setActiveTabId(nextTab.id);
+    selectTab(nextTab.id);
     router.push(securityConfigTabHref(nextTab));
   };
 
@@ -87,25 +91,33 @@ export function AdminSecurityConfigPage({ tabSlug }: AdminSecurityConfigPageProp
             );
           })}
         </AdminTabList>
+
+        <TabsContent value="ops-thresholds" keepMounted={keepMounted("ops-thresholds")}>
+          {canReadMfTransactions ? (
+            <MfTransactionOpsThresholdsPanel
+              canRead={canReadMfTransactions}
+              canManage={canManageMfTransactions}
+            />
+          ) : (
+            <AdminFeedbackMessage variant="warning">
+              You do not have permission to view mutual fund ops thresholds.
+            </AdminFeedbackMessage>
+          )}
+        </TabsContent>
       </Tabs>
 
-      {activeTabId === "ops-thresholds" ? (
-        canReadMfTransactions ? (
-          <MfTransactionOpsThresholdsPanel
-            canRead={canReadMfTransactions}
-            canManage={canManageMfTransactions}
+      {(keepMounted("lockout") || keepMounted("risk") || keepMounted("other")) ? (
+        <div className={activeTabId === "ops-thresholds" ? "hidden" : undefined} aria-hidden={activeTabId === "ops-thresholds"}>
+          <AdminSecurityConfigSettingsPanel
+            activeTab={
+              activeTabId === "ops-thresholds"
+                ? "lockout"
+                : activeTabId
+            }
+            onHasOtherItemsChange={setHasOtherItems}
           />
-        ) : (
-          <AdminFeedbackMessage variant="warning">
-            You do not have permission to view mutual fund ops thresholds.
-          </AdminFeedbackMessage>
-        )
-      ) : (
-        <AdminSecurityConfigSettingsPanel
-          activeTab={activeTabId}
-          onHasOtherItemsChange={setHasOtherItems}
-        />
-      )}
+        </div>
+      ) : null}
     </AdminSectionPageShell>
   );
 }

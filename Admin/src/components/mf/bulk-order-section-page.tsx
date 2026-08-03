@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMountedTabs } from "@/hooks/use-mounted-tabs";
+import { useBulkOrderSummaryQuery } from "@/hooks/use-bulk-order-summary-query";
 import {
   AlertTriangle,
   IndianRupee,
@@ -19,10 +20,6 @@ import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
-import {
-  fetchMfTransactionCheckouts,
-  fetchMfTransactionSipBatches,
-} from "@/lib/mf-transactions-admin-api";
 
 type BulkOrderSectionPageProps = {
   tabSlug?: string;
@@ -41,118 +38,55 @@ const BULK_ORDER_TABS = [
   },
 ] as const;
 
-const PENDING_CHECKOUT_STATUSES = new Set([
-  "PENDING",
-  "PAYMENT_PENDING",
-  "SUBMITTED",
-  "PROCESSING",
-]);
-const FAILED_CHECKOUT_STATUSES = new Set(["FAILED", "CANCELLED"]);
-const PENDING_MANDATE_STATUSES = new Set(["PENDING", "AUTH_PENDING"]);
-const FAILED_MANDATE_STATUSES = new Set(["FAILED", "CANCELLED"]);
-
 function BulkOrderSummaryCards({ canRead }: { canRead: boolean }) {
-  const [loading, setLoading] = useState(true);
-  const [lumpsumCount, setLumpsumCount] = useState(0);
-  const [sipCount, setSipCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [failedCount, setFailedCount] = useState(0);
+  const { data, isPending } = useBulkOrderSummaryQuery(canRead);
+  const showSkeleton = isPending && !data;
 
-  const loadSummary = useCallback(async () => {
-    if (!canRead) return;
-    setLoading(true);
-    try {
-      const [checkoutsResult, batchesResult] = await Promise.all([
-        fetchMfTransactionCheckouts({ checkout_type: "CART", limit: 50 }),
-        fetchMfTransactionSipBatches({ limit: 50 }),
-      ]);
-
-      const checkouts = checkoutsResult.checkouts;
-      const batches = batchesResult.batches;
-
-      setLumpsumCount(checkouts.length);
-      setSipCount(batches.length);
-      setPendingCount(
-        checkouts.filter((item) => PENDING_CHECKOUT_STATUSES.has(item.status.toUpperCase()))
-          .length +
-          batches.filter((item) =>
-            PENDING_MANDATE_STATUSES.has(item.mandate_status.toUpperCase()),
-          ).length,
-      );
-      setFailedCount(
-        checkouts.filter((item) => FAILED_CHECKOUT_STATUSES.has(item.status.toUpperCase()))
-          .length +
-          batches.filter((item) =>
-            FAILED_MANDATE_STATUSES.has(item.mandate_status.toUpperCase()),
-          ).length,
-      );
-    } catch {
-      setLumpsumCount(0);
-      setSipCount(0);
-      setPendingCount(0);
-      setFailedCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [canRead]);
-
-  useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
-
-  const metrics = useMemo(
-    () => [
-      {
-        key: "lumpsum",
-        label: "Lumpsum orders",
-        value: lumpsumCount.toLocaleString(),
-        infoDescription: "Cart-based bulk lumpsum checkouts.",
-        icon: IndianRupee,
-        tone: "info" as const,
-        accent: true,
-      },
-      {
-        key: "sip",
-        label: "SIP batches",
-        value: sipCount.toLocaleString(),
-        infoDescription: "Bulk SIP batches with shared mandate auth.",
-        icon: Repeat,
-        tone: "default" as const,
-      },
-      {
-        key: "pending",
-        label: "In progress",
-        value: pendingCount.toLocaleString(),
-        infoDescription: "Pending or processing lumpsum and SIP bulk orders.",
-        icon: LoaderCircle,
-        tone: pendingCount > 0 ? ("warning" as const) : ("muted" as const),
-      },
-      {
-        key: "failed",
-        label: "Failed / cancelled",
-        value: failedCount.toLocaleString(),
-        infoDescription: "Failed or cancelled lumpsum and SIP bulk orders.",
-        icon: AlertTriangle,
-        tone: failedCount > 0 ? ("warning" as const) : ("success" as const),
-      },
-    ],
-    [failedCount, lumpsumCount, pendingCount, sipCount],
-  );
+  const summary = data ?? {
+    lumpsumCount: 0,
+    sipCount: 0,
+    pendingCount: 0,
+    failedCount: 0,
+  };
 
   return (
     <AdminMetricCardsGrid columns="four" className="!mt-0">
-      {metrics.map((metric) => (
-        <AdminMetricCard
-          key={metric.key}
-          label={metric.label}
-          value={metric.value}
-          infoDescription={metric.infoDescription}
-          icon={metric.icon}
-          tone={metric.tone}
-          accent={metric.accent}
-          loading={loading}
-        />
-      ))}
+      <AdminMetricCard
+        key="lumpsum"
+        label="Lumpsum orders"
+        value={summary.lumpsumCount.toLocaleString()}
+        infoDescription="Cart-based bulk lumpsum checkouts."
+        icon={IndianRupee}
+        tone="info"
+        accent
+        loading={showSkeleton}
+      />
+      <AdminMetricCard
+        key="sip"
+        label="SIP batches"
+        value={summary.sipCount.toLocaleString()}
+        infoDescription="Bulk SIP batches with shared mandate auth."
+        icon={Repeat}
+        loading={showSkeleton}
+      />
+      <AdminMetricCard
+        key="pending"
+        label="In progress"
+        value={summary.pendingCount.toLocaleString()}
+        infoDescription="Pending or processing lumpsum and SIP bulk orders."
+        icon={LoaderCircle}
+        tone={summary.pendingCount > 0 ? "warning" : "muted"}
+        loading={showSkeleton}
+      />
+      <AdminMetricCard
+        key="failed"
+        label="Failed / cancelled"
+        value={summary.failedCount.toLocaleString()}
+        infoDescription="Failed or cancelled lumpsum and SIP bulk orders."
+        icon={AlertTriangle}
+        tone={summary.failedCount > 0 ? "warning" : "success"}
+        loading={showSkeleton}
+      />
     </AdminMetricCardsGrid>
   );
 }
@@ -165,6 +99,15 @@ export function BulkOrderSectionPage({ tabSlug }: BulkOrderSectionPageProps) {
 
   const activeTab =
     BULK_ORDER_TABS.find((tab) => tab.slug === tabSlug) ?? BULK_ORDER_TABS[0];
+  const { activeTab: activeTabSlug, selectTab, keepMounted } = useMountedTabs(
+    activeTab.slug,
+    activeTab.slug,
+  );
+
+  const handleTabChange = (value: string) => {
+    selectTab(value as (typeof BULK_ORDER_TABS)[number]["slug"]);
+    if (value) router.push(`/dashboard/bulk-order/${value}`);
+  };
 
   return (
     <AdminSectionPageShell
@@ -180,13 +123,7 @@ export function BulkOrderSectionPage({ tabSlug }: BulkOrderSectionPageProps) {
         <div className="space-y-5">
           <BulkOrderSummaryCards canRead={canRead} />
 
-          <Tabs
-            value={activeTab.slug}
-            onValueChange={(value) => {
-              if (value) router.push(`/dashboard/bulk-order/${value}`);
-            }}
-            className="space-y-4"
-          >
+          <Tabs value={activeTabSlug} onValueChange={handleTabChange} className="space-y-4">
             <AdminTabList>
               {BULK_ORDER_TABS.map((tab) => {
                 const Icon = tab.icon;
@@ -199,10 +136,10 @@ export function BulkOrderSectionPage({ tabSlug }: BulkOrderSectionPageProps) {
               })}
             </AdminTabList>
 
-            <TabsContent value="lumpsum">
+            <TabsContent value="lumpsum" keepMounted={keepMounted("lumpsum")}>
               <MfTransactionCheckoutsPanel canRead={canRead} />
             </TabsContent>
-            <TabsContent value="sip">
+            <TabsContent value="sip" keepMounted={keepMounted("sip")}>
               <MfTransactionSipBatchesPanel canRead={canRead} canManage={canManage} />
             </TabsContent>
           </Tabs>

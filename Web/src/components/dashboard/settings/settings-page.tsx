@@ -49,6 +49,7 @@ export function SettingsPage() {
   });
   const [storedBackupCodes, setStoredBackupCodes] = useState<string[]>([]);
   const [backupCodesLoading, setBackupCodesLoading] = useState(true);
+  const [autoOpenMfaEnroll, setAutoOpenMfaEnroll] = useState(false);
 
   const loadBackupCodes = useCallback(async () => {
     if (!user?.id) return;
@@ -77,6 +78,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     const section = searchParams.get("section");
+    const action = searchParams.get("action");
     if (section === "risk-profile") {
       router.replace("/dashboard/risk-profile");
       return;
@@ -84,7 +86,11 @@ export function SettingsPage() {
     if (section && SETTINGS_NAV.some((item) => item.id === section)) {
       setActiveSection(section as SettingsSection);
     }
-    if (searchParams.has("section")) {
+    if (action === "enroll-mfa") {
+      setActiveSection("mfa");
+      setAutoOpenMfaEnroll(true);
+    }
+    if (searchParams.has("section") || searchParams.has("action")) {
       router.replace(pathname, { scroll: false });
     }
   }, [pathname, router, searchParams, setActiveSection]);
@@ -139,6 +145,8 @@ export function SettingsPage() {
             backupCodesLoading={backupCodesLoading}
             storedBackupCodes={storedBackupCodes}
             onRefreshBackupCodes={refreshBackupCodesQuietly}
+            autoOpenEnroll={autoOpenMfaEnroll}
+            onAutoOpenEnrollHandled={() => setAutoOpenMfaEnroll(false)}
           />
         );
 

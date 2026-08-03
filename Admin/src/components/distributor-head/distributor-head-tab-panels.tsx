@@ -17,19 +17,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import {
+  ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
   AdminTableBody,
   AdminTableCell,
   AdminTableHeadCell,
   AdminTableHeader,
   AdminTableRow,
+  AdminTableStateRow,
 } from "@/components/ui/admin-table";
 import {
   DUMMY_BRANCHES,
   DUMMY_DISTRIBUTORS,
   DUMMY_MANAGERS,
   DUMMY_SALES_ROWS,
-  DUMMY_STATE_HEAD,
   sumManagersSalesMtd,
 } from "@/lib/dummy/distributor-head-data";
 import {
@@ -98,9 +99,6 @@ export function DistributorHeadOverviewPanel() {
 export function DistributorHeadBranchesPanel() {
   return (
     <div className="space-y-4">
-      <AdminSectionTitle description="Branch-level footprint and sales under this state.">
-        Branches in {DUMMY_STATE_HEAD.state}
-      </AdminSectionTitle>
       <AdminDataTable minWidth="6xl">
         <AdminTableHeader>
           <tr>
@@ -114,17 +112,21 @@ export function DistributorHeadBranchesPanel() {
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {DUMMY_BRANCHES.map((row) => (
-            <AdminTableRow key={row.id}>
-              <AdminTableCell className="font-medium">{row.name}</AdminTableCell>
-              <AdminTableCell>{row.city}</AdminTableCell>
-              <AdminTableCell>{row.managerName}</AdminTableCell>
-              <AdminTableCell>{row.distributorCount}</AdminTableCell>
-              <AdminTableCell>{formatDistributorHeadCount(row.activeClients)}</AdminTableCell>
-              <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.aumInr)}</AdminTableCell>
-              <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.salesMtdInr)}</AdminTableCell>
-            </AdminTableRow>
-          ))}
+          {DUMMY_BRANCHES.length === 0 ? (
+            <AdminTableStateRow colSpan={7}>No branches in this state.</AdminTableStateRow>
+          ) : (
+            DUMMY_BRANCHES.map((row) => (
+              <AdminTableRow key={row.id}>
+                <AdminTableCell className="font-medium">{row.name}</AdminTableCell>
+                <AdminTableCell>{row.city}</AdminTableCell>
+                <AdminTableCell>{row.managerName}</AdminTableCell>
+                <AdminTableCell>{row.distributorCount}</AdminTableCell>
+                <AdminTableCell>{formatDistributorHeadCount(row.activeClients)}</AdminTableCell>
+                <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.aumInr)}</AdminTableCell>
+                <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.salesMtdInr)}</AdminTableCell>
+              </AdminTableRow>
+            ))
+          )}
         </AdminTableBody>
       </AdminDataTable>
     </div>

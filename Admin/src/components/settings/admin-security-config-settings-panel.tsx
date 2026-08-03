@@ -419,7 +419,7 @@ export function AdminSecurityConfigSettingsPanel({
   }, [onHasOtherItemsChange, other.length]);
 
   const loadConfig = useCallback(async () => {
-    setLoading(true);
+    if (items.length === 0) setLoading(true);
     setError("");
     try {
       const result = await fetchSecurityConfig();
@@ -435,7 +435,7 @@ export function AdminSecurityConfigSettingsPanel({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [items.length]);
 
   useEffect(() => {
     void loadConfig();
@@ -491,7 +491,7 @@ export function AdminSecurityConfigSettingsPanel({
     }
   };
 
-  if (loading) {
+  if (loading && items.length === 0) {
     return <AdminFormSkeleton rows={6} />;
   }
 

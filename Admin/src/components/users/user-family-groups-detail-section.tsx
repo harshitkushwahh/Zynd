@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AdminFamilyGroupSubCard } from "@/components/users/admin-family-group-sub-card";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
@@ -13,8 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAdminUserFamilyGroupsQuery } from "@/hooks/use-admin-user-family-groups-query";
 import { userFamilyGroupDetailHref } from "@/lib/admin-user-family-group-navigation";
-import { fetchAdminUserFamilyGroups, type AdminUserFamilyGroups } from "@/lib/family-groups-admin-api";
 import { formatTimestampDetail } from "@/lib/format-date";
 import { getErrorMessage } from "@/lib/errors";
 import { PROFILE_SECTION_TITLE_CLASS } from "@/components/users/user-profile-typography";
@@ -49,28 +49,12 @@ export function UserFamilyGroupsDetailSection({
   profilePath,
 }: UserFamilyGroupsDetailSectionProps) {
   const router = useRouter();
-  const [payload, setPayload] = useState<AdminUserFamilyGroups | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data: payload, isPending, error: queryError } = useAdminUserFamilyGroupsQuery(userId);
+  const showSkeleton = isPending && !payload;
+  const error = queryError
+    ? getErrorMessage(queryError, "Could not load family groups for this user.")
+    : "";
   const [filter, setFilter] = useState<FamilyGroupsFilter>("all");
-
-  const loadGroups = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await fetchAdminUserFamilyGroups(userId);
-      setPayload(result);
-    } catch (err) {
-      setPayload(null);
-      setError(getErrorMessage(err, "Could not load family groups for this user."));
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    void loadGroups();
-  }, [loadGroups]);
 
   const showCreated = filter === "all" || filter === "created";
   const showMemberships = filter === "all" || filter === "memberships";
@@ -85,7 +69,7 @@ export function UserFamilyGroupsDetailSection({
     return hasCreated || hasMemberships;
   }, [filter, hasCreated, hasMemberships, payload]);
 
-  if (loading) {
+  if (showSkeleton) {
     return <AdminTableSkeleton columns={1} rows={3} minWidth="sm" />;
   }
 

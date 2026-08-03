@@ -13,6 +13,7 @@ import {
   AuthenticatorVerifyDialog,
   PasswordVerifyDialog,
 } from "@/features/account/mfa";
+import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
@@ -110,7 +111,10 @@ export function DeleteAccountSettingsPanel({
     setAuthError("");
   };
 
-  const submitDeletion = async (currentPassword: string, totpCode?: string) => {
+  const submitDeletion = async (
+    currentPassword: string,
+    verification?: StepUpVerification
+  ) => {
     setLoading(true);
     setError("");
     setPasswordError("");
@@ -120,7 +124,8 @@ export function DeleteAccountSettingsPanel({
     try {
       const result = await requestAccountDeletion({
         currentPassword,
-        totpCode,
+        totpCode: verification?.totpCode,
+        smsOtp: verification?.smsOtp,
       });
       resetDialogs();
       setPasswordDialogOpen(false);
@@ -159,8 +164,8 @@ export function DeleteAccountSettingsPanel({
     void submitDeletion(password);
   };
 
-  const handleAuthenticatorVerify = (totpCode: string) => {
-    void submitDeletion(pendingPassword, totpCode);
+  const handleStepUpVerify = (verification: StepUpVerification) => {
+    void submitDeletion(pendingPassword, verification);
   };
 
   const handleCancelDeletion = async () => {
@@ -325,7 +330,7 @@ export function DeleteAccountSettingsPanel({
         submitLabel={copy.settings.requestDeletion}
         loading={loading}
         error={authError}
-        onSubmit={handleAuthenticatorVerify}
+        onSubmit={handleStepUpVerify}
       />
     </>
   );

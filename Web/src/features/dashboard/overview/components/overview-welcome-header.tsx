@@ -4,7 +4,6 @@ import { useLayoutEffect, useState } from "react";
 
 import { PageTitle } from "@/components/ui/page-title";
 import { resolveTimeGreeting, type TimeGreeting } from "@/features/dashboard/overview/lib/time-greeting";
-import { copy } from "@/shared/config/copy";
 
 type OverviewWelcomeHeaderProps = {
   name: string;
@@ -24,11 +23,10 @@ export function OverviewWelcomeHeader({ name }: OverviewWelcomeHeaderProps) {
   }, [name]);
 
   return (
-    <div className="mb-6">
-      <PageTitle suppressHydrationWarning>{greeting?.label}</PageTitle>
-      <p className="mt-2 text-compact text-muted-foreground">
-        {copy.dashboard.overview.welcomeSubtitle}
-      </p>
+    <div className="mb-4">
+      <PageTitle suppressHydrationWarning className="font-normal">
+        {greeting?.label}
+      </PageTitle>
     </div>
   );
 }

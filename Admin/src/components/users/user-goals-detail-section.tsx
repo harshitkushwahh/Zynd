@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Goal, Target, TrendingUp, Wallet } from "lucide-react";
 
 import { AdminFamilyGroupGoalTile } from "@/components/users/admin-family-group-goal-tile";
@@ -8,7 +8,7 @@ import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
-import { fetchAdminUserGoals, type AdminUserGoal } from "@/lib/admin-api";
+import { useAdminUserGoalsQuery, type AdminUserGoal } from "@/hooks/use-admin-user-goals-query";
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";
 import { userGoalDetailHref } from "@/lib/admin-user-goal-navigation";
 import { getErrorMessage } from "@/lib/errors";
@@ -51,32 +51,15 @@ function summarizeGoals(goals: AdminUserGoal[]) {
 }
 
 export function UserGoalsDetailSection({ userRef }: UserGoalsDetailSectionProps) {
-  const [goals, setGoals] = useState<AdminUserGoal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data, isPending, error: queryError } = useAdminUserGoalsQuery(userRef);
+  const goals = data ?? [];
+  const showSkeleton = isPending && !data;
+  const error = queryError ? getErrorMessage(queryError, "Could not load goals for this user.") : "";
   const profilePath = clientIdToProfilePath(userRef);
-
-  const loadGoals = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await fetchAdminUserGoals(userRef);
-      setGoals(result.items);
-    } catch (err) {
-      setGoals([]);
-      setError(getErrorMessage(err, "Could not load goals for this user."));
-    } finally {
-      setLoading(false);
-    }
-  }, [userRef]);
-
-  useEffect(() => {
-    void loadGoals();
-  }, [loadGoals]);
 
   const summary = useMemo(() => summarizeGoals(goals), [goals]);
 
-  if (loading) {
+  if (showSkeleton) {
     return <AdminTableSkeleton columns={1} rows={4} minWidth="lg" />;
   }
 

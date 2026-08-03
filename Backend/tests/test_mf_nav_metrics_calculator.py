@@ -7,6 +7,8 @@ from app.application.mf.nav_metrics_calculator import (
     compute_metrics_for_history,
     compute_period_return,
     nav_on_or_before,
+    nav_on_or_before_with_date,
+    resolve_period_start_nav,
 )
 
 
@@ -25,6 +27,14 @@ def test_nav_on_or_before() -> None:
     assert nav_on_or_before(history, date(2025, 12, 1)) is None
 
 
+def test_nav_on_or_before_with_date() -> None:
+    history = [
+        (date(2026, 1, 1), Decimal("100")),
+        (date(2026, 2, 1), Decimal("105")),
+    ]
+    assert nav_on_or_before_with_date(history, date(2026, 1, 15)) == (date(2026, 1, 1), Decimal("100"))
+
+
 def test_compute_metrics_for_history() -> None:
     history = [
         (date(2025, 1, 1), Decimal("100")),
@@ -35,3 +45,40 @@ def test_compute_metrics_for_history() -> None:
     as_of, metrics = result
     assert as_of == date(2026, 1, 1)
     assert metrics["return_1y"] == Decimal("10")
+
+
+def test_compute_metrics_for_history_skips_long_horizons_with_short_history() -> None:
+    history = [
+        (date(2026, 1, 1), Decimal("100")),
+        (date(2026, 2, 1), Decimal("190")),
+    ]
+    result = compute_metrics_for_history(history)
+    assert result is not None
+    _as_of, metrics = result
+    assert metrics["return_1m"] == Decimal("90")
+    assert metrics["return_3m"] is None
+    assert metrics["return_6m"] is None
+    assert metrics["return_1y"] is None
+    assert metrics["return_3y"] is None
+    assert metrics["return_5y"] is None
+
+
+def test_compute_metrics_for_history_skips_sparse_short_periods() -> None:
+    history = [
+        (date(2026, 1, 1), Decimal("100")),
+        (date(2026, 1, 31), Decimal("190")),
+    ]
+    result = compute_metrics_for_history(history)
+    assert result is not None
+    _as_of, metrics = result
+    assert metrics["return_1d"] is None
+    assert metrics["return_1w"] is None
+    assert metrics["return_1m"] == Decimal("90")
+
+
+def test_resolve_period_start_nav_requires_full_span() -> None:
+    history = [
+        (date(2026, 1, 1), Decimal("100")),
+        (date(2026, 2, 1), Decimal("110")),
+    ]
+    assert resolve_period_start_nav(history, date(2026, 2, 1), 365) is None

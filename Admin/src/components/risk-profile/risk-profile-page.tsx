@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Gauge } from "lucide-react";
 
 import { RiskProfileAuditPanel } from "@/components/risk-profile/risk-profile-audit-panel";
@@ -12,8 +12,9 @@ import { RiskProfileTemplatesPanel } from "@/components/risk-profile/risk-profil
 import { RiskProfileTiersPanel } from "@/components/risk-profile/risk-profile-tiers-panel";
 import { RiskProfileUsersPanel } from "@/components/risk-profile/risk-profile-users-panel";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
-import { Tabs } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
+import { useMountedTabs } from "@/hooks/use-mounted-tabs";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   RISK_PROFILE_TABS,
@@ -29,8 +30,10 @@ type RiskProfilePageProps = {
 export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
   const router = useRouter();
   const { hasPermission } = useAdminAuth();
-  const activeTab = resolveRiskProfileTab(tabSlug);
-  const [activeTabId, setActiveTabId] = useState<RiskProfileTabId>(activeTab.id);
+  const { activeTab: activeTabId, selectTab, keepMounted } = useMountedTabs<RiskProfileTabId>(
+    resolveRiskProfileTab(tabSlug).id,
+    resolveRiskProfileTab(tabSlug).id,
+  );
 
   const visibleTabs = useMemo(
     () =>
@@ -47,19 +50,19 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
       return;
     }
 
-    const resolved = visibleTabs.find((tab) => tab.id === tabSlug) ?? visibleTabs[0] ?? activeTab;
-    setActiveTabId(resolved.id);
-    const href = riskProfileTabHref(resolved);
-    const currentHref = tabSlug ? `/dashboard/risk-profile/${tabSlug}` : "/dashboard/risk-profile";
-    if (href !== currentHref && tabSlug !== resolved.id) {
-      router.replace(href);
+    const urlTab = tabSlug ? visibleTabs.find((tab) => tab.id === tabSlug) : undefined;
+    if (!tabSlug || !urlTab) {
+      const tab = visibleTabs.find((item) => item.id === activeTabId) ?? visibleTabs[0];
+      if (tab) {
+        router.replace(riskProfileTabHref(tab), { scroll: false });
+      }
     }
-  }, [activeTab, router, tabSlug, visibleTabs]);
+  }, [activeTabId, router, tabSlug, visibleTabs]);
 
   const handleTabChange = (value: string) => {
     const nextTab = visibleTabs.find((tab) => tab.id === value);
     if (!nextTab) return;
-    setActiveTabId(nextTab.id);
+    selectTab(nextTab.id);
     router.push(riskProfileTabHref(nextTab));
   };
 
@@ -87,15 +90,29 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
             );
           })}
         </AdminTabList>
-      </Tabs>
 
-      {activeTabId === "categories" ? <RiskProfileCategoriesPanel canManage={canManageCategories} /> : null}
-      {activeTabId === "questions" ? <RiskProfileQuestionsPanel canManage={canManageQuestions} /> : null}
-      {activeTabId === "templates" ? <RiskProfileTemplatesPanel canManage={canManageTemplates} /> : null}
-      {activeTabId === "tiers" ? <RiskProfileTiersPanel canManage={canManageTiers} /> : null}
-      {activeTabId === "users" ? <RiskProfileUsersPanel /> : null}
-      {activeTabId === "locked" ? <RiskProfileLockedPanel canManage={canManageLocked} /> : null}
-      {activeTabId === "audit" ? <RiskProfileAuditPanel /> : null}
+        <TabsContent value="categories" keepMounted={keepMounted("categories")}>
+          <RiskProfileCategoriesPanel canManage={canManageCategories} />
+        </TabsContent>
+        <TabsContent value="questions" keepMounted={keepMounted("questions")}>
+          <RiskProfileQuestionsPanel canManage={canManageQuestions} />
+        </TabsContent>
+        <TabsContent value="templates" keepMounted={keepMounted("templates")}>
+          <RiskProfileTemplatesPanel canManage={canManageTemplates} />
+        </TabsContent>
+        <TabsContent value="tiers" keepMounted={keepMounted("tiers")}>
+          <RiskProfileTiersPanel canManage={canManageTiers} />
+        </TabsContent>
+        <TabsContent value="users" keepMounted={keepMounted("users")}>
+          <RiskProfileUsersPanel />
+        </TabsContent>
+        <TabsContent value="locked" keepMounted={keepMounted("locked")}>
+          <RiskProfileLockedPanel canManage={canManageLocked} />
+        </TabsContent>
+        <TabsContent value="audit" keepMounted={keepMounted("audit")}>
+          <RiskProfileAuditPanel />
+        </TabsContent>
+      </Tabs>
     </AdminSectionPageShell>
   );
 }

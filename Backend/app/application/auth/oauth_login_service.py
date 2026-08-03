@@ -111,6 +111,10 @@ async def _process_oauth_login(
         admin_client=admin_client,
     )
     if pending:
+        from app.application.auth.login_sms_service import enrich_mfa_login_pending
+
+        if pending.get("next") == "mfa_required":
+            pending = await enrich_mfa_login_pending(db, user, pending)
         return pending
 
     return await complete_authenticated_login(

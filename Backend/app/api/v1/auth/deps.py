@@ -8,7 +8,7 @@ from fastapi import Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.auth.account_service import fund_eligibility_status
+from app.application.auth.fund_movement_policy_service import evaluate_fund_eligibility
 from app.application.auth.auth_client_policy import (
     is_admin_auth_header,
     is_admin_device_fingerprint as policy_is_admin_device_fingerprint,
@@ -167,33 +167,54 @@ async def require_fund_eligible_user(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-    eligibility = fund_eligibility_status(current_user)
+    eligibility = await evaluate_fund_eligibility(db, current_user)
     if not eligibility["eligible"]:
+        reasons = eligibility["reasons"]
+        if "pin_required" in reasons:
+            gate_event = AuditEventType.fund_gate_blocked_pin
+        elif (
+            "phone_verification_required" in reasons
+            or "email_verification_required" in reasons
+            or "verified_contact_required" in reasons
+        ):
+            gate_event = AuditEventType.fund_gate_blocked_contact
+        elif "mfa_required" in reasons:
+            gate_event = AuditEventType.fund_gate_blocked_mfa
+        else:
+            gate_event = AuditEventType.fund_gate_blocked_contact
         db.add(
             AuditLog(
                 user_id=current_user.id,
-                event_type=AuditEventType.fund_gate_blocked_mfa,
+                event_type=gate_event,
                 ip_address=get_client_ip(request),
-                metadata_={"reasons": eligibility["reasons"]},
+                metadata_={"reasons": reasons},
             )
         )
         await db.flush()
+        if "pin_required" in reasons:
+            code = "pin_required"
+            message = "Set up your Zynd PIN before moving funds."
+        elif "phone_verification_required" in reasons:
+            code = "phone_verification_required"
+            message = "Verify your mobile number before moving funds."
+        elif "email_verification_required" in reasons:
+            code = "email_verification_required"
+            message = "Verify your email address before moving funds."
+        elif "verified_contact_required" in reasons:
+            code = "verified_contact_required"
+            message = "Verify your mobile number before moving funds."
+        elif "mfa_required" in reasons:
+            code = "mfa_required"
+            message = "Enable MFA before moving funds."
+        else:
+            code = "not_eligible"
+            message = "Complete security setup before moving funds."
         raise HTTPException(
             status_code=403,
             detail={
-                "code": (
-                    "pin_required"
-                    if "pin_required" in eligibility["reasons"]
-                    else "mfa_required"
-                    if "mfa_required" in eligibility["reasons"]
-                    else "not_eligible"
-                ),
-                "message": (
-                    "Set up your Zynd PIN before moving funds."
-                    if "pin_required" in eligibility["reasons"]
-                    else "Enable MFA before moving funds."
-                ),
-                "reasons": eligibility["reasons"],
+                "code": code,
+                "message": message,
+                "reasons": reasons,
             },
         )
     return current_user

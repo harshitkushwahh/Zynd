@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus } from "lucide-react";
 
 import {
@@ -54,10 +55,12 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { getErrorMessage } from "@/lib/errors";
 import {
+  RISK_QUESTIONS_PANEL_QUERY_KEY,
+  useRiskQuestionsPanelQuery,
+} from "@/hooks/use-risk-profile-queries";
+import {
   createRiskQuestion,
   deleteRiskQuestion,
-  fetchRiskCategories,
-  fetchRiskQuestions,
   updateRiskQuestion,
   type RiskCategory,
   type RiskQuestion,
@@ -113,9 +116,10 @@ function resolveFormCategories(
 }
 
 export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean }) {
-  const [categories, setCategories] = useState<RiskCategory[]>([]);
-  const [questions, setQuestions] = useState<RiskQuestion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data, isPending, isFetching, error: queryError } = useRiskQuestionsPanelQuery();
+  const categories = data?.categories ?? [];
+  const questions = data?.questions ?? [];
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -172,7 +176,12 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
     [filteredQuestions, page, pageSize],
   );
 
-  const showSkeleton = loading && questions.length === 0;
+  const showSkeleton = isPending && !data;
+  const loadError = queryError ? getErrorMessage(queryError, "Could not load questions.") : "";
+
+  const refreshData = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: RISK_QUESTIONS_PANEL_QUERY_KEY });
+  }, [queryClient]);
 
   const formCategories = useMemo(
     () => resolveFormCategories(activeCategories, categories, categoryId, editingQuestion),
@@ -227,26 +236,7 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
     resetDialog();
   };
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [nextCategories, nextQuestions] = await Promise.all([
-        fetchRiskCategories(true),
-        fetchRiskQuestions({ includeInactive: true }),
-      ]);
-      setCategories(nextCategories);
-      setQuestions(nextQuestions);
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not load questions."));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const loadData = refreshData;
 
   useEffect(() => {
     if (!categoryId && activeCategories[0]) {
@@ -359,7 +349,9 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
           </div>
         </div>
 
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {error || loadError ? (
+          <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+        ) : null}
         {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
         <AdminDataTable
@@ -370,7 +362,7 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
               totalPages={pagination.totalPages}
               hasPrevious={pagination.hasPrevious}
               hasNext={pagination.hasNext}
-              disabled={loading}
+              disabled={isFetching}
               totalCount={filteredQuestions.length}
               currentPageCount={pagination.items.length}
               pageSize={pageSize}

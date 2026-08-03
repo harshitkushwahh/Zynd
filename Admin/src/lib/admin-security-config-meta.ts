@@ -92,6 +92,17 @@ export const SECURITY_CONFIG_GROUPS: SecurityConfigGroup[] = [
       "risk.high_action",
     ],
   },
+  {
+    id: "second-factor",
+    title: "Second factor & fund gates",
+    description: "SMS login fallback and fund-movement security requirements.",
+    keys: [
+      "auth.login_sms_otp_when_mfa_disabled",
+      "auth.step_up_sms_fallback_enabled",
+      "fund.require_mfa",
+      "fund.require_pin",
+    ],
+  },
 ];
 
 export const SECURITY_CONFIG_SUBSECTIONS: Record<
@@ -219,6 +230,42 @@ export const SECURITY_CONFIG_FIELD_META: Record<string, SecurityConfigFieldMeta>
     options: [
       { value: "block_login", label: "Block sign-in" },
       { value: "step_up_mfa", label: "Require MFA step-up" },
+    ],
+  },
+  "auth.login_sms_otp_when_mfa_disabled": {
+    label: "SMS OTP at login when MFA off",
+    description: "Send a mobile verification code after password when MFA is not enrolled.",
+    type: "select",
+    options: [
+      { value: "true", label: "Enabled" },
+      { value: "false", label: "Disabled" },
+    ],
+  },
+  "auth.step_up_sms_fallback_enabled": {
+    label: "SMS fallback for step-up",
+    description: "Allow users to receive an SMS code instead of authenticator TOTP during step-up.",
+    type: "select",
+    options: [
+      { value: "true", label: "Enabled" },
+      { value: "false", label: "Disabled" },
+    ],
+  },
+  "fund.require_mfa": {
+    label: "Require MFA for fund movement",
+    description: "Global switch for authenticator enrollment before transfers and investments.",
+    type: "select",
+    options: [
+      { value: "true", label: "Required" },
+      { value: "false", label: "Not required" },
+    ],
+  },
+  "fund.require_pin": {
+    label: "Require Zynd PIN for fund movement",
+    description: "Global switch for PIN setup after MFA before transfers and investments.",
+    type: "select",
+    options: [
+      { value: "true", label: "Required" },
+      { value: "false", label: "Not required" },
     ],
   },
 };

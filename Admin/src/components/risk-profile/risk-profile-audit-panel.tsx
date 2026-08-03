@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { formatTimestampDetail } from "@/lib/format-date";
@@ -23,7 +24,11 @@ import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { AUDIT_EVENT_GROUPS, formatAuditEvent } from "@/lib/admin-audit-events";
-import { fetchRiskAuditLogs, type RiskAuditLogItem } from "@/lib/risk-profile-admin-api";
+import {
+  riskAuditLogsQueryKey,
+  useRiskAuditLogsQuery,
+} from "@/hooks/use-risk-profile-queries";
+import { type RiskAuditLogItem } from "@/lib/risk-profile-admin-api";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";
@@ -47,14 +52,23 @@ function matchesSearch(log: RiskAuditLogItem, query: string) {
 }
 
 export function RiskProfileAuditPanel() {
-  const [logs, setLogs] = useState<RiskAuditLogItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState(ALL);
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
-  const [hasMore, setHasMore] = useState(false);
+
+  const queryParams = {
+    eventType: eventFilter === ALL ? undefined : eventFilter,
+    limit: pageSize,
+    offset,
+  };
+  const { data, isPending, isFetching, error: queryError } = useRiskAuditLogsQuery(queryParams);
+  const logs = data?.items ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const error = queryError
+    ? getErrorMessage(queryError, "Could not load risk profile audit logs.")
+    : "";
 
   const eventFilterOptions = useMemo<AdminSelectOption[]>(() => {
     const group = AUDIT_EVENT_GROUPS.find((item) => item.label === RISK_PROFILE_GROUP);
@@ -68,36 +82,12 @@ export function RiskProfileAuditPanel() {
     ];
   }, []);
 
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await fetchRiskAuditLogs({
-        event_type: eventFilter === ALL ? undefined : eventFilter,
-        limit: pageSize,
-        offset,
-      });
-      setLogs(result.items);
-      setHasMore(result.items.length === pageSize);
-    } catch (err) {
-      setLogs([]);
-      setHasMore(false);
-      setError(getErrorMessage(err, "Could not load risk profile audit logs."));
-    } finally {
-      setLoading(false);
-    }
-  }, [eventFilter, offset, pageSize]);
-
-  useEffect(() => {
-    void loadLogs();
-  }, [loadLogs]);
-
   const filteredLogs = useMemo(
     () => logs.filter((log) => matchesSearch(log, search)),
     [logs, search],
   );
 
-  const showSkeleton = loading && logs.length === 0;
+  const showSkeleton = isPending && !data;
 
   return (
     <div className="space-y-4">
@@ -121,8 +111,15 @@ export function RiskProfileAuditPanel() {
             className="min-w-select-xl"
           />
 
-          <Button variant="outline" size="icon" onClick={() => void loadLogs()} aria-label="Refresh">
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() =>
+              void queryClient.invalidateQueries({ queryKey: riskAuditLogsQueryKey(queryParams) })
+            }
+            aria-label="Refresh"
+          >
+            <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -136,7 +133,7 @@ export function RiskProfileAuditPanel() {
             page={getOffsetPage(offset, pageSize)}
             hasPrevious={offset > 0}
             hasNext={hasMore}
-            disabled={loading}
+            disabled={isFetching}
             currentPageCount={filteredLogs.length}
             hasMore={hasMore}
             pageSize={pageSize}

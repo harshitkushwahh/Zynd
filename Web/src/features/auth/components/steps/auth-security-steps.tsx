@@ -35,16 +35,52 @@ export function AuthMfaChallengeStep() {
     setMfaError,
     isSubmitting,
     handleMfaSubmit,
+    mfaSmsFallbackAvailable,
+    mfaMaskedPhone,
+    useMfaSmsOtp,
+    setUseMfaSmsOtp,
+    mfaSmsOtp,
+    setMfaSmsOtp,
+    mfaSmsSent,
+    mfaLoginSmsOtpCooldown,
+    handleSendMfaLoginSms,
+    handleResendMfaLoginSms,
   } = flow;
+
+  const bannerMessage = useMfaSmsOtp
+    ? mfaMaskedPhone
+      ? `${copy.mfa.secondFactor.smsLoginDescription} (${mfaMaskedPhone})`
+      : copy.mfa.secondFactor.smsLoginDescription
+    : useBackupCode
+      ? "Enter one of your backup codes."
+      : copy.auth.mfaAuthenticatorHint;
 
   return (
     <form onSubmit={handleMfaSubmit} className={stepPanelClass(step === "mfa-challenge")}>
       <OtpInfoBanner
-        message={
-          useBackupCode ? "Enter one of your backup codes." : copy.auth.mfaAuthenticatorHint
+        message={bannerMessage}
+        resend={
+          useMfaSmsOtp && mfaSmsSent
+            ? {
+                canResend: mfaLoginSmsOtpCooldown.canResend,
+                secondsLeft: mfaLoginSmsOtpCooldown.secondsLeft,
+                onResend: () => void handleResendMfaLoginSms(),
+                disabled: isSubmitting,
+              }
+            : undefined
         }
       />
-      {useBackupCode ? (
+      {useMfaSmsOtp ? (
+        <OtpInput
+          id="mfaSmsOtp"
+          value={mfaSmsOtp}
+          error={!!mfaError}
+          onChange={(value) => {
+            setMfaSmsOtp(value);
+            if (mfaError) setMfaError("");
+          }}
+        />
+      ) : useBackupCode ? (
         <Input
           placeholder="Backup code"
           value={backupCode}
@@ -66,23 +102,93 @@ export function AuthMfaChallengeStep() {
         />
       )}
       <FieldMessage message={mfaError} />
-      <button
-        type="button"
-        className="auth-link mt-3"
-        onClick={() => {
-          setUseBackupCode((current) => !current);
-          setMfaError("");
-        }}
-      >
-        {useBackupCode ? "Use authenticator app instead" : "Use a backup code instead"}
-      </button>
-      <AuthSubmitFooter>
-        <Button
-          type="submit"
-          size="auth"
-          disabled={isSubmitting}
+      {!useMfaSmsOtp ? (
+        <button
+          type="button"
+          className="auth-link mt-3"
+          onClick={() => {
+            setUseBackupCode((current) => !current);
+            setMfaError("");
+          }}
         >
-          {isSubmitting ? "Verifying..." : "Verify and sign in"}
+          {useBackupCode ? "Use authenticator app instead" : "Use a backup code instead"}
+        </button>
+      ) : null}
+      {mfaSmsFallbackAvailable && !useMfaSmsOtp && !useBackupCode ? (
+        <button
+          type="button"
+          className="auth-link mt-3 block"
+          disabled={isSubmitting}
+          onClick={() => void handleSendMfaLoginSms()}
+        >
+          {copy.mfa.secondFactor.stepUpSendSms}
+        </button>
+      ) : null}
+      {useMfaSmsOtp ? (
+        <button
+          type="button"
+          className="auth-link mt-3 block"
+          onClick={() => {
+            setUseMfaSmsOtp(false);
+            setMfaSmsOtp("");
+            setMfaError("");
+          }}
+        >
+          {copy.mfa.secondFactor.stepUpUseAuthenticator}
+        </button>
+      ) : null}
+      <AuthSubmitFooter>
+        <Button type="submit" size="auth" disabled={isSubmitting}>
+          {isSubmitting ? copy.mfa.verifying : "Verify and sign in"}
+        </Button>
+      </AuthSubmitFooter>
+    </form>
+  );
+}
+
+export function AuthSmsOtpLoginStep() {
+  const flow = useAuthDialogFlow();
+  const {
+    step,
+    maskedPhone,
+    loginSmsOtp,
+    setLoginSmsOtp,
+    loginSmsOtpError,
+    setLoginSmsOtpError,
+    isSubmitting,
+    loginSmsOtpCooldown,
+    handleLoginSmsOtpSubmit,
+    handleResendLoginSmsOtp,
+  } = flow;
+
+  return (
+    <form onSubmit={handleLoginSmsOtpSubmit} className={stepPanelClass(step === "sms-otp-login")}>
+      <OtpInfoBanner
+        message={
+          maskedPhone
+            ? `${copy.mfa.secondFactor.smsLoginDescription} (${maskedPhone})`
+            : copy.mfa.secondFactor.smsLoginDescription
+        }
+        resend={{
+          canResend: loginSmsOtpCooldown.canResend,
+          secondsLeft: loginSmsOtpCooldown.secondsLeft,
+          onResend: () => void handleResendLoginSmsOtp(),
+          disabled: isSubmitting,
+        }}
+      />
+      <OtpInput
+        id="loginSmsOtp"
+        value={loginSmsOtp}
+        error={!!loginSmsOtpError}
+        onChange={(value) => {
+          setLoginSmsOtp(value);
+          if (loginSmsOtpError) setLoginSmsOtpError("");
+        }}
+      />
+      <FieldMessage message={loginSmsOtpError} />
+      <AuthSubmitFooter>
+        <Button type="submit" size="auth" disabled={isSubmitting}>
+          {isSubmitting ? copy.mfa.verifying : "Verify and sign in"}
         </Button>
       </AuthSubmitFooter>
     </form>

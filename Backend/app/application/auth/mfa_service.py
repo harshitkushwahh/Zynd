@@ -141,18 +141,18 @@ async def verify_user_backup_code(db: AsyncSession, user: User, code: str) -> bo
     return False
 
 
-from app.infrastructure.security.apple_oauth import is_apple_private_relay_email
-
-
 def user_has_mfa(user: User) -> bool:
     return user.mfa_enrolled_at is not None
 
 
 def user_fund_eligible(user: User) -> bool:
-    if user.status.value != "active":
-        return False
-    if user.mfa_required_for_funds and not user_has_mfa(user):
-        return False
-    if is_apple_private_relay_email(user.email) and not user.phone_verified_at:
-        return False
-    return True
+    from app.application.auth.fund_movement_policy_service import (
+        evaluate_fund_eligibility_with_policy,
+    )
+
+    result = evaluate_fund_eligibility_with_policy(
+        user,
+        require_mfa=False,
+        require_pin=False,
+    )
+    return result["eligible"]

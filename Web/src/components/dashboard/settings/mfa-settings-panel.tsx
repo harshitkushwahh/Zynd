@@ -10,6 +10,7 @@ import {
   MfaRegenerateBackupDialog,
   MfaResetDialog,
 } from "@/features/account/mfa";
+import { SecurityMethodsSummary } from "@/features/account/mfa/components/security-methods-summary";
 import { downloadBackupCodesJson } from "@/features/account/mfa/lib/backup-codes-download";
 import { MfaPanelSkeleton } from "@/components/dashboard/settings/settings-skeleton";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,8 @@ type MfaSettingsPanelProps = {
   backupCodesLoading: boolean;
   storedBackupCodes: string[];
   onRefreshBackupCodes: () => Promise<void>;
+  autoOpenEnroll?: boolean;
+  onAutoOpenEnrollHandled?: () => void;
 };
 
 function formatEnrolledDate(value: string | null) {
@@ -45,6 +48,8 @@ export function MfaSettingsPanel({
   backupCodesLoading,
   storedBackupCodes,
   onRefreshBackupCodes,
+  autoOpenEnroll = false,
+  onAutoOpenEnrollHandled,
 }: MfaSettingsPanelProps) {
   const { user, refreshUser } = useAuth();
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -55,13 +60,20 @@ export function MfaSettingsPanel({
   const [backupCodesRevealed, setBackupCodesRevealed] = useState(false);
   const [copiedBackup, setCopiedBackup] = useState(false);
 
+  const mfaEnabled = Boolean(user?.mfa_enrolled);
+
   useEffect(() => {
     setBackupCodesRevealed(false);
   }, [storedBackupCodes.length, user?.id]);
 
+  useEffect(() => {
+    if (!autoOpenEnroll || mfaEnabled) return;
+    setEnrollOpen(true);
+    onAutoOpenEnrollHandled?.();
+  }, [autoOpenEnroll, mfaEnabled, onAutoOpenEnrollHandled]);
+
   if (!user) return null;
 
-  const mfaEnabled = user.mfa_enrolled;
   const canRevealStoredCodes = storedBackupCodes.length > 0;
 
   const handleCopyBackupCodes = async () => {
@@ -83,6 +95,8 @@ export function MfaSettingsPanel({
     <MfaPanelSkeleton />
   ) : (
     <div className="space-y-6">
+      <SecurityMethodsSummary phoneVerified={Boolean(user.phone_verified_at)} />
+
       <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <div

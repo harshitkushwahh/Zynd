@@ -85,7 +85,10 @@ export function MfFundPerformanceSection({
     () => filterNavPointsByRange(allPoints, range),
     [allPoints, range],
   );
-  const periodReturn = useMemo(() => computeNavPeriodReturn(rangedPoints), [rangedPoints]);
+  const periodReturn = useMemo(
+    () => computeNavPeriodReturn(rangedPoints, { range, allPoints }),
+    [rangedPoints, range, allPoints],
+  );
   const periodReturnDisplay = formatSignedReturn(periodReturn);
   const dayReturnDisplay = formatSignedReturn(fund.returns.return_1d);
 

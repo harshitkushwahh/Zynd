@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DistributorHeadStatusBadge } from "@/components/distributor-head/distributor-head-badge";
 import {
-  DUMMY_LEAVE_APPLICATIONS,
   type DistributorHeadLeaveApplication,
 } from "@/lib/dummy/distributor-head-data";
+import { getLeaveForStateHead } from "@/lib/distributor-head-queries";
 import { cn } from "@/lib/utils";
 
 type LeaveConfirmAction = "approve" | "decline";
@@ -136,7 +136,7 @@ function LeaveInboxItem({
 
 export function DistributorHeadLeaveInboxCard() {
   const [items, setItems] = useState<DistributorHeadLeaveApplication[]>(() => [
-    ...DUMMY_LEAVE_APPLICATIONS,
+    ...getLeaveForStateHead(),
   ]);
   const [confirmTarget, setConfirmTarget] = useState<LeaveConfirmTarget | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -185,7 +185,7 @@ export function DistributorHeadLeaveInboxCard() {
               </div>
               <div>
                 <CardTitle className="text-base font-semibold">Leave inbox</CardTitle>
-                <p className="text-caption text-muted-foreground">Applications in your state</p>
+                <p className="text-caption text-muted-foreground">Manager applications in your state</p>
               </div>
             </div>
             {pendingCount > 0 ? (
@@ -198,16 +198,22 @@ export function DistributorHeadLeaveInboxCard() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <ul className="distributor-head-leave-inbox__list max-h-[32rem] overflow-y-auto">
-            {sorted.map((item) => (
-              <LeaveInboxItem
-                key={item.id}
-                item={item}
-                onApprove={() => setConfirmTarget({ action: "approve", item })}
-                onDecline={() => setConfirmTarget({ action: "decline", item })}
-              />
-            ))}
-          </ul>
+          {sorted.length === 0 ? (
+            <p className="px-4 py-6 text-compact text-muted-foreground">
+              No manager leave requests in your state.
+            </p>
+          ) : (
+            <ul className="distributor-head-leave-inbox__list max-h-[32rem] overflow-y-auto">
+              {sorted.map((item) => (
+                <LeaveInboxItem
+                  key={item.id}
+                  item={item}
+                  onApprove={() => setConfirmTarget({ action: "approve", item })}
+                  onDecline={() => setConfirmTarget({ action: "decline", item })}
+                />
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

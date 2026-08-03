@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
   fetchInvestFunds,
   fetchInvestHome,
@@ -211,6 +212,8 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
           },
         ]}
       />
+
+      <FundEligibilityBanner />
 
       <div className="mb-6">
         <PageTitle>{copy.mutualFunds.allFundsTitle}</PageTitle>

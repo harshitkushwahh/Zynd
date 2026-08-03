@@ -1,4 +1,7 @@
 export const queryKeys = {
+  auth: {
+    fundEligibility: () => ["auth", "fund-eligibility"] as const,
+  },
   invest: {
     all: () => ["invest"] as const,
     home: () => ["invest", "home"] as const,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ClipboardList,
   ShieldAlert,
@@ -27,12 +27,7 @@ import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
-import {
-  fetchAdminActions,
-  fetchAdminUsers,
-  fetchPendingDeletions,
-  fetchSecurityReviews,
-} from "@/lib/admin-api";
+import { useAdminUserManagementMetricsQuery } from "@/hooks/use-admin-user-management-metrics-query";
 import {
   resolveUserManagementTab,
   userManagementTabHref,
@@ -65,11 +60,24 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
   const [mountedTabKeys, setMountedTabKeys] = useState<Set<UserManagementTabKey>>(
     () => new Set([activeTab?.key ?? "people"]),
   );
-  const [metricsLoading, setMetricsLoading] = useState(false);
-  const [registeredUsers, setRegisteredUsers] = useState(0);
-  const [openReviews, setOpenReviews] = useState(0);
-  const [pendingDeletions, setPendingDeletions] = useState(0);
-  const [pendingActions, setPendingActions] = useState(0);
+
+  const metricsParams = useMemo(
+    () => ({
+      canReadUsers,
+      canReadReviews,
+      canExecuteDeletions,
+      canApproveActions,
+    }),
+    [canApproveActions, canExecuteDeletions, canReadReviews, canReadUsers],
+  );
+  const { data: metrics, isLoading: metricsLoading } =
+    useAdminUserManagementMetricsQuery(metricsParams);
+  const showMetricsSkeleton = metricsLoading && !metrics;
+
+  const registeredUsers = metrics?.registeredUsers ?? 0;
+  const openReviews = metrics?.openReviews ?? 0;
+  const pendingDeletions = metrics?.pendingDeletions ?? 0;
+  const pendingActions = metrics?.pendingActions ?? 0;
 
   const visibleTabs = USER_MANAGEMENT_TABS.filter((tab) => {
     if (!tab.permissions?.length) return true;
@@ -103,49 +111,6 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
 
   const keepTabMounted = (key: UserManagementTabKey) => mountedTabKeys.has(key);
 
-  const loadPageMetrics = useCallback(async () => {
-    if (!showPageMetrics) return;
-    setMetricsLoading(true);
-    try {
-      const tasks: Promise<unknown>[] = [];
-      if (canReadUsers) {
-        tasks.push(
-          fetchAdminUsers({ limit: 100 }).then((items) => {
-            setRegisteredUsers(items.length);
-          }),
-        );
-      } else {
-        setRegisteredUsers(0);
-      }
-      if (canReadReviews) {
-        tasks.push(fetchSecurityReviews("open").then((items) => setOpenReviews(items.length)));
-      }
-      if (canExecuteDeletions) {
-        tasks.push(fetchPendingDeletions().then((items) => setPendingDeletions(items.length)));
-      }
-      if (canApproveActions) {
-        tasks.push(
-          fetchAdminActions("pending").then((items) => setPendingActions(items.length)),
-        );
-      }
-      await Promise.all(tasks);
-    } catch {
-      // Metrics are best-effort on the overview row.
-    } finally {
-      setMetricsLoading(false);
-    }
-  }, [
-    canApproveActions,
-    canExecuteDeletions,
-    canReadReviews,
-    canReadUsers,
-    showPageMetrics,
-  ]);
-
-  useEffect(() => {
-    void loadPageMetrics();
-  }, [loadPageMetrics]);
-
   return (
     <div className="admin-section-page-shell">
       <AdminSectionBreadcrumb segments={userManagementBreadcrumbSegments()} />
@@ -160,7 +125,7 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
               label="Registered users"
               value={registeredUsers}
               icon={Users}
-              loading={metricsLoading}
+              loading={showMetricsSkeleton}
             />
           ) : null}
           {canReadReviews ? (
@@ -169,7 +134,7 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
               value={openReviews}
               icon={ShieldAlert}
               tone="warning"
-              loading={metricsLoading}
+              loading={showMetricsSkeleton}
             />
           ) : null}
           {canExecuteDeletions ? (
@@ -178,7 +143,7 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
               value={pendingDeletions}
               icon={Trash2}
               tone="info"
-              loading={metricsLoading}
+              loading={showMetricsSkeleton}
             />
           ) : null}
           {canApproveActions ? (
@@ -186,7 +151,7 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
               label="Pending approvals"
               value={pendingActions}
               icon={ClipboardList}
-              loading={metricsLoading}
+              loading={showMetricsSkeleton}
             />
           ) : null}
         </AdminMetricCardsGrid>

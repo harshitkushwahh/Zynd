@@ -35,6 +35,13 @@ export type DistributorHeadDistributor = {
   aumInr: number;
   salesMtdInr: number;
   status: "Active" | "Onboarding" | "Suspended";
+  mobile?: string;
+  euin?: string;
+  city?: string;
+  joinedAt?: string;
+  salesYtdInr?: number;
+  activeSipCount?: number;
+  onboardingCompletePct?: number;
 };
 
 export type DistributorHeadSalesRow = {
@@ -185,6 +192,13 @@ export const DUMMY_DISTRIBUTORS: DistributorHeadDistributor[] = [
     aumInr: 4_82_00_000,
     salesMtdInr: 28_50_000,
     status: "Active",
+    mobile: "+91 98201 44780",
+    euin: "E884120",
+    city: "Mumbai",
+    joinedAt: "2024-03-12",
+    salesYtdInr: 2_14_00_000,
+    activeSipCount: 86,
+    onboardingCompletePct: 94,
   },
   {
     id: "dist-2",
@@ -507,6 +521,58 @@ export const DUMMY_MANAGER_CLIENTS: DistributorHeadManagerClient[] = [
     kycCompliant: true,
     status: "Active",
   },
+  {
+    id: "mc-7",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    branchName: "Andheri West",
+    name: "Rajesh Nair",
+    email: "rajesh.n@example.com",
+    aumInr: 52_00_000,
+    hasInvested: true,
+    kycCompliant: true,
+    status: "Active",
+  },
+  {
+    id: "mc-8",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    branchName: "Andheri West",
+    name: "Priya Shah",
+    email: "priya.sh@example.com",
+    aumInr: 18_50_000,
+    hasInvested: true,
+    kycCompliant: false,
+    status: "Active",
+  },
+  {
+    id: "mc-9",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    branchName: "Andheri West",
+    name: "Amit Desai",
+    email: "amit.d@example.com",
+    aumInr: 0,
+    hasInvested: false,
+    kycCompliant: true,
+    status: "Active",
+  },
+  {
+    id: "mc-10",
+    managerId: "mgr-2",
+    distributorId: "dist-3",
+    distributorName: "Karan Joshi",
+    branchName: "Thane",
+    name: "Sunita Rao",
+    email: "sunita.r@example.com",
+    aumInr: 22_00_000,
+    hasInvested: true,
+    kycCompliant: true,
+    status: "Active",
+  },
 ];
 
 export const DUMMY_MANAGER_INCENTIVES: DistributorHeadManagerIncentive[] = [
@@ -549,5 +615,515 @@ export const DUMMY_MANAGER_INCENTIVES: DistributorHeadManagerIncentive[] = [
     payoutInr: 0,
     attainmentPct: 86,
     status: "At risk",
+  },
+];
+
+export type DistributorHeadBookSipPlan = {
+  id: string;
+  managerId: string;
+  distributorId: string;
+  distributorName: string;
+  clientName: string;
+  schemeName: string;
+  amountInr: number;
+  frequency: "monthly" | "weekly";
+  status: "active" | "paused" | "cancelled";
+  nextInstallmentDate: string;
+};
+
+export type DistributorHeadBookPurchase = {
+  id: string;
+  managerId: string;
+  distributorId: string;
+  distributorName: string;
+  clientName: string;
+  schemeName: string;
+  amountInr: number;
+  orderDate: string;
+  status: "completed" | "pending" | "failed";
+};
+
+export type DistributorHeadManagerAuditLog = {
+  id: string;
+  managerId: string;
+  distributorId?: string;
+  actorType: "manager" | "distributor" | "system";
+  actorName: string;
+  eventType: string;
+  summary: string;
+  createdAt: string;
+};
+
+export const DUMMY_MANAGER_BOOK_SIPS: DistributorHeadBookSipPlan[] = [
+  {
+    id: "sip-m1-1",
+    managerId: "mgr-1",
+    distributorId: "dist-2",
+    distributorName: "Vikram Singh",
+    clientName: "Sanjay Deshpande",
+    schemeName: "HDFC Flexi Cap Fund",
+    amountInr: 10_000,
+    frequency: "monthly",
+    status: "active",
+    nextInstallmentDate: "2026-08-05",
+  },
+  {
+    id: "sip-m1-2",
+    managerId: "mgr-1",
+    distributorId: "dist-2",
+    distributorName: "Vikram Singh",
+    clientName: "Meera Kulkarni",
+    schemeName: "Parag Parikh Flexi Cap",
+    amountInr: 25_000,
+    frequency: "monthly",
+    status: "active",
+    nextInstallmentDate: "2026-08-10",
+  },
+  {
+    id: "sip-m1-3",
+    managerId: "mgr-1",
+    distributorId: "dist-2",
+    distributorName: "Vikram Singh",
+    clientName: "Arjun Patel",
+    schemeName: "Nippon India Small Cap",
+    amountInr: 5_000,
+    frequency: "monthly",
+    status: "paused",
+    nextInstallmentDate: "2026-08-15",
+  },
+  {
+    id: "sip-m2-1",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    clientName: "Kavita Menon",
+    schemeName: "Axis Bluechip Fund",
+    amountInr: 15_000,
+    frequency: "monthly",
+    status: "active",
+    nextInstallmentDate: "2026-08-03",
+  },
+  {
+    id: "sip-m2-1b",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    clientName: "Rajesh Nair",
+    schemeName: "Mirae Asset Large Cap",
+    amountInr: 20_000,
+    frequency: "monthly",
+    status: "active",
+    nextInstallmentDate: "2026-08-07",
+  },
+  {
+    id: "sip-m2-1c",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    clientName: "Priya Shah",
+    schemeName: "Parag Parikh Flexi Cap",
+    amountInr: 10_000,
+    frequency: "monthly",
+    status: "paused",
+    nextInstallmentDate: "2026-08-12",
+  },
+  {
+    id: "sip-m2-2",
+    managerId: "mgr-2",
+    distributorId: "dist-3",
+    distributorName: "Karan Joshi",
+    clientName: "Rajesh Nair",
+    schemeName: "ICICI Pru Balanced Advantage",
+    amountInr: 8_000,
+    frequency: "monthly",
+    status: "active",
+    nextInstallmentDate: "2026-08-08",
+  },
+  {
+    id: "sip-m4-1",
+    managerId: "mgr-4",
+    distributorId: "dist-6",
+    distributorName: "Pooja Nair",
+    clientName: "Nisha Sharma",
+    schemeName: "SBI Magnum Midcap",
+    amountInr: 12_000,
+    frequency: "monthly",
+    status: "active",
+    nextInstallmentDate: "2026-08-12",
+  },
+];
+
+export const DUMMY_MANAGER_BOOK_PURCHASES: DistributorHeadBookPurchase[] = [
+  {
+    id: "pur-m1-1",
+    managerId: "mgr-1",
+    distributorId: "dist-2",
+    distributorName: "Vikram Singh",
+    clientName: "Meera Kulkarni",
+    schemeName: "Mirae Asset Large Cap",
+    amountInr: 2_00_000,
+    orderDate: "2026-07-28",
+    status: "completed",
+  },
+  {
+    id: "pur-m1-2",
+    managerId: "mgr-1",
+    distributorId: "dist-2",
+    distributorName: "Vikram Singh",
+    clientName: "Sanjay Deshpande",
+    schemeName: "UTI Nifty 50 Index",
+    amountInr: 50_000,
+    orderDate: "2026-07-22",
+    status: "completed",
+  },
+  {
+    id: "pur-m1-3",
+    managerId: "mgr-1",
+    distributorId: "dist-5",
+    distributorName: "Mohit Agarwal",
+    clientName: "Rohit Banerjee",
+    schemeName: "HDFC Short Term Debt",
+    amountInr: 1_00_000,
+    orderDate: "2026-07-25",
+    status: "pending",
+  },
+  {
+    id: "pur-m2-1",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    clientName: "Kavita Menon",
+    schemeName: "Kotak Emerging Equity",
+    amountInr: 3_50_000,
+    orderDate: "2026-07-26",
+    status: "completed",
+  },
+  {
+    id: "pur-m2-1b",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    clientName: "Rajesh Nair",
+    schemeName: "HDFC Flexi Cap Fund",
+    amountInr: 1_25_000,
+    orderDate: "2026-07-18",
+    status: "completed",
+  },
+  {
+    id: "pur-m2-1c",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    distributorName: "Riya Mehta",
+    clientName: "Priya Shah",
+    schemeName: "Nippon India Small Cap",
+    amountInr: 75_000,
+    orderDate: "2026-07-30",
+    status: "pending",
+  },
+  {
+    id: "pur-m2-2",
+    managerId: "mgr-2",
+    distributorId: "dist-3",
+    distributorName: "Karan Joshi",
+    clientName: "Priya Shah",
+    schemeName: "DSP Midcap Fund",
+    amountInr: 75_000,
+    orderDate: "2026-07-20",
+    status: "completed",
+  },
+];
+
+export const DUMMY_MANAGER_AUDIT_LOGS: DistributorHeadManagerAuditLog[] = [
+  {
+    id: "aud-m1-1",
+    managerId: "mgr-1",
+    actorType: "manager",
+    actorName: "Amit Shah",
+    eventType: "leave.approved",
+    summary: "Approved sick leave for Mohit Agarwal (3 days)",
+    createdAt: "2026-07-28T09:30:00.000Z",
+  },
+  {
+    id: "aud-m1-2",
+    managerId: "mgr-1",
+    actorType: "distributor",
+    actorName: "Vikram Singh",
+    eventType: "order.lumpsum",
+    summary: "Lumpsum purchase ₹2,00,000 — Mirae Asset Large Cap for Meera Kulkarni",
+    createdAt: "2026-07-28T11:15:00.000Z",
+  },
+  {
+    id: "aud-m1-3",
+    managerId: "mgr-1",
+    actorType: "distributor",
+    actorName: "Vikram Singh",
+    eventType: "sip.created",
+    summary: "New SIP ₹10,000/month — HDFC Flexi Cap for Sanjay Deshpande",
+    createdAt: "2026-07-25T14:00:00.000Z",
+  },
+  {
+    id: "aud-m1-4",
+    managerId: "mgr-1",
+    actorType: "system",
+    actorName: "Zynd",
+    eventType: "onboarding.started",
+    summary: "Mohit Agarwal onboarding initiated at PCMC branch",
+    createdAt: "2026-07-20T08:00:00.000Z",
+  },
+  {
+    id: "aud-m2-1",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    actorType: "distributor",
+    actorName: "Riya Mehta",
+    eventType: "order.lumpsum",
+    summary: "Lumpsum purchase ₹3,50,000 — Kotak Emerging Equity for Kavita Menon",
+    createdAt: "2026-07-26T16:45:00.000Z",
+  },
+  {
+    id: "aud-m2-1b",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    actorType: "distributor",
+    actorName: "Riya Mehta",
+    eventType: "sip.created",
+    summary: "New SIP ₹20,000/month — Mirae Asset Large Cap for Rajesh Nair",
+    createdAt: "2026-07-24T10:30:00.000Z",
+  },
+  {
+    id: "aud-m2-1c",
+    managerId: "mgr-2",
+    distributorId: "dist-1",
+    actorType: "distributor",
+    actorName: "Riya Mehta",
+    eventType: "client.onboarded",
+    summary: "Onboarded Amit Desai — KYC submitted, awaiting investment",
+    createdAt: "2026-07-22T14:15:00.000Z",
+  },
+  {
+    id: "aud-m2-2",
+    managerId: "mgr-2",
+    actorType: "manager",
+    actorName: "Neha Patil",
+    eventType: "distributor.suspended",
+    summary: "Suspended Deepak Verma — compliance review",
+    createdAt: "2026-07-18T10:20:00.000Z",
+  },
+  {
+    id: "aud-m4-1",
+    managerId: "mgr-4",
+    actorType: "manager",
+    actorName: "Sneha Rao",
+    eventType: "leave.submitted",
+    summary: "Annual leave request submitted (10 days)",
+    createdAt: "2026-07-25T09:12:00.000Z",
+  },
+];
+
+export type DistributorHeadAumTrendPoint = {
+  label: string;
+  aumInr: number;
+};
+
+export type DistributorHeadBookHolding = {
+  id: string;
+  distributorId: string;
+  schemeName: string;
+  amcName: string;
+  aumInr: number;
+  clientCount: number;
+  sipSharePct: number;
+};
+
+export type DistributorHeadDistributorReportRollup = {
+  distributorId: string;
+  aumChangeMtdPct: number;
+  netSalesMtdInr: number;
+  sipInflowMtdInr: number;
+  redemptionsMtdInr: number;
+  kycPendingCount: number;
+  complianceOpenCount: number;
+};
+
+export type DistributorHeadWorkAttendanceRow = {
+  id: string;
+  distributorId: string;
+  date: string;
+  clockIn: string | null;
+  clockOut: string | null;
+  hours: number;
+  workType: "Office" | "Client site" | "Home" | null;
+  status: "complete" | "partial" | "leave" | "holiday";
+};
+
+export type DistributorHeadWorkHours = {
+  distributorId: string;
+  weekLabel: string;
+  totalHours: number;
+  targetHours: number;
+  trendPct: number;
+  avgDailyHours: number;
+  overtimeHours: number;
+};
+
+export const DUMMY_DISTRIBUTOR_AUM_TREND: Record<string, DistributorHeadAumTrendPoint[]> = {
+  "dist-1": [
+    { label: "Mar", aumInr: 3_85_00_000 },
+    { label: "Apr", aumInr: 4_02_00_000 },
+    { label: "May", aumInr: 4_18_00_000 },
+    { label: "Jun", aumInr: 4_45_00_000 },
+    { label: "Jul", aumInr: 4_72_00_000 },
+    { label: "Aug", aumInr: 4_82_00_000 },
+  ],
+  "dist-2": [
+    { label: "Mar", aumInr: 1_72_00_000 },
+    { label: "Apr", aumInr: 1_85_00_000 },
+    { label: "May", aumInr: 1_92_00_000 },
+    { label: "Jun", aumInr: 2_05_00_000 },
+    { label: "Jul", aumInr: 2_12_00_000 },
+    { label: "Aug", aumInr: 2_15_00_000 },
+  ],
+};
+
+export const DUMMY_DISTRIBUTOR_BOOK_HOLDINGS: DistributorHeadBookHolding[] = [
+  {
+    id: "bh-1",
+    distributorId: "dist-1",
+    schemeName: "Axis Bluechip Fund",
+    amcName: "Axis AMC",
+    aumInr: 98_00_000,
+    clientCount: 42,
+    sipSharePct: 68,
+  },
+  {
+    id: "bh-2",
+    distributorId: "dist-1",
+    schemeName: "Mirae Asset Large Cap",
+    amcName: "Mirae Asset",
+    aumInr: 72_00_000,
+    clientCount: 31,
+    sipSharePct: 55,
+  },
+  {
+    id: "bh-3",
+    distributorId: "dist-1",
+    schemeName: "Kotak Emerging Equity",
+    amcName: "Kotak AMC",
+    aumInr: 64_00_000,
+    clientCount: 18,
+    sipSharePct: 22,
+  },
+  {
+    id: "bh-4",
+    distributorId: "dist-1",
+    schemeName: "Parag Parikh Flexi Cap",
+    amcName: "PPFAS",
+    aumInr: 48_00_000,
+    clientCount: 24,
+    sipSharePct: 74,
+  },
+  {
+    id: "bh-5",
+    distributorId: "dist-2",
+    schemeName: "HDFC Flexi Cap Fund",
+    amcName: "HDFC AMC",
+    aumInr: 55_00_000,
+    clientCount: 28,
+    sipSharePct: 62,
+  },
+];
+
+export const DUMMY_DISTRIBUTOR_REPORT_ROLLUPS: DistributorHeadDistributorReportRollup[] = [
+  {
+    distributorId: "dist-1",
+    aumChangeMtdPct: 2.1,
+    netSalesMtdInr: 28_50_000,
+    sipInflowMtdInr: 12_40_000,
+    redemptionsMtdInr: 3_20_000,
+    kycPendingCount: 8,
+    complianceOpenCount: 2,
+  },
+  {
+    distributorId: "dist-2",
+    aumChangeMtdPct: 1.4,
+    netSalesMtdInr: 18_20_000,
+    sipInflowMtdInr: 8_60_000,
+    redemptionsMtdInr: 1_80_000,
+    kycPendingCount: 4,
+    complianceOpenCount: 1,
+  },
+];
+
+export const DUMMY_DISTRIBUTOR_WORK_ATTENDANCE: DistributorHeadWorkAttendanceRow[] = [
+  {
+    id: "att-1",
+    distributorId: "dist-1",
+    date: "2026-07-28",
+    clockIn: "09:12",
+    clockOut: "18:45",
+    hours: 8.5,
+    workType: "Office",
+    status: "complete",
+  },
+  {
+    id: "att-2",
+    distributorId: "dist-1",
+    date: "2026-07-29",
+    clockIn: "10:05",
+    clockOut: "17:30",
+    hours: 6.5,
+    workType: "Client site",
+    status: "partial",
+  },
+  {
+    id: "att-3",
+    distributorId: "dist-1",
+    date: "2026-07-30",
+    clockIn: "09:00",
+    clockOut: "19:15",
+    hours: 9.0,
+    workType: "Office",
+    status: "complete",
+  },
+  {
+    id: "att-4",
+    distributorId: "dist-1",
+    date: "2026-07-31",
+    clockIn: null,
+    clockOut: null,
+    hours: 0,
+    workType: null,
+    status: "leave",
+  },
+  {
+    id: "att-5",
+    distributorId: "dist-1",
+    date: "2026-08-01",
+    clockIn: "09:18",
+    clockOut: "18:20",
+    hours: 8.0,
+    workType: "Office",
+    status: "complete",
+  },
+];
+
+export const DUMMY_DISTRIBUTOR_WORK_HOURS: DistributorHeadWorkHours[] = [
+  {
+    distributorId: "dist-1",
+    weekLabel: "28 Jul – 1 Aug 2026",
+    totalHours: 40.5,
+    targetHours: 40,
+    trendPct: 4.2,
+    avgDailyHours: 8.1,
+    overtimeHours: 2.5,
+  },
+  {
+    distributorId: "dist-2",
+    weekLabel: "28 Jul – 1 Aug 2026",
+    totalHours: 38.0,
+    targetHours: 40,
+    trendPct: -2.1,
+    avgDailyHours: 7.6,
+    overtimeHours: 0,
   },
 ];

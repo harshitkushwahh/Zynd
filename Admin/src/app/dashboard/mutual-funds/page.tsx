@@ -476,6 +476,7 @@ export default function MutualFundsAdminPage() {
 
   const defaultTab: TabKey = canReadCatalog ? "overview" : "operations";
   const [tab, setTab] = useState<TabKey>(defaultTab);
+  const [mountedTabs, setMountedTabs] = useState<Set<TabKey>>(() => new Set([defaultTab]));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -736,6 +737,14 @@ export default function MutualFundsAdminPage() {
     setCategoryPage(0);
   }, [categorySearch, categoryPageSize]);
 
+  const keepTabMounted = (key: TabKey) => mountedTabs.has(key);
+
+  const handleTabChange = (value: string) => {
+    const nextTab = value as TabKey;
+    setTab(nextTab);
+    setMountedTabs((current) => new Set(current).add(nextTab));
+  };
+
   const hasAnyMfAccess = canReadCatalog || canReadAmcs || canReadJobs;
 
   return (
@@ -750,7 +759,7 @@ export default function MutualFundsAdminPage() {
           title="Mutual funds"
           icon={TrendingUp}
         >
-          <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)} className="gap-6">
+          <Tabs value={tab} onValueChange={handleTabChange} className="gap-6">
             <AdminTabList>
               {tabs.map(({ key, label, icon: Icon }) => (
                 <AdminTabTrigger key={key} value={key} className="gap-2">
@@ -773,7 +782,7 @@ export default function MutualFundsAdminPage() {
               ) : null}
 
               {canReadCatalog ? (
-                <TabsContent value="overview" className="mt-0 space-y-4">
+                <TabsContent value="overview" className="mt-0 space-y-4" keepMounted={keepTabMounted("overview")}>
                   <AdminMetricCardsGrid>
                     {overviewMetrics.map((metric) => (
                       <AdminMetricCard
@@ -933,13 +942,13 @@ export default function MutualFundsAdminPage() {
               ) : null}
 
               {canReadCatalog ? (
-                <TabsContent value="staging" className="mt-0">
+                <TabsContent value="staging" className="mt-0" keepMounted={keepTabMounted("staging")}>
                   <SchemeStagingPanel canPublish={canPublishCatalog} />
                 </TabsContent>
               ) : null}
 
               {canReadCatalog ? (
-                <TabsContent value="health" className="mt-0">
+                <TabsContent value="health" className="mt-0" keepMounted={keepTabMounted("health")}>
                   <CatalogHealthPanel
                     onOpenFund={(fundId) => {
                       setSelectedFundId(fundId);
@@ -950,7 +959,7 @@ export default function MutualFundsAdminPage() {
               ) : null}
 
               {canReadCatalog ? (
-                <TabsContent value="categories" className="mt-0 space-y-4">
+                <TabsContent value="categories" className="mt-0 space-y-4" keepMounted={keepTabMounted("categories")}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <AdminSearchInput
                       containerClassName="max-w-sm"
@@ -1057,7 +1066,7 @@ export default function MutualFundsAdminPage() {
               ) : null}
 
               {canReadCatalog ? (
-                <TabsContent value="funds" className="mt-0 space-y-4">
+                <TabsContent value="funds" className="mt-0 space-y-4" keepMounted={keepTabMounted("funds")}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <AdminSearchInput
                       containerClassName="max-w-sm"
@@ -1212,7 +1221,7 @@ export default function MutualFundsAdminPage() {
               ) : null}
 
               {canReadCatalog ? (
-                <TabsContent value="content" className="mt-0">
+                <TabsContent value="content" className="mt-0" keepMounted={keepTabMounted("content")}>
                   <ContentRulesPanel
                     canManageContent={canManageContent}
                     canManageRules={canManageRules}
@@ -1222,13 +1231,13 @@ export default function MutualFundsAdminPage() {
               ) : null}
 
               {canReadCatalog ? (
-                <TabsContent value="bulk" className="mt-0">
+                <TabsContent value="bulk" className="mt-0" keepMounted={keepTabMounted("bulk")}>
                   <BulkImportPanel canPublish={canPublishCatalog} />
                 </TabsContent>
               ) : null}
 
               {canReadJobs ? (
-                <TabsContent value="operations" className="mt-0">
+                <TabsContent value="operations" className="mt-0" keepMounted={keepTabMounted("operations")}>
                   <MfOperationsPanel canRunJobs={canRunJobs} />
                 </TabsContent>
               ) : null}

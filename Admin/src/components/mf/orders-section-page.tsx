@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useMountedTabs } from "@/hooks/use-mounted-tabs";
+import { useOrdersSummaryQuery } from "@/hooks/use-orders-summary-query";
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -24,10 +26,7 @@ import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
-import {
-  fetchMfTransactionOrders,
-  fetchMfTransactionSipPlans,
-} from "@/lib/mf-transactions-admin-api";
+import { cn } from "@/lib/utils";
 import {
   getTransactionSection,
   resolveSectionTab,
@@ -47,18 +46,6 @@ type SummaryMetric = {
   tone: AdminMetricCardTone;
   accent?: boolean;
 };
-
-const PENDING_ORDER_STATUSES = new Set([
-  "pending",
-  "submitted",
-  "payment_pending",
-  "processing",
-]);
-const SUCCEEDED_ORDER_STATUSES = new Set(["succeeded"]);
-const FAILED_ORDER_STATUSES = new Set(["failed", "cancelled"]);
-const PENDING_SIP_STATUSES = new Set(["PENDING", "REVIEW", "CONSENT_PENDING"]);
-const ACTIVE_SIP_STATUSES = new Set(["ACTIVE"]);
-const FAILED_SIP_STATUSES = new Set(["FAILED", "CANCELLED"]);
 
 function zeroMetrics(labels: {
   total: string;
@@ -109,121 +96,21 @@ function zeroMetrics(labels: {
 function OrdersSummaryCards({
   canRead,
   activeTabSlug,
+  isTabMounted,
 }: {
   canRead: boolean;
   activeTabSlug: string;
+  isTabMounted: (slug: string) => boolean;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [purchases, setPurchases] = useState({
-    total: 0,
-    pending: 0,
-    succeeded: 0,
-    failed: 0,
-  });
-  const [sips, setSips] = useState({
-    total: 0,
-    pending: 0,
-    active: 0,
-    failed: 0,
-  });
+  const { data, isPending } = useOrdersSummaryQuery(canRead);
+  const showSkeleton = isPending && !data;
 
-  const loadSummary = useCallback(async () => {
-    if (!canRead) return;
-    if (
-      activeTabSlug === "redemptions" ||
-      activeTabSlug === "switches" ||
-      activeTabSlug === "webhooks"
-    ) {
-      setLoading(false);
-      return;
-    }
+  const purchases = data?.purchases ?? { total: 0, pending: 0, succeeded: 0, failed: 0 };
+  const sips = data?.sips ?? { total: 0, pending: 0, active: 0, failed: 0 };
 
-    setLoading(true);
-    try {
-      if (activeTabSlug === "sip-installments") {
-        const plansResult = await fetchMfTransactionSipPlans({ limit: 50 });
-        const plans = plansResult.plans;
-        setSips({
-          total: plans.length,
-          pending: plans.filter((item) =>
-            PENDING_SIP_STATUSES.has(item.status.toUpperCase()),
-          ).length,
-          active: plans.filter((item) =>
-            ACTIVE_SIP_STATUSES.has(item.status.toUpperCase()),
-          ).length,
-          failed: plans.filter((item) =>
-            FAILED_SIP_STATUSES.has(item.status.toUpperCase()),
-          ).length,
-        });
-      } else {
-        const ordersResult = await fetchMfTransactionOrders({ limit: 50 });
-        const orders = ordersResult.orders;
-        setPurchases({
-          total: orders.length,
-          pending: orders.filter((item) =>
-            PENDING_ORDER_STATUSES.has(item.status.toLowerCase()),
-          ).length,
-          succeeded: orders.filter((item) =>
-            SUCCEEDED_ORDER_STATUSES.has(item.status.toLowerCase()),
-          ).length,
-          failed: orders.filter((item) =>
-            FAILED_ORDER_STATUSES.has(item.status.toLowerCase()),
-          ).length,
-        });
-      }
-    } catch {
-      setPurchases({ total: 0, pending: 0, succeeded: 0, failed: 0 });
-      setSips({ total: 0, pending: 0, active: 0, failed: 0 });
-    } finally {
-      setLoading(false);
-    }
-  }, [activeTabSlug, canRead]);
-
-  useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
-
-  const metrics = useMemo((): SummaryMetric[] => {
-    if (activeTabSlug === "sip-installments") {
-      return [
-        {
-          key: "total",
-          label: "SIP installments",
-          value: sips.total.toLocaleString(),
-          infoDescription: "Recurring SIP plans and installment status.",
-          icon: CalendarClock,
-          tone: "info",
-          accent: true,
-        },
-        {
-          key: "pending",
-          label: "In progress",
-          value: sips.pending.toLocaleString(),
-          infoDescription: "SIP plans pending review or consent.",
-          icon: LoaderCircle,
-          tone: sips.pending > 0 ? "warning" : "muted",
-        },
-        {
-          key: "active",
-          label: "Active",
-          value: sips.active.toLocaleString(),
-          infoDescription: "SIP plans currently active.",
-          icon: CheckCircle2,
-          tone: sips.active > 0 ? "success" : "muted",
-        },
-        {
-          key: "failed",
-          label: "Failed / cancelled",
-          value: sips.failed.toLocaleString(),
-          infoDescription: "Failed or cancelled SIP plans.",
-          icon: AlertTriangle,
-          tone: sips.failed > 0 ? "warning" : "success",
-        },
-      ];
-    }
-
-    if (activeTabSlug === "redemptions") {
-      return zeroMetrics({
+  const comingSoonMetrics = useMemo(
+    (): Record<string, SummaryMetric[]> => ({
+      redemptions: zeroMetrics({
         total: "Redemptions",
         totalDescription: "Redemption orders and payout tracking.",
         totalIcon: ArrowDownToLine,
@@ -231,11 +118,8 @@ function OrdersSummaryCards({
         succeededLabel: "Completed",
         succeededDescription: "Successfully completed redemptions.",
         failedDescription: "Failed or cancelled redemptions.",
-      });
-    }
-
-    if (activeTabSlug === "switches") {
-      return zeroMetrics({
+      }),
+      switches: zeroMetrics({
         total: "Switches",
         totalDescription: "Switch orders between schemes.",
         totalIcon: ArrowLeftRight,
@@ -243,11 +127,8 @@ function OrdersSummaryCards({
         succeededLabel: "Completed",
         succeededDescription: "Successfully completed switches.",
         failedDescription: "Failed or cancelled switches.",
-      });
-    }
-
-    if (activeTabSlug === "webhooks") {
-      return zeroMetrics({
+      }),
+      webhooks: zeroMetrics({
         total: "Webhooks",
         totalDescription: "Webhook events, replay, and processing status.",
         totalIcon: Webhook,
@@ -255,66 +136,124 @@ function OrdersSummaryCards({
         succeededLabel: "Processed",
         succeededDescription: "Successfully processed webhook events.",
         failedDescription: "Failed or cancelled webhook events.",
-      });
-    }
+      }),
+    }),
+    [],
+  );
 
-    return [
-      {
-        key: "total",
-        label: "Purchases",
-        value: purchases.total.toLocaleString(),
-        infoDescription: "Lumpsum and one-time purchase orders.",
-        icon: ShoppingBag,
-        tone: "info",
-        accent: true,
-      },
-      {
-        key: "pending",
-        label: "In progress",
-        value: purchases.pending.toLocaleString(),
-        infoDescription: "Purchase orders pending or processing.",
-        icon: LoaderCircle,
-        tone: purchases.pending > 0 ? "warning" : "muted",
-      },
-      {
-        key: "succeeded",
-        label: "Succeeded",
-        value: purchases.succeeded.toLocaleString(),
-        infoDescription: "Successfully completed purchase orders.",
-        icon: CheckCircle2,
-        tone: purchases.succeeded > 0 ? "success" : "muted",
-      },
-      {
-        key: "failed",
-        label: "Failed / cancelled",
-        value: purchases.failed.toLocaleString(),
-        infoDescription: "Failed or cancelled purchase orders.",
-        icon: AlertTriangle,
-        tone: purchases.failed > 0 ? "warning" : "success",
-      },
-    ];
-  }, [activeTabSlug, purchases, sips]);
-
-  const isComingSoonTab =
-    activeTabSlug === "redemptions" ||
-    activeTabSlug === "switches" ||
-    activeTabSlug === "webhooks";
-
-  return (
+  const renderMetricGrid = (metrics: SummaryMetric[], loading: boolean) => (
     <AdminMetricCardsGrid columns="four" className="!mt-0">
       {metrics.map((metric) => (
         <AdminMetricCard
-          key={`${activeTabSlug}-${metric.key}`}
+          key={metric.key}
           label={metric.label}
           value={metric.value}
           infoDescription={metric.infoDescription}
           icon={metric.icon}
           tone={metric.tone}
           accent={metric.accent}
-          loading={loading && !isComingSoonTab}
+          loading={loading}
         />
       ))}
     </AdminMetricCardsGrid>
+  );
+
+  return (
+    <div className="space-y-0">
+      {isTabMounted("purchases") ? (
+        <div className={cn(activeTabSlug !== "purchases" && "hidden")}>
+          {renderMetricGrid(
+            [
+              {
+                key: "total",
+                label: "Purchases",
+                value: purchases.total.toLocaleString(),
+                infoDescription: "Lumpsum and one-time purchase orders.",
+                icon: ShoppingBag,
+                tone: "info",
+                accent: true,
+              },
+              {
+                key: "pending",
+                label: "In progress",
+                value: purchases.pending.toLocaleString(),
+                infoDescription: "Purchase orders pending or processing.",
+                icon: LoaderCircle,
+                tone: purchases.pending > 0 ? "warning" : "muted",
+              },
+              {
+                key: "succeeded",
+                label: "Succeeded",
+                value: purchases.succeeded.toLocaleString(),
+                infoDescription: "Successfully completed purchase orders.",
+                icon: CheckCircle2,
+                tone: purchases.succeeded > 0 ? "success" : "muted",
+              },
+              {
+                key: "failed",
+                label: "Failed / cancelled",
+                value: purchases.failed.toLocaleString(),
+                infoDescription: "Failed or cancelled purchase orders.",
+                icon: AlertTriangle,
+                tone: purchases.failed > 0 ? "warning" : "success",
+              },
+            ],
+            showSkeleton,
+          )}
+        </div>
+      ) : null}
+
+      {isTabMounted("sip-installments") ? (
+        <div className={cn(activeTabSlug !== "sip-installments" && "hidden")}>
+          {renderMetricGrid(
+            [
+              {
+                key: "total",
+                label: "SIP installments",
+                value: sips.total.toLocaleString(),
+                infoDescription: "Recurring SIP plans and installment status.",
+                icon: CalendarClock,
+                tone: "info",
+                accent: true,
+              },
+              {
+                key: "pending",
+                label: "In progress",
+                value: sips.pending.toLocaleString(),
+                infoDescription: "SIP plans pending review or consent.",
+                icon: LoaderCircle,
+                tone: sips.pending > 0 ? "warning" : "muted",
+              },
+              {
+                key: "active",
+                label: "Active",
+                value: sips.active.toLocaleString(),
+                infoDescription: "SIP plans currently active.",
+                icon: CheckCircle2,
+                tone: sips.active > 0 ? "success" : "muted",
+              },
+              {
+                key: "failed",
+                label: "Failed / cancelled",
+                value: sips.failed.toLocaleString(),
+                infoDescription: "Failed or cancelled SIP plans.",
+                icon: AlertTriangle,
+                tone: sips.failed > 0 ? "warning" : "success",
+              },
+            ],
+            showSkeleton,
+          )}
+        </div>
+      ) : null}
+
+      {(["redemptions", "switches", "webhooks"] as const).map((slug) =>
+        isTabMounted(slug) ? (
+          <div key={slug} className={cn(activeTabSlug !== slug && "hidden")}>
+            {renderMetricGrid(comingSoonMetrics[slug], false)}
+          </div>
+        ) : null,
+      )}
+    </div>
   );
 }
 
@@ -322,6 +261,11 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
   const router = useRouter();
   const { hasPermission } = useAdminAuth();
   const section = getTransactionSection("orders");
+  const resolvedTab = section ? resolveSectionTab(section, tabSlug) : null;
+  const { activeTab: activeTabSlug, selectTab, keepMounted } = useMountedTabs(
+    resolvedTab?.slug ?? "purchases",
+    resolvedTab?.slug,
+  );
 
   useEffect(() => {
     if (tabSlug === "ops-thresholds") {
@@ -330,31 +274,15 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
   }, [router, tabSlug]);
 
   if (tabSlug === "ops-thresholds") return null;
-  if (!section) return null;
+  if (!section || !resolvedTab) return null;
 
   const canRead = section.permissions.some((permission) => hasPermission(permission));
   const canManage = hasPermission("mf.transactions.manage");
-  const activeTab = resolveSectionTab(section, tabSlug);
 
-  if (!activeTab) return null;
-
-  const renderTabContent = () => {
-    switch (activeTab.slug) {
-      case "purchases":
-        return <MfTransactionOrdersPanel canRead={canRead} canManage={canManage} />;
-      case "sip-installments":
-        return <MfTransactionSipPlansPanel canRead={canRead} canManage={canManage} />;
-      case "redemptions":
-      case "switches":
-      case "webhooks":
-        return (
-          <AdminTabComingSoon label={activeTab.label} description={activeTab.description} />
-        );
-      default:
-        return (
-          <AdminTabComingSoon label={activeTab.label} description={activeTab.description} />
-        );
-    }
+  const handleTabChange = (value: string) => {
+    selectTab(value);
+    const nextTab = section.tabs.find((tab) => tab.slug === value);
+    if (nextTab) router.push(sectionTabHref(section, nextTab));
   };
 
   return (
@@ -369,16 +297,13 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
         </AdminFeedbackMessage>
       ) : (
         <div className="space-y-5">
-          <OrdersSummaryCards canRead={canRead} activeTabSlug={activeTab.slug} />
+          <OrdersSummaryCards
+            canRead={canRead}
+            activeTabSlug={activeTabSlug}
+            isTabMounted={keepMounted}
+          />
 
-          <Tabs
-            value={activeTab.slug}
-            onValueChange={(value) => {
-              const nextTab = section.tabs.find((tab) => tab.slug === value);
-              if (nextTab) router.push(sectionTabHref(section, nextTab));
-            }}
-            className="space-y-4"
-          >
+          <Tabs value={activeTabSlug} onValueChange={handleTabChange} className="space-y-4">
             <AdminTabList>
               {section.tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -391,7 +316,21 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
               })}
             </AdminTabList>
 
-            <TabsContent value={activeTab.slug}>{renderTabContent()}</TabsContent>
+            {section.tabs.map((tab) => (
+              <TabsContent
+                key={tab.slug}
+                value={tab.slug}
+                keepMounted={keepMounted(tab.slug)}
+              >
+                {tab.slug === "purchases" ? (
+                  <MfTransactionOrdersPanel canRead={canRead} canManage={canManage} />
+                ) : tab.slug === "sip-installments" ? (
+                  <MfTransactionSipPlansPanel canRead={canRead} canManage={canManage} />
+                ) : (
+                  <AdminTabComingSoon label={tab.label} description={tab.description} />
+                )}
+              </TabsContent>
+            ))}
           </Tabs>
         </div>
       )}

@@ -17,6 +17,7 @@ import {
   AuthForgotPasswordStep,
   AuthMfaChallengeStep,
   AuthOAuthLinkStep,
+  AuthSmsOtpLoginStep,
 } from "@/features/auth/components/steps/auth-security-steps";
 import { useAuthDialogHeader } from "@/features/auth/hooks/auth-dialog-flow";
 
@@ -33,6 +34,7 @@ export function AuthDialogSteps() {
           <div className="relative flex flex-1 flex-col overflow-hidden">
             <AuthEmailStep />
             <AuthMfaChallengeStep />
+            <AuthSmsOtpLoginStep />
             <AuthOAuthLinkStep />
             <AuthEmailOtpStep />
             <AuthPasswordStep />

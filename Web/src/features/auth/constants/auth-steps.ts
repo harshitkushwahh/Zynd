@@ -5,6 +5,8 @@ export type AuthStep =
   | "email"
   | "login"
   | "mfa-challenge"
+  | "sms-otp-login"
+  | "step-up"
   | "oauth-link"
   | "email-otp"
   | "password"
@@ -23,6 +25,8 @@ export const AUTH_STEP_COPY: Record<AuthStep, { title: string; description: stri
     description: copy.auth.loginDescription,
   },
   "mfa-challenge": copy.authSteps.mfaChallenge,
+  "sms-otp-login": copy.authSteps.smsOtpLogin,
+  "step-up": copy.authSteps.stepUp,
   "oauth-link": copy.authSteps.oauthLink,
   "email-otp": copy.authSteps.emailOtp,
   password: copy.authSteps.password,
@@ -38,6 +42,8 @@ export function getAuthProgressStep(step: AuthStep): SignupStepId | null {
     step === "login" ||
     step === "forgot-password" ||
     step === "mfa-challenge" ||
+    step === "sms-otp-login" ||
+    step === "step-up" ||
     step === "oauth-link"
   ) {
     return null;

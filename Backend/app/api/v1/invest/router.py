@@ -542,7 +542,7 @@ async def create_mf_order(
 @router.get("/cart", response_model=MfCartResponse)
 async def get_mf_cart(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfCartResponse:
     payload = await get_cart_summary(db, user_id=current_user.id)
     return MfCartResponse(**payload)
@@ -738,7 +738,7 @@ async def get_mf_cart_checkout(
     checkout_id: UUID,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfCheckoutResponse:
     result = await get_user_checkout(db, user_id=current_user.id, checkout_id=checkout_id)
     if not result:
@@ -814,7 +814,7 @@ async def _sip_plan_response(
 @router.get("/mandates", response_model=MfMandateListResponse)
 async def list_mf_mandates(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfMandateListResponse:
     mandates = await list_user_mandates(db, user_id=current_user.id)
     return MfMandateListResponse(mandates=[MfMandateResponse(**serialize_mandate(row)) for row in mandates])
@@ -851,7 +851,7 @@ async def create_mf_mandate(
 async def get_mf_mandate(
     mandate_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfMandateResponse:
     mandate = await get_user_mandate(db, user_id=current_user.id, mandate_id=mandate_id)
     if not mandate:
@@ -933,7 +933,7 @@ async def create_mf_sip_plan(
 @router.get("/sip/plans", response_model=MfSipPlanListResponse)
 async def list_mf_sip_plans(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(default=50, ge=1, le=100),
 ) -> MfSipPlanListResponse:
     plans = await list_user_sip_plans(db, user_id=current_user.id, limit=limit)
@@ -963,7 +963,7 @@ async def list_mf_sip_plans(
 async def get_mf_sip_plan(
     plan_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfSipPlanResponse:
     plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
     if not plan:
@@ -994,7 +994,7 @@ async def cancel_mf_sip_plan(
 @router.get("/orders", response_model=MfOrderListResponse)
 async def list_mf_orders(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(default=50, ge=1, le=100),
 ) -> MfOrderListResponse:
     orders = await list_user_orders(db, user_id=current_user.id, limit=limit)
@@ -1024,7 +1024,7 @@ async def list_mf_orders(
 async def get_mf_order_journey(
     order_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfOrderJourneyResponse:
     payload = await get_user_order_journey(db, user_id=current_user.id, order_id=order_id)
     if not payload:
@@ -1037,7 +1037,7 @@ async def get_mf_order(
     order_id: UUID,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfOrderResponse:
     order = await get_user_order(db, user_id=current_user.id, order_id=order_id)
     if not order:
@@ -1067,7 +1067,7 @@ async def abandon_mf_order_payment(
 @router.get("/holdings/external", response_model=MfHoldingsResponse)
 async def list_external_holdings(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfHoldingsResponse:
     holdings = await list_user_external_holdings(db, user_id=current_user.id)
     return MfHoldingsResponse(
@@ -1105,7 +1105,7 @@ async def request_cas_import(
 @router.get("/cas/imports", response_model=MfCasImportListResponse)
 async def list_cas_imports(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfCasImportListResponse:
     imports = await list_user_cas_imports(db, user_id=current_user.id)
     return MfCasImportListResponse(

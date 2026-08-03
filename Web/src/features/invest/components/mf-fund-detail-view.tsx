@@ -136,7 +136,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     <div className="w-full min-w-0 max-w-full space-y-6">
       {renderBreadcrumb?.(fund.name)}
 
-      {user && !canInvest ? <FundEligibilityBanner /> : null}
+      {user && !user.fund_movement_eligible ? <FundEligibilityBanner /> : null}
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1 space-y-6">

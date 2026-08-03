@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ChevronDown, ArrowUpRight, Pencil } from "lucide-react";
+import { ChevronDown, ArrowUpRight } from "lucide-react";
 
 import { AdminSidebarBrand } from "@/components/dashboard/admin-sidebar-brand";
 import { AdminSidebarUtilityNav } from "@/components/dashboard/admin-sidebar-utility-nav";
@@ -161,25 +161,10 @@ function AdminSidebarDropdown({
   );
 }
 
-function AdminSidebarSectionLabel({
-  label,
-  showEditAction = false,
-}: {
-  label: string;
-  showEditAction?: boolean;
-}) {
+function AdminSidebarSectionLabel({ label }: { label: string }) {
   return (
     <div className="admin-sidebar-section-head">
       <SidebarGroupLabel className="admin-sidebar-section-label">{label}</SidebarGroupLabel>
-      {showEditAction ? (
-        <button
-          type="button"
-          className="admin-sidebar-section-head__action"
-          aria-label={`Customize ${label} menu`}
-        >
-          <Pencil className="size-3.5" strokeWidth={2.25} />
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -204,7 +189,7 @@ export function AdminDashboardSidebar() {
       <SidebarContent className="admin-sidebar-content">
         {overview ? (
           <SidebarGroup className="admin-sidebar-group">
-            <AdminSidebarSectionLabel label="Menu" showEditAction />
+            <AdminSidebarSectionLabel label="Menu" />
             <SidebarGroupContent>
               <SidebarMenu className="admin-sidebar-menu">
                 <AdminSidebarNavItem
@@ -216,9 +201,9 @@ export function AdminDashboardSidebar() {
           </SidebarGroup>
         ) : null}
 
-        {visibleGroups.map((group, index) => (
+        {visibleGroups.map((group) => (
           <SidebarGroup key={group.label} className="admin-sidebar-group">
-            <AdminSidebarSectionLabel label={group.label} showEditAction={index === 0 && !overview} />
+            <AdminSidebarSectionLabel label={group.label} />
             <SidebarGroupContent>
               <SidebarMenu className="admin-sidebar-menu">
                 {group.routes.map((route) => (

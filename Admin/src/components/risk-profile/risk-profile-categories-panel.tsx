@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus } from "lucide-react";
 
 import {
@@ -41,8 +42,13 @@ import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getErrorMessage } from "@/lib/errors";
 import {
+  RISK_CATEGORIES_QUERY_KEY,
+  RISK_QUESTIONS_PANEL_QUERY_KEY,
+  RISK_TEMPLATES_PANEL_QUERY_KEY,
+  useRiskCategoriesQuery,
+} from "@/hooks/use-risk-profile-queries";
+import {
   createRiskCategory,
-  fetchRiskCategories,
   updateRiskCategory,
   type RiskCategory,
 } from "@/lib/risk-profile-admin-api";
@@ -55,8 +61,8 @@ const STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
 ];
 
 export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }) {
-  const [categories, setCategories] = useState<RiskCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: categories = [], isPending, isFetching, error: queryError } = useRiskCategoriesQuery(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -92,23 +98,16 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
   );
 
   const tableColumnCount = 6;
-  const showSkeleton = loading && categories.length === 0;
+  const showSkeleton = isPending && categories.length === 0;
+  const loadError = queryError
+    ? getErrorMessage(queryError, "Could not load categories.")
+    : "";
 
-  const loadCategories = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setCategories(await fetchRiskCategories(true));
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not load categories."));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadCategories();
-  }, [loadCategories]);
+  const refreshCategories = async () => {
+    await queryClient.invalidateQueries({ queryKey: RISK_CATEGORIES_QUERY_KEY });
+    await queryClient.invalidateQueries({ queryKey: RISK_QUESTIONS_PANEL_QUERY_KEY });
+    await queryClient.invalidateQueries({ queryKey: RISK_TEMPLATES_PANEL_QUERY_KEY });
+  };
 
   const resetCreateForm = () => {
     setName("");
@@ -144,7 +143,7 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
       setMessage("Category created.");
       setCreateDialogOpen(false);
       resetCreateForm();
-      await loadCategories();
+      await refreshCategories();
     } catch (err) {
       setError(getErrorMessage(err, "Could not create category."));
     } finally {
@@ -166,7 +165,7 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
       });
       setMessage("Category updated.");
       closeEditDialog();
-      await loadCategories();
+      await refreshCategories();
     } catch (err) {
       setError(getErrorMessage(err, "Could not update category."));
     } finally {
@@ -183,7 +182,7 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
       await updateRiskCategory(deleteCategory.id, { is_active: false });
       setMessage("Category deactivated.");
       setDeleteCategory(null);
-      await loadCategories();
+      await refreshCategories();
     } catch (err) {
       setError(getErrorMessage(err, "Could not deactivate category."));
     } finally {
@@ -229,7 +228,9 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
         </div>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error || loadError ? (
+        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+      ) : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
@@ -240,7 +241,7 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
             totalPages={pagination.totalPages}
             hasPrevious={pagination.hasPrevious}
             hasNext={pagination.hasNext}
-            disabled={loading}
+            disabled={isFetching}
             totalCount={filteredCategories.length}
             currentPageCount={pagination.items.length}
             pageSize={pageSize}

@@ -1,57 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
 import { AdminUserRiskProfileLayout } from "@/components/users/admin-user-risk-profile-layout";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
+import { useAdminUserRiskProfileQuery } from "@/hooks/use-admin-user-risk-profile-query";
 import { getErrorMessage } from "@/lib/errors";
-import { ApiError } from "@/lib/api-client";
-import {
-  fetchUserRiskProfile,
-  fetchUserRiskProfileAssessments,
-  type UserRiskProfileAssessmentItem,
-  type UserRiskProfileDetail,
-} from "@/lib/risk-profile-admin-api";
 
 type UserRiskDetailSectionProps = {
   userId: string;
 };
 
 export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
-  const [profile, setProfile] = useState<UserRiskProfileDetail | null>(null);
-  const [assessments, setAssessments] = useState<UserRiskProfileAssessmentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data, isPending, error: queryError } = useAdminUserRiskProfileQuery(userId);
+  const showSkeleton = isPending && !data;
+  const error = queryError ? getErrorMessage(queryError, "Could not load risk profile.") : "";
 
-  const loadProfile = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [profileResult, assessmentsResult] = await Promise.all([
-        fetchUserRiskProfile(userId),
-        fetchUserRiskProfileAssessments(userId),
-      ]);
-      setProfile(profileResult);
-      setAssessments(assessmentsResult.items);
-    } catch (err) {
-      setProfile(null);
-      setAssessments([]);
-      if (err instanceof ApiError && err.status === 404) {
-        setError("");
-        return;
-      }
-      setError(getErrorMessage(err, "Could not load risk profile."));
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
-
-  if (loading) {
+  if (showSkeleton) {
     return <AdminTableSkeleton columns={1} rows={4} minWidth="sm" />;
   }
 
@@ -59,7 +23,7 @@ export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
     return <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>;
   }
 
-  if (!profile) {
+  if (!data || data.notFound || !data.profile) {
     return (
       <p className="text-caption text-muted-foreground">
         This user has not completed a risk profile assessment yet.
@@ -68,6 +32,10 @@ export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
   }
 
   return (
-    <AdminUserRiskProfileLayout userId={userId} profile={profile} assessments={assessments} />
+    <AdminUserRiskProfileLayout
+      userId={userId}
+      profile={data.profile}
+      assessments={data.assessments}
+    />
   );
 }

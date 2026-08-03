@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Gauge } from "lucide-react";
 
 import { AdminDialogFooterActions, AdminFormDialog } from "@/components/ui/admin-dialog-presets";
@@ -25,11 +26,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/errors";
 import { resolveRiskTierBadgeVariant } from "@/lib/risk-tier-admin-ui";
-import { fetchRiskTiers, updateRiskTier, type RiskTier } from "@/lib/risk-profile-admin-api";
+import { RISK_TIERS_QUERY_KEY, useRiskTiersQuery } from "@/hooks/use-risk-profile-queries";
+import { updateRiskTier, type RiskTier } from "@/lib/risk-profile-admin-api";
 
 export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
-  const [tiers, setTiers] = useState<RiskTier[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: tiers = [], isPending, isFetching, error: queryError } = useRiskTiersQuery();
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<RiskTier | null>(null);
@@ -55,23 +57,11 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
     [filteredTiers, page, pageSize],
   );
 
-  const showSkeleton = loading && tiers.length === 0;
+  const showSkeleton = isPending && tiers.length === 0;
+  const loadError = queryError ? getErrorMessage(queryError, "Could not load tiers.") : "";
 
-  const loadTiers = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setTiers(await fetchRiskTiers());
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not load tiers."));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadTiers();
-  }, [loadTiers]);
+  const refreshTiers = () =>
+    queryClient.invalidateQueries({ queryKey: RISK_TIERS_QUERY_KEY });
 
   const openEditor = (tier: RiskTier) => {
     setEditing(tier);
@@ -95,7 +85,7 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
       });
       setMessage("Tier updated.");
       setEditing(null);
-      await loadTiers();
+      await refreshTiers();
     } catch (err) {
       setError(getErrorMessage(err, "Could not update tier."));
     } finally {
@@ -115,7 +105,9 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
         }}
       />
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error || loadError ? (
+        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+      ) : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
@@ -126,7 +118,7 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
             totalPages={pagination.totalPages}
             hasPrevious={pagination.hasPrevious}
             hasNext={pagination.hasNext}
-            disabled={loading}
+            disabled={isFetching}
             totalCount={filteredTiers.length}
             currentPageCount={pagination.items.length}
             pageSize={pageSize}

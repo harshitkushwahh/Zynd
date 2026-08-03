@@ -291,6 +291,8 @@ export async function resendAdminInvitation(invitationId: string) {
 export type AuditLogItem = {
   id: string;
   user_id: string | null;
+  user_email?: string | null;
+  client_id?: string | null;
   event_type: string;
   ip_address: string | null;
   metadata: Record<string, unknown>;
@@ -328,6 +330,11 @@ export type AdminUserSummary = {
   suspended_at: string | null;
   suspension_reason_code: string | null;
   mfa_enrolled: boolean;
+  pin_enrolled: boolean;
+  phone_verified: boolean;
+  fund_movement_eligible: boolean;
+  last_login_at: string | null;
+  last_login_method: string | null;
   created_at: string;
 };
 

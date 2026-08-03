@@ -8,6 +8,7 @@ import { Archive, Plus } from "lucide-react";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { Button } from "@/components/ui/button";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { type Goal, type GoalTemplate } from "@/features/goals/api/goals-api";
@@ -205,6 +206,7 @@ export function GoalsPage() {
   return (
     <div className="space-y-6">
       <GoalsBreadcrumb />
+      <FundEligibilityBanner />
 
       <GoalsPageHeader
         action={

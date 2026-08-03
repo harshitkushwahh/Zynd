@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus, Sparkles } from "lucide-react";
 
 import {
@@ -49,10 +50,12 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { getErrorMessage } from "@/lib/errors";
 import {
+  RISK_TEMPLATES_PANEL_QUERY_KEY,
+  useRiskTemplatesPanelQuery,
+} from "@/hooks/use-risk-profile-queries";
+import {
   autoSelectRiskTemplate,
   createRiskTemplate,
-  fetchRiskCategories,
-  fetchRiskTemplates,
   updateRiskTemplate,
   type RiskCategory,
   type RiskTemplate,
@@ -143,9 +146,10 @@ function TemplateRulesEditor({
 }
 
 export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean }) {
-  const [templates, setTemplates] = useState<RiskTemplate[]>([]);
-  const [categories, setCategories] = useState<RiskCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data, isPending, isFetching, error: queryError } = useRiskTemplatesPanelQuery();
+  const templates = data?.templates ?? [];
+  const categories = data?.categories ?? [];
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -180,28 +184,12 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
     [filteredTemplates, page, pageSize],
   );
 
-  const showSkeleton = loading && templates.length === 0;
+  const showSkeleton = isPending && !data;
+  const loadError = queryError ? getErrorMessage(queryError, "Could not load templates.") : "";
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [nextTemplates, nextCategories] = await Promise.all([
-        fetchRiskTemplates(true),
-        fetchRiskCategories(true),
-      ]);
-      setTemplates(nextTemplates);
-      setCategories(nextCategories.filter((category) => category.is_active));
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not load templates."));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const refreshData = async () => {
+    await queryClient.invalidateQueries({ queryKey: RISK_TEMPLATES_PANEL_QUERY_KEY });
+  };
 
   const resetForm = () => {
     setName("");
@@ -253,7 +241,7 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
       setMessage("Template created.");
       setCreateDialogOpen(false);
       resetForm();
-      await loadData();
+      await refreshData();
     } catch (err) {
       setError(getErrorMessage(err, "Could not create template."));
     } finally {
@@ -275,7 +263,7 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
       });
       setMessage("Template updated.");
       closeEditDialog();
-      await loadData();
+      await refreshData();
     } catch (err) {
       setError(getErrorMessage(err, "Could not update template."));
     } finally {
@@ -292,7 +280,7 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
       setMessage(
         nextDefault ? `"${template.name}" set as default template.` : `"${template.name}" removed as default.`,
       );
-      await loadData();
+      await refreshData();
     } catch (err) {
       setError(getErrorMessage(err, "Could not update default template."));
     } finally {
@@ -309,7 +297,7 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
       await updateRiskTemplate(deleteTemplate.id, { is_active: false });
       setMessage("Template deactivated.");
       setDeleteTemplate(null);
-      await loadData();
+      await refreshData();
     } catch (err) {
       setError(getErrorMessage(err, "Could not deactivate template."));
     } finally {
@@ -404,7 +392,9 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
         </div>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error || loadError ? (
+        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+      ) : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
@@ -415,7 +405,7 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
             totalPages={pagination.totalPages}
             hasPrevious={pagination.hasPrevious}
             hasNext={pagination.hasNext}
-            disabled={loading}
+            disabled={isFetching}
             totalCount={filteredTemplates.length}
             currentPageCount={pagination.items.length}
             pageSize={pageSize}

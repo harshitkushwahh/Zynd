@@ -24,6 +24,10 @@ DEFAULT_SECURITY_CONFIG: dict[str, Any] = {
     "risk.high_score": 70,
     "risk.medium_action": "step_up_mfa",
     "risk.high_action": "block_login",
+    "auth.login_sms_otp_when_mfa_disabled": True,
+    "auth.step_up_sms_fallback_enabled": True,
+    "fund.require_mfa": False,
+    "fund.require_pin": False,
 }
 
 SECURITY_CONFIG_NUMBER_BOUNDS: dict[str, tuple[int, int]] = {
@@ -41,6 +45,24 @@ SECURITY_CONFIG_ALLOWED_STRINGS: dict[str, set[str]] = {
     "risk.medium_action": {"step_up_mfa", "block_login"},
     "risk.high_action": {"step_up_mfa", "block_login"},
 }
+
+SECURITY_CONFIG_BOOLEAN_KEYS: frozenset[str] = frozenset(
+    key for key, value in DEFAULT_SECURITY_CONFIG.items() if isinstance(value, bool)
+)
+
+
+def _parse_boolean_config_value(key: str, value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+    raise ValueError(f"{key} must be true or false.")
 
 
 def validate_security_config_value(key: str, value: Any) -> Any:
@@ -75,6 +97,9 @@ def validate_security_config_value(key: str, value: Any) -> Any:
         if parsed not in allowed:
             raise ValueError(f"{key} must be one of: {', '.join(sorted(allowed))}.")
         return parsed
+
+    if key in SECURITY_CONFIG_BOOLEAN_KEYS:
+        return _parse_boolean_config_value(key, value)
 
     return value
 
@@ -173,6 +198,24 @@ async def get_risk_settings(db: AsyncSession) -> dict[str, Any]:
             await get_security_config_value(db, "risk.medium_action", "step_up_mfa")
         ),
         "high_action": str(await get_security_config_value(db, "risk.high_action", "block_login")),
+    }
+
+
+async def get_second_factor_policy(db: AsyncSession) -> dict[str, bool]:
+    return {
+        "login_sms_otp_when_mfa_disabled": bool(
+            await get_security_config_value(db, "auth.login_sms_otp_when_mfa_disabled", True)
+        ),
+        "step_up_sms_fallback_enabled": bool(
+            await get_security_config_value(db, "auth.step_up_sms_fallback_enabled", True)
+        ),
+    }
+
+
+async def get_fund_movement_policy(db: AsyncSession) -> dict[str, bool]:
+    return {
+        "require_mfa": bool(await get_security_config_value(db, "fund.require_mfa", True)),
+        "require_pin": bool(await get_security_config_value(db, "fund.require_pin", True)),
     }
 
 
