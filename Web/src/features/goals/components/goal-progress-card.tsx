@@ -17,10 +17,12 @@ import { goalTemplateIconThemeFor } from "@/features/goals/lib/goal-template-met
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-export const GOAL_PROGRESS_CARD_WIDTH_CLASS = "w-[12rem]";
+export const GOAL_PROGRESS_CARD_WIDTH_CLASS = "w-[11rem]";
+export const OVERVIEW_GOAL_TILE_HEIGHT_CLASS = "h-[5.25rem]";
 
 type GoalProgressCardProps = {
   goal: Goal;
+  variant?: "default" | "overview";
 };
 
 type GoalProgressRingProps = {
@@ -28,6 +30,7 @@ type GoalProgressRingProps = {
   icon: ReturnType<typeof getGoalTemplateIcon>;
   iconColorClass: string;
   targetLabel: string;
+  overview?: boolean;
 };
 
 function goalIconColorClass(themeClass: string) {
@@ -37,8 +40,14 @@ function goalIconColorClass(themeClass: string) {
     .join(" ");
 }
 
-function GoalProgressRing({ progress, icon: Icon, iconColorClass, targetLabel }: GoalProgressRingProps) {
-  const size = 68;
+function GoalProgressRing({
+  progress,
+  icon: Icon,
+  iconColorClass,
+  targetLabel,
+  overview = false,
+}: GoalProgressRingProps) {
+  const size = overview ? 64 : 68;
   const strokeWidth = 5;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -47,7 +56,10 @@ function GoalProgressRing({ progress, icon: Icon, iconColorClass, targetLabel }:
 
   return (
     <div
-      className="relative flex size-[4.25rem] shrink-0 items-center justify-center"
+      className={cn(
+        "relative flex shrink-0 items-center justify-center",
+        overview ? "size-[4rem]" : "size-[4.25rem]",
+      )}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
@@ -88,7 +100,8 @@ function GoalProgressRing({ progress, icon: Icon, iconColorClass, targetLabel }:
   );
 }
 
-export function GoalProgressCard({ goal }: GoalProgressCardProps) {
+export function GoalProgressCard({ goal, variant = "default" }: GoalProgressCardProps) {
+  const isOverview = variant === "overview";
   const Icon = getGoalTemplateIcon(goal.template?.icon_key);
   const iconTheme = goalTemplateIconThemeFor(goal.template?.slug ?? "custom");
   const iconColorClass = goalIconColorClass(iconTheme.headerIconClass ?? iconTheme.iconBadgeClass);
@@ -101,19 +114,27 @@ export function GoalProgressCard({ goal }: GoalProgressCardProps) {
       href={goalDetailHref(goal.id)}
       className={cn(
         GOAL_PROGRESS_CARD_WIDTH_CLASS,
-        "group block shrink-0 rounded-[var(--radius-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        "group block shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        isOverview ? "rounded-[1.75rem]" : "rounded-[var(--radius-card)]",
       )}
       aria-label={`${goal.title}, ${statusLabel}, ${targetLabel} target`}
     >
       <div
         className={cn(
-          "relative flex h-[5.5rem] flex-row items-center gap-2.5 rounded-[var(--radius-card)] border border-border bg-card p-2.5",
-          "transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-zynd-low",
-          "motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+          "relative flex flex-row items-center gap-2 border transition-[border-color,background-color,box-shadow] duration-200",
+          isOverview
+            ? cn(
+                OVERVIEW_GOAL_TILE_HEIGHT_CLASS,
+                "rounded-[1.75rem] border-border/60 bg-muted/30 p-2.5 hover:border-primary/25 hover:bg-muted/40",
+              )
+            : "h-[5.5rem] rounded-[var(--radius-card)] border-border bg-card p-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-zynd-low motion-reduce:transition-none motion-reduce:hover:translate-y-0",
         )}
       >
         <ArrowUpRight
-          className="absolute right-2 top-2 size-3.5 text-muted-foreground"
+          className={cn(
+            "absolute text-muted-foreground transition-colors group-hover:text-primary",
+            isOverview ? "right-2 top-2 size-3" : "right-2 top-2 size-3.5",
+          )}
           strokeWidth={2}
           aria-hidden
         />
@@ -123,14 +144,18 @@ export function GoalProgressCard({ goal }: GoalProgressCardProps) {
           icon={Icon}
           iconColorClass={iconColorClass}
           targetLabel={targetLabel}
+          overview={isOverview}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 pr-3">
-          <p className="truncate text-sm font-semibold leading-tight text-foreground">{goal.title}</p>
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 pr-2.5">
+          <p className="truncate text-[13px] font-semibold leading-tight text-foreground">{goal.title}</p>
           <StatusBadge
             variant={goalStatusBadgeVariant(goal.status)}
             icon={goalStatusBadgeIcon(goal.status)}
-            className="w-fit px-1.5 text-[10px]"
+            className={cn(
+              "w-fit px-1.5 text-[10px]",
+              isOverview && "h-5 rounded-[1.75rem]",
+            )}
           >
             {statusLabel}
           </StatusBadge>

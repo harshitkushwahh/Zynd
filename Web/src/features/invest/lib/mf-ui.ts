@@ -1,6 +1,18 @@
 /** Shared layout tokens for the mutual funds dashboard section. */
 export const MF_CARD_RADIUS_CLASS = "rounded-medium";
 
+/** Fund catalog cards on the MF dashboard browse grids. */
+export const MF_FUND_CARD_RADIUS_CLASS = "rounded-3xl";
+
+/** Fund detail page section surfaces (chart, cards, etc.). */
+export const MF_FUND_DETAIL_RADIUS_CLASS = "rounded-3xl";
+
+/** Fund detail stat tiles (NAV, AUM, TER, 1 day change). */
+export const MF_FUND_DETAIL_METRIC_RADIUS_CLASS = "rounded-2xl";
+
+/** @deprecated Use {@link MF_FUND_DETAIL_RADIUS_CLASS}. */
+export const MF_FUND_DETAIL_SURFACE_RADIUS_CLASS = MF_FUND_DETAIL_RADIUS_CLASS;
+
 export const MF_PAGE_SECTION_CLASS = "w-full min-w-0 max-w-full overflow-x-hidden";
 
 /** Transactions table frame — shrinks to content, scrolls internally when rows exceed viewport budget. */

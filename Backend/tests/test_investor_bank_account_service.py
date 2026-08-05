@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
-from app.application.investor.investor_bank_account_crypto import read_account_number
+from app.application.investor.investor_bank_account_crypto import encrypt_account_number, read_account_number
 from app.application.investor.investor_bank_account_errors import InvestorBankAccountError
 from app.application.investor.investor_bank_account_service import (
     disable_bank_account,
@@ -509,3 +509,112 @@ async def test_set_primary_blocked_when_mandate_auth_pending(db_session) -> None
         )
 
     assert exc.value.code == "active_mandate_exists"
+
+
+@pytest.mark.asyncio
+async def test_list_user_bank_accounts_consolidates_duplicate_kotak_last4(db_session) -> None:
+    user = User(
+        id=uuid4(),
+        email=f"bank-dedupe-{uuid4()}@example.com",
+        phone=f"+919{uuid4().int % 10_000_000_000:010d}",
+        password_hash="hash",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        KycJourneyState(
+            user_id=user.id,
+            pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
+        )
+    )
+
+    ciphertext, key_version = encrypt_account_number("123456789725")
+    primary = InvestorBankAccount(
+        investor_profile_id=user.id,
+        is_primary=True,
+        account_type="savings",
+        account_number_last4="9725",
+        ifsc_code="KKBK0000591",
+        primary_account_holder_name="HARSHIT KUSHWAH",
+        bank_name="KKBK",
+        verification_status=InvestorBankVerificationStatus.verified,
+        source=InvestorObjectSource.kyc,
+        sync_status=InvestorObjectSyncStatus.active,
+        account_number_ciphertext=ciphertext,
+        account_number_key_version=key_version,
+    )
+    duplicate = InvestorBankAccount(
+        investor_profile_id=user.id,
+        is_primary=False,
+        account_type="savings",
+        account_number_last4="9725",
+        ifsc_code="KKBK0005915",
+        primary_account_holder_name="Harshit Kushwah",
+        bank_name="KOTAK MAHINDRA BANK LIMITED",
+        verification_status=InvestorBankVerificationStatus.verified,
+        source=InvestorObjectSource.user,
+        sync_status=InvestorObjectSyncStatus.draft,
+        account_number_ciphertext=ciphertext,
+        account_number_key_version=key_version,
+    )
+    db_session.add_all([primary, duplicate])
+    await db_session.flush()
+
+    rows = await list_user_bank_accounts(db_session, user_id=user.id)
+
+    assert len(rows) == 1
+    assert rows[0]["ifsc_code"] == "KKBK0005915"
+    assert rows[0]["bank_name"] == "KOTAK MAHINDRA BANK LIMITED"
+    assert rows[0]["is_primary"] is True
+    await db_session.refresh(duplicate)
+    await db_session.refresh(primary)
+    assert is_bank_account_disabled(primary)
+    assert not is_bank_account_disabled(duplicate)
+
+
+@pytest.mark.asyncio
+async def test_list_user_bank_accounts_stubs_payment_ready_verified_bank(db_session) -> None:
+    user = User(
+        id=uuid4(),
+        email=f"bank-stub-{uuid4()}@example.com",
+        phone=f"+919{uuid4().int % 10_000_000_000:010d}",
+        password_hash="hash",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        KycJourneyState(
+            user_id=user.id,
+            pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
+        )
+    )
+    ciphertext, key_version = encrypt_account_number("123456789012")
+    bank = InvestorBankAccount(
+        investor_profile_id=user.id,
+        is_primary=True,
+        account_type="savings",
+        account_number_last4="9012",
+        ifsc_code="HDFC0001234",
+        primary_account_holder_name="Test User",
+        bank_name="HDFC Bank",
+        verification_status=InvestorBankVerificationStatus.verified,
+        source=InvestorObjectSource.kyc,
+        sync_status=InvestorObjectSyncStatus.draft,
+        account_number_ciphertext=ciphertext,
+        account_number_key_version=key_version,
+    )
+    db_session.add(bank)
+    await db_session.flush()
+
+    with patch("app.application.investor.investor_bank_account_service.get_settings") as settings_mock:
+        settings_mock.return_value.resolved_fp_enabled = False
+        rows = await list_user_bank_accounts(db_session, user_id=user.id)
+
+    assert len(rows) == 1
+    assert rows[0]["verification_status"] == "verified"
+    assert rows[0]["sync_status"] == "active"
+    assert rows[0]["external_bank_account_id"]
+    await db_session.refresh(bank)
+    assert bank.sync_status == InvestorObjectSyncStatus.active
+    assert bank.external_bank_account_id
+    assert bank.external_old_id is not None

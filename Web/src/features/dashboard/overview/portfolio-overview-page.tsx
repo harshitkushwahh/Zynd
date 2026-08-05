@@ -45,19 +45,17 @@ export function PortfolioOverviewPage() {
             <OverviewHoldingsCard className="min-w-0 lg:w-[17rem] lg:shrink-0 xl:w-[18rem]" />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,1.15fr)] xl:items-start">
-            <div className="flex min-w-0 flex-col gap-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] sm:gap-4">
-                <OverviewRiskCard />
-                <OverviewFamilyCircles />
-              </div>
-
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,1.15fr)] xl:items-stretch">
+            <div className="grid grid-cols-[minmax(9rem,10.5rem)_minmax(0,1fr)] gap-3 sm:gap-4">
+              <OverviewRiskCard />
               <OverviewSipsCard />
-              <OverviewRecentTransactions />
             </div>
 
-            <div className="flex min-w-0 flex-col gap-4">
-              <OverviewGoalsCard />
+            <OverviewGoalsCard className="min-w-0" />
+
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] lg:items-stretch xl:col-span-2">
+              <OverviewFamilyCircles />
+              <OverviewRecentTransactions className="min-w-0" />
             </div>
           </div>
         </OverviewContentFade>

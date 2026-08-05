@@ -67,6 +67,10 @@ def _order_metadata(order: MfOrder) -> dict[str, Any]:
     return dict(order.metadata_ or {})
 
 
+def _resolve_payment_method(payment_method: str | None) -> str:
+    return "NETBANKING" if (payment_method or "").strip().lower() == "netbanking" else "UPI"
+
+
 def _ondc_metadata(order: MfOrder) -> dict[str, Any]:
     meta = _order_metadata(order)
     ondc = meta.get("ondc")
@@ -506,11 +510,17 @@ async def _create_checkout_payment(session: AsyncSession, order: MfOrder) -> Non
     if bank_old_id is None:
         raise FpClientError("Bank old_id missing", "bank_old_id_missing", 400)
 
+    payment_method = None
+    if order.checkout_id:
+        checkout = await session.get(MfCheckout, order.checkout_id)
+        if checkout:
+            payment_method = _checkout_metadata(checkout).get("payment_method")
+
     settings = get_settings()
     payment = await create_netbanking_payment(
         amc_order_ids=[int(order.fp_purchase_old_id)],
         bank_account_id=int(bank_old_id),
-        method="UPI",
+        method=_resolve_payment_method(payment_method),
         provider_name="ONDC" if settings.zynd_mf_order_payment_gateway == "ondc" else "CYBRILLAPOA",
     )
     payment_id = payment.get("id")
@@ -542,11 +552,12 @@ async def _create_cart_checkout_payment(
     if bank_old_id is None:
         raise FpClientError("Bank old_id missing", "bank_old_id_missing", 400)
 
+    payment_method = _checkout_metadata(checkout).get("payment_method")
     settings = get_settings()
     payment = await create_netbanking_payment(
         amc_order_ids=[int(value) for value in amc_order_ids if value is not None],
         bank_account_id=int(bank_old_id),
-        method="UPI",
+        method=_resolve_payment_method(payment_method),
         provider_name="ONDC" if settings.zynd_mf_order_payment_gateway == "ondc" else "CYBRILLAPOA",
     )
     payment_id = payment.get("id")

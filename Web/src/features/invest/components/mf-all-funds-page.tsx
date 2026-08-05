@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SortDescriptor } from "react-aria-components";
 import { Loader2 } from "lucide-react";
 
 import { PageTitle } from "@/components/ui/page-title";
@@ -22,7 +23,14 @@ import {
   hasClientOnlyMfFundFilters,
   type MfFundFilters,
 } from "@/features/invest/lib/mf-fund-filters";
-import { MF_ALL_FUNDS_PAGE_SIZE, mergeInvestFunds, resolveInvestFundsPageHasMore } from "@/features/invest/lib/mf-fund-ranking";
+import {
+  MF_ALL_FUNDS_PAGE_SIZE,
+  MF_FUNDS_TABLE_DEFAULT_SORT,
+  mergeInvestFunds,
+  resolveInvestFundsApiSort,
+  resolveInvestFundsPageHasMore,
+  usesServerFundTableSort,
+} from "@/features/invest/lib/mf-fund-ranking";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 
@@ -36,6 +44,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     ...EMPTY_MF_FUND_FILTERS,
     categorySlug: initialCategorySlug,
   });
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>(MF_FUNDS_TABLE_DEFAULT_SORT);
   const [funds, setFunds] = useState<InvestFundSummary[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -52,10 +61,21 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   const pageRef = useRef(1);
   const hasMoreRef = useRef(true);
   const categorySlugRef = useRef<string | null>(initialCategorySlug);
+  const sortRef = useRef(sortDescriptor);
   const loadPageRef = useRef<
-    (nextPage: number, append: boolean, categorySlug: string | null) => Promise<void>
+    (
+      nextPage: number,
+      append: boolean,
+      categorySlug: string | null,
+      sort: SortDescriptor,
+    ) => Promise<void>
   >(async () => {});
   const LOAD_MORE_ROOT_MARGIN_PX = 160;
+
+  const serverSorted = useMemo(
+    () => usesServerFundTableSort(sortDescriptor, { categoryFiltered: Boolean(filters.categorySlug) }),
+    [filters.categorySlug, sortDescriptor],
+  );
 
   const tryScheduleLoadMore = useCallback(() => {
     if (!hasMoreRef.current || loadingMoreRef.current || refetchingRef.current) return;
@@ -67,7 +87,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     const rootRect = root.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     if (nodeRect.top <= rootRect.bottom + LOAD_MORE_ROOT_MARGIN_PX) {
-      void loadPageRef.current(pageRef.current + 1, true, categorySlugRef.current);
+      void loadPageRef.current(pageRef.current + 1, true, categorySlugRef.current, sortRef.current);
     }
   }, []);
 
@@ -96,8 +116,17 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     categorySlugRef.current = filters.categorySlug;
   }, [filters.categorySlug]);
 
+  useEffect(() => {
+    sortRef.current = sortDescriptor;
+  }, [sortDescriptor]);
+
   const loadPage = useCallback(
-    async (nextPage: number, append: boolean, categorySlug: string | null) => {
+    async (
+      nextPage: number,
+      append: boolean,
+      categorySlug: string | null,
+      sort: SortDescriptor,
+    ) => {
       if (append) {
         if (loadingMoreRef.current || !hasMoreRef.current) return;
         loadingMoreRef.current = true;
@@ -118,7 +147,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
           category: categorySlug ?? undefined,
           page: nextPage,
           page_size: MF_ALL_FUNDS_PAGE_SIZE,
-          sort: "rank",
+          sort: resolveInvestFundsApiSort(sort) ?? "return_3y",
         });
 
         let previousCount = 0;
@@ -153,12 +182,9 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
         setRefetching(false);
         loadingMoreRef.current = false;
         setLoadingMore(false);
-        queueMicrotask(() => {
-          tryScheduleLoadMore();
-        });
       }
     },
-    [tryScheduleLoadMore],
+    [],
   );
 
   useEffect(() => {
@@ -181,8 +207,8 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   }, []);
 
   useEffect(() => {
-    void loadPage(1, false, filters.categorySlug);
-  }, [filters.categorySlug, loadPage]);
+    void loadPage(1, false, filters.categorySlug, sortDescriptor);
+  }, [filters.categorySlug, loadPage, sortDescriptor]);
 
   useEffect(() => {
     if (initialLoading || !hasMore) return;
@@ -201,7 +227,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [initialLoading, hasMore, tryScheduleLoadMore, filters.categorySlug]);
+  }, [funds.length, hasMore, initialLoading, tryScheduleLoadMore]);
 
   return (
     <div className={MF_PAGE_SECTION_CLASS}>
@@ -242,6 +268,10 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
               refetching={refetching}
               loadingMore={loadingMore}
               hasMore={hasMore}
+              virtualized
+              serverSorted={serverSorted}
+              sortDescriptor={sortDescriptor}
+              onSortChange={setSortDescriptor}
               scrollContainerRef={scrollContainerRef}
               loadMoreRef={loadMoreRef}
               emptyDescription={

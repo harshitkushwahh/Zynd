@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { KycReviewAccordion } from "@/features/kyc/components/kyc-review-accordion";
 import { KycReviewBankSection } from "@/features/kyc/components/kyc-review-bank-section";
-import { KycReviewIntro } from "@/features/kyc/components/kyc-review-intro";
 import { KycReviewNomineeEmpty } from "@/features/kyc/components/kyc-review-nominee-empty";
 import { KycReviewPanSection } from "@/features/kyc/components/kyc-review-pan-section";
 import type { KycJourneyDraft } from "@/features/kyc/lib/kyc-journey-draft";
@@ -117,10 +116,6 @@ export function KycReviewStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="shrink-0">
-        <KycReviewIntro />
-      </div>
-
       {familyGroupRepromptNominee ? (
         <div className="shrink-0 rounded-[var(--radius-card)] border border-primary/20 bg-primary/5 px-3 py-3">
           <div className="flex items-start gap-3">

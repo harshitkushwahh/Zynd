@@ -17,4 +17,4 @@ export const DASHBOARD_NAVBAR_FADE_CLASS =
   "pointer-events-none absolute inset-x-0 top-full -z-10 bg-gradient-to-b from-background from-15% via-background/35 to-transparent";
 export const DASHBOARD_MAIN_SCROLL_CLASS =
   "min-h-0 flex-1 overflow-y-auto pb-20 [scrollbar-width:none] md:pb-0 [&::-webkit-scrollbar]:hidden";
-export const DASHBOARD_MAIN_CONTENT_CLASS = "min-h-0 w-full min-w-0";
+export const DASHBOARD_MAIN_CONTENT_CLASS = "flex h-full min-h-0 w-full min-w-0 flex-col";

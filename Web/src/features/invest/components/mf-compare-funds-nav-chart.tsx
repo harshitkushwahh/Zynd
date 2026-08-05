@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { LineChart as LineChartIcon } from "lucide-react";
 import {
   CartesianGrid,
@@ -15,6 +15,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import type { InvestFundDetail } from "@/features/invest/api/invest-api";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { MfNavRangeTabs } from "@/features/invest/components/mf-nav-range-tabs";
 import {
   buildCompareNavChartRows,
   COMPARE_FUND_CHART_COLORS,
@@ -22,7 +23,8 @@ import {
 } from "@/features/invest/lib/mf-compare-nav-series";
 import { formatChartAxisDate } from "@/features/invest/lib/mf-format";
 import {
-  MF_NAV_RANGE_OPTIONS,
+  hasSufficientNavHistoryForCompareRange,
+  resolveNavRangeForCompareHistory,
   type MfNavRange,
 } from "@/features/invest/lib/mf-nav-history";
 import { MF_CALC_ICON_BADGE_CLASS, MF_CALC_PANEL_CLASS } from "@/features/invest/lib/mf-calculator-ui";
@@ -30,42 +32,6 @@ import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 const CHART_HEIGHT = 300;
-
-type CompareNavRangeTabsProps = {
-  value: MfNavRange;
-  onChange: (value: MfNavRange) => void;
-};
-
-function CompareNavRangeTabs({ value, onChange }: CompareNavRangeTabsProps) {
-  return (
-    <div
-      role="tablist"
-      aria-label={copy.mutualFunds.compareChartTitle}
-      className="flex flex-wrap gap-1 rounded-[var(--radius-control)] border border-border/80 bg-muted/20 p-1"
-    >
-      {MF_NAV_RANGE_OPTIONS.map((option) => {
-        const active = value === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(option.id)}
-            className={cn(
-              "min-w-[2.75rem] rounded-[var(--radius-control)] px-3 py-1.5 text-caption font-medium transition-colors",
-              active
-                ? "bg-foreground text-background shadow-zynd-low"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 type CompareChartTooltipProps = {
   active?: boolean;
@@ -156,9 +122,20 @@ export function MfCompareFundsNavChart({
   onRangeChange,
   loading = false,
 }: MfCompareFundsNavChartProps) {
-  const chartRows = useMemo(
-    () => buildCompareNavChartRows(series, range),
+  const effectiveRange = useMemo(
+    () => resolveNavRangeForCompareHistory(series, range),
     [series, range],
+  );
+
+  useEffect(() => {
+    if (effectiveRange !== range) {
+      onRangeChange(effectiveRange);
+    }
+  }, [effectiveRange, onRangeChange, range]);
+
+  const chartRows = useMemo(
+    () => buildCompareNavChartRows(series, effectiveRange),
+    [series, effectiveRange],
   );
 
   const tickInterval = Math.max(1, Math.floor(chartRows.length / 5));
@@ -166,7 +143,12 @@ export function MfCompareFundsNavChart({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <CompareNavRangeTabs value={range} onChange={onRangeChange} />
+        <MfNavRangeTabs
+          value={effectiveRange}
+          onChange={onRangeChange}
+          isRangeAvailable={(nextRange) => hasSufficientNavHistoryForCompareRange(series, nextRange)}
+          ariaLabel={copy.mutualFunds.compareChartTitle}
+        />
         <p className="text-caption text-muted-foreground">{copy.mutualFunds.compareChartIndexedHint}</p>
       </div>
 

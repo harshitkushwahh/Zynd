@@ -20,13 +20,6 @@ def require_pan_verified(journey: KycJourneyState | None) -> None:
         raise KycError("Complete PAN verification first.", "pan_not_verified", 403)
 
 
-def require_digilocker_or_kra_skip(journey: KycJourneyState) -> None:
-    if journey.kyc_already_registered:
-        return
-    if journey.external_kyc_status != "returned_success":
-        raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
-
-
 REKYC_READINESS_CODES = frozenset(
     {
         "kyc_incomplete",
@@ -35,6 +28,24 @@ REKYC_READINESS_CODES = frozenset(
         "kyc_rejected",
     }
 )
+
+
+def is_rekyc_readiness_code(readiness_code: str | None) -> bool:
+    return str(readiness_code or "").lower() in REKYC_READINESS_CODES
+
+
+def is_rekyc_modification(journey: KycJourneyState | None) -> bool:
+    """Existing KRA record that needs modification (Cybrilla kyc_forms type=modify)."""
+    if journey is None:
+        return False
+    return is_rekyc_readiness_code(journey.readiness_code)
+
+
+def require_digilocker_or_kra_skip(journey: KycJourneyState) -> None:
+    if journey.kyc_already_registered or is_rekyc_modification(journey):
+        return
+    if journey.external_kyc_status != "returned_success":
+        raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
 
 
 def requires_full_kyc_submission(journey: KycJourneyState | None) -> bool:

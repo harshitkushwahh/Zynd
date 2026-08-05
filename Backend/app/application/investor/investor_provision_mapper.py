@@ -77,6 +77,48 @@ def _format_date(value: date | str | None) -> str | None:
     return raw or None
 
 
+def validate_early_investor_profile_inputs(*, journey: KycJourneyState | None) -> None:
+    if journey is None:
+        raise InvestorProvisionValidationError("kyc_journey_missing", "KYC journey not found for user")
+
+    pan = journey.pan_draft_json if isinstance(journey.pan_draft_json, dict) else {}
+    if journey.pan_verification_status != "verified":
+        raise InvestorProvisionValidationError("pan_not_verified", "Verified PAN is required before provisioning")
+    if not _str(pan.get("panNumber")):
+        raise InvestorProvisionValidationError("pan_missing", "Verified PAN is required before provisioning")
+    if not _str(pan.get("dateOfBirth")):
+        raise InvestorProvisionValidationError("dob_missing", "Date of birth is required before provisioning")
+    if not _full_name(pan):
+        raise InvestorProvisionValidationError("name_missing", "Investor name is required before provisioning")
+
+
+def build_early_investor_profile_payload(*, user: User, journey: KycJourneyState) -> dict[str, Any]:
+    """Minimal Finprim investor profile payload after PAN confirmation (before personal/bank steps)."""
+    validate_early_investor_profile_inputs(journey=journey)
+    pan = journey.pan_draft_json or {}
+    personal = journey.personal_draft_json if isinstance(journey.personal_draft_json, dict) else {}
+    contact = journey.contact_draft_json if isinstance(journey.contact_draft_json, dict) else {}
+    permanent = contact.get("permanent") if isinstance(contact.get("permanent"), dict) else {}
+
+    place_of_birth = _str(personal.get("placeOfBirth")) or _str(permanent.get("city")) or "India"
+    return {
+        "type": "individual",
+        "tax_status": "resident_individual",
+        "name": _full_name(pan)[:70],
+        "date_of_birth": _str(pan.get("dateOfBirth")),
+        "gender": _str(personal.get("gender")) or "male",
+        "occupation": _str(personal.get("occupation")) or "others",
+        "pan": _str(pan.get("panNumber")).upper(),
+        "country_of_birth": "IN",
+        "place_of_birth": place_of_birth[:60],
+        "nationality_country": "IN",
+        "income_slab": _str(personal.get("incomeSlab")) or "upto_1lakh",
+        "pep_details": _str(personal.get("pepExposed")) or "not_applicable",
+        "source_of_wealth": "salary",
+        "use_default_tax_residences": True,
+    }
+
+
 def validate_provision_inputs(*, user: User, journey: KycJourneyState | None) -> None:
     if journey is None:
         raise InvestorProvisionValidationError("kyc_journey_missing", "KYC journey not found for user")
@@ -156,17 +198,16 @@ def build_bank_account_payload(
     bank_row: InvestorBankAccount,
     journey: KycJourneyState,
 ) -> dict[str, Any]:
+    bank_draft = journey.bank_draft_json if journey and isinstance(journey.bank_draft_json, dict) else {}
     account_number = read_account_number(bank_row) or ""
     if not account_number:
-        bank = journey.bank_draft_json if isinstance(journey.bank_draft_json, dict) else {}
-        account_number = _str(bank.get("accountNumber"))
+        account_number = _str(bank_draft.get("accountNumber"))
     if not account_number:
         raise InvestorProvisionValidationError("bank_missing", "Full bank account number is unavailable")
 
     holder = _str(bank_row.pan_account_holder_name) or _str(bank_row.primary_account_holder_name)
     if not holder:
-        bank = journey.bank_draft_json if isinstance(journey.bank_draft_json, dict) else {}
-        holder = _str(bank.get("panAccountHolderName")) or _str(bank.get("accountHolderName"))
+        holder = _str(bank_draft.get("panAccountHolderName")) or _str(bank_draft.get("accountHolderName"))
     if not holder:
         holder = bank_row.primary_account_holder_name
 
@@ -212,8 +253,13 @@ def build_phone_payload(*, profile_id: str, phone_row: InvestorPhoneNumber) -> d
     }
 
 
+def _normalize_party_relationship(value: str) -> str:
+    normalized = _str(value).lower().replace(" ", "_")
+    return FP_RELATIONSHIP_MAP.get(normalized, normalized or "others")
+
+
 def build_related_party_payload(*, profile_id: str, party_row: InvestorRelatedParty) -> dict[str, Any]:
-    relationship = FP_RELATIONSHIP_MAP.get(party_row.party_relationship, party_row.party_relationship)
+    relationship = _normalize_party_relationship(party_row.party_relationship)
     payload: dict[str, Any] = {
         "profile": profile_id,
         "name": party_row.name[:40],
@@ -228,4 +274,83 @@ def build_related_party_payload(*, profile_id: str, party_row: InvestorRelatedPa
         payload["guardian_name"] = party_row.guardian_name[:120]
     if party_row.guardian_pan:
         payload["guardian_pan"] = party_row.guardian_pan.upper()
+    return payload
+
+
+def _nominee_draft_from_row(party_row: InvestorRelatedParty) -> dict[str, Any]:
+    raw = party_row.external_payload_json
+    if isinstance(raw, dict):
+        draft = raw.get("kyc_nominee")
+        if isinstance(draft, dict):
+            return draft
+    return {}
+
+
+def _fp_phone_from_raw(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if len(digits) < 10:
+        return None
+    return {"isd": "+91", "number": digits[-10:]}
+
+
+def _fp_address_from_nominee_draft(draft: dict[str, Any]) -> dict[str, Any] | None:
+    address = draft.get("address")
+    if not isinstance(address, dict):
+        return None
+    line1 = _str(address.get("line1"))
+    postal_code = _str(address.get("pincode") or address.get("postal_code"))
+    if not line1 or not postal_code:
+        return None
+    country = _str(address.get("country")) or "in"
+    return {
+        "line1": line1[:255],
+        "line2": _str(address.get("line2"))[:255] or None,
+        "line3": None,
+        "city": _str(address.get("city"))[:120] or None,
+        "state": _str(address.get("state"))[:120] or None,
+        "postal_code": postal_code[:16],
+        "country": _fp_country(country),
+    }
+
+
+def build_related_party_patch_payload(*, party_row: InvestorRelatedParty) -> dict[str, Any] | None:
+    if not party_row.external_related_party_id:
+        return None
+
+    draft = _nominee_draft_from_row(party_row)
+    payload: dict[str, Any] = {"id": party_row.external_related_party_id}
+
+    if party_row.pan:
+        payload["pan"] = party_row.pan.upper()
+
+    contact = draft.get("contact") if isinstance(draft.get("contact"), dict) else {}
+    email = _str(contact.get("email"))
+    if email:
+        payload["email_address"] = email.lower()
+
+    phone = _fp_phone_from_raw(contact.get("mobile"))
+    if phone:
+        payload["phone_number"] = phone
+
+    address = _fp_address_from_nominee_draft(draft)
+    if address:
+        payload["address"] = address
+
+    guardian = draft.get("guardian") if isinstance(draft.get("guardian"), dict) else {}
+    if party_row.guardian_pan:
+        payload["guardian_pan"] = party_row.guardian_pan.upper()
+    guardian_email = _str(guardian.get("email"))
+    if guardian_email:
+        payload["guardian_email_address"] = guardian_email.lower()
+    guardian_phone = _fp_phone_from_raw(guardian.get("mobile"))
+    if guardian_phone:
+        payload["guardian_phone_number"] = guardian_phone
+
+    if len(payload) <= 1:
+        return None
     return payload

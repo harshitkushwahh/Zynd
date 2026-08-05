@@ -54,10 +54,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, [kyc]);
 
-  if (loading || sessionRetrying) {
+  const showInitialAuthLoader = loading && !user;
+  const showReconnectLoader = sessionRetrying && !user;
+
+  if (showInitialAuthLoader || showReconnectLoader) {
     return (
       <ZyndGlobalLoader
-        status={sessionRetrying ? copy.account.reconnecting : undefined}
+        status={showReconnectLoader ? copy.account.reconnecting : undefined}
       />
     );
   }

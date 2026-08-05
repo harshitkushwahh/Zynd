@@ -39,6 +39,7 @@ export function KycSelectField({
   onChange,
 }: KycSelectFieldProps) {
   const normalizedOptions = normalizeOptions(options);
+  const selectedLabel = normalizedOptions.find((option) => option.value === value)?.label;
 
   return (
     <div className="space-y-2">
@@ -53,7 +54,7 @@ export function KycSelectField({
           className="w-full rounded-[var(--radius-control)] text-body"
           aria-invalid={hasError}
         >
-          <SelectValue placeholder={placeholder} />
+          <SelectValue placeholder={placeholder}>{selectedLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {normalizedOptions.map((option) => (

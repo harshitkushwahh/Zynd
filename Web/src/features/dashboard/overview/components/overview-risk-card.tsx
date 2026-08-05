@@ -1,14 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import {
-  OVERVIEW_BRAND_CARD_STYLES,
-  resolveRiskTierBrandTone,
-} from "@/features/dashboard/overview/lib/overview-brand-card-styles";
+  OverviewLockedCardBackdrop,
+  OverviewLockedCardOverlay,
+} from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import {
+  OVERVIEW_RISK_LOCKED_DISPLAY_SCORE,
+  OVERVIEW_RISK_LOCKED_SCORE,
+  OVERVIEW_RISK_LOCKED_TIER,
+} from "@/features/dashboard/overview/lib/overview-locked-preview-data";
+import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import {
   resolveDisplayScore,
   resolveRiskTierVisual,
@@ -16,7 +22,16 @@ import {
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-const RISK_CARD_ROW_CLASS = "min-h-[4.5rem]";
+const RiskProfileGauge = dynamic(
+  () =>
+    import("@/features/risk-profile/components/risk-profile-gauge").then(
+      (mod) => mod.RiskProfileGauge,
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-12 w-20" />,
+  },
+);
 
 export function OverviewRiskCard({ className }: { className?: string }) {
   const riskProfile = useRiskProfileOptional();
@@ -28,99 +43,101 @@ export function OverviewRiskCard({ className }: { className?: string }) {
   const displayScore = profile
     ? resolveDisplayScore(profile.score, profile.display_score)
     : null;
-  const brandTone = profile ? resolveRiskTierBrandTone(profile.tier) : "navy";
-  const brandStyles = OVERVIEW_BRAND_CARD_STYLES[brandTone];
+  const placeholderTierVisual = resolveRiskTierVisual(OVERVIEW_RISK_LOCKED_TIER);
+  const isLocked = !loading && !hasProfile;
 
   return (
-    <section
+    <Link
+      href={hasProfile ? "/dashboard/risk-profile" : "/dashboard/risk-profile/assessment"}
       className={cn(
-        "flex min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card",
+        "group flex aspect-square min-h-[9.5rem] w-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-3.5",
+        "transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-zynd-mid",
         className,
       )}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 pb-2 sm:px-5 sm:pt-5">
-        <h2 className="text-compact font-semibold text-foreground">{overview.riskTitle}</h2>
-        <Link
-          href="/dashboard/risk-profile"
-          aria-label={overview.riskView}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/20 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <ArrowUpRight className="size-4" strokeWidth={2.25} />
-        </Link>
-      </div>
-
-      <div className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
-        {loading && !profile ? (
-          <Skeleton className={cn("rounded-[1.15rem]", RISK_CARD_ROW_CLASS)} />
-        ) : hasProfile && profile && tierVisual && displayScore != null ? (
-          <Link
-            href="/dashboard/risk-profile"
-            className={cn(
-              "flex items-center justify-between gap-3 rounded-[1.15rem] px-3 py-3 shadow-zynd-low transition-transform duration-200 ease-out hover:-translate-y-0.5",
-              RISK_CARD_ROW_CLASS,
-              brandStyles.card,
-            )}
-          >
-            <div className="min-w-0">
-              <p className={cn("truncate text-compact font-semibold", brandStyles.title)}>
-                {tierVisual.label}
+      {isLocked ? (
+        <div className="relative flex h-full min-h-0 flex-1 flex-col">
+          <div className="pointer-events-none flex h-full min-h-0 flex-1 select-none flex-col blur-[5px]">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-caption font-semibold text-foreground">{overview.riskTitle}</p>
+              <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={2.25} />
+            </div>
+            <div className="flex flex-1 flex-col items-center justify-center py-1">
+              <RiskProfileGauge
+                score={OVERVIEW_RISK_LOCKED_SCORE}
+                displayScore={OVERVIEW_RISK_LOCKED_DISPLAY_SCORE}
+                tier={OVERVIEW_RISK_LOCKED_TIER}
+                size="mini"
+                showCaption={false}
+              />
+              <p className={cn("mt-1 text-caption font-semibold", placeholderTierVisual.textClass)}>
+                {placeholderTierVisual.label}
               </p>
-              <p className={cn("mt-0.5 truncate text-[11px]", brandStyles.muted)}>
-                {overview.riskTierLabel}
+              <p className="text-[11px] tabular-nums text-muted-foreground">
+                {OVERVIEW_RISK_LOCKED_DISPLAY_SCORE}/100
               </p>
             </div>
+          </div>
+          <OverviewLockedCardBackdrop />
+          <OverviewLockedCardOverlay
+            compact
+            title={overview.riskTitle}
+            subtitle={copy.riskProfile.lockedGaugeDescription}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-caption font-semibold text-foreground">{overview.riskTitle}</p>
+            <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+          </div>
 
-            <div className="shrink-0 text-right">
-              <p className={cn("text-compact font-semibold tabular-nums", brandStyles.title)}>
-                {displayScore}/100
-              </p>
-              <p className={cn("mt-0.5 text-[9px] uppercase tracking-wide", brandStyles.label)}>
-                {overview.riskScoreLabel}
-              </p>
-            </div>
-          </Link>
-        ) : (
-          <Link
-            href="/dashboard/risk-profile/assessment"
-            className={cn(
-              "flex items-center justify-between gap-3 rounded-[1.15rem] px-3 py-3 shadow-zynd-low transition-transform duration-200 ease-out hover:-translate-y-0.5",
-              RISK_CARD_ROW_CLASS,
-              OVERVIEW_BRAND_CARD_STYLES.navy.card,
-            )}
-          >
-            <div className="min-w-0">
-              <p className="truncate text-compact font-semibold text-primary-foreground">
-                {overview.riskEmpty}
-              </p>
-              <p className="mt-0.5 truncate text-[11px] text-primary-foreground/70">
-                {overview.riskEmptyHint}
-              </p>
-            </div>
-
-            <ArrowUpRight className="size-4 shrink-0 text-primary-foreground/80" strokeWidth={2.25} />
-          </Link>
-        )}
-      </div>
-    </section>
+          <div className="flex flex-1 flex-col items-center justify-center py-1">
+            {loading && !profile ? (
+              <div className="flex w-full flex-col items-center gap-2">
+                <Skeleton className="h-12 w-20" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ) : hasProfile && profile && tierVisual && displayScore != null ? (
+              <>
+                <RiskProfileGauge
+                  score={profile.score}
+                  displayScore={profile.display_score}
+                  tier={profile.tier}
+                  size="mini"
+                  showCaption={false}
+                />
+                <p className={cn("mt-1 text-caption font-semibold", tierVisual.textClass)}>
+                  {tierVisual.label}
+                </p>
+                <p className="text-[11px] tabular-nums text-muted-foreground">{displayScore}/100</p>
+              </>
+            ) : null}
+          </div>
+        </>
+      )}
+    </Link>
   );
 }
 
 export function OverviewRiskCardSkeleton({ className }: { className?: string }) {
   return (
-    <section
+    <div
       className={cn(
-        "flex min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card",
+        "flex aspect-square min-h-[9.5rem] w-full min-w-0 flex-col justify-between overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-3.5",
         className,
       )}
       aria-hidden="true"
     >
-      <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="size-8 rounded-full" />
+      <div className="flex w-full items-center justify-between">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="size-3.5" />
       </div>
-      <div className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
-        <Skeleton className={cn("rounded-[1.15rem]", RISK_CARD_ROW_CLASS)} />
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 py-1">
+        <Skeleton className="h-12 w-20" />
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-3 w-12" />
       </div>
-    </section>
+    </div>
   );
 }

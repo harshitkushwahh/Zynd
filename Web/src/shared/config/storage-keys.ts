@@ -21,8 +21,13 @@ export const storageKeys = {
   referralCode: "zynd:referral-code",
   familyInviteToken: "zynd:family-invite-token",
   familyGroupPinnedPrefix: "zynd:family-group-pinned:",
+  kycVerifiedConfettiShownPrefix: "zynd:kyc-verified-confetti:",
 } as const;
 
 export function mfaBackupCodesKey(userId: string): string {
   return `${storageKeys.mfaBackupCodesPrefix}${userId}`;
+}
+
+export function kycVerifiedConfettiKey(userId: string): string {
+  return `${storageKeys.kycVerifiedConfettiShownPrefix}${userId}`;
 }

@@ -42,7 +42,7 @@ export function MfBankAccountPicker({
   error = "",
   disabled = false,
   className,
-  label = copy.mutualFunds.bankPickerLabel,
+  label = "",
   hint = "",
 }: MfBankAccountPickerProps) {
   if (loading) {

@@ -34,7 +34,7 @@ export function useProfileMenuActions() {
   }, [navigateToSettingsSection]);
 
   const openSettings = useCallback(() => {
-    navigateToSettingsSection("mfa");
+    navigateToSettingsSection("security");
   }, [navigateToSettingsSection]);
 
   const openNotifications = useCallback(() => {

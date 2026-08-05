@@ -2,21 +2,25 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { Repeat } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  OverviewLockedCardBackdrop,
+  OverviewLockedCardOverlay,
+} from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OVERVIEW_SIPS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import { type MfSipPlan } from "@/features/invest/api/invest-api";
 import { useMfSipPlansQuery } from "@/features/invest/hooks/use-mf-sip-plans-query";
 import { mfSipPlanStatusVariant } from "@/features/invest/components/mf-sip-plan-status-badge";
 import { formatInr, resolveInvestAssetUrl } from "@/features/invest/lib/mf-format";
-import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-const PREVIEW_LIMIT = 3;
+const PREVIEW_LIMIT = 4;
+const MY_SIPS_HREF = "/dashboard/my-sips";
 
 function isActiveSip(status: string) {
   const normalized = status.trim().toLowerCase();
@@ -83,6 +87,65 @@ function SipAmcCircle({ plan }: { plan: MfSipPlan }) {
   );
 }
 
+function LockedSipPreviewCircle({
+  amcName,
+  amountInr,
+}: {
+  amcName: string;
+  amountInr: number;
+}) {
+  return (
+    <div className="relative z-10 shrink-0">
+      <div className="flex h-11 w-11 items-center rounded-full border border-border/80 bg-card shadow-zynd-low">
+        <div className="flex size-11 shrink-0 items-center justify-center">
+          <div className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-muted/50 ring-1 ring-border">
+            <span className="text-[10px] font-semibold text-muted-foreground">
+              {amcInitials(amcName)}
+            </span>
+          </div>
+        </div>
+      </div>
+      <StatusBadge
+        variant="success"
+        className="pointer-events-none absolute -right-1 -bottom-1 z-20 size-5 justify-center rounded-full px-0 shadow-zynd-low ring-2 ring-card [&_svg]:size-2.5!"
+      >
+        <span className="sr-only">{formatInr(amountInr)}</span>
+      </StatusBadge>
+    </div>
+  );
+}
+
+function LockedSipsPreviewContent() {
+  const overview = copy.dashboard.overview;
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center pl-0.5">
+        <div className="flex items-center -space-x-2.5">
+          {OVERVIEW_SIPS_LOCKED_PREVIEW.map((plan) => (
+            <LockedSipPreviewCircle key={plan.id} amcName={plan.amcName} amountInr={plan.amountInr} />
+          ))}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <p className="text-h4 font-semibold tabular-nums tracking-tight text-foreground">
+          {formatInr(10_500)}
+          <span className="ml-1 text-caption font-medium text-muted-foreground">/mo</span>
+        </p>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <StatusBadge variant="success" showIcon={false} className="rounded-full text-[10px] tabular-nums">
+            {overview.sipsActiveCount.replace("{count}", "3")}
+          </StatusBadge>
+          <StatusBadge variant="info" showIcon={false} className="rounded-full text-[10px] tabular-nums">
+            {overview.sipsPlansCount.replace("{count}", "3")}
+          </StatusBadge>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type OverviewSipsCardProps = {
   className?: string;
 };
@@ -113,40 +176,23 @@ export function OverviewSipsCard({ className }: OverviewSipsCardProps) {
   );
 
   return (
-    <section
+    <Link
+      href={MY_SIPS_HREF}
       className={cn(
-        ZYND_CARD_RADIUS_CLASS,
-        "min-w-0 border border-border bg-card shadow-zynd-low",
+        "group flex min-h-[9.5rem] min-w-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-3.5 shadow-zynd-low",
+        "transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-zynd-mid",
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-3 px-4 pt-3.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-full bg-sky-500/12 text-sky-600 dark:text-sky-400">
-            <Repeat className="size-4" strokeWidth={2.25} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-compact font-semibold text-foreground">{overview.sipsTitle}</p>
-            <p className="text-[11px] text-muted-foreground">{overview.sipsDescription}</p>
-          </div>
-        </div>
-        {!loading && !error && plans.length > 0 ? (
-          <Button
-            variant="muted"
-            size="sm"
-            className="shrink-0"
-            nativeButton={false}
-            render={<Link href="/dashboard/my-sips" />}
-          >
-            {overview.sipsViewAll}
-          </Button>
-        ) : null}
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-caption font-semibold text-foreground">{overview.sipsTitle}</p>
+        <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
       </div>
 
-      <div className="px-4 py-3.5">
+      <div className="mt-3 flex flex-1 flex-col justify-center">
         {loading ? (
           <div className="flex items-center justify-between gap-3">
-            <div className="flex -space-x-2">
+            <div className="flex -space-x-2.5">
               {Array.from({ length: 3 }).map((_, index) => (
                 <Skeleton key={index} className="size-11 rounded-full ring-2 ring-card" />
               ))}
@@ -164,16 +210,21 @@ export function OverviewSipsCard({ className }: OverviewSipsCardProps) {
         {error ? <FieldMessage variant="error" message={error} /> : null}
 
         {!loading && !error && plans.length === 0 ? (
-          <div className="flex min-h-[4.5rem] items-center justify-center text-center">
-            <p className="text-caption text-muted-foreground">{overview.sipsEmpty}</p>
+          <div className="relative min-h-[5.5rem] flex-1">
+            <div className="blur-[5px]">
+              <LockedSipsPreviewContent />
+            </div>
+            <OverviewLockedCardBackdrop />
+            <OverviewLockedCardOverlay
+              compact
+              title={overview.sipsTitle}
+              subtitle={overview.sipsEmpty}
+            />
           </div>
         ) : null}
 
         {!loading && !error && plans.length > 0 ? (
-          <Link
-            href="/dashboard/my-sips"
-            className="flex items-center justify-between gap-4 rounded-[var(--radius-control)] outline-none transition-colors hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
+          <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center pl-0.5">
               <div className="flex items-center -space-x-2.5">
                 {previewPlans.map((plan) => (
@@ -204,9 +255,40 @@ export function OverviewSipsCard({ className }: OverviewSipsCardProps) {
                 </StatusBadge>
               </div>
             </div>
-          </Link>
+          </div>
         ) : null}
       </div>
-    </section>
+    </Link>
+  );
+}
+
+export function OverviewSipsCardSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-[9.5rem] min-w-0 flex-1 flex-col rounded-[1.75rem] border border-border/60 bg-card p-3.5 shadow-zynd-low",
+        className,
+      )}
+      aria-hidden="true"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <Skeleton className="h-4 w-10" />
+        <Skeleton className="size-3.5" />
+      </div>
+      <div className="mt-3 flex flex-1 items-center justify-between gap-3">
+        <div className="flex -space-x-2.5">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="size-11 rounded-full ring-2 ring-card" />
+          ))}
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <Skeleton className="h-5 w-20" />
+          <div className="flex gap-1.5">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

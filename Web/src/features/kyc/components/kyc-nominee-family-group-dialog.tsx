@@ -184,7 +184,9 @@ export function KycNomineeFamilyGroupDialog({
                 <Label>{copy.kyc.familyGroup.selectGroupLabel}</Label>
                 <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
                   <SelectTrigger>
-                    <SelectValue placeholder={copy.kyc.familyGroup.selectGroupPlaceholder} />
+                    <SelectValue placeholder={copy.kyc.familyGroup.selectGroupPlaceholder}>
+                      {preview.groups.find((group) => group.id === selectedGroupId)?.title}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {preview.groups.map((group) => (

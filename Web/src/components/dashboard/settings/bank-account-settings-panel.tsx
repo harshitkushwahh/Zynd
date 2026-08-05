@@ -29,6 +29,14 @@ export function BankAccountSettingsPanel() {
 
   const canAddMore = accounts.length < MAX_BANK_ACCOUNTS;
 
+  const headerActions =
+    !loading && !error && accounts.length > 0 && canAddMore && !showAddForm ? (
+      <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
+        <Plus className="mr-1.5 size-4" />
+        {copy.settings.bankAccounts.addBankAccount}
+      </Button>
+    ) : null;
+
   const handleSetPrimary = async (accountId: string) => {
     setSettingPrimaryId(accountId);
     setActionError("");
@@ -108,6 +116,8 @@ export function BankAccountSettingsPanel() {
           icon={sectionMeta.icon}
           title={sectionMeta.title}
           description={copy.settings.bankAccountDescription}
+          actions={headerActions}
+          descriptionSingleLine
         />
       }
     >
@@ -131,23 +141,6 @@ export function BankAccountSettingsPanel() {
         renderEmptyState()
       ) : (
         <div className="space-y-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-body font-semibold text-foreground">
-                {copy.settings.bankAccounts.sectionTitle}
-              </h3>
-              <p className="mt-1 text-caption text-muted-foreground">
-                {copy.settings.bankAccounts.sectionDescription}
-              </p>
-            </div>
-            {canAddMore && !showAddForm ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
-                <Plus className="mr-1.5 size-4" />
-                {copy.settings.bankAccounts.addBankAccount}
-              </Button>
-            ) : null}
-          </div>
-
           {actionMessage ? (
             <UiMessage variant="success" message={actionMessage} className="mt-0" />
           ) : null}

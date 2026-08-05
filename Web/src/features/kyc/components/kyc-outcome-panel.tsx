@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { KycJsonLottie } from "@/features/kyc/components/kyc-json-lottie";
 import { KycOutcomePanCard } from "@/features/kyc/components/kyc-outcome-pan-card";
 import {
-  KYC_SUCCESS_LOTTIE_SRC,
-  KYC_WAITING_LOTTIE_SRC,
+  KYC_SUCCESS_LOTTIE,
+  KYC_WAITING_LOTTIE,
   type KycOutcomeVariant,
 } from "@/features/kyc/lib/kyc-outcome-lottie";
 import { fireKycSuccessConfetti } from "@/features/kyc/lib/kyc-success-confetti";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
 export type { KycOutcomeVariant } from "@/features/kyc/lib/kyc-outcome-lottie";
 
@@ -52,31 +53,42 @@ export function KycOutcomePanel({
   actionLoading = false,
   className,
 }: KycOutcomePanelProps) {
+  const { user } = useAuth();
   const styles = variantStyles[variant];
-  const lottieSrc = variant === "success" ? KYC_SUCCESS_LOTTIE_SRC : KYC_WAITING_LOTTIE_SRC;
+  const lottieAnimation = variant === "success" ? KYC_SUCCESS_LOTTIE : KYC_WAITING_LOTTIE;
 
   useEffect(() => {
     if (variant !== "success") return;
-    fireKycSuccessConfetti();
-  }, [variant]);
+    fireKycSuccessConfetti({
+      userId: user?.id,
+      oncePerUser: true,
+    });
+  }, [variant, user?.id]);
 
   return (
-    <div className={cn("flex flex-col items-center gap-4 py-2 text-center", className)}>
+    <div
+      className={cn(
+        "kyc-outcome-panel mx-auto flex w-full flex-col items-center gap-4 py-2 text-center",
+        className,
+      )}
+    >
       <div
         className={cn(
-          "flex size-[6.75rem] items-center justify-center rounded-full bg-gradient-to-br p-2 ring-1 ring-inset",
+          "flex size-[7.25rem] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br p-1.5 ring-1 ring-inset",
           styles.ring,
           styles.surface,
         )}
       >
         <KycJsonLottie
-          src={lottieSrc}
+          key={variant}
+          animationData={lottieAnimation}
           loop={variant === "waiting"}
-          className="size-24 max-w-[6.5rem]"
+          holdOnComplete={variant === "success"}
+          className="size-[5.5rem] shrink-0"
         />
       </div>
 
-      <div className="flex w-full max-w-[16.5rem] flex-col items-center gap-2.5">
+      <div className="flex w-full flex-col items-center gap-2.5">
         <p className="text-compact leading-relaxed text-muted-foreground">{copy.description}</p>
 
         {copy.detailLabel && copy.detailValue ? (
@@ -84,6 +96,7 @@ export function KycOutcomePanel({
             label={copy.detailLabel}
             pan={copy.detailValue}
             variant={variant}
+            className="w-full"
           />
         ) : null}
       </div>

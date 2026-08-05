@@ -343,6 +343,7 @@ export type MfOrder = {
   amc_logo_url: string | null;
   order_type: string;
   amount_inr: number;
+  payment_method: MfPaymentMethod | null;
   status: string;
   fp_purchase_id: string | null;
   fp_purchase_old_id: number | null;
@@ -377,12 +378,16 @@ export type MfOrderJourneyResponse = {
   events: MfOrderEvent[];
 };
 
+export type MfPaymentMethod = "upi" | "netbanking";
+export type MfMandateType = "upi" | "nach";
+
 export function createMfOrder(body: {
   product_id: string;
   amount_inr: number;
   idempotency_key: string;
   bank_account_id?: string;
   family_goal_id?: string;
+  payment_method?: MfPaymentMethod;
 }) {
   return apiRequest<MfOrder>("/invest/orders", {
     method: "POST",
@@ -418,6 +423,7 @@ export type MfCartItem = {
   investment_type: "lumpsum" | "sip";
   installment_day: number | null;
   frequency: string | null;
+  number_of_installments: number | null;
   fp_scheme_id: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -451,6 +457,7 @@ export type MfCheckout = {
   checkout_type: string;
   status: string;
   total_amount_inr: number;
+  payment_method: MfPaymentMethod | null;
   payment_url: string | null;
   next_action: string | null;
   fp_payment_id: number | null;
@@ -474,6 +481,7 @@ export function upsertMfCartItem(body: {
   investment_type?: "lumpsum" | "sip";
   installment_day?: number;
   frequency?: "monthly" | "daily";
+  number_of_installments?: number;
 }) {
   return apiRequest<MfCart>("/invest/cart/items", {
     method: "POST",
@@ -506,6 +514,7 @@ export function checkoutMfCart(body: {
   idempotency_key: string;
   bank_account_id?: string;
   family_goal_id?: string;
+  payment_method?: MfPaymentMethod;
 }) {
   return apiRequest<MfCheckout>("/invest/cart/checkout", {
     method: "POST",
@@ -517,6 +526,7 @@ export function checkoutMfSipCart(body: {
   idempotency_key: string;
   bank_account_id?: string;
   family_goal_id?: string;
+  mandate_type?: MfMandateType;
 }) {
   return apiRequest<{ plans: MfSipPlan[] }>("/invest/cart/sip/checkout", {
     method: "POST",
@@ -590,6 +600,7 @@ export function createMfMandate(body: {
   idempotency_key: string;
   installment_amount_inr?: number;
   bank_account_id?: string;
+  mandate_type?: MfMandateType;
 }) {
   return apiRequest<MfMandate>("/invest/mandates", {
     method: "POST",
@@ -612,11 +623,12 @@ export function createMfSipPlan(body: {
   amount_inr: number;
   frequency: "monthly" | "daily";
   installment_day?: number;
-  number_of_installments?: number;
+  number_of_installments: number;
   mandate_id?: string;
   idempotency_key: string;
   bank_account_id?: string;
   family_goal_id?: string;
+  mandate_type?: MfMandateType;
 }) {
   return apiRequest<MfSipPlan>("/invest/sip/plans", {
     method: "POST",
@@ -648,6 +660,7 @@ export type MfExternalHolding = {
   market_value_inr: number | null;
   as_of_date: string | null;
   amc_name: string | null;
+  amc_logo_url: string | null;
   source: string;
 };
 

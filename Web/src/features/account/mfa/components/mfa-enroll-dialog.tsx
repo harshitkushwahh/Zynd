@@ -354,7 +354,7 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
                     {copy.mfa.enroll.nextPinDescription}
                   </p>
                   <Button asChild className="mt-3 w-full sm:w-auto">
-                    <Link href="/dashboard/settings?section=zynd-pin">
+                    <Link href="/dashboard/settings?section=security">
                       {copy.mfa.enroll.nextPinAction}
                     </Link>
                   </Button>

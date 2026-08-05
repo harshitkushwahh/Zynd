@@ -175,11 +175,27 @@ def _validate_installment_day(*, frequency: str, installment_day: int | None) ->
     return installment_day
 
 
-def _default_installments(frequency: str) -> int:
+def default_installments(frequency: str) -> int:
     settings = get_settings()
     if frequency == "daily":
         return settings.zynd_mf_sip_default_daily_installments
     return settings.zynd_mf_sip_default_monthly_installments
+
+
+def _validate_number_of_installments(number_of_installments: int | None) -> int:
+    settings = get_settings()
+    max_installments = settings.zynd_mf_sip_max_installments
+    if number_of_installments is None:
+        raise MfOrderError(
+            code="number_of_installments_required",
+            message="Number of installments is required for SIP",
+        )
+    if number_of_installments < 1 or number_of_installments > max_installments:
+        raise MfOrderError(
+            code="invalid_number_of_installments",
+            message=f"Number of installments must be between 1 and {max_installments}",
+        )
+    return number_of_installments
 
 
 def _normalize_mobile(phone: str | None) -> str | None:
@@ -243,6 +259,7 @@ async def create_sip_plan(
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
+    mandate_type: str = "upi",
 ) -> MfSipPlan:
     if amount_inr <= 0:
         raise MfOrderError(code="invalid_amount", message="Amount must be positive")
@@ -255,7 +272,7 @@ async def create_sip_plan(
 
     normalized_frequency = _validate_sip_frequency(frequency)
     resolved_day = _validate_installment_day(frequency=normalized_frequency, installment_day=installment_day)
-    installments = number_of_installments or _default_installments(normalized_frequency)
+    installments = _validate_number_of_installments(number_of_installments)
 
     product, fund, _amc = await _load_order_context(session, product_id=product_id)
     min_amount = fund.min_sip_amount
@@ -285,6 +302,7 @@ async def create_sip_plan(
             idempotency_key=f"{idempotency_key}:mandate",
             installment_amount_inr=amount_inr,
             bank_account_id=bank_account_id,
+            mandate_type=mandate_type,
         )
 
     try:

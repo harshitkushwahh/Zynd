@@ -26,9 +26,15 @@ import {
 import { clearSessionHint } from "@/features/auth/api/auth-response";
 import { revokeWebPushDevice } from "@/features/notifications/lib/push-device-registration";
 import { isAuthFailure, setAccessToken } from "@/lib/api-client";
+import {
+  clearAuthSessionSnapshot,
+  readAuthSessionSnapshot,
+  writeAuthSessionSnapshot,
+} from "@/lib/auth-session-cache";
 import { clearQueryCache, getQueryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { appConfig } from "@/shared/config/app-config";
+import { clearOverviewReadyLatch } from "@/features/dashboard/overview/lib/overview-ready-latch";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -48,9 +54,18 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sessionRetrying, setSessionRetrying] = useState(false);
+  const cached = readAuthSessionSnapshot();
+  const [user, setUser] = useState<AuthUser | null>(() => cached?.user ?? null);
+  const [loading, setLoading] = useState(() => !(cached?.bootstrapped ?? false));
+  const [sessionRetrying, setSessionRetrying] = useState(() => cached?.sessionRetrying ?? false);
+
+  useEffect(() => {
+    writeAuthSessionSnapshot({
+      user,
+      sessionRetrying,
+      bootstrapped: !loading,
+    });
+  }, [loading, sessionRetrying, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await revokeWebPushDevice();
       await logout();
     } finally {
+      clearAuthSessionSnapshot();
+      clearOverviewReadyLatch();
       setUser(null);
       setAccessToken(null);
       clearQueryCache();
@@ -160,6 +177,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (restored.reason === "expired") {
+        clearAuthSessionSnapshot();
+        clearOverviewReadyLatch();
         setUser(null);
         setAccessToken(null);
         clearSessionHint();

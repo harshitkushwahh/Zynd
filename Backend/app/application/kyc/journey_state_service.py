@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.kyc.journey_gate_service import requires_full_kyc_submission
+from app.application.kyc.journey_gate_service import is_rekyc_modification, requires_full_kyc_submission
 from app.application.kyc.kyc_notification_service import notify_kyc_initiated, notify_kyc_under_review
 from app.infrastructure.persistence.models import (
     KycJourneyState,
@@ -290,7 +290,10 @@ async def save_journey_state(
         elif last_step == "review":
             status.review_step_status = KycStepStatus.saved
 
-    if journey.kyc_already_registered and status.digilocker_step_status == KycStepStatus.pending:
+    if (
+        (journey.kyc_already_registered or is_rekyc_modification(journey))
+        and status.digilocker_step_status == KycStepStatus.pending
+    ):
         status.digilocker_step_status = KycStepStatus.skipped
 
     await db.flush()

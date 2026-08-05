@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Fingerprint, LockKeyhole } from "lucide-react";
+import { LockKeyhole } from "lucide-react";
 
 import {
   ZyndPinForgotDialog,
@@ -20,6 +20,7 @@ import {
   getLocalPinBiometricCredentialId,
   hasLocalPinBiometricCredential,
 } from "@/features/account/pin/storage/pin-biometric-storage";
+import { SecurityFeatureCard } from "@/components/dashboard/settings/security-feature-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -108,93 +109,85 @@ export function ZyndPinSettingsPanel({ mfaEnabled, pinEnrolled }: ZyndPinSetting
     }
   };
 
+  const pinDescription = !mfaEnabled
+    ? copy.pin.mfaRequiredHint
+    : pinEnrolled
+      ? copy.settings.zyndPinEnrolledHint
+      : copy.settings.zyndPinDescription;
+
   return (
     <>
-      <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
-            <LockKeyhole className="size-5" />
-          </div>
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-compact font-semibold text-foreground">{copy.settings.zyndPinTitle}</p>
-              <StatusBadge variant={pinEnrolled ? "success" : "neutral"}>
-                {pinEnrolled ? copy.pin.enrolledLabel : copy.pin.notEnrolledLabel}
-              </StatusBadge>
-            </div>
-            <p className="text-caption text-muted-foreground">
-              {!mfaEnabled
-                ? copy.pin.mfaRequiredHint
-                : pinEnrolled
-                  ? copy.settings.zyndPinEnrolledHint
-                  : copy.settings.zyndPinDescription}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {!pinEnrolled ? (
+      <SecurityFeatureCard
+        title={copy.settings.zyndPinTitle}
+        description={pinDescription}
+        icon={LockKeyhole}
+        tone={pinEnrolled ? "success" : "muted"}
+        badge={
+          <StatusBadge variant={pinEnrolled ? "success" : "neutral"} showIcon={false}>
+            {pinEnrolled ? copy.pin.enrolledLabel : copy.settings.mfaNotSetUpBadge}
+          </StatusBadge>
+        }
+        actions={
+          !pinEnrolled ? (
             <Button size="sm" disabled={!mfaEnabled} onClick={() => setSetupOpen(true)}>
+              <LockKeyhole className="size-3.5" />
               {copy.pin.setUpButton}
             </Button>
           ) : (
             <Button size="sm" variant="outline" onClick={() => setForgotOpen(true)}>
               {copy.pin.forgotLink}
             </Button>
-          )}
-        </div>
-      </div>
-
-      {pinEnrolled ? (
-        <div className="border-b border-border py-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
-                <Fingerprint className="size-5" />
-              </div>
-              <div className="space-y-2">
+          )
+        }
+      >
+        {pinEnrolled ? (
+          <div className="space-y-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-compact font-semibold text-foreground">
                     {copy.pin.biometricEnableTitle}
                   </p>
                   {deviceEnrolled ? (
-                    <StatusBadge variant="success">{copy.pin.biometricEnabledLabel}</StatusBadge>
+                    <StatusBadge variant="success" showIcon={false}>
+                      {copy.pin.biometricEnabledLabel}
+                    </StatusBadge>
                   ) : null}
                 </div>
-                <p className="max-w-xl text-caption text-muted-foreground">
+                <p className="text-caption leading-relaxed text-muted-foreground">
                   {biometricAvailable
                     ? copy.pin.biometricEnableDescription
                     : copy.pin.biometricNotAvailable}
                 </p>
               </div>
-            </div>
 
-            {biometricAvailable ? (
-              <div className="flex flex-wrap gap-2">
-                {deviceEnrolled ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={biometricLoading}
-                    onClick={() => void handleRemoveBiometric()}
-                  >
-                    {copy.pin.biometricRemoveButton}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    disabled={biometricLoading}
-                    onClick={() => void handleEnableBiometric()}
-                  >
-                    {biometricLoading ? copy.mfa.verifying : copy.pin.biometricEnableButton}
-                  </Button>
-                )}
-              </div>
-            ) : null}
+              {biometricAvailable ? (
+                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                  {deviceEnrolled ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={biometricLoading}
+                      onClick={() => void handleRemoveBiometric()}
+                    >
+                      {copy.pin.biometricRemoveButton}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={biometricLoading}
+                      onClick={() => void handleEnableBiometric()}
+                    >
+                      {biometricLoading ? copy.mfa.verifying : copy.pin.biometricEnableButton}
+                    </Button>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <FieldMessage message={biometricError} />
           </div>
-          <FieldMessage message={biometricError} className="mt-3" />
-        </div>
-      ) : null}
+        ) : null}
+      </SecurityFeatureCard>
 
       <ZyndPinSetupDialog
         open={setupOpen}

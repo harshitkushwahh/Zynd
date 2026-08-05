@@ -16,7 +16,9 @@ type KycPanNameCardProps = {
   isFetching: boolean;
   panName: PanName | null;
   middleName: string;
+  onFirstNameChange: (value: string) => void;
   onMiddleNameChange: (value: string) => void;
+  onLastNameChange: (value: string) => void;
   disabled?: boolean;
   dateOfBirth?: string;
   panCategory?: string;
@@ -93,7 +95,9 @@ export function KycPanNameCard({
   isFetching,
   panName,
   middleName,
+  onFirstNameChange,
   onMiddleNameChange,
+  onLastNameChange,
   disabled,
   dateOfBirth,
   panCategory,
@@ -161,7 +165,15 @@ export function KycPanNameCard({
       </div>
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-2">
-        <PanNameField label={copy.kyc.pan.firstNameLabel} value={panName.firstName} />
+        <PanNameField
+          label={copy.kyc.pan.firstNameLabel}
+          editable
+          inputId="kyc-pan-first-name"
+          inputValue={panName.firstName}
+          inputPlaceholder={copy.kyc.pan.firstNameLabel}
+          onInputChange={onFirstNameChange}
+          disabled={disabled || isFetching}
+        />
         <PanNameField
           label={copy.kyc.pan.middleNameLabel}
           editable
@@ -171,7 +183,15 @@ export function KycPanNameCard({
           onInputChange={onMiddleNameChange}
           disabled={disabled || isFetching}
         />
-        <PanNameField label={copy.kyc.pan.lastNameLabel} value={panName.lastName} />
+        <PanNameField
+          label={copy.kyc.pan.lastNameLabel}
+          editable
+          inputId="kyc-pan-last-name"
+          inputValue={panName.lastName}
+          inputPlaceholder={copy.kyc.pan.lastNameLabel}
+          onInputChange={onLastNameChange}
+          disabled={disabled || isFetching}
+        />
       </div>
 
       {dateOfBirth || panCategory ? (

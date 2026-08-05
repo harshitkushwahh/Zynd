@@ -192,9 +192,19 @@ def serialize_mandate(mandate: MfMandate) -> dict:
 
 
 def _compute_mandate_limit(amount_inr: Decimal) -> int:
+    """Size the mandate to roughly cover the SIP amount, not the NPCI UPI Autopay ceiling.
+
+    Showing a small SIP investor a ₹1,00,000 authorization is alarming and unnecessary —
+    the limit only needs enough headroom for the current installment plus modest top-ups.
+    """
     settings = get_settings()
-    base = max(int(amount_inr) * 2, settings.zynd_mf_sip_default_mandate_limit_inr)
+    base = max(int(amount_inr) * settings.zynd_mf_mandate_limit_multiplier, settings.zynd_mf_sip_min_mandate_limit_inr)
     return min(base, 100_000)
+
+
+def _normalize_mandate_type(mandate_type: str) -> str:
+    normalized = (mandate_type or "upi").strip().lower()
+    return "NACH" if normalized == "nach" else "UPI"
 
 
 async def find_approved_mandate(
@@ -219,6 +229,7 @@ async def create_mandate_for_user(
     idempotency_key: str,
     installment_amount_inr: Decimal | None = None,
     bank_account_id: uuid.UUID | None = None,
+    mandate_type: str = "upi",
 ) -> MfMandate:
     existing = await session.scalar(select(MfMandate).where(MfMandate.idempotency_key == idempotency_key))
     if existing:
@@ -231,22 +242,25 @@ async def create_mandate_for_user(
         user_id=user_id,
         bank_account_id=bank_account_id,
     )
+    amount = installment_amount_inr or Decimal("5000")
+    required_limit = _compute_mandate_limit(amount)
+    normalized_type = _normalize_mandate_type(mandate_type)
+
     approved = await find_approved_mandate(
         session,
         user_id=user_id,
         bank_account_old_id=int(bank.external_old_id),
     )
-    if approved:
+    if approved and approved.mandate_type == normalized_type and approved.mandate_limit >= required_limit:
         return approved
 
-    amount = installment_amount_inr or Decimal("5000")
     mandate = MfMandate(
         user_id=user_id,
         investor_bank_account_id=bank.id,
         bank_account_old_id=int(bank.external_old_id),
         status=MfMandateStatus.pending,
-        mandate_type="UPI",
-        mandate_limit=_compute_mandate_limit(amount),
+        mandate_type=normalized_type,
+        mandate_limit=required_limit,
         idempotency_key=idempotency_key,
     )
     session.add(mandate)

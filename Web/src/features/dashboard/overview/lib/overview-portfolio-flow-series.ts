@@ -1,5 +1,3 @@
-/** Preview-only portfolio flow series until live portfolio sync is available. */
-
 export type OverviewPortfolioFlowRange = "1m" | "3m" | "6m" | "1y" | "3y" | "5y" | "10y" | "all";
 
 export type OverviewPortfolioFlowPoint = {
@@ -24,47 +22,6 @@ export const OVERVIEW_PORTFOLIO_FLOW_RANGE_OPTIONS: Array<{
   { id: "all", label: "All", days: null },
 ];
 
-const END_VALUE = 4_28_650;
-const END_INVESTED = 3_81_400;
-
-function monthLabel(date: Date) {
-  return date.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
-}
-
-function buildPreviewPortfolioFlowSeries(): OverviewPortfolioFlowPoint[] {
-  const points: OverviewPortfolioFlowPoint[] = [];
-  const endDate = new Date();
-  endDate.setHours(12, 0, 0, 0);
-  const totalMonths = 120;
-
-  for (let index = 0; index <= totalMonths; index += 1) {
-    const date = new Date(endDate);
-    date.setMonth(date.getMonth() - (totalMonths - index));
-
-    const progress = index / totalMonths;
-    const invested = Math.round(END_INVESTED * (0.22 + 0.78 * progress ** 1.05));
-    const gainFactor = 1 + 0.124 * progress ** 1.15 + Math.sin(index / 4.5) * 0.012;
-    const value = Math.round(Math.max(invested, invested * gainFactor));
-
-    points.push({
-      date: date.toISOString().slice(0, 10),
-      label: monthLabel(date),
-      invested,
-      value: index === totalMonths ? END_VALUE : value,
-    });
-  }
-
-  points[points.length - 1] = {
-    ...points[points.length - 1],
-    invested: END_INVESTED,
-    value: END_VALUE,
-  };
-
-  return points;
-}
-
-export const OVERVIEW_PORTFOLIO_FLOW_SERIES = buildPreviewPortfolioFlowSeries();
-
 export function filterPortfolioFlowByRange(
   points: readonly OverviewPortfolioFlowPoint[],
   range: OverviewPortfolioFlowRange,
@@ -85,6 +42,8 @@ export function filterPortfolioFlowByRange(
 }
 
 export function portfolioFlowYDomain(points: OverviewPortfolioFlowPoint[]): [number, number] {
+  if (points.length === 0) return [0, 1];
+
   const values = points.flatMap((point) => [point.invested, point.value]);
   const min = Math.min(...values);
   const max = Math.max(...values);

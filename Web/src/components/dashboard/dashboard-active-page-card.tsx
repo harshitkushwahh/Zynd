@@ -76,22 +76,17 @@ export function DashboardActivePageCard() {
       ? copy.mutualFunds.cartItemCount.replace("{count}", String(cartCount))
       : pageMeta.description;
   const isLoading = (isFundPage && fundLoading) || (isCartPage && cartLoading);
-  const cartCardMode = cartLoading
-    ? "loading"
-    : showCartAmcs
-      ? "amcs"
-      : showCartEmptyLabel
-        ? "empty"
-        : "default";
   const { isRiskProfileSection } = useRiskProfileActiveCard(pathname);
 
   const measureKey = [
     pathname,
     isRiskProfileSection ? "risk" : "default",
-    cartCardMode,
-    activeCardLabel ?? "",
+    isCartPage
+      ? showCartAmcs
+        ? `amcs-${visibleItems.length}-${overflowCount}`
+        : "empty"
+      : activeCardLabel ?? "",
     showFundAmc ? fund!.amc_name : "",
-    isLoading ? "loading" : "ready",
   ].join("|");
 
   const triggerClassName = cn(
@@ -118,30 +113,30 @@ export function DashboardActivePageCard() {
             }
           >
             {isCartPage ? (
-              cartCardMode === "loading" ? (
-                <span className={cn(NAVBAR_CARD_CONTENT_CLASS, "min-w-[5.5rem] px-0")}>
-                  <NavbarIconSlot loading />
-                </span>
-              ) : (
-                <span
-                  className={cn(
-                    NAVBAR_CARD_CONTENT_CLASS,
-                    "min-w-[5.5rem] justify-center",
-                    cartCardMode === "empty" && "px-0",
-                  )}
-                >
-                  {cartCardMode === "amcs" ? (
-                    <MfCartAmcAvatarStack items={visibleItems} overflowCount={overflowCount} />
-                  ) : (
-                    <>
-                      <Plus className="size-4 shrink-0" strokeWidth={2.25} />
-                      <span className={DASHBOARD_ACTIVE_PAGE_LABEL_CLASS}>
-                        {copy.mutualFunds.cartNavbarEmptyLabel}
-                      </span>
-                    </>
-                  )}
-                </span>
-              )
+              <span
+                className={cn(
+                  NAVBAR_CARD_CONTENT_CLASS,
+                  "min-w-[5.5rem] justify-center",
+                  !showCartAmcs && "px-0",
+                )}
+              >
+                {showCartAmcs ? (
+                  <MfCartAmcAvatarStack items={visibleItems} overflowCount={overflowCount} />
+                ) : (
+                  <>
+                    <Plus className="size-4 shrink-0" strokeWidth={2.25} />
+                    <span
+                      className={cn(
+                        DASHBOARD_ACTIVE_PAGE_LABEL_CLASS,
+                        cartLoading && "text-transparent",
+                      )}
+                      aria-hidden={cartLoading}
+                    >
+                      {copy.mutualFunds.cartNavbarEmptyLabel}
+                    </span>
+                  </>
+                )}
+              </span>
             ) : (
               <span className={cn(NAVBAR_CARD_CONTENT_CLASS, "w-full justify-center")}>
                 <NavbarIconSlot loading={isLoading && !showFundAmc}>

@@ -75,6 +75,10 @@ export function KycBankStep({
     setProofUploaded(false);
   };
 
+  const handleEditBankDetails = () => {
+    resetVerificationState();
+  };
+
   const updateField = (field: keyof KycBankFormValue, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
     setFormErrors((current) => ({ ...current, [field]: undefined }));
@@ -236,6 +240,7 @@ export function KycBankStep({
           accountDetails={accountDetails}
           verification={verification}
           readiness={readiness}
+          onEdit={handleEditBankDetails}
         />
 
         <div className="space-y-2">

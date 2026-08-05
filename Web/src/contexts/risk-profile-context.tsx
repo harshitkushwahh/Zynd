@@ -129,10 +129,7 @@ export function RiskProfileProvider({ children }: { children: ReactNode }) {
   const serverDraft = sessionQuery.data?.draft ?? null;
   const attemptState = profile?.attempt_state ?? sessionAttemptState;
 
-  const loading =
-    enabled &&
-    resultQuery.isPending &&
-    !resultQuery.isFetched;
+  const loading = enabled && !resultQuery.isFetched;
 
   const error = resultQuery.isError
     ? getRiskProfileErrorMessage(resultQuery.error, copy.riskProfile.errors.loadFailed)

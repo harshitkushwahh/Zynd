@@ -5,7 +5,11 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.errors import KycError
-from app.application.kyc.journey_gate_service import require_phase2_complete, requires_full_kyc_submission
+from app.application.kyc.journey_gate_service import (
+    is_rekyc_modification,
+    require_phase2_complete,
+    requires_full_kyc_submission,
+)
 from app.application.kyc.journey_state_service import (
     get_or_create_journey,
     get_or_create_status,
@@ -118,7 +122,11 @@ async def ensure_kyc_form(db: AsyncSession, *, user: User, journey: Any) -> dict
     if not pan or not name or not dob:
         raise KycError("Complete PAN verification before submitting KYC.", "pan_not_verified", 403)
 
-    form_type = "modify" if journey.kyc_already_registered else "fresh"
+    form_type = (
+        "modify"
+        if journey.kyc_already_registered or is_rekyc_modification(journey)
+        else "fresh"
+    )
 
     if journey.external_kyc_form_id:
         form = await fetch_kyc_form(journey.external_kyc_form_id)

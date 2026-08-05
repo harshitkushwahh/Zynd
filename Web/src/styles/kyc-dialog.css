@@ -7,12 +7,7 @@
 }
 
 .kyc-dialog-surface {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--primary) 4%, var(--card)) 0%,
-    var(--card) 18%,
-    var(--card) 100%
-  );
+  background: var(--card);
   color: var(--card-foreground);
   border: 1px solid color-mix(in srgb, var(--border) 88%, var(--primary) 12%);
   box-shadow:
@@ -20,17 +15,72 @@
     0 0 0 1px color-mix(in srgb, var(--primary) 6%, transparent);
 }
 
+.kyc-dialog-surface--journey {
+  border: none;
+  border-radius: 2.5rem;
+  box-shadow: var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.18));
+  height: min(88vh, 720px);
+  max-height: min(88vh, 720px);
+  overflow: hidden;
+}
+
+.kyc-dialog-form-panel {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--card);
+}
+
+.kyc-dialog-visual-panel {
+  min-height: 100%;
+  border: none;
+  box-shadow: none;
+}
+
 .kyc-dialog-chrome {
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--muted) 22%, var(--card));
+  border-bottom: none;
+  background: transparent;
 }
 
 .kyc-dialog-chrome--flat {
   border-bottom: none;
 }
 
+/* KYC dialog — fade only; keep viewport-centered transform at all times. */
+
+.kyc-dialog-overlay[data-open],
+.kyc-dialog-overlay[data-closed] {
+  animation-duration: 200ms !important;
+}
+
+.kyc-dialog-root {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
 .kyc-dialog-root--outcome {
-  max-height: none;
+  max-height: min(calc(100vh - 2rem), 640px);
+  height: auto;
+  width: min(calc(100vw - 2rem), 24rem);
+}
+
+.kyc-dialog-root--outcome [data-slot="dialog-body"] {
+  width: 100%;
+}
+
+/* Outcome shell mounts at final width — fade only, no zoom/width easing. */
+.kyc-dialog-root--outcome[data-open],
+.kyc-dialog-root--outcome[data-closed] {
+  transform: none !important;
+}
+
+/* Journey → outcome resizes instantly; avoid width/height easing from the base dialog shell. */
+.kyc-dialog-root.kyc-dialog-surface {
+  transition: none !important;
 }
 
 .kyc-dialog-root [data-slot="dialog-close"] {

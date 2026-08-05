@@ -139,6 +139,25 @@ export async function verifyKycPan(panNumber: string) {
   });
 }
 
+export type KycPanConfirmNamesResponse = {
+  success: boolean;
+  blocked: boolean;
+  block_type?: string;
+  failure?: { field: string; code?: string; reason?: string };
+  pan_draft?: KycPanDraft;
+};
+
+export async function confirmKycPanNames(body: {
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+}) {
+  return apiRequest<KycPanConfirmNamesResponse>("/kyc/pan/confirm-names", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function startKycDigilocker() {
   return apiRequest<{ redirect_url: string }>("/kyc/kyc-request/start", {
     method: "POST",

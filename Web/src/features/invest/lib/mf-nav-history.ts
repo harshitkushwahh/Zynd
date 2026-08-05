@@ -50,6 +50,52 @@ export function hasSufficientNavHistoryForRange(
   return span != null && span >= days;
 }
 
+export function resolveNavRangeForHistory(
+  allPoints: MfNavChartPoint[],
+  preferred: MfNavRange,
+): MfNavRange {
+  if (hasSufficientNavHistoryForRange(allPoints, preferred)) {
+    return preferred;
+  }
+
+  for (let index = MF_NAV_RANGE_OPTIONS.length - 1; index >= 0; index -= 1) {
+    const option = MF_NAV_RANGE_OPTIONS[index]!;
+    if (hasSufficientNavHistoryForRange(allPoints, option.id)) {
+      return option.id;
+    }
+  }
+
+  return preferred;
+}
+
+export function hasSufficientNavHistoryForCompareRange(
+  series: Array<{ navPoints: InvestNavPoint[] }>,
+  range: MfNavRange,
+): boolean {
+  if (series.length === 0) return false;
+  return series.some(({ navPoints }) =>
+    hasSufficientNavHistoryForRange(normalizeNavPoints(navPoints), range),
+  );
+}
+
+export function resolveNavRangeForCompareHistory(
+  series: Array<{ navPoints: InvestNavPoint[] }>,
+  preferred: MfNavRange,
+): MfNavRange {
+  if (hasSufficientNavHistoryForCompareRange(series, preferred)) {
+    return preferred;
+  }
+
+  for (let index = MF_NAV_RANGE_OPTIONS.length - 1; index >= 0; index -= 1) {
+    const option = MF_NAV_RANGE_OPTIONS[index]!;
+    if (hasSufficientNavHistoryForCompareRange(series, option.id)) {
+      return option.id;
+    }
+  }
+
+  return preferred;
+}
+
 export function filterNavPointsByRange(points: MfNavChartPoint[], range: MfNavRange): MfNavChartPoint[] {
   if (points.length === 0) return [];
   if (range === "max") return points;

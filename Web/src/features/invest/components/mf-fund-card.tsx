@@ -12,13 +12,13 @@ import {
 } from "@/features/invest/components/mf-fund-category-badge";
 import {
   formatInr,
-  formatSignedReturn,
   healthBadgeLabel,
-  resolveInvestAssetUrl,
+  resolveAmcLogoUrl,
 } from "@/features/invest/lib/mf-format";
+import { resolveFundCardReturn } from "@/features/invest/lib/mf-fund-card-return";
 import {
-  MF_CARD_RADIUS_CLASS,
   MF_FUND_CARD_HOVER_CLASS,
+  MF_FUND_CARD_RADIUS_CLASS,
   MF_FUNDS_GRID_CLASS,
 } from "@/features/invest/lib/mf-ui";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,7 @@ type MfFundCardProps = {
 };
 
 function AmcLogo({ fund, className }: { fund: InvestFundSummary; className?: string }) {
-  const logoUrl = resolveInvestAssetUrl(fund.amc_logo_url);
+  const logoUrl = resolveAmcLogoUrl(fund.amc_logo_url, fund.amc_slug);
   if (logoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -38,7 +38,7 @@ function AmcLogo({ fund, className }: { fund: InvestFundSummary; className?: str
         src={logoUrl}
         alt=""
         className={cn(
-          "size-11 rounded-[var(--radius-control)] border border-border/60 bg-background object-contain p-1.5",
+          "size-11 rounded-[var(--radius-control)] bg-background object-contain p-1.5",
           className,
         )}
       />
@@ -48,7 +48,7 @@ function AmcLogo({ fund, className }: { fund: InvestFundSummary; className?: str
   return (
     <div
       className={cn(
-        "flex size-11 items-center justify-center rounded-[var(--radius-control)] border border-border/60 bg-muted/40 text-caption font-semibold text-muted-foreground",
+        "flex size-11 items-center justify-center rounded-[var(--radius-control)] bg-muted/40 text-caption font-semibold text-muted-foreground",
         className,
       )}
     >
@@ -91,7 +91,7 @@ function FundMetric({
 }
 
 export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
-  const return3y = formatSignedReturn(fund.returns.return_3y);
+  const cardReturn = resolveFundCardReturn(fund.returns);
   const categoryLabel = displayRiskLabel(fund);
   const categoryKind = resolveMfFundCategoryKind(categoryLabel);
 
@@ -115,7 +115,7 @@ export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
     >
       <Card
         className={cn(
-          MF_CARD_RADIUS_CLASS,
+          MF_FUND_CARD_RADIUS_CLASS,
           "h-full min-w-0 overflow-hidden border border-zinc-200 bg-card ring-0 shadow-none transition-colors duration-200 dark:border-zinc-600/80",
           MF_FUND_CARD_HOVER_CLASS,
           "hover:border-zinc-300 dark:hover:border-zinc-500",
@@ -176,7 +176,7 @@ export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
 
           <div className="mt-auto min-w-0">
             <div className="grid min-w-0 grid-cols-2 gap-3 rounded-[var(--radius-card)] border border-border/50 bg-muted/10 px-3 py-3">
-              <FundMetric label="3Y return" value={return3y.text} tone={return3y.tone} />
+              <FundMetric label={cardReturn.label} value={cardReturn.text} tone={cardReturn.tone} />
               <FundMetric
                 label="Min SIP"
                 value={formatInr(fund.min_sip_amount_inr)}
@@ -198,7 +198,7 @@ export function MfFundCardSkeleton({ className }: { className?: string }) {
     <div aria-hidden="true" className={cn("min-w-0 max-w-full", className)}>
       <Card
         className={cn(
-          MF_CARD_RADIUS_CLASS,
+          MF_FUND_CARD_RADIUS_CLASS,
           "h-full min-w-0 overflow-hidden bg-card ring-0 shadow-none",
           MF_FUND_CARD_BORDER_CLASS,
         )}

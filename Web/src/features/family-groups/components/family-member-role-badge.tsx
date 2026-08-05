@@ -29,7 +29,7 @@ function getRoleChipConfig(role: string): RoleChipConfig {
       className: {
         default: "border-amber-300 bg-amber-400 text-amber-950 hover:bg-amber-400",
         hero: "border-amber-300/60 bg-amber-400 text-amber-950 hover:bg-amber-400",
-        tooltip: "border-amber-300/35 bg-amber-400/25 text-amber-50",
+        tooltip: "border-amber-300/60 bg-amber-100 text-amber-950 dark:bg-amber-400/25 dark:text-amber-50",
       },
     };
   }
@@ -42,7 +42,8 @@ function getRoleChipConfig(role: string): RoleChipConfig {
         default:
           "border-emerald-300/60 bg-emerald-500/12 text-emerald-800 hover:bg-emerald-500/16 dark:text-emerald-100",
         hero: "border-emerald-300/40 bg-[color-mix(in_srgb,var(--zynd-emerald)_24%,transparent)] text-emerald-50 hover:bg-[color-mix(in_srgb,var(--zynd-emerald)_30%,transparent)]",
-        tooltip: "border-emerald-300/30 bg-emerald-400/20 text-emerald-50",
+        tooltip:
+          "border-emerald-300/60 bg-emerald-100 text-emerald-900 dark:border-emerald-300/30 dark:bg-emerald-400/20 dark:text-emerald-50",
       },
     };
   }
@@ -54,7 +55,8 @@ function getRoleChipConfig(role: string): RoleChipConfig {
       default:
         "border-sky-300/55 bg-sky-500/10 text-sky-900 hover:bg-sky-500/14 dark:text-sky-100",
       hero: "border-sky-300/35 bg-[color-mix(in_srgb,var(--zynd-blue)_20%,transparent)] text-sky-50 hover:bg-[color-mix(in_srgb,var(--zynd-blue)_26%,transparent)]",
-      tooltip: "border-sky-300/30 bg-sky-400/15 text-sky-50",
+      tooltip:
+        "border-sky-300/60 bg-sky-100 text-sky-900 dark:border-sky-300/30 dark:bg-sky-400/15 dark:text-sky-50",
     },
   };
 }
@@ -63,7 +65,8 @@ const RELATIONSHIP_BADGE_CLASS: Record<RoleBadgeSurface, string> = {
   default:
     "border-violet-300/50 bg-violet-500/10 text-violet-900 hover:bg-violet-500/14 dark:text-violet-100",
   hero: "border-violet-300/35 bg-[color-mix(in_srgb,var(--zynd-blue)_16%,transparent)] text-primary-foreground hover:bg-[color-mix(in_srgb,var(--zynd-blue)_22%,transparent)]",
-  tooltip: "border-violet-300/25 bg-violet-400/15 text-violet-50",
+  tooltip:
+    "border-violet-300/60 bg-violet-100 text-violet-900 dark:border-violet-300/25 dark:bg-violet-400/15 dark:text-violet-50",
 };
 
 function RoleChip({

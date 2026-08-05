@@ -1,3 +1,5 @@
+import type { SortDescriptor } from "react-aria-components";
+
 import { fetchInvestFunds, type InvestFundSummary } from "@/features/invest/api/invest-api";
 
 /** Number of funds surfaced per category on the browse home page. */
@@ -5,6 +7,58 @@ export const MF_TOP_FUNDS_PER_CATEGORY = 5;
 
 /** Page size for infinite scroll on the all-funds table. */
 export const MF_ALL_FUNDS_PAGE_SIZE = 40;
+
+/** Default all-funds table sort (matches server `return_3y` ordering). */
+export const MF_FUNDS_TABLE_DEFAULT_SORT: SortDescriptor = {
+  column: "return_3y",
+  direction: "descending",
+};
+
+export type InvestFundsApiSort = "rank" | "return_3y" | "name";
+
+export function resolveInvestFundsApiSort(sort: SortDescriptor): InvestFundsApiSort | null {
+  if (sort.column === "return_3y" && sort.direction === "descending") {
+    return "return_3y";
+  }
+  if (sort.column === "name" && sort.direction === "ascending") {
+    return "name";
+  }
+  return null;
+}
+
+export function usesServerFundTableSort(
+  sort: SortDescriptor,
+  options?: { categoryFiltered?: boolean },
+): boolean {
+  if (options?.categoryFiltered) return false;
+  return resolveInvestFundsApiSort(sort) != null;
+}
+
+export function sortFundTableRows<T extends InvestFundSummary>(
+  rows: T[],
+  sort: SortDescriptor,
+): T[] {
+  if (usesServerFundTableSort(sort)) return rows;
+
+  const column = sort.column;
+  const direction = sort.direction === "descending" ? -1 : 1;
+
+  return [...rows].sort((a, b) => {
+    if (column === "name") {
+      return a.name.localeCompare(b.name) * direction;
+    }
+    if (column === "category") {
+      return displayCategoryLabel(a).localeCompare(displayCategoryLabel(b)) * direction;
+    }
+    if (column === "return_1y" || column === "return_3y" || column === "return_5y") {
+      const key = column as "return_1y" | "return_3y" | "return_5y";
+      const first = a.returns[key] ?? Number.NEGATIVE_INFINITY;
+      const second = b.returns[key] ?? Number.NEGATIVE_INFINITY;
+      return (first - second) * direction;
+    }
+    return 0;
+  });
+}
 
 /** Keep the first occurrence when the API returns duplicate product rows. */
 export function dedupeInvestFunds(funds: InvestFundSummary[]): InvestFundSummary[] {

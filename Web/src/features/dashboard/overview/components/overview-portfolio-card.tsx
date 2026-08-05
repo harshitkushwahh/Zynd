@@ -4,17 +4,14 @@ import Link from "next/link";
 import { PieChart, TrendingUp, Wallet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  OVERVIEW_PORTFOLIO_PREVIEW,
-  type OverviewPortfolioPreview,
-} from "@/features/dashboard/overview/lib/overview-portfolio-preview";
+import type { OverviewPortfolioPreview } from "@/features/dashboard/overview/lib/overview-portfolio-preview";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
 import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type OverviewPortfolioCardProps = {
-  data?: OverviewPortfolioPreview;
+  data?: OverviewPortfolioPreview | null;
   className?: string;
 };
 
@@ -59,10 +56,25 @@ function DetailCard({
 }
 
 export function OverviewPortfolioCard({
-  data = OVERVIEW_PORTFOLIO_PREVIEW,
+  data = null,
   className,
 }: OverviewPortfolioCardProps) {
   const overview = copy.dashboard.overview;
+
+  if (!data) {
+    return (
+      <section
+        className={cn(
+          ZYND_CARD_RADIUS_CLASS,
+          "flex min-h-[12rem] items-center justify-center border border-border bg-card p-6 text-center shadow-zynd-low",
+          className,
+        )}
+      >
+        <p className="text-caption text-muted-foreground">{overview.portfolioFlowEmpty}</p>
+      </section>
+    );
+  }
+
   const totalReturn = formatSignedReturn(data.totalReturnPct);
   const dayChange = formatSignedReturn(data.dayChangePct);
 

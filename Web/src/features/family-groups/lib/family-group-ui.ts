@@ -1,4 +1,8 @@
-import type { FamilyGroupMemberPreview, FamilyGroupRole } from "@/features/family-groups/api/family-groups-api";
+import type {
+  FamilyGoal,
+  FamilyGroupMemberPreview,
+  FamilyGroupRole,
+} from "@/features/family-groups/api/family-groups-api";
 import { ZYND_CARD_RADIUS_CLASS, ZYND_CONTROL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 
@@ -251,4 +255,18 @@ export function pickOrbitMembers(
     .filter((member) => member.user_id !== center?.user_id)
     .slice(0, FAMILY_ORBIT_MAX_ORBITING);
   return { center, orbiting };
+}
+
+/** Highest-priority active family goal for dashboard hero (priority 1 = top / pinned). */
+export function pickPrimaryFamilyGoal(goals: FamilyGoal[]): FamilyGoal | null {
+  const active = goals.filter((goal) => goal.status !== "archived");
+  if (active.length === 0) return null;
+
+  return [...active].sort((left, right) => {
+    if (left.priority !== right.priority) return left.priority - right.priority;
+    const leftDate = new Date(left.target_date).getTime();
+    const rightDate = new Date(right.target_date).getTime();
+    if (leftDate !== rightDate) return leftDate - rightDate;
+    return right.id.localeCompare(left.id);
+  })[0]!;
 }

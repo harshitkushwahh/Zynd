@@ -1,14 +1,15 @@
 "use client";
 
-import type { ReactNode } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/auth-context";
 import { useKycOptional } from "@/contexts/kyc-context";
 import { useProfileImage } from "@/contexts/profile-image-context";
+import { fetchAuthSecurityPolicy } from "@/features/account/api/mfa-api";
+import { ProfileStatusBadge } from "@/features/dashboard/overview/components/overview-profile-status-badge";
+import { getKycStepFormMeta } from "@/features/kyc/lib/kyc-step-form-meta";
 import { initialsFromName } from "@/features/referral/lib/referral-initials";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -27,65 +28,96 @@ const PROFILE_INITIALS_BG_CLASS =
 const PROFILE_FOOTER_CLASS =
   "border border-white/45 bg-white/42 backdrop-blur-sm dark:border-white/20 dark:bg-white/14";
 
-function ProfileStatusCircle({
-  complete,
-  children,
-  tooltip,
-  href,
-  filled = false,
-}: {
-  complete: boolean;
-  children: ReactNode;
-  tooltip: string;
-  href?: string;
-  filled?: boolean;
-}) {
-  const circleClass = cn(
-    "flex size-9 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-    href
-      ? "cursor-pointer transition-transform hover:scale-105 active:scale-95"
-      : "cursor-default",
-    filled
-      ? complete
-        ? "bg-success text-white"
-        : "bg-warning text-white"
-      : complete
-        ? "bg-white text-success ring-2 ring-success/25"
-        : "bg-white text-warning ring-2 ring-warning/35",
-  );
+function useProfileMfaTooltip() {
+  const { user } = useAuth();
+  const overview = copy.dashboard.overview;
+  const mfaComplete = Boolean(user?.mfa_enrolled);
+  const phoneVerified = Boolean(user?.phone_verified_at);
+  const [smsFallbackEnabled, setSmsFallbackEnabled] = useState<boolean | null>(null);
 
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          href ? (
-            <Link href={href} aria-label={tooltip} className={circleClass}>
-              {children}
-            </Link>
-          ) : (
-            <button type="button" aria-label={tooltip} className={circleClass}>
-              {children}
-            </button>
-          )
+  useEffect(() => {
+    if (!mfaComplete) {
+      setSmsFallbackEnabled(null);
+      return;
+    }
+
+    let cancelled = false;
+    void fetchAuthSecurityPolicy()
+      .then((policy) => {
+        if (!cancelled) {
+          setSmsFallbackEnabled(Boolean(policy.step_up_sms_fallback_enabled));
         }
-      />
-      <TooltipContent side="top" className="max-w-[14rem] text-center">
-        {tooltip}
-      </TooltipContent>
-    </Tooltip>
-  );
+      })
+      .catch(() => {
+        if (!cancelled) setSmsFallbackEnabled(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mfaComplete]);
+
+  return useMemo(() => {
+    if (!mfaComplete) {
+      return {
+        complete: false,
+        title: overview.profileMfaTooltipPendingTitle,
+        detail: overview.profileMfaTooltipPending,
+        href: "/dashboard/settings?section=security" as const,
+      };
+    }
+
+    let detail = overview.profileMfaTooltipComplete;
+    if (smsFallbackEnabled && phoneVerified) {
+      detail = `${detail} ${overview.profileMfaTooltipCompleteSms}`;
+    }
+
+    return {
+      complete: true,
+      title: overview.profileMfaTooltipCompleteTitle,
+      detail,
+      href: "/dashboard/settings?section=security" as const,
+    };
+  }, [mfaComplete, overview, phoneVerified, smsFallbackEnabled]);
 }
 
 export function OverviewProfileCard({ className }: OverviewProfileCardProps) {
   const { displayName, user } = useAuth();
   const { profileUrl, loading } = useProfileImage();
   const kyc = useKycOptional();
+  const mfaTooltip = useProfileMfaTooltip();
   const name = displayName || user?.email || "User";
   const initials = initialsFromName(name);
   const overview = copy.dashboard.overview;
-  const kycComplete = kyc?.status === "complete";
-  const mfaComplete = Boolean(user?.mfa_enrolled);
   const hasPhoto = Boolean(profileUrl);
+
+  const kycComplete = kyc?.status === "complete";
+  const kycProgress = kyc?.profileProgress;
+  const kycAllowed = kyc?.kycAllowed ?? false;
+
+  const kycStepIcon = kycProgress
+    ? getKycStepFormMeta(kycProgress.activeStepId).icon
+    : getKycStepFormMeta("pan-card").icon;
+
+  const kycTooltip = kycComplete && kycProgress
+    ? {
+        title: kycProgress.tooltipTitle,
+        detail: kycProgress.tooltipDetail,
+      }
+    : !kycAllowed
+      ? {
+          title: overview.profileKycTooltipBlockedTitle,
+          detail: overview.profileKycTooltipBlocked,
+        }
+      : kycProgress
+        ? {
+            title: kycProgress.tooltipTitle,
+            detail: kycProgress.tooltipDetail,
+          }
+        : {
+            title: overview.profileKycTooltipPendingTitle,
+            detail: overview.profileKycTooltipPending,
+          };
 
   return (
     <div
@@ -135,31 +167,33 @@ export function OverviewProfileCard({ className }: OverviewProfileCardProps) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <ProfileStatusCircle
+          <ProfileStatusBadge
+            href={kycAllowed ? "/dashboard/kyc" : undefined}
+            ariaLabel={kycTooltip.title}
+            tooltipTitle={kycTooltip.title}
+            tooltipDetail={kycTooltip.detail}
             complete={kycComplete}
-            href="/dashboard/kyc"
-            tooltip={
-              kycComplete
-                ? overview.profileKycTooltipComplete
-                : overview.profileKycTooltipPending
-            }
-          >
-            <span className="text-[9px] font-bold uppercase tracking-wide">
-              {overview.profileKycLabel}
-            </span>
-          </ProfileStatusCircle>
-          <ProfileStatusCircle
-            complete={mfaComplete}
-            filled
-            href={mfaComplete ? "/dashboard/settings?section=mfa" : undefined}
-            tooltip={
-              mfaComplete
-                ? overview.profileMfaTooltipComplete
-                : overview.profileMfaTooltipPending
-            }
-          >
-            <ShieldCheck className="size-4" strokeWidth={2.25} aria-hidden="true" />
-          </ProfileStatusCircle>
+            ring={{
+              progressFraction: kycProgress?.progressFraction ?? 0,
+              tone: kycProgress?.tone ?? "muted",
+              icon: kycStepIcon,
+              complete: kycComplete,
+              submitted: kycProgress?.overallStatus === "submitted",
+            }}
+          />
+          <ProfileStatusBadge
+            href={mfaTooltip.href}
+            ariaLabel={mfaTooltip.title}
+            tooltipTitle={mfaTooltip.title}
+            tooltipDetail={mfaTooltip.detail}
+            complete={mfaTooltip.complete}
+            ring={{
+              progressFraction: mfaTooltip.complete ? 1 : 0,
+              tone: mfaTooltip.complete ? "success" : "warning",
+              icon: ShieldCheck,
+              complete: mfaTooltip.complete,
+            }}
+          />
         </div>
       </div>
     </div>

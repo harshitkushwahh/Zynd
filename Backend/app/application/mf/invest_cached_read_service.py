@@ -18,6 +18,11 @@ from app.application.mf.invest_home_service import (
     list_invest_funds,
 )
 from app.application.mf.invest_search_service import search_invest_funds
+from app.application.mf.public_asset_service import (
+    enrich_fund_list_payload,
+    enrich_fund_summary_logo,
+    enrich_invest_home_payload,
+)
 from app.core.config import get_settings
 
 
@@ -26,15 +31,16 @@ async def cached_get_invest_home(session: AsyncSession) -> dict:
     key = await build_invest_cache_key("home")
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
-        return cached
+        return enrich_invest_home_payload(cached, settings)
     payload = await get_invest_home(session)
+    enriched = enrich_invest_home_payload(payload, settings)
     await set_cached_json(
         key,
         payload,
         ttl_seconds=settings.zynd_mf_invest_cache_home_ttl_seconds,
         settings=settings,
     )
-    return payload
+    return enriched
 
 
 async def cached_list_invest_categories(session: AsyncSession) -> list[dict]:
@@ -87,7 +93,7 @@ async def cached_list_invest_funds(
     )
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
-        return cached
+        return enrich_fund_list_payload(cached, settings)
     payload = await list_invest_funds(
         session,
         category_slug=category_slug,
@@ -101,7 +107,7 @@ async def cached_list_invest_funds(
         ttl_seconds=settings.zynd_mf_invest_cache_category_ttl_seconds,
         settings=settings,
     )
-    return payload
+    return enrich_fund_list_payload(payload, settings)
 
 
 async def cached_get_invest_fund_detail(session: AsyncSession, product_id: uuid.UUID) -> dict | None:
@@ -109,7 +115,7 @@ async def cached_get_invest_fund_detail(session: AsyncSession, product_id: uuid.
     key = await build_invest_cache_key("fund", str(product_id))
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
-        return cached
+        return enrich_fund_summary_logo(cached, settings)
     payload = await get_invest_fund_detail(session, product_id)
     if payload is None:
         return None
@@ -119,7 +125,7 @@ async def cached_get_invest_fund_detail(session: AsyncSession, product_id: uuid.
         ttl_seconds=settings.zynd_mf_invest_cache_fund_ttl_seconds,
         settings=settings,
     )
-    return payload
+    return enrich_fund_summary_logo(payload, settings)
 
 
 async def cached_get_invest_config(session: AsyncSession) -> dict:
@@ -161,7 +167,7 @@ async def cached_search_invest_funds(
     key = await build_invest_cache_key("search", normalized, str(page), str(page_size))
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
-        return cached
+        return enrich_fund_list_payload(cached, settings)
     payload = await search_invest_funds(session, query=query, page=page, page_size=page_size)
     await set_cached_json(
         key,
@@ -169,4 +175,4 @@ async def cached_search_invest_funds(
         ttl_seconds=settings.zynd_mf_invest_cache_search_ttl_seconds,
         settings=settings,
     )
-    return payload
+    return enrich_fund_list_payload(payload, settings)

@@ -21,6 +21,7 @@ from app.application.investor.investor_provision_mapper import (
     build_email_payload,
     build_investor_profile_payload,
     build_phone_payload,
+    build_related_party_patch_payload,
     build_related_party_payload,
     validate_provision_drafts,
     validate_provision_inputs,
@@ -34,6 +35,7 @@ from app.infrastructure.mf.fp_investor_client import (
     create_investor_profile,
     create_phone_number,
     create_related_party,
+    patch_related_party,
 )
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
@@ -70,8 +72,10 @@ def _mark_child_active(row: Any, *, external_id: str | None, external_old_id: in
 
 def _mark_child_failed(row: Any, *, code: str, reason: str) -> None:
     row.sync_status = InvestorObjectSyncStatus.failed
-    row.failure_code = code
-    row.failure_reason = reason
+    if hasattr(row, "failure_code"):
+        row.failure_code = code
+    if hasattr(row, "failure_reason"):
+        row.failure_reason = reason
 
 
 async def _load_profile_bundle(session: AsyncSession, user_id) -> tuple[InvestorProfile, User, KycJourneyState | None] | None:
@@ -105,6 +109,30 @@ async def provision_investor_profile(session: AsyncSession, *, user_id) -> bool:
     if not bundle:
         return False
     profile, user, journey = bundle
+
+    if profile.external_profile_id and profile.status == InvestorProfileStatus.active:
+        try:
+            validate_provision_inputs(user=user, journey=journey)
+            validate_provision_drafts(
+                addresses=profile.addresses,
+                bank_accounts=profile.bank_accounts,
+                email_addresses=profile.email_addresses,
+                phone_numbers=profile.phone_numbers,
+            )
+        except InvestorProvisionValidationError:
+            return False
+        try:
+            await _provision_child_objects(
+                session,
+                profile=profile,
+                profile_id=profile.external_profile_id,
+                user=user,
+                journey=journey,
+            )
+        except FpClientError as exc:
+            logger.exception("Investor child sync failed user=%s code=%s", user_id, exc.code)
+            return True
+        return True
 
     if profile.status == InvestorProfileStatus.active and profile.external_profile_id:
         return False
@@ -241,11 +269,24 @@ async def _provision_child_objects(
 
     for party_row in profile.related_parties:
         if party_row.sync_status == InvestorObjectSyncStatus.active and party_row.external_related_party_id:
+            patch_payload = build_related_party_patch_payload(party_row=party_row)
+            if patch_payload:
+                party_row.sync_status = InvestorObjectSyncStatus.pending_create
+                try:
+                    result = await patch_related_party(patch_payload)
+                    _mark_child_active(party_row, external_id=party_row.external_related_party_id, raw=result.get("raw"))
+                except FpClientError as exc:
+                    _mark_child_failed(party_row, code="fp_related_party_patch_failed", reason=str(exc))
+                    raise
             continue
         party_row.sync_status = InvestorObjectSyncStatus.pending_create
         try:
             result = await create_related_party(build_related_party_payload(profile_id=profile_id, party_row=party_row))
             _mark_child_active(party_row, external_id=result.get("id"), raw=result.get("raw"))
+            patch_payload = build_related_party_patch_payload(party_row=party_row)
+            if patch_payload:
+                patch_result = await patch_related_party(patch_payload)
+                _mark_child_active(party_row, external_id=result.get("id"), raw=patch_result.get("raw"))
         except FpClientError as exc:
             _mark_child_failed(party_row, code="fp_related_party_failed", reason=str(exc))
             raise

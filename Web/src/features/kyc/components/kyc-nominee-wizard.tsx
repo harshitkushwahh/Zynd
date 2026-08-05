@@ -26,6 +26,7 @@ import {
   createEmptyNomineeIdentity,
   formatNomineeDobForDateInput,
   getNomineeTypeFromDob,
+  isNomineeWizardDirty,
   KYC_NOMINEE_WIZARD_STEPS,
   normalizeNomineeSharePercentInput,
   parseNomineeDob,
@@ -53,7 +54,7 @@ type KycNomineeWizardProps = {
   relationshipOptions?: KycMasterDataOption[];
   sourceOfWealthOptions?: KycMasterDataOption[];
   documentTypeOptions?: KycMasterDataOption[];
-  onCancel: () => void;
+  onCancel: (hasUnsavedContent: boolean) => void;
   onSave: (nominee: KycNomineeRecord) => void;
 };
 
@@ -362,6 +363,22 @@ export function KycNomineeWizard({
     setErrors({});
   };
 
+  const handleCancel = () => {
+    onCancel(
+      isNomineeWizardDirty(
+        {
+          type: nomineeType,
+          core,
+          identity: draft.identity,
+          contact: draft.contact,
+          address: draft.address,
+          guardian: draft.guardian,
+        },
+        editingNominee,
+      ),
+    );
+  };
+
   if (phase === "core") {
     return (
       <div className="space-y-6">
@@ -369,7 +386,7 @@ export function KycNomineeWizard({
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={handleCancel}
               className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label={copy.kyc.nominee.back}
             >
@@ -726,7 +743,7 @@ export function KycNomineeWizard({
       </div>
 
       <div className="flex gap-3">
-        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
+        <Button type="button" variant="outline" className="flex-1" onClick={handleCancel}>
           {copy.kyc.nominee.cancel}
         </Button>
         <Button type="button" className="flex-1" onClick={handleWizardNext}>

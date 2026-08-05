@@ -38,18 +38,20 @@ export function SettingsDetailSection({
   description,
   children,
 }: {
-  title: string;
+  title?: string;
   description?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-[var(--radius-card)] border border-border bg-muted/15 p-4 sm:p-5">
-      <div className="mb-3">
-        <h3 className="text-body font-semibold text-foreground">{title}</h3>
-        {description ? (
-          <p className="mt-1 text-caption text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
+      {title ? (
+        <div className="mb-3">
+          <h3 className="text-body font-semibold text-foreground">{title}</h3>
+          {description ? (
+            <p className="mt-1 text-caption text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+      ) : null}
       {children}
     </section>
   );

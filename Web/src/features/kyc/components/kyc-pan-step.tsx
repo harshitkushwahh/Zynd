@@ -6,8 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { KycPanNameCard } from "@/features/kyc/components/kyc-pan-name-card";
-import { verifyKycPan, type KycPanDraft, type KycPanVerifyResponse } from "@/features/kyc/lib/kyc-api";
-import { normalizePersonNameInput } from "@/features/kyc/lib/kyc-name-validation";
+import {
+  confirmKycPanNames,
+  verifyKycPan,
+  type KycPanDraft,
+  type KycPanVerifyResponse,
+} from "@/features/kyc/lib/kyc-api";
+import { normalizePersonNameInput, validateKycPersonName } from "@/features/kyc/lib/kyc-name-validation";
 import { ApiError } from "@/lib/api-client";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -39,8 +44,11 @@ export function KycPanStep({
   onSubmit,
 }: KycPanStepProps) {
   const [panNumber, setPanNumber] = useState(initialDraft?.panNumber ?? "");
+  const [firstName, setFirstName] = useState(initialDraft?.firstName ?? "");
   const [middleName, setMiddleName] = useState(initialDraft?.middleName ?? "");
+  const [lastName, setLastName] = useState(initialDraft?.lastName ?? "");
   const [panError, setPanError] = useState("");
+  const [nameError, setNameError] = useState("");
   const [fetchError, setFetchError] = useState("");
   const [isFetching, setIsFetching] = useState(false);
   const [isVerified, setIsVerified] = useState(initiallyVerified);
@@ -61,7 +69,9 @@ export function KycPanStep({
   useEffect(() => {
     if (!initialDraft) return;
     setPanNumber(initialDraft.panNumber);
+    setFirstName(initialDraft.firstName);
     setMiddleName(initialDraft.middleName ?? "");
+    setLastName(initialDraft.lastName);
     setVerifiedDraft(initialDraft);
     setIsVerified(initiallyVerified);
   }, [initialDraft, initiallyVerified]);
@@ -69,13 +79,53 @@ export function KycPanStep({
   const handlePanChange = (value: string) => {
     setPanNumber(value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10));
     setPanError("");
+    setNameError("");
     setFetchError("");
     setIsVerified(false);
     setVerifiedDraft(null);
+    setFirstName("");
     setMiddleName("");
+    setLastName("");
     setRequiresDigilocker(null);
     setKycAlreadyRegistered(null);
     onPanReset?.();
+  };
+
+  const validateNames = () => {
+    const firstError = validateKycPersonName(
+      firstName,
+      copy.kyc.pan.requiredField,
+      copy.kyc.pan.invalidName,
+    );
+    if (firstError) {
+      setNameError(firstError);
+      return false;
+    }
+
+    if (middleName.trim()) {
+      const middleError = validateKycPersonName(
+        middleName,
+        copy.kyc.pan.requiredField,
+        copy.kyc.pan.invalidName,
+      );
+      if (middleError) {
+        setNameError(middleError);
+        return false;
+      }
+    }
+
+    const lastError = validateKycPersonName(
+      lastName,
+      copy.kyc.pan.requiredField,
+      copy.kyc.pan.invalidName,
+    );
+    if (lastError) {
+      setNameError(lastError);
+      return false;
+    }
+
+    setNameError("");
+    return true;
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -100,6 +150,9 @@ export function KycPanStep({
           return;
         }
         setVerifiedDraft(result.pan_draft);
+        setFirstName(result.pan_draft.firstName);
+        setMiddleName(result.pan_draft.middleName ?? "");
+        setLastName(result.pan_draft.lastName);
         setRequiresDigilocker(Boolean(result.requires_digilocker));
         setKycAlreadyRegistered(Boolean(result.kyc_already_registered));
         onPanVerified?.({
@@ -119,17 +172,47 @@ export function KycPanStep({
       return;
     }
 
-    onSubmit({
-      ...verifiedDraft,
-      middleName: middleName.trim(),
-      requiresDigilocker: Boolean(requiresDigilocker),
-      kycAlreadyRegistered: Boolean(kycAlreadyRegistered),
-    });
-  };
+    if (!validateNames()) return;
 
-  const panName = verifiedDraft
-    ? { firstName: verifiedDraft.firstName, lastName: verifiedDraft.lastName }
-    : null;
+    setIsFetching(true);
+    setFetchError("");
+    try {
+      const confirmResult = await confirmKycPanNames({
+        first_name: firstName.trim(),
+        middle_name: middleName.trim(),
+        last_name: lastName.trim(),
+      });
+
+      if (confirmResult.blocked) {
+        onBlocked({
+          success: false,
+          blocked: true,
+          block_type: confirmResult.block_type,
+          failure: confirmResult.failure,
+        });
+        return;
+      }
+
+      if (!confirmResult.success || !confirmResult.pan_draft) {
+        setFetchError(copy.kyc.pan.fetchFailed);
+        return;
+      }
+
+      onSubmit({
+        ...confirmResult.pan_draft,
+        requiresDigilocker: Boolean(requiresDigilocker),
+        kycAlreadyRegistered: Boolean(kycAlreadyRegistered),
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.message !== "Request failed") {
+        setFetchError(error.message);
+      } else {
+        setFetchError(copy.kyc.pan.fetchFailed);
+      }
+    } finally {
+      setIsFetching(false);
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -137,9 +220,20 @@ export function KycPanStep({
         <KycPanNameCard
           isFetched={isVerified}
           isFetching={isFetching}
-          panName={panName}
+          panName={isVerified ? { firstName, lastName } : null}
           middleName={middleName}
-          onMiddleNameChange={(value) => setMiddleName(normalizePersonNameInput(value))}
+          onFirstNameChange={(value) => {
+            setFirstName(normalizePersonNameInput(value));
+            setNameError("");
+          }}
+          onMiddleNameChange={(value) => {
+            setMiddleName(normalizePersonNameInput(value));
+            setNameError("");
+          }}
+          onLastNameChange={(value) => {
+            setLastName(normalizePersonNameInput(value));
+            setNameError("");
+          }}
           disabled={disabled}
           dateOfBirth={verifiedDraft?.dateOfBirth}
           panCategory={verifiedDraft?.panCategory}
@@ -158,6 +252,7 @@ export function KycPanStep({
           className="h-14 text-center font-mono text-h4 uppercase tracking-[0.2em]"
         />
         {panError ? <FieldMessage message={panError} /> : null}
+        {nameError ? <FieldMessage message={nameError} /> : null}
         {fetchError ? <FieldMessage message={fetchError} /> : null}
       </div>
 

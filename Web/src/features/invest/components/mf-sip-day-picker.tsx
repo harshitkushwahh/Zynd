@@ -83,7 +83,7 @@ export function MfSipDayPicker({
             "flex w-full items-center text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
             compact
               ? "h-9 gap-2 rounded-[var(--radius-control)] border border-input bg-background px-3 text-compact hover:bg-muted/40"
-              : "gap-3 rounded-[var(--radius-medium)] border border-border bg-background px-4 py-3 hover:bg-muted/20 data-popup-open:bg-muted/20",
+              : "gap-2.5 rounded-[var(--radius-medium)] border border-border bg-background px-3 py-2 hover:bg-muted/20 data-popup-open:bg-muted/20",
           )}
         >
           {compact ? (
@@ -93,14 +93,11 @@ export function MfSipDayPicker({
             </>
           ) : (
             <>
-              <div className="sip-icon-badge flex size-9 shrink-0 items-center justify-center rounded-full">
-                <CalendarDays className="size-4" strokeWidth={2.25} />
+              <div className="sip-icon-badge flex size-8 shrink-0 items-center justify-center rounded-full">
+                <CalendarDays className="size-3.5" strokeWidth={2.25} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-foreground">{formatSipDay(value)}</p>
-                <p className="mt-0.5 truncate text-caption text-muted-foreground">
-                  {copy.mutualFunds.sipDayHint}
-                </p>
+                <p className="text-compact font-medium leading-none text-foreground">{formatSipDay(value)}</p>
               </div>
               <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
             </>
@@ -118,9 +115,6 @@ export function MfSipDayPicker({
           <div className="space-y-3 p-4">
             <div>
               <p className="text-compact font-medium text-foreground">{copy.mutualFunds.sipSelectDate}</p>
-              {!compact ? (
-                <p className="mt-0.5 text-caption text-muted-foreground">{copy.mutualFunds.sipDayHint}</p>
-              ) : null}
             </div>
 
             <SipDayGrid

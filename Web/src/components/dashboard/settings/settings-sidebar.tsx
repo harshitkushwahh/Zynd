@@ -6,7 +6,6 @@ import {
   Building2,
   KeyRound,
   Laptop,
-  LockKeyhole,
   Mail,
   Pencil,
   Shield,
@@ -25,13 +24,18 @@ import { cn } from "@/lib/utils";
 export type SettingsSection =
   | "personal-details"
   | "bank-account"
-  | "mfa"
-  | "zynd-pin"
+  | "security"
   | "change-password"
   | "change-email"
   | "your-devices"
   | "notifications"
   | "delete-account";
+
+/** Legacy ?section= values mapped to current nav ids. */
+export const SETTINGS_SECTION_ALIASES: Partial<Record<string, SettingsSection>> = {
+  mfa: "security",
+  "zynd-pin": "security",
+};
 
 export const PROFILE_SETTINGS_SECTIONS: SettingsSection[] = ["personal-details", "bank-account"];
 
@@ -57,18 +61,11 @@ export const SETTINGS_NAV: {
     icon: Building2,
   },
   {
-    id: "mfa",
-    label: "MFA",
-    title: copy.settings.mfaTitle,
-    description: copy.settings.mfaDescription,
+    id: "security",
+    label: copy.settings.securityTitle,
+    title: copy.settings.securityTitle,
+    description: copy.settings.securityDescription,
     icon: Shield,
-  },
-  {
-    id: "zynd-pin",
-    label: copy.settings.zyndPinTitle,
-    title: copy.settings.zyndPinTitle,
-    description: copy.settings.zyndPinDescription,
-    icon: LockKeyhole,
   },
   {
     id: "change-password",
@@ -127,7 +124,7 @@ export function SettingsSidebar({
   const initials = getUserInitials(user.first_name, user.email);
 
   return (
-    <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card md:h-full md:w-72">
+    <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card md:h-full md:max-h-full md:w-72">
       <div className="shrink-0 border-b border-border px-5 py-6 text-center">
         <div className="relative mx-auto size-[4.5rem]">
           <Avatar className="size-full">

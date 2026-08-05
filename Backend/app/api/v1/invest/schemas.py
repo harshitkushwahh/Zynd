@@ -248,6 +248,7 @@ class CreateMfOrderRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
     family_goal_id: Optional[UUID] = None
+    payment_method: Literal["upi", "netbanking"] = "upi"
 
 
 class MfOrderResponse(BaseModel):
@@ -259,6 +260,7 @@ class MfOrderResponse(BaseModel):
     amc_logo_url: Optional[str] = None
     order_type: str
     amount_inr: float
+    payment_method: Optional[str] = None
     status: str
     fp_purchase_id: Optional[str] = None
     fp_purchase_old_id: Optional[int] = None
@@ -303,6 +305,7 @@ class MfCartItemResponse(BaseModel):
     investment_type: Literal["lumpsum", "sip"] = "lumpsum"
     installment_day: Optional[int] = None
     frequency: Optional[str] = None
+    number_of_installments: Optional[int] = None
     fp_scheme_id: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -327,6 +330,7 @@ class UpsertMfCartItemRequest(BaseModel):
     investment_type: Literal["lumpsum", "sip"] = "lumpsum"
     installment_day: Optional[int] = Field(default=None, ge=1, le=28)
     frequency: Literal["monthly", "daily"] = "monthly"
+    number_of_installments: Optional[int] = Field(default=None, ge=1, le=60)
 
 
 class BulkUpsertMfCartItemLine(BaseModel):
@@ -342,6 +346,8 @@ class CheckoutMfCartRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
     family_goal_id: Optional[UUID] = None
+    payment_method: Literal["upi", "netbanking"] = "upi"
+    mandate_type: Literal["upi", "nach"] = "upi"
 
 
 class MfCheckoutOrderLineResponse(BaseModel):
@@ -359,6 +365,7 @@ class MfCheckoutResponse(BaseModel):
     checkout_type: str
     status: str
     total_amount_inr: float
+    payment_method: Optional[str] = None
     payment_url: Optional[str] = None
     next_action: Optional[str] = None
     fp_payment_id: Optional[int] = None
@@ -376,6 +383,7 @@ class CreateMfMandateRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     installment_amount_inr: Optional[float] = Field(default=None, gt=0)
     bank_account_id: Optional[UUID] = None
+    mandate_type: Literal["upi", "nach"] = "upi"
 
 
 class MfMandateResponse(BaseModel):
@@ -403,11 +411,12 @@ class CreateMfSipPlanRequest(BaseModel):
     amount_inr: float = Field(gt=0)
     frequency: Literal["monthly", "daily"] = "monthly"
     installment_day: Optional[int] = Field(default=None, ge=1, le=28)
-    number_of_installments: Optional[int] = Field(default=None, ge=1, le=9999)
+    number_of_installments: int = Field(ge=1, le=60)
     mandate_id: Optional[UUID] = None
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
     family_goal_id: Optional[UUID] = None
+    mandate_type: Literal["upi", "nach"] = "upi"
 
 
 class MfSipPlanResponse(BaseModel):
@@ -452,6 +461,7 @@ class MfExternalHoldingResponse(BaseModel):
     market_value_inr: Optional[float] = None
     as_of_date: Optional[str] = None
     amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
     source: str
 
 

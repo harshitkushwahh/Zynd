@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class KycEligibilityResponse(BaseModel):
@@ -18,6 +19,20 @@ class KycPanFailure(BaseModel):
     field: str
     code: Optional[str] = None
     reason: Optional[str] = None
+
+
+class KycPanConfirmNamesRequest(BaseModel):
+    first_name: str = Field(min_length=2, max_length=80)
+    middle_name: str = Field(default="", max_length=80)
+    last_name: str = Field(min_length=2, max_length=80)
+
+
+class KycPanConfirmNamesResponse(BaseModel):
+    success: bool
+    blocked: bool = False
+    block_type: Optional[str] = None
+    failure: Optional[KycPanFailure] = None
+    pan_draft: Optional[dict[str, Any]] = None
 
 
 class KycReadinessInfo(BaseModel):
@@ -157,6 +172,14 @@ class KycBankVerifyRequest(BaseModel):
     account_number: str = Field(min_length=9, max_length=18)
     account_type: str
     ifsc_code: str = Field(min_length=11, max_length=11)
+
+    @field_validator("ifsc_code")
+    @classmethod
+    def validate_ifsc_code(cls, value: str) -> str:
+        code = value.strip().upper()
+        if not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", code):
+            raise ValueError("Enter a valid 11-character IFSC code.")
+        return code
 
 
 class KycBankFailure(BaseModel):

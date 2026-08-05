@@ -529,6 +529,7 @@ async def create_mf_order(
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
             family_goal_id=body.family_goal_id,
+            payment_method=body.payment_method,
         )
         product = await db.get(Product, order.product_id)
         await db.commit()
@@ -569,6 +570,7 @@ async def upsert_mf_cart_item(
             investment_type=body.investment_type,
             installment_day=body.installment_day,
             frequency=body.frequency,
+            number_of_installments=body.number_of_installments,
         )
         payload = await get_cart_summary(db, user_id=current_user.id)
         await db.commit()
@@ -666,6 +668,7 @@ async def checkout_mf_cart(
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
             family_goal_id=body.family_goal_id,
+            payment_method=body.payment_method,
         )
         product_ids = {order.product_id for order in orders}
         products = {
@@ -701,6 +704,7 @@ async def checkout_mf_sip_cart(
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
             family_goal_id=body.family_goal_id,
+            mandate_type=body.mandate_type,
         )
         product_ids = {plan.product_id for plan in plans}
         products = {
@@ -838,6 +842,7 @@ async def create_mf_mandate(
             idempotency_key=body.idempotency_key,
             installment_amount_inr=amount,
             bank_account_id=body.bank_account_id,
+            mandate_type=body.mandate_type,
         )
         await db.commit()
     except MfOrderError as exc:
@@ -920,6 +925,7 @@ async def create_mf_sip_plan(
             user_ip=get_client_ip(request),
             bank_account_id=body.bank_account_id,
             family_goal_id=body.family_goal_id,
+            mandate_type=body.mandate_type,
         )
         product = await db.get(Product, plan.product_id)
         await db.commit()

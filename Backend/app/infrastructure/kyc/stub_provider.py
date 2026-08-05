@@ -208,10 +208,18 @@ def stub_ifsc_lookup(ifsc_code: str) -> dict[str, Any]:
         "HDFC0001234": {"bank_name": "HDFC Bank", "branch": "Connaught Place, New Delhi"},
         "SBIN0001234": {"bank_name": "State Bank of India", "branch": "Parliament Street, New Delhi"},
         "ICIC0001234": {"bank_name": "ICICI Bank", "branch": "Bandra Kurla Complex, Mumbai"},
+        "KKBK0005915": {"bank_name": "Kotak Mahindra Bank", "branch": "Connaught Place, New Delhi"},
     }
-    info = bank_by_ifsc.get(ifsc_code.upper(), {"bank_name": "Axis Bank", "branch": "Koramangala, Bengaluru"})
+    code = ifsc_code.upper().strip()
+    info = bank_by_ifsc.get(code)
+    if not info:
+        return {
+            "ifsc_code": code,
+            "bank_name": "",
+            "branch": "",
+        }
     return {
-        "ifsc_code": ifsc_code.upper(),
+        "ifsc_code": code,
         "bank_name": info["bank_name"],
         "branch": info["branch"],
     }

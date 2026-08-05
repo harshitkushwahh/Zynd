@@ -4,9 +4,11 @@ export const queryKeys = {
   },
   invest: {
     all: () => ["invest"] as const,
+    cart: () => ["invest", "cart"] as const,
     home: () => ["invest", "home"] as const,
     orders: (limit?: number) => ["invest", "orders", { limit: limit ?? 100 }] as const,
     sipPlans: () => ["invest", "sip-plans"] as const,
+    externalHoldings: () => ["invest", "external-holdings"] as const,
     fundNavs: (productId: string, limit: number) =>
       ["invest", "fund-navs", productId, { limit }] as const,
   },

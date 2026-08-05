@@ -9,12 +9,12 @@ import { useSettingsKycProfile } from "@/components/dashboard/settings/use-setti
 import { ChangeEmailSettingsPanel } from "@/components/dashboard/settings/change-email-settings-panel";
 import { ChangePasswordSettingsPanel } from "@/components/dashboard/settings/change-password-settings-panel";
 import { DeleteAccountSettingsPanel } from "@/components/dashboard/settings/delete-account-settings-panel";
-import { MfaSettingsPanel } from "@/components/dashboard/settings/mfa-settings-panel";
+import { SecuritySettingsPanel } from "@/components/dashboard/settings/security-settings-panel";
 import { NotificationsSettingsPanel } from "@/components/dashboard/settings/notifications-settings-panel";
-import { ZyndPinSettingsPanel } from "@/components/dashboard/settings/zynd-pin-settings-panel";
 import {
   SettingsSidebar,
   SETTINGS_NAV,
+  SETTINGS_SECTION_ALIASES,
   type SettingsSection,
 } from "@/components/dashboard/settings/settings-sidebar";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
@@ -83,11 +83,14 @@ export function SettingsPage() {
       router.replace("/dashboard/risk-profile");
       return;
     }
-    if (section && SETTINGS_NAV.some((item) => item.id === section)) {
-      setActiveSection(section as SettingsSection);
+    if (section) {
+      const resolved = SETTINGS_SECTION_ALIASES[section] ?? section;
+      if (SETTINGS_NAV.some((item) => item.id === resolved)) {
+        setActiveSection(resolved as SettingsSection);
+      }
     }
     if (action === "enroll-mfa") {
-      setActiveSection("mfa");
+      setActiveSection("security");
       setAutoOpenMfaEnroll(true);
     }
     if (searchParams.has("section") || searchParams.has("action")) {
@@ -103,7 +106,7 @@ export function SettingsPage() {
   );
 
   useEffect(() => {
-    if (activeSection === "mfa") {
+    if (activeSection === "security") {
       void loadBackupCodes();
     } else {
       setBackupCodesLoading(false);
@@ -138,21 +141,15 @@ export function SettingsPage() {
       case "bank-account":
         return <BankAccountSettingsPanel />;
 
-      case "mfa":
+      case "security":
         return (
-          <MfaSettingsPanel
+          <SecuritySettingsPanel
             backupStatus={backupStatus}
             backupCodesLoading={backupCodesLoading}
             storedBackupCodes={storedBackupCodes}
             onRefreshBackupCodes={refreshBackupCodesQuietly}
             autoOpenEnroll={autoOpenMfaEnroll}
             onAutoOpenEnrollHandled={() => setAutoOpenMfaEnroll(false)}
-          />
-        );
-
-      case "zynd-pin":
-        return (
-          <ZyndPinSettingsPanel
             mfaEnabled={mfaEnabled}
             pinEnrolled={user.pin_enrolled}
           />
@@ -202,35 +199,39 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
-      <DashboardBreadcrumb
-        items={[
-          { label: "Settings", href: "/dashboard/settings" },
-          { label: activeLabel },
-        ]}
-      />
+      <div className="shrink-0">
+        <DashboardBreadcrumb
+          items={[
+            { label: "Settings", href: "/dashboard/settings" },
+            { label: activeLabel },
+          ]}
+        />
+      </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row">
+      <div className="mt-6 flex min-h-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row md:items-stretch">
         <SettingsSidebar
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
         />
 
-        {activeSection === "personal-details" || activeSection === "bank-account" ? (
-          panelContent
-        ) : (
-          <SettingsContentCard
-            header={
-              <SettingsPanelHeader
-                icon={activeSectionMeta.icon}
-                title={activeSectionMeta.title}
-                description={activeSectionMeta.description}
-                tone={activeSection === "delete-account" ? "destructive" : "default"}
-              />
-            }
-          >
-            {panelContent}
-          </SettingsContentCard>
-        )}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {activeSection === "personal-details" || activeSection === "bank-account" ? (
+            panelContent
+          ) : (
+            <SettingsContentCard
+              header={
+                <SettingsPanelHeader
+                  icon={activeSectionMeta.icon}
+                  title={activeSectionMeta.title}
+                  description={activeSectionMeta.description}
+                  tone={activeSection === "delete-account" ? "destructive" : "default"}
+                />
+              }
+            >
+              {panelContent}
+            </SettingsContentCard>
+          )}
+        </div>
       </div>
     </div>
   );

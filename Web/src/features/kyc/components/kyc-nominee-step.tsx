@@ -166,18 +166,17 @@ export function KycNomineeStep({
   const handleAddClick = () => {
     setEditingNominee(undefined);
     setView("add");
-    setHasUnsavedDraft(true);
   };
 
   const handleEditClick = (nominee: KycNomineeRecord) => {
     setEditingNominee(nominee);
     setView("edit");
-    setHasUnsavedDraft(true);
   };
 
-  const handleCancelWizard = () => {
+  const handleCancelWizard = (hasUnsavedContent: boolean) => {
     setView("list");
     setEditingNominee(undefined);
+    setHasUnsavedDraft(hasUnsavedContent);
   };
 
   const handleSaveNominee = (nominee: KycNomineeRecord) => {

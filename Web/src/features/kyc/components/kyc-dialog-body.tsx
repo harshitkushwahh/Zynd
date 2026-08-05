@@ -16,10 +16,10 @@ export function KycDialogBody({
   return (
     <div
       className={cn(
-        "min-h-0 flex-1",
+        "flex min-h-0 flex-1 flex-col",
         variant === "review"
-          ? "flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-3 sm:px-7 sm:pb-7"
-          : "min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-7 sm:py-7",
+          ? "overflow-hidden px-8 pb-3 pt-3 sm:px-10"
+          : "overflow-y-auto px-8 py-8 pb-3 sm:px-10 sm:py-9",
         className,
       )}
     >

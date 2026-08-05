@@ -96,6 +96,7 @@ async def create_lumpsum_order(
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
+    payment_method: str = "upi",
 ) -> MfOrder:
     if amount_inr <= 0:
         raise MfOrderError(code="invalid_amount", message="Amount must be positive")
@@ -136,7 +137,10 @@ async def create_lumpsum_order(
         status=MfCheckoutStatus.pending,
         total_amount_inr=amount_inr,
         idempotency_key=idempotency_key,
-        metadata_=bank_account_metadata_snapshot(payout_bank),
+        metadata_={
+            "payment_method": payment_method,
+            **bank_account_metadata_snapshot(payout_bank),
+        },
     )
     session.add(checkout)
     await session.flush()
@@ -313,6 +317,7 @@ def serialize_order(
         "amc_logo_url": amc_logo_url,
         "order_type": order.order_type.value,
         "amount_inr": float(order.amount_inr),
+        "payment_method": metadata.get("payment_method", "upi"),
         "status": order.status.value,
         "fp_purchase_id": order.fp_purchase_id,
         "fp_purchase_old_id": order.fp_purchase_old_id,

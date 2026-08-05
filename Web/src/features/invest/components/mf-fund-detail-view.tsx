@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   fetchInvestConfig,
@@ -22,10 +22,11 @@ import { MfFundDetailSkeleton } from "@/features/invest/components/mf-fund-detai
 import { MfFundPerformanceSection } from "@/features/invest/components/mf-fund-performance-section";
 import { MfFundReturnsCard } from "@/features/invest/components/mf-fund-returns-card";
 import { MfComplianceDetailsCard } from "@/features/invest/components/mf-compliance-details-card";
+import { MfFundDisclaimerNotice } from "@/features/invest/components/mf-fund-disclaimer-notice";
 import { MfFundFactsCard, shouldShowFundFacts } from "@/features/invest/components/mf-fund-facts-card";
 import { MfInvestmentDetailsCard } from "@/features/invest/components/mf-investment-details-card";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
-import { MF_PAGE_SECTION_CLASS, MF_INVEST_SIDEBAR_STICKY_CLASS, MF_INVEST_SIDEBAR_WIDTH_CLASS } from "@/features/invest/lib/mf-ui";
+import { MF_PAGE_SECTION_CLASS, MF_FUND_DETAIL_RADIUS_CLASS, MF_INVEST_SIDEBAR_STICKY_CLASS, MF_INVEST_SIDEBAR_WIDTH_CLASS } from "@/features/invest/lib/mf-ui";
 import { mfFundHref, isFundUuid } from "@/features/invest/lib/mf-fund-url";
 import type { MfNavRange } from "@/features/invest/lib/mf-nav-history";
 import { useAuth } from "@/contexts/auth-context";
@@ -108,7 +109,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     return (
       <div className={MF_PAGE_SECTION_CLASS}>
         {renderBreadcrumb?.(null)}
-        <Card className="rounded-[var(--radius-medium)]">
+        <Card className={cn("border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
           <CardContent className="space-y-4 p-6">
             <FieldMessage variant="error" message={error ?? copy.mutualFunds.fundUnavailable} />
           </CardContent>
@@ -128,7 +129,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
       preview={false}
       canInvest={canInvest}
       sipEnabled={config?.sip_enabled ?? false}
-      className="w-full"
+      className={cn(MF_FUND_DETAIL_RADIUS_CLASS, "w-full")}
     />
   );
 
@@ -167,24 +168,11 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
 
           {shouldShowFundFacts(fund) ? <MfFundFactsCard fund={fund} /> : null}
 
-          <Card className="rounded-[var(--radius-medium)]">
-            <CardHeader>
-              <CardTitle>{copy.mutualFunds.disclaimerTitle}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-caption text-muted-foreground">
-              <p>{fund.disclaimer ?? config?.disclaimer}</p>
-              {fund.distributor_arn ? (
-                <p>
-                  {copy.mutualFunds.distributorArn}: {fund.distributor_arn}
-                </p>
-              ) : null}
-              {fund.distributor_euin ? (
-                <p>
-                  {copy.mutualFunds.distributorEuin}: {fund.distributor_euin}
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
+          <MfFundDisclaimerNotice
+            disclaimer={fund.disclaimer ?? config?.disclaimer}
+            distributorArn={fund.distributor_arn}
+            distributorEuin={fund.distributor_euin}
+          />
         </div>
 
         <aside

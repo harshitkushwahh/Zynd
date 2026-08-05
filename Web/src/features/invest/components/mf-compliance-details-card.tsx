@@ -12,6 +12,8 @@ import {
 import { Card } from "@/components/ui/card";
 import { copy } from "@/shared/config/copy";
 import type { InvestFundDetail } from "@/features/invest/api/invest-api";
+import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
+import { cn } from "@/lib/utils";
 
 type ComplianceData = NonNullable<InvestFundDetail["compliance"]>;
 
@@ -72,7 +74,7 @@ export function MfComplianceDetailsCard({ compliance }: MfComplianceDetailsCardP
   if (bullets.length === 0) return null;
 
   return (
-    <Card className="overflow-hidden rounded-[var(--radius-medium)] border border-border">
+    <Card className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
       <Accordion className="w-full">
         <AccordionItem value="compliance" className="border-b-0">
           <AccordionTrigger className="rounded-none px-4 py-4 hover:bg-muted/20">

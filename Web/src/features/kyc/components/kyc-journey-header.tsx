@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -13,8 +13,9 @@ type KycJourneyHeaderProps = {
   steps?: KycJourneyStep[];
   title: string;
   onClose: () => void;
-  onBack?: () => void;
   showStepBadge?: boolean;
+  showClose?: boolean;
+  hideTitle?: boolean;
   className?: string;
 };
 
@@ -23,44 +24,47 @@ export function KycJourneyHeader({
   steps = KYC_JOURNEY_STEPS,
   title,
   onClose,
-  onBack,
   showStepBadge = true,
+  showClose = true,
+  hideTitle = false,
   className,
 }: KycJourneyHeaderProps) {
   const totalSteps = steps.length;
-  const canGoBack = activeStepIndex > 0 && Boolean(onBack);
+
+  const stepBadge = showStepBadge ? (
+    <StatusBadge variant="neutral" showIcon={false} className="h-6 px-2.5 text-[11px]">
+      {copy.kyc.stepOf(activeStepIndex + 1, totalSteps)}
+    </StatusBadge>
+  ) : null;
+
+  if (!showClose && !showStepBadge) {
+    return hideTitle ? null : <p className="sr-only">{title}</p>;
+  }
+
+  if (!showClose) {
+    return (
+      <header className={cn("flex items-center gap-3 px-6 py-3.5 pr-14 sm:px-8 sm:pr-16", className)}>
+        {stepBadge}
+        <p className="sr-only">{title}</p>
+      </header>
+    );
+  }
 
   return (
     <header
       className={cn(
-        "grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-6 py-3.5 sm:px-7",
-        className
+        "grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-6 py-3.5 sm:px-8",
+        className,
       )}
     >
-      <div className="justify-self-start">
-        {showStepBadge ? (
-          canGoBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label={copy.kyc.back}
-              className={cn(
-                "inline-flex h-6 items-center gap-1 rounded-[var(--radius-control)] border border-border bg-muted/40 px-2.5 text-[11px] font-medium leading-none text-muted-foreground transition-colors",
-                "hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-              )}
-            >
-              <ArrowLeft className="size-3 shrink-0" strokeWidth={2.25} />
-              <span>{copy.kyc.stepOf(activeStepIndex + 1, totalSteps)}</span>
-            </button>
-          ) : (
-            <StatusBadge variant="neutral" showIcon={false} className="h-6 px-2.5 text-[11px]">
-              {copy.kyc.stepOf(activeStepIndex + 1, totalSteps)}
-            </StatusBadge>
-          )
-        ) : null}
-      </div>
+      <div className="justify-self-start">{stepBadge}</div>
 
-      <p className="text-center text-compact font-semibold uppercase tracking-wide text-foreground">
+      <p
+        className={cn(
+          "text-center text-compact font-semibold uppercase tracking-wide text-foreground",
+          hideTitle && "sr-only",
+        )}
+      >
         {title}
       </p>
 
