@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   ArrowRight,
-  Building2,
   CalendarDays,
   IndianRupee,
   Info,
@@ -17,23 +17,32 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { PageTitle } from "@/components/ui/page-title";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   checkoutMfCart,
   checkoutMfSipCart,
+  clearMfCartTab,
   fetchMfCart,
   removeMfCartItem,
   type MfCart,
   type MfCartItem,
+  type MfMandateType,
+  type MfPaymentMethod,
 } from "@/features/invest/api/invest-api";
 import { MfBankAccountPicker } from "@/features/invest/components/mf-bank-account-picker";
 import { MfBreadcrumb } from "@/features/invest/components/mf-breadcrumb";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
+import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
+import { formatInstallmentDuration } from "@/features/invest/lib/mf-sip-calculator";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
 import { markMfSipCartCheckoutPlans } from "@/features/invest/lib/mf-payment-session";
+import { setMfCartQueryData } from "@/features/invest/hooks/use-mf-cart-query";
+import { invalidateInvestQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import {
   MF_CARD_RADIUS_CLASS,
@@ -138,6 +147,11 @@ function CartItemRow({
               {copy.mutualFunds.sipInstallmentDay.replace("{day}", String(item.installment_day))}
             </Badge>
           ) : null}
+          {tab === "sip" && item.number_of_installments ? (
+            <Badge variant="secondary" className="gap-1 font-normal">
+              {formatInstallmentDuration(item.number_of_installments)}
+            </Badge>
+          ) : null}
         </div>
       </div>
 
@@ -207,7 +221,6 @@ function CartEmptyState({ tab }: { tab: CartTab }) {
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
         <Button nativeButton={false} render={<Link href="/dashboard/mutual-funds/all" />}>
           {copy.mutualFunds.cartBrowseFunds}
-          <ArrowRight className="size-4" />
         </Button>
         <Button
           variant="outline"
@@ -237,11 +250,15 @@ function CartCheckoutPanel({
   checkingOut,
   banksLoading,
   hasPaymentReadyAccount,
-  paymentReadyAccounts,
+  accounts,
   selectedBankAccountId,
   onSelectBankAccount,
   banksError,
   onCheckout,
+  paymentMethod,
+  onPaymentMethodChange,
+  mandateType,
+  onMandateTypeChange,
   isEmpty = false,
   className,
 }: {
@@ -251,11 +268,15 @@ function CartCheckoutPanel({
   checkingOut: boolean;
   banksLoading: boolean;
   hasPaymentReadyAccount: boolean;
-  paymentReadyAccounts: ReturnType<typeof usePaymentReadyBankAccounts>["accounts"];
+  accounts: ReturnType<typeof usePaymentReadyBankAccounts>["accounts"];
   selectedBankAccountId: string | null;
   onSelectBankAccount: (id: string) => void;
   banksError: string | null;
   onCheckout: () => void;
+  paymentMethod: MfPaymentMethod;
+  onPaymentMethodChange: (value: MfPaymentMethod) => void;
+  mandateType: MfMandateType;
+  onMandateTypeChange: (value: MfMandateType) => void;
   isEmpty?: boolean;
   className?: string;
 }) {
@@ -312,13 +333,23 @@ function CartCheckoutPanel({
           <p className="text-caption leading-relaxed text-muted-foreground">{checkoutHint}</p>
         </div>
 
+        {tab === "lumpsum" ? (
+          <MfPaymentMethodPicker
+            value={paymentMethod}
+            onChange={onPaymentMethodChange}
+            disabled={checkoutDisabled}
+          />
+        ) : (
+          <MfMandateTypePicker
+            value={mandateType}
+            onChange={onMandateTypeChange}
+            disabled={checkoutDisabled}
+          />
+        )}
+
         <div className="space-y-2">
-          <div className="flex items-center gap-2 px-0.5 text-caption font-medium text-muted-foreground">
-            <Building2 className="size-3.5 shrink-0" aria-hidden="true" />
-            {copy.mutualFunds.bankPickerLabel}
-          </div>
           <MfBankAccountPicker
-              accounts={paymentReadyAccounts}
+              accounts={accounts}
               selectedId={selectedBankAccountId}
               onSelect={onSelectBankAccount}
               loading={banksLoading}
@@ -344,15 +375,19 @@ function CartCheckoutPanel({
 }
 
 export function MfCartView() {
+  const queryClient = useQueryClient();
   const { openCartCheckoutPayment, openSipMandate } = useMfPaymentOverlay();
   const [cart, setCart] = useState<MfCart | null>(null);
   const [tab, setTab] = useState<CartTab>("lumpsum");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
+  const [clearingTab, setClearingTab] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
+  const [mandateType, setMandateType] = useState<MfMandateType>("upi");
   const {
-    accounts: paymentReadyAccounts,
+    accounts,
     selectedBankAccountId,
     setSelectedBankAccountId,
     loading: banksLoading,
@@ -364,6 +399,7 @@ export function MfCartView() {
     try {
       const next = await fetchMfCart();
       setCart(next);
+      setMfCartQueryData(queryClient, next);
       setError(null);
       if (next.lumpsum_item_count === 0 && next.sip_item_count > 0) {
         setTab("sip");
@@ -375,7 +411,7 @@ export function MfCartView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     void loadCart();
@@ -392,11 +428,27 @@ export function MfCartView() {
     try {
       const next = await removeMfCartItem(productId, tab);
       setCart(next);
+      setMfCartQueryData(queryClient, next);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.cartRemoveFailed);
     } finally {
       setRemovingProductId(null);
+    }
+  }
+
+  async function handleClearTab() {
+    if (activeCount === 0) return;
+    setClearingTab(true);
+    try {
+      const next = await clearMfCartTab(tab);
+      setCart(next);
+      setMfCartQueryData(queryClient, next);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : copy.mutualFunds.cartClearFailed);
+    } finally {
+      setClearingTab(false);
     }
   }
 
@@ -413,6 +465,7 @@ export function MfCartView() {
         const checkout = await checkoutMfCart({
           idempotency_key: crypto.randomUUID(),
           bank_account_id: selectedBankAccountId,
+          payment_method: paymentMethod,
         });
         openCartCheckoutPayment(checkout.checkout_id);
         return;
@@ -421,6 +474,7 @@ export function MfCartView() {
       const result = await checkoutMfSipCart({
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
+        mandate_type: mandateType,
       });
       const firstPlan = result.plans[0];
       if (!firstPlan) {
@@ -428,6 +482,7 @@ export function MfCartView() {
         return;
       }
       markMfSipCartCheckoutPlans(result.plans.map((plan) => plan.plan_id));
+      void invalidateInvestQueries(queryClient);
       openSipMandate(firstPlan.plan_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.cartCheckoutFailed);
@@ -439,6 +494,7 @@ export function MfCartView() {
   const description =
     tab === "lumpsum" ? copy.mutualFunds.cartDescription : copy.mutualFunds.cartSipDescription;
   const DescriptionIcon = tab === "lumpsum" ? Wallet : CalendarDays;
+  const clearDisabled = activeCount === 0 || clearingTab || removingProductId !== null || checkingOut;
 
   if (loading) {
     return (
@@ -452,6 +508,7 @@ export function MfCartView() {
   return (
     <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-6 pb-8")}>
       <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
+      <FundEligibilityBanner />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -470,12 +527,29 @@ export function MfCartView() {
         </div>
       </div>
 
-      <CartTabToggle
-        tab={tab}
-        onChange={setTab}
-        lumpsumCount={cart?.lumpsum_item_count ?? 0}
-        sipCount={cart?.sip_item_count ?? 0}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CartTabToggle
+          tab={tab}
+          onChange={setTab}
+          lumpsumCount={cart?.lumpsum_item_count ?? 0}
+          sipCount={cart?.sip_item_count ?? 0}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+          disabled={clearDisabled}
+          onClick={() => void handleClearTab()}
+        >
+          {clearingTab ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Trash2 className="size-4" />
+          )}
+          {copy.mutualFunds.cartClearTab}
+        </Button>
+      </div>
 
       {error ? <FieldMessage variant="error" message={error} /> : null}
 
@@ -500,11 +574,15 @@ export function MfCartView() {
           checkingOut={checkingOut}
           banksLoading={banksLoading}
           hasPaymentReadyAccount={hasPaymentReadyAccount}
-          paymentReadyAccounts={paymentReadyAccounts}
+          accounts={accounts}
           selectedBankAccountId={selectedBankAccountId}
           onSelectBankAccount={setSelectedBankAccountId}
           banksError={banksError}
           onCheckout={() => void handleCheckout()}
+          paymentMethod={paymentMethod}
+          onPaymentMethodChange={setPaymentMethod}
+          mandateType={mandateType}
+          onMandateTypeChange={setMandateType}
           isEmpty={activeCount === 0}
         />
       </div>

@@ -27,6 +27,7 @@ def schedule_login_succeeded(
     is_new_device: bool,
     velocity_flag: dict[str, Any] | None,
     provider: str | None = None,
+    login_method: str | None = None,
 ) -> None:
     schedule_domain_event(
         STREAM_AUTH,
@@ -40,6 +41,7 @@ def schedule_login_succeeded(
                 is_new_device=is_new_device,
                 velocity_flag=velocity_flag,
                 provider=provider,
+                login_method=login_method,
             )
         ),
     )

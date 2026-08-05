@@ -25,6 +25,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { copy } from "@/shared/config/copy";
 import type { InvestFundDetail, InvestInvestmentDetails } from "@/features/invest/api/invest-api";
 import { formatInr } from "@/features/invest/lib/mf-format";
+import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
+import { cn } from "@/lib/utils";
 
 type AmountBlock = {
   min_inr?: number | null;
@@ -323,7 +325,7 @@ export function MfInvestmentDetailsCard({ details }: MfInvestmentDetailsCardProp
   if (sections.length === 0) return null;
 
   return (
-    <Card className="overflow-hidden rounded-[var(--radius-medium)] border border-border">
+    <Card className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
       <CardHeader className="border-b border-border/60 bg-muted/10">
         <div className="flex items-start gap-3">
           <div className="sip-icon-badge mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full">

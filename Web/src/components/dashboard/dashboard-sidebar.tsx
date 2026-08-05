@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, RefreshCw, Settings, ShieldCheck, UserRound } from "lucide-react";
+import { LogOut, RefreshCw, Settings, ShieldCheck, UserRound, Bell } from "lucide-react";
 
 import {
   DASHBOARD_HEADER_CLASS,
+  DASHBOARD_NAV_CLUSTER_CLASS,
   DASHBOARD_SIDEBAR_SECTION_GAP,
   DASHBOARD_SIDEBAR_WIDTH,
 } from "@/components/dashboard/dashboard-layout";
@@ -21,11 +22,6 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/auth-context";
 import { useSettingsNavigationOptional } from "@/contexts/settings-navigation-context";
 import { useKycOptional } from "@/contexts/kyc-context";
@@ -34,6 +30,7 @@ import { KycStatusRing } from "@/features/kyc/components/kyc-status-ring";
 import {
   DASHBOARD_ROUTES,
   isDashboardRouteActive,
+  NOTIFICATIONS_PAGE_META,
   type DashboardRoute,
 } from "@/features/dashboard/navigation/dashboard-routes";
 import {
@@ -58,6 +55,43 @@ function navButtonClass(active: boolean, compact = false) {
   );
 }
 
+/** Above page content for hover-expanding pills; below dialog overlay (z-50). */
+const SIDEBAR_NAV_ITEM_Z = "z-30";
+
+function sidebarNavPillClass(active: boolean, disabled = false) {
+  return cn(
+    "group relative flex h-9 max-w-9 shrink-0 items-center overflow-hidden rounded-full outline-none",
+    "transition-[max-width,background-color,color,box-shadow] duration-200 ease-out",
+    "hover:max-w-56 focus-visible:max-w-56",
+    SIDEBAR_NAV_ITEM_Z,
+    disabled
+      ? "cursor-not-allowed text-muted-foreground/60 hover:bg-[var(--zynd-white)] hover:text-muted-foreground hover:shadow-zynd-low dark:hover:bg-transparent dark:hover:shadow-none"
+      : active
+        ? "bg-[var(--zynd-neutral-900)] text-[var(--zynd-white)] shadow-zynd-low dark:bg-[var(--zynd-white)] dark:text-[var(--zynd-neutral-900)]"
+        : cn(
+            "text-muted-foreground hover:bg-[var(--zynd-white)] hover:text-[var(--zynd-neutral-900)] hover:shadow-zynd-low",
+            "dark:bg-transparent dark:text-muted-foreground dark:hover:bg-background dark:hover:text-foreground dark:hover:shadow-zynd-low",
+          ),
+  );
+}
+
+function SidebarNavItemLabel({ label }: { label: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "min-w-0 overflow-hidden whitespace-nowrap pr-3 text-caption font-medium",
+        "max-w-0 opacity-0 transition-[max-width,opacity] duration-200 ease-out",
+        "group-hover:max-w-48 group-hover:opacity-100 group-focus-visible:max-w-48 group-focus-visible:opacity-100",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+const SIDEBAR_NAV_ICON_OFFSET_CLASS = "absolute left-1/2 top-0 -translate-x-[1.125rem]";
+
 function SidebarNavItem({
   item,
   active,
@@ -70,44 +104,32 @@ function SidebarNavItem({
 
   if (item.disabled) {
     return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <span
-              aria-disabled="true"
-              className={cn(navButtonClass(false, true), "cursor-not-allowed opacity-50")}
-              aria-label={item.label}
-            />
-          }
+      <div className="relative h-9 w-full overflow-visible">
+        <span
+          aria-disabled="true"
+          className={cn(sidebarNavPillClass(false, true), SIDEBAR_NAV_ICON_OFFSET_CLASS)}
+          aria-label={item.label}
         >
-          {icon}
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>
-          {item.label} — Coming soon
-        </TooltipContent>
-      </Tooltip>
+          <span className="flex size-9 shrink-0 items-center justify-center">{icon}</span>
+          <SidebarNavItemLabel label={item.label} />
+        </span>
+      </div>
     );
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Link
-            href={item.href}
-            scroll={false}
-            aria-current={active ? "page" : undefined}
-            className={navButtonClass(active, true)}
-            aria-label={item.label}
-          />
-        }
+    <div className="relative h-9 w-full overflow-visible">
+      <Link
+        href={item.href}
+        scroll={false}
+        aria-current={active ? "page" : undefined}
+        className={cn(sidebarNavPillClass(active), SIDEBAR_NAV_ICON_OFFSET_CLASS)}
+        aria-label={item.label}
       >
-        {icon}
-      </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
-        {item.label}
-      </TooltipContent>
-    </Tooltip>
+        <span className="flex size-9 shrink-0 items-center justify-center">{icon}</span>
+        <SidebarNavItemLabel label={item.label} />
+      </Link>
+    </div>
   );
 }
 
@@ -125,7 +147,7 @@ function MobileNavItem({
       <span
         aria-disabled="true"
         className={cn(navButtonClass(false), "cursor-not-allowed opacity-50")}
-        aria-label={`${item.label} — Coming soon`}
+        aria-label={item.label}
       >
         <Icon className="size-[18px]" strokeWidth={2} />
       </span>
@@ -174,17 +196,21 @@ function ProfileAvatar({
     checkingKraStatus,
     openProfile,
     openSettings,
+    openNotifications,
     openKyc,
     checkKycStatus,
     signOutAndRedirect,
   } = useProfileMenuActions();
   const initials = getUserInitials(user?.first_name, user?.email);
   const profileLabel = displayName || user?.email || "Profile";
-  const showKycRing = Boolean(kyc?.showRing && kyc.ringTone);
-  const showWatchBadge = showKycRing && kyc?.status !== "complete";
+  const kycRingTone = kyc?.showRing && kyc.ringTone ? kyc.ringTone : null;
+  const showWatchBadge = Boolean(kycRingTone && kyc?.status !== "complete");
   const showCheckKycStatus = Boolean(kyc?.overallStatus === "submitted" && kyc.kycAllowed);
+  const kycComplete = kyc?.status === "complete";
+  const kycMenuLabel = kycComplete ? copy.kyc.completeTitle : copy.kyc.menuLabel;
 
   const isSettingsPage = pathname === "/dashboard/settings";
+  const isNotificationsPage = pathname.startsWith("/dashboard/notifications");
   const activeSettingsSection = settingsNavigation?.activeSection;
   const isProfileActive =
     isSettingsPage &&
@@ -195,17 +221,23 @@ function ProfileAvatar({
     activeSettingsSection != null &&
     !PROFILE_SETTINGS_SECTIONS.includes(activeSettingsSection);
 
-  const avatar = (
-    <KycStatusRing tone={showKycRing ? kyc!.ringTone : null} showWatch={showWatchBadge}>
-      <Avatar className={compact ? "size-9" : "size-11"}>
-        {profileUrl ? (
-          <AvatarImage src={profileUrl} alt={profileLabel} />
-        ) : null}
-        <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
-          {initials}
-        </AvatarFallback>
-      </Avatar>
+  const profileAvatar = (
+    <Avatar className={compact ? "size-9" : "size-11"}>
+      {profileUrl ? (
+        <AvatarImage src={profileUrl} alt={profileLabel} />
+      ) : null}
+      <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
+        {initials}
+      </AvatarFallback>
+    </Avatar>
+  );
+
+  const avatar = kycRingTone ? (
+    <KycStatusRing tone={kycRingTone} showWatch={showWatchBadge} size={compact ? "compact" : "default"}>
+      {profileAvatar}
     </KycStatusRing>
+  ) : (
+    profileAvatar
   );
 
   if (!withMenu) {
@@ -234,14 +266,12 @@ function ProfileAvatar({
         <DropdownMenuGroup>
           <DropdownMenuLabel className="px-2 py-1.5 font-normal">
             <div className="flex items-center gap-2.5">
-              <KycStatusRing tone={showKycRing ? kyc!.ringTone : null} showWatch={showWatchBadge}>
-                <Avatar className="size-8">
-                  {profileUrl ? <AvatarImage src={profileUrl} alt={profileLabel} /> : null}
-                  <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-              </KycStatusRing>
+              <Avatar className="size-8">
+                {profileUrl ? <AvatarImage src={profileUrl} alt={profileLabel} /> : null}
+                <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-caption font-semibold text-foreground">
                   {displayName || "Account"}
@@ -282,9 +312,9 @@ function ProfileAvatar({
               title={!kyc.kycAllowed ? copy.kyc.entryGate.menuDisabledHint : undefined}
               onClick={openKyc}
             >
-              <ShieldCheck />
-              {copy.kyc.menuLabel}
-              {kyc.kycAllowed ? (
+              <ShieldCheck className={cn(kycComplete && "text-success")} />
+              {kycMenuLabel}
+              {kyc.kycAllowed && !kycComplete ? (
                 <DropdownMenuShortcut>
                   {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.kyc)}
                 </DropdownMenuShortcut>
@@ -297,6 +327,13 @@ function ProfileAvatar({
           >
             <Settings />
             Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={profileMenuItemClass(isNotificationsPage)}
+            onClick={openNotifications}
+          >
+            <Bell />
+            {NOTIFICATIONS_PAGE_META.title}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -316,32 +353,40 @@ function ProfileAvatar({
 
 export function DashboardSidebar({ className }: { className?: string }) {
   const pathname = usePathname();
-  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled);
+  const navRoutes = DASHBOARD_ROUTES.filter(
+    (route) => route.enabled && route.showInSidebar !== false,
+  );
 
   return (
     <aside
       className={cn(
-        "relative z-10 flex h-full shrink-0 flex-col",
+        "relative isolate flex h-full shrink-0 flex-col overflow-visible",
+        SIDEBAR_NAV_ITEM_Z,
         DASHBOARD_SIDEBAR_WIDTH,
         DASHBOARD_SIDEBAR_SECTION_GAP,
         className
       )}
     >
       <div className={cn(DASHBOARD_HEADER_CLASS, "justify-center")}>
-        <Link href="/dashboard" className={uiClasses.navLogoLink}>
+        <Link href="/dashboard" className={cn(DASHBOARD_NAV_CLUSTER_CLASS, "w-full justify-center")}>
           <Image
             src="/logo.png"
             alt={APP_NAME}
-            width={36}
-            height={36}
-            className="size-9 rounded-full object-cover"
+            width={40}
+            height={40}
+            className="size-10 shrink-0 rounded-full object-cover"
             priority
           />
         </Link>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-between">
-        <nav className={cn("flex shrink-0 flex-col items-center gap-1", uiClasses.navSurfaceSidebar)}>
+      <div className="flex min-h-0 w-full flex-1 flex-col items-stretch justify-between">
+        <nav
+          className={cn(
+            "relative flex w-full shrink-0 flex-col items-center gap-1 overflow-visible",
+            uiClasses.navSurfaceSidebar,
+          )}
+        >
           {navRoutes.map((item) => (
             <SidebarNavItem
               key={item.id}
@@ -351,7 +396,7 @@ export function DashboardSidebar({ className }: { className?: string }) {
           ))}
         </nav>
 
-        <ProfileAvatar withMenu compact className="pb-1" />
+        <ProfileAvatar withMenu compact className="self-center pb-1" />
       </div>
     </aside>
   );
@@ -359,7 +404,9 @@ export function DashboardSidebar({ className }: { className?: string }) {
 
 export function DashboardMobileNav() {
   const pathname = usePathname();
-  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled);
+  const navRoutes = DASHBOARD_ROUTES.filter(
+    (route) => route.enabled && route.showInSidebar !== false,
+  );
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-[var(--blur-sm)] md:hidden">

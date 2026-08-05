@@ -10,8 +10,11 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  indicatorClassName,
   ...props
-}: SliderPrimitive.Root.Props) {
+}: SliderPrimitive.Root.Props & {
+  indicatorClassName?: string;
+}) {
   const thumbCount = Array.isArray(value)
     ? value.length
     : Array.isArray(defaultValue)
@@ -36,7 +39,7 @@ function Slider({
         >
           <SliderPrimitive.Indicator
             data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
+            className={cn("bg-primary select-none data-horizontal:h-full data-vertical:w-full", indicatorClassName)}
           />
         </SliderPrimitive.Track>
         {Array.from({ length: thumbCount }, (_, index) => (

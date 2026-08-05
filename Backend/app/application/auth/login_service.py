@@ -247,6 +247,17 @@ async def login_with_email(
         )
     else:
         pending = None
+    if not pending and not user_has_mfa(user):
+        from app.application.auth.login_sms_service import maybe_sms_otp_pending_login
+
+        pending = await maybe_sms_otp_pending_login(
+            db,
+            user,
+            device_fingerprint=device_fingerprint,
+            user_agent=user_agent,
+            admin_client=admin_client,
+            ip=ip,
+        )
     if pending:
         await record_login_attempt(
             db,
@@ -256,7 +267,19 @@ async def login_with_email(
             success=True,
             failure_reason=None,
         )
+        from app.application.auth.login_sms_service import enrich_mfa_login_pending
+
+        if pending.get("next") == "mfa_required":
+            pending = await enrich_mfa_login_pending(db, user, pending)
         return pending
+
+    if force_mfa:
+        raise AuthError(
+            "Additional verification is required. Enable MFA or verify your mobile number.",
+            "step_up_required",
+            403,
+            metadata={"risk_level": risk.level, "reasons": risk.reasons},
+        )
 
     login_result = await complete_authenticated_login(
         db,

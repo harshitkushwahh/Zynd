@@ -30,6 +30,15 @@ class NotificationType(str, Enum):
     REFERRAL_ENGAGED = "referral.engaged"
     ACCOUNT_SETTINGS_CHANGED = "account.settings.changed"
     ACCOUNT_PROFILE_IMAGE_UPDATED = "account.profile_image.updated"
+    INVEST_RISK_PROFILE_COMPLETED = "invest.risk_profile.completed"
+    INVEST_RISK_PROFILE_UNLOCK_OTP = "invest.risk_profile.unlock_otp"
+    FAMILY_INVITE_RECEIVED = "family.invite.received"
+    FAMILY_INVITE_ACCEPTED = "family.invite.accepted"
+    FAMILY_INVITE_DECLINED = "family.invite.declined"
+    FAMILY_MEMBER_REMOVED = "family.member.removed"
+    FAMILY_MEMBER_ROLE_CHANGED = "family.member.role_changed"
+    FAMILY_HEAD_TRANSFERRED = "family.head.transferred"
+    FAMILY_INVITE_REMINDER = "family.invite.reminder"
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +200,60 @@ NOTIFICATION_DEFINITIONS: dict[NotificationType, NotificationDefinition] = {
         default_email=False,
         default_in_app=True,
     ),
+    NotificationType.INVEST_RISK_PROFILE_COMPLETED: NotificationDefinition(
+        notification_type=NotificationType.INVEST_RISK_PROFILE_COMPLETED,
+        category=NotificationCategory.account,
+        default_email=True,
+        default_in_app=True,
+    ),
+    NotificationType.INVEST_RISK_PROFILE_UNLOCK_OTP: NotificationDefinition(
+        notification_type=NotificationType.INVEST_RISK_PROFILE_UNLOCK_OTP,
+        category=NotificationCategory.security,
+        default_email=False,
+        default_in_app=True,
+    ),
+    NotificationType.FAMILY_INVITE_RECEIVED: NotificationDefinition(
+        notification_type=NotificationType.FAMILY_INVITE_RECEIVED,
+        category=NotificationCategory.family,
+        default_email=True,
+        default_in_app=True,
+    ),
+    NotificationType.FAMILY_INVITE_ACCEPTED: NotificationDefinition(
+        notification_type=NotificationType.FAMILY_INVITE_ACCEPTED,
+        category=NotificationCategory.family,
+        default_email=True,
+        default_in_app=True,
+    ),
+    NotificationType.FAMILY_INVITE_DECLINED: NotificationDefinition(
+        notification_type=NotificationType.FAMILY_INVITE_DECLINED,
+        category=NotificationCategory.family,
+        default_email=True,
+        default_in_app=True,
+    ),
+    NotificationType.FAMILY_MEMBER_REMOVED: NotificationDefinition(
+        notification_type=NotificationType.FAMILY_MEMBER_REMOVED,
+        category=NotificationCategory.family,
+        default_email=True,
+        default_in_app=True,
+    ),
+    NotificationType.FAMILY_MEMBER_ROLE_CHANGED: NotificationDefinition(
+        notification_type=NotificationType.FAMILY_MEMBER_ROLE_CHANGED,
+        category=NotificationCategory.family,
+        default_email=True,
+        default_in_app=True,
+    ),
+    NotificationType.FAMILY_HEAD_TRANSFERRED: NotificationDefinition(
+        notification_type=NotificationType.FAMILY_HEAD_TRANSFERRED,
+        category=NotificationCategory.family,
+        default_email=True,
+        default_in_app=True,
+    ),
+    NotificationType.FAMILY_INVITE_REMINDER: NotificationDefinition(
+        notification_type=NotificationType.FAMILY_INVITE_REMINDER,
+        category=NotificationCategory.family,
+        default_email=True,
+        default_in_app=True,
+    ),
 }
 
 
@@ -199,4 +262,5 @@ DEFAULT_PREFERENCE_CATEGORIES = (
     NotificationCategory.kyc,
     NotificationCategory.referral,
     NotificationCategory.account,
+    NotificationCategory.family,
 )

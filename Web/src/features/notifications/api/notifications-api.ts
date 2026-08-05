@@ -1,6 +1,6 @@
 import { apiRequest } from "@/lib/api-client";
 
-export type NotificationCategory = "security" | "kyc" | "referral" | "account";
+export type NotificationCategory = "security" | "kyc" | "referral" | "account" | "family";
 
 export type NotificationItem = {
   id: string;

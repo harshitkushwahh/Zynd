@@ -17,14 +17,18 @@ from app.infrastructure.security.mfa_crypto import decrypt_secret, encrypt_secre
 
 
 def _user(**overrides) -> User:
+    now = datetime.now(timezone.utc)
     user = User(
         email="user@example.com",
         password_hash="hash",
         role=UserRole.user,
+        phone="9876543210",
     )
     user.status = UserStatus.active
     user.mfa_required_for_funds = True
     user.mfa_enrolled_at = None
+    user.email_verified_at = now
+    user.phone_verified_at = now
     for key, value in overrides.items():
         setattr(user, key, value)
     return user
@@ -55,24 +59,26 @@ def test_user_has_mfa() -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "mfa_enrolled", "required", "expected"),
+    ("status", "email_verified", "phone_verified", "expected"),
     [
         (UserStatus.active, True, True, True),
         (UserStatus.active, False, True, False),
-        (UserStatus.active, False, False, True),
+        (UserStatus.active, True, False, False),
         (UserStatus.deletion_pending, True, True, False),
         (UserStatus.suspended, True, True, False),
     ],
 )
 def test_user_fund_eligible(
     status: UserStatus,
-    mfa_enrolled: bool,
-    required: bool,
+    email_verified: bool,
+    phone_verified: bool,
     expected: bool,
 ) -> None:
+    now = datetime.now(timezone.utc)
     user = _user(
         status=status,
-        mfa_required_for_funds=required,
-        mfa_enrolled_at=datetime.now(timezone.utc) if mfa_enrolled else None,
+        email_verified_at=now if email_verified else None,
+        phone_verified_at=now if phone_verified else None,
+        phone="9876543210" if phone_verified else None,
     )
     assert user_fund_eligible(user) is expected

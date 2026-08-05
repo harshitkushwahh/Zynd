@@ -18,7 +18,7 @@ function MaskedPanValue({ pan }: { pan: string }) {
 
   if (masked.length <= 2) {
     return (
-      <span className="font-mono text-body font-semibold uppercase tracking-[0.18em] text-foreground">
+      <span className="whitespace-nowrap font-mono text-body font-semibold uppercase tracking-[0.18em] text-foreground">
         {masked}
       </span>
     );
@@ -30,12 +30,12 @@ function MaskedPanValue({ pan }: { pan: string }) {
 
   return (
     <span
-      className="inline-flex items-center gap-0.5 font-mono text-body font-semibold uppercase"
+      className="whitespace-nowrap font-mono text-body font-semibold uppercase tabular-nums tracking-[0.18em]"
       aria-label={`PAN ending in ${last}`}
     >
-      <span className="tracking-[0.12em] text-foreground">{first}</span>
-      <span className="tracking-[0.28em] text-muted-foreground/55">{middle}</span>
-      <span className="tracking-[0.12em] text-foreground">{last}</span>
+      <span className="text-foreground">{first}</span>
+      <span className="text-muted-foreground/55">{middle}</span>
+      <span className="text-foreground">{last}</span>
     </span>
   );
 }
@@ -66,7 +66,7 @@ export function KycOutcomePanCard({ label, pan, variant, className }: KycOutcome
         className,
       )}
     >
-      <div className="flex items-center gap-2.5 border-b border-border/45 px-3 py-2">
+      <div className="flex items-center justify-center gap-2 border-b border-border/45 px-3 py-2.5 text-center">
         <div
           className={cn(
             "flex size-7 shrink-0 items-center justify-center rounded-full ring-1 ring-inset",
@@ -75,11 +75,9 @@ export function KycOutcomePanCard({ label, pan, variant, className }: KycOutcome
         >
           <CreditCard className="size-3.5" strokeWidth={2} aria-hidden />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            {label}
-          </p>
-        </div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          {label}
+        </p>
         <span
           className={cn(
             "rounded-[var(--radius-full)] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
@@ -92,7 +90,7 @@ export function KycOutcomePanCard({ label, pan, variant, className }: KycOutcome
 
       <div
         className={cn(
-          "mx-3 mb-3 mt-2.5 flex justify-center rounded-[var(--radius-control)] border px-3 py-2.5",
+          "mx-3 mb-3 flex min-h-[2.75rem] items-center justify-center rounded-[var(--radius-control)] border px-3 py-3 text-center",
           styles.panSurface,
         )}
       >

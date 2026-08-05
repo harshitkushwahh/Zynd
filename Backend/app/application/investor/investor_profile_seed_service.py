@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.investor.investor_bank_account_crypto import encrypt_account_number
+from app.application.investor.investor_bank_account_service import _find_existing_bank_account
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
     InvestorBankAccount,
@@ -18,9 +19,9 @@ from app.infrastructure.persistence.investor_models import (
     InvestorPhoneNumber,
     InvestorProfile,
     InvestorProvisionTrigger,
-    InvestorRelatedParty,
 )
 from app.infrastructure.persistence.models import KycJourneyState, User
+from app.application.investor.investor_nominee_mapper import upsert_nominee_drafts_to_local
 from app.infrastructure.persistence.repositories.investor_profile_repository import (
     get_or_create_pending_investor_profile,
 )
@@ -64,28 +65,6 @@ def _map_address_fields(raw: dict[str, Any] | None) -> dict[str, Any] | None:
         "postal_code": _str(raw.get("pincode") or raw.get("postal_code"))[:16],
         "country": country[:8] or "IN",
     }
-
-
-def _parse_share_percent(value: Any) -> int | None:
-    raw = _str(value)
-    if not raw:
-        return None
-    try:
-        return int(float(raw))
-    except ValueError:
-        return None
-
-
-def _parse_nominee_dob(value: Any):
-    from datetime import date
-
-    raw = _str(value)
-    if not raw:
-        return None
-    try:
-        return date.fromisoformat(raw)
-    except ValueError:
-        return None
 
 
 def _map_verification_status(raw: Any) -> InvestorBankVerificationStatus:
@@ -248,19 +227,18 @@ async def _seed_bank(db: AsyncSession, profile: InvestorProfile, journey: KycJou
         return
 
     last4 = _account_last4(account_number)
-    existing = await db.execute(
-        select(InvestorBankAccount).where(
-            InvestorBankAccount.investor_profile_id == profile.user_id,
-            InvestorBankAccount.account_number_last4 == last4,
-            InvestorBankAccount.ifsc_code == ifsc,
-        )
+    existing_row = await _find_existing_bank_account(
+        db,
+        user_id=profile.user_id,
+        account_number=account_number,
+        ifsc_code=ifsc,
     )
-    existing_row = existing.scalar_one_or_none()
 
     account_type = ACCOUNT_TYPE_MAP.get(_str(bank.get("accountType")), "savings")
     holder = _str(bank.get("accountHolderName")) or "Account Holder"
 
     if existing_row:
+        existing_row.ifsc_code = ifsc
         if not existing_row.account_number_ciphertext:
             _apply_bank_verification_fields(
                 existing_row,
@@ -295,42 +273,7 @@ async def _seed_bank(db: AsyncSession, profile: InvestorProfile, journey: KycJou
 
 
 async def _seed_nominees(db: AsyncSession, profile: InvestorProfile, journey: KycJourneyState) -> None:
-    nominees = journey.nominee_draft_json
-    if not isinstance(nominees, list) or not nominees:
-        return
-
-    await db.execute(delete(InvestorRelatedParty).where(InvestorRelatedParty.investor_profile_id == profile.user_id))
-
-    for item in nominees:
-        if not isinstance(item, dict):
-            continue
-        core = item.get("core") if isinstance(item.get("core"), dict) else {}
-        identity = item.get("identity") if isinstance(item.get("identity"), dict) else {}
-        guardian = item.get("guardian") if isinstance(item.get("guardian"), dict) else {}
-        name = _str(core.get("fullName"))
-        relationship = _str(core.get("relationship")) or "others"
-        if not name:
-            continue
-        pan = _str(identity.get("documentNumber")) if _str(identity.get("documentType")).lower() == "pan" else None
-        guardian_pan = None
-        if isinstance(guardian, dict):
-            if _str(guardian.get("documentType")).lower() == "pan":
-                guardian_pan = _str(guardian.get("documentNumber")) or None
-        db.add(
-            InvestorRelatedParty(
-                investor_profile_id=profile.user_id,
-                local_nominee_id=_str(item.get("id")) or None,
-                name=name[:120],
-                party_relationship=relationship[:64],
-                date_of_birth=_parse_nominee_dob(core.get("dateOfBirth")),
-                pan=pan[:10] if pan else None,
-                guardian_name=_str(guardian.get("name"))[:120] or None,
-                guardian_pan=guardian_pan[:10] if guardian_pan else None,
-                share_percent=_parse_share_percent(core.get("sharePercent")),
-                source=InvestorObjectSource.kyc,
-                sync_status=InvestorObjectSyncStatus.draft,
-            )
-        )
+    await upsert_nominee_drafts_to_local(db, profile=profile, journey=journey)
 
 
 __all__ = ["seed_investor_drafts_from_kyc"]

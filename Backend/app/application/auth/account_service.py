@@ -148,6 +148,7 @@ async def mfa_regenerate_backup_codes(
     session_id: UUID,
     current_password: str,
     totp_code: str | None,
+    sms_otp: str | None = None,
     ip: str | None,
 ) -> dict[str, Any]:
     await verify_step_up(
@@ -156,6 +157,7 @@ async def mfa_regenerate_backup_codes(
         session_id=session_id,
         current_password=current_password,
         totp_code=totp_code,
+        sms_otp=sms_otp,
         ip=ip,
     )
     try:
@@ -265,6 +267,7 @@ async def mfa_disable(
     session_id: UUID,
     current_password: str,
     totp_code: str | None,
+    sms_otp: str | None = None,
     ip: str | None,
 ) -> dict[str, bool]:
     if not user_has_mfa(user):
@@ -276,6 +279,7 @@ async def mfa_disable(
         session_id=session_id,
         current_password=current_password,
         totp_code=totp_code,
+        sms_otp=sms_otp,
         ip=ip,
     )
 
@@ -319,6 +323,7 @@ async def verify_mfa_login(
     mfa_token: str,
     totp_code: str | None,
     backup_code: str | None,
+    sms_otp: str | None,
     ip: str | None,
 ) -> dict[str, Any]:
     settings = get_settings()
@@ -331,20 +336,52 @@ async def verify_mfa_login(
         raise AuthError("Too many MFA attempts. Try again later.", "rate_limited", 429)
 
     from app.application.auth.service import _complete_authenticated_login, get_user_by_id
+    from app.application.auth.second_factor_verification_service import verify_second_factor
+    from app.application.identity.otp_purposes import OtpPurpose
+    from app.application.security.security_config_service import get_second_factor_policy
 
     user = await get_user_by_id(db, user_id)
     if not user or not user_has_mfa(user):
         raise AuthError("Invalid MFA session.", "mfa_invalid", 400)
 
+    provided = [
+        bool(totp_code and totp_code.strip()),
+        bool(backup_code and backup_code.strip()),
+        bool(sms_otp and sms_otp.strip()),
+    ]
+    if sum(provided) != 1:
+        raise AuthError(
+            "Provide an authenticator code, backup code, or SMS code.",
+            "invalid_mfa_payload",
+            400,
+        )
+
     verified = False
     used_backup = False
-    if totp_code and not backup_code:
-        verified = await verify_user_totp(db, user, totp_code)
-    elif backup_code and not totp_code:
-        verified = await verify_user_backup_code(db, user, backup_code)
+    used_sms = False
+    if sms_otp and sms_otp.strip():
+        policy = await get_second_factor_policy(db)
+        if not policy["step_up_sms_fallback_enabled"]:
+            raise AuthError("SMS fallback is not enabled.", "sms_fallback_disabled", 403)
+        if not user.phone_verified_at or not user.phone:
+            raise AuthError(
+                "SMS verification is unavailable for this account.",
+                "sms_fallback_unavailable",
+                400,
+            )
+        result = await verify_second_factor(
+            db,
+            user=user,
+            sms_otp=sms_otp.strip(),
+            sms_purpose=OtpPurpose.step_up_sms,
+        )
+        verified = result.verified
+        used_sms = verified
+    elif totp_code and totp_code.strip():
+        verified = await verify_user_totp(db, user, totp_code.strip())
+    elif backup_code and backup_code.strip():
+        verified = await verify_user_backup_code(db, user, backup_code.strip())
         used_backup = verified
-    else:
-        raise AuthError("Provide either a TOTP code or a backup code.", "invalid_mfa_payload", 400)
 
     if not verified:
         await write_audit(
@@ -355,15 +392,32 @@ async def verify_mfa_login(
         )
         raise AuthError("Invalid verification code.", "invalid_mfa_code", 401)
 
+    challenge_metadata: dict[str, Any] = {"used_backup_code": used_backup}
+    if used_sms:
+        challenge_metadata["method"] = "sms"
+        await write_audit(
+            db,
+            event_type=AuditEventType.step_up_sms_used,
+            user_id=user.id,
+            ip=ip,
+            metadata={"context": "mfa_login"},
+        )
+    elif totp_code:
+        challenge_metadata["method"] = "totp"
+    elif used_backup:
+        challenge_metadata["method"] = "backup"
+
     await write_audit(
         db,
         event_type=AuditEventType.mfa_challenge_success,
         user_id=user.id,
         ip=ip,
-        metadata={"used_backup_code": used_backup},
+        metadata=challenge_metadata,
     )
     if used_backup:
         await write_audit(db, event_type=AuditEventType.backup_code_used, user_id=user.id, ip=ip)
+
+    login_method = "sms" if used_sms else "backup" if used_backup else "authenticator"
 
     return await _complete_authenticated_login(
         db,
@@ -373,6 +427,7 @@ async def verify_mfa_login(
         ip=ip,
         settings=settings,
         provider=payload.get("provider"),
+        login_method=login_method,
     ) | {
         "device_fingerprint": payload["device_fingerprint"],
         "admin_client": bool(payload.get("admin_client")),
@@ -549,6 +604,10 @@ async def confirm_oauth_link(
         admin_client=False,
     )
     if pending:
+        from app.application.auth.login_sms_service import enrich_mfa_login_pending
+
+        if pending.get("next") == "mfa_required":
+            pending = await enrich_mfa_login_pending(db, user, pending)
         return pending
 
     return await _complete_authenticated_login(
@@ -587,13 +646,58 @@ async def verify_step_up(
     session_id: UUID,
     current_password: str,
     totp_code: str | None,
+    sms_otp: str | None = None,
     ip: str | None,
 ) -> dict[str, bool]:
+    from app.application.auth.second_factor_verification_service import verify_second_factor
+    from app.application.identity.otp_purposes import OtpPurpose
+    from app.application.security.security_config_service import get_second_factor_policy
+
     if not user.password_hash or not verify_password(user.password_hash, current_password):
         raise AuthError("Invalid password.", "invalid_credentials", 401)
 
     if user_has_mfa(user):
-        if not totp_code or not await verify_user_totp(db, user, totp_code):
+        has_totp = bool(totp_code and totp_code.strip())
+        has_sms = bool(sms_otp and sms_otp.strip())
+        if has_totp and has_sms:
+            raise AuthError(
+                "Provide only one second-factor method at a time.",
+                "invalid_second_factor_payload",
+                400,
+            )
+        if not has_totp and not has_sms:
+            raise AuthError(
+                "Valid authenticator or SMS code required.",
+                "second_factor_required",
+                401,
+            )
+
+        if has_sms:
+            policy = await get_second_factor_policy(db)
+            if not policy["step_up_sms_fallback_enabled"]:
+                raise AuthError("SMS fallback is not enabled.", "sms_fallback_disabled", 403)
+            if not user.phone_verified_at or not user.phone:
+                raise AuthError(
+                    "SMS verification is unavailable for this account.",
+                    "sms_fallback_unavailable",
+                    400,
+                )
+            result = await verify_second_factor(
+                db,
+                user=user,
+                sms_otp=sms_otp.strip() if sms_otp else None,
+                sms_purpose=OtpPurpose.step_up_sms,
+            )
+            if not result.verified:
+                raise AuthError("Invalid verification code.", "invalid_mfa_code", 401)
+            await write_audit(
+                db,
+                event_type=AuditEventType.step_up_sms_used,
+                user_id=user.id,
+                ip=ip,
+                metadata={"context": "step_up"},
+            )
+        elif not await verify_user_totp(db, user, totp_code.strip() if totp_code else ""):
             raise AuthError("Valid authenticator code required.", "invalid_totp", 401)
 
     settings = get_settings()
@@ -615,6 +719,7 @@ async def change_password(
     current_password: str,
     new_password: str,
     totp_code: str | None,
+    sms_otp: str | None = None,
     ip: str | None,
 ) -> dict[str, bool]:
     await verify_step_up(
@@ -623,6 +728,7 @@ async def change_password(
         session_id=session_id,
         current_password=current_password,
         totp_code=totp_code,
+        sms_otp=sms_otp,
         ip=ip,
     )
     try:
@@ -658,6 +764,7 @@ async def change_email_start(
     new_email: str,
     current_password: str,
     totp_code: str | None,
+    sms_otp: str | None = None,
     ip: str | None,
 ) -> dict[str, str]:
     await verify_step_up(
@@ -666,6 +773,7 @@ async def change_email_start(
         session_id=session_id,
         current_password=current_password,
         totp_code=totp_code,
+        sms_otp=sms_otp,
         ip=ip,
     )
 
@@ -798,6 +906,7 @@ async def request_account_deletion(
     session_id: UUID,
     current_password: str,
     totp_code: str | None,
+    sms_otp: str | None = None,
     ip: str | None,
 ) -> dict[str, Any]:
     await verify_step_up(
@@ -806,6 +915,7 @@ async def request_account_deletion(
         session_id=session_id,
         current_password=current_password,
         totp_code=totp_code,
+        sms_otp=sms_otp,
         ip=ip,
     )
 
@@ -874,18 +984,16 @@ async def cancel_account_deletion(
 
 
 def fund_eligibility_status(user: User) -> dict[str, Any]:
-    from app.application.auth.pin_service import user_has_pin
+    from app.application.auth.fund_movement_policy_service import (
+        evaluate_fund_eligibility_with_policy,
+    )
 
-    reasons: list[str] = []
-    if user.status != UserStatus.active:
-        reasons.append("account_inactive")
-    if user.mfa_required_for_funds and not user_has_mfa(user):
-        reasons.append("mfa_required")
-    if user.mfa_required_for_funds and user_has_mfa(user) and not user_has_pin(user):
-        reasons.append("pin_required")
-    if is_apple_private_relay_email(user.email) and not user.phone_verified_at:
-        reasons.append("verified_contact_required")
-    return {"eligible": not reasons, "reasons": reasons}
+    result = evaluate_fund_eligibility_with_policy(
+        user,
+        require_mfa=False,
+        require_pin=False,
+    )
+    return {"eligible": result["eligible"], "reasons": result["reasons"]}
 
 
 def kyc_eligibility_status(user: User) -> dict[str, Any]:

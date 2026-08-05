@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.auth.deps import get_client_ip, get_current_user
@@ -39,6 +39,10 @@ from app.application.referral.referral_leaderboard_service import (
     ReferralLeaderboardPeriod as LeaderboardPeriodEnum,
     get_referral_leaderboard,
     referee_display_name_for_user,
+)
+from app.application.referral.referral_qr_service import (
+    REFERRAL_QR_TEMPLATE_VERSION,
+    generate_referral_qr_png,
 )
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -87,6 +91,27 @@ async def get_referral_me(
         qualified_count=qualified_count,
         engaged_count=engaged_count,
         created_at=referral_code.created_at,
+    )
+
+
+@router.get("/me/qr")
+async def get_referral_qr(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    size: Annotated[int, Query(ge=256, le=1024)] = 512,
+) -> Response:
+    referral_code = await get_or_create_referral_code(db, user=current_user)
+    await db.commit()
+    png_bytes = generate_referral_qr_png(_share_url(referral_code.code), size=size)
+    filename = f"zynd-referral-{referral_code.code}.png"
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+            "X-QR-Template-Version": str(REFERRAL_QR_TEMPLATE_VERSION),
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
     )
 
 

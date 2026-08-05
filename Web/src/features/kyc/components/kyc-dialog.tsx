@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldMessage } from "@/components/ui/ui-message";
 import {
   Dialog,
   DialogContent,
@@ -12,21 +13,31 @@ import { useKyc } from "@/contexts/kyc-context";
 import { KycAddressStep } from "@/features/kyc/components/kyc-address-step";
 import { KycDialogBody } from "@/features/kyc/components/kyc-dialog-body";
 import { KycDialogChrome } from "@/features/kyc/components/kyc-dialog-chrome";
+import { KycDialogLayout } from "@/features/kyc/components/kyc-dialog-layout";
 import { KycDialogProgressState } from "@/features/kyc/components/kyc-dialog-progress-state";
 import { KycEntryGate } from "@/features/kyc/components/kyc-entry-gate";
+import { KycFormHeader } from "@/features/kyc/components/kyc-form-header";
 import { KycOutcomePanel } from "@/features/kyc/components/kyc-outcome-panel";
 import { KycPanBlockDialog } from "@/features/kyc/components/kyc-pan-block-dialog";
-import { KycPanLottie } from "@/features/kyc/components/kyc-pan-lottie";
 import { KycPanStep } from "@/features/kyc/components/kyc-pan-step";
 import { KycBankStep } from "@/features/kyc/components/kyc-bank-step";
 import { KycNomineeStep } from "@/features/kyc/components/kyc-nominee-step";
+import { KycNomineeFamilyGroupDialog } from "@/features/kyc/components/kyc-nominee-family-group-dialog";
+import {
+  addNomineeToFamilyGroup,
+  previewNomineeFamilyGroupAdd,
+} from "@/features/family-groups/api/family-groups-api";
+import {
+  filterNomineesForFamilyPrompt,
+  isActionableFamilyPreviewStatus,
+} from "@/features/family-groups/lib/kyc-nominee-family-bridge";
 import { KycPersonalInfoStep } from "@/features/kyc/components/kyc-personal-info-step";
 import { KycReviewStep } from "@/features/kyc/components/kyc-review-step";
 import { KycSignatureStep } from "@/features/kyc/components/kyc-signature-step";
 import { KycEsignDialog } from "@/features/kyc/components/kyc-esign-dialog";
 import { KycLocationRequiredDialog } from "@/features/kyc/components/kyc-location-required-dialog";
 import { KycPanReadinessBadge } from "@/features/kyc/components/kyc-pan-readiness-badge";
-import { KycStepHero } from "@/features/kyc/components/kyc-step-hero";
+import { getKycStepFormMeta } from "@/features/kyc/lib/kyc-step-form-meta";
 import {
   ensureKycToken,
   checkKycReadiness,
@@ -87,6 +98,8 @@ type KycDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+const KYC_DIALOG_CLOSE_RESET_MS = 220;
+
 function mapContactDraft(raw: Record<string, unknown> | null | undefined): KycAddressFormValue | undefined {
   if (!raw) return undefined;
   const permanent = (raw.permanent as KycAddressFormValue["permanent"] | undefined) ?? undefined;
@@ -144,6 +157,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const {
     status,
     record,
+    overallStatus,
     kycAllowed,
     kycBlockReasons,
     markKycSubmitted,
@@ -159,6 +173,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [maxReachableStepIndex, setMaxReachableStepIndex] = useState(0);
   const [journeyDraft, setJourneyDraft] = useState<KycJourneyDraft>(() => createEmptyJourneyDraft());
   const [stateOptions, setStateOptions] = useState<string[]>([]);
   const [masterEnums, setMasterEnums] = useState<Awaited<ReturnType<typeof fetchKycMasterDataEnums>> | null>(null);
@@ -182,6 +197,15 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [familyPromptQueue, setFamilyPromptQueue] = useState<KycNomineeRecord[]>([]);
+  const [familyPromptOpen, setFamilyPromptOpen] = useState(false);
+  const [familyPromptNominee, setFamilyPromptNominee] = useState<KycNomineeRecord | null>(null);
+  const [familyPromptSkippedIds, setFamilyPromptSkippedIds] = useState<string[]>([]);
+  const [reviewFamilyRepromptNominee, setReviewFamilyRepromptNominee] = useState<KycNomineeRecord | null>(
+    null,
+  );
+  const [reviewFamilyRepromptChecked, setReviewFamilyRepromptChecked] = useState(false);
+  const [familyReviewDialogOpen, setFamilyReviewDialogOpen] = useState(false);
 
   const processSubmissionResult = useCallback(
     async (result: KycFormActionResponse) => {
@@ -237,7 +261,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       readiness_code: payload.readiness_code,
     });
     const steps = getKycJourneySteps(fullKycRequired);
-    setActiveStepIndex(Math.min(payload.active_step_index ?? 0, steps.length - 1));
+    const stepIndex = Math.min(payload.active_step_index ?? 0, steps.length - 1);
+    setActiveStepIndex(stepIndex);
+    setMaxReachableStepIndex(stepIndex);
     const signatureDraft = payload.signature_draft as KycSignatureDraft | null | undefined;
     setJourneyDraft({
       pan: payload.pan_draft ?? undefined,
@@ -347,19 +373,34 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   }, [open, kycAllowed, loadBootstrap, digilockerResumeToken, kycSubmissionResumeToken]);
 
   useEffect(() => {
-    if (!open) {
+    if (open) return;
+
+    const timeoutId = window.setTimeout(() => {
       setActiveStepIndex(0);
+      setMaxReachableStepIndex(0);
       setJourneyDraft(createEmptyJourneyDraft());
       setBootstrap(null);
       setPrefilledFromDigilocker(false);
       setBlockDialog(null);
       setSubmittedOutcomeShown(false);
+      setKraVerifiedOutcomeShown(false);
+      setKraCheckMessage(null);
+      setCheckingKraStatus(false);
       setSubmitError(null);
       setPanReadiness(null);
       setNomineeEnums(null);
       setEsignDialogOpen(false);
       setPendingEsignUrl(null);
-    }
+      setFamilyPromptQueue([]);
+      setFamilyPromptOpen(false);
+      setFamilyPromptNominee(null);
+      setFamilyPromptSkippedIds([]);
+      setReviewFamilyRepromptNominee(null);
+      setReviewFamilyRepromptChecked(false);
+      setFamilyReviewDialogOpen(false);
+    }, KYC_DIALOG_CLOSE_RESET_MS);
+
+    return () => window.clearTimeout(timeoutId);
   }, [open]);
 
   const requiresExitConfirm = status === "none" || status === "pending";
@@ -380,15 +421,96 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     setJourneyDraft((current) => ({ ...current, ...patch }));
   };
 
+  const syncKycRegistrationFromPan = useCallback(
+    (info: {
+      kycAlreadyRegistered: boolean;
+      readiness?: { status?: string; code?: string; reason?: string } | null;
+    }) => {
+      setBootstrap((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          kyc_already_registered: info.kycAlreadyRegistered,
+          readiness_code: info.readiness?.code ?? current.readiness_code,
+          readiness_reason: info.readiness?.reason ?? current.readiness_reason,
+        };
+      });
+    },
+    [],
+  );
+
   const requiresFullKyc = requiresFullKycSubmission({
     kyc_already_registered: bootstrap?.kyc_already_registered,
     readiness_code: bootstrap?.readiness_code,
   });
   const journeySteps = useMemo(() => getKycJourneySteps(requiresFullKyc), [requiresFullKyc]);
 
+  useEffect(() => {
+    const maxIndex = Math.max(0, journeySteps.length - 1);
+    setActiveStepIndex((current) => Math.min(current, maxIndex));
+    setMaxReachableStepIndex((current) => Math.min(current, maxIndex));
+  }, [journeySteps.length]);
+
   const goToNextStep = () => {
-    setActiveStepIndex((current) => Math.min(current + 1, journeySteps.length - 1));
+    setActiveStepIndex((current) => {
+      const next = Math.min(current + 1, journeySteps.length - 1);
+      setMaxReachableStepIndex((prev) => Math.max(prev, next));
+      return next;
+    });
   };
+
+  const handleStepSelect = useCallback(
+    (index: number) => {
+      if (index > maxReachableStepIndex) return;
+      setActiveStepIndex((current) => (index === current ? current : index));
+      setJourneySaveError(null);
+    },
+    [maxReachableStepIndex],
+  );
+
+  const advanceFamilyPromptQueue = useCallback(() => {
+    setFamilyPromptQueue((remaining) => {
+      if (remaining.length === 0) {
+        setFamilyPromptOpen(false);
+        setFamilyPromptNominee(null);
+        setActiveStepIndex((current) => {
+          const next = Math.min(current + 1, journeySteps.length - 1);
+          setMaxReachableStepIndex((prev) => Math.max(prev, next));
+          return next;
+        });
+        return [];
+      }
+      const [next, ...rest] = remaining;
+      setFamilyPromptNominee(next);
+      setFamilyPromptOpen(true);
+      return rest;
+    });
+  }, [journeySteps.length]);
+
+  const handleFamilyPromptCompleted = useCallback(
+    (result: "invited" | "skipped" | "blocked") => {
+      if (familyPromptNominee && result === "skipped") {
+        setFamilyPromptSkippedIds((current) =>
+          current.includes(familyPromptNominee.id) ? current : [...current, familyPromptNominee.id],
+        );
+      }
+      advanceFamilyPromptQueue();
+    },
+    [advanceFamilyPromptQueue, familyPromptNominee],
+  );
+
+  const handleReviewFamilyPromptCompleted = useCallback(
+    (result: "invited" | "skipped" | "blocked") => {
+      setFamilyReviewDialogOpen(false);
+      setReviewFamilyRepromptNominee(null);
+      if (result === "skipped" && reviewFamilyRepromptNominee) {
+        setFamilyPromptSkippedIds((current) =>
+          current.filter((id) => id !== reviewFamilyRepromptNominee.id),
+        );
+      }
+    },
+    [reviewFamilyRepromptNominee],
+  );
 
   const handlePanBlocked = (response: KycPanVerifyResponse) => {
     if (response.block_type === "corporate_pan") {
@@ -428,7 +550,6 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     setSaving(true);
     try {
       await saveKycJourneyState({
-        middle_name: details.middleName,
         last_completed_step: "pan",
       });
       updateDraft({
@@ -439,7 +560,12 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
           middleName: details.middleName,
           dateOfBirth: details.dateOfBirth,
           panCategory: details.panCategory,
+          fullName: details.fullName,
         },
+      });
+      syncKycRegistrationFromPan({
+        kycAlreadyRegistered: details.kycAlreadyRegistered,
+        readiness: panReadiness,
       });
 
       if (details.requiresDigilocker) {
@@ -494,6 +620,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         setPrefilledFromDigilocker(true);
       }
       setActiveStepIndex(1);
+      setMaxReachableStepIndex((prev) => Math.max(prev, 1));
     } finally {
       setSaving(false);
     }
@@ -551,7 +678,39 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         last_completed_step: "nominee",
       });
       updateDraft({ nominees });
-      goToNextStep();
+
+      const eligible = filterNomineesForFamilyPrompt(nominees);
+      if (eligible.length === 0) {
+        goToNextStep();
+        return;
+      }
+
+      const queue: KycNomineeRecord[] = [];
+      for (const nominee of eligible) {
+        try {
+          const preview = await previewNomineeFamilyGroupAdd({
+            nominee_email: nominee.contact.email.trim(),
+            nominee_name: nominee.core.fullName.trim(),
+            relationship: nominee.core.relationship,
+            kyc_nominee_id: nominee.id,
+          });
+          if (isActionableFamilyPreviewStatus(preview.status)) {
+            queue.push(nominee);
+          }
+        } catch {
+          // Non-blocking — continue KYC if family group preview fails.
+        }
+      }
+
+      if (queue.length === 0) {
+        goToNextStep();
+        return;
+      }
+
+      const [first, ...rest] = queue;
+      setFamilyPromptQueue(rest);
+      setFamilyPromptNominee(first);
+      setFamilyPromptOpen(true);
     } catch (error) {
       setJourneySaveError(resolveJourneySaveError(error));
     } finally {
@@ -697,9 +856,78 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   }, [open, resumeSubmissionReturn, kycSubmissionResumeToken]);
 
   const activeStepId = journeySteps[activeStepIndex]?.id;
-  const isOutcomeView = submittedOutcomeShown || kraVerifiedOutcomeShown;
+  const showVerifiedOutcome =
+    kraVerifiedOutcomeShown || (open && status === "complete");
+  const showSubmittedOutcome =
+    submittedOutcomeShown || (open && overallStatus === "submitted" && status !== "complete");
+  const isOutcomeView = showVerifiedOutcome || showSubmittedOutcome;
   const panVerified = bootstrap?.pan_verification_status === "verified";
-  const submittedPan = bootstrap?.pan_draft?.panNumber ?? journeyDraft.pan?.panNumber;
+  const submittedPan =
+    bootstrap?.pan_draft?.panNumber ?? journeyDraft.pan?.panNumber ?? record?.panNumber;
+  const stepFormMeta = getKycStepFormMeta(activeStepId);
+  const entryGateFormMeta = {
+    ...getKycStepFormMeta(),
+    title: copy.kyc.entryGate.title,
+    description: copy.kyc.entryGate.description,
+  };
+
+  const renderJourneyFormHeader = () => {
+    if (loadingBootstrap || bootstrapError) {
+      return null;
+    }
+
+    if (activeStepId === "pan-card") {
+      return (
+        <KycFormHeader
+          meta={stepFormMeta}
+          badge={<KycPanReadinessBadge readiness={panReadiness} />}
+        />
+      );
+    }
+
+    return <KycFormHeader meta={stepFormMeta} />;
+  };
+
+  useEffect(() => {
+    if (activeStepId !== "review" || reviewFamilyRepromptChecked || familyPromptSkippedIds.length === 0) {
+      return;
+    }
+
+    const nominees = journeyDraft.nominees ?? [];
+    const nominee = nominees.find((item) => familyPromptSkippedIds.includes(item.id));
+    if (!nominee) {
+      setReviewFamilyRepromptChecked(true);
+      return;
+    }
+
+    let cancelled = false;
+    setReviewFamilyRepromptChecked(true);
+
+    void previewNomineeFamilyGroupAdd({
+      nominee_email: nominee.contact.email.trim(),
+      nominee_name: nominee.core.fullName.trim(),
+      relationship: nominee.core.relationship,
+      kyc_nominee_id: nominee.id,
+    })
+      .then((preview) => {
+        if (cancelled) return;
+        if (isActionableFamilyPreviewStatus(preview.status)) {
+          setReviewFamilyRepromptNominee(nominee);
+        }
+      })
+      .catch(() => {
+        // Non-blocking — review submit must remain available.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeStepId,
+    familyPromptSkippedIds,
+    journeyDraft.nominees,
+    reviewFamilyRepromptChecked,
+  ]);
 
   const enumOptions = useMemo(
     () =>
@@ -734,23 +962,22 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     switch (activeStepId) {
       case "pan-card":
         return (
-          <div className="space-y-6">
-            <KycStepHero
-              media={<KycPanLottie className="flex justify-center" />}
-              badge={<KycPanReadinessBadge readiness={panReadiness} />}
-              descriptionLines={copy.kyc.pan.stepDescription}
-            />
-            <KycPanStep
-              initialDraft={journeyDraft.pan ?? bootstrap?.pan_draft ?? null}
-              initiallyVerified={panVerified}
-              initialKycAlreadyRegistered={bootstrap?.kyc_already_registered ?? null}
-              onBlocked={handlePanBlocked}
-              onPanVerified={({ readiness }) => setPanReadiness(readiness ?? null)}
-              onPanReset={() => setPanReadiness(null)}
-              onSubmit={handlePanSubmit}
-              disabled={saving}
-            />
-          </div>
+          <KycPanStep
+            initialDraft={journeyDraft.pan ?? bootstrap?.pan_draft ?? null}
+            initiallyVerified={panVerified}
+            initialKycAlreadyRegistered={bootstrap?.kyc_already_registered ?? null}
+            onBlocked={handlePanBlocked}
+            onPanVerified={({ kycAlreadyRegistered, readiness }) => {
+              setPanReadiness(readiness ?? null);
+              syncKycRegistrationFromPan({
+                kycAlreadyRegistered,
+                readiness,
+              });
+            }}
+            onPanReset={() => setPanReadiness(null)}
+            onSubmit={handlePanSubmit}
+            disabled={saving}
+          />
         );
       case "address":
         return (
@@ -829,9 +1056,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         return (
           <div className="flex min-h-0 flex-1 flex-col">
             {submitError ? (
-              <p className="mb-3 shrink-0 rounded-[var(--radius-card)] border border-destructive/30 bg-destructive/5 px-3 py-2 text-caption text-destructive">
-                {submitError}
-              </p>
+              <FieldMessage message={submitError} className="mb-3 mt-0 shrink-0" />
             ) : null}
             <KycReviewStep
               draft={journeyDraft}
@@ -840,6 +1065,27 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               onAddNominee={() =>
                 setActiveStepIndex(journeySteps.findIndex((step) => step.id === "nominee"))
               }
+              familyGroupRepromptNominee={reviewFamilyRepromptNominee}
+              onFamilyGroupRepromptInvite={() => {
+                if (!reviewFamilyRepromptNominee) return;
+                setFamilyPromptNominee(reviewFamilyRepromptNominee);
+                setFamilyReviewDialogOpen(true);
+              }}
+              onFamilyGroupRepromptDismiss={() => {
+                if (!reviewFamilyRepromptNominee) {
+                  setReviewFamilyRepromptNominee(null);
+                  return;
+                }
+                void addNomineeToFamilyGroup({
+                  nominee_email: reviewFamilyRepromptNominee.contact.email.trim(),
+                  nominee_name: reviewFamilyRepromptNominee.core.fullName.trim(),
+                  relationship: reviewFamilyRepromptNominee.core.relationship,
+                  kyc_nominee_id: reviewFamilyRepromptNominee.id,
+                  action: "skip",
+                }).finally(() => {
+                  setReviewFamilyRepromptNominee(null);
+                });
+              }}
             />
             {submitting ? (
               <p className="mt-3 shrink-0 text-center text-compact text-muted-foreground">
@@ -853,95 +1099,113 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     }
   };
 
+  const outcomeDialogClassName = cn(
+    "kyc-dialog-root kyc-dialog-root--outcome kyc-dialog-surface flex w-full max-w-sm flex-col items-center overflow-hidden p-0 shadow-zynd-high ring-1 ring-border transition-none sm:max-w-sm",
+  );
+
+  const journeyDialogClassName = cn(
+    "kyc-dialog-root kyc-dialog-surface kyc-dialog-surface--journey flex w-full max-w-[1024px] flex-col overflow-hidden p-0 shadow-zynd-high ring-0 transition-none sm:max-w-[1024px]",
+  );
+
+  const renderOutcomeContent = () => (
+    <>
+      <DialogTitle className="sr-only">{copy.kyc.pageTitle}</DialogTitle>
+      <KycDialogBody
+        variant="default"
+        className="flex flex-col items-center justify-center px-5 py-6 text-center sm:px-6 sm:py-7"
+      >
+        {showVerifiedOutcome ? (
+          <KycOutcomePanel
+            variant="success"
+            copy={{
+              description: copy.kyc.completeDescription,
+              detailLabel: copy.kyc.verifiedPanLabel,
+              detailValue: submittedPan,
+              actionLabel: copy.kyc.done,
+            }}
+            onAction={() => onOpenChange(false)}
+          />
+        ) : (
+          <KycOutcomePanel
+            variant="waiting"
+            copy={{
+              description: kraCheckMessage ?? copy.kyc.submittedDescription,
+              detailLabel: submittedPan ? copy.kyc.submittedPanLabel : undefined,
+              detailValue: submittedPan,
+              actionLabel: checkingKraStatus
+                ? copy.kyc.checkStatusChecking
+                : copy.kyc.checkStatusAction,
+            }}
+            onAction={() => void handleCheckKraStatus()}
+            secondaryActionLabel={copy.kyc.checkStatusDone}
+            onSecondaryAction={() => onOpenChange(false)}
+            actionLoading={checkingKraStatus}
+          />
+        )}
+      </KycDialogBody>
+    </>
+  );
+
+  const renderJourneyContent = () => (
+    <>
+      <DialogTitle className="sr-only">{copy.kyc.pageTitle}</DialogTitle>
+      {!kycAllowed ? (
+        <KycDialogLayout onClose={() => handleOpenChange(false)}>
+          <KycDialogChrome
+            title={copy.kyc.pageTitle}
+            onClose={() => handleOpenChange(false)}
+            showStepBadge={false}
+            showClose={false}
+            hideTitle
+            hideBottomBorder
+          />
+          <KycDialogBody variant="default">
+            <KycFormHeader meta={entryGateFormMeta} />
+            <KycEntryGate reasons={kycBlockReasons} onReady={() => openDialog()} />
+          </KycDialogBody>
+        </KycDialogLayout>
+      ) : (
+        <KycDialogLayout
+          activeStepId={activeStepId}
+          hidePanelVisual={loadingBootstrap || Boolean(bootstrapError)}
+          onClose={() => handleOpenChange(false)}
+        >
+          <KycDialogChrome
+            activeStepIndex={activeStepIndex}
+            maxReachableStepIndex={maxReachableStepIndex}
+            steps={journeySteps}
+            title={journeySteps[activeStepIndex]?.label ?? copy.kyc.pageTitle}
+            onClose={() => handleOpenChange(false)}
+            onStepSelect={handleStepSelect}
+            showCircleSteps
+            showStepBadge={false}
+            showClose={false}
+            hideTitle
+          />
+          <KycDialogBody variant={activeStepId === "review" ? "review" : "default"}>
+            {renderJourneyFormHeader()}
+            {journeySaveError ? (
+              <FieldMessage message={journeySaveError} className="mb-3 mt-0 shrink-0" />
+            ) : null}
+            <div className="flex min-h-0 flex-1 flex-col">{renderJourneyStep()}</div>
+          </KycDialogBody>
+        </KycDialogLayout>
+      )}
+    </>
+  );
+
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
-          showCloseButton={false}
-          overlayClassName="kyc-dialog-overlay"
-          className={cn(
-            "kyc-dialog-root kyc-dialog-surface flex w-full flex-col overflow-hidden p-0 shadow-zynd-high ring-1 ring-border",
-            isOutcomeView
-              ? "kyc-dialog-root--outcome max-w-[18.5rem] sm:max-w-[19.5rem]"
-              : "max-h-[min(90vh,820px)] max-w-xl sm:max-w-[36rem]",
-          )}
+          key="kyc-dialog"
+          centeredLayout
+          motion="fade"
+          showCloseButton={isOutcomeView}
+          overlayClassName="kyc-dialog-overlay duration-200 data-closed:duration-150"
+          className={isOutcomeView ? outcomeDialogClassName : journeyDialogClassName}
         >
-          <DialogTitle className="sr-only">{copy.kyc.pageTitle}</DialogTitle>
-
-          {isOutcomeView ? (
-            <>
-              <KycDialogChrome
-                title={kraVerifiedOutcomeShown ? copy.kyc.completeTitle : copy.kyc.submittedTitle}
-                onClose={() => onOpenChange(false)}
-                showStepBadge={false}
-                hideBottomBorder
-                className="pb-0 [&_header]:px-5 [&_header]:py-2.5 sm:[&_header]:px-6"
-              />
-              <KycDialogBody variant="default" className="px-5 py-4 sm:px-6 sm:py-5">
-                {kraVerifiedOutcomeShown ? (
-                  <KycOutcomePanel
-                    variant="success"
-                    copy={{
-                      description: copy.kyc.completeDescription,
-                      detailLabel: copy.kyc.verifiedPanLabel,
-                      detailValue: submittedPan,
-                      actionLabel: copy.kyc.done,
-                    }}
-                    onAction={() => onOpenChange(false)}
-                  />
-                ) : (
-                  <>
-                    <KycOutcomePanel
-                      variant="waiting"
-                      copy={{
-                        description: kraCheckMessage ?? copy.kyc.submittedDescription,
-                        detailLabel: submittedPan ? copy.kyc.submittedPanLabel : undefined,
-                        detailValue: submittedPan,
-                        actionLabel: checkingKraStatus
-                          ? copy.kyc.checkStatusChecking
-                          : copy.kyc.checkStatusAction,
-                      }}
-                      onAction={() => void handleCheckKraStatus()}
-                      secondaryActionLabel={copy.kyc.checkStatusDone}
-                      onSecondaryAction={() => onOpenChange(false)}
-                      actionLoading={checkingKraStatus}
-                    />
-                  </>
-                )}
-              </KycDialogBody>
-            </>
-          ) : !kycAllowed ? (
-            <>
-              <KycDialogChrome
-                title={copy.kyc.pageTitle}
-                onClose={() => handleOpenChange(false)}
-                showStepBadge={false}
-                hideBottomBorder
-              />
-              <KycDialogBody variant="default">
-                <KycEntryGate reasons={kycBlockReasons} onReady={() => openDialog()} />
-              </KycDialogBody>
-            </>
-          ) : (
-            <>
-              <KycDialogChrome
-                activeStepIndex={activeStepIndex}
-                steps={journeySteps}
-                title={journeySteps[activeStepIndex]?.label ?? copy.kyc.pageTitle}
-                onClose={() => handleOpenChange(false)}
-                onBack={() => setActiveStepIndex((current) => Math.max(0, current - 1))}
-                showProgress
-              />
-              <KycDialogBody variant={activeStepId === "review" ? "review" : "default"}>
-                {journeySaveError ? (
-                  <p className="mb-3 shrink-0 rounded-[var(--radius-card)] border border-destructive/30 bg-destructive/5 px-3 py-2 text-caption text-destructive">
-                    {journeySaveError}
-                  </p>
-                ) : null}
-                {renderJourneyStep()}
-              </KycDialogBody>
-            </>
-          )}
+          {isOutcomeView ? renderOutcomeContent() : renderJourneyContent()}
         </DialogContent>
       </Dialog>
 
@@ -1004,6 +1268,20 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             window.location.assign(pendingEsignUrl);
           }
         }}
+      />
+
+      <KycNomineeFamilyGroupDialog
+        open={familyPromptOpen}
+        onOpenChange={setFamilyPromptOpen}
+        nominee={familyPromptNominee}
+        onCompleted={handleFamilyPromptCompleted}
+      />
+
+      <KycNomineeFamilyGroupDialog
+        open={familyReviewDialogOpen}
+        onOpenChange={setFamilyReviewDialogOpen}
+        nominee={reviewFamilyRepromptNominee}
+        onCompleted={handleReviewFamilyPromptCompleted}
       />
     </>
   );

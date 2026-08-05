@@ -57,6 +57,7 @@ export async function verifyMfaLogin(payload: {
   mfaToken: string;
   totpCode?: string;
   backupCode?: string;
+  smsOtp?: string;
 }) {
   const data = await apiRequest<AuthSuccessResponse>("/auth/mfa/verify", {
     method: "POST",
@@ -64,9 +65,35 @@ export async function verifyMfaLogin(payload: {
       mfa_token: payload.mfaToken,
       totp_code: payload.totpCode ?? null,
       backup_code: payload.backupCode ?? null,
+      sms_otp: payload.smsOtp ?? null,
     }),
   });
   return storeAuthResponse(data);
+}
+
+export async function sendMfaLoginSms(mfaToken: string) {
+  return apiRequest<OtpSendResponse>("/auth/login/mfa/send-sms", {
+    method: "POST",
+    body: JSON.stringify({ mfa_token: mfaToken }),
+  });
+}
+
+export async function verifyLoginSms(payload: { loginToken: string; otp: string }) {
+  const data = await apiRequest<AuthSuccessResponse>("/auth/login/verify-sms", {
+    method: "POST",
+    body: JSON.stringify({
+      login_token: payload.loginToken,
+      otp: payload.otp,
+    }),
+  });
+  return storeAuthResponse(data);
+}
+
+export async function resendLoginSmsOtp(loginToken: string) {
+  return apiRequest<OtpSendResponse>("/auth/login/resend-sms", {
+    method: "POST",
+    body: JSON.stringify({ login_token: loginToken }),
+  });
 }
 
 export async function resendOAuthLinkOtp(linkToken: string) {

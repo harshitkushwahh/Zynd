@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SortDescriptor } from "react-aria-components";
 import { Loader2 } from "lucide-react";
 
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
   fetchInvestFunds,
   fetchInvestHome,
@@ -21,7 +23,14 @@ import {
   hasClientOnlyMfFundFilters,
   type MfFundFilters,
 } from "@/features/invest/lib/mf-fund-filters";
-import { MF_ALL_FUNDS_PAGE_SIZE, mergeInvestFunds } from "@/features/invest/lib/mf-fund-ranking";
+import {
+  MF_ALL_FUNDS_PAGE_SIZE,
+  MF_FUNDS_TABLE_DEFAULT_SORT,
+  mergeInvestFunds,
+  resolveInvestFundsApiSort,
+  resolveInvestFundsPageHasMore,
+  usesServerFundTableSort,
+} from "@/features/invest/lib/mf-fund-ranking";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 
@@ -35,6 +44,7 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     ...EMPTY_MF_FUND_FILTERS,
     categorySlug: initialCategorySlug,
   });
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>(MF_FUNDS_TABLE_DEFAULT_SORT);
   const [funds, setFunds] = useState<InvestFundSummary[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -51,6 +61,35 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   const pageRef = useRef(1);
   const hasMoreRef = useRef(true);
   const categorySlugRef = useRef<string | null>(initialCategorySlug);
+  const sortRef = useRef(sortDescriptor);
+  const loadPageRef = useRef<
+    (
+      nextPage: number,
+      append: boolean,
+      categorySlug: string | null,
+      sort: SortDescriptor,
+    ) => Promise<void>
+  >(async () => {});
+  const LOAD_MORE_ROOT_MARGIN_PX = 160;
+
+  const serverSorted = useMemo(
+    () => usesServerFundTableSort(sortDescriptor, { categoryFiltered: Boolean(filters.categorySlug) }),
+    [filters.categorySlug, sortDescriptor],
+  );
+
+  const tryScheduleLoadMore = useCallback(() => {
+    if (!hasMoreRef.current || loadingMoreRef.current || refetchingRef.current) return;
+
+    const node = loadMoreRef.current;
+    const root = scrollContainerRef.current;
+    if (!node || !root) return;
+
+    const rootRect = root.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    if (nodeRect.top <= rootRect.bottom + LOAD_MORE_ROOT_MARGIN_PX) {
+      void loadPageRef.current(pageRef.current + 1, true, categorySlugRef.current, sortRef.current);
+    }
+  }, []);
 
   const filteredFunds = useMemo(() => applyMfFundFilters(funds, filters), [funds, filters]);
   const tableTotalCount = hasClientOnlyMfFundFilters(filters) ? filteredFunds.length : total;
@@ -77,8 +116,17 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     categorySlugRef.current = filters.categorySlug;
   }, [filters.categorySlug]);
 
+  useEffect(() => {
+    sortRef.current = sortDescriptor;
+  }, [sortDescriptor]);
+
   const loadPage = useCallback(
-    async (nextPage: number, append: boolean, categorySlug: string | null) => {
+    async (
+      nextPage: number,
+      append: boolean,
+      categorySlug: string | null,
+      sort: SortDescriptor,
+    ) => {
       if (append) {
         if (loadingMoreRef.current || !hasMoreRef.current) return;
         loadingMoreRef.current = true;
@@ -99,14 +147,31 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
           category: categorySlug ?? undefined,
           page: nextPage,
           page_size: MF_ALL_FUNDS_PAGE_SIZE,
-          sort: "rank",
+          sort: resolveInvestFundsApiSort(sort) ?? "return_3y",
         });
 
-        setFunds((current) => (append ? mergeInvestFunds(current, response.items) : mergeInvestFunds([], response.items)));
+        let previousCount = 0;
+        let mergedCount = 0;
+        setFunds((current) => {
+          previousCount = current.length;
+          const merged = append
+            ? mergeInvestFunds(current, response.items)
+            : mergeInvestFunds([], response.items);
+          mergedCount = merged.length;
+          return merged;
+        });
+
+        const nextHasMore = resolveInvestFundsPageHasMore(
+          append,
+          previousCount,
+          mergedCount,
+          response.has_more,
+          response.items.length,
+        );
         pageRef.current = response.page;
-        hasMoreRef.current = response.has_more;
+        hasMoreRef.current = nextHasMore;
         setPage(response.page);
-        setHasMore(response.has_more);
+        setHasMore(nextHasMore);
         setTotal(response.total);
         hasLoadedOnceRef.current = true;
       } catch (err) {
@@ -121,6 +186,10 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     },
     [],
   );
+
+  useEffect(() => {
+    loadPageRef.current = loadPage;
+  }, [loadPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,11 +207,11 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   }, []);
 
   useEffect(() => {
-    void loadPage(1, false, filters.categorySlug);
-  }, [filters.categorySlug, loadPage]);
+    void loadPage(1, false, filters.categorySlug, sortDescriptor);
+  }, [filters.categorySlug, loadPage, sortDescriptor]);
 
   useEffect(() => {
-    if (initialLoading) return;
+    if (initialLoading || !hasMore) return;
 
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
@@ -151,16 +220,14 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        if (!hasMoreRef.current) return;
-        if (loadingMoreRef.current || refetchingRef.current) return;
-        void loadPage(pageRef.current + 1, true, categorySlugRef.current);
+        tryScheduleLoadMore();
       },
-      { root, rootMargin: "120px" },
+      { root, rootMargin: `${LOAD_MORE_ROOT_MARGIN_PX}px`, threshold: 0 },
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [initialLoading, loadPage, filters.categorySlug]);
+  }, [funds.length, hasMore, initialLoading, tryScheduleLoadMore]);
 
   return (
     <div className={MF_PAGE_SECTION_CLASS}>
@@ -171,6 +238,8 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
           },
         ]}
       />
+
+      <FundEligibilityBanner />
 
       <div className="mb-6">
         <PageTitle>{copy.mutualFunds.allFundsTitle}</PageTitle>
@@ -199,8 +268,17 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
               refetching={refetching}
               loadingMore={loadingMore}
               hasMore={hasMore}
+              virtualized
+              serverSorted={serverSorted}
+              sortDescriptor={sortDescriptor}
+              onSortChange={setSortDescriptor}
               scrollContainerRef={scrollContainerRef}
               loadMoreRef={loadMoreRef}
+              emptyDescription={
+                hasClientOnlyMfFundFilters(filters) && funds.length > 0
+                  ? copy.mutualFunds.allFundsEmptyFiltered
+                  : copy.mutualFunds.allFundsEmptyDescription
+              }
             />
           )}
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CheckCircle2, Loader2 } from "lucide-react";
+import { Building2, CheckCircle2, Loader2, PencilLine } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { KycPanReadinessBadge } from "@/features/kyc/components/kyc-pan-readiness-badge";
@@ -15,15 +15,16 @@ type KycBankAccountCardProps = {
   accountDetails: KycBankAccountDetails | null;
   verification: KycBankVerificationResult | null;
   readiness?: KycReadinessInfo | null;
+  onEdit?: () => void;
 };
 
 const fieldShellClassName =
-  "flex h-9 w-full min-w-0 items-center rounded-[var(--radius-control)] border border-border/60 bg-muted/35 px-2.5 text-caption font-semibold tracking-tight text-foreground";
+  "flex h-8 w-full min-w-0 items-center rounded-[var(--radius-control)] border border-border/60 bg-muted/35 px-2 text-[12px] font-semibold tracking-tight text-foreground";
 
 function BankDetailField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 space-y-1">
-      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="min-w-0 space-y-0.5">
+      <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
         {label}
       </p>
       <div className={fieldShellClassName}>
@@ -41,24 +42,24 @@ function KycBankVerificationBadges({
   readiness?: KycReadinessInfo | null;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1">
       <KycPanReadinessBadge readiness={readiness} />
       {verification.panVerified ? (
-        <StatusBadge variant="success" className="h-6 px-2.5 text-[11px]">
+        <StatusBadge variant="success" className="h-5 px-2 text-[10px]">
           {copy.kyc.bank.badges.panVerified}
         </StatusBadge>
       ) : null}
       {verification.bankVerified ? (
-        <StatusBadge variant="success" className="h-6 px-2.5 text-[11px]">
+        <StatusBadge variant="success" className="h-5 px-2 text-[10px]">
           {copy.kyc.bank.badges.bankVerified}
         </StatusBadge>
       ) : null}
       {verification.readinessVerified ? (
-        <StatusBadge variant="success" className="h-6 px-2.5 text-[11px]">
+        <StatusBadge variant="success" className="h-5 px-2 text-[10px]">
           {copy.kyc.bank.badges.readinessVerified}
         </StatusBadge>
       ) : (
-        <StatusBadge variant="warning" className="h-6 px-2.5 text-[11px]">
+        <StatusBadge variant="warning" className="h-5 px-2 text-[10px]">
           {copy.kyc.bank.badges.readinessPending}
         </StatusBadge>
       )}
@@ -72,6 +73,7 @@ export function KycBankAccountCard({
   accountDetails,
   verification,
   readiness,
+  onEdit,
 }: KycBankAccountCardProps) {
   const requiresManual = Boolean(verification?.requiresManualVerification && !isComplete);
   const showGenericPending = (!isComplete && !accountDetails) || isProcessing;
@@ -128,30 +130,30 @@ export function KycBankAccountCard({
   return (
     <div
       className={cn(
-        "space-y-3 rounded-[var(--radius-card)] border border-border p-3 shadow-zynd-low",
+        "space-y-2 rounded-[var(--radius-card)] border border-border p-2.5 shadow-zynd-low",
         requiresManual
           ? "border-warning/30 bg-gradient-to-br from-warning/[0.08] via-card to-muted/15"
           : "bg-gradient-to-br from-success/[0.06] via-card to-muted/15",
       )}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-2">
         <div
           className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-full ring-1 ring-inset",
+            "flex size-7 shrink-0 items-center justify-center rounded-full ring-1 ring-inset",
             requiresManual
               ? "bg-warning/10 text-warning ring-warning/20"
               : "bg-success/10 text-success ring-success/20",
           )}
         >
-          <CheckCircle2 className="size-4" strokeWidth={2} />
+          <CheckCircle2 className="size-3.5" strokeWidth={2} />
         </div>
 
-        <div className="min-w-0 flex-1 space-y-2">
+        <div className="min-w-0 flex-1 space-y-1">
           <div>
-            <p className="text-caption font-semibold tracking-tight text-foreground">
+            <p className="text-[13px] font-semibold leading-tight tracking-tight text-foreground">
               {requiresManual ? copy.kyc.bank.manualPendingTitle : copy.kyc.bank.verifiedTitle}
             </p>
-            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
               {requiresManual
                 ? verification?.failureReason ?? copy.kyc.bank.manualPendingDescription
                 : copy.kyc.bank.verifiedDescription}
@@ -161,14 +163,26 @@ export function KycBankAccountCard({
             <KycBankVerificationBadges verification={verification} readiness={readiness} />
           ) : null}
         </div>
+
+        {isComplete && !requiresManual && onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={isProcessing}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            aria-label={copy.kyc.bank.editBankDetails}
+          >
+            <PencilLine className="size-3.5" strokeWidth={2} />
+          </button>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5">
+      <div className="grid grid-cols-1 gap-2">
         <BankDetailField
           label={copy.kyc.bank.fields.accountHolderName}
           value={accountDetails.accountHolderName}
         />
-        <div className="grid gap-2.5 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <BankDetailField label={copy.kyc.bank.fields.bankName} value={accountDetails.bankName} />
           <BankDetailField label={copy.kyc.bank.fields.branch} value={accountDetails.branch} />
         </div>

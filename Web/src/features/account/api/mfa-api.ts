@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
+import type { AuthSecurityPolicy } from "@/features/auth/api/types";
 import type { OtpSendResponse } from "@/features/auth/api/types";
 
 export async function mfaEnrollStart() {
@@ -33,12 +34,14 @@ export async function fetchMfaBackupCodesStatus() {
 export async function regenerateMfaBackupCodes(payload: {
   currentPassword: string;
   totpCode?: string;
+  smsOtp?: string;
 }) {
   return apiRequest<{ backup_codes: string[] }>("/auth/mfa/backup-codes/regenerate", {
     method: "POST",
     body: JSON.stringify({
       current_password: payload.currentPassword,
       totp_code: payload.totpCode ?? null,
+      sms_otp: payload.smsOtp ?? null,
     }),
   });
 }
@@ -69,16 +72,34 @@ export async function mfaResetConfirm(resetToken: string, totpCode: string) {
 export async function mfaDisable(payload: {
   currentPassword: string;
   totpCode?: string;
+  smsOtp?: string;
 }) {
   return apiRequest<{ disabled: boolean }>("/auth/mfa/disable", {
     method: "POST",
     body: JSON.stringify({
       current_password: payload.currentPassword,
       totp_code: payload.totpCode ?? null,
+      sms_otp: payload.smsOtp ?? null,
     }),
   });
 }
 
 export async function checkFundEligibility() {
   return apiRequest<{ eligible: boolean; reasons: string[] }>("/auth/fund-eligibility/check");
+}
+
+export async function fetchFundEligibilityStatus() {
+  return apiRequest<{
+    eligible: boolean;
+    reasons: string[];
+    next_action: "verify_email" | "verify_phone" | "setup_mfa" | "setup_pin" | null;
+    email_verified: boolean;
+    mfa_enrolled: boolean;
+    pin_enrolled: boolean;
+    phone_verified: boolean;
+  }>("/auth/fund-eligibility/status");
+}
+
+export async function fetchAuthSecurityPolicy() {
+  return apiRequest<AuthSecurityPolicy>("/auth/security-policy");
 }

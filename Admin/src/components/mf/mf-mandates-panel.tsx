@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ShieldCheck, Timer, Users } from "lucide-react";
+import { RefreshCw, ShieldCheck, Timer, Users } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { MfMandateDetailDialog } from "@/components/mf/mf-mandate-detail-dialog";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -23,45 +25,56 @@ import {
   paginateItems,
 } from "@/components/ui/admin-table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ApiError } from "@/lib/api-client";
 import { userInitials } from "@/lib/admin-capabilities";
 import {
   fetchMfTransactionMandates,
   type MfTransactionMandate,
 } from "@/lib/mf-transactions-admin-api";
+import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const MANDATE_STATUS_OPTIONS = [
+const MANDATE_STATUS_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "PENDING", label: "Pending" },
   { value: "AUTH_PENDING", label: "Auth pending" },
   { value: "APPROVED", label: "Approved" },
   { value: "FAILED", label: "Failed" },
   { value: "CANCELLED", label: "Cancelled" },
-] as const;
-
+];
 
 function formatInr(value: number) {
   return `₹${value.toLocaleString()}`;
 }
 
+function matchesSearch(mandate: MfTransactionMandate, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    mandate.user_display_name,
+    mandate.user_email,
+    mandate.client_id,
+    mandate.mandate_id,
+    mandate.status,
+    mandate.fp_mandate_status,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(normalized);
+}
+
 export function MfMandatesPanel({
   canRead,
   canManage,
+  showSummaryCards = true,
 }: {
   canRead: boolean;
   canManage: boolean;
+  showSummaryCards?: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -71,8 +84,10 @@ export function MfMandatesPanel({
     active_mandates: 0,
     auth_pending_mandates: 0,
   });
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [selectedMandateId, setSelectedMandateId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -99,25 +114,35 @@ export function MfMandatesPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter]);
+  }, [statusFilter, search, pageSize]);
+
+  const filteredMandates = useMemo(
+    () => mandates.filter((mandate) => matchesSearch(mandate, search)),
+    [mandates, search],
+  );
 
   const pagination = useMemo(
-    () => paginateItems(mandates, page, ADMIN_TABLE_PAGE_SIZE),
-    [mandates, page],
+    () => paginateItems(filteredMandates, page, pageSize),
+    [filteredMandates, page, pageSize],
   );
+
+  const showSkeleton = loading && mandates.length === 0;
 
   const summaryMetrics = [
     {
       key: "total",
       label: "Total mandates",
       value: summary.total_mandates.toLocaleString(),
+      infoDescription: "All user mandates linked to systematic plans.",
       icon: Users,
-      tone: "muted" as const,
+      tone: "info" as const,
+      accent: true,
     },
     {
       key: "active",
       label: "Active mandates",
       value: summary.active_mandates.toLocaleString(),
+      infoDescription: "Approved mandates ready for SIP collections.",
       icon: ShieldCheck,
       tone: summary.active_mandates > 0 ? ("success" as const) : ("muted" as const),
     },
@@ -125,51 +150,80 @@ export function MfMandatesPanel({
       key: "auth-pending",
       label: "Auth pending",
       value: summary.auth_pending_mandates.toLocaleString(),
+      infoDescription: "Mandates waiting for customer authorization.",
       icon: Timer,
       tone: summary.auth_pending_mandates > 0 ? ("warning" as const) : ("muted" as const),
     },
   ];
 
   return (
-    <div className="space-y-5">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {summaryMetrics.map((metric) => (
-          <AdminMetricCard
-            key={metric.key}
-            label={metric.label}
-            value={metric.value}
-            icon={metric.icon}
-            tone={metric.tone}
-            loading={loading}
-          />
-        ))}
-      </div>
+    <div className="space-y-4">
+      {showSummaryCards ? (
+        <AdminMetricCardsGrid columns="three" className="!mt-0">
+          {summaryMetrics.map((metric) => (
+            <AdminMetricCard
+              key={metric.key}
+              label={metric.label}
+              value={metric.value}
+              infoDescription={metric.infoDescription}
+              icon={metric.icon}
+              tone={metric.tone}
+              accent={metric.accent}
+              loading={loading}
+            />
+          ))}
+        </AdminMetricCardsGrid>
+      ) : null}
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSectionTitle icon={ShieldCheck}>User mandates</AdminSectionTitle>
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? ALL)}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="All statuses">
-              {MANDATE_STATUS_OPTIONS.find((option) => option.value === statusFilter)?.label ??
-                "All statuses"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Filter by status</SelectLabel>
-              {MANDATE_STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by customer or mandate ID"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value)}
+            options={MANDATE_STATUS_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void loadData()}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
+        </div>
       </div>
 
-      <AdminDataTable minWidth="7xl">
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+
+      <AdminDataTable
+        minWidth="7xl"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            disabled={loading}
+            totalCount={filteredMandates.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+            onNext={() => setPage((value) => value + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Customer</AdminTableHeadCell>
@@ -182,15 +236,18 @@ export function MfMandatesPanel({
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {loading ? (
+          {showSkeleton ? (
             <AdminTableSkeletonRows columns={7} />
-          ) : pagination.items.length === 0 ? (
-            <AdminTableStateRow colSpan={7}>No mandates found.</AdminTableStateRow>
+          ) : filteredMandates.length === 0 ? (
+            <AdminTableStateRow colSpan={7}>
+              {mandates.length === 0
+                ? "No mandates found."
+                : "No mandates match your search."}
+            </AdminTableStateRow>
           ) : (
             pagination.items.map((mandate) => (
               <AdminTableRow
                 key={mandate.mandate_id}
-                className="cursor-pointer"
                 onClick={() => setSelectedMandateId(mandate.mandate_id)}
               >
                 <AdminTableCell>
@@ -244,18 +301,6 @@ export function MfMandatesPanel({
           )}
         </AdminTableBody>
       </AdminDataTable>
-
-      {!loading && mandates.length > 0 ? (
-        <AdminTablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          hasPrevious={pagination.hasPrevious}
-          hasNext={pagination.hasNext}
-          disabled={loading}
-          onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-          onNext={() => setPage((value) => value + 1)}
-        />
-      ) : null}
 
       <MfMandateDetailDialog
         open={selectedMandateId != null}

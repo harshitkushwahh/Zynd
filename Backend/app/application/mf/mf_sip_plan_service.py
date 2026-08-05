@@ -10,16 +10,20 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.goals.errors import GoalError
+from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
 from app.application.mf.mf_fp_state import map_fp_plan_state
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
 from app.application.mf.mf_mandate_service import (
     create_mandate_for_user,
+    maybe_release_mandate_after_sip_change,
     serialize_mandate,
 )
 from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.mf_order_service import _load_order_context, get_or_create_mf_investment_account
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
+from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
@@ -36,6 +40,7 @@ from app.infrastructure.persistence.investor_models import (
     InvestorProfileStatus,
     InvestorProvisionTrigger,
 )
+from app.infrastructure.persistence.mf_models import FundAmc, MutualFund
 from app.infrastructure.persistence.mf_transaction_models import (
     MfInvestmentAccountStatus,
     MfMandate,
@@ -71,12 +76,47 @@ def _derive_sip_next_action(*, status: str, mandate: MfMandate | None) -> str:
     return "wait_processing"
 
 
-def serialize_sip_plan(plan: MfSipPlan, *, product_name: str | None = None, mandate: MfMandate | None = None) -> dict:
+async def load_sip_plan_fund_metadata(
+    session: AsyncSession,
+    plans: list[MfSipPlan],
+) -> tuple[dict[int, str], dict[int, str | None], dict[int, str]]:
+    fund_ids = {plan.fund_id for plan in plans}
+    if not fund_ids:
+        return {}, {}, {}
+
+    settings = get_settings()
+    result = await session.execute(
+        select(MutualFund.id, MutualFund.isin_growth, FundAmc.name, FundAmc.logo_url, FundAmc.slug)
+        .join(FundAmc, MutualFund.amc_id == FundAmc.id)
+        .where(MutualFund.id.in_(fund_ids))
+    )
+    amc_names: dict[int, str] = {}
+    amc_logos: dict[int, str | None] = {}
+    isins: dict[int, str] = {}
+    for fund_id, isin, name, logo_url, slug in result:
+        amc_names[fund_id] = name
+        amc_logos[fund_id] = resolve_amc_logo_url(logo_url, slug, settings)
+        isins[fund_id] = isin
+    return amc_names, amc_logos, isins
+
+
+def serialize_sip_plan(
+    plan: MfSipPlan,
+    *,
+    product_name: str | None = None,
+    mandate: MfMandate | None = None,
+    amc_name: str | None = None,
+    amc_logo_url: str | None = None,
+    isin: str | None = None,
+) -> dict:
     mandate_payload = serialize_mandate(mandate) if mandate else None
     return {
         "plan_id": str(plan.id),
         "product_id": str(plan.product_id),
         "product_name": product_name,
+        "amc_name": amc_name,
+        "amc_logo_url": amc_logo_url,
+        "isin": isin,
         "amount_inr": float(plan.amount_inr),
         "frequency": plan.frequency,
         "installment_day": plan.installment_day,
@@ -135,11 +175,27 @@ def _validate_installment_day(*, frequency: str, installment_day: int | None) ->
     return installment_day
 
 
-def _default_installments(frequency: str) -> int:
+def default_installments(frequency: str) -> int:
     settings = get_settings()
     if frequency == "daily":
         return settings.zynd_mf_sip_default_daily_installments
     return settings.zynd_mf_sip_default_monthly_installments
+
+
+def _validate_number_of_installments(number_of_installments: int | None) -> int:
+    settings = get_settings()
+    max_installments = settings.zynd_mf_sip_max_installments
+    if number_of_installments is None:
+        raise MfOrderError(
+            code="number_of_installments_required",
+            message="Number of installments is required for SIP",
+        )
+    if number_of_installments < 1 or number_of_installments > max_installments:
+        raise MfOrderError(
+            code="invalid_number_of_installments",
+            message=f"Number of installments must be between 1 and {max_installments}",
+        )
+    return number_of_installments
 
 
 def _normalize_mobile(phone: str | None) -> str | None:
@@ -202,6 +258,8 @@ async def create_sip_plan(
     idempotency_key: str,
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
+    family_goal_id: uuid.UUID | None = None,
+    mandate_type: str = "upi",
 ) -> MfSipPlan:
     if amount_inr <= 0:
         raise MfOrderError(code="invalid_amount", message="Amount must be positive")
@@ -214,7 +272,7 @@ async def create_sip_plan(
 
     normalized_frequency = _validate_sip_frequency(frequency)
     resolved_day = _validate_installment_day(frequency=normalized_frequency, installment_day=installment_day)
-    installments = number_of_installments or _default_installments(normalized_frequency)
+    installments = _validate_number_of_installments(number_of_installments)
 
     product, fund, _amc = await _load_order_context(session, product_id=product_id)
     min_amount = fund.min_sip_amount
@@ -244,7 +302,13 @@ async def create_sip_plan(
             idempotency_key=f"{idempotency_key}:mandate",
             installment_amount_inr=amount_inr,
             bank_account_id=bank_account_id,
+            mandate_type=mandate_type,
         )
+
+    try:
+        linked_goal = await validate_family_goal_link(session, user_id=user_id, family_goal_id=family_goal_id)
+    except GoalError as exc:
+        raise MfOrderError(code=exc.code, message=exc.message, status_code=exc.status_code) from exc
 
     plan = MfSipPlan(
         user_id=user_id,
@@ -258,12 +322,15 @@ async def create_sip_plan(
         number_of_installments=installments,
         status=MfSipPlanStatus.pending,
         idempotency_key=idempotency_key,
-        metadata_={
-            "investor_profile_status": profile.status.value,
-            "mfia_status": mfia.status.value,
-            "fp_scheme_id": fund.fp_scheme_id,
-            "user_ip": user_ip,
-        },
+        metadata_=apply_family_goal_metadata(
+            {
+                "investor_profile_status": profile.status.value,
+                "mfia_status": mfia.status.value,
+                "fp_scheme_id": fund.fp_scheme_id,
+                "user_ip": user_ip,
+            },
+            family_goal_id=linked_goal.id if linked_goal else None,
+        ),
     )
     session.add(plan)
     await session.flush()
@@ -309,6 +376,8 @@ async def cancel_sip_plan(session: AsyncSession, plan: MfSipPlan) -> MfSipPlan:
         to_status=plan.status.value,
         source="API",
     )
+    mandate = await session.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+    await maybe_release_mandate_after_sip_change(session, mandate)
     await session.flush()
     return plan
 
@@ -342,6 +411,9 @@ async def _apply_plan_state(session: AsyncSession, plan: MfSipPlan, *, fp_state:
     plan.status = mapped
     if mapped == MfSipPlanStatus.active and plan.activated_at is None:
         plan.activated_at = datetime.now(timezone.utc)
+        from app.application.goals.goal_funding_service import record_contribution_from_sip_plan
+
+        await record_contribution_from_sip_plan(session, plan)
     elif mapped == MfSipPlanStatus.failed:
         plan.failure_code = plan.failure_code or "fp_plan_failed"
         plan.failure_reason = plan.failure_reason or str(fp_state)
@@ -353,6 +425,9 @@ async def _apply_plan_state(session: AsyncSession, plan: MfSipPlan, *, fp_state:
         source=source,
         payload={"fp_state": plan.fp_state},
     )
+    if mapped in {MfSipPlanStatus.cancelled, MfSipPlanStatus.failed}:
+        mandate = await session.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+        await maybe_release_mandate_after_sip_change(session, mandate)
     return True
 
 

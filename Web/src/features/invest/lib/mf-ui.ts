@@ -1,5 +1,17 @@
 /** Shared layout tokens for the mutual funds dashboard section. */
-export const MF_CARD_RADIUS_CLASS = "rounded-[var(--radius-medium)]";
+export const MF_CARD_RADIUS_CLASS = "rounded-medium";
+
+/** Fund catalog cards on the MF dashboard browse grids. */
+export const MF_FUND_CARD_RADIUS_CLASS = "rounded-3xl";
+
+/** Fund detail page section surfaces (chart, cards, etc.). */
+export const MF_FUND_DETAIL_RADIUS_CLASS = "rounded-3xl";
+
+/** Fund detail stat tiles (NAV, AUM, TER, 1 day change). */
+export const MF_FUND_DETAIL_METRIC_RADIUS_CLASS = "rounded-2xl";
+
+/** @deprecated Use {@link MF_FUND_DETAIL_RADIUS_CLASS}. */
+export const MF_FUND_DETAIL_SURFACE_RADIUS_CLASS = MF_FUND_DETAIL_RADIUS_CLASS;
 
 export const MF_PAGE_SECTION_CLASS = "w-full min-w-0 max-w-full overflow-x-hidden";
 
@@ -17,7 +29,9 @@ export const MF_FUNDS_HORIZONTAL_ROW_CLASS =
 
 /** Full-width grid for collection theme cards. */
 export const MF_COLLECTIONS_GRID_CLASS =
-  "grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4 [&>*]:min-w-0";
+  "grid min-w-0 grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0";
+
+export const MF_COLLECTION_CARD_MIN_HEIGHT_CLASS = "min-h-[9.75rem] sm:min-h-[10.5rem]";
 
 /** Fixed width for fund cards inside a horizontal scroll row. */
 export const MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS = "w-[17.5rem] shrink-0";

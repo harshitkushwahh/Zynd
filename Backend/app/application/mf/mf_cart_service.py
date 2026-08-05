@@ -6,6 +6,8 @@ from decimal import Decimal
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.goals.errors import GoalError
+from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_bank_account_resolver import (
     bank_account_metadata_snapshot,
     resolve_payment_bank_account,
@@ -20,7 +22,9 @@ from app.application.mf.mf_order_service import (
 )
 from app.application.mf.mf_sip_plan_service import (
     _validate_installment_day,
+    _validate_number_of_installments,
     create_sip_plan,
+    default_installments,
 )
 from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
@@ -57,6 +61,7 @@ def serialize_cart_item(
         "investment_type": item.investment_type.value,
         "installment_day": item.installment_day,
         "frequency": item.frequency,
+        "number_of_installments": item.number_of_installments,
         "fp_scheme_id": item.fp_scheme_id,
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
@@ -90,6 +95,7 @@ def serialize_checkout(
         "checkout_type": checkout.checkout_type.value,
         "status": status,
         "total_amount_inr": float(checkout.total_amount_inr),
+        "payment_method": metadata.get("payment_method", "upi"),
         "payment_url": payment_url,
         "next_action": _derive_next_action(status=status, payment_url=payment_url),
         "fp_payment_id": checkout.fp_payment_id,
@@ -204,6 +210,7 @@ async def upsert_cart_item(
     investment_type: str | MfCartInvestmentType = MfCartInvestmentType.lumpsum,
     installment_day: int | None = None,
     frequency: str = "monthly",
+    number_of_installments: int | None = None,
 ) -> MfCartItem:
     if amount_inr <= 0:
         raise MfOrderError(code="invalid_amount", message="Amount must be positive")
@@ -223,8 +230,10 @@ async def upsert_cart_item(
             frequency=frequency,
             installment_day=installment_day,
         )
+        resolved_installments = _validate_number_of_installments(number_of_installments)
     else:
         resolved_installment_day = None
+        resolved_installments = None
         min_amount = fund.min_lumpsum_amount
         if min_amount is not None and amount_inr < min_amount:
             raise MfOrderError(
@@ -253,6 +262,7 @@ async def upsert_cart_item(
         if cart_type == MfCartInvestmentType.sip:
             existing.installment_day = resolved_installment_day
             existing.frequency = frequency
+            existing.number_of_installments = resolved_installments
         await session.flush()
         return existing
 
@@ -264,6 +274,7 @@ async def upsert_cart_item(
         investment_type=cart_type,
         installment_day=resolved_installment_day if cart_type == MfCartInvestmentType.sip else None,
         frequency=frequency if cart_type == MfCartInvestmentType.sip else "monthly",
+        number_of_installments=resolved_installments if cart_type == MfCartInvestmentType.sip else None,
         fp_scheme_id=fund.fp_scheme_id,
     )
     session.add(item)
@@ -358,6 +369,8 @@ async def checkout_cart(
     idempotency_key: str,
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
+    family_goal_id: uuid.UUID | None = None,
+    payment_method: str = "upi",
 ) -> tuple[MfCheckout, list[MfOrder]]:
     existing = await session.scalar(select(MfCheckout).where(MfCheckout.idempotency_key == idempotency_key))
     if existing:
@@ -394,6 +407,10 @@ async def checkout_cart(
         provision_trigger=InvestorProvisionTrigger.mf_order,
     )
     mfia = await get_or_create_mf_investment_account(session, user_id=user_id)
+    try:
+        linked_goal = await validate_family_goal_link(session, user_id=user_id, family_goal_id=family_goal_id)
+    except GoalError as exc:
+        raise MfOrderError(code=exc.code, message=exc.message, status_code=exc.status_code) from exc
 
     checkout = MfCheckout(
         user_id=user_id,
@@ -403,6 +420,7 @@ async def checkout_cart(
         idempotency_key=idempotency_key,
         metadata_={
             "user_ip": user_ip,
+            "payment_method": payment_method,
             **bank_account_metadata_snapshot(payout_bank),
         },
     )
@@ -434,6 +452,11 @@ async def checkout_cart(
                 "investor_profile_status": profile.status.value,
                 "mfia_status": mfia.status.value,
                 "user_ip": user_ip,
+                **(
+                    apply_family_goal_metadata({}, family_goal_id=linked_goal.id)
+                    if linked_goal
+                    else {}
+                ),
             },
         )
         session.add(order)
@@ -454,6 +477,8 @@ async def checkout_sip_cart(
     idempotency_key: str,
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
+    family_goal_id: uuid.UUID | None = None,
+    mandate_type: str = "upi",
 ) -> list[MfSipPlan]:
     items = [
         item
@@ -470,6 +495,7 @@ async def checkout_sip_cart(
         idempotency_key=f"{idempotency_key}:mandate",
         installment_amount_inr=max_amount,
         bank_account_id=bank_account_id,
+        mandate_type=mandate_type,
     )
 
     plans: list[MfSipPlan] = []
@@ -481,10 +507,12 @@ async def checkout_sip_cart(
             amount_inr=item.amount_inr,
             frequency=item.frequency,
             installment_day=item.installment_day,
-            number_of_installments=None,
+            number_of_installments=item.number_of_installments or default_installments(item.frequency),
             mandate_id=mandate.id,
             idempotency_key=f"{idempotency_key}:{index}",
             user_ip=user_ip,
+            family_goal_id=family_goal_id,
+            mandate_type=mandate_type,
         )
         plans.append(plan)
 

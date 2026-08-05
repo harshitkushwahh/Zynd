@@ -247,6 +247,8 @@ class CreateMfOrderRequest(BaseModel):
     amount_inr: float = Field(gt=0)
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
+    family_goal_id: Optional[UUID] = None
+    payment_method: Literal["upi", "netbanking"] = "upi"
 
 
 class MfOrderResponse(BaseModel):
@@ -258,6 +260,7 @@ class MfOrderResponse(BaseModel):
     amc_logo_url: Optional[str] = None
     order_type: str
     amount_inr: float
+    payment_method: Optional[str] = None
     status: str
     fp_purchase_id: Optional[str] = None
     fp_purchase_old_id: Optional[int] = None
@@ -302,6 +305,7 @@ class MfCartItemResponse(BaseModel):
     investment_type: Literal["lumpsum", "sip"] = "lumpsum"
     installment_day: Optional[int] = None
     frequency: Optional[str] = None
+    number_of_installments: Optional[int] = None
     fp_scheme_id: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -326,6 +330,7 @@ class UpsertMfCartItemRequest(BaseModel):
     investment_type: Literal["lumpsum", "sip"] = "lumpsum"
     installment_day: Optional[int] = Field(default=None, ge=1, le=28)
     frequency: Literal["monthly", "daily"] = "monthly"
+    number_of_installments: Optional[int] = Field(default=None, ge=1, le=60)
 
 
 class BulkUpsertMfCartItemLine(BaseModel):
@@ -340,6 +345,9 @@ class BulkUpsertMfCartItemsRequest(BaseModel):
 class CheckoutMfCartRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
+    family_goal_id: Optional[UUID] = None
+    payment_method: Literal["upi", "netbanking"] = "upi"
+    mandate_type: Literal["upi", "nach"] = "upi"
 
 
 class MfCheckoutOrderLineResponse(BaseModel):
@@ -357,6 +365,7 @@ class MfCheckoutResponse(BaseModel):
     checkout_type: str
     status: str
     total_amount_inr: float
+    payment_method: Optional[str] = None
     payment_url: Optional[str] = None
     next_action: Optional[str] = None
     fp_payment_id: Optional[int] = None
@@ -374,6 +383,7 @@ class CreateMfMandateRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
     installment_amount_inr: Optional[float] = Field(default=None, gt=0)
     bank_account_id: Optional[UUID] = None
+    mandate_type: Literal["upi", "nach"] = "upi"
 
 
 class MfMandateResponse(BaseModel):
@@ -401,16 +411,21 @@ class CreateMfSipPlanRequest(BaseModel):
     amount_inr: float = Field(gt=0)
     frequency: Literal["monthly", "daily"] = "monthly"
     installment_day: Optional[int] = Field(default=None, ge=1, le=28)
-    number_of_installments: Optional[int] = Field(default=None, ge=1, le=9999)
+    number_of_installments: int = Field(ge=1, le=60)
     mandate_id: Optional[UUID] = None
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
+    family_goal_id: Optional[UUID] = None
+    mandate_type: Literal["upi", "nach"] = "upi"
 
 
 class MfSipPlanResponse(BaseModel):
     plan_id: str
     product_id: str
     product_name: Optional[str] = None
+    amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
+    isin: Optional[str] = None
     amount_inr: float
     frequency: str
     installment_day: Optional[int] = None
@@ -446,6 +461,7 @@ class MfExternalHoldingResponse(BaseModel):
     market_value_inr: Optional[float] = None
     as_of_date: Optional[str] = None
     amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
     source: str
 
 
@@ -534,3 +550,175 @@ class InvestorBankAccountPreverifyStatusResponse(BaseModel):
     bank_verified: bool = False
     code: Optional[str] = None
     reason: Optional[str] = None
+
+
+class InvestRiskProfileAnswerInput(BaseModel):
+    question_id: UUID
+    option_id: UUID
+
+
+class InvestRiskProfileQuestionOptionResponse(BaseModel):
+    id: str
+    label: str
+    score_value: int
+    sort_order: int
+
+
+class InvestRiskProfileQuestionResponse(BaseModel):
+    id: str
+    category_id: str
+    category_slug: Optional[str] = None
+    category_name: Optional[str] = None
+    prompt: str
+    help_text: Optional[str] = None
+    sort_order: int
+    options: list[InvestRiskProfileQuestionOptionResponse]
+
+
+class InvestRiskProfileTemplateSummaryResponse(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    is_default: bool
+    selection_mode: str
+    total_questions: int
+
+
+class InvestRiskProfileSubmitRequest(BaseModel):
+    answers: list[InvestRiskProfileAnswerInput] = Field(min_length=1)
+    template_id: Optional[UUID] = None
+
+
+class InvestRiskProfileAttemptStateResponse(BaseModel):
+    completed_count: int
+    granted_attempts: int
+    attempts_remaining: int
+    is_locked: bool
+    locked_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class InvestRiskProfileDraftResponse(BaseModel):
+    template_id: Optional[str] = None
+    question_ids: list[str] = Field(default_factory=list)
+    answers: dict[str, str] = Field(default_factory=dict)
+    step_index: int = 0
+    updated_at: Optional[str] = None
+
+
+class InvestRiskProfileSessionResponse(BaseModel):
+    attempt_state: InvestRiskProfileAttemptStateResponse
+    draft: Optional[InvestRiskProfileDraftResponse] = None
+
+
+class InvestRiskProfileDraftUpsertRequest(BaseModel):
+    template_id: Optional[UUID] = None
+    question_ids: list[str] = Field(min_length=1)
+    answers: dict[str, str] = Field(default_factory=dict)
+    step_index: int = Field(default=0, ge=0)
+
+
+class InvestRiskProfileAssessmentResponse(BaseModel):
+    selection_reason: Optional[str] = None
+    preferred_question_count: Optional[int] = None
+    template: Optional[InvestRiskProfileTemplateSummaryResponse] = None
+    questions: list[InvestRiskProfileQuestionResponse] = Field(default_factory=list)
+    total_questions: int = 0
+
+
+class InvestRiskProfileTierResponse(BaseModel):
+    tier: str
+    min_score: int
+    max_score: int
+    display_score: int
+    display_score_min: int
+    display_score_max: int
+    title: str
+    message_body: str
+    message_summary: str
+    message_recommendation: str
+    sort_order: int
+    updated_at: Optional[str] = None
+
+
+class InvestRiskProfileTierListResponse(BaseModel):
+    items: list[InvestRiskProfileTierResponse] = Field(default_factory=list)
+
+
+class InvestRiskProfileConfigResponse(BaseModel):
+    trends_min_profiles: int
+    default_attempts: int
+    unlock_bonus_attempts: int
+
+
+class InvestRiskProfileResultResponse(BaseModel):
+    assessment_id: str
+    score: int
+    display_score: int
+    tier: str
+    tier_config: InvestRiskProfileTierResponse
+    category_scores: dict[str, float]
+    attempt_state: InvestRiskProfileAttemptStateResponse
+
+
+class InvestRiskProfileCurrentResponse(BaseModel):
+    user_id: str
+    score: int
+    display_score: int
+    tier: str
+    tier_config: InvestRiskProfileTierResponse
+    assessment_id: str
+    questions_answered: int
+    total_questions: int
+    computed_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    attempt_state: Optional[InvestRiskProfileAttemptStateResponse] = None
+
+
+class InvestRiskProfileAssessmentAnswerOptionResponse(BaseModel):
+    id: str
+    label: str
+    selected: bool
+
+
+class InvestRiskProfileAssessmentAnswerResponse(BaseModel):
+    question_id: str
+    category_name: Optional[str] = None
+    prompt: str
+    help_text: Optional[str] = None
+    sort_order: int
+    selected_option_id: str
+    selected_option_label: str
+    options: list[InvestRiskProfileAssessmentAnswerOptionResponse] = Field(default_factory=list)
+
+
+class InvestRiskProfileAssessmentAnswersResponse(BaseModel):
+    assessment_id: str
+    completed_at: Optional[str] = None
+    answers: list[InvestRiskProfileAssessmentAnswerResponse] = Field(default_factory=list)
+
+
+class InvestRiskProfileAssessmentHistoryItemResponse(BaseModel):
+    assessment_id: str
+    score: int
+    display_score: int
+    tier: str
+    tier_config: InvestRiskProfileTierResponse
+    completed_at: Optional[str] = None
+    questions_answered: int
+    total_questions: int
+
+
+class InvestRiskProfileAssessmentHistoryResponse(BaseModel):
+    items: list[InvestRiskProfileAssessmentHistoryItemResponse] = Field(default_factory=list)
+    limit: int
+    offset: int
+
+
+class InvestRiskProfileReportResponse(BaseModel):
+    assessment_id: str
+    tier: str
+    score: int
+    cached: bool
+    generated_at: Optional[str] = None
+    filename: str

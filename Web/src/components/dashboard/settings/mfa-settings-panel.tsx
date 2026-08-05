@@ -10,8 +10,9 @@ import {
   MfaRegenerateBackupDialog,
   MfaResetDialog,
 } from "@/features/account/mfa";
-import { downloadBackupCodesJson } from "@/features/account/mfa/lib/backup-codes-download";
+import { SecurityFeatureCard } from "@/components/dashboard/settings/security-feature-card";
 import { MfaPanelSkeleton } from "@/components/dashboard/settings/settings-skeleton";
+import { downloadBackupCodesJson } from "@/features/account/mfa/lib/backup-codes-download";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/contexts/auth-context";
@@ -30,6 +31,8 @@ type MfaSettingsPanelProps = {
   backupCodesLoading: boolean;
   storedBackupCodes: string[];
   onRefreshBackupCodes: () => Promise<void>;
+  autoOpenEnroll?: boolean;
+  onAutoOpenEnrollHandled?: () => void;
 };
 
 function formatEnrolledDate(value: string | null) {
@@ -45,6 +48,8 @@ export function MfaSettingsPanel({
   backupCodesLoading,
   storedBackupCodes,
   onRefreshBackupCodes,
+  autoOpenEnroll = false,
+  onAutoOpenEnrollHandled,
 }: MfaSettingsPanelProps) {
   const { user, refreshUser } = useAuth();
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -55,13 +60,20 @@ export function MfaSettingsPanel({
   const [backupCodesRevealed, setBackupCodesRevealed] = useState(false);
   const [copiedBackup, setCopiedBackup] = useState(false);
 
+  const mfaEnabled = Boolean(user?.mfa_enrolled);
+
   useEffect(() => {
     setBackupCodesRevealed(false);
   }, [storedBackupCodes.length, user?.id]);
 
+  useEffect(() => {
+    if (!autoOpenEnroll || mfaEnabled) return;
+    setEnrollOpen(true);
+    onAutoOpenEnrollHandled?.();
+  }, [autoOpenEnroll, mfaEnabled, onAutoOpenEnrollHandled]);
+
   if (!user) return null;
 
-  const mfaEnabled = user.mfa_enrolled;
   const canRevealStoredCodes = storedBackupCodes.length > 0;
 
   const handleCopyBackupCodes = async () => {
@@ -82,36 +94,23 @@ export function MfaSettingsPanel({
   const panelBody = backupCodesLoading ? (
     <MfaPanelSkeleton />
   ) : (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              "flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-card)]",
-              mfaEnabled ? "bg-success/10 text-success" : "bg-muted text-muted-foreground",
-            )}
-          >
-            <ShieldCheck className="size-5" />
-          </div>
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-compact font-semibold text-foreground">
-                {mfaEnabled ? copy.settings.mfaActiveTitle : copy.settings.mfaInactiveTitle}
-              </p>
-              <StatusBadge variant={mfaEnabled ? "success" : "neutral"}>
-                {mfaEnabled ? copy.settings.mfaEnabledBadge : copy.settings.mfaNotSetUpBadge}
-              </StatusBadge>
-            </div>
-            <p className="text-caption text-muted-foreground">
-              {mfaEnabled
-                ? copy.settings.mfaEnrolledOn(formatEnrolledDate(user.mfa_enrolled_at))
-                : copy.settings.mfaEnableHint}
-            </p>
-          </div>
-        </div>
-
-        {mfaEnabled ? (
-          <div className="flex flex-wrap gap-2">
+    <SecurityFeatureCard
+      title={copy.settings.mfaTitle}
+      description={
+        mfaEnabled
+          ? copy.settings.mfaEnrolledOn(formatEnrolledDate(user.mfa_enrolled_at))
+          : copy.settings.mfaEnableHint
+      }
+      icon={ShieldCheck}
+      tone={mfaEnabled ? "success" : "muted"}
+      badge={
+        <StatusBadge variant={mfaEnabled ? "success" : "neutral"} showIcon={false}>
+          {mfaEnabled ? copy.settings.mfaEnabledBadge : copy.settings.mfaNotSetUpBadge}
+        </StatusBadge>
+      }
+      actions={
+        mfaEnabled ? (
+          <>
             <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}>
               <RefreshCw className="size-3.5" />
               {copy.settings.changeAuthenticator}
@@ -120,22 +119,24 @@ export function MfaSettingsPanel({
               <ShieldOff className="size-3.5" />
               {copy.settings.disableMfa}
             </Button>
-          </div>
+          </>
         ) : (
           <Button size="sm" onClick={() => setEnrollOpen(true)}>
             <ShieldCheck className="size-3.5" />
             {copy.mfa.setupButton}
           </Button>
-        )}
-      </div>
-
+        )
+      }
+    >
       {mfaEnabled ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-2">
+            <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-compact font-semibold text-foreground">{copy.settings.backupCodesTitle}</p>
-                <StatusBadge variant={backupTone}>
+                <p className="text-compact font-semibold text-foreground">
+                  {copy.settings.backupCodesTitle}
+                </p>
+                <StatusBadge variant={backupTone} showIcon={false}>
                   {copy.settings.backupCodesRemaining(backupStatus.remaining, backupStatus.total)}
                 </StatusBadge>
               </div>
@@ -217,7 +218,7 @@ export function MfaSettingsPanel({
           )}
         </div>
       ) : null}
-    </div>
+    </SecurityFeatureCard>
   );
 
   return (

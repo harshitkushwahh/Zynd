@@ -1,0 +1,2 @@
+export const GOAL_MAX_PERSONAL_ACTIVE = 10;
+export const GOAL_MAX_FAMILY_ACTIVE_PER_GROUP = 5;

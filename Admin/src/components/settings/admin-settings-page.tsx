@@ -108,7 +108,6 @@ export function AdminSettingsPage({ sectionSlug }: AdminSettingsPageProps) {
     <AdminSectionPageShell
       breadcrumbSegments={[{ label: "Administrator" }, { label: "Settings" }]}
       title="Settings"
-      description="Your account, workspace administration, and console preferences"
       icon={Settings}
     >
       {!user ? (

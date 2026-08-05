@@ -1,9 +1,10 @@
 "use client";
 
-import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
+import { KeyRound, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 
 import { AuthenticatorVerifyDialog } from "@/features/account/mfa";
+import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { PasswordCriteriaList } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export function ChangePasswordSettingsPanel({
     setNewPassword("");
   };
 
-  const submitPasswordChange = async (totpCode?: string) => {
+  const submitPasswordChange = async (verification?: StepUpVerification) => {
     setLoading(true);
     setError("");
     setAuthError("");
@@ -51,7 +52,8 @@ export function ChangePasswordSettingsPanel({
       await changePassword({
         currentPassword,
         newPassword,
-        totpCode,
+        totpCode: verification?.totpCode,
+        smsOtp: verification?.smsOtp,
       });
       resetForm();
       setSuccess(copy.settings.changePasswordSuccess);
@@ -87,8 +89,8 @@ export function ChangePasswordSettingsPanel({
     void submitPasswordChange();
   };
 
-  const handleAuthenticatorVerify = (totpCode: string) => {
-    void submitPasswordChange(totpCode);
+  const handleStepUpVerify = (verification: StepUpVerification) => {
+    void submitPasswordChange(verification);
   };
 
   const canSubmit =
@@ -97,22 +99,6 @@ export function ChangePasswordSettingsPanel({
   return (
     <>
       <div className="space-y-6">
-        <div className="rounded-[var(--radius-card)] border border-border bg-muted/10 px-4 py-4 sm:px-5">
-          <div className="flex items-start gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
-              <ShieldCheck className="size-5" />
-            </div>
-            <div className="min-w-0 space-y-2">
-              <p className="text-compact font-semibold text-foreground">
-                {copy.settings.changePasswordSecurityTitle}
-              </p>
-              <p className="text-caption leading-relaxed text-muted-foreground">
-                {copy.settings.changePasswordSecurityHint}
-              </p>
-            </div>
-          </div>
-        </div>
-
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4 rounded-[var(--radius-card)] border border-border bg-card p-4 sm:p-5">
             <div className="space-y-2">
@@ -173,7 +159,7 @@ export function ChangePasswordSettingsPanel({
         submitLabel={copy.settings.changePasswordSubmit}
         loading={loading}
         error={authError}
-        onSubmit={handleAuthenticatorVerify}
+        onSubmit={handleStepUpVerify}
       />
     </>
   );

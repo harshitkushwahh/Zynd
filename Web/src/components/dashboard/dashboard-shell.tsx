@@ -12,12 +12,16 @@ import {
   DASHBOARD_INNER_GAP,
   DASHBOARD_MAIN_CONTENT_CLASS,
   DASHBOARD_MAIN_SCROLL_CLASS,
+  DASHBOARD_MAIN_TOP_OFFSET,
   DASHBOARD_SHELL_PADDING,
 } from "@/components/dashboard/dashboard-layout";
+import { cn } from "@/lib/utils";
 import { MfPaymentOverlayProvider } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { ProfileMenuShortcutListener } from "@/features/dashboard/navigation/profile-menu-shortcut-listener";
 import { ZyndPinLockScreen } from "@/features/account/pin";
 import { KycDialog } from "@/features/kyc/components/kyc-dialog";
+import { SupportFloatingWidget } from "@/features/support/components/support-floating-widget";
+import { SupportWidgetProvider } from "@/features/support/contexts/support-widget-context";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
 import { useKycOptional } from "@/contexts/kyc-context";
 import { ZyndGlobalLoader } from "@/components/ui/zynd-global-loader";
@@ -25,7 +29,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { SettingsNavigationProvider } from "@/contexts/settings-navigation-context";
 import { copy } from "@/shared/config/copy";
 import { ZyndErrorBoundary } from "@/shared/components/zynd-error-boundary";
-import { cn } from "@/lib/utils";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -51,10 +54,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, [kyc]);
 
-  if (loading || sessionRetrying) {
+  const showInitialAuthLoader = loading && !user;
+  const showReconnectLoader = sessionRetrying && !user;
+
+  if (showInitialAuthLoader || showReconnectLoader) {
     return (
       <ZyndGlobalLoader
-        status={sessionRetrying ? copy.account.reconnecting : undefined}
+        status={showReconnectLoader ? copy.account.reconnecting : undefined}
       />
     );
   }
@@ -70,6 +76,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <MfPaymentOverlayProvider>
     <SettingsNavigationProvider>
+    <SupportWidgetProvider>
       <ProfileMenuShortcutListener />
     <div className="h-dvh overflow-hidden bg-background">
       {pinContext?.locked ? <ZyndPinLockScreen /> : null}
@@ -88,22 +95,22 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         <div
           className={cn(
-            "flex min-h-0 flex-1",
+            "flex min-h-0 flex-1 items-stretch",
             DASHBOARD_INNER_GAP,
-            "md:items-stretch"
           )}
         >
           <DashboardSidebar className="hidden md:flex" />
 
-          <div
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-              DASHBOARD_INNER_GAP
-            )}
-          >
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <DashboardNavbar />
 
-              <main className={DASHBOARD_MAIN_SCROLL_CLASS}>
+            <main
+              className={cn(
+                DASHBOARD_MAIN_SCROLL_CLASS,
+                DASHBOARD_MAIN_TOP_OFFSET,
+                "overflow-x-hidden",
+              )}
+            >
                 <div className={DASHBOARD_MAIN_CONTENT_CLASS}>
                   <ZyndErrorBoundary>{children}</ZyndErrorBoundary>
                 </div>
@@ -113,7 +120,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <DashboardMobileNav />
       </div>
+      {pinContext?.locked ? null : <SupportFloatingWidget />}
     </div>
+    </SupportWidgetProvider>
     </SettingsNavigationProvider>
     </MfPaymentOverlayProvider>
   );

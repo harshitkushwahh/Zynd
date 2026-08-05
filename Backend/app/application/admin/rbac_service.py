@@ -46,6 +46,19 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("mf.transactions.manage", "Reconcile MF transactions, replay webhooks, and expire stale checkouts"),
     ("mf.integrations.read", "View mutual fund provider integration status and environment"),
     ("mf.integrations.manage", "Switch mutual fund provider integration test/live environments"),
+    ("risk_profile.read", "View risk profile categories, questions, tiers, and score previews"),
+    ("risk_profile.categories.manage", "Create and update risk profile question categories"),
+    ("risk_profile.questions.manage", "Create, update, and deactivate risk profile questions"),
+    ("risk_profile.tiers.manage", "Update risk tier score bands and user messages"),
+    ("risk_profile.users.read", "View computed risk profiles for users"),
+    ("risk_profile.users.manage", "Unlock locked risk profile attempts for users"),
+    ("risk_profile.templates.manage", "Create and update risk profile assessment templates"),
+    ("family_groups.read", "View family groups, members, and invites"),
+    ("family_groups.manage", "Moderate family groups and force-remove members"),
+    ("goals.templates.read", "View predefined goal templates"),
+    ("goals.templates.manage", "Update predefined goal templates"),
+    ("distributor.clients.list", "List investor clients in the distributor console"),
+    ("distributor.clients.read", "View masked investor client profiles in the distributor console"),
 ]
 
 ROLES: dict[str, dict[str, object]] = {
@@ -71,6 +84,8 @@ ROLES: dict[str, dict[str, object]] = {
             "documents.download",
             "documents.verify",
             "documents.legal_hold",
+            "risk_profile.read",
+            "risk_profile.users.read",
         ],
     },
     "support_agent": {
@@ -93,6 +108,14 @@ ROLES: dict[str, dict[str, object]] = {
             "mf.transactions.manage",
             "mf.integrations.read",
             "mf.integrations.manage",
+            "risk_profile.read",
+            "risk_profile.categories.manage",
+            "risk_profile.questions.manage",
+            "risk_profile.tiers.manage",
+            "risk_profile.templates.manage",
+            "risk_profile.users.read",
+            "goals.templates.read",
+            "goals.templates.manage",
             "audit.read",
         ],
     },
@@ -105,6 +128,14 @@ ROLES: dict[str, dict[str, object]] = {
             "mf.catalog.publish",
             "admin_actions.approve",
             "audit.read",
+        ],
+    },
+    "distributor_console": {
+        "name": "Distributor Console",
+        "description": "View masked investor profiles and activity for distributor partners.",
+        "permissions": [
+            "distributor.clients.list",
+            "distributor.clients.read",
         ],
     },
 }

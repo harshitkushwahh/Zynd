@@ -2,6 +2,8 @@ import { storageKeys } from "@/shared/config/storage-keys";
 
 export type Theme = "light" | "dark";
 
+const THEME_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+
 export function getSystemTheme(): Theme {
   if (typeof window === "undefined") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -17,6 +19,11 @@ export function readStoredTheme(): Theme | null {
     return null;
   }
 
+  return null;
+}
+
+export function parseThemeCookie(value: string | undefined): Theme | null {
+  if (value === "light" || value === "dark") return value;
   return null;
 }
 
@@ -37,6 +44,10 @@ export function persistTheme(theme: Theme) {
   } catch {
     // Ignore storage failures (private mode, quota, etc.).
   }
-}
 
-export const themeInitScript = `(function(){try{var k=${JSON.stringify(storageKeys.theme)};var t=localStorage.getItem(k);var dark=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",dark);}catch(e){}})();`;
+  try {
+    document.cookie = `${storageKeys.theme}=${theme}; path=/; max-age=${THEME_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+  } catch {
+    // Ignore cookie failures (privacy mode, blocked storage, etc.).
+  }
+}

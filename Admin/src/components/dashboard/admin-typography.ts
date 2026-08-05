@@ -1,4 +1,4 @@
-export const ADMIN_PAGE_TITLE_CLASS = "font-heading text-h3 font-semibold text-foreground";
+export const ADMIN_PAGE_TITLE_CLASS = "font-sans text-h3 font-normal text-foreground";
 
 export const ADMIN_PAGE_DESCRIPTION_CLASS = "mt-1 text-caption text-muted-foreground";
 

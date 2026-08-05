@@ -20,7 +20,7 @@ export function ProfileMenuShortcutListener() {
   } = useProfileMenuActions();
 
   const showCheckKycStatus = Boolean(kyc?.overallStatus === "submitted" && kyc.kycAllowed);
-  const showKycMenu = Boolean(kyc?.showKycMenu && kyc.kycAllowed);
+  const showKycMenu = Boolean(kyc?.showKycMenu && kyc.kycAllowed && kyc.status !== "complete");
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

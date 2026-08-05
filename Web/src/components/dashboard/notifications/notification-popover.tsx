@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, Bell, RefreshCw } from "lucide-react";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 
 import { NotificationUnreadEmptyState } from "@/components/dashboard/notifications/notification-unread-empty-state";
 import { NotificationEmptyState } from "@/components/dashboard/notifications/notification-empty-state";
@@ -75,7 +75,7 @@ export function NotificationPopover() {
               aria-label="Notifications"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                "relative size-9 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
+                "relative size-10 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             />
           }
@@ -127,9 +127,10 @@ export function NotificationPopover() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-caption"
+                  className="h-8 gap-1.5 px-2 text-caption"
                   onClick={() => void markAllRead()}
                 >
+                  <CheckCheck className="size-3.5" strokeWidth={2.25} />
                   Mark all read
                 </Button>
               ) : null}
@@ -185,12 +186,11 @@ export function NotificationPopover() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-9 w-full justify-center gap-1.5 text-compact"
+            className="h-9 w-full justify-center text-compact"
             nativeButton={false}
             render={<Link href="/dashboard/notifications" />}
           >
             View all notifications
-            <ArrowRight className="size-3.5" />
           </Button>
         </div>
       </PopoverContent>

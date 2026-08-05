@@ -1,6 +1,24 @@
 import confetti from "canvas-confetti";
 
-export function fireKycSuccessConfetti() {
+import { kycVerifiedConfettiKey } from "@/shared/config/storage-keys";
+
+type FireKycSuccessConfettiOptions = {
+  /** When set with `oncePerUser`, confetti plays at most once per browser for this user. */
+  userId?: string;
+  oncePerUser?: boolean;
+};
+
+function hasKycVerifiedConfettiPlayed(userId: string): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(kycVerifiedConfettiKey(userId)) === "1";
+}
+
+function markKycVerifiedConfettiPlayed(userId: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(kycVerifiedConfettiKey(userId), "1");
+}
+
+function launchConfetti() {
   const duration = 2200;
   const end = Date.now() + duration;
   const colors = ["#22c55e", "#3b82f6", "#f59e0b", "#ec4899"];
@@ -38,4 +56,15 @@ export function fireKycSuccessConfetti() {
   };
 
   frame();
+}
+
+export function fireKycSuccessConfetti(options?: FireKycSuccessConfettiOptions) {
+  const { userId, oncePerUser = false } = options ?? {};
+
+  if (oncePerUser && userId) {
+    if (hasKycVerifiedConfettiPlayed(userId)) return;
+    markKycVerifiedConfettiPlayed(userId);
+  }
+
+  launchConfetti();
 }

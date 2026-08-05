@@ -128,7 +128,11 @@ class Settings(BaseSettings):
     otp_send_limit_per_ip: int = 20
     otp_send_window_seconds: int = 3600
 
-    sms_provider: Literal["", "stub"] = ""
+    sms_provider: Literal["", "stub", "twilio"] = ""
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    twilio_messaging_service_sid: str = ""
 
     @property
     def resolved_mfa_encryption_key(self) -> str:
@@ -215,6 +219,7 @@ class Settings(BaseSettings):
     clamav_port: int = 3310
     clamav_timeout_seconds: int = 30
     clamav_fail_open: bool = False
+    clamav_stream_max_length_bytes: int = 25 * 1024 * 1024
     documents_worm_s3_object_lock_enabled: bool = False
     documents_worm_retention_days: int = 0
     documents_cdn_base_url: str = ""
@@ -380,9 +385,11 @@ class Settings(BaseSettings):
     zynd_mf_cart_max_items: int = 10
     zynd_mf_sip_enabled: bool = True
     zynd_mf_mandate_provider: str = "CYBRILLAPOA"
-    zynd_mf_sip_default_mandate_limit_inr: int = 15_000
-    zynd_mf_sip_default_monthly_installments: int = 360
-    zynd_mf_sip_default_daily_installments: int = 365
+    zynd_mf_sip_min_mandate_limit_inr: int = 1_000
+    zynd_mf_sip_default_monthly_installments: int = 12
+    zynd_mf_sip_default_daily_installments: int = 30
+    zynd_mf_sip_max_installments: int = 60
+    zynd_mf_mandate_limit_multiplier: int = 2
     zynd_mf_payment_expiry_minutes: int = 1440
     zynd_mf_stuck_transaction_minutes: int = 60
     zynd_mf_worker_max_transient_retries: int = 5

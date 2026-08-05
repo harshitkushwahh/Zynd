@@ -8,27 +8,32 @@ import {
   Info,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Search,
   Upload,
 } from "lucide-react";
 
 import { MfStatusChip, type MfStatusTone } from "@/components/mf/mf-status-chip";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import {
   AdminFormDialog,
   AdminInfoDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
-import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
+import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import {
+  ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
   AdminTableBody,
   AdminTableCell,
   AdminTableHeadCell,
   AdminTableHeader,
+  AdminTablePagination,
   AdminTableRow,
+  AdminTableStateRow,
+  paginateItems,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -227,9 +232,19 @@ export function BulkImportPanel({ canPublish }: { canPublish: boolean }) {
   const [message, setMessage] = useState("");
   const [infoDialogOpen, setInfoDialogOpen] = useState(false);
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+  const [jobPage, setJobPage] = useState(0);
+  const [jobPageSize, setJobPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const rowCount = useMemo(() => countCsvRows(csv), [csv]);
   const completedJobs = jobs.filter((job) => jobStatusTone(job.status) === "success").length;
+  const jobPagination = useMemo(
+    () => paginateItems(jobs, jobPage, jobPageSize),
+    [jobPage, jobPageSize, jobs],
+  );
+
+  useEffect(() => {
+    setJobPage(0);
+  }, [jobPageSize, jobs.length]);
 
   const loadJobs = useCallback(async () => {
     setJobsLoading(true);
@@ -294,28 +309,10 @@ export function BulkImportPanel({ canPublish }: { canPublish: boolean }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <AdminSectionTitle icon={Upload}>Bulk catalog import</AdminSectionTitle>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setInfoDialogOpen(true)}
-            aria-label="View bulk CSV reference"
-          >
-            <Info className="size-3.5" />
-          </Button>
-          <Button onClick={() => setCsvDialogOpen(true)}>
-            <Plus className="size-3.5" />
-            Import CSV
-          </Button>
-        </div>
-      </div>
-
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <AdminMetricCardsGrid columns="three">
         <AdminMetricCard
           label="CSV rows"
           value={rowCount.toLocaleString()}
@@ -335,47 +332,72 @@ export function BulkImportPanel({ canPublish }: { canPublish: boolean }) {
           tone="success"
           loading={jobsLoading}
         />
-      </div>
+      </AdminMetricCardsGrid>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <AdminSectionTitle icon={History} variant="section">
-            Recent bulk jobs
-          </AdminSectionTitle>
-          <Button variant="outline" size="sm" disabled={jobsLoading} onClick={() => void loadJobs()}>
-            Refresh
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setInfoDialogOpen(true)}
+            aria-label="View bulk CSV reference"
+          >
+            <Info className="size-3.5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            disabled={jobsLoading}
+            onClick={() => void loadJobs()}
+            aria-label="Refresh bulk jobs"
+          >
+            <RefreshCw className={`size-3.5 ${jobsLoading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button onClick={() => setCsvDialogOpen(true)}>
+            <Plus className="size-3.5" />
+            Import CSV
           </Button>
         </div>
 
-        {jobsLoading ? (
-          <AdminTableSkeleton columns={5} rows={4} minWidth="lg" />
-        ) : jobs.length === 0 ? (
-          <div className="rounded-[var(--radius-card)] border border-dashed border-border bg-muted/10 px-6 py-empty-state-sm text-center">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Upload className="size-6" strokeWidth={2} />
-            </div>
-            <p className="mt-4 font-medium text-foreground">No bulk jobs yet</p>
-            <p className="mt-1 text-caption text-muted-foreground">
-              Open import CSV to preview rows, run a dry run, then apply when matched rows look correct.
-            </p>
-            <Button className="mt-6" onClick={() => setCsvDialogOpen(true)}>
-              <Plus className="size-3.5" />
-              Import CSV
-            </Button>
-          </div>
-        ) : (
-          <AdminDataTable minWidth="lg">
-            <AdminTableHeader>
-              <tr>
-                <AdminTableHeadCell>Job</AdminTableHeadCell>
-                <AdminTableHeadCell>Status</AdminTableHeadCell>
-                <AdminTableHeadCell className="text-right">Rows</AdminTableHeadCell>
-                <AdminTableHeadCell className="text-right">Affected</AdminTableHeadCell>
-                <AdminTableHeadCell>Created</AdminTableHeadCell>
-              </tr>
-            </AdminTableHeader>
-            <AdminTableBody>
-              {jobs.map((job) => (
+        <AdminDataTable
+          minWidth="lg"
+          footer={
+            <AdminTablePagination
+              page={jobPagination.page}
+              totalPages={jobPagination.totalPages}
+              hasPrevious={jobPagination.hasPrevious}
+              hasNext={jobPagination.hasNext}
+              disabled={jobsLoading}
+              totalCount={jobs.length}
+              currentPageCount={jobPagination.items.length}
+              pageSize={jobPageSize}
+              onPageSizeChange={(next) => {
+                setJobPageSize(next);
+                setJobPage(0);
+              }}
+              onPrevious={() => setJobPage((page) => Math.max(0, page - 1))}
+              onNext={() => setJobPage((page) => page + 1)}
+            />
+          }
+        >
+          <AdminTableHeader>
+            <tr>
+              <AdminTableHeadCell>Job</AdminTableHeadCell>
+              <AdminTableHeadCell>Status</AdminTableHeadCell>
+              <AdminTableHeadCell className="text-right">Rows</AdminTableHeadCell>
+              <AdminTableHeadCell className="text-right">Affected</AdminTableHeadCell>
+              <AdminTableHeadCell>Created</AdminTableHeadCell>
+            </tr>
+          </AdminTableHeader>
+          <AdminTableBody>
+            {jobsLoading ? (
+              <AdminTableSkeletonRows columns={5} />
+            ) : jobPagination.items.length === 0 ? (
+              <AdminTableStateRow colSpan={5}>
+                No bulk jobs yet. Import a CSV to preview, dry-run, then apply.
+              </AdminTableStateRow>
+            ) : (
+              jobPagination.items.map((job) => (
                 <AdminTableRow key={job.job_id}>
                   <AdminTableCell>
                     <p className="font-medium text-foreground">{job.job_id}</p>
@@ -398,10 +420,10 @@ export function BulkImportPanel({ canPublish }: { canPublish: boolean }) {
                     {job.created_at ? new Date(job.created_at).toLocaleString() : "No data"}
                   </AdminTableCell>
                 </AdminTableRow>
-              ))}
-            </AdminTableBody>
-          </AdminDataTable>
-        )}
+              ))
+            )}
+          </AdminTableBody>
+        </AdminDataTable>
       </div>
 
       <BulkImportInfoDialog open={infoDialogOpen} onClose={() => setInfoDialogOpen(false)} />

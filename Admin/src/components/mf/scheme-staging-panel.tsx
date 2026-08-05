@@ -28,17 +28,10 @@ import {
   AdminTableRow,
   AdminTableStateRow,
 } from "@/components/ui/admin-table";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ApiError } from "@/lib/api-client";
 import {
   approveMfStagingBatch,
@@ -53,6 +46,19 @@ import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
+const VALIDATION_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All validation" },
+  { value: "valid", label: "Valid" },
+  { value: "excluded", label: "Excluded" },
+  { value: "invalid", label: "Invalid" },
+];
+
+const PROMOTE_FILTER_OPTIONS: AdminSelectOption[] = [
+  { value: ALL, label: "All promote" },
+  { value: "pending", label: "Pending" },
+  { value: "promoted", label: "Promoted" },
+  { value: "failed", label: "Failed" },
+];
 
 function batchStatusTone(status: string): MfStatusTone {
   if (status === "promoted" || status === "validated" || status === "approved") return "success";
@@ -199,6 +205,7 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
   const [selected, setSelected] = useState<MfStagingBatch | null>(null);
   const [rows, setRows] = useState<MfStagingRow[]>([]);
   const [rowPage, setRowPage] = useState(1);
+  const [rowPageSize, setRowPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [rowTotal, setRowTotal] = useState(0);
   const [rowHasMore, setRowHasMore] = useState(false);
   const [validationFilter, setValidationFilter] = useState("");
@@ -242,7 +249,7 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
     try {
       const payload = await fetchMfStagingBatchRows(selected.batch_uuid, {
         page: rowPage,
-        page_size: ADMIN_TABLE_PAGE_SIZE,
+        page_size: rowPageSize,
         validation_status: validationFilter || undefined,
         promote_status: promoteFilter || undefined,
       });
@@ -254,7 +261,7 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
     } finally {
       setRowsLoading(false);
     }
-  }, [promoteFilter, rowPage, selected, validationFilter]);
+  }, [promoteFilter, rowPage, rowPageSize, selected, validationFilter]);
 
   useEffect(() => {
     void loadBatches();
@@ -266,9 +273,9 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
 
   useEffect(() => {
     setRowPage(1);
-  }, [selected?.batch_uuid, validationFilter, promoteFilter]);
+  }, [selected?.batch_uuid, validationFilter, promoteFilter, rowPageSize]);
 
-  const rowTotalPages = Math.max(1, Math.ceil(rowTotal / ADMIN_TABLE_PAGE_SIZE));
+  const rowTotalPages = Math.max(1, Math.ceil(rowTotal / rowPageSize));
 
   async function handleApprove() {
     if (!selected || !canPublish) return;
@@ -546,45 +553,46 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
 
       {selected ? (
         <div className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSectionTitle icon={Layers}>Staged rows</AdminSectionTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <Select
+                <AdminSelect
                   value={validationFilter || ALL}
-                  onValueChange={(value) => setValidationFilter(value === ALL ? "" : (value ?? ""))}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Validation">
-                      {validationFilter || "All validation"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>All validation</SelectItem>
-                    <SelectItem value="valid">Valid</SelectItem>
-                    <SelectItem value="excluded">Excluded</SelectItem>
-                    <SelectItem value="invalid">Invalid</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
+                  onValueChange={(value) => setValidationFilter(value === ALL ? "" : value)}
+                  options={VALIDATION_FILTER_OPTIONS}
+                  placeholder="Validation"
+                  className="min-w-select-sm"
+                />
+                <AdminSelect
                   value={promoteFilter || ALL}
-                  onValueChange={(value) => setPromoteFilter(value === ALL ? "" : (value ?? ""))}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Promote">
-                      {promoteFilter || "All promote"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>All promote</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="promoted">Promoted</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                  </SelectContent>
-                </Select>
+                  onValueChange={(value) => setPromoteFilter(value === ALL ? "" : value)}
+                  options={PROMOTE_FILTER_OPTIONS}
+                  placeholder="Promote"
+                  className="min-w-select-sm"
+                />
               </div>
             </div>
 
-            <AdminDataTable minWidth="xl">
+            <AdminDataTable
+              minWidth="xl"
+              footer={
+                <AdminTablePagination
+                  page={rowPage - 1}
+                  totalPages={rowTotalPages}
+                  hasPrevious={rowPage > 1}
+                  hasNext={rowHasMore}
+                  disabled={rowsLoading}
+                  totalCount={rowTotal}
+                  currentPageCount={rows.length}
+                  pageSize={rowPageSize}
+                  onPageSizeChange={(next) => {
+                    setRowPageSize(next);
+                    setRowPage(1);
+                  }}
+                  onPrevious={() => setRowPage((page) => Math.max(1, page - 1))}
+                  onNext={() => setRowPage((page) => page + 1)}
+                />
+              }
+            >
               <AdminTableHeader>
                 <tr>
                   <AdminTableHeadCell>ISIN</AdminTableHeadCell>
@@ -637,18 +645,6 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
                 )}
               </AdminTableBody>
             </AdminDataTable>
-
-            {!rowsLoading && rows.length > 0 ? (
-              <AdminTablePagination
-                page={rowPage - 1}
-                totalPages={rowTotalPages}
-                hasPrevious={rowPage > 1}
-                hasNext={rowHasMore}
-                disabled={rowsLoading}
-                onPrevious={() => setRowPage((page) => Math.max(1, page - 1))}
-                onNext={() => setRowPage((page) => page + 1)}
-              />
-            ) : null}
         </div>
       ) : null}
     </section>

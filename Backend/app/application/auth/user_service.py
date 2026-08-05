@@ -5,14 +5,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.auth.fund_movement_policy_service import evaluate_fund_eligibility
 from app.infrastructure.persistence.models import User
 from app.infrastructure.persistence.repositories.user_repository import SqlAlchemyUserRepository
 
 
-def user_to_public_dict(user: User) -> dict[str, Any]:
-    from app.application.auth.account_service import fund_eligibility_status
-
-    eligibility = fund_eligibility_status(user)
+async def user_to_public_dict(db: AsyncSession, user: User) -> dict[str, Any]:
+    eligibility = await evaluate_fund_eligibility(db, user)
     return {
         "id": user.id,
         "email": user.email,

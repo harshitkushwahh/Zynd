@@ -14,11 +14,16 @@ export {
   configureApiClient,
   getAccessToken,
   getApiUrl,
+  getBackendConnectionState,
   isAuthFailure,
+  isBackendConnectionError,
+  isBackendConnectionStatus,
   parseApiError,
   refreshSession,
   setAccessToken,
+  subscribeBackendConnectionState,
   type ApiErrorBody,
+  type BackendConnectionState,
   type SessionRefreshResult,
 } from "./api";
 

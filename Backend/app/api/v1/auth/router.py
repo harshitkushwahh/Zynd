@@ -29,6 +29,8 @@ from app.api.v1.auth.schemas import (
     CheckEmailResponse,
     ForgotPasswordRequest,
     FundEligibilityResponse,
+    FundEligibilityStatusResponse,
+    AuthSecurityPolicyResponse,
     AppleLoginRequest,
     GoogleLoginRequest,
     LoginRequest,
@@ -43,6 +45,10 @@ from app.api.v1.auth.schemas import (
     MfaResetStartRequest,
     MfaResetStartResponse,
     MfaRequiredResponse,
+    SmsOtpRequiredResponse,
+    LoginSmsResendRequest,
+    LoginSmsVerifyRequest,
+    MfaLoginSendSmsRequest,
     MfaVerifyRequest,
     OAuthConnectAppleRequest,
     OAuthConnectGoogleRequest,
@@ -83,6 +89,8 @@ from app.api.v1.auth.schemas import (
     SignupVerifyEmailRequest,
     SignupVerifyMobileRequest,
     StepUpRequest,
+    StepUpOptionsResponse,
+    StepUpSmsSendResponse,
     VerifyPasswordRequest,
     UserResponse,
     VerifiedResponse,
@@ -110,6 +118,16 @@ from app.application.auth.account_service import (
     request_account_deletion,
     verify_account_password,
     verify_mfa_login,
+)
+from app.application.auth.login_sms_service import (
+    resend_login_sms_otp,
+    send_mfa_login_sms,
+    verify_sms_login,
+)
+from app.application.auth.step_up_service import get_step_up_sms_options, send_step_up_sms
+from app.application.auth.fund_movement_policy_service import (
+    evaluate_fund_eligibility,
+    get_auth_security_policy,
 )
 from app.application.auth.oauth_service import (
     connect_oauth_apple,
@@ -163,15 +181,15 @@ from app.infrastructure.persistence.models import User
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _user_response(user: User) -> UserResponse:
-    data = user_to_public_dict(user)
+async def _user_response(db: AsyncSession, user: User) -> UserResponse:
+    data = await user_to_public_dict(db, user)
     return UserResponse(**data)
 
 
-def _auth_response(result: dict[str, Any]) -> AuthResponse:
+async def _auth_response(db: AsyncSession, result: dict[str, Any]) -> AuthResponse:
     return AuthResponse(
         access_token=result["access_token"],
-        user=_user_response(result["user"]),
+        user=await _user_response(db, result["user"]),
         new_device=result.get("new_device", False),
         velocity_flagged=result.get("velocity_flagged", False),
     )
@@ -191,16 +209,26 @@ def _resolve_auth_client(request: Request, device_fingerprint: str | None) -> bo
         raise handle_auth_error(exc) from exc
 
 
-def _handle_login_result(
+async def _handle_login_result(
+    db: AsyncSession,
     result: dict[str, Any],
     response: Response,
     *,
     admin: bool = False,
-) -> AuthResponse | MfaRequiredResponse | OAuthLinkRequiredResponse:
+) -> AuthResponse | MfaRequiredResponse | SmsOtpRequiredResponse | OAuthLinkRequiredResponse:
     if result["next"] == "mfa_required":
         return MfaRequiredResponse(
             mfa_token=result["mfa_token"],
             expires_in=result["expires_in"],
+            sms_fallback_available=bool(result.get("sms_fallback_available")),
+            masked_phone=result.get("masked_phone"),
+        )
+    if result["next"] == "sms_otp_required":
+        return SmsOtpRequiredResponse(
+            login_token=result["login_token"],
+            masked_phone=result["masked_phone"],
+            expires_in=result["expires_in"],
+            retry_after_seconds=result.get("retry_after_seconds", 0),
         )
     if result["next"] == "oauth_link_confirmation_required":
         return OAuthLinkRequiredResponse(
@@ -212,7 +240,7 @@ def _handle_login_result(
         )
     _validate_client_role(result["user"], admin=admin)
     set_refresh_cookie(response, result["refresh_token"], admin=admin)
-    return _auth_response(result)
+    return await _auth_response(db, result)
 
 
 @router.post("/check-email", response_model=CheckEmailResponse)
@@ -323,7 +351,7 @@ async def post_signup_complete(
         raise handle_auth_error(exc) from exc
     _resolve_auth_client(request, body.device_fingerprint)
     set_refresh_cookie(response, refresh_token, admin=False)
-    return AuthResponse(access_token=access_token, user=_user_response(user))
+    return AuthResponse(access_token=access_token, user=await _user_response(db, user))
 
 
 @router.post("/login")
@@ -347,7 +375,7 @@ async def post_login(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return _handle_login_result(result, response, admin=admin_client)
+    return await _handle_login_result(db, result, response, admin=admin_client)
 
 
 @router.post("/google")
@@ -371,7 +399,7 @@ async def post_google_login(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return _handle_login_result(result, response, admin=admin_client)
+    return await _handle_login_result(db, result, response, admin=admin_client)
 
 
 @router.post("/apple")
@@ -398,7 +426,7 @@ async def post_apple_login(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return _handle_login_result(result, response, admin=admin_client)
+    return await _handle_login_result(db, result, response, admin=admin_client)
 
 
 @router.post("/mfa/verify")
@@ -414,6 +442,7 @@ async def post_mfa_verify(
             mfa_token=body.mfa_token,
             totp_code=body.totp_code,
             backup_code=body.backup_code,
+            sms_otp=body.sms_otp,
             ip=get_client_ip(request),
         )
     except AuthError as exc:
@@ -430,7 +459,76 @@ async def post_mfa_verify(
         )
     _validate_client_role(result["user"], admin=admin_client)
     set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
-    return _auth_response(result)
+    return await _auth_response(db, result)
+
+
+@router.post("/login/mfa/send-sms", response_model=OtpSendResponse)
+async def post_mfa_login_send_sms(
+    body: MfaLoginSendSmsRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OtpSendResponse:
+    try:
+        result = await send_mfa_login_sms(
+            db,
+            mfa_token=body.mfa_token,
+            ip=get_client_ip(request),
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    return OtpSendResponse(
+        ok=True,
+        retry_after_seconds=result.get("retry_after_seconds", 30),
+        expires_in=result.get("expires_in", 600),
+    )
+
+
+@router.post("/login/verify-sms")
+async def post_login_verify_sms(
+    body: LoginSmsVerifyRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    try:
+        result = await verify_sms_login(
+            db,
+            login_token=body.login_token,
+            otp=body.otp,
+            ip=get_client_ip(request),
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    admin_client = bool(result.get("admin_client"))
+    resolved_client = _resolve_auth_client(request, result.get("device_fingerprint"))
+    if resolved_client != admin_client:
+        raise handle_auth_error(
+            AuthError(
+                "Sign-in client mismatch. Use the correct app to continue.",
+                "invalid_auth_client",
+                403,
+            )
+        )
+    _validate_client_role(result["user"], admin=admin_client)
+    set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
+    return await _auth_response(db, result)
+
+
+@router.post("/login/resend-sms", response_model=OtpSendResponse)
+async def post_login_resend_sms(
+    body: LoginSmsResendRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OtpSendResponse:
+    try:
+        result = await resend_login_sms_otp(
+            db,
+            login_token=body.login_token,
+            ip=get_client_ip(request),
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    return OtpSendResponse(**result)
 
 
 @router.post("/oauth/link/resend", response_model=OtpSendResponse)
@@ -465,7 +563,7 @@ async def post_oauth_link_confirm(
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
     admin_client = _resolve_auth_client(request, body.device_fingerprint)
-    return _handle_login_result(result, response, admin=admin_client)
+    return await _handle_login_result(db, result, response, admin=admin_client)
 
 
 @router.get("/oauth/connections", response_model=OAuthConnectionsResponse)
@@ -536,6 +634,7 @@ async def post_oauth_disconnect(
             provider=OAuthProvider(body.provider),
             current_password=body.current_password,
             totp_code=body.totp_code,
+            sms_otp=body.sms_otp,
             ip=get_client_ip(request),
         )
     except AuthError as exc:
@@ -602,6 +701,7 @@ async def post_mfa_disable(
             session_id=session_id,
             current_password=body.current_password,
             totp_code=body.totp_code,
+            sms_otp=body.sms_otp,
             ip=get_client_ip(request),
         )
     except AuthError as exc:
@@ -625,6 +725,7 @@ async def post_mfa_regenerate_backup_codes(
             session_id=session_id,
             current_password=body.current_password,
             totp_code=body.totp_code,
+            sms_otp=body.sms_otp,
             ip=get_client_ip(request),
         )
     except AuthError as exc:
@@ -673,18 +774,61 @@ async def post_mfa_reset_confirm(
 
 @router.get("/fund-eligibility/check", response_model=FundEligibilityResponse)
 async def get_fund_eligibility(
+    db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> FundEligibilityResponse:
-    result = fund_eligibility_status(current_user)
-    return FundEligibilityResponse(**result)
+    result = await evaluate_fund_eligibility(db, current_user)
+    return FundEligibilityResponse(eligible=result["eligible"], reasons=result["reasons"])
 
 
-@router.get("/fund-eligibility/gated-check", response_model=FundEligibilityResponse)
+@router.get("/fund-eligibility/status", response_model=FundEligibilityStatusResponse)
+async def get_fund_eligibility_status(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FundEligibilityStatusResponse:
+    result = await evaluate_fund_eligibility(db, current_user)
+    return FundEligibilityStatusResponse(**result)
+
+
+@router.get("/security-policy", response_model=AuthSecurityPolicyResponse)
+async def get_security_policy(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> AuthSecurityPolicyResponse:
+    result = await get_auth_security_policy(db, current_user)
+    return AuthSecurityPolicyResponse(**result)
+
+
+@router.get("/step-up/options", response_model=StepUpOptionsResponse)
+async def get_step_up_options(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> StepUpOptionsResponse:
+    result = await get_step_up_sms_options(db, current_user)
+    return StepUpOptionsResponse(**result)
+
+
+@router.post("/step-up/send-sms", response_model=StepUpSmsSendResponse)
+async def post_step_up_send_sms(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> StepUpSmsSendResponse:
+    try:
+        result = await send_step_up_sms(db, user=current_user, ip=get_client_ip(request))
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    await db.commit()
+    return StepUpSmsSendResponse(**result)
+
+
+@router.get("/fund-eligibility/gated-check", response_model=FundEligibilityStatusResponse)
 async def get_gated_fund_eligibility(
+    db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_fund_eligible_user)],
-) -> FundEligibilityResponse:
-    result = fund_eligibility_status(current_user)
-    return FundEligibilityResponse(**result)
+) -> FundEligibilityStatusResponse:
+    result = await evaluate_fund_eligibility(db, current_user)
+    return FundEligibilityStatusResponse(**result)
 
 
 @router.post("/pin/setup", response_model=PinOkResponse)
@@ -956,6 +1100,7 @@ async def post_change_password(
             current_password=body.current_password,
             new_password=body.new_password,
             totp_code=body.totp_code,
+            sms_otp=body.sms_otp,
             ip=get_client_ip(request),
         )
     except AuthError as exc:
@@ -991,6 +1136,7 @@ async def post_change_email_start(
             new_email=body.new_email,
             current_password=body.current_password,
             totp_code=body.totp_code,
+            sms_otp=body.sms_otp,
             ip=get_client_ip(request),
         )
     except AuthError as exc:
@@ -1047,6 +1193,7 @@ async def post_delete_request(
             session_id=session_id,
             current_password=body.current_password,
             totp_code=body.totp_code,
+            sms_otp=body.sms_otp,
             ip=get_client_ip(request),
         )
     except AuthError as exc:
@@ -1101,7 +1248,7 @@ async def post_refresh(
         clear_refresh_cookie(response, admin=admin_client)
         raise
     set_refresh_cookie(response, new_refresh_token, admin=admin_client)
-    return AuthResponse(access_token=access_token, user=_user_response(user))
+    return AuthResponse(access_token=access_token, user=await _user_response(db, user))
 
 
 @router.post("/logout", response_model=OkResponse)
@@ -1118,8 +1265,11 @@ async def post_logout(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: Annotated[User, Depends(get_current_user)]) -> UserResponse:
-    return _user_response(current_user)
+async def get_me(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> UserResponse:
+    return await _user_response(db, current_user)
 
 
 @router.post("/oauth/state/google-login", response_model=OAuthStateResponse)
@@ -1225,7 +1375,7 @@ async def post_admin_invite_accept(
     admin_client = _resolve_auth_client(request, body.device_fingerprint)
     _validate_client_role(result["user"], admin=admin_client)
     set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
-    return _auth_response(result)
+    return await _auth_response(db, result)
 
 
 @router.get("/jwks")

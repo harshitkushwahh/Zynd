@@ -2,15 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CalendarClock, Loader2, TrendingUp } from "lucide-react";
+import { CalendarClock, TrendingUp } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
@@ -23,6 +17,7 @@ import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculat
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
 import { MfSipProjectionChartPanel } from "@/features/invest/components/mf-sip-projection-chart";
+import { MfSipCalculatorResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
 import { formatDate, formatInr, formatReturn } from "@/features/invest/lib/mf-format";
 import {
@@ -410,32 +405,26 @@ export function MfSipCalculatorView() {
 
           {fund && error ? <FieldMessage variant="error" message={error} /> : null}
 
-          {fund && loading ? (
-            <Card className="h-full rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
-              <CardContent className="flex h-full min-h-full items-center justify-center gap-2 p-5 text-muted-foreground sm:p-6">
-                <Loader2 className="size-4 animate-spin" />
-                {copy.mutualFunds.calculatorLoading}
-              </CardContent>
-            </Card>
-          ) : null}
+          {fund && loading ? <MfSipCalculatorResultsSkeleton /> : null}
 
           {fund && hasResult && result ? <SipResultsCard result={result} projectedGain={projectedGain} /> : null}
         </div>
         </div>
 
         <Card className={cn("w-full", MF_SIP_CARD_CLASS)}>
-          <CardHeader className="pb-3">
-            <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
-            <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className={cn(MF_SIP_CARD_CONTENT_CLASS, "gap-4")}>
+            <div className="space-y-1">
+              <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
+              <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
+            </div>
+
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className={MF_SIP_INVESTED_DOT_CLASS} />
+                <span className={MF_SIP_INVESTED_DOT_CLASS} aria-hidden />
                 {copy.mutualFunds.sipChartInvested}
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className={MF_SIP_GAIN_DOT_CLASS} />
+                <span className={MF_SIP_GAIN_DOT_CLASS} aria-hidden />
                 {copy.mutualFunds.sipChartGain}
               </span>
             </div>

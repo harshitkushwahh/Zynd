@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RotateCcw, ShoppingCart } from "lucide-react";
+import { RefreshCw, RotateCcw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import {
   MfOrderCustomerCell,
   MfOrderFundCell,
@@ -13,6 +12,8 @@ import {
 } from "@/components/mf/mf-order-journey-dialog";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -27,24 +28,15 @@ import {
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ApiError } from "@/lib/api-client";
-import {
   fetchMfTransactionOrders,
   syncMfTransactionOrder,
   type MfTransactionOrder,
 } from "@/lib/mf-transactions-admin-api";
+import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const ORDER_SORT_OPTIONS = [
+const ORDER_SORT_OPTIONS: AdminSelectOption[] = [
   { value: "recent", label: "Recent first" },
   { value: "oldest", label: "Oldest first" },
   { value: "updated_recent", label: "Recently updated" },
@@ -54,9 +46,9 @@ const ORDER_SORT_OPTIONS = [
   { value: "product_az", label: "Fund name · A to Z" },
   { value: "product_za", label: "Fund name · Z to A" },
   { value: "status_az", label: "Status · A to Z" },
-] as const;
+];
 
-const ORDER_STATUS_OPTIONS = [
+const ORDER_STATUS_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "pending", label: "Pending" },
   { value: "submitted", label: "Submitted" },
@@ -65,10 +57,18 @@ const ORDER_STATUS_OPTIONS = [
   { value: "succeeded", label: "Succeeded" },
   { value: "failed", label: "Failed" },
   { value: "cancelled", label: "Cancelled" },
-] as const;
+];
 
-type OrderSortKey = (typeof ORDER_SORT_OPTIONS)[number]["value"];
-
+type OrderSortKey =
+  | "recent"
+  | "oldest"
+  | "updated_recent"
+  | "updated_oldest"
+  | "amount_high"
+  | "amount_low"
+  | "product_az"
+  | "product_za"
+  | "status_az";
 
 function formatOrderTimestamp(order: MfTransactionOrder) {
   const value = order.settled_at ?? order.submitted_at ?? order.created_at;
@@ -120,10 +120,29 @@ function sortOrders(orders: MfTransactionOrder[], sort: OrderSortKey) {
   }
 }
 
+function matchesSearch(order: MfTransactionOrder, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    order.product_name,
+    order.product_id,
+    order.user_display_name,
+    order.user_email,
+    order.client_id,
+    order.order_id,
+    order.status,
+    order.order_type,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(normalized);
+}
+
 export function MfTransactionOrdersPanel({
   canRead,
   canManage,
-  title = "Purchase orders",
   orderType,
   checkoutType,
   emptyMessage = "No orders found.",
@@ -140,9 +159,11 @@ export function MfTransactionOrdersPanel({
   const [message, setMessage] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [orders, setOrders] = useState<MfTransactionOrder[]>([]);
+  const [search, setSearch] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState(ALL);
   const [orderSort, setOrderSort] = useState<OrderSortKey>("recent");
   const [orderPage, setOrderPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -170,13 +191,20 @@ export function MfTransactionOrdersPanel({
 
   useEffect(() => {
     setOrderPage(0);
-  }, [orderStatusFilter, orderSort]);
+  }, [orderStatusFilter, orderSort, search, pageSize]);
 
-  const sortedOrders = useMemo(() => sortOrders(orders, orderSort), [orderSort, orders]);
-  const orderPagination = useMemo(
-    () => paginateItems(sortedOrders, orderPage, ADMIN_TABLE_PAGE_SIZE),
-    [orderPage, sortedOrders],
+  const filteredOrders = useMemo(
+    () => sortOrders(orders.filter((order) => matchesSearch(order, search)), orderSort),
+    [orderSort, orders, search],
   );
+
+  const orderPagination = useMemo(
+    () => paginateItems(filteredOrders, orderPage, pageSize),
+    [filteredOrders, orderPage, pageSize],
+  );
+
+  const columnCount = canManage ? 7 : 6;
+  const showSkeleton = loading && orders.length === 0;
 
   const handleSyncOrder = async (orderId: string) => {
     if (!canManage) return;
@@ -194,81 +222,106 @@ export function MfTransactionOrdersPanel({
   };
 
   return (
-    <div className="space-y-3">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
-
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSectionTitle icon={ShoppingCart}>{title}</AdminSectionTitle>
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by fund, customer, or ID"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
         <div className="flex flex-wrap items-center gap-2">
-          <Select
+          <AdminSelect
             value={orderSort}
-            onValueChange={(value) => setOrderSort((value ?? "recent") as OrderSortKey)}
-          >
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="Sort orders">
-                {ORDER_SORT_OPTIONS.find((option) => option.value === orderSort)?.label ??
-                  "Recent first"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Sort by</SelectLabel>
-                {ORDER_SORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Select
+            onValueChange={(value) => setOrderSort(value as OrderSortKey)}
+            options={ORDER_SORT_OPTIONS}
+            placeholder="Sort"
+            className="min-w-select-sm"
+          />
+          <AdminSelect
             value={orderStatusFilter}
-            onValueChange={(value) => setOrderStatusFilter(value ?? ALL)}
+            onValueChange={(value) => setOrderStatusFilter(value)}
+            options={ORDER_STATUS_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void loadData()}
+            aria-label="Refresh"
           >
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="All statuses">
-                {ORDER_STATUS_OPTIONS.find((option) => option.value === orderStatusFilter)?.label ??
-                  "All statuses"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Filter by status</SelectLabel>
-                {ORDER_STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
         </div>
       </div>
 
-      <AdminDataTable minWidth="6xl">
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+
+      <AdminDataTable
+        minWidth="6xl"
+        footer={
+          <AdminTablePagination
+            page={orderPagination.page}
+            totalPages={orderPagination.totalPages}
+            hasPrevious={orderPagination.hasPrevious}
+            hasNext={orderPagination.hasNext}
+            disabled={loading}
+            totalCount={filteredOrders.length}
+            currentPageCount={orderPagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setOrderPage(0);
+            }}
+            onPrevious={() => setOrderPage((page) => Math.max(0, page - 1))}
+            onNext={() => setOrderPage((page) => page + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            {canManage ? (
+              <AdminTableHeadCell className="w-[5.5rem]">Actions</AdminTableHeadCell>
+            ) : null}
             <AdminTableHeadCell>Fund</AdminTableHeadCell>
             <AdminTableHeadCell>Customer</AdminTableHeadCell>
             <AdminTableHeadCell>Type</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Amount</AdminTableHeadCell>
             <AdminTableHeadCell>Updated</AdminTableHeadCell>
-            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {loading ? (
-            <AdminTableSkeletonRows columns={canManage ? 7 : 6} />
-          ) : orderPagination.items.length === 0 ? (
-            <AdminTableStateRow colSpan={canManage ? 7 : 6}>{emptyMessage}</AdminTableStateRow>
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={columnCount} />
+          ) : filteredOrders.length === 0 ? (
+            <AdminTableStateRow colSpan={columnCount}>
+              {orders.length === 0 ? emptyMessage : "No orders match your search."}
+            </AdminTableStateRow>
           ) : (
             orderPagination.items.map((order, index) => (
               <AdminTableRow
                 key={order.order_id ?? `order-${index}`}
                 onClick={() => setSelectedOrderId(order.order_id)}
               >
+                {canManage ? (
+                  <AdminTableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actionLoading === `sync-${order.order_id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleSyncOrder(order.order_id);
+                      }}
+                    >
+                      <RotateCcw className="size-3.5" />
+                      Sync
+                    </Button>
+                  </AdminTableCell>
+                ) : null}
                 <AdminTableCell>
                   <MfOrderFundCell order={order} />
                 </AdminTableCell>
@@ -287,39 +340,11 @@ export function MfTransactionOrdersPanel({
                 <AdminTableCell className="text-muted-foreground">
                   {formatOrderTimestamp(order)}
                 </AdminTableCell>
-                {canManage ? (
-                  <AdminTableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading === `sync-${order.order_id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleSyncOrder(order.order_id);
-                      }}
-                    >
-                      <RotateCcw className="size-3.5" />
-                      Sync
-                    </Button>
-                  </AdminTableCell>
-                ) : null}
               </AdminTableRow>
             ))
           )}
         </AdminTableBody>
       </AdminDataTable>
-
-      {!loading && sortedOrders.length > 0 ? (
-        <AdminTablePagination
-          page={orderPagination.page}
-          totalPages={orderPagination.totalPages}
-          hasPrevious={orderPagination.hasPrevious}
-          hasNext={orderPagination.hasNext}
-          disabled={loading}
-          onPrevious={() => setOrderPage((page) => Math.max(0, page - 1))}
-          onNext={() => setOrderPage((page) => page + 1)}
-        />
-      ) : null}
 
       <MfOrderJourneyDialog
         open={selectedOrderId != null}

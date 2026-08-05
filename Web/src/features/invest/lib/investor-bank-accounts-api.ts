@@ -133,7 +133,6 @@ export function isInvestorBankAccountVerified(account: InvestorBankAccount): boo
 export function isInvestorBankAccountPaymentReady(account: InvestorBankAccount): boolean {
   return (
     isInvestorBankAccountVerified(account) &&
-    account.readiness_verified &&
     account.sync_status === "active" &&
     Boolean(account.external_bank_account_id)
   );

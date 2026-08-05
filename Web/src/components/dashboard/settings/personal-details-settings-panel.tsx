@@ -1,18 +1,33 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  CreditCard,
+  Globe,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 
 import { AppleIcon, GoogleIcon } from "@/components/auth/oauth-provider-icons";
 import {
   AuthenticatorVerifyDialog,
   PasswordVerifyDialog,
 } from "@/features/account/mfa";
+import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import {
-  SettingsDetailRow,
-  SettingsDetailSection,
-} from "@/components/dashboard/settings/settings-detail-row";
+  SettingsProfileFieldCard,
+} from "@/components/dashboard/settings/settings-profile-field-card";
+import { SettingsOAuthConnectionFieldCard } from "@/components/dashboard/settings/settings-oauth-connection-field-card";
+import { SettingsProfileSectionCard } from "@/components/dashboard/settings/settings-profile-section-card";
+import {
+  PersonalDetailsAddressSkeletonCards,
+  PersonalDetailsIdentitySkeletonCards,
+} from "@/components/dashboard/settings/settings-skeleton";
 import { SETTINGS_NAV } from "@/components/dashboard/settings/settings-sidebar";
 import { Button } from "@/components/ui/button";
 import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
@@ -56,10 +71,6 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return <SettingsDetailRow label={label} value={value} />;
-}
-
 export function PersonalDetailsSettingsPanel({
   displayName,
   registeredEmail,
@@ -84,6 +95,11 @@ export function PersonalDetailsSettingsPanel({
   const [passwordError, setPasswordError] = useState("");
   const [authError, setAuthError] = useState("");
   const [pendingPassword, setPendingPassword] = useState("");
+
+  const hasIdentity = Boolean(kycProfile?.panNumber || personalInfo);
+  const hasAddress = Boolean(kycProfile?.address);
+  const showIdentitySection = kycProfileLoading || hasIdentity || kyc?.kycAllowed;
+  const showAddressSection = kycProfileLoading || hasAddress;
 
   const loadConnections = useCallback(async () => {
     setLoading(true);
@@ -143,7 +159,10 @@ export function PersonalDetailsSettingsPanel({
     }
   };
 
-  const submitDisconnect = async (currentPassword: string, totpCode?: string) => {
+  const submitDisconnect = async (
+    currentPassword: string,
+    verification?: StepUpVerification,
+  ) => {
     if (!disconnectProvider) return;
 
     setActionLoading(disconnectProvider);
@@ -156,7 +175,8 @@ export function PersonalDetailsSettingsPanel({
       const result = await disconnectOAuth({
         provider: disconnectProvider,
         currentPassword,
-        totpCode,
+        totpCode: verification?.totpCode,
+        smsOtp: verification?.smsOtp,
       });
       setConnections(result);
       setSuccess(`${disconnectProvider === "google" ? "Google" : "Apple"} account disconnected.`);
@@ -253,98 +273,162 @@ export function PersonalDetailsSettingsPanel({
         />
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-4">
         <FieldMessage message={error} />
         {success ? <UiMessage variant="success" message={success} className="mb-3" /> : null}
 
-        <SettingsDetailSection title={copy.settings.accountSectionTitle}>
-          <DetailRow label={copy.settings.fullNameLabel} value={displayName || copy.settings.notSet} />
-          <DetailRow label={copy.settings.emailLabel} value={registeredEmail} />
-          <DetailRow label={copy.settings.phoneLabel} value={phone || copy.settings.notSet} />
-          <DetailRow label={copy.settings.countryLabel} value={formatSettingsCountryCode(countryCode)} />
-          <DetailRow
-            label={copy.settings.googleLabel}
-            value={googleConnected ? connections?.google.email || copy.settings.connected : copy.settings.notConnected}
-          />
-          <DetailRow
-            label={copy.settings.appleLabel}
-            value={appleConnected ? connections?.apple.email || copy.settings.connected : copy.settings.notConnected}
-          />
-        </SettingsDetailSection>
+        <div className="space-y-5">
+          <SettingsProfileSectionCard
+            title={copy.settings.accountSectionTitle}
+            icon={UserRound}
+            tone="primary"
+          >
+            <SettingsProfileFieldCard
+              label={copy.settings.fullNameLabel}
+              value={displayName || copy.settings.notSet}
+              icon={UserRound}
+              variant="accent"
+            />
+            <SettingsProfileFieldCard
+              label={copy.settings.emailLabel}
+              value={registeredEmail}
+              icon={Mail}
+            />
+            <SettingsProfileFieldCard
+              label={copy.settings.phoneLabel}
+              value={phone || copy.settings.notSet}
+              icon={Phone}
+            />
+            <SettingsProfileFieldCard
+              label={copy.settings.countryLabel}
+              value={formatSettingsCountryCode(countryCode)}
+              icon={Globe}
+            />
+            <SettingsOAuthConnectionFieldCard
+              provider="google"
+              connected={googleConnected}
+              email={connections?.google.email}
+            />
+            <SettingsOAuthConnectionFieldCard
+              provider="apple"
+              connected={appleConnected}
+              email={connections?.apple.email}
+            />
+          </SettingsProfileSectionCard>
 
-        {kycProfileLoading ? (
-          <p className="text-caption text-muted-foreground">{copy.settings.profileLoading}</p>
-        ) : kycProfile?.panNumber || personalInfo || kycProfile?.address ? (
-          <>
-            {kycProfile.panNumber ? (
-              <SettingsDetailSection
-                title={copy.settings.identitySectionTitle}
-                description={copy.settings.identitySectionDescription}
-              >
-                <SettingsDetailRow
-                  label={copy.kyc.pan.numberLabel}
-                  value={kycProfile.panNumber}
-                  mono
-                  verified={kycProfile.panVerified}
-                />
-                {personalInfo ? (
-                  <>
-                    <SettingsDetailRow
-                      label={copy.kyc.personalInfo.fields.fathersName}
-                      value={personalInfo.fathersName}
+          {showIdentitySection ? (
+            <SettingsProfileSectionCard
+              title={copy.settings.identitySectionTitle}
+              icon={ShieldCheck}
+              tone="success"
+              badge={
+                hasIdentity && kycProfile?.panVerified ? (
+                  <span className="rounded-[var(--radius-full)] bg-success/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success">
+                    KYC verified
+                  </span>
+                ) : null
+              }
+            >
+              {kycProfileLoading ? (
+                <PersonalDetailsIdentitySkeletonCards />
+              ) : hasIdentity ? (
+                <>
+                  {kycProfile?.panNumber ? (
+                    <SettingsProfileFieldCard
+                      label={copy.kyc.pan.numberLabel}
+                      value={kycProfile.panNumber}
+                      icon={CreditCard}
+                      mono
+                      verified={kycProfile.panVerified}
                     />
-                    <SettingsDetailRow label={copy.kyc.personalInfo.fields.gender} value={personalInfo.gender} />
-                    <SettingsDetailRow
-                      label={copy.kyc.personalInfo.fields.incomeSlab}
-                      value={personalInfo.incomeSlab}
-                    />
-                    <SettingsDetailRow
-                      label={copy.kyc.personalInfo.fields.occupation}
-                      value={personalInfo.occupation}
-                    />
-                    <SettingsDetailRow
-                      label={copy.kyc.personalInfo.fields.maritalStatus}
-                      value={personalInfo.maritalStatus}
-                    />
-                    <SettingsDetailRow
-                      label={copy.kyc.personalInfo.fields.nationality}
-                      value={personalInfo.nationality}
-                    />
-                    <SettingsDetailRow
-                      label={copy.kyc.personalInfo.fields.placeOfBirth}
-                      value={personalInfo.placeOfBirth}
-                    />
-                    <SettingsDetailRow
-                      label={copy.kyc.personalInfo.fields.pepExposed}
-                      value={personalInfo.pepExposed}
-                    />
-                  </>
-                ) : null}
-              </SettingsDetailSection>
-            ) : null}
+                  ) : null}
+                  {personalInfo ? (
+                    <>
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.fathersName}
+                        value={personalInfo.fathersName}
+                      />
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.gender}
+                        value={personalInfo.gender}
+                      />
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.incomeSlab}
+                        value={personalInfo.incomeSlab}
+                      />
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.occupation}
+                        value={personalInfo.occupation}
+                      />
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.maritalStatus}
+                        value={personalInfo.maritalStatus}
+                      />
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.nationality}
+                        value={personalInfo.nationality}
+                      />
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.placeOfBirth}
+                        value={personalInfo.placeOfBirth}
+                        icon={MapPin}
+                      />
+                      <SettingsProfileFieldCard
+                        label={copy.kyc.personalInfo.fields.pepExposed}
+                        value={personalInfo.pepExposed}
+                      />
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <div className="flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-success/25 bg-card px-6 py-10 text-center sm:col-span-2 xl:col-span-3">
+                  <div className="flex size-12 items-center justify-center rounded-full bg-success/10 text-success ring-1 ring-inset ring-success/20">
+                    <ShieldCheck className="size-5" strokeWidth={2} aria-hidden />
+                  </div>
+                  <p className="mt-4 max-w-sm text-body font-medium text-foreground">
+                    {copy.kyc.menuLabel}
+                  </p>
+                  <p className="mt-1 max-w-sm text-caption text-muted-foreground">
+                    {copy.kyc.pageDescription}
+                  </p>
+                  <Button type="button" size="sm" className="mt-4" onClick={() => kyc?.openDialog()}>
+                    {copy.kyc.menuLabel}
+                  </Button>
+                </div>
+              )}
+            </SettingsProfileSectionCard>
+          ) : null}
 
-            {kycProfile.address ? (
-              <SettingsDetailSection title={copy.settings.addressSectionTitle}>
-                <SettingsDetailRow
-                  label={copy.kyc.address.permanentTab}
-                  value={kycProfile.address.permanent}
-                  verified={kycProfile.address.verified}
-                />
-                <SettingsDetailRow
-                  label={copy.kyc.address.correspondenceTab}
-                  value={kycProfile.address.correspondence}
-                />
-              </SettingsDetailSection>
-            ) : null}
-          </>
-        ) : kyc?.kycAllowed ? (
-          <div className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-6 text-center">
-            <p className="text-caption text-muted-foreground">{copy.kyc.pageDescription}</p>
-            <Button type="button" size="sm" className="mt-3" onClick={() => kyc.openDialog()}>
-              {copy.kyc.menuLabel}
-            </Button>
-          </div>
-        ) : null}
+          {showAddressSection ? (
+            <SettingsProfileSectionCard
+              title={copy.settings.addressSectionTitle}
+              icon={MapPin}
+              tone="info"
+            >
+              {kycProfileLoading ? (
+                <PersonalDetailsAddressSkeletonCards />
+              ) : hasAddress ? (
+                <>
+                  <SettingsProfileFieldCard
+                    label={copy.kyc.address.permanentTab}
+                    value={kycProfile!.address!.permanent}
+                    verified={kycProfile!.address!.verified}
+                    icon={MapPin}
+                    multiline
+                    className="sm:col-span-2 xl:col-span-3"
+                  />
+                  <SettingsProfileFieldCard
+                    label={copy.kyc.address.correspondenceTab}
+                    value={kycProfile!.address!.correspondence}
+                    icon={MapPin}
+                    multiline
+                    className="sm:col-span-2 xl:col-span-3"
+                  />
+                </>
+              ) : null}
+            </SettingsProfileSectionCard>
+          ) : null}
+        </div>
       </div>
 
       <PasswordVerifyDialog
@@ -382,7 +466,7 @@ export function PersonalDetailsSettingsPanel({
         submitLabel={copy.settings.disconnectSubmit}
         loading={actionLoading !== null}
         error={authError}
-        onSubmit={(totpCode) => void submitDisconnect(pendingPassword, totpCode)}
+        onSubmit={(verification) => void submitDisconnect(pendingPassword, verification)}
       />
     </SettingsContentCard>
   );

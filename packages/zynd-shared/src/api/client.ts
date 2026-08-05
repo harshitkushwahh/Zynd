@@ -1,3 +1,11 @@
+import {
+  beginBackendRequest,
+  endBackendRequest,
+  isBackendConnectionError,
+  isBackendConnectionStatus,
+  markBackendConnectionReady,
+  markBackendConnectionWaiting,
+} from "./connection-state";
 import { getApiUrl, getClientKind } from "./configure";
 import { ApiError, parseApiError } from "./errors";
 
@@ -41,6 +49,7 @@ export function getAccessToken() {
 export async function refreshSession(): Promise<SessionRefreshResult> {
   if (!refreshPromise) {
     refreshPromise = (async (): Promise<SessionRefreshResult> => {
+      beginBackendRequest();
       try {
         const headers = new Headers();
         applyClientHeaders(headers);
@@ -48,20 +57,30 @@ export async function refreshSession(): Promise<SessionRefreshResult> {
           method: "POST",
           credentials: "include",
           headers,
+        }).catch((error: unknown) => {
+          markBackendConnectionWaiting();
+          throw error;
         });
 
         if (!response.ok) {
+          if (isBackendConnectionStatus(response.status)) {
+            markBackendConnectionWaiting();
+          }
           setAccessToken(null);
           return { ok: false, reason: "expired" };
         }
 
+        markBackendConnectionReady();
         const data = (await response.json()) as Record<string, unknown> & {
           access_token: string;
         };
         setAccessToken(data.access_token);
         return { ok: true, accessToken: data.access_token, data };
       } catch {
+        markBackendConnectionWaiting();
         return { ok: false, reason: "network" };
+      } finally {
+        endBackendRequest();
       }
     })().finally(() => {
       refreshPromise = null;
@@ -81,40 +100,56 @@ export async function apiRequest<T>(
   options: RequestInit = {},
   retry = true
 ): Promise<T> {
-  const headers = new Headers(options.headers);
-  applyClientHeaders(headers);
-  if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-  if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
-  }
+  beginBackendRequest();
+  try {
+    const headers = new Headers(options.headers);
+    applyClientHeaders(headers);
+    if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
 
-  const response = await fetch(`${getApiUrl()}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  }).catch((error: unknown) => {
-    if (error instanceof TypeError) {
-      throw new ApiError("Unable to reach the server. Try again shortly.", "network_error", 503);
+    const response = await fetch(`${getApiUrl()}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    }).catch((error: unknown) => {
+      markBackendConnectionWaiting();
+      if (error instanceof TypeError) {
+        throw new ApiError("Unable to reach the server. Try again shortly.", "network_error", 503);
+      }
+      throw error;
+    });
+
+    if (response.status === 401 && retry && shouldRefreshSessionOn401(path)) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        return apiRequest<T>(path, options, false);
+      }
+    }
+
+    if (!response.ok) {
+      if (isBackendConnectionStatus(response.status)) {
+        markBackendConnectionWaiting();
+      }
+      throw await parseApiError(response);
+    }
+
+    markBackendConnectionReady();
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    return response.json() as Promise<T>;
+  } catch (error) {
+    if (isBackendConnectionError(error)) {
+      markBackendConnectionWaiting();
     }
     throw error;
-  });
-
-  if (response.status === 401 && retry && shouldRefreshSessionOn401(path)) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      return apiRequest<T>(path, options, false);
-    }
+  } finally {
+    endBackendRequest();
   }
-
-  if (!response.ok) {
-    throw await parseApiError(response);
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return response.json() as Promise<T>;
 }

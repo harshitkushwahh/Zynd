@@ -21,23 +21,18 @@ def _user(**overrides) -> User:
     return user
 
 
-def test_kyc_eligibility_requires_email_phone_mfa_and_pin() -> None:
+def test_kyc_eligibility_requires_email_and_phone() -> None:
     result = kyc_eligibility_status(_user())
     assert result["eligible"] is False
     assert "email_not_verified" in result["reasons"]
     assert "phone_not_verified" in result["reasons"]
-    assert "mfa_required" in result["reasons"]
-    assert "pin_required" in result["reasons"]
 
 
-def test_kyc_eligibility_ok_when_all_gates_met() -> None:
+def test_kyc_eligibility_ok_when_contact_verified() -> None:
     now = datetime.now(timezone.utc)
     user = _user(
         email_verified_at=now,
         phone_verified_at=now,
-        mfa_enrolled_at=now,
-        pin_set_at=now,
-        pin_hash="hash",
     )
     result = kyc_eligibility_status(user)
     assert result["eligible"] is True

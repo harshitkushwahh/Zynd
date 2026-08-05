@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IndianRupee, ShoppingCart } from "lucide-react";
+import { RefreshCw, ShoppingCart } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { formatTimestamp } from "@/lib/format-date";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { MfOrderCustomerCell } from "@/components/mf/mf-order-journey-dialog";
 import { MfTransactionCheckoutDetailDialog } from "@/components/mf/mf-transaction-checkout-detail-dialog";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -23,24 +24,16 @@ import {
   AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ApiError } from "@/lib/api-client";
+import { Button } from "@/components/ui/button";
 import {
   fetchMfTransactionCheckouts,
   type MfTransactionCheckout,
 } from "@/lib/mf-transactions-admin-api";
+import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const CHECKOUT_STATUS_OPTIONS = [
+const CHECKOUT_STATUS_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "PENDING", label: "Pending" },
   { value: "PAYMENT_PENDING", label: "Payment pending" },
@@ -49,9 +42,7 @@ const CHECKOUT_STATUS_OPTIONS = [
   { value: "SUCCEEDED", label: "Succeeded" },
   { value: "FAILED", label: "Failed" },
   { value: "CANCELLED", label: "Cancelled" },
-] as const;
-
-
+];
 
 function formatFundSummary(checkout: MfTransactionCheckout) {
   const names = checkout.orders
@@ -64,18 +55,32 @@ function formatFundSummary(checkout: MfTransactionCheckout) {
   return `${names.slice(0, 2).join(", ")} +${names.length - 2} more`;
 }
 
-export function MfTransactionCheckoutsPanel({
-  canRead,
-  title = "Bulk lumpsum orders",
-}: {
-  canRead: boolean;
-  title?: string;
-}) {
+function matchesSearch(checkout: MfTransactionCheckout, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    checkout.user_display_name,
+    checkout.user_email,
+    checkout.client_id,
+    checkout.checkout_id,
+    checkout.status,
+    formatFundSummary(checkout),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(normalized);
+}
+
+export function MfTransactionCheckoutsPanel({ canRead }: { canRead: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [checkouts, setCheckouts] = useState<MfTransactionCheckout[]>([]);
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [selectedCheckoutId, setSelectedCheckoutId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -102,40 +107,71 @@ export function MfTransactionCheckoutsPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter]);
+  }, [statusFilter, search, pageSize]);
 
-  const pagination = useMemo(
-    () => paginateItems(checkouts, page, ADMIN_TABLE_PAGE_SIZE),
-    [checkouts, page],
+  const filteredCheckouts = useMemo(
+    () => checkouts.filter((checkout) => matchesSearch(checkout, search)),
+    [checkouts, search],
   );
 
-  return (
-    <div className="space-y-3">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+  const pagination = useMemo(
+    () => paginateItems(filteredCheckouts, page, pageSize),
+    [filteredCheckouts, page, pageSize],
+  );
 
+  const showSkeleton = loading && checkouts.length === 0;
+
+  return (
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSectionTitle icon={IndianRupee}>{title}</AdminSectionTitle>
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? ALL)}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="All statuses">
-              {CHECKOUT_STATUS_OPTIONS.find((option) => option.value === statusFilter)?.label ??
-                "All statuses"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Filter by status</SelectLabel>
-              {CHECKOUT_STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by customer, fund, or ID"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value)}
+            options={CHECKOUT_STATUS_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void loadData()}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
+        </div>
       </div>
 
-      <AdminDataTable minWidth="5xl">
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+
+      <AdminDataTable
+        minWidth="5xl"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            disabled={loading}
+            totalCount={filteredCheckouts.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+            onNext={() => setPage((current) => current + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Customer</AdminTableHeadCell>
@@ -147,10 +183,14 @@ export function MfTransactionCheckoutsPanel({
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {loading ? (
+          {showSkeleton ? (
             <AdminTableSkeletonRows columns={6} />
-          ) : pagination.items.length === 0 ? (
-            <AdminTableStateRow colSpan={6}>No bulk lumpsum orders found.</AdminTableStateRow>
+          ) : filteredCheckouts.length === 0 ? (
+            <AdminTableStateRow colSpan={6}>
+              {checkouts.length === 0
+                ? "No bulk lumpsum orders found."
+                : "No bulk lumpsum orders match your search."}
+            </AdminTableStateRow>
           ) : (
             pagination.items.map((checkout) => (
               <AdminTableRow
@@ -196,18 +236,6 @@ export function MfTransactionCheckoutsPanel({
           )}
         </AdminTableBody>
       </AdminDataTable>
-
-      {!loading && checkouts.length > 0 ? (
-        <AdminTablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          hasPrevious={pagination.hasPrevious}
-          hasNext={pagination.hasNext}
-          disabled={loading}
-          onPrevious={() => setPage((current) => Math.max(0, current - 1))}
-          onNext={() => setPage((current) => current + 1)}
-        />
-      ) : null}
 
       <MfTransactionCheckoutDetailDialog
         open={selectedCheckoutId != null}

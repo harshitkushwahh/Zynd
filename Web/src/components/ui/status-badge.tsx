@@ -17,19 +17,19 @@ const variantConfig: Record<
 > = {
   success: {
     icon: CheckCircle2,
-    className: "border-success/25 bg-success/10 text-success",
+    className: "border-transparent bg-success text-success-foreground",
   },
   warning: {
     icon: AlertTriangle,
-    className: "border-warning/25 bg-warning/10 text-warning",
+    className: "border-transparent bg-warning text-white",
   },
   destructive: {
     icon: AlertCircle,
-    className: "border-destructive/25 bg-destructive/10 text-destructive",
+    className: "border-transparent bg-destructive text-destructive-foreground",
   },
   info: {
     icon: Info,
-    className: "border-info/25 bg-info/10 text-info",
+    className: "border-transparent bg-info text-info-foreground",
   },
   neutral: {
     icon: Circle,

@@ -122,12 +122,19 @@ class AdminUserSummaryResponse(BaseModel):
     client_id: str
     email: str
     display_name: str
+    phone: Optional[str] = None
+    profile_image_url: Optional[str] = None
     status: str
     role: str
     has_invested: bool
     suspended_at: Optional[datetime] = None
     suspension_reason_code: Optional[str] = None
     mfa_enrolled: bool
+    pin_enrolled: bool = False
+    phone_verified: bool = False
+    fund_movement_eligible: bool = False
+    last_login_at: Optional[datetime] = None
+    last_login_method: Optional[str] = None
     created_at: datetime
 
 
@@ -167,7 +174,7 @@ class AdminUserKycPersonalResponse(BaseModel):
     income_slab: Optional[str] = None
     occupation: Optional[str] = None
     marital_status: Optional[str] = None
-    pep_exposed: Optional[bool] = None
+    pep_exposed: Optional[str] = None
     place_of_birth: Optional[str] = None
     nationality: Optional[str] = None
 
@@ -216,12 +223,41 @@ class AdminUserInvestorAddressResponse(BaseModel):
     sync_status: str
 
 
+class AdminUserKycComplianceIssueResponse(BaseModel):
+    id: str
+    step_key: str
+    step_label: str
+    severity: str
+    title: str
+    detail: str
+    status: str = "open"
+
+
+class AdminUserKycAuditEntryResponse(BaseModel):
+    id: str
+    occurred_at: str
+    action: str
+    step_key: Optional[str] = None
+    step_label: Optional[str] = None
+    detail: str
+    actor: str
+    source: str
+
+
 class AdminUserKycDetailResponse(BaseModel):
     overall_status: str
     last_completed_step: Optional[str] = None
     active_step_index: int = 0
     step_statuses: dict[str, str]
     incomplete_steps: list[AdminUserKycStepResponse]
+    kyc_already_registered: bool = False
+    readiness_code: Optional[str] = None
+    readiness_reason: Optional[str] = None
+    kyc_initiated_at: Optional[str] = None
+    esign_details_status: Optional[str] = None
+    proof_details_status: Optional[str] = None
+    compliance_issues: list[AdminUserKycComplianceIssueResponse] = []
+    audit_log: list[AdminUserKycAuditEntryResponse] = []
     pan: Optional[AdminUserKycPanResponse] = None
     address: Optional[AdminUserKycAddressResponse] = None
     investor_addresses: list[AdminUserInvestorAddressResponse] = []
@@ -236,6 +272,9 @@ class AdminUserKycDetailResponse(BaseModel):
     external_kyc_status: Optional[str] = None
     kyc_form_status: Optional[str] = None
     investor_profile_status: Optional[str] = None
+    investor_profile_id: Optional[str] = None
+    mf_investment_profile_id: Optional[str] = None
+    mf_investment_profile_status: Optional[str] = None
     documents: list[AdminKycDocumentResponse]
 
 
@@ -311,6 +350,7 @@ class AdminUserListItemResponse(BaseModel):
     client_id: str
     email: str
     display_name: str
+    profile_image_url: Optional[str] = None
     status: str
     role: str
     has_invested: bool
@@ -327,6 +367,8 @@ class AdminUserListResponse(BaseModel):
 class AuditLogItemResponse(BaseModel):
     id: UUID
     user_id: Optional[UUID] = None
+    user_email: Optional[str] = None
+    client_id: Optional[str] = None
     event_type: str
     ip_address: Optional[str] = None
     metadata: dict

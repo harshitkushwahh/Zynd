@@ -9,15 +9,18 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import { MF_FUND_SEARCH_MIN_CHARS } from "@/features/invest/lib/mf-fund-search";
-import { formatSignedReturn, resolveInvestAssetUrl } from "@/features/invest/lib/mf-format";
+import { resolveAmcLogoUrl } from "@/features/invest/lib/mf-format";
+import { resolveFundCardReturn } from "@/features/invest/lib/mf-fund-card-return";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type MfFundAmcAvatarProps = {
   amcLogoUrl: string | null;
   amcName: string;
+  amcSlug?: string | null;
   size?: "sm" | "md";
   className?: string;
 };
@@ -25,10 +28,11 @@ type MfFundAmcAvatarProps = {
 export function MfFundAmcAvatar({
   amcLogoUrl,
   amcName,
+  amcSlug,
   size = "md",
   className,
 }: MfFundAmcAvatarProps) {
-  const logoUrl = resolveInvestAssetUrl(amcLogoUrl);
+  const logoUrl = resolveAmcLogoUrl(amcLogoUrl, amcSlug);
   const sizeClass = size === "sm" ? "size-7 text-[10px]" : "size-8 text-[10px]";
 
   if (logoUrl) {
@@ -70,11 +74,11 @@ export function MfFundSearchResultItem({
   showReturn = true,
   className,
 }: MfFundSearchResultItemProps) {
-  const return3y = formatSignedReturn(fund.returns.return_3y);
+  const cardReturn = resolveFundCardReturn(fund.returns);
 
   return (
     <div className={cn("flex min-w-0 flex-1 items-start gap-3", className)}>
-      <MfFundAmcAvatar amcLogoUrl={fund.amc_logo_url} amcName={fund.amc_name} className="mt-0.5" />
+      <MfFundAmcAvatar amcLogoUrl={fund.amc_logo_url} amcSlug={fund.amc_slug} amcName={fund.amc_name} className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium leading-snug text-foreground">{fund.name}</p>
         <p className="truncate text-caption text-muted-foreground">{fund.amc_name}</p>
@@ -83,12 +87,14 @@ export function MfFundSearchResultItem({
         <span
           className={cn(
             "shrink-0 self-center text-caption font-semibold tabular-nums",
-            return3y.tone === "positive" && "text-success",
-            return3y.tone === "negative" && "text-destructive",
-            return3y.tone === "muted" && "text-muted-foreground",
+            cardReturn.tone === "positive" && "text-success",
+            cardReturn.tone === "negative" && "text-destructive",
+            cardReturn.tone === "muted" && "text-muted-foreground",
           )}
         >
-          3Y {return3y.text}
+          {cardReturn.hasData && cardReturn.shortLabel
+            ? `${cardReturn.shortLabel} ${cardReturn.text}`
+            : cardReturn.text}
         </span>
       ) : null}
     </div>
@@ -132,7 +138,9 @@ export function MfFundSearchList({
         ) : null}
 
         {error ? (
-          <div className="px-4 py-3 text-caption text-destructive">{error}</div>
+          <div className="px-4 py-1">
+            <FieldMessage message={error} className="mt-0" />
+          </div>
         ) : null}
 
         {showHint ? (

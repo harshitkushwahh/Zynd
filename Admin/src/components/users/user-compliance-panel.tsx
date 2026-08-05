@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/errors";
 import {
   AlertTriangle,
@@ -15,7 +16,6 @@ import {
 
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import {
@@ -32,12 +32,10 @@ import {
 } from "@/components/ui/admin-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import {
   approveAdminAction,
-  fetchAdminActions,
-  fetchPendingDeletions,
-  fetchSecurityReviews,
   rejectAdminAction,
   resolveSecurityReview,
   runDeletionExecutor,
@@ -48,6 +46,10 @@ import {
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import {
+  adminComplianceQueryKey,
+  useAdminComplianceQuery,
+} from "@/hooks/use-admin-compliance-query";
 
 
 function formatLabel(value: string) {
@@ -91,7 +93,7 @@ function TabCount({ count, active }: { count: number; active?: boolean }) {
         "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-micro font-semibold tabular-nums",
         count > 0
           ? active
-            ? "bg-primary text-primary-foreground"
+            ? "bg-white/20 text-white"
             : "bg-warning/15 text-warning"
           : "bg-muted text-muted-foreground",
       )}
@@ -129,10 +131,20 @@ export function UserCompliancePanel({
   canExecuteDeletions,
   canApproveActions,
 }: UserCompliancePanelProps) {
-  const [reviews, setReviews] = useState<SecurityReviewItem[]>([]);
-  const [deletions, setDeletions] = useState<PendingDeletionItem[]>([]);
-  const [pendingActions, setPendingActions] = useState<AdminActionItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const complianceParams = {
+    canReadReviews,
+    canExecuteDeletions,
+    canApproveActions,
+  };
+  const { data, isLoading, isFetching, error: queryError, refetch } =
+    useAdminComplianceQuery(complianceParams);
+
+  const reviews = data?.reviews ?? [];
+  const deletions = data?.deletions ?? [];
+  const pendingActions = data?.pendingActions ?? [];
+  const loading = isLoading && !data;
+
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -141,8 +153,11 @@ export function UserCompliancePanel({
   const [deletionQuery, setDeletionQuery] = useState("");
   const [actionQuery, setActionQuery] = useState("");
   const [reviewPage, setReviewPage] = useState(0);
+  const [reviewPageSize, setReviewPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [deletionPage, setDeletionPage] = useState(0);
+  const [deletionPageSize, setDeletionPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [actionPage, setActionPage] = useState(0);
+  const [actionPageSize, setActionPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const visibleTabs = useMemo(() => {
     const tabs: Array<{ key: ComplianceTab; label: string; icon: LucideIcon; count: number }> = [];
@@ -170,37 +185,15 @@ export function UserCompliancePanel({
     reviews.length,
   ]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const tasks: Promise<unknown>[] = [];
-      if (canReadReviews) {
-        tasks.push(fetchSecurityReviews("open").then(setReviews));
-      } else {
-        setReviews([]);
-      }
-      if (canExecuteDeletions) {
-        tasks.push(fetchPendingDeletions().then(setDeletions));
-      } else {
-        setDeletions([]);
-      }
-      if (canApproveActions) {
-        tasks.push(fetchAdminActions("pending").then(setPendingActions));
-      } else {
-        setPendingActions([]);
-      }
-      await Promise.all(tasks);
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not load compliance data."));
-    } finally {
-      setLoading(false);
-    }
-  }, [canApproveActions, canExecuteDeletions, canReadReviews]);
+  const loadData = async () => {
+    await queryClient.invalidateQueries({ queryKey: adminComplianceQueryKey(complianceParams) });
+  };
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    if (queryError) {
+      setError(getErrorMessage(queryError, "Could not load compliance data."));
+    }
+  }, [queryError]);
 
   useEffect(() => {
     if (!visibleTabs.some((tab) => tab.key === activeTab)) {
@@ -210,15 +203,15 @@ export function UserCompliancePanel({
 
   useEffect(() => {
     setReviewPage(0);
-  }, [reviews.length, reviewQuery]);
+  }, [reviews.length, reviewQuery, reviewPageSize]);
 
   useEffect(() => {
     setDeletionPage(0);
-  }, [deletions.length, deletionQuery]);
+  }, [deletions.length, deletionQuery, deletionPageSize]);
 
   useEffect(() => {
     setActionPage(0);
-  }, [pendingActions.length, actionQuery]);
+  }, [pendingActions.length, actionQuery, actionPageSize]);
 
   const filteredReviews = useMemo(
     () =>
@@ -259,16 +252,16 @@ export function UserCompliancePanel({
   );
 
   const reviewPagination = useMemo(
-    () => paginateItems(filteredReviews, reviewPage, ADMIN_TABLE_PAGE_SIZE),
-    [filteredReviews, reviewPage],
+    () => paginateItems(filteredReviews, reviewPage, reviewPageSize),
+    [filteredReviews, reviewPage, reviewPageSize],
   );
   const deletionPagination = useMemo(
-    () => paginateItems(filteredDeletions, deletionPage, ADMIN_TABLE_PAGE_SIZE),
-    [deletionPage, filteredDeletions],
+    () => paginateItems(filteredDeletions, deletionPage, deletionPageSize),
+    [deletionPage, deletionPageSize, filteredDeletions],
   );
   const actionPagination = useMemo(
-    () => paginateItems(filteredActions, actionPage, ADMIN_TABLE_PAGE_SIZE),
-    [actionPage, filteredActions],
+    () => paginateItems(filteredActions, actionPage, actionPageSize),
+    [actionPage, actionPageSize, filteredActions],
   );
 
   const handleResolveReview = async (itemId: string, status: "reviewed" | "dismissed") => {
@@ -350,31 +343,31 @@ export function UserCompliancePanel({
         className="gap-4"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList variant="line" className="h-auto w-fit justify-start border-b border-border">
+          <AdminTabList variant="secondary">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               return (
-                <TabsTrigger
+                <AdminTabTrigger
                   key={tab.key}
                   value={tab.key}
-                  className="gap-2 px-4 py-2.5"
+                  className="gap-2"
                 >
                   <Icon className="size-4 shrink-0" />
                   {tab.label}
                   <TabCount count={tab.count} active={activeTab === tab.key} />
-                </TabsTrigger>
+                </AdminTabTrigger>
               );
             })}
-          </TabsList>
+          </AdminTabList>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              disabled={loading}
-              onClick={() => void loadData()}
+              disabled={isFetching}
+              onClick={() => void refetch()}
             >
-              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
               Refresh
             </Button>
           </div>
@@ -383,27 +376,44 @@ export function UserCompliancePanel({
         {canReadReviews ? (
           <TabsContent value="reviews" className="mt-0 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSectionTitle variant="section">
-                Security review queue
-              </AdminSectionTitle>
               <AdminSearchInput
-                containerClassName="max-w-sm sm:w-56"
+                containerClassName="max-w-sm"
                 placeholder="Search reviews"
                 value={reviewQuery}
                 onChange={(event) => setReviewQuery(event.target.value)}
               />
             </div>
 
-            <AdminDataTable minWidth="lg">
+            <AdminDataTable
+              minWidth="lg"
+              footer={
+                <AdminTablePagination
+                  page={reviewPagination.page}
+                  totalPages={reviewPagination.totalPages}
+                  hasPrevious={reviewPagination.hasPrevious}
+                  hasNext={reviewPagination.hasNext}
+                  disabled={loading}
+                  totalCount={filteredReviews.length}
+                  currentPageCount={reviewPagination.items.length}
+                  pageSize={reviewPageSize}
+                  onPageSizeChange={(next) => {
+                    setReviewPageSize(next);
+                    setReviewPage(0);
+                  }}
+                  onPrevious={() => setReviewPage((page) => Math.max(0, page - 1))}
+                  onNext={() => setReviewPage((page) => page + 1)}
+                />
+              }
+            >
               <AdminTableHeader>
                 <tr>
+                  {canResolveReviews ? (
+                    <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+                  ) : null}
                   <AdminTableHeadCell>User</AdminTableHeadCell>
                   <AdminTableHeadCell>Reason</AdminTableHeadCell>
                   <AdminTableHeadCell>Flagged</AdminTableHeadCell>
                   <AdminTableHeadCell>Status</AdminTableHeadCell>
-                  {canResolveReviews ? (
-                    <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
-                  ) : null}
                 </tr>
               </AdminTableHeader>
               <AdminTableBody>
@@ -424,27 +434,6 @@ export function UserCompliancePanel({
                 ) : (
                   reviewPagination.items.map((item) => (
                     <AdminTableRow key={item.id}>
-                      <AdminTableCell>
-                        <div className="space-y-1">
-                          <p className="font-medium text-foreground">{item.user_email}</p>
-                          <Link
-                            href={userProfileHref(item.user_id)}
-                            className="inline-flex items-center gap-1 text-caption text-primary hover:underline"
-                          >
-                            View profile
-                            <ExternalLink className="size-3" />
-                          </Link>
-                        </div>
-                      </AdminTableCell>
-                      <AdminTableCell className="text-muted-foreground">
-                        {formatLabel(item.reason)}
-                      </AdminTableCell>
-                      <AdminTableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatDateTime(item.created_at)}
-                      </AdminTableCell>
-                      <AdminTableCell>
-                        <StatusBadge variant="warning">{formatLabel(item.status)}</StatusBadge>
-                      </AdminTableCell>
                       {canResolveReviews ? (
                         <AdminTableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -466,49 +455,74 @@ export function UserCompliancePanel({
                           </div>
                         </AdminTableCell>
                       ) : null}
+                      <AdminTableCell>
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">{item.user_email}</p>
+                          <Link
+                            href={userProfileHref(item.user_id)}
+                            className="inline-flex items-center gap-1 text-caption text-primary hover:underline"
+                          >
+                            View profile
+                            <ExternalLink className="size-3" />
+                          </Link>
+                        </div>
+                      </AdminTableCell>
+                      <AdminTableCell className="text-muted-foreground">
+                        {formatLabel(item.reason)}
+                      </AdminTableCell>
+                      <AdminTableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatDateTime(item.created_at)}
+                      </AdminTableCell>
+                      <AdminTableCell>
+                        <StatusBadge variant="warning">{formatLabel(item.status)}</StatusBadge>
+                      </AdminTableCell>
                     </AdminTableRow>
                   ))
                 )}
               </AdminTableBody>
             </AdminDataTable>
-
-            {!loading && filteredReviews.length > 0 ? (
-              <AdminTablePagination
-                page={reviewPagination.page}
-                totalPages={reviewPagination.totalPages}
-                hasPrevious={reviewPagination.hasPrevious}
-                hasNext={reviewPagination.hasNext}
-                onPrevious={() => setReviewPage((page) => Math.max(0, page - 1))}
-                onNext={() => setReviewPage((page) => page + 1)}
-              />
-            ) : null}
           </TabsContent>
         ) : null}
 
         {canExecuteDeletions ? (
           <TabsContent value="deletions" className="mt-0 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSectionTitle variant="section">
-                Account deletions
-              </AdminSectionTitle>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button
-                  size="sm"
-                  disabled={actionLoading === "deletion-executor"}
-                  onClick={() => void handleRunDeletionExecutor()}
-                >
-                  {actionLoading === "deletion-executor" ? "Running..." : "Run deletion executor"}
-                </Button>
-                <AdminSearchInput
-                  containerClassName="max-w-sm sm:w-56"
-                  placeholder="Search deletions"
-                  value={deletionQuery}
-                  onChange={(event) => setDeletionQuery(event.target.value)}
-                />
-              </div>
+              <AdminSearchInput
+                containerClassName="max-w-sm"
+                placeholder="Search deletions"
+                value={deletionQuery}
+                onChange={(event) => setDeletionQuery(event.target.value)}
+              />
+              <Button
+                size="sm"
+                disabled={actionLoading === "deletion-executor"}
+                onClick={() => void handleRunDeletionExecutor()}
+              >
+                {actionLoading === "deletion-executor" ? "Running..." : "Run deletion executor"}
+              </Button>
             </div>
 
-            <AdminDataTable minWidth="md">
+            <AdminDataTable
+              minWidth="md"
+              footer={
+                <AdminTablePagination
+                  page={deletionPagination.page}
+                  totalPages={deletionPagination.totalPages}
+                  hasPrevious={deletionPagination.hasPrevious}
+                  hasNext={deletionPagination.hasNext}
+                  disabled={loading}
+                  totalCount={filteredDeletions.length}
+                  currentPageCount={deletionPagination.items.length}
+                  pageSize={deletionPageSize}
+                  onPageSizeChange={(next) => {
+                    setDeletionPageSize(next);
+                    setDeletionPage(0);
+                  }}
+                  onPrevious={() => setDeletionPage((page) => Math.max(0, page - 1))}
+                  onNext={() => setDeletionPage((page) => page + 1)}
+                />
+              }
+            >
               <AdminTableHeader>
                 <tr>
                   <AdminTableHeadCell>Account</AdminTableHeadCell>
@@ -567,42 +581,48 @@ export function UserCompliancePanel({
                 )}
               </AdminTableBody>
             </AdminDataTable>
-
-            {!loading && filteredDeletions.length > 0 ? (
-              <AdminTablePagination
-                page={deletionPagination.page}
-                totalPages={deletionPagination.totalPages}
-                hasPrevious={deletionPagination.hasPrevious}
-                hasNext={deletionPagination.hasNext}
-                onPrevious={() => setDeletionPage((page) => Math.max(0, page - 1))}
-                onNext={() => setDeletionPage((page) => page + 1)}
-              />
-            ) : null}
           </TabsContent>
         ) : null}
 
         {canApproveActions ? (
           <TabsContent value="actions" className="mt-0 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSectionTitle variant="section">
-                Pending admin actions
-              </AdminSectionTitle>
               <AdminSearchInput
-                containerClassName="max-w-sm sm:w-56"
+                containerClassName="max-w-sm"
                 placeholder="Search actions"
                 value={actionQuery}
                 onChange={(event) => setActionQuery(event.target.value)}
               />
             </div>
 
-            <AdminDataTable minWidth="xl">
+            <AdminDataTable
+              minWidth="xl"
+              footer={
+                <AdminTablePagination
+                  page={actionPagination.page}
+                  totalPages={actionPagination.totalPages}
+                  hasPrevious={actionPagination.hasPrevious}
+                  hasNext={actionPagination.hasNext}
+                  disabled={loading}
+                  totalCount={filteredActions.length}
+                  currentPageCount={actionPagination.items.length}
+                  pageSize={actionPageSize}
+                  onPageSizeChange={(next) => {
+                    setActionPageSize(next);
+                    setActionPage(0);
+                  }}
+                  onPrevious={() => setActionPage((page) => Math.max(0, page - 1))}
+                  onNext={() => setActionPage((page) => page + 1)}
+                />
+              }
+            >
               <AdminTableHeader>
                 <tr>
+                  <AdminTableHeadCell className="text-right">Decision</AdminTableHeadCell>
                   <AdminTableHeadCell>Action</AdminTableHeadCell>
                   <AdminTableHeadCell>Target</AdminTableHeadCell>
                   <AdminTableHeadCell>Requested by</AdminTableHeadCell>
                   <AdminTableHeadCell>Requested</AdminTableHeadCell>
-                  <AdminTableHeadCell className="text-right">Decision</AdminTableHeadCell>
                 </tr>
               </AdminTableHeader>
               <AdminTableBody>
@@ -623,6 +643,25 @@ export function UserCompliancePanel({
                 ) : (
                   actionPagination.items.map((item) => (
                     <AdminTableRow key={item.id}>
+                      <AdminTableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            disabled={actionLoading === `approve-${item.id}`}
+                            onClick={() => void handleApproveAction(item.id)}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={actionLoading === `reject-${item.id}`}
+                            onClick={() => void handleRejectAction(item.id)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </AdminTableCell>
                       <AdminTableCell>
                         <p className="font-medium text-foreground">
                           {formatLabel(item.action_type)}
@@ -647,41 +686,11 @@ export function UserCompliancePanel({
                       <AdminTableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDateTime(item.created_at)}
                       </AdminTableCell>
-                      <AdminTableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            disabled={actionLoading === `approve-${item.id}`}
-                            onClick={() => void handleApproveAction(item.id)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={actionLoading === `reject-${item.id}`}
-                            onClick={() => void handleRejectAction(item.id)}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      </AdminTableCell>
                     </AdminTableRow>
                   ))
                 )}
               </AdminTableBody>
             </AdminDataTable>
-
-            {!loading && filteredActions.length > 0 ? (
-              <AdminTablePagination
-                page={actionPagination.page}
-                totalPages={actionPagination.totalPages}
-                hasPrevious={actionPagination.hasPrevious}
-                hasNext={actionPagination.hasNext}
-                onPrevious={() => setActionPage((page) => Math.max(0, page - 1))}
-                onNext={() => setActionPage((page) => page + 1)}
-              />
-            ) : null}
           </TabsContent>
         ) : null}
       </Tabs>

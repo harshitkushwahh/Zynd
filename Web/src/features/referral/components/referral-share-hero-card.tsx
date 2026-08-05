@@ -16,7 +16,7 @@ import referIllustration from "@/features/referral/assets/refer-illustration.png
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { REFERRAL_CARD_RADIUS_CLASS } from "@/features/referral/lib/referral-ui";
+import { REFERRAL_CARD_RADIUS_CLASS, REFERRAL_HERO_GRADIENT_CLASS, REFERRAL_HERO_OVERLAY_CLASS } from "@/features/referral/lib/referral-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -171,10 +171,17 @@ export function ReferralShareHeroCard({ shareUrl, code }: ReferralShareHeroCardP
 
   return (
     <>
-      <section className={cn("relative w-full max-w-full overflow-hidden bg-gradient-brand p-4 shadow-zynd-mid sm:p-5", REFERRAL_CARD_RADIUS_CLASS)}>
-        <div className="auth-brand-pattern pointer-events-none absolute inset-0 opacity-25" />
-        <div className="pointer-events-none absolute -right-8 -top-8 size-40 rounded-full bg-primary-foreground/10 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/4 size-32 rounded-full bg-[color-mix(in_srgb,var(--zynd-emerald)_30%,transparent)] blur-3xl" />
+      <section
+        className={cn(
+          "relative w-full max-w-full overflow-hidden border border-primary-foreground/10 p-4 shadow-zynd-mid sm:p-5",
+          REFERRAL_CARD_RADIUS_CLASS,
+          REFERRAL_HERO_GRADIENT_CLASS,
+        )}
+      >
+        <div className="auth-brand-pattern pointer-events-none absolute inset-0 opacity-20" />
+        <div className="pointer-events-none absolute -left-10 -top-10 size-44 rounded-full bg-primary-foreground/10 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 right-1/3 size-36 rounded-full bg-[color-mix(in_srgb,var(--zynd-emerald)_28%,transparent)] blur-3xl" />
+        <div className={cn("pointer-events-none absolute inset-0", REFERRAL_HERO_OVERLAY_CLASS)} />
 
         <div className="pointer-events-none absolute right-3 top-6 z-10 hidden sm:block">
           <div className="relative h-20 w-24 lg:h-[5.75rem] lg:w-[6.75rem]">

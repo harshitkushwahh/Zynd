@@ -11,6 +11,9 @@ class OtpPurpose(str, Enum):
     email_change = "email_change"
     oauth_link = "oauth_link"
     pin_reset = "pin_reset"
+    login_second_factor = "login_second_factor"
+    step_up_sms = "step_up_sms"
+    fund_confirmation = "fund_confirmation"
 
 
 OtpChannel = Literal["email", "sms"]
@@ -55,6 +58,24 @@ OTP_PURPOSE_REGISTRY: dict[OtpPurpose, OtpPurposeDefinition] = {
         channel="email",
         email_subject="Reset your ZYND PIN",
     ),
+    OtpPurpose.login_second_factor: OtpPurposeDefinition(
+        purpose=OtpPurpose.login_second_factor,
+        storage_key="login_second_factor",
+        channel="sms",
+        email_subject="Your ZYND sign-in code",
+    ),
+    OtpPurpose.step_up_sms: OtpPurposeDefinition(
+        purpose=OtpPurpose.step_up_sms,
+        storage_key="step_up_sms",
+        channel="sms",
+        email_subject="Your ZYND verification code",
+    ),
+    OtpPurpose.fund_confirmation: OtpPurposeDefinition(
+        purpose=OtpPurpose.fund_confirmation,
+        storage_key="fund_confirmation",
+        channel="sms",
+        email_subject="Confirm your ZYND transaction",
+    ),
 }
 
 # Backward-compatible storage-key aliases used before Phase 4.
@@ -89,4 +110,10 @@ def build_otp_message(*, purpose: OtpPurpose, code: str) -> str:
         return f"Your ZYND provider link verification code is {code}. It expires in 10 minutes."
     if purpose == OtpPurpose.pin_reset:
         return f"Your ZYND PIN reset code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.login_second_factor:
+        return f"Your ZYND sign-in code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.step_up_sms:
+        return f"Your ZYND verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.fund_confirmation:
+        return f"Your ZYND transaction confirmation code is {code}. It expires in 10 minutes."
     return f"Your ZYND verification code is {code}. It expires in 10 minutes."

@@ -45,21 +45,76 @@ function DialogContent({
   showCloseButton = true,
   closeTone = "default",
   overlayClassName,
+  centeredLayout = false,
+  motion = "default",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
   closeTone?: "default" | "on-brand";
   overlayClassName?: string;
+  centeredLayout?: boolean;
+  motion?: "default" | "fade";
 }) {
+  const popupMotionClass =
+    motion === "fade"
+      ? "duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 data-closed:duration-150"
+      : "duration-300 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95";
+
+  const popupClassName = cn(
+    centeredLayout
+      ? "relative z-50 grid w-full max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-[var(--radius-modal)] bg-popover p-0 text-popover-foreground shadow-zynd-high ring-1 ring-border outline-none"
+      : "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-[var(--radius-modal)] bg-popover p-0 text-popover-foreground shadow-zynd-high ring-1 ring-border outline-none",
+    popupMotionClass,
+    className,
+  );
+
+  if (centeredLayout) {
+    return (
+      <DialogPortal>
+        <DialogOverlay className={overlayClassName} />
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+          <DialogPrimitive.Popup
+            data-slot="dialog-content"
+            className={cn("pointer-events-auto", popupClassName)}
+            {...props}
+          >
+            {children}
+            {showCloseButton ? (
+              <DialogPrimitive.Close
+                data-slot="dialog-close"
+                render={
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "absolute top-3 right-3 z-10 rounded-[var(--radius-control)]",
+                      closeTone === "on-brand"
+                        ? "text-primary-foreground hover:bg-transparent hover:text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                    size="icon-sm"
+                  />
+                }
+              >
+                <XIcon
+                  className={cn(
+                    closeTone === "on-brand" ? "text-primary-foreground" : "text-current"
+                  )}
+                />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            ) : null}
+          </DialogPrimitive.Popup>
+        </div>
+      </DialogPortal>
+    );
+  }
+
   return (
     <DialogPortal>
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
-        className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-[var(--radius-modal)] bg-popover p-0 text-popover-foreground shadow-zynd-high ring-1 ring-border duration-300 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
-        )}
+        className={popupClassName}
         {...props}
       >
         {children}

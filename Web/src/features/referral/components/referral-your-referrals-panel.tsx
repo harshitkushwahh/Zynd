@@ -4,15 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -21,13 +15,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PaginationPageMinimalCenter } from "@/components/core/table";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageTitle } from "@/components/ui/page-title";
-import { fetchReferralList, type ReferralListItem } from "@/features/referral/api/referral-api";
 import { ReferralListRow } from "@/features/referral/components/referral-list-row";
 import { ReferralYourReferralsEmptyState } from "@/features/referral/components/referral-your-referrals-empty-state";
 import { ReferralYourReferralsSkeleton } from "@/features/referral/components/referral-skeleton";
 import { ReferralSummaryStatCards } from "@/features/referral/components/referral-summary-stat-cards";
+import { useReferralListQuery } from "@/features/referral/hooks/use-referral-list-query";
 import {
   filterReferralsByPeriod,
   mapReferralDisplayItems,
@@ -61,28 +55,17 @@ const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
 
 function ReferralYourReferralsBreadcrumb() {
   return (
-    <Breadcrumb className="mb-6 shrink-0">
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard" />}>Dashboard</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbLink render={<Link href="/dashboard/referral" />}>{referralRouteLabel}</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{copy.referral.referralsPageTitle}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
+    <DashboardBreadcrumb
+      items={[
+        { label: referralRouteLabel, href: "/dashboard/referral" },
+        { label: copy.referral.referralsPageTitle },
+      ]}
+    />
   );
 }
 
 export function ReferralYourReferralsPanel() {
-  const [referrals, setReferrals] = useState<ReferralListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { referrals, showSkeleton, errorMessage, isFetching, refetch } = useReferralListQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [period, setPeriod] = useState<ReferralsPeriod>("this_month");
@@ -92,33 +75,7 @@ export function ReferralYourReferralsPanel() {
     REFERRALS_PERIOD_OPTIONS.find((option) => option.value === period)?.label ??
     copy.referral.leaderboardPeriodThisMonth;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const list = await fetchReferralList();
-        if (!cancelled) {
-          setReferrals(list.items);
-        }
-      } catch {
-        if (!cancelled) {
-          setError(copy.referral.loadFailed);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const loadReferrals = () => refetch();
 
   const periodReferrals = useMemo(
     () => filterReferralsByPeriod(referrals, period),
@@ -165,15 +122,27 @@ export function ReferralYourReferralsPanel() {
   };
   const hasNoReferrals = referrals.length === 0;
 
-  if (loading) {
+  if (showSkeleton && !errorMessage && referrals.length === 0) {
     return <ReferralYourReferralsSkeleton />;
   }
 
-  if (error) {
+  if (errorMessage) {
     return (
       <>
         <ReferralYourReferralsBreadcrumb />
-        <FieldMessage message={error} />
+        <LoadErrorCard
+          title={copy.referral.loadFailedTitle}
+          description={errorMessage}
+          retryLabel={copy.referral.retry}
+          retryLoading={isFetching}
+          onRetry={() => void loadReferrals()}
+          icon={Users}
+          backAction={
+            <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/referral" />}>
+              {referralRouteLabel}
+            </Button>
+          }
+        />
       </>
     );
   }

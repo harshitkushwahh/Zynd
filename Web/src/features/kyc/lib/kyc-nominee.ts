@@ -233,3 +233,68 @@ export function normalizeNomineeSharePercentInput(value: string) {
 
   return String(Math.min(100, parsed));
 }
+
+function nomineeSnapshotForCompare(record: Omit<KycNomineeRecord, "id"> | KycNomineeRecord) {
+  const { id: _id, ...snapshot } = record as KycNomineeRecord;
+  return snapshot;
+}
+
+function hasMeaningfulNomineeDraftContent(snapshot: Omit<KycNomineeRecord, "id">) {
+  const { core, identity, contact, address, guardian } = snapshot;
+
+  if (
+    core.fullName.trim() ||
+    core.relationship.trim() ||
+    core.sourceOfWealth.trim() ||
+    core.dateOfBirth.trim() ||
+    core.sharePercent.trim()
+  ) {
+    return true;
+  }
+
+  if (identity.documentType.trim() || identity.documentNumber.trim()) {
+    return true;
+  }
+
+  if (contact.email.trim() || contact.mobile.trim()) {
+    return true;
+  }
+
+  if (
+    address.line1.trim() ||
+    address.line2.trim() ||
+    address.city.trim() ||
+    address.pincode.trim()
+  ) {
+    return true;
+  }
+
+  if (guardian) {
+    if (
+      guardian.name.trim() ||
+      guardian.sourceOfWealth.trim() ||
+      guardian.documentType.trim() ||
+      guardian.documentNumber.trim() ||
+      guardian.email.trim() ||
+      guardian.mobile.trim()
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function isNomineeWizardDirty(
+  snapshot: Omit<KycNomineeRecord, "id">,
+  editingNominee?: KycNomineeRecord,
+) {
+  if (editingNominee) {
+    return (
+      JSON.stringify(nomineeSnapshotForCompare(snapshot)) !==
+      JSON.stringify(nomineeSnapshotForCompare(editingNominee))
+    );
+  }
+
+  return hasMeaningfulNomineeDraftContent(snapshot);
+}

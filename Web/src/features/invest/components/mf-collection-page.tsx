@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
   bulkUpsertMfCartItems,
   fetchInvestConfig,
@@ -24,7 +25,7 @@ import { MfFundsTable } from "@/features/invest/components/mf-funds-table";
 import { buildBulkCartItems } from "@/features/invest/lib/mf-cart-amount";
 import { collectionMetaFor } from "@/features/invest/lib/mf-collection-meta";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
-import { MF_ALL_FUNDS_PAGE_SIZE, mergeInvestFunds } from "@/features/invest/lib/mf-fund-ranking";
+import { MF_ALL_FUNDS_PAGE_SIZE, mergeInvestFunds, resolveInvestFundsPageHasMore } from "@/features/invest/lib/mf-fund-ranking";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { useAuth } from "@/contexts/auth-context";
 import { copy } from "@/shared/config/copy";
@@ -54,6 +55,22 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
   const loadingMoreRef = useRef(false);
   const pageRef = useRef(1);
   const hasMoreRef = useRef(true);
+  const loadPageRef = useRef<(nextPage: number, append: boolean) => Promise<void>>(async () => {});
+  const LOAD_MORE_ROOT_MARGIN_PX = 160;
+
+  const tryScheduleLoadMore = useCallback(() => {
+    if (!hasMoreRef.current || loadingMoreRef.current) return;
+
+    const node = loadMoreRef.current;
+    const root = scrollContainerRef.current;
+    if (!node || !root) return;
+
+    const rootRect = root.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    if (nodeRect.top <= rootRect.bottom + LOAD_MORE_ROOT_MARGIN_PX) {
+      void loadPageRef.current(pageRef.current + 1, true);
+    }
+  }, []);
 
   const meta = useMemo(() => collectionMetaFor(slug), [slug]);
   const canInvest = Boolean(user?.fund_movement_eligible && config?.orders_enabled);
@@ -120,11 +137,26 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
         sort: "rank",
       });
 
-      setFunds((current) => (append ? mergeInvestFunds(current, response.items) : mergeInvestFunds([], response.items)));
+      let previousCount = 0;
+      let mergedCount = 0;
+      setFunds((current) => {
+        previousCount = current.length;
+        const merged = append ? mergeInvestFunds(current, response.items) : mergeInvestFunds([], response.items);
+        mergedCount = merged.length;
+        return merged;
+      });
+
+      const nextHasMore = resolveInvestFundsPageHasMore(
+        append,
+        previousCount,
+        mergedCount,
+        response.has_more,
+        response.items.length,
+      );
       pageRef.current = response.page;
-      hasMoreRef.current = response.has_more;
+      hasMoreRef.current = nextHasMore;
       setPage(response.page);
-      setHasMore(response.has_more);
+      setHasMore(nextHasMore);
       setTotal(response.total);
       hasLoadedOnceRef.current = true;
 
@@ -137,15 +169,22 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
       setInitialLoading(false);
       loadingMoreRef.current = false;
       setLoadingMore(false);
+      queueMicrotask(() => {
+        tryScheduleLoadMore();
+      });
     }
-  }, [slug]);
+  }, [slug, tryScheduleLoadMore]);
+
+  useEffect(() => {
+    loadPageRef.current = loadPage;
+  }, [loadPage]);
 
   useEffect(() => {
     void loadPage(1, false);
   }, [loadPage]);
 
   useEffect(() => {
-    if (initialLoading) return;
+    if (initialLoading || !hasMore) return;
 
     const node = loadMoreRef.current;
     const root = scrollContainerRef.current;
@@ -154,16 +193,14 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        if (!hasMoreRef.current) return;
-        if (loadingMoreRef.current) return;
-        void loadPage(pageRef.current + 1, true);
+        tryScheduleLoadMore();
       },
-      { root, rootMargin: "120px" },
+      { root, rootMargin: `${LOAD_MORE_ROOT_MARGIN_PX}px`, threshold: 0 },
     );
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [initialLoading, loadPage, slug]);
+  }, [initialLoading, hasMore, tryScheduleLoadMore, slug]);
 
   const handleSelectFund = useCallback((fund: InvestFundSummary) => {
     setSelectedFund(fund);
@@ -223,6 +260,8 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
           },
         ]}
       />
+
+      <FundEligibilityBanner />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">

@@ -6,36 +6,55 @@ import Lottie, { type LottieRefCurrentProps } from "lottie-react";
 import { cn } from "@/lib/utils";
 
 type KycJsonLottieProps = {
-  src: string;
+  /** Remote JSON path — used when animationData is not provided. */
+  src?: string;
+  /** Preloaded animation JSON (preferred for outcome cards). */
+  animationData?: object;
   loop?: boolean;
+  /** Keep the last frame visible after a one-shot animation finishes. */
+  holdOnComplete?: boolean;
   className?: string;
 };
 
-export function KycJsonLottie({ src, loop = true, className }: KycJsonLottieProps) {
-  const [animationData, setAnimationData] = useState<object | null>(null);
+export function KycJsonLottie({
+  src,
+  animationData: animationDataProp,
+  loop = true,
+  holdOnComplete = false,
+  className,
+}: KycJsonLottieProps) {
+  const [fetchedAnimationData, setFetchedAnimationData] = useState<object | null>(
+    animationDataProp ?? null,
+  );
   const lottieRef = useRef<LottieRefCurrentProps>(null);
+  const animationData = animationDataProp ?? fetchedAnimationData;
 
   useEffect(() => {
-    let cancelled = false;
+    if (animationDataProp) {
+      setFetchedAnimationData(animationDataProp);
+      return;
+    }
+    if (!src) return;
 
+    let cancelled = false;
     fetch(src)
       .then((response) => response.json())
       .then((data) => {
-        if (!cancelled) setAnimationData(data);
+        if (!cancelled) setFetchedAnimationData(data);
       })
       .catch(() => {
-        if (!cancelled) setAnimationData(null);
+        if (!cancelled) setFetchedAnimationData(null);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [src]);
+  }, [animationDataProp, src]);
 
   if (!animationData) {
     return (
       <div
-        className={cn("mx-auto size-36 animate-pulse rounded-full bg-muted/40", className)}
+        className={cn("size-[5.5rem] shrink-0 animate-pulse rounded-full bg-muted/40", className)}
         aria-hidden
       />
     );
@@ -47,7 +66,14 @@ export function KycJsonLottie({ src, loop = true, className }: KycJsonLottieProp
       animationData={animationData}
       loop={loop}
       autoplay
-      className={cn("mx-auto size-36 max-w-[11rem]", className)}
+      rendererSettings={{ preserveAspectRatio: "xMidYMid meet" }}
+      onComplete={() => {
+        if (!holdOnComplete || loop) return;
+        const instance = lottieRef.current;
+        if (!instance) return;
+        instance.goToAndStop(Math.max(instance.getDuration(true) - 1, 0), true);
+      }}
+      className={cn("size-[5.5rem] shrink-0", className)}
     />
   );
 }

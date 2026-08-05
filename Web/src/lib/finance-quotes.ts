@@ -1,14 +1,14 @@
 const FINANCE_QUOTES = [
-  "Do not save what is left after spending; spend what is left after saving. — Warren Buffett",
-  "The stock market is a device for transferring money from the impatient to the patient. — Warren Buffett",
-  "An investment in knowledge pays the best interest. — Benjamin Franklin",
-  "Risk comes from not knowing what you are doing. — Warren Buffett",
-  "Wealth is the ability to fully experience life. — Henry David Thoreau",
-  "It's not how much money you make, but how much you keep. — Robert Kiyosaki",
-  "The four most dangerous words in investing are: this time it's different. — Sir John Templeton",
-  "Compound interest is the eighth wonder of the world. — Albert Einstein",
-  "Know what you own, and know why you own it. — Peter Lynch",
-  "Financial peace isn't the acquisition of stuff. It's learning to live on less than you make. — Dave Ramsey",
+  "Small, consistent investments can build extraordinary wealth over time.",
+  "Time in the market is more powerful than timing the market.",
+  "Invest regularly. Stay patient. Let compounding do the heavy lifting.",
+  "Every SIP is a step toward your financial freedom.",
+  "A diversified portfolio is built for the future, not for today's headlines.",
+  "Market volatility is temporary. Financial discipline is permanent.",
+  "The best day to start investing was yesterday. The next best day is today.",
+  "Wealth is created through consistency, not prediction.",
+  "Your financial goals deserve a long-term plan, not short-term reactions.",
+  "Invest with confidence. Grow with patience.",
 ] as const;
 
 export type FinanceQuote = (typeof FINANCE_QUOTES)[number];

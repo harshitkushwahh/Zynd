@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.session_service import revoke_all_sessions
 from app.application.documents.client_id_service import assign_client_id
+from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
 from app.infrastructure.notifications.email_service import send_security_email
 from app.infrastructure.persistence.mf_transaction_models import (
     MfExternalHolding,
@@ -234,14 +235,17 @@ async def list_users(
     query = query.limit(min(limit, 100)).offset(max(offset, 0))
     result = await db.execute(query)
     users = list(result.scalars())
-    invested_ids = await _invested_user_ids(db, [user.id for user in users])
-    kyc_compliant_ids = await _kyc_compliant_user_ids(db, [user.id for user in users])
+    user_ids = [user.id for user in users]
+    invested_ids = await _invested_user_ids(db, user_ids)
+    kyc_compliant_ids = await _kyc_compliant_user_ids(db, user_ids)
+    profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=user_ids)
     return [
         {
             "user_id": user.id,
             "client_id": user.client_id,
             "email": user.email,
             "display_name": _display_name(user),
+            "profile_image_url": profile_images.get(user.id),
             "status": user.status.value,
             "role": user.role.value,
             "has_invested": user.id in invested_ids,
@@ -254,12 +258,19 @@ async def list_users(
     ]
 
 
-def _user_summary_dict(user: User, *, has_invested: bool) -> dict[str, Any]:
+def _user_summary_dict(
+    user: User,
+    *,
+    has_invested: bool,
+    profile_image_url: str | None = None,
+) -> dict[str, Any]:
     return {
         "user_id": user.id,
         "client_id": user.client_id,
         "email": user.email,
         "display_name": _display_name(user),
+        "phone": user.phone,
+        "profile_image_url": profile_image_url,
         "status": user.status.value,
         "role": user.role.value,
         "has_invested": has_invested,
@@ -271,19 +282,49 @@ def _user_summary_dict(user: User, *, has_invested: bool) -> dict[str, Any]:
 
 
 async def get_user_summary(db: AsyncSession, user_id: UUID) -> dict[str, Any] | None:
+    from app.application.admin.user_security_summary_service import (
+        build_admin_security_summary,
+        get_user_last_login_summary,
+    )
+
     user = await db.get(User, user_id)
     if not user:
         return None
     invested_ids = await _invested_user_ids(db, [user.id])
-    return _user_summary_dict(user, has_invested=user.id in invested_ids)
+    profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=[user.id])
+    last_login = await get_user_last_login_summary(db, user.id)
+    security = build_admin_security_summary(user, last_login)
+    return {
+        **_user_summary_dict(
+            user,
+            has_invested=user.id in invested_ids,
+            profile_image_url=profile_images.get(user.id),
+        ),
+        **security,
+    }
 
 
 async def get_user_summary_by_reference(db: AsyncSession, reference: str) -> dict[str, Any] | None:
+    from app.application.admin.user_security_summary_service import (
+        build_admin_security_summary,
+        get_user_last_login_summary,
+    )
+
     user = await get_user_by_reference(db, reference)
     if not user:
         return None
     invested_ids = await _invested_user_ids(db, [user.id])
-    return _user_summary_dict(user, has_invested=user.id in invested_ids)
+    profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=[user.id])
+    last_login = await get_user_last_login_summary(db, user.id)
+    security = build_admin_security_summary(user, last_login)
+    return {
+        **_user_summary_dict(
+            user,
+            has_invested=user.id in invested_ids,
+            profile_image_url=profile_images.get(user.id),
+        ),
+        **security,
+    }
 
 
 async def create_admin_user(

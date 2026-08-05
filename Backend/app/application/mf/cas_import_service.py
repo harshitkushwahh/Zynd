@@ -9,8 +9,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.mf_order_errors import MfCasError
+from app.application.mf.public_asset_service import resolve_amc_logo_url
+from app.core.config import get_settings
 from app.infrastructure.mf.mf_central_client import MfCentralClientError, fetch_cas_payload, request_cas_import
-from app.infrastructure.persistence.mf_models import MutualFund
+from app.infrastructure.persistence.mf_models import FundAmc, MutualFund
 from app.infrastructure.persistence.mf_transaction_models import (
     MfCasImport,
     MfCasImportStatus,
@@ -148,12 +150,14 @@ async def list_user_cas_imports(session: AsyncSession, *, user_id: uuid.UUID, li
 async def list_user_external_holdings(session: AsyncSession, *, user_id: uuid.UUID) -> list[dict]:
     rows = (
         await session.execute(
-            select(MfExternalHolding, MutualFund.scheme_name)
+            select(MfExternalHolding, MutualFund.scheme_name, FundAmc.logo_url, FundAmc.slug)
             .outerjoin(MutualFund, MutualFund.id == MfExternalHolding.matched_fund_id)
+            .outerjoin(FundAmc, FundAmc.id == MutualFund.amc_id)
             .where(MfExternalHolding.user_id == user_id)
             .order_by(MfExternalHolding.scheme_name)
         )
     ).all()
+    settings = get_settings()
     return [
         {
             "isin": holding.isin,
@@ -165,7 +169,8 @@ async def list_user_external_holdings(session: AsyncSession, *, user_id: uuid.UU
             "market_value_inr": float(holding.market_value_inr) if holding.market_value_inr is not None else None,
             "as_of_date": holding.as_of_date.isoformat() if holding.as_of_date else None,
             "amc_name": holding.amc_name,
+            "amc_logo_url": resolve_amc_logo_url(logo_url, slug, settings) if slug else None,
             "source": holding.source,
         }
-        for holding, matched_name in rows
+        for holding, matched_name, logo_url, slug in rows
     ]

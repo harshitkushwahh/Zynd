@@ -15,4 +15,7 @@ if [ -f .env ]; then
   done < .env
 fi
 
+# Turbopack + chart libs can spike memory during HMR; give dev headroom.
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
+
 exec npm run dev -- --port "${PORT}"

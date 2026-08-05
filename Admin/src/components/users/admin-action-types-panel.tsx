@@ -21,6 +21,7 @@ import { ADMIN_ACTION_TYPES } from "@/lib/admin-action-types-meta";
 export function AdminActionTypesPanel() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -37,11 +38,11 @@ export function AdminActionTypesPanel() {
 
   useEffect(() => {
     setPage(0);
-  }, [query]);
+  }, [query, pageSize]);
 
   const pagination = useMemo(
-    () => paginateItems(filtered, page, ADMIN_TABLE_PAGE_SIZE),
-    [filtered, page],
+    () => paginateItems(filtered, page, pageSize),
+    [filtered, page, pageSize],
   );
 
   return (
@@ -53,7 +54,26 @@ export function AdminActionTypesPanel() {
         onChange={(event) => setQuery(event.target.value)}
       />
 
-      <AdminDataTable minWidth="md">
+      <AdminDataTable
+        minWidth="md"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            totalCount={filtered.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+            onNext={() => setPage((value) => value + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Action</AdminTableHeadCell>
@@ -87,17 +107,6 @@ export function AdminActionTypesPanel() {
           )}
         </AdminTableBody>
       </AdminDataTable>
-
-      {filtered.length > 0 ? (
-        <AdminTablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          hasPrevious={pagination.hasPrevious}
-          hasNext={pagination.hasNext}
-          onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-          onNext={() => setPage((value) => value + 1)}
-        />
-      ) : null}
     </div>
   );
 }

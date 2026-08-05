@@ -2,7 +2,23 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/zynd-brand.css";
+@import "../styles/zynd-ai-bot-button.css";
 @import "../styles/kyc-dialog.css";
+
+@theme inline {
+  --animate-orbit: orbit calc(var(--duration) * 1s) linear infinite;
+
+  @keyframes orbit {
+    0% {
+      transform: rotate(calc(var(--angle) * 1deg)) translateY(calc(var(--radius) * 1px))
+        rotate(calc(var(--angle) * -1deg));
+    }
+    100% {
+      transform: rotate(calc(var(--angle) * 1deg + 360deg)) translateY(calc(var(--radius) * 1px))
+        rotate(calc((var(--angle) * -1deg) - 360deg));
+    }
+  }
+}
 
 @plugin "tailwindcss-animate";
 @plugin "tailwindcss-react-aria-components";
@@ -196,6 +212,37 @@
   }
   100% {
     filter: hue-rotate(0deg);
+  }
+}
+
+/* Indeterminate zebra stripe progress — backend connection dialog. */
+.stripe-progress-bar {
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-color: var(--muted);
+}
+
+.stripe-progress-bar__track {
+  height: 100%;
+  width: 100%;
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--primary) 0,
+    var(--primary) 0.5rem,
+    color-mix(in srgb, var(--primary) 55%, var(--background)) 0.5rem,
+    color-mix(in srgb, var(--primary) 55%, var(--background)) 1rem
+  );
+  background-size: 1.75rem 1.75rem;
+  animation: stripe-progress-slide 0.65s linear infinite;
+}
+
+@keyframes stripe-progress-slide {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 1.75rem 0;
   }
 }
 

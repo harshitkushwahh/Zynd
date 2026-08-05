@@ -3,6 +3,7 @@
 import { Building2, Star, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { FieldMessage } from "@/components/ui/ui-message";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   formatInvestorBankAccountType,
@@ -112,7 +113,7 @@ export function SettingsBankAccountCard({
           </dl>
 
           {account.failure?.reason ? (
-            <p className="text-[11px] text-destructive">{account.failure.reason}</p>
+            <FieldMessage message={account.failure.reason} className="mt-0" />
           ) : null}
 
           {canSetPrimary && onSetPrimary ? (

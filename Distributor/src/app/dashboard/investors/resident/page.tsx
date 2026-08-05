@@ -1,0 +1,7 @@
+import { redirect } from "next/navigation";
+
+import { buildYourClientsListHref } from "@/lib/distributor-clients-list-scope";
+
+export default function ResidentInvestorsPage() {
+  redirect(buildYourClientsListHref("all"));
+}

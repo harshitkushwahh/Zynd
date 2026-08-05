@@ -1,17 +1,38 @@
 import { env } from "@/lib/env";
 
+const INVEST_ASSETS_PREFIX = "/invest/assets/";
+
+function buildInvestAssetUrl(assetPath: string) {
+  const normalized = assetPath.replace(/^\/+/, "");
+  return `${env.apiUrl}${INVEST_ASSETS_PREFIX}${normalized}`;
+}
+
 export function resolveInvestAssetUrl(url: string | null | undefined) {
   if (!url) return null;
   if (url.startsWith("/")) return url;
 
-  const marker = "/invest/assets/";
-  const markerIndex = url.indexOf(marker);
+  const markerIndex = url.indexOf(INVEST_ASSETS_PREFIX);
   if (markerIndex !== -1) {
-    const assetPath = url.slice(markerIndex + marker.length);
-    return `${env.apiUrl}${marker}${assetPath}`;
+    const assetPath = url.slice(markerIndex + INVEST_ASSETS_PREFIX.length);
+    return buildInvestAssetUrl(assetPath);
+  }
+
+  if (url.startsWith("public/")) {
+    return buildInvestAssetUrl(url);
   }
 
   return url;
+}
+
+/** Resolve AMC logo from API value, falling back to the standard storage path from slug. */
+export function resolveAmcLogoUrl(
+  logoUrl: string | null | undefined,
+  amcSlug: string | null | undefined,
+) {
+  const resolved = resolveInvestAssetUrl(logoUrl);
+  if (resolved) return resolved;
+  if (!amcSlug) return null;
+  return buildInvestAssetUrl(`public/amcs/${amcSlug}.png`);
 }
 
 export function formatReturn(value: number | null | undefined) {
@@ -40,6 +61,39 @@ export function formatInr(value: number | null | undefined, options?: { compact?
     style: "currency",
     currency: "INR",
     maximumFractionDigits: value < 100 ? 2 : 0,
+  }).format(value);
+}
+
+function formatOverviewCompactUnit(value: number) {
+  const rounded = Math.round(value * 100) / 100;
+  if (Number.isInteger(rounded)) return String(rounded);
+  const withOneDecimal = Math.round(value * 10) / 10;
+  if (Math.abs(withOneDecimal - rounded) < 0.001) {
+    return withOneDecimal.toFixed(1).replace(/\.0$/, "");
+  }
+  return rounded.toFixed(2).replace(/\.?0+$/, "");
+}
+
+/** Overview card INR: full format below ₹10L, then ₹XL / ₹X Cr. */
+export function formatInrOverview(value: number | null | undefined) {
+  if (value == null) return "—";
+
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  if (abs >= 1_00_00_000) {
+    const crore = abs / 1_00_00_000;
+    return `${sign}₹${formatOverviewCompactUnit(crore)} Cr`;
+  }
+  if (abs >= 10_00_000) {
+    const lakh = abs / 1_00_000;
+    return `${sign}₹${formatOverviewCompactUnit(lakh)} L`;
+  }
+
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: abs < 100 ? 2 : 0,
   }).format(value);
 }
 

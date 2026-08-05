@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchMfOrders, type MfOrder } from "@/features/invest/api/invest-api";
-import { MfOrderStatusBadge } from "@/features/invest/components/mf-order-status-badge";
+import {
+  OverviewLockedCardBackdrop,
+  OverviewLockedCardOverlay,
+} from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OVERVIEW_TRANSACTIONS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
+import { type MfOrder } from "@/features/invest/api/invest-api";
+import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
+import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import {
+  MfOrderStatusBadge,
+  mfOrderStatusVariant,
+} from "@/features/invest/components/mf-order-status-badge";
 import { MfOrderJourneyDialog } from "@/features/invest/components/payment-dialog";
 import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import { sortMfTransactions } from "@/features/invest/lib/mf-transaction-filters";
@@ -22,6 +25,8 @@ import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_LIMIT = 5;
+const OVERVIEW_ORDERS_LIMIT = 100;
+const TRANSACTIONS_HREF = "/dashboard/transactions";
 
 function formatOrderType(orderType: string) {
   const normalized = orderType.trim().toUpperCase();
@@ -31,6 +36,49 @@ function formatOrderType(orderType: string) {
   return orderType.replaceAll("_", " ");
 }
 
+function RecentTransactionRowPreview({ order }: { order: MfOrder }) {
+  const isDestructive = mfOrderStatusVariant(order.status) === "destructive";
+
+  return (
+    <div className="flex w-full items-center gap-2.5 rounded-[1rem] px-2 py-2">
+      <MfOrderStatusBadge status={order.status} />
+
+      <span
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-full ring-1",
+          isDestructive
+            ? "bg-destructive/5 ring-destructive/15"
+            : "bg-card ring-border/60",
+        )}
+      >
+        <MfFundAmcAvatar
+          amcLogoUrl={order.amc_logo_url}
+          amcName={order.amc_name ?? copy.mutualFunds.unknownAmc}
+          className="rounded-full"
+        />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-compact font-semibold text-foreground">
+          {order.product_name ?? copy.mutualFunds.unknownFund}
+        </p>
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="inline-flex rounded-full bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border/60">
+            {formatOrderType(order.order_type)}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {formatDate(order.created_at)}
+          </span>
+        </div>
+      </div>
+
+      <p className="shrink-0 text-compact font-semibold tabular-nums tracking-tight text-foreground">
+        {formatInr(order.amount_inr)}
+      </p>
+    </div>
+  );
+}
+
 function RecentTransactionRow({
   order,
   onClick,
@@ -38,81 +86,82 @@ function RecentTransactionRow({
   order: MfOrder;
   onClick: () => void;
 }) {
+  const isDestructive = mfOrderStatusVariant(order.status) === "destructive";
+
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full flex-col gap-2 border-b border-border/60 py-4 text-left last:border-b-0",
-        "transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between",
+        "group flex w-full items-center gap-2.5 rounded-[1rem] px-2 py-2 text-left",
+        "transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+        isDestructive
+          ? "hover:bg-destructive/[0.06]"
+          : "hover:bg-card/80",
       )}
     >
-      <div className="min-w-0">
-        <p className="truncate font-medium text-foreground">
+      <MfOrderStatusBadge status={order.status} />
+
+      <span
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-full ring-1",
+          isDestructive
+            ? "bg-destructive/5 ring-destructive/15"
+            : "bg-card ring-border/60",
+        )}
+      >
+        <MfFundAmcAvatar
+          amcLogoUrl={order.amc_logo_url}
+          amcName={order.amc_name ?? copy.mutualFunds.unknownAmc}
+          className="rounded-full"
+        />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-compact font-semibold text-foreground">
           {order.product_name ?? copy.mutualFunds.unknownFund}
         </p>
-        <p className="mt-1 text-caption text-muted-foreground">
-          {formatOrderType(order.order_type)} · {formatDate(order.created_at)}
-        </p>
+        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="inline-flex rounded-full bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border/60">
+            {formatOrderType(order.order_type)}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {formatDate(order.created_at)}
+          </span>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3 sm:text-right">
-        <p className="font-medium text-foreground">{formatInr(order.amount_inr)}</p>
-        <MfOrderStatusBadge status={order.status} />
+
+      <div className="flex shrink-0 items-center gap-1">
+        <p className="text-compact font-semibold tabular-nums tracking-tight text-foreground">
+          {formatInr(order.amount_inr)}
+        </p>
+        <ChevronRight
+          className="size-3.5 text-muted-foreground/40 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground"
+          strokeWidth={2.25}
+          aria-hidden
+        />
       </div>
     </button>
   );
 }
 
-function RecentTransactionsSkeleton() {
-  return (
-    <div className="space-y-4 py-2">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-4 w-3/5" />
-            <Skeleton className="h-3 w-2/5" />
-          </div>
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-6 w-24 rounded-full" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+type OverviewRecentTransactionsProps = {
+  className?: string;
+};
 
-export function OverviewRecentTransactions() {
+export function OverviewRecentTransactions({ className }: OverviewRecentTransactionsProps) {
   const { overview } = copy.dashboard;
-  const [orders, setOrders] = useState<MfOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { orders, showSkeleton, errorMessage } = useMfOrdersQuery(OVERVIEW_ORDERS_LIMIT);
+  const loading = showSkeleton;
+  const error = errorMessage;
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [journeyOpen, setJourneyOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetchMfOrders(PREVIEW_LIMIT)
-      .then((response) => {
-        if (!cancelled) setOrders(response.orders);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err.message || overview.recentTransactionsLoadError);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [overview.recentTransactionsLoadError]);
 
   const recentOrders = useMemo(
     () => sortMfTransactions(orders).slice(0, PREVIEW_LIMIT),
     [orders],
   );
+  const isLocked = !loading && !error && recentOrders.length === 0;
 
   useEffect(() => {
     if (journeyOpen) return;
@@ -126,48 +175,102 @@ export function OverviewRecentTransactions() {
 
   return (
     <>
-      <Card className="h-full">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div className="min-w-0">
-            <CardTitle>{overview.recentTransactionsTitle}</CardTitle>
-            <CardDescription>{overview.recentTransactionsDescription}</CardDescription>
+      <section
+        className={cn(
+          "relative flex h-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-4 shadow-zynd-low sm:p-5",
+          className,
+        )}
+      >
+        {isLocked ? (
+          <div className="relative flex min-h-[12rem] flex-1 flex-col">
+            <div className="pointer-events-none flex flex-1 select-none flex-col blur-[5px]">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-compact font-semibold text-foreground">
+                    {overview.recentTransactionsTitle}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {overview.recentTransactionsDescription}
+                  </p>
+                </div>
+                <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={2.25} />
+              </div>
+              <div className="mt-4 min-h-0 flex-1 rounded-[1.25rem] bg-muted/45 p-2 sm:p-2.5">
+                <div className="space-y-0.5">
+                  {OVERVIEW_TRANSACTIONS_LOCKED_PREVIEW.map((order) => (
+                    <RecentTransactionRowPreview key={order.order_id} order={order} />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <OverviewLockedCardBackdrop />
+            <OverviewLockedCardOverlay
+              title={overview.recentTransactionsTitle}
+              subtitle={overview.recentTransactionsEmpty}
+            />
           </div>
-          {!loading && !error && recentOrders.length > 0 ? (
-            <Link
-              href="/dashboard/transactions"
-              className="inline-flex shrink-0 items-center gap-1 text-caption font-medium text-primary hover:underline"
-            >
-              {overview.recentTransactionsViewAll}
-              <ArrowRight className="size-3.5" />
-            </Link>
-          ) : null}
-        </CardHeader>
-        <CardContent>
-          {loading ? <RecentTransactionsSkeleton /> : null}
-          {error ? <FieldMessage variant="error" message={error} /> : null}
-          {!loading && !error && recentOrders.length === 0 ? (
-            <div className="flex min-h-[180px] items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border px-6 text-center">
-              <p className="text-compact text-muted-foreground">
-                {overview.recentTransactionsEmpty}
-              </p>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-compact font-semibold text-foreground">
+                  {overview.recentTransactionsTitle}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {overview.recentTransactionsDescription}
+                </p>
+              </div>
+              <Link
+                href={TRANSACTIONS_HREF}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
+                aria-label={overview.recentTransactionsViewAll}
+              >
+                <ArrowUpRight className="size-3.5" strokeWidth={2.25} />
+              </Link>
             </div>
-          ) : null}
-          {!loading && !error && recentOrders.length > 0 ? (
-            <div>
-              {recentOrders.map((order) => (
-                <RecentTransactionRow
-                  key={order.order_id}
-                  order={order}
-                  onClick={() => {
-                    setSelectedOrderId(order.order_id);
-                    setJourneyOpen(true);
-                  }}
-                />
-              ))}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+
+            {loading ? (
+              <div className="mt-4 rounded-[1.25rem] bg-muted/45 p-2.5">
+                <div className="space-y-1.5">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="flex items-center gap-2.5 px-2 py-2">
+                      <Skeleton className="size-9 shrink-0 rounded-full" />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <Skeleton className="h-3.5 w-3/5" />
+                        <Skeleton className="h-3 w-2/5" />
+                      </div>
+                      <Skeleton className="h-4 w-14" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="mt-4">
+                <FieldMessage variant="error" message={error} />
+              </div>
+            ) : null}
+
+            {!loading && !error && recentOrders.length > 0 ? (
+              <div className="mt-4 min-h-0 flex-1 rounded-[1.25rem] bg-muted/45 p-2 sm:p-2.5">
+                <div className="max-h-[14rem] space-y-0.5 overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin]">
+                  {recentOrders.map((order) => (
+                    <RecentTransactionRow
+                      key={order.order_id}
+                      order={order}
+                      onClick={() => {
+                        setSelectedOrderId(order.order_id);
+                        setJourneyOpen(true);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </section>
 
       <MfOrderJourneyDialog
         open={journeyOpen}
@@ -175,5 +278,39 @@ export function OverviewRecentTransactions() {
         onOpenChange={setJourneyOpen}
       />
     </>
+  );
+}
+
+export function OverviewRecentTransactionsSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "flex h-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-4 shadow-zynd-low sm:p-5",
+        className,
+      )}
+      aria-hidden="true"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-36" />
+        </div>
+        <Skeleton className="size-3.5" />
+      </div>
+      <div className="mt-4 rounded-[1.25rem] bg-muted/45 p-2.5">
+        <div className="space-y-1.5">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-2.5 px-2 py-2">
+              <Skeleton className="size-9 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Skeleton className="h-3.5 w-3/5" />
+                <Skeleton className="h-3 w-2/5" />
+              </div>
+              <Skeleton className="h-4 w-14" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

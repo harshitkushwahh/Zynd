@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, IndianRupee, Loader2, type LucideIcon } from "lucide-react";
+import { CalendarClock, IndianRupee, type LucideIcon } from "lucide-react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import type { InvestFundDetail, InvestReturnCalculator } from "@/features/invest/api/invest-api";
 import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculator-disclaimer";
@@ -25,6 +26,7 @@ import {
   resolveMinSipAmount,
   sipAmountStep,
 } from "@/features/invest/lib/mf-sip-calculator";
+import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -46,13 +48,25 @@ function ModeTabs({
     { id: "lumpsum", label: copy.mutualFunds.calculatorModeLumpsum, icon: IndianRupee },
     { id: "sip", label: copy.mutualFunds.calculatorModeSip, icon: CalendarClock },
   ];
+  const activeIndex = Math.max(
+    0,
+    options.findIndex((option) => option.id === mode),
+  );
 
   return (
     <div
       role="tablist"
       aria-label={copy.mutualFunds.performanceCalculatorTab}
-      className="inline-flex rounded-[var(--radius-control)] border border-border/80 bg-muted/20 p-1"
+      className="relative inline-grid min-w-[15.5rem] grid-cols-2 gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
     >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-foreground shadow-zynd-low transition-transform duration-300 ease-out"
+        style={{
+          width: "calc((100% - 0.5rem - 0.25rem) / 2)",
+          transform: `translateX(calc(${activeIndex * 100}% + ${activeIndex * 0.25}rem))`,
+        }}
+      />
       {options.map((option) => {
         const active = mode === option.id;
         const Icon = option.icon;
@@ -64,19 +78,42 @@ function ModeTabs({
             aria-selected={active}
             onClick={() => onChange(option.id)}
             className={cn(
-              "rounded-[var(--radius-control)] px-4 py-1.5 text-caption font-medium transition-colors",
-              active
-                ? "bg-foreground text-background shadow-zynd-low"
-                : "text-muted-foreground hover:text-foreground",
+              "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-caption font-medium transition-colors duration-300 ease-out",
+              active ? "text-background" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <span className="inline-flex items-center gap-1.5">
-              {active ? <Icon className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden /> : null}
-              {option.label}
-            </span>
+            <Icon className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+            {option.label}
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function MfFundCalculatorResultsSkeleton() {
+  return (
+    <div className="w-full space-y-4" aria-busy="true" aria-live="polite">
+      <div className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
+        <div className="border-b border-border bg-muted/20 px-4 py-2.5">
+          <div className="grid grid-cols-3 gap-3">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-14 justify-self-end" />
+          </div>
+        </div>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={index}
+            className="grid grid-cols-3 gap-3 border-b border-border/60 px-4 py-3 last:border-0"
+          >
+            <Skeleton className="h-4 w-10" />
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-14 justify-self-end" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="mx-auto h-4 w-56 max-w-full" />
     </div>
   );
 }
@@ -91,6 +128,7 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
   const [calculator, setCalculator] = useState<InvestReturnCalculator | null>(initialCalculator ?? null);
   const [loading, setLoading] = useState(false);
   const previousMode = useRef(mode);
+  const skipInitialFetch = useRef(Boolean(initialCalculator));
 
   const minLumpsum = useMemo(
     () => resolveMinLumpsumAmount(fund.min_lumpsum_amount_inr),
@@ -114,6 +152,7 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
   useEffect(() => {
     if (previousMode.current !== mode) {
       setCalculator(null);
+      setLoading(true);
       previousMode.current = mode;
     }
     setAmount((current) =>
@@ -125,6 +164,10 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
 
   useEffect(() => {
     if (amount <= 0) return;
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
 
     let cancelled = false;
     setLoading(true);
@@ -188,7 +231,10 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
     <div className="flex flex-col items-center gap-6">
       <ModeTabs mode={mode} onChange={setMode} />
 
-      <div className="w-full max-w-md space-y-2 text-center">
+      <div
+        key={mode}
+        className="w-full max-w-md animate-in fade-in space-y-2 text-center duration-200"
+      >
         <p className="text-caption font-medium text-muted-foreground">{amountLabel}</p>
         <div className="flex items-center justify-center gap-1">
           <span className="text-h3 font-medium text-muted-foreground">₹</span>
@@ -232,15 +278,10 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-caption text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          {copy.mutualFunds.calculatorLoading}
-        </div>
-      ) : null}
-
-      {!loading && calculator && calculator.scenarios.length > 0 ? (
-        <div className="w-full space-y-4">
-          <div className="overflow-hidden rounded-[var(--radius-card)] border border-border">
+        <MfFundCalculatorResultsSkeleton />
+      ) : calculator && calculator.scenarios.length > 0 ? (
+        <div className="w-full animate-in fade-in space-y-4 duration-200">
+          <div className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
             <table className="w-full text-left text-compact">
               <thead>
                 <tr className="border-b border-border bg-muted/20">

@@ -1,0 +1,301 @@
+/* AI bot navbar control — brand aurora hover (Gemini-like soft glow) */
+
+.zynd-ai-bot-button {
+  --zynd-ai-h: 2.5rem;
+  --zynd-ai-w: 2.5rem;
+  --zynd-ai-round: 0.75rem;
+  --zynd-ai-base: var(--zynd-blue, #2563eb);
+  --zynd-ai-base-end: var(--zynd-emerald, #10b981);
+  --zynd-ai-glow: color-mix(in srgb, var(--zynd-emerald, #10b981) 80%, transparent);
+  --zynd-ai-glow-soft: color-mix(in srgb, var(--zynd-emerald, #10b981) 0%, transparent);
+  --zynd-ai-cyan: var(--zynd-accent-cyan, #06b6d4);
+
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  isolation: isolate;
+  width: var(--zynd-ai-w);
+  height: var(--zynd-ai-h);
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  border-radius: var(--zynd-ai-round);
+  transition:
+    transform 0.25s ease,
+    filter 0.35s ease;
+}
+
+.zynd-ai-bot-aurora {
+  position: absolute;
+  inset: -42%;
+  z-index: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  filter: blur(14px);
+  transform: scale(0.85) rotate(0deg);
+  background: conic-gradient(
+    from 0deg,
+    var(--zynd-ai-base) 0deg,
+    var(--zynd-ai-cyan) 90deg,
+    var(--zynd-ai-base-end) 180deg,
+    color-mix(in srgb, var(--zynd-ai-base) 70%, white) 270deg,
+    var(--zynd-ai-base) 360deg
+  );
+  transition:
+    opacity 0.45s ease,
+    filter 0.45s ease,
+    transform 0.45s ease;
+}
+
+.zynd-ai-bot-button:hover .zynd-ai-bot-aurora,
+.zynd-ai-bot-button:focus-visible .zynd-ai-bot-aurora {
+  opacity: 0.9;
+  filter: blur(16px);
+  transform: scale(1);
+  animation: zynd-ai-aurora-spin 4.5s linear infinite;
+}
+
+.zynd-ai-bot-surface {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--zynd-ai-round);
+  background:
+    radial-gradient(
+      65.28% 65.28% at 50% 100%,
+      var(--zynd-ai-glow) 0%,
+      var(--zynd-ai-glow-soft) 100%
+    ),
+    linear-gradient(135deg, var(--zynd-ai-base) 0%, var(--zynd-ai-base-end) 100%);
+  transition: box-shadow 0.35s ease;
+}
+
+.zynd-ai-bot-button:hover .zynd-ai-bot-surface,
+.zynd-ai-bot-button:focus-visible .zynd-ai-bot-surface {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, white 18%, transparent),
+    0 0 18px color-mix(in srgb, var(--zynd-ai-base) 35%, transparent),
+    0 0 28px color-mix(in srgb, var(--zynd-ai-base-end) 30%, transparent);
+}
+
+.zynd-ai-bot-surface::before,
+.zynd-ai-bot-surface::after {
+  content: "";
+  position: absolute;
+  inset: var(--space);
+  transition: all 0.5s ease-in-out;
+  border-radius: calc(var(--zynd-ai-round) - var(--space));
+  z-index: 0;
+}
+
+.zynd-ai-bot-surface::before {
+  --space: 1px;
+  background: linear-gradient(
+    177.95deg,
+    rgba(255, 255, 255, 0.19) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.zynd-ai-bot-surface::after {
+  --space: 2px;
+  background:
+    radial-gradient(
+      65.28% 65.28% at 50% 100%,
+      var(--zynd-ai-glow) 0%,
+      var(--zynd-ai-glow-soft) 100%
+    ),
+    linear-gradient(135deg, var(--zynd-ai-base) 0%, var(--zynd-ai-base-end) 100%);
+}
+
+.zynd-ai-bot-button:active {
+  transform: scale(0.95);
+}
+
+.zynd-ai-bot-button:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zynd-ai-base) 35%, transparent);
+}
+
+.zynd-ai-bot-fold {
+  z-index: 1;
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 0.7rem;
+  width: 0.7rem;
+  display: inline-block;
+  transition: all 0.5s ease-in-out;
+  background: radial-gradient(
+    100% 75% at 55%,
+    var(--zynd-ai-glow) 0%,
+    var(--zynd-ai-glow-soft) 100%
+  );
+  box-shadow: 0 0 3px rgb(0 0 0 / 0.35);
+  border-bottom-left-radius: 0.4rem;
+  border-top-right-radius: var(--zynd-ai-round);
+}
+
+.zynd-ai-bot-fold::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150%;
+  height: 150%;
+  transform: rotate(45deg) translateX(0%) translateY(-14px);
+  background-color: #e8e8e8;
+  pointer-events: none;
+}
+
+.dark .zynd-ai-bot-fold::after {
+  background-color: #1c1c1c;
+}
+
+.zynd-ai-bot-button:hover .zynd-ai-bot-fold {
+  margin-top: -0.7rem;
+  margin-right: -0.7rem;
+}
+
+.zynd-ai-bot-points {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.zynd-ai-bot-point {
+  bottom: -10px;
+  position: absolute;
+  animation: zynd-ai-floating-points infinite ease-in-out;
+  pointer-events: none;
+  width: 2px;
+  height: 2px;
+  background-color: #fff;
+  border-radius: 9999px;
+}
+
+@keyframes zynd-ai-floating-points {
+  0% {
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(-40px);
+    opacity: 0;
+  }
+}
+
+@keyframes zynd-ai-aurora-spin {
+  from {
+    transform: scale(1) rotate(0deg);
+  }
+  to {
+    transform: scale(1) rotate(360deg);
+  }
+}
+
+.zynd-ai-bot-point:nth-child(1) {
+  left: 10%;
+  opacity: 1;
+  animation-duration: 2.35s;
+  animation-delay: 0.2s;
+}
+.zynd-ai-bot-point:nth-child(2) {
+  left: 30%;
+  opacity: 0.7;
+  animation-duration: 2.5s;
+  animation-delay: 0.5s;
+}
+.zynd-ai-bot-point:nth-child(3) {
+  left: 25%;
+  opacity: 0.8;
+  animation-duration: 2.2s;
+  animation-delay: 0.1s;
+}
+.zynd-ai-bot-point:nth-child(4) {
+  left: 44%;
+  opacity: 0.6;
+  animation-duration: 2.05s;
+}
+.zynd-ai-bot-point:nth-child(5) {
+  left: 50%;
+  opacity: 1;
+  animation-duration: 1.9s;
+}
+.zynd-ai-bot-point:nth-child(6) {
+  left: 75%;
+  opacity: 0.5;
+  animation-duration: 1.5s;
+  animation-delay: 1.5s;
+}
+.zynd-ai-bot-point:nth-child(7) {
+  left: 88%;
+  opacity: 0.9;
+  animation-duration: 2.2s;
+  animation-delay: 0.2s;
+}
+.zynd-ai-bot-point:nth-child(8) {
+  left: 58%;
+  opacity: 0.8;
+  animation-duration: 2.25s;
+  animation-delay: 0.2s;
+}
+.zynd-ai-bot-point:nth-child(9) {
+  left: 98%;
+  opacity: 0.6;
+  animation-duration: 2.6s;
+  animation-delay: 0.1s;
+}
+.zynd-ai-bot-point:nth-child(10) {
+  left: 65%;
+  opacity: 1;
+  animation-duration: 2.5s;
+  animation-delay: 0.2s;
+}
+
+.zynd-ai-bot-inner {
+  z-index: 2;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease-in-out;
+}
+
+.zynd-ai-bot-inner svg.zynd-ai-bot-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  stroke: currentColor;
+  fill: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zynd-ai-bot-point {
+    animation: none;
+    opacity: 0;
+  }
+
+  .zynd-ai-bot-button:hover .zynd-ai-bot-aurora,
+  .zynd-ai-bot-button:focus-visible .zynd-ai-bot-aurora {
+    animation: none;
+    opacity: 0.55;
+  }
+}

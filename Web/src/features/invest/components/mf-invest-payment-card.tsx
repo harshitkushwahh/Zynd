@@ -6,14 +6,21 @@ import { ChevronRight, Loader2, ShoppingCart, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   createMfOrder,
   createMfSipPlan,
   upsertMfCartItem,
+  type MfMandateType,
+  type MfPaymentMethod,
 } from "@/features/invest/api/invest-api";
 import { MfBankAccountPicker } from "@/features/invest/components/mf-bank-account-picker";
+import { MfFamilyGoalLinkPicker } from "@/features/invest/components/mf-family-goal-link-picker";
+import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
+import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
+import { MfSipInstallmentsInput } from "@/features/invest/components/mf-sip-installments-input";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
 import { MF_INVEST_PAYMENT_CARD_CLASS } from "@/features/invest/lib/mf-ui";
@@ -22,6 +29,7 @@ import {
 } from "@/features/invest/lib/mf-lumpsum-calculator";
 import {
   SIP_CALCULATOR_MAX_AMOUNT,
+  SIP_ORDER_DEFAULT_INSTALLMENTS,
 } from "@/features/invest/lib/mf-sip-calculator";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
@@ -62,6 +70,48 @@ function clampPaymentAmountInput(amount: number, mode: MfInvestPaymentMode) {
   return Math.min(Math.max(Math.trunc(amount), 0), max);
 }
 
+function resolveAmountFieldError(
+  amount: number,
+  mode: MfInvestPaymentMode,
+  minSipAmountInr: number | null | undefined,
+  minLumpsumAmountInr: number | null | undefined,
+  options?: { requireAmount?: boolean },
+): string | null {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return options?.requireAmount ? copy.mutualFunds.invalidAmount : null;
+  }
+
+  if (mode === "sip") {
+    if (amount > SIP_CALCULATOR_MAX_AMOUNT) {
+      return copy.mutualFunds.paymentCardMaxAmountHint.replace(
+        "{amount}",
+        formatInr(SIP_CALCULATOR_MAX_AMOUNT, { compact: true }),
+      );
+    }
+    if (minSipAmountInr != null && amount < minSipAmountInr) {
+      return copy.mutualFunds.paymentCardMinAmountHint.replace(
+        "{amount}",
+        formatInr(minSipAmountInr),
+      );
+    }
+    return null;
+  }
+
+  if (amount > LUMPSUM_CALCULATOR_MAX_AMOUNT) {
+    return copy.mutualFunds.paymentCardMaxAmountHint.replace(
+      "{amount}",
+      formatInr(LUMPSUM_CALCULATOR_MAX_AMOUNT, { compact: true }),
+    );
+  }
+  if (minLumpsumAmountInr != null && amount < minLumpsumAmountInr) {
+    return copy.mutualFunds.paymentCardMinAmountHint.replace(
+      "{amount}",
+      formatInr(minLumpsumAmountInr),
+    );
+  }
+  return null;
+}
+
 function ModeToggle({
   mode,
   onChange,
@@ -90,7 +140,7 @@ function ModeToggle({
             aria-selected={isActive}
             onClick={() => onChange(option.id)}
             className={cn(
-              "rounded-full px-3 py-2.5 text-compact font-medium transition-colors",
+              "rounded-full px-3 py-2 text-compact font-medium transition-colors",
               isActive
                 ? "bg-foreground text-background shadow-zynd-low"
                 : "text-muted-foreground hover:text-foreground",
@@ -108,12 +158,15 @@ function AmountInput({
   amount,
   mode,
   onChange,
+  error,
 }: {
   amount: number;
   mode: MfInvestPaymentMode;
   onChange: (amount: number) => void;
+  error?: string | null;
 }) {
   const isEmpty = amount <= 0;
+  const hasError = Boolean(error);
   const formattedAmount = formatAmountDigits(amount);
   const amountFontClass =
     formattedAmount.length > 12
@@ -142,7 +195,7 @@ function AmountInput({
 
   return (
     <div className="w-full min-w-0 px-2">
-      <div className="flex min-h-[5.5rem] items-center justify-center">
+      <div className="flex min-h-[4.25rem] items-center justify-center">
         <div className="inline-flex max-w-full min-w-0 items-center gap-0.5">
           <span
             className={cn(
@@ -157,6 +210,7 @@ function AmountInput({
             type="text"
             inputMode="numeric"
             aria-label={copy.mutualFunds.paymentCardAmountSelected}
+            aria-invalid={hasError}
             placeholder="0"
             value={formattedAmount}
             onChange={(event) => handleAmountInput(event.target.value)}
@@ -164,11 +218,23 @@ function AmountInput({
             className={cn(
               "min-w-[1.5ch] max-w-full border-0 bg-transparent p-0 text-left font-semibold leading-none tracking-tight tabular-nums shadow-none outline-none focus-visible:ring-0",
               amountFontClass,
-              isEmpty ? "text-muted-foreground/35 placeholder:text-muted-foreground/35" : "text-foreground",
+              isEmpty
+                ? "text-muted-foreground/35 placeholder:text-muted-foreground/35"
+                : "text-foreground",
             )}
           />
         </div>
       </div>
+      {error ? (
+        <div className="mt-1.5 flex justify-center">
+          <Badge
+            variant="outline"
+            className="border-destructive/30 bg-destructive/10 text-destructive"
+          >
+            {error}
+          </Badge>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -226,7 +292,7 @@ function PaymentMethodRow({
   return (
     <button
       type="button"
-      className="group flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 px-3.5 py-3.5 text-left transition-colors hover:border-primary/25 hover:bg-muted/25"
+      className="group flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 px-3.5 py-2.5 text-left transition-colors hover:border-primary/25 hover:bg-muted/25"
     >
       <div
         className={cn(
@@ -277,14 +343,21 @@ export function MfInvestPaymentCard({
   const amount = controlledAmount ?? internalAmount;
   const setAmount = onAmountChange ?? setInternalAmount;
   const [installmentDay, setInstallmentDay] = useState<number>(20);
+  const [numberOfInstallments, setNumberOfInstallments] = useState<number>(
+    SIP_ORDER_DEFAULT_INSTALLMENTS,
+  );
+  const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
+  const [mandateType, setMandateType] = useState<MfMandateType>("upi");
+  const [selectedFamilyGoalId, setSelectedFamilyGoalId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showAmountValidation, setShowAmountValidation] = useState(false);
   const interactive = canInvest && !preview;
   const showSip = sipEnabled;
   const hasFund = Boolean(fundName?.trim() && productId);
   const shouldLoadBankAccounts = canInvest || (hasFund && mode === "sip" && showSip);
   const {
-    accounts: paymentReadyAccounts,
+    accounts,
     selectedBankAccountId,
     setSelectedBankAccountId,
     loading: banksLoading,
@@ -304,47 +377,41 @@ export function MfInvestPaymentCard({
 
   const canSubmit = useMemo(() => hasFund && amount > 0, [amount, hasFund]);
 
+  const amountError = useMemo(() => {
+    const liveError = resolveAmountFieldError(amount, mode, minSipAmountInr, minLumpsumAmountInr);
+    if (liveError) return liveError;
+    if (!showAmountValidation) return null;
+    return resolveAmountFieldError(amount, mode, minSipAmountInr, minLumpsumAmountInr, {
+      requireAmount: true,
+    });
+  }, [amount, minLumpsumAmountInr, minSipAmountInr, mode, showAmountValidation]);
+
   function validateAmount(): string | null {
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return copy.mutualFunds.invalidAmount;
-    }
-    if (mode === "sip") {
-      if (amount > SIP_CALCULATOR_MAX_AMOUNT) {
-        return copy.mutualFunds.maxSipError.replace(
-          "{amount}",
-          formatInr(SIP_CALCULATOR_MAX_AMOUNT, { compact: true }),
-        );
-      }
-      if (minSipAmountInr != null && amount < minSipAmountInr) {
-        return copy.mutualFunds.minSipError.replace("{amount}", formatInr(minSipAmountInr));
-      }
-      return null;
-    }
-    if (amount > LUMPSUM_CALCULATOR_MAX_AMOUNT) {
-      return copy.mutualFunds.maxLumpsumError.replace(
-        "{amount}",
-        formatInr(LUMPSUM_CALCULATOR_MAX_AMOUNT, { compact: true }),
-      );
-    }
-    if (minLumpsumAmountInr != null && amount < minLumpsumAmountInr) {
-      return copy.mutualFunds.minLumpsumError.replace("{amount}", formatInr(minLumpsumAmountInr));
-    }
-    return null;
+    return resolveAmountFieldError(amount, mode, minSipAmountInr, minLumpsumAmountInr, {
+      requireAmount: true,
+    });
+  }
+
+  function handleAmountValidationFailure() {
+    setShowAmountValidation(true);
   }
 
   function handleModeChange(nextMode: MfInvestPaymentMode) {
     setActionError(null);
+    setShowAmountValidation(false);
     setMode(nextMode);
     setAmount(clampPaymentAmountInput(amount, nextMode));
   }
 
   function handleAmountChange(nextAmount: number) {
     setActionError(null);
+    setShowAmountValidation(false);
     setAmount(nextAmount);
   }
 
   function handleQuickAdd(increment: number) {
     setActionError(null);
+    setShowAmountValidation(false);
     setAmount(
       clampPaymentAmountInput(amount + increment, mode),
     );
@@ -354,7 +421,7 @@ export function MfInvestPaymentCard({
     if (!interactive || !productId) return;
     const validationError = validateAmount();
     if (validationError) {
-      setActionError(validationError);
+      handleAmountValidationFailure();
       return;
     }
     if (!hasPaymentReadyAccount || !selectedBankAccountId) {
@@ -370,6 +437,8 @@ export function MfInvestPaymentCard({
         amount_inr: amount,
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
+        family_goal_id: selectedFamilyGoalId ?? undefined,
+        payment_method: paymentMethod,
       });
       openOrderPayment(order.order_id);
     } catch (err) {
@@ -383,7 +452,7 @@ export function MfInvestPaymentCard({
     if (!interactive || !productId) return;
     const validationError = validateAmount();
     if (validationError) {
-      setActionError(validationError);
+      handleAmountValidationFailure();
       return;
     }
 
@@ -396,6 +465,7 @@ export function MfInvestPaymentCard({
         investment_type: mode,
         installment_day: mode === "sip" ? installmentDay : undefined,
         frequency: mode === "sip" ? "monthly" : undefined,
+        number_of_installments: mode === "sip" ? numberOfInstallments : undefined,
       });
       const addedLabel =
         mode === "sip" ? copy.mutualFunds.cartSipAddedToast : copy.mutualFunds.cartAddedToast;
@@ -419,7 +489,7 @@ export function MfInvestPaymentCard({
     if (!interactive || !productId) return;
     const validationError = validateAmount();
     if (validationError) {
-      setActionError(validationError);
+      handleAmountValidationFailure();
       return;
     }
     if (!hasPaymentReadyAccount || !selectedBankAccountId) {
@@ -435,8 +505,11 @@ export function MfInvestPaymentCard({
         amount_inr: amount,
         frequency: "monthly",
         installment_day: installmentDay,
+        number_of_installments: numberOfInstallments,
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
+        family_goal_id: selectedFamilyGoalId ?? undefined,
+        mandate_type: mandateType,
       });
       openSipMandate(plan.plan_id);
     } catch (err) {
@@ -458,14 +531,14 @@ export function MfInvestPaymentCard({
     <div
       className={cn(
         MF_INVEST_PAYMENT_CARD_CLASS,
-        "flex min-h-[30rem] w-full min-w-0 flex-col overflow-x-hidden",
+        "flex min-h-[27rem] w-full min-w-0 flex-col overflow-x-hidden",
         sticky && "lg:sticky lg:top-6",
         !hasFund && "border-dashed",
         className,
       )}
     >
       {showFundName ? (
-        <div className="border-b border-zinc-200 bg-muted/10 px-6 py-4 dark:border-zinc-700/80">
+        <div className="border-b border-zinc-200 bg-muted/10 px-6 py-3 dark:border-zinc-700/80">
           <p
             className={cn(
               "line-clamp-2 text-body font-semibold leading-snug",
@@ -477,44 +550,86 @@ export function MfInvestPaymentCard({
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col justify-between gap-7 px-5 py-7">
+      <div className="flex flex-1 flex-col justify-between gap-5 px-5 pt-4 pb-5">
         {showSip ? <ModeToggle mode={mode} onChange={handleModeChange} /> : null}
 
-        <div className="space-y-6">
-          <AmountInput amount={amount} mode={mode} onChange={handleAmountChange} />
+        <div className="space-y-4">
+          <AmountInput
+            amount={amount}
+            mode={mode}
+            onChange={handleAmountChange}
+            error={amountError}
+          />
           <QuickAmountChips amount={amount} mode={mode} onAdd={handleQuickAdd} />
 
           {mode === "sip" && showSip ? (
-            <MfSipDayPicker
-              maxDay={SIP_MAX_INSTALLMENT_DAY}
-              value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
-              onChange={setInstallmentDay}
-              disabled={submitting}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <p className="text-caption font-medium text-muted-foreground">
+                  {copy.mutualFunds.sipDayLabel}
+                </p>
+                <MfSipDayPicker
+                  compact
+                  maxDay={SIP_MAX_INSTALLMENT_DAY}
+                  value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
+                  onChange={setInstallmentDay}
+                  disabled={submitting}
+                />
+              </div>
+              <MfSipInstallmentsInput
+                value={numberOfInstallments}
+                onChange={setNumberOfInstallments}
+                disabled={submitting}
+              />
+            </div>
           ) : null}
         </div>
 
-        <div className="mt-auto space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700/80">
+        <div className="mt-auto space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700/80">
+          {interactive && canInvest ? (
+            <MfFamilyGoalLinkPicker
+              selectedGoalId={selectedFamilyGoalId}
+              onSelect={setSelectedFamilyGoalId}
+              disabled={submitting}
+            />
+          ) : null}
+
           {mode === "sip" && showSip ? (
-            <MfBankAccountPicker
-              label={copy.mutualFunds.paymentCardPayViaMandate}
-              hint=""
-              accounts={paymentReadyAccounts}
-              selectedId={selectedBankAccountId}
-              onSelect={setSelectedBankAccountId}
-              loading={banksLoading}
-              error={banksError}
-              disabled={submitting}
-            />
+            <>
+              {interactive && canInvest ? (
+                <MfMandateTypePicker
+                  value={mandateType}
+                  onChange={setMandateType}
+                  disabled={submitting}
+                />
+              ) : null}
+              <MfBankAccountPicker
+                label={copy.mutualFunds.paymentCardPayViaMandate}
+                hint=""
+                accounts={accounts}
+                selectedId={selectedBankAccountId}
+                onSelect={setSelectedBankAccountId}
+                loading={banksLoading}
+                error={banksError}
+                disabled={submitting}
+              />
+            </>
           ) : interactive && canInvest ? (
-            <MfBankAccountPicker
-              accounts={paymentReadyAccounts}
-              selectedId={selectedBankAccountId}
-              onSelect={setSelectedBankAccountId}
-              loading={banksLoading}
-              error={banksError}
-              disabled={submitting}
-            />
+            <>
+              <MfPaymentMethodPicker
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                disabled={submitting}
+              />
+              <MfBankAccountPicker
+                accounts={accounts}
+                selectedId={selectedBankAccountId}
+                onSelect={setSelectedBankAccountId}
+                loading={banksLoading}
+                error={banksError}
+                disabled={submitting}
+              />
+            </>
           ) : (
             <LumpsumRow />
           )}

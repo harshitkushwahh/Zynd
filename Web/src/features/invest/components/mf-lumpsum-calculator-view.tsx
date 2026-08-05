@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { LineChart, Loader2, TrendingUp } from "lucide-react";
+import { LineChart, TrendingUp } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   fetchInvestFundDetail,
@@ -13,10 +13,12 @@ import {
   type MfLumpsumCalculator,
 } from "@/features/invest/api/invest-api";
 import { fetchLumpsumCalculatorWithFallback } from "@/features/invest/lib/mf-calculator-api";
+import { MfCalculatorProjectionChartPanel } from "@/features/invest/components/mf-calculator-projection-chart";
 import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculator-disclaimer";
 import { MfCalculatorSliderField } from "@/features/invest/components/mf-calculator-slider-field";
 import { LumpsumCorpusDonut } from "@/features/invest/components/mf-lumpsum-corpus-donut";
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
+import { MfLumpsumCalculatorResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
 import {
   MF_CALC_CARD_CLASS,
@@ -34,8 +36,11 @@ import {
   clampLumpsumAmount,
   LUMPSUM_CALCULATOR_DEFAULT_AMOUNT,
   LUMPSUM_CALCULATOR_MAX_AMOUNT,
+  LUMPSUM_PLACEHOLDER_CHART_SERIES,
+  calculatorPointsToSeries,
   lumpsumAmountStep,
   resolveMinLumpsumAmount,
+  scenariosToChartSeries,
 } from "@/features/invest/lib/mf-lumpsum-calculator";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -303,6 +308,29 @@ export function MfLumpsumCalculatorView() {
 
   const hasResult = Boolean(!loading && result && result.scenarios.length > 0);
 
+  const growthChartSeries = useMemo(() => {
+    if (hasResult && result) {
+      const fromPoints = calculatorPointsToSeries(result.points);
+      if (fromPoints.length >= 2) {
+        return fromPoints;
+      }
+      return scenariosToChartSeries(result.scenarios);
+    }
+    return LUMPSUM_PLACEHOLDER_CHART_SERIES;
+  }, [hasResult, result]);
+
+  const growthChartLabels = useMemo(
+    () => ({
+      value: copy.mutualFunds.lumpsumChartValue,
+      invested: copy.mutualFunds.lumpsumChartInvested,
+      gain: copy.mutualFunds.lumpsumChartGain,
+      empty: copy.mutualFunds.lumpsumChartEmpty,
+      lockedTitle: copy.mutualFunds.lumpsumChartLockedTitle,
+      lockedMessage: copy.mutualFunds.lumpsumChartNoFund,
+    }),
+    [],
+  );
+
   return (
     <MfToolsPageShell
       trail={[
@@ -311,6 +339,7 @@ export function MfLumpsumCalculatorView() {
       title={copy.mutualFunds.lumpsumCalcTitle}
       description={copy.mutualFunds.lumpsumCalcDescription}
     >
+      <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
         <Card className={cn("h-full", MF_CALC_CARD_CLASS)}>
           <CardContent className={MF_CALC_CARD_CONTENT_CLASS}>
@@ -371,14 +400,7 @@ export function MfLumpsumCalculatorView() {
 
           {fund && error ? <FieldMessage variant="error" message={error} /> : null}
 
-          {fund && loading ? (
-            <Card className="h-full rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
-              <CardContent className="flex h-full min-h-full items-center justify-center gap-2 p-5 text-muted-foreground sm:p-6">
-                <Loader2 className="size-4 animate-spin" />
-                {copy.mutualFunds.calculatorLoading}
-              </CardContent>
-            </Card>
-          ) : null}
+          {fund && loading ? <MfLumpsumCalculatorResultsSkeleton /> : null}
 
           {!loading && result && result.scenarios.length === 0 ? (
             <FieldMessage variant="info" message={copy.mutualFunds.calculatorDataShallow} />
@@ -386,6 +408,43 @@ export function MfLumpsumCalculatorView() {
 
           {fund && hasResult && result ? <LumpsumResultsCard result={result} /> : null}
         </div>
+      </div>
+
+        <Card className={cn("w-full", MF_CALC_CARD_CLASS)}>
+          <CardContent className={cn(MF_CALC_CARD_CONTENT_CLASS, "gap-4")}>
+            <div className="space-y-1">
+              <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
+              <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
+            </div>
+
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className={MF_CALC_INVESTED_DOT_CLASS} aria-hidden />
+                {copy.mutualFunds.lumpsumChartInvested}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className={MF_CALC_GAIN_DOT_CLASS} aria-hidden />
+                {copy.mutualFunds.lumpsumChartGain}
+              </span>
+            </div>
+
+            <MfCalculatorProjectionChartPanel
+              series={growthChartSeries}
+              labels={growthChartLabels}
+              locked={!fund}
+              loading={Boolean(fund && loading)}
+              emptyMessage={copy.mutualFunds.lumpsumChartEmpty}
+              disclaimer={
+                fund && hasResult && result ? (
+                  <MfCalculatorDisclaimer
+                    disclaimer={result.disclaimer}
+                    dataQuality={result.data_quality}
+                  />
+                ) : null
+              }
+            />
+          </CardContent>
+        </Card>
       </div>
     </MfToolsPageShell>
   );

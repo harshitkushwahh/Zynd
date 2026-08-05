@@ -12,7 +12,8 @@ import {
 } from "recharts";
 
 import type { MfNavChartPoint } from "@/features/invest/lib/mf-nav-history";
-import { formatChartAxisDate, formatNav, formatSignedReturn } from "@/features/invest/lib/mf-format";
+import { formatNav, formatSignedReturn } from "@/features/invest/lib/mf-format";
+import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -114,16 +115,24 @@ export function MfFundNavChart({ points, periodReturn }: MfFundNavChartProps) {
 
   if (points.length < 2) {
     return (
-      <div className="flex min-h-[240px] items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border bg-muted/10 px-6 text-center">
+      <div
+        className={cn(
+          "flex min-h-[240px] items-center justify-center border border-dashed border-border bg-muted/10 px-6 text-center",
+          MF_FUND_DETAIL_RADIUS_CLASS,
+        )}
+      >
         <p className="text-compact text-muted-foreground">{copy.mutualFunds.navChartEmpty}</p>
       </div>
     );
   }
 
-  const tickInterval = Math.max(1, Math.floor(points.length / 5));
-
   return (
-    <div className="rounded-[var(--radius-card)] border border-border/70 bg-muted/10 p-3 pt-4 sm:p-4 sm:pt-5">
+    <div
+      className={cn(
+        "overflow-hidden border border-border/70 bg-muted/10",
+        MF_FUND_DETAIL_RADIUS_CLASS,
+      )}
+    >
       <div className="h-[300px] w-full min-w-0 [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible">
         <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
           <AreaChart data={points} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
@@ -146,16 +155,7 @@ export function MfFundNavChart({ points, periodReturn }: MfFundNavChartProps) {
               strokeDasharray="3 6"
               vertical={false}
             />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              minTickGap={28}
-              interval={tickInterval}
-              tickFormatter={(value) => formatChartAxisDate(String(value))}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-              dy={8}
-            />
+            <XAxis dataKey="date" hide />
             <YAxis domain={domain} hide />
             <Tooltip
               content={renderNavTooltip(startNav)}

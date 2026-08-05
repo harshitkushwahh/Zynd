@@ -20,12 +20,17 @@ import {
   type KycBootstrapResponse,
   type KycReadinessCheckResponse,
 } from "@/features/kyc/lib/kyc-api";
+import {
+  buildOverviewKycProfileProgress,
+  type OverviewKycProfileProgress,
+} from "@/features/dashboard/overview/lib/overview-profile-kyc-state";
 import type { KycRecord, KycStatus } from "@/features/kyc/lib/kyc-types";
 
 type KycContextValue = {
   status: KycStatus | null;
   record: KycRecord | null;
   overallStatus: string | null;
+  profileProgress: OverviewKycProfileProgress | null;
   showRing: boolean;
   showKycMenu: boolean;
   kycAllowed: boolean;
@@ -59,12 +64,6 @@ function getKycBlockReasons(user: NonNullable<ReturnType<typeof useAuth>["user"]
   }
   if (!user.phone_verified_at) {
     reasons.push("phone_not_verified");
-  }
-  if (!user.mfa_enrolled) {
-    reasons.push("mfa_required");
-  }
-  if (!user.pin_enrolled) {
-    reasons.push("pin_required");
   }
   return reasons;
 }
@@ -101,6 +100,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
   const { user, refreshUser } = useAuth();
   const [record, setRecord] = useState<KycRecord | null>(null);
   const [overallStatus, setOverallStatus] = useState<string | null>(null);
+  const [profileProgress, setProfileProgress] = useState<OverviewKycProfileProgress | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [digilockerResumeToken, setDigilockerResumeToken] = useState(0);
   const [kycSubmissionResumeToken, setKycSubmissionResumeToken] = useState(0);
@@ -112,9 +112,11 @@ export function KycProvider({ children }: { children: ReactNode }) {
     setOverallStatus(payload.step_statuses?.overall ?? null);
     if (!payload.eligible) {
       setRecord(null);
+      setProfileProgress(null);
       return;
     }
     setRecord(recordFromBootstrap(payload));
+    setProfileProgress(buildOverviewKycProfileProgress(payload));
   }, []);
 
   const refreshFromBootstrap = useCallback(async () => {
@@ -152,6 +154,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
     if (!nextUserId) {
       setRecord(null);
       setOverallStatus(null);
+      setProfileProgress(null);
       setDialogOpen(false);
       return;
     }
@@ -159,6 +162,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
     if (previousUserId && previousUserId !== nextUserId) {
       setRecord(null);
       setOverallStatus(null);
+      setProfileProgress(null);
       setDialogOpen(false);
     }
   }, [user?.id]);
@@ -221,6 +225,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
   const markFreshUser = useCallback(() => {
     setRecord({ status: "none" });
     setOverallStatus(null);
+    setProfileProgress(null);
   }, []);
 
   const markPhase1Complete = useCallback(() => {
@@ -259,9 +264,23 @@ export function KycProvider({ children }: { children: ReactNode }) {
         completedAt: new Date().toISOString(),
       }));
       setOverallStatus("completed");
+      setProfileProgress((current) =>
+        current
+          ? {
+              ...current,
+              progressFraction: 1,
+              tone: "success",
+              overallStatus: "completed",
+              statusLabel: copy.dashboard.overview.profileKycStatusVerified,
+              tooltipTitle: copy.dashboard.overview.profileKycTooltipCompleteTitle,
+              tooltipDetail: copy.dashboard.overview.profileKycTooltipComplete,
+            }
+          : current,
+      );
+      void refreshFromBootstrap();
       void refreshUser();
     },
-    [refreshUser],
+    [refreshFromBootstrap, refreshUser],
   );
 
   const resumeAfterDigilocker = useCallback(() => {
@@ -281,8 +300,9 @@ export function KycProvider({ children }: { children: ReactNode }) {
       status,
       record,
       overallStatus,
+      profileProgress,
       showRing: Boolean(user && record),
-      showKycMenu: Boolean(user && record && record.status !== "complete"),
+      showKycMenu: Boolean(user && record),
       kycAllowed,
       kycBlockReasons,
       ringTone: getRingTone(record),
@@ -316,6 +336,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
     markKycVerified,
     openDialog,
     overallStatus,
+    profileProgress,
     record,
     refreshFromBootstrap,
     resumeAfterDigilocker,

@@ -23,8 +23,29 @@ async def test_lookup_ifsc_falls_back_when_gateway_ifsc_route_unavailable() -> N
             result = await lookup_ifsc("HDFC0001234")
 
     assert result["ifsc_code"] == "HDFC0001234"
-    assert result["bank_name"] == "HDFC"
+    assert result["bank_name"] == ""
     assert result["branch"] == ""
+    assert result["lookup_fallback"] is True
+
+
+@pytest.mark.asyncio
+async def test_lookup_ifsc_raises_when_ifsc_code_not_found() -> None:
+    with patch("app.infrastructure.kyc.fp_clients.get_settings") as settings_mock:
+        settings_mock.return_value.resolved_kyc_provider_live = True
+        with patch(
+            "app.infrastructure.kyc.fp_clients.fp_get",
+            new=AsyncMock(
+                side_effect=FpClientError(
+                    "IFSC code not found.",
+                    status_code=404,
+                )
+            ),
+        ):
+            with pytest.raises(FpClientError) as exc_info:
+                await lookup_ifsc("KKBK0000591")
+
+    assert exc_info.value.code == "invalid_ifsc"
+    assert exc_info.value.status_code == 404
 
 
 @pytest.mark.asyncio

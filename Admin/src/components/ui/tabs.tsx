@@ -69,11 +69,19 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   )
 }
 
-function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
+function TabsContent({
+  className,
+  keepMounted = false,
+  ...props
+}: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      keepMounted={keepMounted}
+      className={cn(
+        "flex-1 text-sm outline-none data-hidden:hidden",
+        className,
+      )}
       {...props}
     />
   )

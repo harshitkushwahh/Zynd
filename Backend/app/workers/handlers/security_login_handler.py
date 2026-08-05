@@ -112,10 +112,17 @@ async def handle_login_succeeded(event: DomainEvent) -> None:
 
     notification_type = NotificationType.AUTH_NEW_DEVICE if is_new_device else NotificationType.AUTH_LOGIN_SUCCEEDED
     title = "New device signed in" if is_new_device else "Signed in to ZYND"
+    method_label = {
+        "sms": "mobile verification code",
+        "authenticator": "authenticator app",
+        "backup": "backup code",
+        "oauth": "linked sign-in provider",
+    }.get(payload.login_method or "", "password")
     body = (
-        f"A new device signed in to your ZYND account.\n\nDevice: {device_label}\nIP address: {ip or 'Unknown'}"
+        f"A new device signed in to your ZYND account using {method_label}.\n\n"
+        f"Device: {device_label}\nIP address: {ip or 'Unknown'}"
         if is_new_device
-        else f"You signed in to ZYND from {device_label}.\nIP address: {ip or 'Unknown'}"
+        else f"You signed in to ZYND from {device_label} using {method_label}.\nIP address: {ip or 'Unknown'}"
     )
     await enqueue_user_notification(
         user_id=user_id,
@@ -128,6 +135,7 @@ async def handle_login_succeeded(event: DomainEvent) -> None:
             "device_label": device_label,
             "ip": ip,
             "is_new_device": is_new_device,
+            "login_method": payload.login_method,
         },
         idempotency_key=f"{notification_type.value}:{event.event_id}",
     )

@@ -65,6 +65,29 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
     ],
   },
   {
+    id: "risk-profile",
+    label: "Risk profiling",
+    description: "Questionnaire configuration, templates, and user risk results.",
+    capabilities: [
+      { key: "risk_profile.read", label: "View risk profile config", description: "Read categories, questions, tiers, and templates." },
+      { key: "risk_profile.categories.manage", label: "Manage categories", description: "Create and update weighted question categories." },
+      { key: "risk_profile.questions.manage", label: "Manage questions", description: "Create, edit, deactivate, and bulk-import questions." },
+      { key: "risk_profile.templates.manage", label: "Manage templates", description: "Configure assessment templates and category counts." },
+      { key: "risk_profile.tiers.manage", label: "Manage tier messages", description: "Update score bands and user-facing tier messages." },
+      { key: "risk_profile.users.read", label: "View user profiles", description: "See computed risk profiles for users." },
+      { key: "risk_profile.users.manage", label: "Unlock risk profiles", description: "Grant additional attempts after OTP verification." },
+    ],
+  },
+  {
+    id: "family-groups",
+    label: "Family groups",
+    description: "Directory, invites, and moderation for customer family groups.",
+    capabilities: [
+      { key: "family_groups.read", label: "View family groups", description: "Browse groups, members, and invites." },
+      { key: "family_groups.manage", label: "Moderate family groups", description: "Force archive groups and remove members." },
+    ],
+  },
+  {
     id: "mutual-funds",
     label: "Mutual funds",
     description: "Catalog, content, jobs, and transaction operations.",

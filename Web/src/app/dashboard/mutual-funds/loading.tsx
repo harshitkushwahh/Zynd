@@ -1,11 +1,5 @@
-import { MutualFundsPageSkeleton } from "@/features/invest/components/mf-mutual-funds-catalog-skeleton";
-import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
-import { cn } from "@/lib/utils";
+import { DashboardQueryRouteLoading } from "@/components/dashboard/dashboard-query-route-loading";
 
 export default function MutualFundsLoading() {
-  return (
-    <div className={cn(MF_PAGE_SECTION_CLASS)}>
-      <MutualFundsPageSkeleton />
-    </div>
-  );
+  return <DashboardQueryRouteLoading />;
 }

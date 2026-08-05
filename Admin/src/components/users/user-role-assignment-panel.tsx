@@ -408,6 +408,7 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
         <AdminDataTable minWidth="4xl">
           <AdminTableHeader>
             <tr>
+              <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
               <AdminTableHeadCell className="w-10">
                 <input
                   type="checkbox"
@@ -422,7 +423,6 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
               <AdminTableHeadCell>Email</AdminTableHeadCell>
               <AdminTableHeadCell>Status</AdminTableHeadCell>
               <AdminTableHeadCell>Team roles</AdminTableHeadCell>
-              <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             </tr>
           </AdminTableHeader>
           <AdminTableBody>
@@ -442,6 +442,19 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
                     key={user.user_id}
                     className={cn("hover:bg-muted/20", selected && "bg-primary/5")}
                   >
+                    <AdminTableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setManageDialogError("");
+                            setManageUser(user);
+                          }}
+                        >
+                          <Settings2 className="size-3.5" />
+                          Manage roles
+                        </Button>
+                    </AdminTableCell>
                     <AdminTableCell>
                         <input
                           type="checkbox"
@@ -479,19 +492,6 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
                             ))}
                           </div>
                         )}
-                    </AdminTableCell>
-                    <AdminTableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setManageDialogError("");
-                            setManageUser(user);
-                          }}
-                        >
-                          <Settings2 className="size-3.5" />
-                          Manage roles
-                        </Button>
                     </AdminTableCell>
                   </AdminTableRow>
                 );

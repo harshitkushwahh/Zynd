@@ -1,5 +1,5 @@
 import type { SecurityConfigItem } from "@/lib/admin-api";
-import { LockKeyhole, ShieldAlert, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { LockKeyhole, ShieldAlert, SlidersHorizontal, Timer, type LucideIcon } from "lucide-react";
 
 export type SecurityConfigFieldType = "number" | "select";
 
@@ -8,6 +8,8 @@ export type SecurityConfigFieldMeta = {
   description: string;
   type: SecurityConfigFieldType;
   inputHint?: string;
+  min?: number;
+  max?: number;
   options?: Array<{ value: string; label: string }>;
 };
 
@@ -18,7 +20,7 @@ export type SecurityConfigGroup = {
   keys: string[];
 };
 
-export type SecurityConfigTabId = "lockout" | "risk" | "other";
+export type SecurityConfigTabId = "lockout" | "risk" | "ops-thresholds" | "other";
 
 export type SecurityConfigTab = {
   id: SecurityConfigTabId;
@@ -48,6 +50,13 @@ export const SECURITY_CONFIG_TABS: SecurityConfigTab[] = [
     label: "Adaptive risk",
     description: "Risk score thresholds and enforcement during sign-in.",
     icon: ShieldAlert,
+  },
+  {
+    id: "ops-thresholds",
+    slug: "ops-thresholds",
+    label: "Ops thresholds",
+    description: "Mutual fund reconciliation windows and stuck pipeline counts.",
+    icon: Timer,
   },
   {
     id: "other",
@@ -83,17 +92,28 @@ export const SECURITY_CONFIG_GROUPS: SecurityConfigGroup[] = [
       "risk.high_action",
     ],
   },
+  {
+    id: "second-factor",
+    title: "Second factor & fund gates",
+    description: "SMS login fallback and fund-movement security requirements.",
+    keys: [
+      "auth.login_sms_otp_when_mfa_disabled",
+      "auth.step_up_sms_fallback_enabled",
+      "fund.require_mfa",
+      "fund.require_pin",
+    ],
+  },
 ];
 
 export const SECURITY_CONFIG_SUBSECTIONS: Record<
-  Exclude<SecurityConfigTabId, "other">,
+  Exclude<SecurityConfigTabId, "other" | "ops-thresholds">,
   SecurityConfigSubsection[]
 > = {
   lockout: [
     {
       id: "limits",
       title: "Account limits",
-      description: "",
+      description: "When captcha appears, accounts lock, and how long they stay locked.",
       keys: [
         "lockout.captcha_after_attempt",
         "lockout.max_attempts",
@@ -103,13 +123,13 @@ export const SECURITY_CONFIG_SUBSECTIONS: Record<
     {
       id: "backoff",
       title: "Exponential backoff",
-      description: "",
+      description: "Slow down repeated failed sign-ins before a full lockout.",
       keys: ["lockout.backoff_start_attempt", "lockout.backoff_base_seconds"],
     },
     {
       id: "network",
       title: "IP protection",
-      description: "",
+      description: "Block abusive source IPs across accounts.",
       keys: ["lockout.ip_block_threshold"],
     },
   ],
@@ -117,13 +137,13 @@ export const SECURITY_CONFIG_SUBSECTIONS: Record<
     {
       id: "scores",
       title: "Risk thresholds",
-      description: "",
+      description: "Score cutoffs that classify a sign-in as medium or high risk.",
       keys: ["risk.medium_score", "risk.high_score"],
     },
     {
       id: "actions",
       title: "Enforcement actions",
-      description: "",
+      description: "What the platform does when each risk level is reached.",
       keys: ["risk.medium_action", "risk.high_action"],
     },
   ],
@@ -135,42 +155,56 @@ export const SECURITY_CONFIG_FIELD_META: Record<string, SecurityConfigFieldMeta>
     description: "How many failed sign-ins before users must complete a captcha.",
     type: "number",
     inputHint: "Number of failed attempts",
+    min: 1,
+    max: 50,
   },
   "lockout.max_attempts": {
     label: "Lock account after",
     description: "How many failed sign-ins before the account is temporarily locked.",
     type: "number",
     inputHint: "Number of failed attempts",
+    min: 1,
+    max: 100,
   },
   "lockout.duration_minutes": {
     label: "Lockout length",
     description: "How long a locked account stays locked before sign-in can be tried again.",
     type: "number",
     inputHint: "Minutes",
+    min: 1,
+    max: 1440,
   },
   "lockout.backoff_start_attempt": {
     label: "Slow down sign-in after",
     description: "From this failed attempt onward, each try waits longer than the last.",
     type: "number",
     inputHint: "Attempt number",
+    min: 1,
+    max: 100,
   },
   "lockout.backoff_base_seconds": {
     label: "Initial delay",
     description: "Starting wait time before sign-in is allowed again; it grows with each failure.",
     type: "number",
     inputHint: "Seconds",
+    min: 1,
+    max: 300,
   },
   "lockout.ip_block_threshold": {
     label: "Block IP after",
     description: "How many failed sign-ins from one IP (across accounts) before that IP is blocked.",
     type: "number",
     inputHint: "Number of failed attempts",
+    min: 1,
+    max: 1000,
   },
   "risk.medium_score": {
     label: "Medium risk threshold",
     description: "Sign-ins at this score or higher are treated as medium risk.",
     type: "number",
     inputHint: "Minimum score",
+    min: 1,
+    max: 99,
   },
   "risk.medium_action": {
     label: "When medium risk is reached",
@@ -186,6 +220,8 @@ export const SECURITY_CONFIG_FIELD_META: Record<string, SecurityConfigFieldMeta>
     description: "Sign-ins at this score or higher are treated as high risk.",
     type: "number",
     inputHint: "Minimum score",
+    min: 2,
+    max: 100,
   },
   "risk.high_action": {
     label: "When high risk is reached",
@@ -194,6 +230,42 @@ export const SECURITY_CONFIG_FIELD_META: Record<string, SecurityConfigFieldMeta>
     options: [
       { value: "block_login", label: "Block sign-in" },
       { value: "step_up_mfa", label: "Require MFA step-up" },
+    ],
+  },
+  "auth.login_sms_otp_when_mfa_disabled": {
+    label: "SMS OTP at login when MFA off",
+    description: "Send a mobile verification code after password when MFA is not enrolled.",
+    type: "select",
+    options: [
+      { value: "true", label: "Enabled" },
+      { value: "false", label: "Disabled" },
+    ],
+  },
+  "auth.step_up_sms_fallback_enabled": {
+    label: "SMS fallback for step-up",
+    description: "Allow users to receive an SMS code instead of authenticator TOTP during step-up.",
+    type: "select",
+    options: [
+      { value: "true", label: "Enabled" },
+      { value: "false", label: "Disabled" },
+    ],
+  },
+  "fund.require_mfa": {
+    label: "Require MFA for fund movement",
+    description: "Global switch for authenticator enrollment before transfers and investments.",
+    type: "select",
+    options: [
+      { value: "true", label: "Required" },
+      { value: "false", label: "Not required" },
+    ],
+  },
+  "fund.require_pin": {
+    label: "Require Zynd PIN for fund movement",
+    description: "Global switch for PIN setup after MFA before transfers and investments.",
+    type: "select",
+    options: [
+      { value: "true", label: "Required" },
+      { value: "false", label: "Not required" },
     ],
   },
 };
@@ -234,8 +306,30 @@ export function getSecurityConfigFieldMeta(key: string): SecurityConfigFieldMeta
       label: key.split(".").pop()?.replace(/_/g, " ") ?? key,
       description: "Adjust this platform security setting.",
       type: "number",
+      min: 1,
+      max: 1000,
     }
   );
+}
+
+export function getSecurityConfigNumberBoundsError(
+  key: string,
+  raw: string,
+): string | null {
+  const meta = getSecurityConfigFieldMeta(key);
+  if (meta.type !== "number") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return "Enter a value.";
+  if (!/^-?\d+$/.test(trimmed)) return "Enter a whole number.";
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) return "Enter a valid number.";
+  if (meta.min != null && value < meta.min) {
+    return `Minimum allowed value is ${meta.min}.`;
+  }
+  if (meta.max != null && value > meta.max) {
+    return `Maximum allowed value is ${meta.max}.`;
+  }
+  return null;
 }
 
 function formatSecurityConfigNumberDisplay(key: string, value: number) {
@@ -308,6 +402,7 @@ export function getSecurityConfigItemsForTab(
   tabId: SecurityConfigTabId,
   items: SecurityConfigItem[],
 ) {
+  if (tabId === "ops-thresholds") return [];
   const { grouped, other } = groupSecurityConfigItems(items);
   if (tabId === "other") return other;
   const group = grouped.find((entry) => entry.id === tabId);

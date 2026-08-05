@@ -34,8 +34,12 @@ export function useProfileMenuActions() {
   }, [navigateToSettingsSection]);
 
   const openSettings = useCallback(() => {
-    navigateToSettingsSection("mfa");
+    navigateToSettingsSection("security");
   }, [navigateToSettingsSection]);
+
+  const openNotifications = useCallback(() => {
+    router.push("/dashboard/notifications");
+  }, [router]);
 
   const openKyc = useCallback(() => {
     kyc?.openDialog();
@@ -67,6 +71,7 @@ export function useProfileMenuActions() {
     checkingKraStatus,
     openProfile,
     openSettings,
+    openNotifications,
     openKyc,
     checkKycStatus,
     signOutAndRedirect,

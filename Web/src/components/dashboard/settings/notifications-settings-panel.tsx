@@ -22,6 +22,7 @@ const CATEGORY_ORDER: NotificationCategory[] = [
   "kyc",
   "referral",
   "account",
+  "family",
 ];
 
 const CATEGORY_LABELS: Record<
@@ -43,6 +44,10 @@ const CATEGORY_LABELS: Record<
   account: {
     title: copy.settings.notificationsCategoryAccountTitle,
     description: copy.settings.notificationsCategoryAccountDescription,
+  },
+  family: {
+    title: copy.settings.notificationsCategoryFamilyTitle,
+    description: copy.settings.notificationsCategoryFamilyDescription,
   },
 };
 

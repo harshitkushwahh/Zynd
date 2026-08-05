@@ -161,6 +161,7 @@ export type AdminUserListItem = {
   client_id: string;
   email: string;
   display_name: string;
+  profile_image_url: string | null;
   status: string;
   role: string;
   has_invested: boolean;
@@ -290,6 +291,8 @@ export async function resendAdminInvitation(invitationId: string) {
 export type AuditLogItem = {
   id: string;
   user_id: string | null;
+  user_email?: string | null;
+  client_id?: string | null;
   event_type: string;
   ip_address: string | null;
   metadata: Record<string, unknown>;
@@ -319,12 +322,19 @@ export type AdminUserSummary = {
   client_id: string;
   email: string;
   display_name: string;
+  phone: string | null;
+  profile_image_url: string | null;
   status: string;
   role: string;
   has_invested: boolean;
   suspended_at: string | null;
   suspension_reason_code: string | null;
   mfa_enrolled: boolean;
+  pin_enrolled: boolean;
+  phone_verified: boolean;
+  fund_movement_eligible: boolean;
+  last_login_at: string | null;
+  last_login_method: string | null;
   created_at: string;
 };
 
@@ -368,7 +378,7 @@ export type AdminUserKycPersonal = {
   income_slab: string | null;
   occupation: string | null;
   marital_status: string | null;
-  pep_exposed: boolean | null;
+  pep_exposed: string | null;
   place_of_birth: string | null;
   nationality: string | null;
 };
@@ -417,12 +427,41 @@ export type AdminUserInvestorAddress = {
   sync_status: string;
 };
 
+export type AdminUserKycComplianceIssue = {
+  id: string;
+  step_key: string;
+  step_label: string;
+  severity: string;
+  title: string;
+  detail: string;
+  status: string;
+};
+
+export type AdminUserKycAuditEntry = {
+  id: string;
+  occurred_at: string;
+  action: string;
+  step_key: string | null;
+  step_label: string | null;
+  detail: string;
+  actor: string;
+  source: string;
+};
+
 export type AdminUserKycDetail = {
   overall_status: string;
   last_completed_step: string | null;
   active_step_index: number;
   step_statuses: Record<string, string>;
   incomplete_steps: AdminUserKycStep[];
+  kyc_already_registered?: boolean;
+  readiness_code?: string | null;
+  readiness_reason?: string | null;
+  kyc_initiated_at?: string | null;
+  esign_details_status?: string | null;
+  proof_details_status?: string | null;
+  compliance_issues?: AdminUserKycComplianceIssue[];
+  audit_log?: AdminUserKycAuditEntry[];
   pan: AdminUserKycPan | null;
   address: AdminUserKycAddress | null;
   investor_addresses: AdminUserInvestorAddress[];
@@ -437,6 +476,9 @@ export type AdminUserKycDetail = {
   external_kyc_status: string | null;
   kyc_form_status: string | null;
   investor_profile_status: string | null;
+  investor_profile_id: string | null;
+  mf_investment_profile_id: string | null;
+  mf_investment_profile_status: string | null;
   documents: AdminKycDocument[];
 };
 
@@ -460,6 +502,141 @@ export type AdminUserProfileDetail = {
   kyc: AdminUserKycDetail | null;
   investments: AdminUserInvestmentsDetail | null;
 };
+
+export type AdminUserGoal = {
+  id: string;
+  user_id: string;
+  family_group_id?: string | null;
+  template_id?: string | null;
+  template?: {
+    id: string;
+    slug: string;
+    name: string;
+    description?: string | null;
+    icon_key: string;
+    image_url?: string | null;
+    default_tenure_months: number;
+    suggested_return_pct?: number | null;
+    is_active: boolean;
+    sort_order: number;
+  } | null;
+  title: string;
+  tag?: string | null;
+  priority: number;
+  target_amount_inr: number;
+  target_date: string;
+  current_amount_inr: number;
+  existing_savings_inr: number;
+  expected_return_pct?: number | null;
+  status: string;
+  progress_pct: number;
+  linked_product_id?: string | null;
+  linked_product_name?: string | null;
+  holdings_value_inr?: number | null;
+  invested_via_orders_inr?: number | null;
+  linked_sip_monthly_inr?: number | null;
+  effective_current_amount_inr?: number | null;
+  effective_progress_pct?: number | null;
+  projected_value_inr?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export async function fetchAdminUserGoals(userRef: string) {
+  return apiRequest<{ items: AdminUserGoal[]; limit: number; active_count: number }>(
+    `/admin/users/${adminUserRefPath(userRef)}/goals`,
+  );
+}
+
+export async function fetchAdminUserGoal(userRef: string, goalId: string) {
+  return apiRequest<AdminUserGoal>(
+    `/admin/users/${adminUserRefPath(userRef)}/goals/${encodeURIComponent(goalId)}`,
+  );
+}
+
+export type AdminGoalLinkedProduct = {
+  product_id: string;
+  product_name: string | null;
+  isin: string | null;
+};
+
+export type AdminGoalInvestmentHolding = {
+  holding_id: number;
+  user_id: string;
+  owner_display_name: string;
+  scheme_name: string;
+  matched_scheme_name: string | null;
+  folio_number: string;
+  isin: string;
+  units: number;
+  nav_value: number | null;
+  market_value_inr: number | null;
+  as_of_date: string | null;
+  amc_name: string | null;
+  source: string;
+};
+
+export type AdminGoalInvestmentSipPlan = {
+  plan_id: string;
+  user_id: string;
+  owner_display_name: string;
+  product_id: string;
+  product_name: string | null;
+  amount_inr: number;
+  frequency: string;
+  installment_day: number | null;
+  status: string;
+  next_installment_date: string | null;
+  is_goal_linked: boolean;
+  created_at: string | null;
+  activated_at: string | null;
+};
+
+export type AdminGoalInvestmentOrder = {
+  order_id: string;
+  user_id: string;
+  owner_display_name: string;
+  product_id: string;
+  product_name: string | null;
+  order_type: string;
+  amount_inr: number;
+  status: string;
+  is_goal_linked: boolean;
+  created_at: string | null;
+  settled_at: string | null;
+};
+
+export type AdminGoalInvestmentContribution = {
+  id: string;
+  user_id: string;
+  owner_display_name: string;
+  amount_inr: number;
+  source_type: string;
+  note: string | null;
+  contributed_at: string | null;
+};
+
+export type AdminGoalInvestments = {
+  goal_id: string;
+  linked_product: AdminGoalLinkedProduct | null;
+  holdings: AdminGoalInvestmentHolding[];
+  sip_plans: AdminGoalInvestmentSipPlan[];
+  orders: AdminGoalInvestmentOrder[];
+  contributions: AdminGoalInvestmentContribution[];
+  summary: {
+    holdings_value_inr: number;
+    invested_via_orders_inr: number;
+    linked_sip_monthly_inr: number;
+    contributions_total_inr: number;
+    has_linked_investment: boolean;
+  };
+};
+
+export async function fetchAdminUserGoalInvestments(userRef: string, goalId: string) {
+  return apiRequest<AdminGoalInvestments>(
+    `/admin/users/${adminUserRefPath(userRef)}/goals/${encodeURIComponent(goalId)}/investments`,
+  );
+}
 
 export async function fetchAdminUserProfileDetail(userId: string) {
   return apiRequest<AdminUserProfileDetail>(

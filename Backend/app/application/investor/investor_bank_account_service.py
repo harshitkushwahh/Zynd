@@ -22,6 +22,7 @@ from app.application.kyc.bank_verification_core import (
 )
 from app.application.kyc.journey_state_service import get_or_create_journey
 from app.application.mf.mf_folio_defaults_service import refresh_mfia_payout_bank_account
+from app.application.mf.mf_mandate_guard import find_blocking_mandate_for_bank
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_investor_client import create_bank_account
@@ -32,7 +33,6 @@ from app.infrastructure.persistence.investor_models import (
     InvestorObjectSyncStatus,
     InvestorProfile,
 )
-from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus
 from app.infrastructure.persistence.models import KycJourneyState, User
 from app.infrastructure.persistence.repositories.investor_profile_repository import (
     get_or_create_pending_investor_profile,
@@ -41,11 +41,6 @@ from app.infrastructure.persistence.repositories.investor_profile_repository imp
 logger = logging.getLogger(__name__)
 
 MAX_BANK_ACCOUNTS_PER_USER = 5
-_BLOCKING_MANDATE_STATUSES = {
-    MfMandateStatus.pending,
-    MfMandateStatus.auth_pending,
-    MfMandateStatus.approved,
-}
 
 KYC_ACCOUNT_TYPE_MAP = {
     "Savings": "savings",
@@ -67,6 +62,159 @@ def _account_last4(account_number: str) -> str:
     digits = account_number.strip()
     return digits[-4:] if len(digits) >= 4 else digits
 
+
+def _ifsc_bank_prefix(ifsc_code: str) -> str:
+    return _str(ifsc_code).upper()[:4]
+
+
+def _bank_account_identity_key(row: InvestorBankAccount) -> str:
+    account_number = read_account_number(row)
+    if account_number:
+        return f"acct:{account_number.strip()}"
+    return f"last4:{row.account_number_last4}:{_ifsc_bank_prefix(row.ifsc_code)}"
+
+
+def _bank_account_preference_score(row: InvestorBankAccount) -> tuple[Any, ...]:
+    bank_name = _str(row.bank_name)
+    return (
+        1 if row.verification_status == InvestorBankVerificationStatus.verified else 0,
+        1 if row.external_bank_account_id else 0,
+        len(bank_name),
+        1 if len(bank_name) > 6 else 0,
+        1 if row.is_primary else 0,
+        row.created_at or datetime.min.replace(tzinfo=timezone.utc),
+    )
+
+
+async def _find_existing_bank_account(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    account_number: str,
+    ifsc_code: str,
+) -> InvestorBankAccount | None:
+    account_no = account_number.strip()
+    ifsc = ifsc_code.strip().upper()
+    last4 = _account_last4(account_no)
+
+    exact = await db.scalar(
+        select(InvestorBankAccount).where(
+            InvestorBankAccount.investor_profile_id == user_id,
+            InvestorBankAccount.account_number_last4 == last4,
+            InvestorBankAccount.ifsc_code == ifsc,
+        )
+    )
+    if exact:
+        return exact
+
+    candidates = (
+        await db.scalars(
+            select(InvestorBankAccount).where(
+                InvestorBankAccount.investor_profile_id == user_id,
+                InvestorBankAccount.account_number_last4 == last4,
+            )
+        )
+    ).all()
+
+    for row in candidates:
+        stored = read_account_number(row)
+        if stored and stored.strip() == account_no:
+            return row
+
+    bank_prefix = _ifsc_bank_prefix(ifsc)
+    prefix_matches = [row for row in candidates if _ifsc_bank_prefix(row.ifsc_code) == bank_prefix]
+    if len(prefix_matches) == 1:
+        return prefix_matches[0]
+    return None
+
+
+async def _consolidate_duplicate_bank_accounts(
+    db: AsyncSession,
+    rows: list[InvestorBankAccount],
+) -> list[InvestorBankAccount]:
+    active = [row for row in rows if not is_bank_account_disabled(row)]
+
+    account_number_by_loose_key: dict[str, str] = {}
+    loose_buckets: dict[str, list[InvestorBankAccount]] = {}
+    for row in active:
+        loose_key = f"last4:{row.account_number_last4}:{_ifsc_bank_prefix(row.ifsc_code)}"
+        loose_buckets.setdefault(loose_key, []).append(row)
+    for loose_key, bucket in loose_buckets.items():
+        account_numbers = {
+            read_account_number(row).strip()
+            for row in bucket
+            if read_account_number(row)
+        }
+        if len(account_numbers) == 1:
+            account_number_by_loose_key[loose_key] = account_numbers.pop()
+
+    multi_loose_keys = {key for key, bucket in loose_buckets.items() if len(bucket) > 1}
+
+    groups: dict[str, list[InvestorBankAccount]] = {}
+    for row in active:
+        loose_key = f"last4:{row.account_number_last4}:{_ifsc_bank_prefix(row.ifsc_code)}"
+        account_number = read_account_number(row)
+        if loose_key in multi_loose_keys:
+            if account_number:
+                key = f"acct:{account_number.strip()}"
+            else:
+                promoted = account_number_by_loose_key.get(loose_key)
+                key = f"acct:{promoted}" if promoted else loose_key
+        elif account_number:
+            key = f"acct:{account_number.strip()}"
+        else:
+            promoted = account_number_by_loose_key.get(loose_key)
+            key = f"acct:{promoted}" if promoted else loose_key
+        groups.setdefault(key, []).append(row)
+
+    kept: list[InvestorBankAccount] = []
+    changed = False
+    for group in groups.values():
+        if len(group) == 1:
+            kept.append(group[0])
+            continue
+
+        ranked = sorted(group, key=_bank_account_preference_score, reverse=True)
+        winner = ranked[0]
+        kept.append(winner)
+
+        for loser in ranked[1:]:
+            metadata = loser.metadata_json if isinstance(loser.metadata_json, dict) else {}
+            if metadata.get("disabled"):
+                continue
+
+            if loser.is_primary:
+                winner.is_primary = True
+                loser.is_primary = False
+                changed = True
+
+            if not _str(winner.bank_name) and _str(loser.bank_name):
+                winner.bank_name = loser.bank_name[:120]
+                changed = True
+            elif len(_str(loser.bank_name)) > len(_str(winner.bank_name)):
+                winner.bank_name = loser.bank_name[:120]
+                changed = True
+
+            if not winner.external_bank_account_id and loser.external_bank_account_id:
+                winner.external_bank_account_id = loser.external_bank_account_id
+                winner.external_old_id = loser.external_old_id
+                changed = True
+
+            loser.metadata_json = {
+                **metadata,
+                "disabled": True,
+                "disabledAt": datetime.now(timezone.utc).isoformat(),
+                "disabledReason": "duplicate_account_number",
+                "consolidatedInto": str(winner.id),
+            }
+            loser.is_primary = False
+            changed = True
+
+    if changed:
+        await db.flush()
+        for row in kept:
+            await db.refresh(row)
+    return kept
 
 def _map_verification_status(
     *,
@@ -193,7 +341,8 @@ def serialize_bank_account(row: InvestorBankAccount) -> dict[str, Any]:
 
 
 async def list_user_bank_accounts(db: AsyncSession, *, user_id: UUID) -> list[dict[str, Any]]:
-    await _require_pan_verified_journey(db, user_id)
+    journey, _, _ = await _require_pan_verified_journey(db, user_id)
+    profile = await get_or_create_pending_investor_profile(db, user_id=user_id)
     rows = (
         await db.scalars(
             select(InvestorBankAccount)
@@ -201,7 +350,23 @@ async def list_user_bank_accounts(db: AsyncSession, *, user_id: UUID) -> list[di
             .order_by(InvestorBankAccount.is_primary.desc(), InvestorBankAccount.created_at.asc())
         )
     ).all()
-    return [serialize_bank_account(row) for row in rows if not is_bank_account_disabled(row)]
+    consolidated = await _consolidate_duplicate_bank_accounts(db, list(rows))
+    settings = get_settings()
+    for row in consolidated:
+        if _bank_needs_payment_setup(row):
+            await _provision_bank_account_if_ready(
+                db,
+                profile=profile,
+                bank_row=row,
+                journey=journey,
+            )
+    for row in consolidated:
+        if not _bank_needs_payment_setup(row):
+            continue
+        if not settings.resolved_fp_enabled or settings.debug:
+            _apply_stub_bank_payment_ids(row)
+    await db.flush()
+    return [await _serialize_bank_account_from_session(db, row) for row in consolidated]
 
 
 async def verify_and_add_bank_account(
@@ -219,12 +384,11 @@ async def verify_and_add_bank_account(
     account_no = account_number.strip()
     last4 = _account_last4(account_no)
 
-    existing = await db.scalar(
-        select(InvestorBankAccount).where(
-            InvestorBankAccount.investor_profile_id == user.id,
-            InvestorBankAccount.account_number_last4 == last4,
-            InvestorBankAccount.ifsc_code == ifsc,
-        )
+    existing = await _find_existing_bank_account(
+        db,
+        user_id=user.id,
+        account_number=account_no,
+        ifsc_code=ifsc,
     )
     if (
         existing
@@ -287,6 +451,7 @@ async def verify_and_add_bank_account(
 
     if existing:
         row = existing
+        row.ifsc_code = ifsc
         row.primary_account_holder_name = outcome.display_holder_name[:120]
         row.pan_account_holder_name = outcome.pan_holder_name[:120]
         row.bank_name = outcome.bank_name[:120] or None
@@ -550,12 +715,18 @@ async def set_primary_bank_account(
         )
     )
     if current_primary and current_primary.id != target.id and current_primary.external_old_id is not None:
-        blocking_mandate = await db.scalar(
-            select(MfMandate).where(
-                MfMandate.user_id == user_id,
-                MfMandate.bank_account_old_id == current_primary.external_old_id,
-                MfMandate.status.in_(_BLOCKING_MANDATE_STATUSES),
-            )
+        from app.application.mf.mf_mandate_service import reconcile_bank_mandates_from_fp
+
+        await reconcile_bank_mandates_from_fp(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(current_primary.external_old_id),
+            force=True,
+        )
+        blocking_mandate = await find_blocking_mandate_for_bank(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(current_primary.external_old_id),
         )
         if blocking_mandate:
             raise InvestorBankAccountError(
@@ -602,12 +773,18 @@ async def disable_bank_account(
         )
 
     if row.external_old_id is not None:
-        blocking_mandate = await db.scalar(
-            select(MfMandate).where(
-                MfMandate.user_id == user_id,
-                MfMandate.bank_account_old_id == row.external_old_id,
-                MfMandate.status.in_(_BLOCKING_MANDATE_STATUSES),
-            )
+        from app.application.mf.mf_mandate_service import reconcile_bank_mandates_from_fp
+
+        await reconcile_bank_mandates_from_fp(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(row.external_old_id),
+            force=True,
+        )
+        blocking_mandate = await find_blocking_mandate_for_bank(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(row.external_old_id),
         )
         if blocking_mandate:
             raise InvestorBankAccountError(
@@ -625,6 +802,33 @@ async def disable_bank_account(
     await db.flush()
 
 
+def _stub_bank_account_external_ids(bank_row: InvestorBankAccount) -> tuple[str, int]:
+    external_id = bank_row.external_bank_account_id or f"bac_stub_{bank_row.id.hex[:24]}"
+    external_old_id = bank_row.external_old_id or (bank_row.id.int % 1_000_000_000 or 1)
+    return external_id, external_old_id
+
+
+def _apply_stub_bank_payment_ids(bank_row: InvestorBankAccount) -> None:
+    external_id, external_old_id = _stub_bank_account_external_ids(bank_row)
+    bank_row.external_bank_account_id = external_id
+    bank_row.external_old_id = external_old_id
+    bank_row.sync_status = InvestorObjectSyncStatus.active
+    bank_row.failure_code = None
+    bank_row.failure_reason = None
+
+
+def _bank_needs_payment_setup(row: InvestorBankAccount) -> bool:
+    return (
+        row.verification_status == InvestorBankVerificationStatus.verified
+        and not is_bank_account_disabled(row)
+        and (
+            row.sync_status != InvestorObjectSyncStatus.active
+            or not row.external_bank_account_id
+            or row.external_old_id is None
+        )
+    )
+
+
 async def _provision_bank_account_if_ready(
     db: AsyncSession,
     *,
@@ -633,13 +837,15 @@ async def _provision_bank_account_if_ready(
     journey,
 ) -> None:
     settings = get_settings()
-    if not settings.resolved_fp_enabled:
-        return
-    if not profile.external_profile_id:
-        return
-    if bank_row.sync_status == InvestorObjectSyncStatus.active and bank_row.external_bank_account_id:
+    if bank_row.sync_status == InvestorObjectSyncStatus.active and bank_row.external_bank_account_id and bank_row.external_old_id is not None:
         return
     if bank_row.verification_status != InvestorBankVerificationStatus.verified:
+        return
+    if not settings.resolved_fp_enabled:
+        _apply_stub_bank_payment_ids(bank_row)
+        await db.flush()
+        return
+    if not profile.external_profile_id:
         return
     if not read_account_number(bank_row):
         return
@@ -690,12 +896,11 @@ async def sync_bank_account_from_kyc_journey(
 
     profile = await get_or_create_pending_investor_profile(db, user_id=user_id)
     last4 = _account_last4(account_number)
-    existing_row = await db.scalar(
-        select(InvestorBankAccount).where(
-            InvestorBankAccount.investor_profile_id == user_id,
-            InvestorBankAccount.account_number_last4 == last4,
-            InvestorBankAccount.ifsc_code == ifsc,
-        )
+    existing_row = await _find_existing_bank_account(
+        db,
+        user_id=user_id,
+        account_number=account_number,
+        ifsc_code=ifsc,
     )
 
     account_type = KYC_ACCOUNT_TYPE_MAP.get(_str(bank.get("accountType")), "savings")
@@ -719,6 +924,7 @@ async def sync_bank_account_from_kyc_journey(
 
     if existing_row:
         row = existing_row
+        row.ifsc_code = ifsc
         row.primary_account_holder_name = holder[:120]
         row.pan_account_holder_name = pan_holder[:120] or None
         row.bank_name = _str(bank.get("bankName"))[:120] or None

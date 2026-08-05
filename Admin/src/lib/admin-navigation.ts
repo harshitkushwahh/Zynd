@@ -1,4 +1,6 @@
 import {
+  Crown,
+  Gauge,
   Globe,
   Handshake,
   Layers,
@@ -8,6 +10,7 @@ import {
   Settings,
   Shield,
   Smartphone,
+  Target,
   TrendingUp,
   Users,
   type LucideIcon,
@@ -22,6 +25,10 @@ import {
   sectionTabHref,
   type AdminSectionTab,
 } from "@/lib/admin-transaction-sections";
+import {
+  getDistributorHeadDistributor,
+  getDistributorHeadManager,
+} from "@/lib/distributor-head-queries";
 import { env } from "@/lib/env";
 
 export type AdminNavRoute = {
@@ -78,6 +85,37 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     permissions: ["mf.transactions.read"],
   },
   {
+    id: "risk-profile",
+    label: "Risk Profile",
+    href: "/dashboard/risk-profile",
+    icon: Gauge,
+    description: "Questionnaire categories, bulk import, templates, and user risk profiles",
+    permissions: [
+      "risk_profile.read",
+      "risk_profile.categories.manage",
+      "risk_profile.questions.manage",
+      "risk_profile.templates.manage",
+      "risk_profile.tiers.manage",
+      "risk_profile.users.read",
+    ],
+  },
+  {
+    id: "family-groups",
+    label: "Family Groups",
+    href: "/dashboard/family-groups",
+    icon: Users,
+    description: "Family group directory, invites, and moderation",
+    permissions: ["family_groups.read", "family_groups.manage"],
+  },
+  {
+    id: "goals",
+    label: "Goals",
+    href: "/dashboard/goals",
+    icon: Target,
+    description: "Predefined goal templates for personal and family savings",
+    permissions: ["goals.templates.read", "goals.templates.manage"],
+  },
+  {
     id: "security-config",
     label: "Security",
     href: "/dashboard/security-config",
@@ -93,6 +131,13 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     description: "Distributor onboarding, ARN records, and account management",
     showTrailingArrow: true,
     comingSoon: true,
+  },
+  {
+    id: "distributor-head",
+    label: "Distributor Head",
+    href: "/dashboard/distributor-head",
+    icon: Crown,
+    description: "State head view of managers, branches, distributors, and sales",
   },
   {
     id: "zynd-web",
@@ -144,7 +189,7 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     label: "Zynd Logs",
     href: "/dashboard/zynd-logs",
     icon: ScrollText,
-    description: "Cybrilla, Fintech Primitive, and KYC Kart integration audit logs",
+    description: "Platform audit logs plus Cybrilla, Fintech Primitive, and KYC Kart integration logs",
     permissions: ["audit.read"],
   },
 ];
@@ -170,7 +215,12 @@ export function getVisibleAdminRoutes(hasPermission: (key: string) => boolean) {
 
 const ADMIN_PLATFORM_LEADING_ROUTE_IDS = ["users", "mutual-funds"] as const;
 
-const ADMIN_PLATFORM_TRAILING_ROUTE_IDS = ["bulk-order", "security-config"] as const;
+const ADMIN_PLATFORM_TRAILING_ROUTE_IDS = [
+  "bulk-order",
+  "risk-profile",
+  "distributor-head",
+  "security-config",
+] as const;
 
 const ADMIN_PLATFORM_DROPDOWN_IDS = ["orders", "systematic-plans", "txn-requests"] as const;
 
@@ -323,6 +373,7 @@ export function getAdminPageTitle(pathname: string) {
   if (pathname === "/dashboard/security-config" || pathname.startsWith("/dashboard/security-config/")) {
     const slug = pathname.replace("/dashboard/security-config", "").replace(/^\//, "").split("/")[0];
     if (slug === "risk") return "Security · Adaptive risk";
+    if (slug === "ops-thresholds") return "Security · Ops thresholds";
     if (slug === "other") return "Security · Other";
     return "Security · Login lockout";
   }
@@ -333,6 +384,24 @@ export function getAdminPageTitle(pathname: string) {
       : ADMIN_SETTINGS_NAV[0];
     if (item) return `Settings · ${item.title}`;
     return "Settings";
+  }
+  if (pathname === "/dashboard/distributor-head" || pathname.startsWith("/dashboard/distributor-head/")) {
+    const parts = pathname.replace("/dashboard/distributor-head", "").replace(/^\//, "").split("/");
+    const section = parts[0];
+    const entityId = parts[1];
+    if (section === "managers" && entityId) {
+      const manager = getDistributorHeadManager(entityId);
+      return manager ? `Distributor Head · ${manager.name}` : "Distributor Head · Manager";
+    }
+    if (section === "distributors" && entityId) {
+      const distributor = getDistributorHeadDistributor(entityId);
+      return distributor ? `Distributor Head · ${distributor.name}` : "Distributor Head · Distributor";
+    }
+    if (section === "managers") return "Distributor Head · Managers";
+    if (section === "distributors") return "Distributor Head · Distributors";
+    if (section === "branches") return "Distributor Head · Branches";
+    if (section === "sales") return "Distributor Head · Sales";
+    return "Distributor Head";
   }
   return route?.label ?? "Admin Console";
 }

@@ -26,6 +26,8 @@ from app.api.v1.kyc.schemas import (
     KycMasterDataEnumsResponse,
     KycMasterDataOption,
     KycNomineeEnumsResponse,
+    KycPanConfirmNamesRequest,
+    KycPanConfirmNamesResponse,
     KycPanFailure,
     KycPanVerifyRequest,
     KycPanVerifyResponse,
@@ -66,7 +68,8 @@ from app.application.kyc.kyc_form_service import (
 )
 from app.application.kyc.master_data import master_data_enums
 from app.application.kyc.nominee_master_data import nominee_master_data_enums
-from app.application.kyc.pan_verification_service import verify_pan
+from app.application.kyc.pan_verification_service import confirm_pan_names, verify_pan
+from app.application.investor.investor_nominee_sync_service import sync_nominees_from_kyc_draft
 from app.application.kyc.readiness_check_service import check_kra_readiness_status
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -87,7 +90,10 @@ def _handle_kyc_error(exc: KycError) -> HTTPException:
 async def post_kyc_token_ensure(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, bool]:
-    require_entry_gate(current_user)
+    try:
+        require_entry_gate(current_user)
+    except KycError as exc:
+        raise _handle_kyc_error(exc) from exc
     await ensure_kyc_tokens()
     return {"ok": True}
 
@@ -164,6 +170,39 @@ async def post_kyc_pan_verify(
         kyc_already_registered=result.get("kycAlreadyRegistered"),
         readiness=KycReadinessInfo(**result["readiness"]) if result.get("readiness") else None,
         requires_digilocker=result.get("requiresDigilocker"),
+    )
+
+
+@router.post("/pan/confirm-names", response_model=KycPanConfirmNamesResponse)
+async def post_kyc_pan_confirm_names(
+    body: KycPanConfirmNamesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> KycPanConfirmNamesResponse:
+    require_entry_gate(current_user)
+    try:
+        result = await confirm_pan_names(
+            db,
+            user=current_user,
+            first_name=body.first_name,
+            middle_name=body.middle_name,
+            last_name=body.last_name,
+        )
+    except KycError as exc:
+        raise _handle_kyc_error(exc) from exc
+    await db.commit()
+
+    if result.get("blocked"):
+        return KycPanConfirmNamesResponse(
+            success=False,
+            blocked=True,
+            block_type=result.get("blockType"),
+            failure=KycPanFailure(**result["failure"]) if result.get("failure") else None,
+        )
+
+    return KycPanConfirmNamesResponse(
+        success=True,
+        pan_draft=result.get("panDraft"),
     )
 
 
@@ -275,6 +314,8 @@ async def post_kyc_journey_state(
         payload["lastCompletedStep"] = body.last_completed_step
 
     journey, _ = await save_journey_state(db, user=current_user, payload=payload)
+    if body.nominee_draft_json is not None:
+        await sync_nominees_from_kyc_draft(db, user=current_user, journey=journey)
     await db.commit()
     from app.application.kyc.journey_state_service import _step_index
 

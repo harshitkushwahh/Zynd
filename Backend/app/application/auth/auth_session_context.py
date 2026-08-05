@@ -137,6 +137,7 @@ async def complete_authenticated_login(
     ip: str | None,
     settings: Settings | None = None,
     provider: str | None = None,
+    login_method: str | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
 
@@ -155,6 +156,8 @@ async def complete_authenticated_login(
     metadata: dict[str, Any] = {}
     if provider:
         metadata["provider"] = provider
+    resolved_login_method = login_method or ("oauth" if provider else "password")
+    metadata["login_method"] = resolved_login_method
     await write_audit(
         db,
         event_type=AuditEventType.login_success,
@@ -190,6 +193,7 @@ async def complete_authenticated_login(
         is_new_device=is_new_device,
         velocity_flag=velocity_flag,
         provider=provider,
+        login_method=resolved_login_method,
     )
     return {
         "next": "authenticated",

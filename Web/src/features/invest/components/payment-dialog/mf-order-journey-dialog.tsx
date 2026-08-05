@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import {
   fetchMfOrderJourney,
   type MfOrder,
@@ -235,16 +235,11 @@ function JourneyTimelineSection({
 
       <div className="space-y-4 p-4 sm:p-5">
         {journey.outcomeSummary ? (
-          <div
-            className={cn(
-              "rounded-[var(--radius-control)] border px-3.5 py-3 text-compact leading-relaxed",
-              isNegativeOutcome
-                ? "border-destructive/30 bg-destructive/5 text-foreground"
-                : "border-border/70 bg-muted/15 text-muted-foreground",
-            )}
-          >
-            {journey.outcomeSummary}
-          </div>
+          <UiMessage
+            variant={isNegativeOutcome ? "error" : "info"}
+            message={journey.outcomeSummary}
+            className="mt-0"
+          />
         ) : null}
 
         {journey.steps.length === 0 ? (

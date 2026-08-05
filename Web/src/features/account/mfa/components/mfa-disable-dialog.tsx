@@ -7,11 +7,10 @@ import { AuthSubmitFooter } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { FieldMessage } from "@/components/ui/ui-message";
+import { StepUpSecondFactorFields } from "@/features/account/mfa/components/step-up-second-factor-fields";
+import { clearMfaBackupCodes } from "@/features/account/mfa/storage/mfa-backup-codes-storage";
 import { ApiError } from "@/lib/api-client";
 import { mfaDisable } from "@/lib/auth-api";
-import { clearMfaBackupCodes } from "@/features/account/mfa/storage/mfa-backup-codes-storage";
 import { copy } from "@/shared/config/copy";
 
 type MfaDisableDialogProps = {
@@ -29,12 +28,18 @@ export function MfaDisableDialog({
 }: MfaDisableDialogProps) {
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
+  const [smsOtp, setSmsOtp] = useState("");
+  const [useSms, setUseSms] = useState(false);
+  const [smsSent, setSmsSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const reset = () => {
     setPassword("");
     setTotp("");
+    setSmsOtp("");
+    setUseSms(false);
+    setSmsSent(false);
     setError("");
   };
 
@@ -42,6 +47,8 @@ export function MfaDisableDialog({
     if (!next) reset();
     onOpenChange(next);
   };
+
+  const canSubmit = password.length > 0 && (useSms ? smsOtp.length === 6 : totp.length === 6);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -51,7 +58,8 @@ export function MfaDisableDialog({
     try {
       await mfaDisable({
         currentPassword: password,
-        totpCode: totp || undefined,
+        totpCode: useSms ? undefined : totp || undefined,
+        smsOtp: useSms ? smsOtp : undefined,
       });
       clearMfaBackupCodes(userId);
       onCompleted?.();
@@ -78,21 +86,25 @@ export function MfaDisableDialog({
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="current-password"
         />
-        <Input
-          inputMode="numeric"
-          placeholder="Authenticator code"
-          value={totp}
-          onChange={(event) =>
-            setTotp(event.target.value.replace(/\D/g, "").slice(0, 6))
-          }
+        <StepUpSecondFactorFields
+          useSms={useSms}
+          onUseSmsChange={setUseSms}
+          totpCode={totp}
+          onTotpCodeChange={setTotp}
+          smsOtp={smsOtp}
+          onSmsOtpChange={setSmsOtp}
+          smsSent={smsSent}
+          onSmsSentChange={setSmsSent}
+          disabled={loading}
+          error={error}
+          onErrorChange={setError}
         />
-        <FieldMessage message={error} />
         <AuthSubmitFooter>
           <Button
             type="submit"
             variant="destructive"
             className="w-full"
-            disabled={loading || !password || totp.length !== 6}
+            disabled={loading || !canSubmit}
           >
             {loading ? copy.mfa.disable.disabling : copy.mfa.disable.submit}
           </Button>

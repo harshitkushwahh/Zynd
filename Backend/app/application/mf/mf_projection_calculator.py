@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from app.application.mf.mf_tax_templates import CALCULATOR_HORIZONS
-from app.application.mf.nav_metrics_calculator import compute_period_return, nav_on_or_before
+from app.application.mf.nav_metrics_calculator import compute_period_return, nav_on_or_before, resolve_period_start_nav
 
 History = list[tuple[date, Decimal]]
 
@@ -154,8 +154,11 @@ def project_lumpsum(
 
     as_of_date, end_nav = history[-1]
     start_date = as_of_date - timedelta(days=horizon_days)
-    start_nav = nav_on_or_before(history, start_date)
-    if start_nav is None or start_nav <= 0 or end_nav <= 0:
+    start_match = resolve_period_start_nav(history, as_of_date, horizon_days)
+    if start_match is None or end_nav <= 0:
+        return None
+    _prior_date, start_nav = start_match
+    if start_nav <= 0:
         return None
 
     value_inr = _quantize_inr(amount_inr * (end_nav / start_nav))

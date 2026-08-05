@@ -1,9 +1,5 @@
-import { AdminPageSkeleton } from "@/components/ui/admin-skeletons";
+import { AdminGlobalLoading } from "@/components/auth/admin-global-loading";
 
 export default function DashboardLoading() {
-  return (
-    <div className="p-6">
-      <AdminPageSkeleton withToolbar withMetrics metricCount={4} tableColumns={6} />
-    </div>
-  );
+  return <AdminGlobalLoading />;
 }

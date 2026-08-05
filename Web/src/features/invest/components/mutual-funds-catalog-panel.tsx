@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import { FieldMessage } from "@/components/ui/ui-message";
+import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
-  fetchInvestHome,
   type InvestFundSummary,
   type InvestHomeResponse,
 } from "@/features/invest/api/invest-api";
@@ -15,6 +15,7 @@ import { MfCollectionCards } from "@/features/invest/components/mf-collection-ca
 import { MfDashboardSidebar } from "@/features/invest/components/mf-dashboard-sidebar";
 import { MutualFundsPageSkeleton } from "@/features/invest/components/mf-mutual-funds-catalog-skeleton";
 import { MfPopularFundsSection } from "@/features/invest/components/mf-popular-funds-section";
+import { useInvestHomeQuery } from "@/features/invest/hooks/use-invest-home-query";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
@@ -55,28 +56,7 @@ function BrowseHome({
 
 export function MutualFundsCatalogPanel() {
   const router = useRouter();
-  const [homeData, setHomeData] = useState<InvestHomeResponse | null>(null);
-  const [homeLoading, setHomeLoading] = useState(true);
-  const [homeError, setHomeError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setHomeLoading(true);
-    fetchInvestHome()
-      .then((response) => {
-        if (!cancelled) setHomeData(response);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setHomeError(err.message || copy.mutualFunds.catalogLoadError);
-      })
-      .finally(() => {
-        if (!cancelled) setHomeLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { homeData, showSkeleton, errorMessage } = useInvestHomeQuery();
 
   const openFund = useCallback(
     (fund: InvestFundSummary) => {
@@ -85,7 +65,7 @@ export function MutualFundsCatalogPanel() {
     [router],
   );
 
-  if (homeLoading) {
+  if (showSkeleton) {
     return (
       <div className={MF_PAGE_SECTION_CLASS}>
         <MutualFundsPageSkeleton />
@@ -96,13 +76,14 @@ export function MutualFundsCatalogPanel() {
   return (
     <div className={MF_PAGE_SECTION_CLASS}>
       <MfBreadcrumb />
+      <FundEligibilityBanner />
 
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1">
-          {homeError && !homeData ? (
-            <FieldMessage variant="error" message={homeError} />
+          {errorMessage && !homeData ? (
+            <FieldMessage variant="error" message={errorMessage} />
           ) : homeData ? (
-            <BrowseHome data={homeData} error={homeError} onSelectFund={openFund} />
+            <BrowseHome data={homeData} error={errorMessage} onSelectFund={openFund} />
           ) : null}
         </div>
 

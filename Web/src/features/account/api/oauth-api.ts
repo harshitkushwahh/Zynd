@@ -31,6 +31,7 @@ export async function disconnectOAuth(payload: {
   provider: "google" | "apple";
   currentPassword: string;
   totpCode?: string;
+  smsOtp?: string;
 }) {
   return apiRequest<OAuthConnections>("/auth/oauth/disconnect", {
     method: "POST",
@@ -38,6 +39,7 @@ export async function disconnectOAuth(payload: {
       provider: payload.provider,
       current_password: payload.currentPassword,
       totp_code: payload.totpCode ?? null,
+      sms_otp: payload.smsOtp ?? null,
     }),
   });
 }

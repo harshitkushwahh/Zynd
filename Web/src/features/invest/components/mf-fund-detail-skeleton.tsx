@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  MF_CARD_RADIUS_CLASS,
+  MF_FUND_DETAIL_METRIC_RADIUS_CLASS,
+  MF_FUND_DETAIL_RADIUS_CLASS,
   MF_INVEST_SIDEBAR_STICKY_CLASS,
   MF_INVEST_SIDEBAR_WIDTH_CLASS,
 } from "@/features/invest/lib/mf-ui";
@@ -32,7 +33,14 @@ function MfFundDetailHeaderSkeleton() {
           <Skeleton className="h-6 w-4/5 max-w-xl" />
         </div>
       </div>
-      <Skeleton className={cn("h-[5.25rem] w-full", MF_CARD_RADIUS_CLASS)} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <Skeleton
+            key={index}
+            className={cn("h-[5.25rem] w-full", MF_FUND_DETAIL_METRIC_RADIUS_CLASS)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -40,14 +48,14 @@ function MfFundDetailHeaderSkeleton() {
 function MfFundDetailPaymentSkeleton({ className }: { className?: string }) {
   return (
     <Skeleton
-      className={cn("min-h-[30rem] w-full rounded-invest-card border border-zinc-200 dark:border-zinc-700/80", className)}
+      className={cn("min-h-[30rem] w-full border border-zinc-200 dark:border-zinc-700/80", MF_FUND_DETAIL_RADIUS_CLASS, className)}
     />
   );
 }
 
 function MfFundDetailSectionSkeleton({ tall = false }: { tall?: boolean }) {
   return (
-    <div className={cn("space-y-4 border border-border bg-card p-5 sm:p-6", MF_CARD_RADIUS_CLASS)}>
+    <div className={cn("space-y-4 border border-border bg-card p-5 sm:p-6", MF_FUND_DETAIL_RADIUS_CLASS)}>
       <Skeleton className="h-5 w-32" />
       <Skeleton className={cn("w-full", tall ? "h-64" : "h-40")} />
     </div>

@@ -1,55 +1,21 @@
 "use client";
 
+import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AdminDataTable,
   AdminTableBody,
-  AdminTableCell,
-  AdminTableRow,
+  AdminTableSkeletonRows,
 } from "@/components/ui/admin-table";
 import type { AdminTableMinWidth } from "@/components/ui/admin-design-tokens";
-import { cn } from "@/lib/utils";
+
+export { AdminTableSkeletonRows } from "@/components/ui/admin-table";
 
 type AdminTableSkeletonRowsProps = {
   columns: number;
   rows?: number;
   dense?: boolean;
 };
-
-export function AdminTableSkeletonRows({
-  columns,
-  rows = 6,
-  dense = false,
-}: AdminTableSkeletonRowsProps) {
-  return (
-    <>
-      {Array.from({ length: rows }).map((_, rowIndex) => (
-        <AdminTableRow key={`skeleton-row-${rowIndex}`}>
-          {Array.from({ length: columns }).map((_, columnIndex) => (
-            <AdminTableCell key={`skeleton-cell-${rowIndex}-${columnIndex}`}>
-              {columnIndex === 0 && !dense ? (
-                <div className="flex items-center gap-3">
-                  <Skeleton className="size-8 shrink-0 rounded-control" />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <Skeleton className="h-4 w-36 max-w-full" />
-                    <Skeleton className="h-3 w-24 max-w-full" />
-                  </div>
-                </div>
-              ) : (
-                <Skeleton
-                  className={cn(
-                    "h-4 max-w-full",
-                    columnIndex === columns - 1 ? "ml-auto w-16" : "w-28",
-                  )}
-                />
-              )}
-            </AdminTableCell>
-          ))}
-        </AdminTableRow>
-      ))}
-    </>
-  );
-}
 
 type AdminTableSkeletonProps = AdminTableSkeletonRowsProps & {
   minWidth?: AdminTableMinWidth;
@@ -99,10 +65,9 @@ export function AdminBreadcrumbSkeleton({ segments = 2 }: { segments?: number })
 
 export function AdminPageHeaderSkeleton({ withAside = true }: { withAside?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="min-w-0 flex-1 space-y-2">
+    <div className="admin-page-header flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
         <Skeleton className="h-8 w-56 max-w-full" />
-        <Skeleton className="h-4 w-80 max-w-full" />
       </div>
       {withAside ? <Skeleton className="size-14 shrink-0 rounded-card" /> : null}
     </div>
@@ -124,22 +89,14 @@ export function AdminToolbarSkeleton({ actions = 2 }: { actions?: number }) {
 
 export function AdminMetricCardsSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <AdminMetricCardsGrid>
       {Array.from({ length: count }).map((_, index) => (
-        <div
+        <Skeleton
           key={`metric-skeleton-${index}`}
-          className="rounded-card border border-border bg-card p-4"
-        >
-          <div className="flex gap-3">
-            <Skeleton className="size-9 shrink-0 rounded-md" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-6 w-16" />
-            </div>
-          </div>
-        </div>
+          className="min-h-[7.5rem] rounded-[var(--radius-5xl)]"
+        />
       ))}
-    </div>
+    </AdminMetricCardsGrid>
   );
 }
 

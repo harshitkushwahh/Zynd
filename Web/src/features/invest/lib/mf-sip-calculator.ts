@@ -5,6 +5,19 @@ export const SIP_CALCULATOR_MAX_INSTALLMENTS = 999;
 export const SIP_CALCULATOR_DEFAULT_INSTALLMENTS = 60;
 export const SIP_CALCULATOR_DEFAULT_DAY = 5;
 
+/** Real SIP order registration is capped well below the calculator's illustrative range. */
+export const SIP_ORDER_MIN_INSTALLMENTS = 1;
+export const SIP_ORDER_MAX_INSTALLMENTS = 60;
+export const SIP_ORDER_DEFAULT_INSTALLMENTS = 12;
+
+export function clampOrderInstallments(installments: number) {
+  if (!Number.isFinite(installments)) return SIP_ORDER_DEFAULT_INSTALLMENTS;
+  return Math.min(
+    Math.max(Math.trunc(installments), SIP_ORDER_MIN_INSTALLMENTS),
+    SIP_ORDER_MAX_INSTALLMENTS,
+  );
+}
+
 export function resolveMinSipAmount(minSipAmountInr: number | null | undefined) {
   const resolved = minSipAmountInr ?? SIP_CALCULATOR_DEFAULT_MIN_AMOUNT;
   return Math.min(Math.max(resolved, 1), SIP_CALCULATOR_MAX_AMOUNT);

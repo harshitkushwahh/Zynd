@@ -13,6 +13,9 @@ from app.api.v1.admin.mf_integrations_router import router as mf_integrations_ro
 from app.api.v1.admin.mf_router import router as mf_admin_router
 from app.api.v1.admin.mf_transactions_router import router as mf_transactions_router
 from app.api.v1.admin.zynd_logs_router import router as zynd_logs_router
+from app.api.v1.admin.risk_profile_router import router as risk_profile_router
+from app.api.v1.admin.family_groups_router import router as family_groups_router
+from app.api.v1.admin.goals_router import router as goals_router
 from app.api.v1.admin.schemas import (
     AdminActionListResponse,
     AdminActionRequestResponse,
@@ -39,8 +42,8 @@ from app.api.v1.admin.schemas import (
     AdminUserListItemResponse,
     AdminUserListResponse,
     AdminUserProfileDetailResponse,
-    AdminUserRolesResponse,
     AdminUserSummaryResponse,
+    AdminUserRolesResponse,
     AssignAdminRoleRequest,
     CreateAdminUserRequest,
     CreateAdminUserResponse,
@@ -62,6 +65,8 @@ from app.api.v1.admin.schemas import (
     SecurityReviewListResponse,
     SuspendUserRequest,
 )
+from app.api.v1.goals.schemas import AdminGoalInvestmentsResponse, GoalListResponse, GoalResponse
+from app.application.admin.goal_investments_admin_service import build_goal_investments_detail
 from app.api.v1.auth.deps import get_client_ip, require_admin_user, require_permission
 from app.application.admin.admin_action_service import (
     approve_admin_action_request,
@@ -113,6 +118,9 @@ from app.application.admin.user_admin_service import (
     list_users,
 )
 from app.application.admin.user_profile_admin_service import get_user_profile_detail
+from app.application.goals.errors import GoalError
+from app.application.goals.goal_service import get_personal_goal, list_personal_goals
+from app.infrastructure.persistence.goal_models import Goal
 from app.application.compliance.retention_service import list_retention_policies
 from app.application.security.security_config_service import list_security_config
 from app.core.database import get_db
@@ -129,6 +137,9 @@ from app.infrastructure.persistence.models import (
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 router.include_router(mf_admin_router)
+router.include_router(risk_profile_router)
+router.include_router(family_groups_router)
+router.include_router(goals_router)
 router.include_router(admin_invitations_router)
 router.include_router(mf_integrations_router)
 router.include_router(mf_transactions_router)
@@ -813,6 +824,67 @@ async def get_admin_user_profile_detail(
             detail={"code": "user_not_found", "message": "User not found."},
         )
     return AdminUserProfileDetailResponse(**detail)
+
+
+@router.get("/users/{user_id}/goals", response_model=GoalListResponse)
+async def get_admin_user_goals(
+    user_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("users.read"))],
+) -> GoalListResponse:
+    user = await _require_user_by_reference(db, user_id)
+    items = await list_personal_goals(db, user_id=user.id, include_archived=True)
+    active_count = sum(1 for item in items if item.get("status") in {"draft", "active", "paused"})
+    return GoalListResponse(
+        items=[GoalResponse(**item) for item in items],
+        limit=len(items),
+        active_count=active_count,
+    )
+
+
+@router.get("/users/{user_id}/goals/{goal_id}", response_model=GoalResponse)
+async def get_admin_user_goal(
+    user_id: str,
+    goal_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("users.read"))],
+) -> GoalResponse:
+    user = await _require_user_by_reference(db, user_id)
+    try:
+        result = await get_personal_goal(db, goal_id=goal_id, user_id=user.id)
+    except GoalError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    return GoalResponse(**result)
+
+
+@router.get("/users/{user_id}/goals/{goal_id}/investments", response_model=AdminGoalInvestmentsResponse)
+async def get_admin_user_goal_investments(
+    user_id: str,
+    goal_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("users.read"))],
+) -> AdminGoalInvestmentsResponse:
+    user = await _require_user_by_reference(db, user_id)
+    try:
+        await get_personal_goal(db, goal_id=goal_id, user_id=user.id)
+    except GoalError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
+    goal = await db.get(Goal, goal_id)
+    if not goal or goal.user_id != user.id:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "goal_not_found", "message": "Goal not found."},
+        )
+
+    result = await build_goal_investments_detail(db, goal=goal)
+    return AdminGoalInvestmentsResponse(**result)
 
 
 @router.post("/users/{user_id}/suspend", response_model=PendingActionResponse)

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -82,43 +85,98 @@ def _raise_for_fp_response(response: httpx.Response) -> None:
     raise FpClientError(message, "fp_client_error", response.status_code)
 
 
+_TOKEN_REFRESH_BUFFER_SECONDS = 60
+
+
+@dataclass(frozen=True)
+class _CachedToken:
+    value: str
+    expires_at: float
+
+
+def _jwt_expires_at(token: str) -> float | None:
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload = parts[1]
+        payload += "=" * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload))
+        exp = data.get("exp")
+        return float(exp) if exp is not None else None
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _token_expires_at(access_token: str, expires_in: int | None) -> float:
+    jwt_exp = _jwt_expires_at(access_token)
+    if jwt_exp is not None:
+        return jwt_exp
+    return time.time() + float(expires_in if expires_in is not None else 3600)
+
+
+def _is_token_still_valid(cached: _CachedToken | None) -> bool:
+    if cached is None:
+        return False
+    return time.time() < cached.expires_at - _TOKEN_REFRESH_BUFFER_SECONDS
+
+
+def _is_auth_token_error(exc: FpClientError) -> bool:
+    if exc.status_code not in {401, 403}:
+        return False
+    message = exc.message.lower()
+    return (
+        "jwt expired" in message
+        or "token expired" in message
+        or ("invalid token" in message and "jwt" in message)
+    )
+
+
 class FpTokenService:
     def __init__(self) -> None:
-        self._kyc_token: str | None = None
-        self._poa_token: str | None = None
+        self._kyc_token: _CachedToken | None = None
+        self._poa_token: _CachedToken | None = None
 
-    async def get_kyc_token(self) -> str:
+    async def get_kyc_token(self, *, force_refresh: bool = False) -> str:
         if not is_kyckart_live():
             return "stub-kyc-token"
-        if self._kyc_token:
-            return self._kyc_token
+        if not force_refresh and _is_token_still_valid(self._kyc_token):
+            assert self._kyc_token is not None
+            return self._kyc_token.value
         runtime = get_finprim_runtime()
-        token = await self._fetch_token(
+        token, expires_at = await self._fetch_token(
             token_base_url=runtime.base_url,
             auth_tenant=runtime.tenant,
             client_id=runtime.client_id,
             client_secret=runtime.client_secret,
         )
-        self._kyc_token = token
+        self._kyc_token = _CachedToken(value=token, expires_at=expires_at)
         return token
 
-    async def get_poa_token(self) -> str:
+    async def get_poa_token(self, *, force_refresh: bool = False) -> str:
         if not is_cybrilla_poa_live():
             return "stub-poa-token"
-        if self._poa_token:
-            return self._poa_token
+        if not force_refresh and _is_token_still_valid(self._poa_token):
+            assert self._poa_token is not None
+            return self._poa_token.value
         runtime = get_cybrilla_runtime()
-        token = await self._fetch_token(
+        token, expires_at = await self._fetch_token(
             token_base_url=runtime.resolved_token_base_url,
             auth_tenant=runtime.auth_tenant,
             client_id=runtime.client_id,
             client_secret=runtime.client_secret,
         )
-        self._poa_token = token
+        self._poa_token = _CachedToken(value=token, expires_at=expires_at)
         return token
 
     def invalidate(self) -> None:
         self._kyc_token = None
+        self._poa_token = None
+
+    def invalidate_kyc_token(self) -> None:
+        self._kyc_token = None
+
+    def invalidate_poa_token(self) -> None:
         self._poa_token = None
 
     async def _fetch_token(
@@ -128,7 +186,7 @@ class FpTokenService:
         auth_tenant: str,
         client_id: str,
         client_secret: str,
-    ) -> str:
+    ) -> tuple[str, float]:
         url = f"{token_base_url.rstrip('/')}/v2/auth/{auth_tenant}/token"
         async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(
@@ -137,7 +195,10 @@ class FpTokenService:
             )
             response.raise_for_status()
             payload = response.json()
-        return str(payload["access_token"])
+        token = str(payload["access_token"])
+        expires_in_raw = payload.get("expires_in")
+        expires_in = int(expires_in_raw) if expires_in_raw is not None else None
+        return token, _token_expires_at(token, expires_in)
 
 
 _fp_tokens = FpTokenService()
@@ -240,27 +301,65 @@ async def ensure_kyc_tokens() -> None:
     await _fp_tokens.get_poa_token()
 
 
-async def fp_get(path: str, *, use_poa: bool = False) -> dict[str, Any]:
-    token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
+def _fp_runtime(*, use_poa: bool) -> tuple[str, str]:
     if use_poa:
         runtime = get_cybrilla_runtime()
-        base = runtime.base_url
-        tenant = runtime.auth_tenant
-    else:
-        runtime = get_finprim_runtime()
-        base = runtime.base_url
-        tenant = runtime.tenant
+        return runtime.base_url, runtime.auth_tenant
+    runtime = get_finprim_runtime()
+    return runtime.base_url, runtime.tenant
 
-    async def runner() -> httpx.Response:
+
+async def _fp_request_with_auth_retry(
+    method: str,
+    path: str,
+    *,
+    use_poa: bool,
+    request_body: Any,
+    runner: Callable[[str], Awaitable[httpx.Response]],
+) -> dict[str, Any]:
+    last_exc: FpClientError | None = None
+    for attempt in range(2):
+        force_refresh = attempt > 0
+        if force_refresh:
+            if use_poa:
+                _fp_tokens.invalidate_poa_token()
+            else:
+                _fp_tokens.invalidate_kyc_token()
+        token = await (
+            _fp_tokens.get_poa_token(force_refresh=force_refresh)
+            if use_poa
+            else _fp_tokens.get_kyc_token(force_refresh=force_refresh)
+        )
+        try:
+            return await _run_logged_fp_request(
+                method=method,
+                path=path,
+                use_poa=use_poa,
+                request_body=request_body,
+                runner=lambda current_token=token: runner(current_token),
+            )
+        except FpClientError as exc:
+            last_exc = exc
+            if attempt == 0 and _is_auth_token_error(exc):
+                continue
+            raise
+    assert last_exc is not None
+    raise last_exc
+
+
+async def fp_get(path: str, *, use_poa: bool = False) -> dict[str, Any]:
+    base, tenant = _fp_runtime(use_poa=use_poa)
+
+    async def runner(token: str) -> httpx.Response:
         async with httpx.AsyncClient(timeout=30.0) as client:
             return await client.get(
                 f"{base.rstrip('/')}{path}",
                 headers={"Authorization": f"Bearer {token}", "x-tenant-id": tenant},
             )
 
-    return await _run_logged_fp_request(
-        method="GET",
-        path=path,
+    return await _fp_request_with_auth_retry(
+        "GET",
+        path,
         use_poa=use_poa,
         request_body=None,
         runner=runner,
@@ -268,17 +367,9 @@ async def fp_get(path: str, *, use_poa: bool = False) -> dict[str, Any]:
 
 
 async def fp_post(path: str, body: dict[str, Any], *, use_poa: bool = False) -> dict[str, Any]:
-    token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
-    if use_poa:
-        runtime = get_cybrilla_runtime()
-        base = runtime.base_url
-        tenant = runtime.auth_tenant
-    else:
-        runtime = get_finprim_runtime()
-        base = runtime.base_url
-        tenant = runtime.tenant
+    base, tenant = _fp_runtime(use_poa=use_poa)
 
-    async def runner() -> httpx.Response:
+    async def runner(token: str) -> httpx.Response:
         async with httpx.AsyncClient(timeout=30.0) as client:
             return await client.post(
                 f"{base.rstrip('/')}{path}",
@@ -290,9 +381,9 @@ async def fp_post(path: str, body: dict[str, Any], *, use_poa: bool = False) -> 
                 json=body,
             )
 
-    return await _run_logged_fp_request(
-        method="POST",
-        path=path,
+    return await _fp_request_with_auth_retry(
+        "POST",
+        path,
         use_poa=use_poa,
         request_body=body,
         runner=runner,
@@ -306,21 +397,13 @@ async def fp_post_multipart(
     files: dict[str, tuple[str, bytes, str]],
     use_poa: bool = False,
 ) -> dict[str, Any]:
-    token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
-    if use_poa:
-        runtime = get_cybrilla_runtime()
-        base = runtime.base_url
-        tenant = runtime.auth_tenant
-    else:
-        runtime = get_finprim_runtime()
-        base = runtime.base_url
-        tenant = runtime.tenant
+    base, tenant = _fp_runtime(use_poa=use_poa)
     multipart_files = {
         key: (filename, content, mime)
         for key, (filename, content, mime) in files.items()
     }
 
-    async def runner() -> httpx.Response:
+    async def runner(token: str) -> httpx.Response:
         async with httpx.AsyncClient(timeout=60.0) as client:
             return await client.post(
                 f"{base.rstrip('/')}{path}",
@@ -329,9 +412,9 @@ async def fp_post_multipart(
                 files=multipart_files,
             )
 
-    return await _run_logged_fp_request(
-        method="POST",
-        path=path,
+    return await _fp_request_with_auth_retry(
+        "POST",
+        path,
         use_poa=use_poa,
         request_body={"fields": list(fields.keys()), "files": list(files.keys())},
         runner=runner,
@@ -339,17 +422,9 @@ async def fp_post_multipart(
 
 
 async def fp_patch(path: str, body: dict[str, Any], *, use_poa: bool = False) -> dict[str, Any]:
-    token = await (_fp_tokens.get_poa_token() if use_poa else _fp_tokens.get_kyc_token())
-    if use_poa:
-        runtime = get_cybrilla_runtime()
-        base = runtime.base_url
-        tenant = runtime.auth_tenant
-    else:
-        runtime = get_finprim_runtime()
-        base = runtime.base_url
-        tenant = runtime.tenant
+    base, tenant = _fp_runtime(use_poa=use_poa)
 
-    async def runner() -> httpx.Response:
+    async def runner(token: str) -> httpx.Response:
         async with httpx.AsyncClient(timeout=30.0) as client:
             return await client.patch(
                 f"{base.rstrip('/')}{path}",
@@ -361,9 +436,9 @@ async def fp_patch(path: str, body: dict[str, Any], *, use_poa: bool = False) ->
                 json=body,
             )
 
-    return await _run_logged_fp_request(
-        method="PATCH",
-        path=path,
+    return await _fp_request_with_auth_retry(
+        "PATCH",
+        path,
         use_poa=use_poa,
         request_body=body,
         runner=runner,
@@ -433,12 +508,17 @@ async def fetch_identity_document(document_id: str) -> dict[str, Any]:
     return await fp_get(f"/v2/identity_documents/{document_id}")
 
 
-def _fallback_ifsc_lookup(ifsc_code: str) -> dict[str, str]:
+def _is_gateway_ifsc_route_unavailable(exc: FpClientError) -> bool:
+    return exc.status_code in {403, 501} or "url not available" in exc.message.lower()
+
+
+def _fallback_ifsc_lookup(ifsc_code: str) -> dict[str, Any]:
     code = ifsc_code.upper().strip()
     return {
         "ifsc_code": code,
-        "bank_name": code[:4],
+        "bank_name": "",
         "branch": "",
+        "lookup_fallback": True,
     }
 
 
@@ -451,8 +531,14 @@ async def lookup_ifsc(ifsc_code: str) -> dict[str, Any]:
     try:
         payload = await fp_get(f"/api/onb/ifsc_codes/{code}")
     except FpClientError as exc:
-        if exc.status_code in {404, 403, 501} or "url not available" in exc.message.lower():
+        if _is_gateway_ifsc_route_unavailable(exc):
             return _fallback_ifsc_lookup(code)
+        if exc.status_code == 404:
+            raise FpClientError(
+                "IFSC code not found.",
+                "invalid_ifsc",
+                404,
+            ) from exc
         raise
 
     return {

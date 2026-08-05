@@ -1,17 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Repeat, RotateCcw } from "lucide-react";
+import { RefreshCw, RotateCcw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { formatTimestamp } from "@/lib/format-date";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AmcLogo } from "@/components/mf/amc-logo";
 import { MfMandateDetailDialog } from "@/components/mf/mf-mandate-detail-dialog";
 import { MfOrderCustomerCell } from "@/components/mf/mf-order-journey-dialog";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -26,33 +27,22 @@ import {
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ApiError } from "@/lib/api-client";
-import {
   fetchMfTransactionSipBatches,
   syncMfTransactionMandate,
   type MfTransactionSipBatch,
 } from "@/lib/mf-transactions-admin-api";
+import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const MANDATE_STATUS_OPTIONS = [
+const MANDATE_STATUS_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "PENDING", label: "Pending" },
   { value: "AUTH_PENDING", label: "Auth pending" },
   { value: "APPROVED", label: "Approved" },
   { value: "FAILED", label: "Failed" },
   { value: "CANCELLED", label: "Cancelled" },
-] as const;
-
-
+];
 
 function formatPlanSummary(batch: MfTransactionSipBatch) {
   const names = batch.plans
@@ -65,22 +55,41 @@ function formatPlanSummary(batch: MfTransactionSipBatch) {
   return `${names.slice(0, 2).join(", ")} +${names.length - 2} more`;
 }
 
+function matchesSearch(batch: MfTransactionSipBatch, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    batch.user_display_name,
+    batch.user_email,
+    batch.client_id,
+    batch.batch_id,
+    batch.mandate_id,
+    batch.mandate_status,
+    formatPlanSummary(batch),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(normalized);
+}
+
 export function MfTransactionSipBatchesPanel({
   canRead,
   canManage,
-  title = "Bulk SIP orders",
 }: {
   canRead: boolean;
   canManage: boolean;
-  title?: string;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [batches, setBatches] = useState<MfTransactionSipBatch[]>([]);
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [selectedMandateId, setSelectedMandateId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -106,12 +115,20 @@ export function MfTransactionSipBatchesPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter]);
+  }, [statusFilter, search, pageSize]);
+
+  const filteredBatches = useMemo(
+    () => batches.filter((batch) => matchesSearch(batch, search)),
+    [batches, search],
+  );
 
   const pagination = useMemo(
-    () => paginateItems(batches, page, ADMIN_TABLE_PAGE_SIZE),
-    [batches, page],
+    () => paginateItems(filteredBatches, page, pageSize),
+    [filteredBatches, page, pageSize],
   );
+
+  const columnCount = canManage ? 7 : 6;
+  const showSkeleton = loading && batches.length === 0;
 
   const handleSyncMandate = async (mandateId: string) => {
     if (!canManage) return;
@@ -129,55 +146,101 @@ export function MfTransactionSipBatchesPanel({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <AdminSearchInput
+          containerClassName="max-w-sm"
+          placeholder="Search by customer, fund, or ID"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value)}
+            options={MANDATE_STATUS_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => void loadData()}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
+        </div>
+      </div>
+
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSectionTitle icon={Repeat}>{title}</AdminSectionTitle>
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value ?? ALL)}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="All statuses">
-              {MANDATE_STATUS_OPTIONS.find((option) => option.value === statusFilter)?.label ??
-                "All statuses"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Filter by mandate status</SelectLabel>
-              {MANDATE_STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <AdminDataTable minWidth="6xl">
+      <AdminDataTable
+        minWidth="6xl"
+        footer={
+          <AdminTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            hasPrevious={pagination.hasPrevious}
+            hasNext={pagination.hasNext}
+            disabled={loading}
+            totalCount={filteredBatches.length}
+            currentPageCount={pagination.items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setPage(0);
+            }}
+            onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+            onNext={() => setPage((current) => current + 1)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
+            {canManage ? (
+              <AdminTableHeadCell className="w-[5.5rem]">Actions</AdminTableHeadCell>
+            ) : null}
             <AdminTableHeadCell>Customer</AdminTableHeadCell>
             <AdminTableHeadCell>Funds</AdminTableHeadCell>
             <AdminTableHeadCell>SIPs</AdminTableHeadCell>
             <AdminTableHeadCell>Mandate</AdminTableHeadCell>
             <AdminTableHeadCell className="text-right">Monthly total</AdminTableHeadCell>
             <AdminTableHeadCell>Created</AdminTableHeadCell>
-            {canManage ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {loading ? (
-            <AdminTableSkeletonRows columns={canManage ? 7 : 6} />
-          ) : pagination.items.length === 0 ? (
-            <AdminTableStateRow colSpan={canManage ? 7 : 6}>No bulk SIP orders found.</AdminTableStateRow>
+          {showSkeleton ? (
+            <AdminTableSkeletonRows columns={columnCount} />
+          ) : filteredBatches.length === 0 ? (
+            <AdminTableStateRow colSpan={columnCount}>
+              {batches.length === 0
+                ? "No bulk SIP orders found."
+                : "No bulk SIP orders match your search."}
+            </AdminTableStateRow>
           ) : (
             pagination.items.map((batch) => (
               <AdminTableRow
                 key={batch.batch_id}
                 onClick={() => setSelectedMandateId(batch.mandate_id)}
               >
+                {canManage ? (
+                  <AdminTableCell>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actionLoading === `sync-${batch.mandate_id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleSyncMandate(batch.mandate_id);
+                      }}
+                    >
+                      <RotateCcw className="size-3.5" />
+                      Sync
+                    </Button>
+                  </AdminTableCell>
+                ) : null}
                 <AdminTableCell>
                   <MfOrderCustomerCell
                     order={{
@@ -218,39 +281,11 @@ export function MfTransactionSipBatchesPanel({
                 <AdminTableCell className="text-muted-foreground">
                   {formatTimestamp(batch.created_at)}
                 </AdminTableCell>
-                {canManage ? (
-                  <AdminTableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading === `sync-${batch.mandate_id}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleSyncMandate(batch.mandate_id);
-                      }}
-                    >
-                      <RotateCcw className="size-3.5" />
-                      Sync
-                    </Button>
-                  </AdminTableCell>
-                ) : null}
               </AdminTableRow>
             ))
           )}
         </AdminTableBody>
       </AdminDataTable>
-
-      {!loading && batches.length > 0 ? (
-        <AdminTablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          hasPrevious={pagination.hasPrevious}
-          hasNext={pagination.hasNext}
-          disabled={loading}
-          onPrevious={() => setPage((current) => Math.max(0, current - 1))}
-          onNext={() => setPage((current) => current + 1)}
-        />
-      ) : null}
 
       <MfMandateDetailDialog
         open={selectedMandateId != null}

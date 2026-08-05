@@ -28,6 +28,7 @@ class LoginSucceededPayload(BaseModel):
     is_new_device: bool
     velocity_flag: dict[str, Any] | None = None
     provider: str | None = None
+    login_method: str | None = None
 
 
 class LoginFailedPayload(BaseModel):

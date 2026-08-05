@@ -28,6 +28,9 @@ export {
   loginWithGoogle,
   loginWithApple,
   verifyMfaLogin,
+  sendMfaLoginSms,
+  verifyLoginSms,
+  resendLoginSmsOtp,
   resendOAuthLinkOtp,
   confirmOAuthLink,
 } from "@/features/auth/api/login-api";

@@ -24,16 +24,10 @@ import {
   AdminFormDialog,
 } from "@/components/ui/admin-dialog-presets";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   createAdminPermission,
   type AdminPermission,
@@ -165,11 +159,28 @@ export function PermissionsCatalogPanel({
   const [dialogError, setDialogError] = useState("");
   const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
-  const areaOptions = useMemo(() => {
+  const areaOptions = useMemo<AdminSelectOption[]>(() => {
     const areas = new Set(permissionCatalog.map((item) => permissionResource(item.key)));
-    return [...areas].sort((a, b) => a.localeCompare(b));
+    return [
+      { value: "all", label: "All areas" },
+      ...[...areas]
+        .sort((a, b) => a.localeCompare(b))
+        .map((area) => ({ value: area, label: area })),
+    ];
   }, [permissionCatalog]);
+
+  const statusOptions = useMemo<AdminSelectOption[]>(
+    () => [
+      { value: "all", label: "All statuses" },
+      { value: "enforced", label: "enforced" },
+      { value: "partial", label: "partial" },
+      { value: "mismatch", label: "mismatch" },
+      { value: "catalog", label: "catalog" },
+    ],
+    [],
+  );
 
   const filteredPermissions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -199,11 +210,11 @@ export function PermissionsCatalogPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [query, areaFilter, statusFilter]);
+  }, [query, areaFilter, statusFilter, pageSize]);
 
   const pagination = useMemo(
-    () => paginateItems(filteredPermissions, page, ADMIN_TABLE_PAGE_SIZE),
-    [filteredPermissions, page],
+    () => paginateItems(filteredPermissions, page, pageSize),
+    [filteredPermissions, page, pageSize],
   );
 
   const handleCreatePermission = async (payload: { key: string; description: string }) => {
@@ -232,40 +243,20 @@ export function PermissionsCatalogPanel({
           />
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Select value={areaFilter} onValueChange={(value) => setAreaFilter(value ?? "all")}>
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="All areas">
-                  {areaFilter === "all" ? "All areas" : areaFilter}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All areas</SelectItem>
-                {areaOptions.map((area) => (
-                  <SelectItem key={area} value={area}>
-                    {area}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
+            <AdminSelect
+              value={areaFilter}
+              onValueChange={setAreaFilter}
+              options={areaOptions}
+              placeholder="Area"
+              className="min-w-select-sm"
+            />
+            <AdminSelect
               value={statusFilter}
-              onValueChange={(value) => setStatusFilter((value as StatusFilter) ?? "all")}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="All statuses">
-                  {statusFilter === "all" ? "All statuses" : statusFilter}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="enforced">enforced</SelectItem>
-                <SelectItem value="partial">partial</SelectItem>
-                <SelectItem value="mismatch">mismatch</SelectItem>
-                <SelectItem value="catalog">catalog</SelectItem>
-              </SelectContent>
-            </Select>
-
+              onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+              options={statusOptions}
+              placeholder="Status"
+              className="min-w-select-sm"
+            />
             <Button
               onClick={() => {
                 setDialogError("");
@@ -280,7 +271,27 @@ export function PermissionsCatalogPanel({
 
         {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
-        <AdminDataTable minWidth="sm">
+        <AdminDataTable
+          minWidth="sm"
+          footer={
+            <AdminTablePagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              hasPrevious={pagination.hasPrevious}
+              hasNext={pagination.hasNext}
+              disabled={loading}
+              totalCount={filteredPermissions.length}
+              currentPageCount={pagination.items.length}
+              pageSize={pageSize}
+              onPageSizeChange={(next) => {
+                setPageSize(next);
+                setPage(0);
+              }}
+              onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+              onNext={() => setPage((value) => value + 1)}
+            />
+          }
+        >
           <AdminTableHeader>
             <tr>
               <AdminTableHeadCell>Permission</AdminTableHeadCell>
@@ -319,17 +330,6 @@ export function PermissionsCatalogPanel({
             )}
           </AdminTableBody>
         </AdminDataTable>
-
-        {!loading && filteredPermissions.length > 0 ? (
-          <AdminTablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            hasPrevious={pagination.hasPrevious}
-            hasNext={pagination.hasNext}
-            onPrevious={() => setPage((value) => Math.max(0, value - 1))}
-            onNext={() => setPage((value) => value + 1)}
-          />
-        ) : null}
       </div>
 
       <AddPermissionDialog

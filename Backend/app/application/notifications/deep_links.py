@@ -29,6 +29,15 @@ NOTIFICATION_TYPE_ROUTES: dict[str, tuple[str, str | None]] = {
     "referral.engaged": ("/dashboard/referral", None),
     "account.settings.changed": ("/dashboard/settings", NOTIFICATIONS_SETTINGS_SECTION),
     "account.profile_image.updated": ("/dashboard/settings", "personal-details"),
+    "invest.risk_profile.completed": ("/dashboard/risk-profile", None),
+    "invest.risk_profile.unlock_otp": ("/dashboard/notifications", None),
+    "family.invite.received": ("/dashboard/family", None),
+    "family.invite.accepted": ("/dashboard/family", None),
+    "family.invite.declined": ("/dashboard/family", None),
+    "family.member.removed": ("/dashboard/family", None),
+    "family.member.role_changed": ("/dashboard/family", None),
+    "family.head.transferred": ("/dashboard/family", None),
+    "family.invite.reminder": ("/dashboard/family", None),
 }
 
 CATEGORY_FALLBACK_ROUTES: dict[NotificationCategory, tuple[str, str | None]] = {
@@ -36,6 +45,7 @@ CATEGORY_FALLBACK_ROUTES: dict[NotificationCategory, tuple[str, str | None]] = {
     NotificationCategory.kyc: ("/dashboard/kyc", None),
     NotificationCategory.referral: ("/dashboard/referral", None),
     NotificationCategory.account: ("/dashboard/settings", NOTIFICATIONS_SETTINGS_SECTION),
+    NotificationCategory.family: ("/dashboard/family", None),
 }
 
 

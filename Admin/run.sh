@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PORT="${PORT:-3001}"
+PORT="${PORT:-8888}"
 
 if [ -f .env ]; then
   while IFS= read -r line || [ -n "$line" ]; do

@@ -8,6 +8,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.mf.mf_mandate_guard import SIP_MANDATE_BLOCKING_STATUSES
 from app.application.investor.investor_bank_account_resolver import resolve_payment_bank_account
 from app.application.mf.mf_fp_state import map_fp_mandate_status
 from app.application.mf.mf_order_errors import MfOrderError
@@ -22,7 +23,7 @@ from app.infrastructure.mf.fp_mandate_client import (
     get_mandate,
 )
 from app.infrastructure.mf.fp_oms_client import invalidate_mf_token
-from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus
+from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus, MfSipPlan
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,13 @@ TERMINAL_MANDATE_STATUSES = {
     MfMandateStatus.failed,
     MfMandateStatus.cancelled,
 }
+
+SYNC_SKIP_MANDATE_STATUSES = frozenset(
+    {
+        MfMandateStatus.failed,
+        MfMandateStatus.cancelled,
+    }
+)
 
 
 def _mandate_sync_meta(metadata: dict | None) -> dict:
@@ -78,6 +86,90 @@ def _derive_mandate_next_action(*, status: str, auth_url: str | None) -> str:
     return "wait_processing"
 
 
+def _fp_cancel_error_is_benign(message: str) -> bool:
+    normalized = message.strip().lower()
+    if "already cancel" in normalized:
+        return True
+    if "operation not allowed" in normalized and "cybrillapoa" in normalized:
+        return True
+    return False
+
+
+def _apply_mandate_fp_status(
+    mandate: MfMandate,
+    *,
+    fp_status: str | None,
+) -> bool:
+    mapped = map_fp_mandate_status(fp_status)
+    changed = mapped != mandate.status or fp_status != mandate.fp_mandate_status
+    mandate.fp_mandate_status = fp_status if fp_status is not None else mandate.fp_mandate_status
+    mandate.status = mapped
+    if mapped == MfMandateStatus.approved and mandate.approved_at is None:
+        mandate.approved_at = datetime.now(timezone.utc)
+    elif mapped == MfMandateStatus.failed:
+        mandate.failure_code = mandate.failure_code or "fp_mandate_failed"
+        mandate.failure_reason = mandate.failure_reason or str(fp_status)
+    return changed
+
+
+async def refresh_mandate_status_from_fp(
+    session: AsyncSession,
+    mandate: MfMandate,
+    *,
+    force: bool = False,
+) -> bool:
+    if mandate.status in SYNC_SKIP_MANDATE_STATUSES or mandate.fp_mandate_id is None:
+        return False
+    if should_skip_mandate_sync(mandate.metadata_, force=force):
+        return False
+
+    try:
+        payload = await get_mandate(int(mandate.fp_mandate_id))
+    except FpClientError as exc:
+        logger.warning(
+            "Failed to refresh mandate %s (fp_mandate_id=%s): %s",
+            mandate.id,
+            mandate.fp_mandate_id,
+            exc.message,
+        )
+        mandate.metadata_ = record_mandate_sync(mandate.metadata_)
+        await session.flush()
+        return False
+
+    mandate.metadata_ = record_mandate_sync(mandate.metadata_)
+    fp_status = extract_mandate_status(payload)
+    changed = _apply_mandate_fp_status(mandate, fp_status=fp_status)
+    await session.flush()
+    return changed
+
+
+async def reconcile_bank_mandates_from_fp(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    bank_account_old_id: int,
+    force: bool = False,
+) -> int:
+    """Refresh local mandate rows for a bank account before payout-bank guard checks."""
+    mandates = list(
+        (
+            await session.execute(
+                select(MfMandate).where(
+                    MfMandate.user_id == user_id,
+                    MfMandate.bank_account_old_id == bank_account_old_id,
+                    MfMandate.status.not_in(list(SYNC_SKIP_MANDATE_STATUSES)),
+                    MfMandate.fp_mandate_id.is_not(None),
+                )
+            )
+        ).scalars()
+    )
+    updated = 0
+    for mandate in mandates:
+        if await refresh_mandate_status_from_fp(session, mandate, force=force):
+            updated += 1
+    return updated
+
+
 def serialize_mandate(mandate: MfMandate) -> dict:
     return {
         "mandate_id": str(mandate.id),
@@ -100,9 +192,19 @@ def serialize_mandate(mandate: MfMandate) -> dict:
 
 
 def _compute_mandate_limit(amount_inr: Decimal) -> int:
+    """Size the mandate to roughly cover the SIP amount, not the NPCI UPI Autopay ceiling.
+
+    Showing a small SIP investor a ₹1,00,000 authorization is alarming and unnecessary —
+    the limit only needs enough headroom for the current installment plus modest top-ups.
+    """
     settings = get_settings()
-    base = max(int(amount_inr) * 2, settings.zynd_mf_sip_default_mandate_limit_inr)
+    base = max(int(amount_inr) * settings.zynd_mf_mandate_limit_multiplier, settings.zynd_mf_sip_min_mandate_limit_inr)
     return min(base, 100_000)
+
+
+def _normalize_mandate_type(mandate_type: str) -> str:
+    normalized = (mandate_type or "upi").strip().lower()
+    return "NACH" if normalized == "nach" else "UPI"
 
 
 async def find_approved_mandate(
@@ -127,6 +229,7 @@ async def create_mandate_for_user(
     idempotency_key: str,
     installment_amount_inr: Decimal | None = None,
     bank_account_id: uuid.UUID | None = None,
+    mandate_type: str = "upi",
 ) -> MfMandate:
     existing = await session.scalar(select(MfMandate).where(MfMandate.idempotency_key == idempotency_key))
     if existing:
@@ -139,22 +242,25 @@ async def create_mandate_for_user(
         user_id=user_id,
         bank_account_id=bank_account_id,
     )
+    amount = installment_amount_inr or Decimal("5000")
+    required_limit = _compute_mandate_limit(amount)
+    normalized_type = _normalize_mandate_type(mandate_type)
+
     approved = await find_approved_mandate(
         session,
         user_id=user_id,
         bank_account_old_id=int(bank.external_old_id),
     )
-    if approved:
+    if approved and approved.mandate_type == normalized_type and approved.mandate_limit >= required_limit:
         return approved
 
-    amount = installment_amount_inr or Decimal("5000")
     mandate = MfMandate(
         user_id=user_id,
         investor_bank_account_id=bank.id,
         bank_account_old_id=int(bank.external_old_id),
         status=MfMandateStatus.pending,
-        mandate_type="UPI",
-        mandate_limit=_compute_mandate_limit(amount),
+        mandate_type=normalized_type,
+        mandate_limit=required_limit,
         idempotency_key=idempotency_key,
     )
     session.add(mandate)
@@ -209,11 +315,52 @@ async def initiate_mandate_auth(session: AsyncSession, mandate: MfMandate) -> Mf
 async def cancel_user_mandate(session: AsyncSession, mandate: MfMandate) -> MfMandate:
     if mandate.status == MfMandateStatus.cancelled:
         return mandate
+
     if mandate.fp_mandate_id is not None:
-        await cancel_mandate(int(mandate.fp_mandate_id))
+        await refresh_mandate_status_from_fp(session, mandate, force=True)
+        if mandate.status == MfMandateStatus.cancelled:
+            return mandate
+
+        try:
+            await cancel_mandate(int(mandate.fp_mandate_id))
+        except FpClientError as exc:
+            await refresh_mandate_status_from_fp(session, mandate, force=True)
+            if mandate.status == MfMandateStatus.cancelled:
+                return mandate
+            if _fp_cancel_error_is_benign(exc.message):
+                mandate.status = MfMandateStatus.cancelled
+                mandate.fp_mandate_status = mandate.fp_mandate_status or "CANCELLED"
+                await session.flush()
+                return mandate
+            raise MfOrderError(
+                code=exc.code,
+                message=exc.message,
+                status_code=exc.status_code,
+            ) from exc
+
     mandate.status = MfMandateStatus.cancelled
     await session.flush()
     return mandate
+
+
+async def maybe_release_mandate_after_sip_change(
+    session: AsyncSession,
+    mandate: MfMandate | None,
+) -> None:
+    """Cancel an approved mandate once no SIP still depends on it."""
+    if mandate is None or mandate.status != MfMandateStatus.approved:
+        return
+    has_blocking_sip = await session.scalar(
+        select(MfSipPlan.id)
+        .where(
+            MfSipPlan.mf_mandate_id == mandate.id,
+            MfSipPlan.status.in_(SIP_MANDATE_BLOCKING_STATUSES),
+        )
+        .limit(1)
+    )
+    if has_blocking_sip:
+        return
+    await cancel_user_mandate(session, mandate)
 
 
 async def submit_pending_mandate(session: AsyncSession, mandate: MfMandate) -> bool:
@@ -264,25 +411,56 @@ async def submit_pending_mandate(session: AsyncSession, mandate: MfMandate) -> b
 
 
 async def sync_mandate_from_fp(session: AsyncSession, mandate: MfMandate, *, force: bool = False) -> bool:
-    if mandate.status in TERMINAL_MANDATE_STATUSES or mandate.fp_mandate_id is None:
-        return False
-    if should_skip_mandate_sync(mandate.metadata_, force=force):
-        return False
+    return await refresh_mandate_status_from_fp(session, mandate, force=force)
 
-    payload = await get_mandate(int(mandate.fp_mandate_id))
-    mandate.metadata_ = record_mandate_sync(mandate.metadata_)
-    fp_status = extract_mandate_status(payload)
-    mapped = map_fp_mandate_status(fp_status)
-    changed = mapped != mandate.status or fp_status != mandate.fp_mandate_status
-    mandate.fp_mandate_status = fp_status if fp_status is not None else mandate.fp_mandate_status
-    mandate.status = mapped
-    if mapped == MfMandateStatus.approved and mandate.approved_at is None:
-        mandate.approved_at = datetime.now(timezone.utc)
-    elif mapped == MfMandateStatus.failed:
-        mandate.failure_code = mandate.failure_code or "fp_mandate_failed"
-        mandate.failure_reason = mandate.failure_reason or str(fp_status)
-    await session.flush()
-    return changed
+
+async def sync_open_mandates(session: AsyncSession, *, batch_size: int = 20) -> dict[str, int]:
+    auth_pending = list(
+        (
+            await session.execute(
+                select(MfMandate)
+                .where(MfMandate.status == MfMandateStatus.auth_pending)
+                .order_by(MfMandate.updated_at)
+                .limit(batch_size)
+            )
+        ).scalars()
+    )
+    approved = list(
+        (
+            await session.execute(
+                select(MfMandate)
+                .where(
+                    MfMandate.status == MfMandateStatus.approved,
+                    MfMandate.fp_mandate_id.is_not(None),
+                )
+                .order_by(MfMandate.updated_at)
+                .limit(max(batch_size // 2, 5))
+            )
+        ).scalars()
+    )
+    mandates = auth_pending + approved
+    updated = 0
+    failed = 0
+    skipped = 0
+    for mandate in mandates:
+        if should_skip_mandate_sync(mandate.metadata_):
+            skipped += 1
+            continue
+        try:
+            if await refresh_mandate_status_from_fp(session, mandate):
+                updated += 1
+        except FpClientError as exc:
+            failed += 1
+            mandate.metadata_ = record_mandate_sync(mandate.metadata_)
+            if exc.status_code == 401:
+                invalidate_mf_token()
+            logger.warning(
+                "Failed to sync mandate %s (fp_mandate_id=%s): %s",
+                mandate.id,
+                mandate.fp_mandate_id,
+                exc.message,
+            )
+    return {"processed": len(mandates), "updated": updated, "failed": failed, "skipped": skipped}
 
 
 async def process_pending_mandates(session: AsyncSession, *, batch_size: int = 10) -> dict[str, int]:
@@ -301,38 +479,3 @@ async def process_pending_mandates(session: AsyncSession, *, batch_size: int = 1
         if await submit_pending_mandate(session, mandate):
             submitted += 1
     return {"processed": len(mandates), "submitted": submitted}
-
-
-async def sync_open_mandates(session: AsyncSession, *, batch_size: int = 20) -> dict[str, int]:
-    mandates = list(
-        (
-            await session.execute(
-                select(MfMandate)
-                .where(MfMandate.status == MfMandateStatus.auth_pending)
-                .order_by(MfMandate.updated_at)
-                .limit(batch_size)
-            )
-        ).scalars()
-    )
-    updated = 0
-    failed = 0
-    skipped = 0
-    for mandate in mandates:
-        if should_skip_mandate_sync(mandate.metadata_):
-            skipped += 1
-            continue
-        try:
-            if await sync_mandate_from_fp(session, mandate):
-                updated += 1
-        except FpClientError as exc:
-            failed += 1
-            mandate.metadata_ = record_mandate_sync(mandate.metadata_)
-            if exc.status_code == 401:
-                invalidate_mf_token()
-            logger.warning(
-                "Failed to sync mandate %s (fp_mandate_id=%s): %s",
-                mandate.id,
-                mandate.fp_mandate_id,
-                exc.message,
-            )
-    return {"processed": len(mandates), "updated": updated, "failed": failed, "skipped": skipped}

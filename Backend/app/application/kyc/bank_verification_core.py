@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,8 @@ ACCOUNT_TYPE_MAP = {
     "NRO": "nro_savings",
 }
 
+IFSC_CODE_PATTERN = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+
 
 class BankVerificationError(Exception):
     def __init__(self, message: str, code: str, status_code: int = 400) -> None:
@@ -29,6 +32,48 @@ def map_account_type(account_type: str) -> str:
     if not mapped:
         raise BankVerificationError("Invalid bank account type.", "invalid_account_type", 400)
     return mapped
+
+
+def normalize_ifsc_code(ifsc_code: str) -> str:
+    return ifsc_code.strip().upper()
+
+
+def validate_ifsc_format(ifsc_code: str) -> str:
+    code = normalize_ifsc_code(ifsc_code)
+    if not IFSC_CODE_PATTERN.match(code):
+        raise BankVerificationError(
+            "Enter a valid 11-character IFSC code.",
+            "invalid_ifsc",
+            400,
+        )
+    return code
+
+
+async def resolve_ifsc_details(ifsc_code: str) -> tuple[str, str, str]:
+    code = validate_ifsc_format(ifsc_code)
+    try:
+        payload = await lookup_ifsc(code)
+    except FpClientError as exc:
+        if exc.status_code == 404 and exc.code == "invalid_ifsc":
+            raise BankVerificationError(
+                "IFSC code not found. Check the code and try again.",
+                "invalid_ifsc",
+                400,
+            ) from exc
+        raise BankVerificationError(exc.message, exc.code, exc.status_code) from exc
+
+    if payload.get("lookup_fallback"):
+        return code, "", ""
+
+    bank_name = str(payload.get("bank_name") or payload.get("bankName") or "").strip()
+    branch = str(payload.get("branch") or payload.get("branch_name") or "").strip()
+    if not bank_name:
+        raise BankVerificationError(
+            "IFSC code not found. Check the code and try again.",
+            "invalid_ifsc",
+            400,
+        )
+    return code, bank_name, branch
 
 
 def extract_field_result(payload: dict[str, Any], field: str) -> dict[str, Any]:
@@ -110,13 +155,9 @@ async def run_hybrid_bank_verification(
     ifsc_code: str,
     kyc_already_registered: bool | None,
 ) -> HybridBankVerificationOutcome:
-    ifsc = ifsc_code.strip().upper()
     account_no = account_number.strip()
     poa_account_type = map_account_type(account_type)
-
-    ifsc_payload = await lookup_ifsc(ifsc)
-    bank_name = str(ifsc_payload.get("bank_name") or ifsc_payload.get("bankName") or "").strip()
-    branch = str(ifsc_payload.get("branch") or ifsc_payload.get("branch_name") or "").strip()
+    ifsc, bank_name, branch = await resolve_ifsc_details(ifsc_code)
 
     kyckart_holder_name = ""
     try:

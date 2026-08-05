@@ -6,12 +6,14 @@ import { cn } from "@/lib/utils"
 
 function TooltipProvider({
   delay = 0,
+  closeDelay = 0,
   ...props
 }: TooltipPrimitive.Provider.Props) {
   return (
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
       delay={delay}
+      closeDelay={closeDelay}
       {...props}
     />
   )
@@ -31,12 +33,19 @@ function TooltipContent({
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
+  collisionBoundary = "clipping-ancestors",
+  collisionPadding = 5,
   children,
   ...props
 }: TooltipPrimitive.Popup.Props &
   Pick<
     TooltipPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset"
+    | "align"
+    | "alignOffset"
+    | "side"
+    | "sideOffset"
+    | "collisionBoundary"
+    | "collisionPadding"
   >) {
   return (
     <TooltipPrimitive.Portal>
@@ -45,6 +54,8 @@ function TooltipContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        collisionBoundary={collisionBoundary}
+        collisionPadding={collisionPadding}
         className="isolate z-50"
       >
         <TooltipPrimitive.Popup

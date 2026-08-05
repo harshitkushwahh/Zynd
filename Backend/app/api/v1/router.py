@@ -8,6 +8,9 @@ from app.api.v1.invest.router import router as invest_router
 from app.api.v1.kyc.router import router as kyc_router
 from app.api.v1.notifications.router import router as notifications_router
 from app.api.v1.referral.router import router as referral_router
+from app.api.v1.family_groups.router import router as family_groups_router
+from app.api.v1.goals.router import router as goals_router
+from app.api.v1.distributor.router import router as distributor_router
 from app.api.v1.transactions.router import router as transactions_router
 from app.api.v1.webhooks.router import router as webhooks_router
 
@@ -21,4 +24,7 @@ api_router.include_router(kyc_router)
 api_router.include_router(invest_router)
 api_router.include_router(notifications_router)
 api_router.include_router(referral_router)
+api_router.include_router(family_groups_router)
+api_router.include_router(goals_router)
+api_router.include_router(distributor_router)
 api_router.include_router(webhooks_router)

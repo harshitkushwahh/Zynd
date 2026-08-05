@@ -37,12 +37,7 @@ export function KycEntryGate({ reasons, onReady }: KycEntryGateProps) {
 
   const handleRefresh = async () => {
     const updated = await refreshUser();
-    if (
-      updated?.email_verified_at &&
-      updated.phone_verified_at &&
-      updated.mfa_enrolled &&
-      updated.pin_enrolled
-    ) {
+    if (updated?.email_verified_at && updated.phone_verified_at) {
       onReady?.();
     }
   };

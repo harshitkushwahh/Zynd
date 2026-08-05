@@ -41,6 +41,8 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "routes": [
             "GET /admin/users",
             "GET /admin/users/{user_id}",
+            "GET /admin/users/{user_id}/profile-detail",
+            "GET /admin/users/{user_id}/goals",
         ],
         "notes": "List and view user account summaries.",
     },
@@ -298,6 +300,136 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "status": "enforced",
         "routes": ["PATCH /admin/mf/integrations/{provider}/environment"],
         "notes": "Switch active MF provider environment without editing .env files.",
+    },
+    {
+        "permission": "risk_profile.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/risk-profile/categories",
+            "GET /admin/risk-profile/categories/{category_id}",
+            "GET /admin/risk-profile/questions",
+            "GET /admin/risk-profile/questions/{question_id}",
+            "POST /admin/risk-profile/questions/bulk/preview",
+            "GET /admin/risk-profile/tiers",
+            "GET /admin/risk-profile/tiers/{tier}",
+            "GET /admin/risk-profile/templates",
+            "GET /admin/risk-profile/templates/{template_id}",
+            "GET /admin/risk-profile/templates/{template_id}/questions",
+            "POST /admin/risk-profile/templates/auto-select",
+            "POST /admin/risk-profile/score/preview",
+            "GET /admin/risk-profile/audit",
+        ],
+        "notes": "Read-only risk profile configuration and score preview.",
+    },
+    {
+        "permission": "risk_profile.categories.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/risk-profile/categories",
+            "PATCH /admin/risk-profile/categories/{category_id}",
+        ],
+        "notes": "Create and update weighted risk question categories.",
+    },
+    {
+        "permission": "risk_profile.questions.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/risk-profile/questions",
+            "PATCH /admin/risk-profile/questions/{question_id}",
+            "DELETE /admin/risk-profile/questions/{question_id}",
+            "POST /admin/risk-profile/questions/bulk/submit",
+        ],
+        "notes": "Manage risk profile questions and up to four options each.",
+    },
+    {
+        "permission": "risk_profile.tiers.manage",
+        "status": "enforced",
+        "routes": ["PATCH /admin/risk-profile/tiers/{tier}"],
+        "notes": "Update risk tier score bands and user-facing messages.",
+    },
+    {
+        "permission": "risk_profile.users.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/risk-profile/users",
+            "GET /admin/risk-profile/users/{user_id}",
+            "GET /admin/risk-profile/users/{user_id}/assessments",
+            "GET /admin/risk-profile/users/{user_id}/assessments/{assessment_id}",
+            "GET /admin/risk-profile/users/{user_id}/assessments/{assessment_id}/report/download",
+            "GET /admin/risk-profile/users/{user_id}/unlock-journey",
+        ],
+        "notes": "List computed user risk profiles.",
+    },
+    {
+        "permission": "risk_profile.users.manage",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/risk-profile/locked-users",
+            "GET /admin/risk-profile/users/{user_id}/unlock-journey",
+            "POST /admin/risk-profile/users/{user_id}/unlock/request",
+            "POST /admin/risk-profile/users/{user_id}/unlock/confirm",
+        ],
+        "notes": "Review locked risk profile attempts and grant more after OTP verification.",
+    },
+    {
+        "permission": "risk_profile.templates.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/risk-profile/templates",
+            "PATCH /admin/risk-profile/templates/{template_id}",
+        ],
+        "notes": "Create and update assessment templates and category question counts.",
+    },
+    {
+        "permission": "family_groups.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/family-groups",
+            "GET /admin/family-groups/{group_id}",
+        ],
+        "notes": "Phase 5 admin console — directory and group detail.",
+    },
+    {
+        "permission": "family_groups.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/family-groups/{group_id}/archive",
+            "POST /admin/family-groups/{group_id}/members/{user_id}/remove",
+        ],
+        "notes": "Phase 5 admin moderation actions.",
+    },
+    {
+        "permission": "goals.templates.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/goals/templates",
+            "GET /admin/goals/templates/{template_id}",
+        ],
+        "notes": "View predefined goal templates seeded at startup.",
+    },
+    {
+        "permission": "goals.templates.manage",
+        "status": "enforced",
+        "routes": [
+            "PATCH /admin/goals/templates/{template_id}",
+        ],
+        "notes": "Update predefined goal template metadata and visibility.",
+    },
+    {
+        "permission": "distributor.clients.list",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/clients",
+        ],
+        "notes": "Distributor console investor list with masked PII.",
+    },
+    {
+        "permission": "distributor.clients.read",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/clients/{client_reference}",
+        ],
+        "notes": "Distributor console masked client profile aggregate.",
     },
 ]
 
