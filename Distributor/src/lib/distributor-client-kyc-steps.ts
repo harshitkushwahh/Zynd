@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { kycProgressPct } from "@/lib/distributor-client-copy";
-import type { DistributorClientKycStep } from "@/lib/dummy/types";
+import type { DistributorClientKycStep } from "@/lib/distributor-types";
 
 export type DistributorKycStepGroup = {
   id: string;

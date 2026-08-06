@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { getDisplayInitials } from "@/lib/get-display-initials";
 
 export type DistributorProfileHeroCardProps = {
   name: string;
@@ -15,7 +16,7 @@ export type DistributorProfileHeroCardProps = {
   /** When set, replaces the default experience badge (e.g. client code + copy). */
   badge?: ReactNode;
   imageSrc?: string | null;
-  /** Used when `imageSrc` is empty. Defaults to demo profile photo. */
+  /** Used when `imageSrc` is empty. Omit to show initials on a gradient surface. */
   fallbackImageSrc?: string;
   /** When true, fallback uses logo containment styling instead of cover photo. */
   brandFallbackImage?: boolean;
@@ -88,10 +89,10 @@ function ProfileHeroCopyAction({
 export function DistributorProfileHeroCard({
   name,
   roleLabel,
-  experienceLabel = "4+ years experience",
+  experienceLabel,
   badge,
   imageSrc,
-  fallbackImageSrc = "/profile.jpeg",
+  fallbackImageSrc,
   brandFallbackImage = false,
   email,
   phone,
@@ -100,24 +101,39 @@ export function DistributorProfileHeroCard({
   className,
 }: DistributorProfileHeroCardProps) {
   const trimmedImage = imageSrc?.trim();
-  const usingBrandFallback = !trimmedImage && brandFallbackImage;
-  const resolvedImage = trimmedImage || fallbackImageSrc;
+  const trimmedFallback = fallbackImageSrc?.trim();
+  const usingInitialsFallback = !trimmedImage && !trimmedFallback;
+  const usingBrandFallback = !trimmedImage && Boolean(trimmedFallback) && brandFallbackImage;
+  const resolvedImage = trimmedImage || trimmedFallback;
+  const initials = getDisplayInitials(name);
   const resolvedPhone = phone?.trim() || DEFAULT_PHONE;
   const resolvedEmail = email?.trim() || DEFAULT_EMAIL;
 
   return (
-    <article className={cn("distributor-profile-hero-card", className)}>
-      <Image
-        src={resolvedImage}
-        alt=""
-        fill
-        priority
-        sizes="(max-width: 48rem) 100vw, 20rem"
-        className={cn(
-          "distributor-profile-hero-card__image",
-          usingBrandFallback && "distributor-profile-hero-card__image--brand",
-        )}
-      />
+    <article
+      className={cn(
+        "distributor-profile-hero-card",
+        usingInitialsFallback && "distributor-profile-hero-card--initials",
+        className,
+      )}
+    >
+      {usingInitialsFallback ? (
+        <div className="distributor-profile-hero-card__initials-fallback" aria-hidden>
+          <span className="distributor-profile-hero-card__initials-mark">{initials}</span>
+        </div>
+      ) : resolvedImage ? (
+        <Image
+          src={resolvedImage}
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 48rem) 100vw, 20rem"
+          className={cn(
+            "distributor-profile-hero-card__image",
+            usingBrandFallback && "distributor-profile-hero-card__image--brand",
+          )}
+        />
+      ) : null}
       <div className="distributor-profile-hero-card__shade" aria-hidden />
 
       {overlayTopEnd ? (
@@ -128,12 +144,13 @@ export function DistributorProfileHeroCard({
         <div className="distributor-profile-hero-card__bottom-start">{overlayBottomStart}</div>
       ) : null}
 
-      {badge ?? (
-        <div className="distributor-profile-hero-card__badge">
-          <span>{experienceLabel}</span>
-          <Sparkles className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-        </div>
-      )}
+      {badge ??
+        (experienceLabel ? (
+          <div className="distributor-profile-hero-card__badge">
+            <span>{experienceLabel}</span>
+            <Sparkles className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+          </div>
+        ) : null)}
 
       <footer className="distributor-profile-hero-card__footer">
         <div className="distributor-profile-hero-card__footer-glass" aria-hidden />

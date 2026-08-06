@@ -25,6 +25,25 @@ type DashboardSearchDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+function SearchDialogFooterHint() {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-muted/20 px-4 py-2.5 text-[11px] text-muted-foreground">
+      <span className="truncate">{copy.dashboard.search.footerHint}</span>
+      <div className="flex shrink-0 items-center gap-2">
+        <kbd className="rounded-md border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-[10px] leading-none">
+          ↑↓
+        </kbd>
+        <kbd className="rounded-md border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-[10px] leading-none">
+          ↵
+        </kbd>
+        <kbd className="rounded-md border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-[10px] leading-none">
+          esc
+        </kbd>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardSearchDialog({
   open,
   onOpenChange,
@@ -81,31 +100,31 @@ export function DashboardSearchDialog({
         />
         <CommandList>
           {!isFundSearch && trimmedQuery.length > 0 ? (
-            <div className="px-3 py-2 text-caption text-muted-foreground">
+            <div className="mx-2 mb-1 rounded-xl bg-muted/35 px-3 py-2 text-caption text-muted-foreground ring-1 ring-border/40">
               {copy.mutualFunds.searchHint}
             </div>
           ) : null}
 
           {searching ? (
-            <div className="flex items-center gap-2 px-3 py-3 text-caption text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" />
+            <div className="flex items-center gap-2 px-4 py-4 text-caption text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
               {copy.mutualFunds.searching}
             </div>
           ) : null}
 
           {searchError ? (
-            <div className="px-3 py-1">
+            <div className="px-4 py-1">
               <FieldMessage message={searchError} className="mt-0" />
             </div>
           ) : null}
 
           {isFundSearch && funds.length > 0 ? (
-            <CommandGroup heading={copy.dashboard.search.fundsHeading} className="p-1.5">
+            <CommandGroup heading={copy.dashboard.search.fundsHeading} className="px-1">
               {funds.map((fund) => (
                 <CommandItem
                   key={fund.product_id}
                   value={fund.product_id}
-                  className="py-2.5"
+                  className="px-2.5 py-2.5"
                   onSelect={() => openFund(fund)}
                 >
                   <MfFundSearchResultItem fund={fund} />
@@ -115,7 +134,7 @@ export function DashboardSearchDialog({
           ) : null}
 
           {filteredPages.length > 0 ? (
-            <CommandGroup heading={copy.dashboard.search.pagesHeading}>
+            <CommandGroup heading={copy.dashboard.search.pagesHeading} className="px-1">
               {filteredPages.map((route) => {
                 const Icon = route.icon;
 
@@ -123,13 +142,23 @@ export function DashboardSearchDialog({
                   <CommandItem
                     key={route.id}
                     value={route.id}
+                    className="px-2.5"
                     onSelect={() => {
                       router.push(route.href);
                       onOpenChange(false);
                     }}
                   >
-                    <Icon />
-                    <span>{route.label}</span>
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-foreground ring-1 ring-border/50">
+                      <Icon className="size-4" strokeWidth={2.25} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{route.label}</span>
+                      {route.description ? (
+                        <span className="block truncate text-caption text-muted-foreground">
+                          {route.description}
+                        </span>
+                      ) : null}
+                    </div>
                   </CommandItem>
                 );
               })}
@@ -142,6 +171,7 @@ export function DashboardSearchDialog({
             </CommandEmpty>
           ) : null}
         </CommandList>
+        <SearchDialogFooterHint />
       </Command>
     </CommandDialog>
   );

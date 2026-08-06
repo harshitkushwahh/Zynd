@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { useKycOptional } from "@/contexts/kyc-context";
 import {
   isInvestorBankAccountPaymentReady,
   isInvestorBankAccountVerified,
@@ -19,7 +20,10 @@ function sortBankAccountsForPicker(accounts: InvestorBankAccount[]) {
 }
 
 export function usePaymentReadyBankAccounts(enabled: boolean) {
-  const { accounts, loading, error, reloadAccounts } = useInvestorBankAccounts(enabled);
+  const kyc = useKycOptional();
+  const kycVerified = kyc?.overallStatus === "completed";
+  const shouldLoadAccounts = enabled && kycVerified;
+  const { accounts, loading, error, reloadAccounts } = useInvestorBankAccounts(shouldLoadAccounts);
   const verifiedAccounts = useMemo(
     () => sortBankAccountsForPicker(accounts.filter(isInvestorBankAccountVerified)),
     [accounts],

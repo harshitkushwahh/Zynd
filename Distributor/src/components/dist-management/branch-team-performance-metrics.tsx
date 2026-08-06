@@ -8,7 +8,7 @@ import {
   DUMMY_BRANCH_INVESTOR_FUNNEL,
   DUMMY_BRANCH_TARGET_HEATMAP,
   DUMMY_DISTRIBUTOR_TXN_MIX,
-} from "@/lib/dummy/branch-team-performance";
+} from "@/lib/distributor-branch-team-performance-data";
 import {
   DISTRIBUTOR_DIST_MANAGEMENT_HUB_METRICS_CLASS,
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,

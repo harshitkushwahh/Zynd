@@ -130,6 +130,47 @@ async def _drop_public_schema(database_url: str) -> None:
         await engine.dispose()
 
 
+def _ensure_alembic_version_column() -> None:
+    python_bin = os.environ.get("PYTHON", sys.executable)
+    venv_python = BACKEND_ROOT / ".venv" / "bin" / "python"
+    if venv_python.is_file():
+        python_bin = str(venv_python)
+
+    subprocess.run(
+        [
+            python_bin,
+            "-c",
+            """
+import asyncio, os
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def main():
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return
+    engine = create_async_engine(url)
+    try:
+        async with engine.begin() as conn:
+            exists = await conn.scalar(text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version')"
+            ))
+            if not exists:
+                return
+            await conn.execute(text(
+                "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)"
+            ))
+    finally:
+        await engine.dispose()
+
+asyncio.run(main())
+""",
+        ],
+        cwd=BACKEND_ROOT,
+        check=False,
+    )
+
+
 def _run_migrations() -> None:
     python_bin = os.environ.get("PYTHON", sys.executable)
     venv_python = BACKEND_ROOT / ".venv" / "bin" / "python"
@@ -149,8 +190,8 @@ async def _seed_database() -> None:
     get_settings.cache_clear()
 
     async with AsyncSessionLocal() as session:
-        await ensure_dev_admin_seed(session, settings=dev_settings)
         await ensure_rbac_seed(session)
+        await ensure_dev_admin_seed(session, settings=dev_settings)
         await ensure_security_config_seed(session)
         await ensure_retention_seed(session)
         await session.commit()
@@ -174,6 +215,7 @@ async def _run(*, assume_yes: bool, force: bool) -> None:
     await _wipe_mongo_mf()
 
     print("Running Alembic migrations ...", flush=True)
+    _ensure_alembic_version_column()
     _run_migrations()
     print("Migrations complete.")
 
@@ -184,6 +226,11 @@ async def _run(*, assume_yes: bool, force: bool) -> None:
     print("Dev admin account:")
     print(f"  email:    {DEV_ADMIN_EMAIL}")
     print(f"  password: {DEV_ADMIN_PASSWORD}")
+    print()
+    print("Restart the backend before logging in:")
+    print("  1. Stop any running Backend/run.sh or uvicorn process")
+    print("  2. Run: ./Backend/run.sh")
+    print("  3. Sign out in Admin and log in again as admin@zynd.com")
 
 
 def main() -> None:

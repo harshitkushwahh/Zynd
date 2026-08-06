@@ -2,9 +2,7 @@
 
 import { useEffect } from "react";
 
-import { Button } from "@/components/ui/button";
-import { PageTitle } from "@/components/ui/page-title";
-import { copy } from "@/shared/config/copy";
+import { ZyndErrorFallback } from "@/shared/components/zynd-error-fallback";
 import { rootFontClassName } from "@/shared/config/fonts";
 
 type GlobalErrorProps = {
@@ -19,14 +17,8 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
 
   return (
     <html lang="en" className={`${rootFontClassName} h-full antialiased`}>
-      <body className="flex min-h-full flex-col items-center justify-center bg-background px-6 font-sans text-foreground">
-        <PageTitle>{copy.dashboard.error.boundaryTitle}</PageTitle>
-        <p className="mt-2 max-w-md text-center text-compact text-muted-foreground">
-          {copy.dashboard.error.boundaryDescription}
-        </p>
-        <Button type="button" className="mt-6" onClick={reset}>
-          {copy.dashboard.error.retry}
-        </Button>
+      <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
+        <ZyndErrorFallback variant="page" onRetry={reset} className="min-h-full flex-1" />
       </body>
     </html>
   );

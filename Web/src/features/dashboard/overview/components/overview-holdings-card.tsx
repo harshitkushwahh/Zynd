@@ -1,18 +1,17 @@
 "use client";
 
 import { useCallback, useMemo, useState, type UIEvent } from "react";
-import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
-import type { MfExternalHolding } from "@/features/invest/api/invest-api";
-import { useExternalHoldingsQuery } from "@/features/invest/hooks/use-external-holdings-query";
+import { usePortfolioHoldingsQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
+import type { PortfolioHoldingResponse } from "@/features/dashboard/portfolio/lib/portfolio-api";
 import {
   OverviewLockedCardBackdrop,
   OverviewLockedCardOverlay,
 } from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
 import { OVERVIEW_HOLDINGS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import {
   truncateHoldingFundName,
@@ -36,20 +35,22 @@ const HOLDING_CARD_HEIGHT_CLASS = "min-h-[4.5rem]";
 const HOLDINGS_LIST_VIEWPORT_CLASS = "h-[14.5rem]";
 const VISIBLE_HOLDINGS_COUNT = 3;
 
-function mapExternalHoldingsToCardItems(holdings: MfExternalHolding[]): OverviewHoldingCardItem[] {
+function mapPortfolioHoldingsToCardItems(
+  holdings: PortfolioHoldingResponse[],
+): OverviewHoldingCardItem[] {
   return holdings.map((holding) => ({
-    id: `${holding.isin}-${holding.folio_number}`,
-    fundName: holding.matched_scheme_name ?? holding.scheme_name,
+    id: holding.id,
+    fundName: holding.fund_name,
     amcName: holding.amc_name ?? copy.mutualFunds.unknownAmc,
     amcLogoUrl: holding.amc_logo_url,
-    investedInr: holding.market_value_inr ?? 0,
-    monthReturnPct: null,
+    investedInr: holding.current_value_inr,
+    returnPct: holding.return_pct,
   }));
 }
 
 function HoldingRow({ holding, index }: { holding: OverviewHoldingCardItem; index: number }) {
   const overview = copy.dashboard.overview;
-  const monthReturn = formatSignedReturn(holding.monthReturnPct);
+  const fundReturn = formatSignedReturn(holding.returnPct);
   const styles = OVERVIEW_BRAND_CARD_STYLES[resolveOverviewBrandCardTone(index)];
 
   return (
@@ -79,16 +80,16 @@ function HoldingRow({ holding, index }: { holding: OverviewHoldingCardItem; inde
         <p
           className={cn(
             "text-compact font-semibold tabular-nums",
-            holding.monthReturnPct == null && styles.muted,
-            monthReturn.tone === "positive" && styles.title,
-            monthReturn.tone === "negative" && styles.negative,
-            monthReturn.tone === "muted" && holding.monthReturnPct != null && styles.muted,
+            holding.returnPct == null && styles.muted,
+            fundReturn.tone === "positive" && styles.title,
+            fundReturn.tone === "negative" && styles.negative,
+            fundReturn.tone === "muted" && holding.returnPct != null && styles.muted,
           )}
         >
-          {holding.monthReturnPct == null ? "—" : monthReturn.text}
+          {holding.returnPct == null ? "—" : fundReturn.text}
         </p>
         <p className={cn("mt-0.5 text-[9px] uppercase tracking-wide", styles.label)}>
-          {overview.holdingsLastMonthLabel}
+          {overview.holdingsReturnLabel}
         </p>
       </div>
     </article>
@@ -97,10 +98,13 @@ function HoldingRow({ holding, index }: { holding: OverviewHoldingCardItem; inde
 
 export function OverviewHoldingsCard({ className }: OverviewHoldingsCardProps) {
   const overview = copy.dashboard.overview;
-  const { holdings, showSkeleton, errorMessage } = useExternalHoldingsQuery();
+  const { data, showSkeleton, errorMessage } = usePortfolioHoldingsQuery();
   const [showHeaderFade, setShowHeaderFade] = useState(false);
 
-  const cardHoldings = useMemo(() => mapExternalHoldingsToCardItems(holdings), [holdings]);
+  const cardHoldings = useMemo(
+    () => mapPortfolioHoldingsToCardItems(data?.holdings ?? []),
+    [data?.holdings],
+  );
   const isLocked = !showSkeleton && !errorMessage && cardHoldings.length === 0;
 
   const handleListScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
@@ -110,20 +114,15 @@ export function OverviewHoldingsCard({ className }: OverviewHoldingsCardProps) {
   const header = (
     <div
       className={cn(
-        "relative shrink-0 px-4 pt-4 sm:px-5 sm:pt-5",
+        "relative shrink-0 px-4 pt-4 pb-2 sm:px-5 sm:pt-5",
         !isLocked && "z-10 bg-[var(--zynd-white)] dark:bg-card",
       )}
     >
-      <div className="flex items-center justify-between gap-3 pb-2">
-        <h2 className="text-compact font-semibold text-foreground">{overview.holdingsInvestmentsTitle}</h2>
-        <Link
-          href="/dashboard/mutual-funds"
-          aria-label={overview.holdingsExploreCta}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/20 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <ArrowUpRight className="size-4" strokeWidth={2.25} />
-        </Link>
-      </div>
+      <OverviewCompactCardHeader
+        title={overview.holdingsInvestmentsTitle}
+        href="/dashboard/portfolio"
+        ariaLabel={overview.holdingsExploreCta}
+      />
       {!isLocked ? (
         <div
           aria-hidden="true"
@@ -175,10 +174,10 @@ export function OverviewHoldingsCard({ className }: OverviewHoldingsCardProps) {
         className,
       )}
     >
+      {header}
       {isLocked ? (
-        <div className="relative flex min-h-[16.5rem] flex-1 flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="pointer-events-none flex flex-1 select-none flex-col blur-[5px]">
-            {header}
             {listBody}
           </div>
           <OverviewLockedCardBackdrop />
@@ -188,10 +187,7 @@ export function OverviewHoldingsCard({ className }: OverviewHoldingsCardProps) {
           />
         </div>
       ) : (
-        <>
-          {header}
-          {listBody}
-        </>
+        listBody
       )}
     </section>
   );
@@ -206,9 +202,9 @@ export function OverviewHoldingsCardSkeleton({ className }: { className?: string
       )}
       aria-hidden="true"
     >
-      <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
+      <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-2 sm:px-5 sm:pt-5">
         <Skeleton className="h-4 w-24" />
-        <Skeleton className="size-8 rounded-full" />
+        <Skeleton className="size-3.5" />
       </div>
       <div
         className={cn(

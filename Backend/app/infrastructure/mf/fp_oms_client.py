@@ -437,6 +437,206 @@ async def create_mf_investment_account(*, investor_profile_id: str) -> dict[str,
     }
 
 
+async def get_mf_investment_account(fp_mfia_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {"id": fp_mfia_id, "old_id": 1, "object": "mf_investment_account"}
+    return await fp_mf_get(f"/v2/mf_investment_accounts/{fp_mfia_id}")
+
+
+async def get_holdings_report(
+    *,
+    investment_account_id: int,
+    folios: str | None = None,
+    as_on: str | None = None,
+) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {"id": investment_account_id, "folios": []}
+
+    params: dict[str, Any] = {"investment_account_id": investment_account_id}
+    if folios:
+        params["folios"] = folios
+    if as_on:
+        params["as_on"] = as_on
+    return await fp_mf_get("/api/oms/reports/holdings", params=params)
+
+
+async def get_investment_account_wise_returns(
+    *,
+    fp_mfia_id: str,
+    traded_on_to: str | None = None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"mf_investment_account": fp_mfia_id}
+    if traded_on_to:
+        body["traded_on_to"] = traded_on_to
+
+    if not is_finprim_enabled():
+        return {
+            "object": "transaction_report",
+            "data": {
+                "rows": [[fp_mfia_id, 0, 0, 0, 0, 0, 0]],
+                "columns": [
+                    "mf_investment_account",
+                    "invested_amount",
+                    "current_value",
+                    "unrealized_gain",
+                    "absolute_return",
+                    "cagr",
+                    "xirr",
+                ],
+            },
+        }
+
+    return await fp_mf_post("/v2/transactions/reports/investment_account_wise_returns", body=body)
+
+
+async def get_scheme_wise_returns(
+    *,
+    fp_mfia_id: str,
+    traded_on_to: str | None = None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"mf_investment_account": fp_mfia_id}
+    if traded_on_to:
+        body["traded_on_to"] = traded_on_to
+
+    if not is_finprim_enabled():
+        return {
+            "object": "transaction_report",
+            "data": {
+                "rows": [],
+                "columns": [
+                    "isin",
+                    "invested_amount",
+                    "current_value",
+                    "unrealized_gain",
+                    "absolute_return",
+                    "xirr",
+                ],
+            },
+        }
+
+    return await fp_mf_post("/v2/transactions/reports/scheme_wise_returns", body=body)
+
+
+async def list_mf_folios(
+    *,
+    fp_mfia_id: str,
+    folio_number: str | None = None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {"mf_investment_account": fp_mfia_id}
+    if folio_number:
+        params["folio_number"] = folio_number
+
+    if not is_finprim_enabled():
+        return {"object": "list", "data": []}
+
+    return await fp_mf_get("/v2/mf_folios", params=params)
+
+
+async def list_mf_transactions(
+    *,
+    folios: str,
+    fp_mfia_id: str | None = None,
+    types: str | None = None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {"folios": folios}
+    if fp_mfia_id:
+        params["mf_investment_account"] = fp_mfia_id
+    if types:
+        params["types"] = types
+
+    if not is_finprim_enabled():
+        return {"object": "list", "data": []}
+
+    return await fp_mf_get("/transactions", params=params)
+
+
+async def list_mf_redemptions(
+    *,
+    fp_mfia_id: str,
+    states: str | None = None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {"mf_investment_account": fp_mfia_id}
+    if states:
+        params["states"] = states
+
+    if not is_finprim_enabled():
+        return {"object": "list", "data": []}
+
+    return await fp_mf_get("/v2/mf_redemptions", params=params)
+
+
+async def get_mf_redemption(fp_redemption_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {
+            "id": fp_redemption_id,
+            "state": "submitted",
+            "folio_number": "0000000",
+            "scheme": "INF000000000",
+            "amount": 0,
+            "units": 0,
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+
+    return await fp_mf_get(f"/v2/mf_redemptions/{fp_redemption_id}")
+
+
+async def get_mf_payout_details(*, fp_redemption_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {"object": "list", "data": []}
+
+    return await fp_mf_get("/v2/mf_payout_details", params={"mf_redemption": fp_redemption_id})
+
+
+async def create_mf_redemption(
+    *,
+    fp_mfia_id: str,
+    folio_number: str,
+    scheme: str,
+    source_ref_id: str,
+    amount_inr: float | None = None,
+    units: float | None = None,
+    user_ip: str | None = None,
+) -> dict[str, Any]:
+    settings = get_settings()
+    body: dict[str, Any] = {
+        "mf_investment_account": fp_mfia_id,
+        "folio_number": folio_number,
+        "scheme": scheme,
+        "source_ref_id": source_ref_id,
+    }
+    if amount_inr is not None:
+        body["amount"] = amount_inr
+    elif units is not None:
+        body["units"] = units
+    if user_ip:
+        body["user_ip"] = normalize_fp_user_ip(user_ip)
+    if settings.zynd_distributor_arn.strip():
+        body["distributor_arn"] = settings.zynd_distributor_arn.strip()
+    if settings.zynd_distributor_euin.strip():
+        body["euin"] = settings.zynd_distributor_euin.strip()
+
+    payload = await fp_mf_post("/v2/mf_redemptions", body=body)
+    return {
+        "fp_redemption_id": _extract_fp_id(payload),
+        "fp_redemption_old_id": extract_fp_old_id(payload),
+        "state": extract_fp_state(payload),
+        "raw": payload,
+    }
+
+
+async def update_mf_redemption(fp_redemption_id: str, *, body: dict[str, Any]) -> dict[str, Any]:
+    payload = await fp_mf_patch(
+        "/v2/mf_redemptions",
+        body={"id": fp_redemption_id, **body},
+    )
+    return {
+        "fp_redemption_id": _extract_fp_id(payload) or fp_redemption_id,
+        "fp_redemption_old_id": extract_fp_old_id(payload),
+        "state": extract_fp_state(payload),
+        "raw": payload,
+    }
+
+
 async def list_fund_schemes(*, page: int = 1, size: int = 100) -> dict[str, Any]:
     return await fp_mf_get("/api/oms/fund_schemes", params={"page": page, "size": size})
 

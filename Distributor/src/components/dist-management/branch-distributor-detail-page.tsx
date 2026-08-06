@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   CalendarClock,
+  Loader2,
   TrendingUp,
   Users,
   Wallet,
@@ -27,11 +28,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  getBranchDistributorProfile,
   getFeaturedInvestorsForBranchDistributor,
   getOrdersForBranchDistributor,
   getSipsForBranchDistributor,
-} from "@/lib/dummy/branch-distributor-profile";
+  mapPartnerDetailToBranchProfile,
+  type BranchDistributorProfile,
+} from "@/lib/distributor-branch-distributor-profile-data";
+import { fetchDistributorPartnerDetail } from "@/lib/distributor-partners-api";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { formatAum } from "@/lib/format";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
@@ -61,7 +64,34 @@ function DetailSection({
 
 export function BranchDistributorDetailPage({ distributorId }: BranchDistributorDetailPageProps) {
   const router = useRouter();
-  const profile = useMemo(() => getBranchDistributorProfile(distributorId), [distributorId]);
+  const [profile, setProfile] = useState<BranchDistributorProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    void fetchDistributorPartnerDetail(distributorId)
+      .then((detail) => {
+        if (cancelled) return;
+        setProfile(mapPartnerDetailToBranchProfile(detail));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProfile(null);
+          setError(ZYND_MITRA_COPY.notFound);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [distributorId]);
 
   const featuredInvestors = useMemo(
     () => (profile ? getFeaturedInvestorsForBranchDistributor(profile) : []),
@@ -78,6 +108,15 @@ export function BranchDistributorDetailPage({ distributorId }: BranchDistributor
     [profile],
   );
 
+  if (loading) {
+    return (
+      <div className={cn(DISTRIBUTOR_PAGE_STACK_CLASS, "flex min-h-[320px] items-center justify-center gap-2 text-sm text-muted-foreground")}>
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+        Loading Zynd Mitra profile…
+      </div>
+    );
+  }
+
   if (!profile) {
     return (
       <div className={cn(DISTRIBUTOR_PAGE_STACK_CLASS, "space-y-4")}>
@@ -85,7 +124,7 @@ export function BranchDistributorDetailPage({ distributorId }: BranchDistributor
           <ArrowLeft className="size-4" />
           Back
         </Button>
-        <p className="text-compact text-muted-foreground">{ZYND_MITRA_COPY.notFound}</p>
+        <p className="text-compact text-muted-foreground">{error || ZYND_MITRA_COPY.notFound}</p>
       </div>
     );
   }

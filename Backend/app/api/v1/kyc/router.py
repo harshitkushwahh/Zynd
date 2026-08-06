@@ -57,6 +57,7 @@ from app.application.kyc.journey_state_service import (
     get_or_create_journey,
     get_or_create_status,
     journey_to_bootstrap_dict,
+    resolve_active_step_index,
     save_journey_state,
 )
 from app.application.kyc.kyc_form_service import (
@@ -137,6 +138,7 @@ async def get_kyc_journey_bootstrap(
         kyc_form_failure_reason=payload["kycFormFailureReason"],
         proof_details_status=payload["proofDetailsStatus"],
         esign_details_status=payload["esignDetailsStatus"],
+        geolocation_draft=payload["geolocationDraft"],
         step_statuses=KycStepStatuses(**step_statuses) if step_statuses else None,
     )
 
@@ -310,6 +312,11 @@ async def post_kyc_journey_state(
 
         require_phase2_complete(journey)
         payload["signatureDraftJson"] = body.signature_draft_json
+    if body.geolocation_json is not None:
+        from app.application.kyc.journey_gate_service import require_phase2_complete
+
+        require_phase2_complete(journey)
+        payload["geolocationJson"] = body.geolocation_json.model_dump(by_alias=True)
     if body.last_completed_step is not None:
         payload["lastCompletedStep"] = body.last_completed_step
 
@@ -317,14 +324,9 @@ async def post_kyc_journey_state(
     if body.nominee_draft_json is not None:
         await sync_nominees_from_kyc_draft(db, user=current_user, journey=journey)
     await db.commit()
-    from app.application.kyc.journey_state_service import _step_index
-
     return KycJourneyStateResponse(
         last_completed_step=journey.last_completed_step,
-        active_step_index=_step_index(
-            journey.last_completed_step,
-            kyc_already_registered=bool(journey.kyc_already_registered),
-        ),
+        active_step_index=resolve_active_step_index(journey),
     )
 
 
@@ -382,11 +384,8 @@ async def get_kyc_countries(
 @router.get("/master-data/nominee-enums", response_model=KycNomineeEnumsResponse)
 async def get_kyc_nominee_enums(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> KycNomineeEnumsResponse:
     require_entry_gate(current_user)
-    journey = await get_or_create_journey(db, current_user.id)
-    require_phase1_complete(journey)
     enums = nominee_master_data_enums()
     return KycNomineeEnumsResponse(
         relationships=[KycMasterDataOption(**item) for item in enums["relationships"]],

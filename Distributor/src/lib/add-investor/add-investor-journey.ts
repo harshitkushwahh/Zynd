@@ -327,7 +327,9 @@ export function emptyBankDraft(): AddInvestorBankDraft {
   };
 }
 
-export const ADD_INVESTOR_DEMO_OTP = "123456";
+export function isValidSixDigitOtp(value: string): boolean {
+  return /^\d{6}$/.test(value.trim());
+}
 
 export const ADD_INVESTOR_COUNTRY_OPTIONS = [
   { value: "india", label: "India" },

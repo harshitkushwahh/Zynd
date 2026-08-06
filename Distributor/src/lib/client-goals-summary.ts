@@ -1,4 +1,4 @@
-import type { DistributorClientGoal } from "@/lib/dummy/types";
+import type { DistributorClientGoal } from "@/lib/distributor-types";
 
 export type ClientGoalsSummary = {
   totalGoals: number;

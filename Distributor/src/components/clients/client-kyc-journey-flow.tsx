@@ -19,7 +19,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { kycStepIcon } from "@/lib/distributor-client-kyc-steps";
 import { useTheme } from "@/contexts/theme-context";
-import type { DistributorClientKycStep } from "@/lib/dummy/types";
+import type { DistributorClientKycStep } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 const NODE_WIDTH = 168;

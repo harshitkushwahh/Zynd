@@ -10,6 +10,7 @@ import {
   fetchRiskProfileAssessmentAnswers,
   type RiskProfileAssessmentAnswerItem,
 } from "@/features/risk-profile/api/risk-profile-api";
+import { RISK_PROFILE_HERO_RADIUS_CLASS } from "@/features/risk-profile/lib/risk-tier-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api-client";
@@ -102,7 +103,7 @@ export function RiskProfileViewAnswersDialog({
               return (
               <li
                 key={item.question_id}
-                className="rounded-[var(--radius-card)] border border-border bg-background p-4"
+                className={cn("border border-border bg-background p-4", RISK_PROFILE_HERO_RADIUS_CLASS)}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

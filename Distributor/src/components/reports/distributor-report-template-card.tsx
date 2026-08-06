@@ -26,7 +26,7 @@ import {
   type DistributorReportFormat,
   type DistributorReportTemplate,
   type DistributorReportTemplatePeriod,
-} from "@/lib/dummy/distributor-reports";
+} from "@/lib/distributor-reports-data";
 import { cn } from "@/lib/utils";
 
 const REPORT_TEMPLATE_ICONS: Record<string, LucideIcon> = {

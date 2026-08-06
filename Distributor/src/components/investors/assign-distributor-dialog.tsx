@@ -35,9 +35,9 @@ import {
   DISTRIBUTOR_OVERLAY_HEADER_CLASS,
   DISTRIBUTOR_STACK_MD_CLASS,
 } from "@/lib/distributor-layout";
-import type { DistributorInvestor } from "@/lib/dummy/types";
+import type { DistributorInvestor } from "@/lib/distributor-types";
 import {
-  buildDemoMagicLink,
+  buildAssignmentMagicLink,
   getBranchDistributorsForAssignment,
 } from "@/lib/resident-distributor-assignment";
 import { cn } from "@/lib/utils";
@@ -179,7 +179,7 @@ export function AssignDistributorDialog({ investor, open, onOpenChange }: Assign
   };
 
   const selectedDistributor = distributors.find((row) => row.id === distributorId);
-  const magicLink = investor ? buildDemoMagicLink(investor.id) : "";
+  const magicLink = investor ? buildAssignmentMagicLink(investor.id) : "";
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

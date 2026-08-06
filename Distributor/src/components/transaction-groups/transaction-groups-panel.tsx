@@ -19,8 +19,8 @@ import {
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
-import { DUMMY_TRANSACTION_GROUPS } from "@/lib/dummy/transaction-groups";
-import type { DistributorTransactionGroup } from "@/lib/dummy/types";
+import { DUMMY_TRANSACTION_GROUPS } from "@/lib/distributor-operations-list-data";
+import type { DistributorTransactionGroup } from "@/lib/distributor-types";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";

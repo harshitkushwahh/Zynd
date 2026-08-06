@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CalendarClock, TrendingUp } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { PAGE_HEADER_ICON_CLASS } from "@/components/ui/page-header";
 import { Slider } from "@/components/ui/slider";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
@@ -15,10 +16,12 @@ import {
 import { fetchSipCalculatorWithFallback } from "@/features/invest/lib/mf-calculator-api";
 import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculator-disclaimer";
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
+import { MfGrowthProjectionHeader } from "@/features/invest/components/mf-growth-projection-header";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
 import { MfSipProjectionChartPanel } from "@/features/invest/components/mf-sip-projection-chart";
 import { MfSipCalculatorResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
+import { MF_TOOL_ICONS } from "@/features/invest/lib/mf-dashboard-sidebar-data";
 import { formatDate, formatInr, formatReturn } from "@/features/invest/lib/mf-format";
 import {
   clampInstallments,
@@ -47,6 +50,7 @@ import {
   MF_SIP_STAT_CLASS,
 } from "@/features/invest/lib/mf-sip-calculator-ui";
 import { copy } from "@/shared/config/copy";
+import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
 
 type SipSliderFieldProps = {
@@ -324,16 +328,17 @@ export function MfSipCalculatorView() {
     <MfToolsPageShell
       trail={[{ label: copy.mutualFunds.sipCalcTitle, href: "/dashboard/mutual-funds/calculators/sip" }]}
       title={copy.mutualFunds.sipCalcTitle}
-      description={copy.mutualFunds.sipCalcDescription}
+      icon={MF_TOOL_ICONS["sip-calc"]}
     >
       <div className="space-y-6">
         <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
         <Card className={cn("h-full", MF_SIP_CARD_CLASS)}>
           <CardContent className={MF_SIP_CARD_CONTENT_CLASS}>
             <div className="flex items-center gap-2.5 text-body font-semibold tracking-tight">
-              <span className={MF_SIP_ICON_BADGE_CLASS}>
-                <CalendarClock className="size-4" strokeWidth={2.25} />
-              </span>
+              <CalendarClock
+                className={cn("size-5 shrink-0", PAGE_HEADER_ICON_CLASS)}
+                strokeWidth={2.25}
+              />
               {copy.mutualFunds.sipInputsTitle}
             </div>
 
@@ -380,17 +385,14 @@ export function MfSipCalculatorView() {
             />
 
             <div className={MF_SIP_PANEL_CLASS}>
-              <label className="text-caption font-medium text-foreground">{copy.mutualFunds.sipDayLabel}</label>
-              <div className="mt-2.5">
-                <MfSipDayPicker value={sipDay} onChange={setSipDay} disabled={!fund} compact />
-              </div>
+              <MfSipDayPicker value={sipDay} onChange={setSipDay} disabled={!fund} compact />
             </div>
           </CardContent>
         </Card>
 
         <div className="flex h-full min-h-0 flex-col gap-4">
           {!fund ? (
-            <Card className="h-full flex-1 rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
+            <Card className={cn("h-full flex-1 border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]", ZYND_3XL_RADIUS_CLASS)}>
               <CardContent className="flex h-full min-h-full flex-col items-center justify-center gap-3 p-5 text-center sm:p-6">
                 <TrendingUp className="size-8 text-[var(--sip-empty-icon)]" />
                 <div>
@@ -413,10 +415,10 @@ export function MfSipCalculatorView() {
 
         <Card className={cn("w-full", MF_SIP_CARD_CLASS)}>
           <CardContent className={cn(MF_SIP_CARD_CONTENT_CLASS, "gap-4")}>
-            <div className="space-y-1">
-              <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
-              <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
-            </div>
+            <MfGrowthProjectionHeader
+              title={copy.mutualFunds.sipChartTitle}
+              description={copy.mutualFunds.sipChartDescription}
+            />
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">

@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 
 import { KycDialogCloseButton } from "@/features/kyc/components/kyc-dialog-close-button";
-import { KycDialogSecurityFooter } from "@/features/kyc/components/kyc-dialog-security-footer";
 import { KycVisualPanel } from "@/features/kyc/components/kyc-visual-panel";
 import type { KycJourneyStepId } from "@/features/kyc/lib/kyc-journey";
 import { cn } from "@/lib/utils";
@@ -13,7 +12,6 @@ type KycDialogLayoutProps = {
   onClose: () => void;
   children: ReactNode;
   hidePanelVisual?: boolean;
-  showSecurityFooter?: boolean;
   className?: string;
 };
 
@@ -22,7 +20,6 @@ export function KycDialogLayout({
   onClose,
   children,
   hidePanelVisual = false,
-  showSecurityFooter = true,
   className,
 }: KycDialogLayoutProps) {
   return (
@@ -36,7 +33,6 @@ export function KycDialogLayout({
         />
         <div className="kyc-dialog-form-panel relative flex h-full min-h-0 flex-col bg-card">
           <div className="relative z-[1] flex min-h-0 flex-1 flex-col">{children}</div>
-          {showSecurityFooter ? <KycDialogSecurityFooter /> : null}
         </div>
       </div>
     </div>

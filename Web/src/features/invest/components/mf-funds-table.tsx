@@ -96,7 +96,7 @@ const FundNameCell = memo(function FundNameCell({ fund }: { fund: InvestFundSumm
 
 function MfFundsTableEmptyState({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
       <SearchX className="size-10 text-[var(--sip-empty-icon)]" strokeWidth={1.75} aria-hidden />
       <div>
         <p className="text-compact font-medium text-foreground">{title}</p>
@@ -319,6 +319,26 @@ export function MfFundsTable({
     </>
   );
 
+  const emptyState = (
+    <MfFundsTableEmptyState
+      title={emptyTitle ?? copy.mutualFunds.allFundsEmpty}
+      description={emptyDescription ?? copy.mutualFunds.allFundsEmptyDescription}
+    />
+  );
+
+  if (sortedRows.length === 0) {
+    return (
+      <div className={cn("flex flex-col", className)}>
+        <TableCard.Root
+          size="sm"
+          className="rounded-none border-0 shadow-none"
+        >
+          {emptyState}
+        </TableCard.Root>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("flex h-full min-h-0 flex-col overflow-hidden", className)}>
       <TableCard.Root
@@ -412,13 +432,6 @@ export function MfFundsTable({
                     ) : null}
                   </tbody>
                 </table>
-
-                {sortedRows.length === 0 ? (
-                  <MfFundsTableEmptyState
-                    title={emptyTitle ?? copy.mutualFunds.allFundsEmpty}
-                    description={emptyDescription ?? copy.mutualFunds.allFundsEmptyDescription}
-                  />
-                ) : null}
 
                 {tableFooter}
               </>
@@ -519,13 +532,6 @@ export function MfFundsTable({
                     </Table.Body>
                   ) : null}
                 </Table>
-
-                {sortedRows.length === 0 ? (
-                  <MfFundsTableEmptyState
-                    title={emptyTitle ?? copy.mutualFunds.allFundsEmpty}
-                    description={emptyDescription ?? copy.mutualFunds.allFundsEmptyDescription}
-                  />
-                ) : null}
 
                 {tableFooter}
               </>

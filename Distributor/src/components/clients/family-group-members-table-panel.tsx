@@ -23,7 +23,7 @@ import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import type {
   DistributorClientFamilyGroup,
   DistributorClientFamilyMember,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import { formatAum } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { cn } from "@/lib/utils";

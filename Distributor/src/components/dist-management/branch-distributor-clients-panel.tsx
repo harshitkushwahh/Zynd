@@ -20,13 +20,12 @@ import {
   type InvestorTableFilters,
 } from "@/components/investors/investor-filters";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { BranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
+import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
 import {
   distributorClientDetailHref,
-  getDistributorClientProfile,
-} from "@/lib/dummy/client-profile";
+} from "@/lib/distributor-client-routes";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
-import type { DistributorInvestor } from "@/lib/dummy/types";
+import type { DistributorInvestor } from "@/lib/distributor-types";
 import { formatAum } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { investmentStatusVariant, onboardingStatusVariant } from "@/lib/status-meta";
@@ -46,7 +45,7 @@ type BranchDistributorClientRow = DistributorInvestor & {
 function toClientRows(investors: DistributorInvestor[]): BranchDistributorClientRow[] {
   return investors.map((investor) => ({
     ...investor,
-    displayName: getDistributorClientProfile(investor.id)?.displayName ?? investor.clientCode,
+    displayName: investor.clientCode,
   }));
 }
 
@@ -143,7 +142,7 @@ export function BranchDistributorClientsPanel({
             >
               <Table.Cell>
                 <Link href={href} className="font-medium text-foreground hover:underline">
-                  {investor.displayName}
+                  {investor.emailMasked}
                 </Link>
               </Table.Cell>
               <Table.Cell className="font-mono text-caption">{investor.clientCode}</Table.Cell>
@@ -182,7 +181,7 @@ export function BranchDistributorClientsPanel({
           icon={UserCheck}
           label="Onboarded"
           value={String(onboardedCount)}
-          hint={`${investors.length} in demo sample`}
+          hint={`${investors.length} clients`}
           tone="soft"
         />
         <BranchDistributorSquareMetricCard

@@ -33,7 +33,7 @@ from app.infrastructure.persistence.investor_models import (
     InvestorObjectSyncStatus,
     InvestorProfile,
 )
-from app.infrastructure.persistence.models import KycJourneyState, User
+from app.infrastructure.persistence.models import KycJourneyState, KycOverallStatus, User, UserKycStatus
 from app.infrastructure.persistence.repositories.investor_profile_repository import (
     get_or_create_pending_investor_profile,
 )
@@ -262,6 +262,20 @@ async def _count_active_bank_accounts(db: AsyncSession, *, user_id: UUID) -> int
     return sum(1 for row in rows if not is_bank_account_disabled(row))
 
 
+async def _is_kyc_completed(db: AsyncSession, user_id: UUID) -> bool:
+    status = await db.get(UserKycStatus, user_id)
+    return bool(status and status.overall_status == KycOverallStatus.completed)
+
+
+async def _require_kyc_completed(db: AsyncSession, user_id: UUID) -> None:
+    if not await _is_kyc_completed(db, user_id):
+        raise InvestorBankAccountError(
+            code="kyc_required",
+            message="Complete KYC verification before managing bank accounts.",
+            status_code=403,
+        )
+
+
 async def _require_pan_verified_journey(db: AsyncSession, user_id: UUID):
     journey = await get_or_create_journey(db, user_id)
     pan_draft = journey.pan_draft_json if isinstance(journey.pan_draft_json, dict) else {}
@@ -341,6 +355,8 @@ def serialize_bank_account(row: InvestorBankAccount) -> dict[str, Any]:
 
 
 async def list_user_bank_accounts(db: AsyncSession, *, user_id: UUID) -> list[dict[str, Any]]:
+    if not await _is_kyc_completed(db, user_id):
+        return []
     journey, _, _ = await _require_pan_verified_journey(db, user_id)
     profile = await get_or_create_pending_investor_profile(db, user_id=user_id)
     rows = (
@@ -377,6 +393,7 @@ async def verify_and_add_bank_account(
     account_type: str,
     ifsc_code: str,
 ) -> dict[str, Any]:
+    await _require_kyc_completed(db, user.id)
     journey, pan_draft, pan_number = await _require_pan_verified_journey(db, user.id)
     profile = await get_or_create_pending_investor_profile(db, user_id=user.id)
 
@@ -517,6 +534,7 @@ async def upload_bank_account_proof(
 ) -> dict[str, Any]:
     from app.infrastructure.kyc.poa_client import upload_poa_file
 
+    await _require_kyc_completed(db, user.id)
     await _require_pan_verified_journey(db, user.id)
     row = await _get_owned_bank_account(db, user_id=user.id, bank_account_id=bank_account_id)
 
@@ -571,6 +589,7 @@ async def verify_bank_account_manual(
 ) -> dict[str, Any]:
     from app.infrastructure.kyc.poa_client import poa_verify_bank_account_manual
 
+    await _require_kyc_completed(db, user.id)
     journey, pan_draft, pan_number = await _require_pan_verified_journey(db, user.id)
     profile = await get_or_create_pending_investor_profile(db, user_id=user.id)
     row = await _get_owned_bank_account(db, user_id=user.id, bank_account_id=bank_account_id)
@@ -668,6 +687,7 @@ async def get_bank_account_preverify_status(
 ) -> dict[str, Any]:
     from app.infrastructure.kyc.poa_client import fetch_poa_preverification
 
+    await _require_kyc_completed(db, user_id)
     row = await _get_owned_bank_account(db, user_id=user_id, bank_account_id=bank_account_id)
     if row.poa_preverify_id != preverify_id:
         raise InvestorBankAccountError(
@@ -696,6 +716,7 @@ async def set_primary_bank_account(
     user_id: UUID,
     bank_account_id: UUID,
 ) -> dict[str, Any]:
+    await _require_kyc_completed(db, user_id)
     await _require_pan_verified_journey(db, user_id)
     target = await _get_owned_bank_account(db, user_id=user_id, bank_account_id=bank_account_id)
 
@@ -755,6 +776,7 @@ async def disable_bank_account(
     user_id: UUID,
     bank_account_id: UUID,
 ) -> None:
+    await _require_kyc_completed(db, user_id)
     await _require_pan_verified_journey(db, user_id)
     row = await _get_owned_bank_account(
         db,

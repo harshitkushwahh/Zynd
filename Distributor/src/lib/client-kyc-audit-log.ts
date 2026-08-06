@@ -2,9 +2,9 @@ import type {
   DistributorClientKycAuditEntry,
   DistributorClientKycStep,
   DistributorInvestor,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
-export type { DistributorClientKycAuditEntry } from "@/lib/dummy/types";
+export type { DistributorClientKycAuditEntry } from "@/lib/distributor-types";
 
 function hashOffset(seed: string, index: number): number {
   let hash = index;

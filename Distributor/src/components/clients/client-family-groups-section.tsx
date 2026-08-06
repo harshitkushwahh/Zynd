@@ -9,7 +9,7 @@ import { DistributorActionButton } from "@/components/ui/distributor-action-butt
 import { Card } from "@/components/ui/card";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
-import type { DistributorClientFamilyGroup } from "@/lib/dummy/types";
+import type { DistributorClientFamilyGroup } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 type ClientFamilyGroupsSectionProps = {

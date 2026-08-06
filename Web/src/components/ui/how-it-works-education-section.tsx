@@ -118,6 +118,7 @@ type HowItWorksEducationSectionProps = {
   steps: HowItWorksStep[];
   id?: string;
   className?: string;
+  radiusClassName?: string;
 };
 
 export function HowItWorksEducationSection({
@@ -125,6 +126,7 @@ export function HowItWorksEducationSection({
   steps,
   id,
   className,
+  radiusClassName,
 }: HowItWorksEducationSectionProps) {
   return (
     <section id={id} className={cn("space-y-3", className)}>
@@ -138,6 +140,7 @@ export function HowItWorksEducationSection({
           return (
             <WobbleCard
               key={step.label}
+              radiusClassName={radiusClassName}
               containerClassName={config.containerClassName}
               className="relative min-h-full"
             >

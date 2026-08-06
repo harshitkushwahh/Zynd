@@ -11,7 +11,7 @@ import {
   resolveGoalProgressPct,
 } from "@/lib/client-goal-ui";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientGoal } from "@/lib/dummy/types";
+import type { DistributorClientGoal } from "@/lib/distributor-types";
 import { formatAum } from "@/lib/format";
 
 type FamilyGroupGoalTileProps = {

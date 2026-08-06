@@ -35,6 +35,12 @@ export const ADMIN_PERMISSIONS: Array<{ key: string; description: string }> = [
   { key: "mf.catalog.publish", description: "Apply catalog rules and bulk catalog mutations" },
   { key: "mf.transactions.read", description: "View MF orders, checkouts, SIP plans, mandates, and webhooks" },
   { key: "mf.transactions.manage", description: "Reconcile MF transactions, replay webhooks, and expire stale checkouts" },
+  { key: "admin.distributor_partners.list", description: "Review pending Zynd Mitra onboarding applications" },
+  { key: "admin.distributor_partners.approve", description: "Approve or reject Zynd Mitra onboarding applications" },
+  { key: "admin.distributor_hierarchy.read", description: "View Mitra hierarchy branches, managers, and partners" },
+  { key: "admin.distributor_branches.list", description: "List distributor branches in admin hierarchy" },
+  { key: "admin.distributor_branches.manage", description: "Create and update distributor branches" },
+  { key: "admin.distributor_managers.list", description: "List branch managers in admin hierarchy" },
 ];
 
 /** Mirrors Backend/app/application/admin/permission_matrix.py (read-only admin UI). */
@@ -67,6 +73,12 @@ export const PERMISSION_ROUTE_MATRIX: PermissionRouteEntry[] = [
   { permission: "mf.catalog.publish", status: "enforced", routes: ["POST /admin/mf/rules/apply", "POST /admin/mf/funds/bulk"], notes: "Apply rules and bulk catalog mutations." },
   { permission: "mf.transactions.read", status: "enforced", routes: ["GET /admin/mf/transactions/overview", "GET /admin/mf/transactions/orders", "GET /admin/mf/transactions/sip-plans", "GET /admin/mf/transactions/mandates", "GET /admin/mf/transactions/webhooks"], notes: "MF payment ops read APIs." },
   { permission: "mf.transactions.manage", status: "enforced", routes: ["POST /admin/mf/transactions/orders/{order_id}/sync", "POST /admin/mf/transactions/sip-plans/{plan_id}/sync", "POST /admin/mf/transactions/webhooks/{event_id}/replay"], notes: "Reconcile stuck MF transactions and replay webhooks." },
+  { permission: "admin.distributor_partners.list", status: "enforced", routes: ["GET /admin/distributor-partners/pending", "GET /admin/distributor-partners/{partner_id}"], notes: "HO review queue for Zynd Mitra onboarding." },
+  { permission: "admin.distributor_partners.approve", status: "enforced", routes: ["POST /admin/distributor-partners/{partner_id}/approve", "POST /admin/distributor-partners/{partner_id}/reject"], notes: "Approve or reject Zynd Mitra applications." },
+  { permission: "admin.distributor_hierarchy.read", status: "enforced", routes: ["GET /admin/distributor-hierarchy/overview", "GET /admin/distributor-hierarchy/branches", "GET /admin/distributor-hierarchy/managers", "GET /admin/distributor-hierarchy/partners", "GET /admin/distributor-hierarchy/state-heads"], notes: "Mitra hierarchy read APIs for admin console." },
+  { permission: "admin.distributor_branches.list", status: "enforced", routes: ["GET /admin/distributor-hierarchy/branches"], notes: "Alias scope for branch listing in hierarchy console." },
+  { permission: "admin.distributor_branches.manage", status: "enforced", routes: ["GET /admin/distributor-hierarchy/branch-manager-candidates", "POST /admin/distributor-hierarchy/branches", "POST /admin/distributor-hierarchy/state-heads"], notes: "Create branches and Mitra State Head accounts." },
+  { permission: "admin.distributor_managers.list", status: "enforced", routes: ["GET /admin/distributor-hierarchy/managers"], notes: "Alias scope for branch manager listing in hierarchy console." },
 ];
 
 export function groupPermissionsByResource(permissions: string[]) {

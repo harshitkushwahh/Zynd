@@ -21,6 +21,7 @@ type ConfirmDialogProps = {
   doneLabel?: string;
   onConfirm?: () => void;
   loading?: boolean;
+  contentClassName?: string;
 };
 
 const variantConfig: Record<
@@ -67,6 +68,7 @@ export function ConfirmDialog({
   doneLabel = copy.confirmDialog.done,
   onConfirm,
   loading = false,
+  contentClassName,
 }: ConfirmDialogProps) {
   const isInfo = variant === "info";
 
@@ -78,7 +80,7 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="z-[60] max-w-sm gap-0 overflow-hidden p-0"
+        className={cn("z-[60] max-w-sm gap-0 overflow-hidden p-0", contentClassName)}
         overlayClassName="z-[60]"
         showCloseButton={false}
       >

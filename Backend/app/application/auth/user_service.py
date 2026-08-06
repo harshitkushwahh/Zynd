@@ -31,6 +31,7 @@ async def user_to_public_dict(db: AsyncSession, user: User) -> dict[str, Any]:
         "account_status": user.status.value,
         "deletion_scheduled_at": user.deletion_scheduled_at,
         "client_id": user.client_id,
+        "created_at": user.created_at,
     }
 
 

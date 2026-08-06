@@ -16,6 +16,7 @@ import {
   OverviewLockedCardBackdrop,
   OverviewLockedCardOverlay,
 } from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
 import { OverviewFamilyLockedPreview } from "@/features/dashboard/overview/components/overview-family-locked-preview";
 import { useAuth } from "@/contexts/auth-context";
 import {
@@ -389,30 +390,48 @@ export function OverviewFamilyCircles({ className }: OverviewFamilyCirclesProps)
     >
       {isLocked ? (
         <div className="relative flex flex-col">
-          <div className="pointer-events-none flex flex-col select-none blur-[5px]">
-            <OverviewFamilyLockedPreview />
-          </div>
-          <OverviewLockedCardBackdrop />
-          <OverviewLockedCardOverlay
+          <OverviewCompactCardHeader
             title={overview.familyTitle}
-            subtitle={overview.familyEmpty}
+            href={FAMILY_HREF}
+            ariaLabel={overview.familyViewAll}
           />
+          <div className="relative mt-3 flex flex-col">
+            <div className="pointer-events-none flex flex-col select-none blur-[5px]">
+              <OverviewFamilyLockedPreview />
+            </div>
+            <OverviewLockedCardBackdrop />
+            <OverviewLockedCardOverlay
+              title={overview.familyTitle}
+              subtitle={overview.familyEmpty}
+            />
+          </div>
         </div>
       ) : null}
 
       {!isLocked && groupsLoading ? (
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <>
+          <OverviewCompactCardHeader title={overview.familyTitle} />
+          <div className="mt-3 flex items-center gap-2.5">
             <Skeleton className="size-10 rounded-full" />
-            <Skeleton className="h-4 w-28" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-28" />
+              <div className="flex gap-1.5">
+                <Skeleton className="size-1.5 rounded-full" />
+                <Skeleton className="size-1.5 rounded-full" />
+              </div>
+            </div>
           </div>
-          <Skeleton className="size-3.5" />
-        </div>
+        </>
       ) : null}
 
       {!isLocked && activeGroup ? (
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <>
+          <OverviewCompactCardHeader
+            title={overview.familyTitle}
+            href={groupHref}
+            ariaLabel={overview.familyViewAll}
+          />
+          <div className="mt-3 flex min-w-0 items-center gap-2.5">
             <GroupLogo group={activeGroup} colorIndex={activeGroupIndex} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-compact font-semibold text-foreground">{activeGroup.title}</p>
@@ -425,14 +444,7 @@ export function OverviewFamilyCircles({ className }: OverviewFamilyCirclesProps)
               </div>
             </div>
           </div>
-          <Link
-            href={groupHref}
-            className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
-            aria-label={overview.familyViewAll}
-          >
-            <ArrowUpRight className="size-3.5" strokeWidth={2.25} />
-          </Link>
-        </div>
+        </>
       ) : null}
 
       {!isLocked && contentLoading ? (
@@ -525,6 +537,8 @@ export function OverviewFamilyCircles({ className }: OverviewFamilyCirclesProps)
 }
 
 export function OverviewFamilyCardSkeleton({ className }: { className?: string }) {
+  const overview = copy.dashboard.overview;
+
   return (
     <div
       className={cn(
@@ -533,18 +547,16 @@ export function OverviewFamilyCardSkeleton({ className }: { className?: string }
       )}
       aria-hidden="true"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <Skeleton className="size-10 rounded-full" />
-          <div className="space-y-1.5">
-            <Skeleton className="h-4 w-28" />
-            <div className="flex gap-1.5">
-              <Skeleton className="size-1.5 rounded-full" />
-              <Skeleton className="size-1.5 rounded-full" />
-            </div>
+      <OverviewCompactCardHeader title={overview.familyTitle} />
+      <div className="mt-3 flex items-center gap-2.5">
+        <Skeleton className="size-10 rounded-full" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-28" />
+          <div className="flex gap-1.5">
+            <Skeleton className="size-1.5 rounded-full" />
+            <Skeleton className="size-1.5 rounded-full" />
           </div>
         </div>
-        <Skeleton className="size-3.5" />
       </div>
       <div className="mt-4 flex items-end gap-2.5">
         <Skeleton className="h-9 w-28" />

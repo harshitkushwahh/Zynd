@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import logging
+import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_gate_service import (
-    is_rekyc_modification,
     require_phase2_complete,
     requires_full_kyc_submission,
+    resolve_kyc_form_type,
 )
 from app.application.kyc.journey_state_service import (
     get_or_create_journey,
@@ -71,6 +75,132 @@ def _sync_journey_from_form(journey: Any, form: dict[str, Any]) -> None:
     journey.esign_details_status = _esign_status(form)
 
 
+def _kyc_form_status(form: dict[str, Any]) -> str:
+    return str(form.get("status") or "")
+
+
+def _validate_form_for_submission(form: dict[str, Any]) -> None:
+    status = _kyc_form_status(form)
+    if status == "failed":
+        raise KycError(
+            str(form.get("reason") or "KYC form failed at the provider."),
+            "kyc_form_create_failed",
+            400,
+        )
+    if status == "expired":
+        raise KycError(
+            str(form.get("reason") or "KYC form has expired."),
+            "kyc_form_expired",
+            400,
+        )
+    if status == "submitted":
+        raise KycError(
+            "KYC form was already submitted.",
+            "kyc_form_already_submitted",
+            400,
+        )
+
+
+async def _fetch_bound_kyc_form(
+    db: AsyncSession,
+    journey: Any,
+    form_id: str,
+) -> dict[str, Any]:
+    """Load an existing Cybrilla kyc_form by ID and sync the journey reference."""
+    try:
+        form = await fetch_kyc_form(form_id)
+    except FpClientError as exc:
+        logger.warning(
+            "[KYC] Could not fetch kyc_form | form_id=%s | error=%s",
+            form_id,
+            exc.message,
+        )
+        raise KycError(
+            f"Could not load KYC form {form_id}.",
+            "kyc_form_not_found",
+            502,
+        ) from exc
+
+    await _persist_kyc_form_reference(db, journey, form)
+    return form
+
+
+async def _persist_kyc_form_reference(
+    db: AsyncSession,
+    journey: Any,
+    form: dict[str, Any],
+) -> None:
+    _sync_journey_from_form(journey, form)
+    await db.flush()
+    await db.commit()
+
+
+async def _persist_created_form_reference(
+    db: AsyncSession,
+    journey: Any,
+    *,
+    form_id: str,
+    form_type: str,
+    status: str | None = None,
+) -> None:
+    journey.external_kyc_form_id = form_id
+    journey.kyc_form_type = form_type
+    journey.kyc_form_status = status or "under_review"
+    await db.flush()
+    await db.commit()
+
+
+async def _finalize_new_kyc_form(
+    db: AsyncSession,
+    journey: Any,
+    *,
+    created: dict[str, Any],
+    form_type: str,
+) -> dict[str, Any]:
+    form_id = str(created["id"])
+    await _persist_created_form_reference(
+        db,
+        journey,
+        form_id=form_id,
+        form_type=form_type,
+        status=str(created.get("status") or "under_review"),
+    )
+
+    form = await poll_kyc_form_until_created(form_id)
+    _sync_journey_from_form(journey, form)
+
+    if _kyc_form_status(form) == "failed":
+        await _persist_kyc_form_reference(db, journey, form)
+        raise KycError(
+            str(form.get("reason") or "KYC form could not be created."),
+            "kyc_form_create_failed",
+            400,
+        )
+
+    await _persist_kyc_form_reference(db, journey, form)
+    return form
+
+
+def _extract_form_id_from_error(exc: FpClientError) -> str | None:
+    raw_text = f"{exc.response_data} {exc.message}"
+    matched = re.search(r"kycf_[a-zA-Z0-9]+", raw_text)
+    if matched:
+        return matched.group(0)
+
+    if isinstance(exc.response_data, dict):
+        resp_id = exc.response_data.get("id")
+        if not resp_id and isinstance(exc.response_data.get("error"), dict):
+            resp_id = exc.response_data["error"].get("id")
+        if resp_id and str(resp_id).startswith("kycf_"):
+            return str(resp_id)
+    return None
+
+
+def _is_ongoing_form_exists_error(exc: FpClientError) -> bool:
+    raw_text = f"{exc.response_data} {exc.message}".lower()
+    return "already exists" in raw_text or "ongoing kyc form" in raw_text
+
+
 def _build_next_action(form: dict[str, Any], *, journey: Any) -> dict[str, Any]:
     status = str(form.get("status") or "")
     if status == "failed":
@@ -122,40 +252,112 @@ async def ensure_kyc_form(db: AsyncSession, *, user: User, journey: Any) -> dict
     if not pan or not name or not dob:
         raise KycError("Complete PAN verification before submitting KYC.", "pan_not_verified", 403)
 
-    form_type = (
-        "modify"
-        if journey.kyc_already_registered or is_rekyc_modification(journey)
-        else "fresh"
+    form_type = resolve_kyc_form_type(journey)
+    print(f"[KYC] ensure_kyc_form started | pan={pan} | form_type={form_type} | existing_form_id={journey.external_kyc_form_id} | kyc_already_registered={journey.kyc_already_registered}", flush=True)
+    logger.info(
+        "[KYC] ensure_kyc_form started | pan=%s | form_type=%s | existing_form_id=%s | kyc_already_registered=%s",
+        pan, form_type, journey.external_kyc_form_id, journey.kyc_already_registered,
     )
 
     if journey.external_kyc_form_id:
-        form = await fetch_kyc_form(journey.external_kyc_form_id)
-        if str(form.get("status")) not in {"failed", "expired"}:
-            _sync_journey_from_form(journey, form)
-            return form
-
-    created = await create_kyc_form(
-        form_type=form_type,
-        pan=pan,
-        name=name,
-        date_of_birth=dob,
-        proof_details_callback_url=settings.resolved_kyc_proof_callback_url,
-        esign_callback_url=settings.resolved_kyc_esign_callback_url,
-    )
-    form_id = str(created["id"])
-    journey.external_kyc_form_id = form_id
-    journey.kyc_form_type = form_type
-    form = await poll_kyc_form_until_created(form_id)
-    _sync_journey_from_form(journey, form)
-
-    if str(form.get("status")) == "failed":
-        raise KycError(
-            str(form.get("reason") or "KYC form could not be created."),
-            "kyc_form_create_failed",
-            400,
+        print(
+            f"[KYC] Reusing bound form from journey | form_id={journey.external_kyc_form_id}",
+            flush=True,
         )
-    await db.flush()
-    return form
+        logger.info(
+            "[KYC] Reusing bound form from journey | form_id=%s",
+            journey.external_kyc_form_id,
+        )
+        form = await _fetch_bound_kyc_form(db, journey, journey.external_kyc_form_id)
+        print(
+            f"[KYC] Bound form loaded | form_id={form.get('id')} | status={form.get('status')}",
+            flush=True,
+        )
+        _validate_form_for_submission(form)
+        return form
+
+    print(f"[KYC] Creating new KYC form | pan={pan} | form_type={form_type}", flush=True)
+    logger.info("[KYC] Creating new KYC form | pan=%s | form_type=%s", pan, form_type)
+
+    import traceback as _tb
+    _created: dict[str, Any] | None = None
+    _kyc_create_exc: FpClientError | None = None
+    try:
+        _created = await create_kyc_form(
+            form_type=form_type,
+            pan=pan,
+            name=name,
+            date_of_birth=dob,
+            proof_details_callback_url=settings.resolved_kyc_proof_callback_url,
+            esign_callback_url=settings.resolved_kyc_esign_callback_url,
+        )
+        print(f"[KYC] KYC form created successfully | form_id={_created.get('id')}", flush=True)
+        logger.info("[KYC] KYC form created successfully | form_id=%s", _created.get("id"))
+    except FpClientError as _fp_exc:
+        _kyc_create_exc = _fp_exc
+        print(f"[KYC] create_kyc_form FpClientError | status_code={_fp_exc.status_code} | message={_fp_exc.message} | response_data={_fp_exc.response_data}", flush=True)
+    except Exception as _other_exc:
+        print(f"[KYC] create_kyc_form NON-FpClientError EXCEPTION type={type(_other_exc).__name__} | repr={repr(_other_exc)}", flush=True)
+        print(_tb.format_exc(), flush=True)
+        raise
+
+    if _kyc_create_exc is not None:
+        exc = _kyc_create_exc
+        raw_text = f"{exc.response_data} {exc.message}"
+        is_already_exists = _is_ongoing_form_exists_error(exc)
+        is_ineligible_fresh = "ineligible_for_fresh_kyc" in raw_text.lower()
+        is_ineligible_modify = "ineligible_for_kyc_modification" in raw_text.lower()
+        print(f"[KYC] Error flags | is_already_exists={is_already_exists} | is_ineligible_fresh={is_ineligible_fresh} | is_ineligible_modify={is_ineligible_modify}", flush=True)
+        logger.error(
+            "[KYC] create_kyc_form FAILED | pan=%s | form_type=%s | status_code=%s | message=%s | response_data=%s",
+            pan, form_type, exc.status_code, exc.message, exc.response_data,
+        )
+
+        if is_already_exists:
+            matched_id_str = _extract_form_id_from_error(exc)
+            print(f"[KYC] Recovered form ID from error | matched_id_str={matched_id_str}", flush=True)
+
+            if matched_id_str:
+                form = await _fetch_bound_kyc_form(db, journey, matched_id_str)
+                print(
+                    f"[KYC] Bound recovered form | form_id={matched_id_str} | status={form.get('status')}",
+                    flush=True,
+                )
+                _validate_form_for_submission(form)
+                return form
+
+            raise KycError(
+                "An ongoing KYC form already exists for this PAN. Retry submission or contact support.",
+                "kyc_form_already_exists",
+                400,
+            ) from exc
+        elif is_ineligible_fresh and form_type == "fresh":
+            print("[KYC] Retrying as modify due to ineligible_for_fresh_kyc", flush=True)
+            try:
+                _created = await create_kyc_form(
+                    form_type="modify", pan=pan, name=name, date_of_birth=dob,
+                    proof_details_callback_url=settings.resolved_kyc_proof_callback_url,
+                    esign_callback_url=settings.resolved_kyc_esign_callback_url,
+                )
+                form_type = "modify"
+            except FpClientError:
+                raise exc
+        elif is_ineligible_modify and form_type == "modify":
+            print("[KYC] Retrying as fresh due to ineligible_for_kyc_modification", flush=True)
+            try:
+                _created = await create_kyc_form(
+                    form_type="fresh", pan=pan, name=name, date_of_birth=dob,
+                    proof_details_callback_url=settings.resolved_kyc_proof_callback_url,
+                    esign_callback_url=settings.resolved_kyc_esign_callback_url,
+                )
+                form_type = "fresh"
+            except FpClientError:
+                raise exc
+        else:
+            raise exc
+
+    assert _created is not None
+    return await _finalize_new_kyc_form(db, journey, created=_created, form_type=form_type)
 
 
 async def submit_compliant_kyc_journey(db: AsyncSession, *, user: User) -> dict[str, Any]:
@@ -233,13 +435,21 @@ async def submit_kyc_form(
 
     try:
         form = await ensure_kyc_form(db, user=user, journey=journey)
+        print(f"[KYC] ensure_kyc_form OK | form_id={form.get('id')} | status={form.get('status')}", flush=True)
 
         patch_payload = build_kyc_form_patch_payload(
             user_email=user.email,
             user_phone=user.phone,
             journey=journey,
         )
-        form = await patch_kyc_form(str(form["id"]), patch_payload)
+        print(f"[KYC] Calling patch_kyc_form | form_id={form.get('id')} | patch_keys={list(patch_payload.keys())}", flush=True)
+        try:
+            form = await patch_kyc_form(str(form["id"]), patch_payload)
+            print(f"[KYC] patch_kyc_form OK | form_id={form.get('id')} | status={form.get('status')}", flush=True)
+        except FpClientError as _pe:
+            print(f"[KYC] patch_kyc_form FAILED | status_code={_pe.status_code} | message={_pe.message} | response_data={_pe.response_data}", flush=True)
+            await _persist_kyc_form_reference(db, journey, form)
+            raise
         _sync_journey_from_form(journey, form)
 
         signature_draft = journey.signature_draft_json or {}
@@ -248,17 +458,25 @@ async def submit_kyc_form(
             if not data_url:
                 raise KycError("Signature file is missing.", "signature_required", 400)
             file_bytes, filename, content_type = data_url_to_file(data_url)
-            form = await upload_kyc_form_signature(
-                str(form["id"]),
-                file_bytes=file_bytes,
-                filename=filename,
-                content_type=content_type,
-            )
+            print(f"[KYC] Uploading signature | form_id={form.get('id')}", flush=True)
+            try:
+                form = await upload_kyc_form_signature(
+                    str(form["id"]),
+                    file_bytes=file_bytes,
+                    filename=filename,
+                    content_type=content_type,
+                )
+                print(f"[KYC] upload_signature OK | status={form.get('status')}", flush=True)
+            except FpClientError as _se:
+                print(f"[KYC] upload_signature FAILED | status_code={_se.status_code} | message={_se.message} | response_data={_se.response_data}", flush=True)
+                await _persist_kyc_form_reference(db, journey, form)
+                raise
             _sync_journey_from_form(journey, form)
 
         form = await fetch_kyc_form(str(form["id"]))
         _sync_journey_from_form(journey, form)
     except FpClientError as exc:
+        print(f"[KYC] submit_kyc_form FpClientError (outer) | message={exc.message} | response_data={exc.response_data}", flush=True)
         raise KycError(exc.message, exc.code, exc.status_code) from exc
 
     status = await get_or_create_status(db, user.id)

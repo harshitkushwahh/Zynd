@@ -59,6 +59,11 @@ export type KycBootstrapResponse = {
   kyc_form_failure_reason: string | null;
   proof_details_status: string | null;
   esign_details_status: string | null;
+  geolocation_draft: {
+    latitude?: number;
+    longitude?: number;
+    accuracyMeters?: number;
+  } | null;
   step_statuses?: KycStepStatuses | null;
 };
 
@@ -182,6 +187,11 @@ export async function saveKycJourneyState(body: {
   nominee_draft_json?: Record<string, unknown>[];
   bank_draft_json?: Record<string, unknown>;
   signature_draft_json?: Record<string, unknown>;
+  geolocation_json?: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number;
+  };
   last_completed_step?:
     | "pan"
     | "digilocker"
@@ -200,6 +210,20 @@ export async function saveKycJourneyState(body: {
       body: JSON.stringify(body),
     },
   );
+}
+
+export async function saveKycGeolocation(coords: {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+}) {
+  return saveKycJourneyState({
+    geolocation_json: {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracyMeters: coords.accuracy,
+    },
+  });
 }
 
 export async function fetchKycMasterDataEnums() {

@@ -1,3 +1,5 @@
+import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
+
 export type DistributorAgent = {
   id: string;
   name: string;
@@ -8,40 +10,16 @@ export type DistributorAgent = {
   branchId?: string;
   branchName?: string;
   branchCode?: string;
+  zyndClientId?: string;
   avatarUrl?: string | null;
+  /** ISO timestamp when the distributor account was created. */
+  joinedAt?: string;
 };
 
-export const DISTRIBUTOR_DEMO_AGENTS: DistributorAgent[] = [
-  {
-    id: "dist-riya",
-    name: "Riya Mehta",
-    email: "riya@zynd.distributor",
-    password: "distributor123",
-    initials: "RM",
-    role: "distributor",
-    branchId: "branch-andheri",
-    branchName: "Mumbai · Andheri",
-    branchCode: "MUM-AND",
-  },
-  {
-    id: "dist-arjun",
-    name: "Arjun Kapoor",
-    email: "arjun@zynd.distributor",
-    password: "distributor123",
-    initials: "AK",
-    role: "branch_manager",
-    branchId: "branch-andheri",
-    branchName: "Mumbai · Andheri",
-    branchCode: "MUM-AND",
-    avatarUrl: "/client.jpeg",
-  },
-];
+export function findDistributorAgent(_email: string, _password: string): DistributorAgent | null {
+  return null;
+}
 
-export function findDistributorAgent(email: string, password: string): DistributorAgent | null {
-  const normalized = email.trim().toLowerCase();
-  return (
-    DISTRIBUTOR_DEMO_AGENTS.find(
-      (agent) => agent.email === normalized && agent.password === password,
-    ) ?? null
-  );
+export function getDemoAccountErrorMessage(): string {
+  return ZYND_MITRA_COPY.demoAccountError;
 }

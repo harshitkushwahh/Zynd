@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { ArrowUpRight } from "lucide-react";
 
 import { FieldMessage } from "@/components/ui/ui-message";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +9,7 @@ import {
   OverviewLockedCardBackdrop,
   OverviewLockedCardOverlay,
 } from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
 import { OVERVIEW_GOALS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import {
   GOAL_PROGRESS_CARD_WIDTH_CLASS,
@@ -78,14 +78,16 @@ export function OverviewGoalsCard({ className }: OverviewGoalsCardProps) {
         className,
       )}
     >
+      <OverviewCompactCardHeader
+        title={overview.goalsTitle}
+        href={GOALS_HREF}
+        ariaLabel={overview.goalsViewAll}
+      />
+
       {isLocked ? (
-        <div className="relative flex h-full min-h-0 flex-1 flex-col">
+        <div className="relative mt-3 flex min-h-0 flex-1 flex-col">
           <div className="pointer-events-none flex h-full min-h-0 flex-1 select-none flex-col blur-[5px]">
-            <div className="flex shrink-0 items-start justify-between gap-2">
-              <p className="text-caption font-semibold text-foreground">{overview.goalsTitle}</p>
-              <ArrowUpRight className="size-3.5 text-muted-foreground" strokeWidth={2.25} />
-            </div>
-            <div className="mt-3 flex min-h-0 flex-1 items-center overflow-hidden">
+            <div className="flex min-h-0 flex-1 items-center overflow-hidden">
               <div className="flex w-full items-stretch gap-3 overflow-hidden">
                 {OVERVIEW_GOALS_LOCKED_PREVIEW.map((goal) => (
                   <GoalProgressCard key={goal.id} goal={goal} variant="overview" />
@@ -101,45 +103,32 @@ export function OverviewGoalsCard({ className }: OverviewGoalsCardProps) {
           />
         </div>
       ) : (
-        <>
-          <div className="flex shrink-0 items-start justify-between gap-2">
-            <p className="text-caption font-semibold text-foreground">{overview.goalsTitle}</p>
-            <Link
-              href={GOALS_HREF}
-              className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
-              aria-label={overview.goalsViewAll}
-            >
-              <ArrowUpRight className="size-3.5" strokeWidth={2.25} />
-            </Link>
-          </div>
-
-          <div className="mt-3 flex min-h-0 flex-1 items-center overflow-hidden">
-            {loading ? (
-              <div className="flex w-full gap-3 overflow-hidden">
-                {Array.from({ length: 2 }).map((_, index) => (
-                  <Skeleton
-                    key={index}
-                    className={cn(
-                      GOAL_PROGRESS_CARD_WIDTH_CLASS,
-                      "shrink-0",
-                      OVERVIEW_GOAL_TILE_HEIGHT_CLASS,
-                      OVERVIEW_TILE_RADIUS_CLASS,
-                    )}
-                  />
-                ))}
-              </div>
-            ) : null}
-            {error ? <FieldMessage variant="error" message={error} /> : null}
-            {previewGoals.length > 0 ? (
-              <div className="flex w-full items-stretch gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {previewGoals.map((goal) => (
-                  <GoalProgressCard key={goal.id} goal={goal} variant="overview" />
-                ))}
-                {remainingCount > 0 ? <MoreGoalsTile count={remainingCount} /> : null}
-              </div>
-            ) : null}
-          </div>
-        </>
+        <div className="mt-3 flex min-h-0 flex-1 items-center overflow-hidden">
+          {loading ? (
+            <div className="flex w-full gap-3 overflow-hidden">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <Skeleton
+                  key={index}
+                  className={cn(
+                    GOAL_PROGRESS_CARD_WIDTH_CLASS,
+                    "shrink-0",
+                    OVERVIEW_GOAL_TILE_HEIGHT_CLASS,
+                    OVERVIEW_TILE_RADIUS_CLASS,
+                  )}
+                />
+              ))}
+            </div>
+          ) : null}
+          {error ? <FieldMessage variant="error" message={error} /> : null}
+          {previewGoals.length > 0 ? (
+            <div className="flex w-full items-stretch gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {previewGoals.map((goal) => (
+                <GoalProgressCard key={goal.id} goal={goal} variant="overview" />
+              ))}
+              {remainingCount > 0 ? <MoreGoalsTile count={remainingCount} /> : null}
+            </div>
+          ) : null}
+        </div>
       )}
     </section>
   );

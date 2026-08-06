@@ -4,21 +4,18 @@ import {
   distributorClientDetailHref,
   YOUR_CLIENTS_LIST_HREF,
 } from "@/lib/distributor-client-routes";
-import { getInvestorById } from "@/lib/dummy/client-profile";
 
 type LegacyResidentClientDetailProps = {
   params: Promise<{ clientId: string }>;
 };
 
-/** Legacy `/your-clients/resident/:id` → book or system detail. */
+/** Legacy `/your-clients/resident/:id` → book detail. */
 export default async function LegacyResidentClientDetailRedirect({
   params,
 }: LegacyResidentClientDetailProps) {
   const { clientId } = await params;
-  const investor = getInvestorById(clientId);
-  if (!investor) {
+  if (!clientId) {
     redirect(YOUR_CLIENTS_LIST_HREF);
   }
-  const origin = investor.inDistributorBook ? "your-book" : "system-resident";
-  redirect(distributorClientDetailHref(origin, clientId));
+  redirect(distributorClientDetailHref("your-book", clientId));
 }

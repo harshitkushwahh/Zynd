@@ -2,7 +2,7 @@ import type {
   DistributorClientDocument,
   DistributorClientKycStep,
   DistributorInvestor,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 function stepById(steps: DistributorClientKycStep[], id: string) {
   return steps.find((step) => step.id === id);

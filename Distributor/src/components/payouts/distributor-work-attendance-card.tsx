@@ -20,7 +20,7 @@ import {
   getDistributorWorkAttendanceChartData,
   getDistributorWorkAttendanceSummary,
   type DistributorWorkAttendanceChartPoint,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { cn } from "@/lib/utils";
 
 const ATTENDANCE_DETAIL_HREF = "/dashboard/payouts/attendance";

@@ -45,7 +45,6 @@ export function MfSipInstallmentsInput({
         >
           {copy.mutualFunds.paymentCardInstallmentsLabel}
         </label>
-        <span className="text-caption text-muted-foreground">{formatInstallmentDuration(value)}</span>
       </div>
       <div
         className={cn(

@@ -20,21 +20,15 @@ import { ClientRiskProfileCard } from "@/components/clients/client-risk-profile-
 import { ClientRiskProfileTab } from "@/components/clients/client-risk-profile-tab";
 import { ClientSipsTransactionsTabPanel } from "@/components/clients/client-sips-transactions-tab-panel";
 import { Button } from "@/components/ui/button";
-import { getDistributorClientProfile } from "@/lib/dummy/client-profile";
 import { fetchDistributorClientDetail } from "@/lib/distributor-clients-api";
-import {
-  buildDistributorClientPortfolioDemoHoldings,
-  getDistributorClientPortfolioDemo,
-} from "@/lib/distributor-client-portfolio-demo";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import { env } from "@/lib/env";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import type {
   DistributorClientProfile,
   DistributorOrder,
   DistributorSystematicPlan,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 type YourClientDetailPageProps = {
   listOrigin: DistributorClientListOrigin;
@@ -62,14 +56,7 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
     setLoading(true);
     setProfile(null);
 
-    if (!env.useBackendClients) {
-      setProfile(getDistributorClientProfile(clientId));
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
-    setLoading(true);
     void fetchDistributorClientDetail(clientId)
       .then((payload) => {
         if (!cancelled) setProfile(payload);
@@ -91,32 +78,17 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
     router.replace(pathname, { scroll: false });
   }, [clientId, pathname, router, searchParams]);
 
-  const portfolioHoldings = useMemo(() => {
-    if (!profile) return [];
-    if (profile.holdings.length > 0) return profile.holdings;
-    const demo = getDistributorClientPortfolioDemo(clientId);
-    return buildDistributorClientPortfolioDemoHoldings(
-      profile.investor.id,
-      profile.investor.clientCode,
-      demo,
-    );
-  }, [profile, clientId]);
+  const portfolioHoldings = useMemo(() => profile?.holdings ?? [], [profile]);
 
   const portfolioTotals = useMemo(() => {
     if (!portfolioHoldings.length) {
-      const demo = getDistributorClientPortfolioDemo(clientId);
-      return {
-        current: demo.current,
-        invested: demo.invested,
-        returns: demo.returns,
-        redeemable: demo.redeemable,
-      };
+      return { current: 0, invested: 0, returns: 0, redeemable: 0 };
     }
     const current = portfolioHoldings.reduce((sum, row) => sum + row.currentValue, 0);
     const invested = portfolioHoldings.reduce((sum, row) => sum + row.investedAmount, 0);
     const redeemable = portfolioHoldings.reduce((sum, row) => sum + row.redeemableValue, 0);
     return { current, invested, returns: current - invested, redeemable };
-  }, [portfolioHoldings, clientId]);
+  }, [portfolioHoldings]);
 
   if (loading || (profile && showSkeleton)) {
     return <ClientDetailPageSkeleton />;

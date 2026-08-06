@@ -5,7 +5,7 @@ import { ScanFace } from "lucide-react";
 import { AddInvestorPanNameCard } from "@/components/add-investor/add-investor-pan-name-card";
 import { Input } from "@/components/ui/input";
 import type { AddInvestorPanName, AddInvestorReadiness } from "@/lib/add-investor/add-investor-journey";
-import { normalizePanInput, ADD_INVESTOR_DEMO_PAN_DIGILOCKER, ADD_INVESTOR_DEMO_PAN_KRA } from "@/lib/add-investor/add-investor-demo";
+import { normalizePanInput } from "@/lib/add-investor/add-investor-demo";
 
 type AddInvestorPanPanelProps = {
   pan: string;
@@ -60,7 +60,7 @@ export function AddInvestorPanPanel({
           id="add-investor-pan"
           value={pan}
           onChange={(event) => onPanChange(normalizePanInput(event.target.value))}
-          placeholder={ADD_INVESTOR_DEMO_PAN_KRA}
+          placeholder="ABCDE1234F"
           autoComplete="off"
           spellCheck={false}
           disabled={disabled || panLoading || panVerified}
@@ -68,11 +68,6 @@ export function AddInvestorPanPanel({
           aria-invalid={Boolean(panError)}
           className="add-investor-pan-panel__input font-mono uppercase"
         />
-
-        <p className="add-investor-pan-panel__demo-hint">
-          Demo: <span className="font-mono">{ADD_INVESTOR_DEMO_PAN_KRA}</span> KRA registered ·{" "}
-          <span className="font-mono">{ADD_INVESTOR_DEMO_PAN_DIGILOCKER}</span> DigiLocker path
-        </p>
 
         {panError ? <p className="add-investor-pan-panel__error">{panError}</p> : null}
       </div>

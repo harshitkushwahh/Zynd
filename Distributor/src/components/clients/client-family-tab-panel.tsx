@@ -6,7 +6,7 @@ import { ClientFamilyGroupsSection } from "@/components/clients/client-family-gr
 import { ClientFamilyTabStatusMetrics } from "@/components/clients/client-family-tab-status-metrics";
 import { filterDistributorVisibleFamilyGroups } from "@/lib/distributor-client-family-groups";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
-import type { DistributorClientFamilyGroup } from "@/lib/dummy/types";
+import type { DistributorClientFamilyGroup } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 type ClientFamilyTabPanelProps = {

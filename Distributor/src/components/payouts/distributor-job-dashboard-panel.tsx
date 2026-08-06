@@ -21,8 +21,8 @@ import {
   DUMMY_DISTRIBUTOR_PAYOUTS,
   type DistributorPayoutRow,
   type DistributorPayoutStatus,
-} from "@/lib/dummy/distributor-payouts";
-import { CURRENT_PAYROLL_ID } from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-payouts-data";
+import { CURRENT_PAYROLL_ID } from "@/lib/distributor-job-dashboard-data";
 import { DISTRIBUTOR_PAGE_STACK_CLASS, DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
@@ -188,7 +188,12 @@ export function DistributorJobDashboardPanel({ title }: DistributorJobDashboardP
       )}
     >
       <DistributorPageHeader title={title} description="">
-        <DistributorJobPeriodSelect value={selectedPeriodId} onValueChange={setSelectedPeriodId} />
+        <DistributorJobPeriodSelect
+          value={selectedPeriodId}
+          onValueChange={(value) => {
+            if (value) setSelectedPeriodId(value);
+          }}
+        />
       </DistributorPageHeader>
 
       <DistributorJobSectionMetrics />

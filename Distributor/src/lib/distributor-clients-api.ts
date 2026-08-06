@@ -22,7 +22,7 @@ import type {
   InvestorType,
   OrderStatus,
   SystematicPlanStatus,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 type ApiClientListItem = {
   user_id: string;

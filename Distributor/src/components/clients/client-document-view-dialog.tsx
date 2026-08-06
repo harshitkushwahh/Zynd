@@ -16,7 +16,7 @@ import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import type {
   DistributorClientDocument,
   DistributorClientDocumentStatus,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import { env } from "@/lib/env";
 import { formatDistributorDate } from "@/lib/format";
 import {

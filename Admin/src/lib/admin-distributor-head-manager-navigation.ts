@@ -8,6 +8,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
+
 export type DistributorHeadManagerTabKey =
   | "overview"
   | "distributors"
@@ -25,7 +27,7 @@ export type DistributorHeadManagerTab = {
 
 export const DISTRIBUTOR_HEAD_MANAGER_TABS: DistributorHeadManagerTab[] = [
   { key: "overview", slug: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "distributors", slug: "distributors", label: "Distributors", icon: Network },
+  { key: "distributors", slug: "distributors", label: MITRA_HIERARCHY_COPY.zyndMitras, icon: Network },
   { key: "clients", slug: "clients", label: "Clients", icon: Users2 },
   { key: "book", slug: "book", label: "Book", icon: PieChart },
   { key: "leave", slug: "leave", label: "Leave", icon: CalendarDays },

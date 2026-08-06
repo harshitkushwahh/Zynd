@@ -23,6 +23,7 @@ export type SettingsKycBank = {
 export type SettingsKycProfile = {
   panNumber: string | null;
   panVerified: boolean;
+  kycVerified: boolean;
   personalInfo: KycPersonalInfoValue | null;
   address: SettingsKycAddress | null;
   bank: SettingsKycBank | null;
@@ -93,10 +94,12 @@ export function mapBootstrapToKycProfile(
 ): SettingsKycProfile {
   const contact = mapContactDraft(bootstrap?.contact_draft ?? null);
   const bank = mapBankDraft(bootstrap?.bank_draft ?? null);
+  const kycVerified = bootstrap?.step_statuses?.overall === "completed";
 
   return formatSettingsKycProfile({
     panNumber: bootstrap?.pan_draft?.panNumber ?? null,
-    panVerified: bootstrap?.pan_verification_status === "verified",
+    panVerified: kycVerified && bootstrap?.pan_verification_status === "verified",
+    kycVerified,
     personalInfo: mapPersonalDraft(bootstrap?.personal_draft ?? null),
     address: contact
       ? {
@@ -105,15 +108,13 @@ export function mapBootstrapToKycProfile(
             contact.sameAsPermanent ? contact.permanent : contact.correspondence,
           ),
           sameAsPermanent: contact.sameAsPermanent,
-          verified: Boolean(
-            bootstrap?.external_kyc_status === "returned_success" || contact.permanent.line1,
-          ),
+          verified: kycVerified && bootstrap?.external_kyc_status === "returned_success",
         }
       : null,
     bank: bank
       ? {
           ...bank,
-          verified: bootstrap?.bank_verification_status === "verified",
+          verified: kycVerified && bootstrap?.bank_verification_status === "verified",
         }
       : null,
   });

@@ -7,6 +7,7 @@ import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DistributorHeadDistributorReportRollup } from "@/lib/dummy/distributor-head-data";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { formatDistributorHeadInr } from "@/lib/distributor-head-format";
 
 const REPORT_TEMPLATES = [
@@ -18,7 +19,7 @@ const REPORT_TEMPLATES = [
   {
     id: "holdings",
     name: "Holdings statement",
-    description: "Scheme-wise AUM and client counts across the distributor book.",
+    description: `Scheme-wise AUM and client counts across the ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} book.`,
   },
   {
     id: "sip-book",
@@ -40,7 +41,7 @@ export function DistributorHeadDistributorReportsTab({
   if (!rollup) {
     return (
       <p className="text-compact text-muted-foreground">
-        No report rollup available for this distributor in demo data.
+        No report rollup available for this {MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} in demo data.
       </p>
     );
   }

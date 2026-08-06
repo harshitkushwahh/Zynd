@@ -195,6 +195,7 @@ class OAuthLinkResendRequest(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
     turnstile_token: Optional[str] = None
+    client: Optional[str] = None
 
 
 class ResetPasswordRequest(BaseModel):
@@ -228,6 +229,7 @@ class UserResponse(BaseModel):
     account_status: str = "active"
     deletion_scheduled_at: Optional[datetime] = None
     client_id: str
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

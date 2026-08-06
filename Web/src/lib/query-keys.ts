@@ -12,6 +12,15 @@ export const queryKeys = {
     fundNavs: (productId: string, limit: number) =>
       ["invest", "fund-navs", productId, { limit }] as const,
   },
+  portfolio: {
+    all: () => ["portfolio"] as const,
+    summary: () => ["portfolio", "summary"] as const,
+    holdings: () => ["portfolio", "holdings"] as const,
+    holdingDetail: (holdingId: string) => ["portfolio", "holding-detail", holdingId] as const,
+    redeemUnits: () => ["portfolio", "redeem-units"] as const,
+    redemptionJourney: (fpRedemptionId: string) =>
+      ["portfolio", "redemption-journey", fpRedemptionId] as const,
+  },
   referral: {
     all: () => ["referral"] as const,
     me: () => ["referral", "me"] as const,

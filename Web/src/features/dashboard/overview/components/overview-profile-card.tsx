@@ -18,15 +18,19 @@ type OverviewProfileCardProps = {
   className?: string;
 };
 
-/** Soft whitish blue→emerald wash — same brand pairing as the AI bot surface. */
+/** Light: soft whitish blue→emerald wash. Dark (no photo): deep blue→emerald on dark surface. */
 const PROFILE_CARD_BRAND_BG_CLASS =
-  "bg-[radial-gradient(65%_65%_at_50%_100%,color-mix(in_srgb,var(--zynd-emerald)_14%,transparent)_0%,transparent_100%),linear-gradient(135deg,color-mix(in_srgb,var(--zynd-blue)_16%,white)_0%,color-mix(in_srgb,var(--zynd-emerald)_14%,white)_100%)] dark:bg-[radial-gradient(65%_65%_at_50%_100%,color-mix(in_srgb,var(--zynd-emerald)_18%,transparent)_0%,transparent_100%),linear-gradient(135deg,color-mix(in_srgb,var(--zynd-blue)_22%,white)_0%,color-mix(in_srgb,var(--zynd-emerald)_18%,white)_100%)]";
+  "bg-[radial-gradient(65%_65%_at_50%_100%,color-mix(in_srgb,var(--zynd-emerald)_14%,transparent)_0%,transparent_100%),linear-gradient(135deg,color-mix(in_srgb,var(--zynd-blue)_16%,white)_0%,color-mix(in_srgb,var(--zynd-emerald)_14%,white)_100%)] dark:bg-[radial-gradient(65%_65%_at_50%_100%,color-mix(in_srgb,var(--zynd-emerald)_26%,transparent)_0%,transparent_100%),linear-gradient(135deg,color-mix(in_srgb,var(--zynd-blue)_48%,var(--zynd-dark-surface))_0%,color-mix(in_srgb,var(--zynd-emerald)_34%,var(--zynd-dark-bg))_100%)]";
 
 const PROFILE_INITIALS_BG_CLASS =
   "bg-[radial-gradient(65%_65%_at_50%_100%,color-mix(in_srgb,var(--zynd-emerald)_55%,transparent)_0%,transparent_100%),linear-gradient(135deg,var(--zynd-blue)_0%,var(--zynd-emerald)_100%)] text-primary-foreground ring-1 ring-white/35";
 
 const PROFILE_FOOTER_CLASS =
-  "border border-white/45 bg-white/42 backdrop-blur-sm dark:border-white/20 dark:bg-white/14";
+  "border border-white/45 bg-white/42 backdrop-blur-sm dark:border-white/12 dark:bg-black/30";
+
+/** Name and subtitle: dark on light footer in light mode, white on dark footer in dark mode. */
+const PROFILE_FOOTER_NAME_CLASS = "text-zinc-900 dark:text-white";
+const PROFILE_FOOTER_SUBTITLE_CLASS = "text-zinc-600 dark:text-white/75";
 
 function useProfileMfaTooltip() {
   const { user } = useAuth();
@@ -160,15 +164,15 @@ export function OverviewProfileCard({ className }: OverviewProfileCardProps) {
         )}
       >
         <div className="min-w-0 flex-1">
-          <p className="truncate text-compact font-semibold text-foreground">{name}</p>
-          <p className="mt-0.5 truncate text-caption text-muted-foreground">
+          <p className={cn("truncate text-compact font-semibold", PROFILE_FOOTER_NAME_CLASS)}>{name}</p>
+          <p className={cn("mt-0.5 truncate text-caption", PROFILE_FOOTER_SUBTITLE_CLASS)}>
             {overview.profileSubtitle}
           </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
           <ProfileStatusBadge
-            href={kycAllowed ? "/dashboard/kyc" : undefined}
+            onClick={kycAllowed ? () => kyc?.openDialog() : undefined}
             ariaLabel={kycTooltip.title}
             tooltipTitle={kycTooltip.title}
             tooltipDetail={kycTooltip.detail}
@@ -220,8 +224,8 @@ export function OverviewProfileCardSkeleton({ className }: { className?: string 
         )}
       >
         <div className="space-y-1.5">
-          <Skeleton className="h-4 w-28 bg-foreground/10" />
-          <Skeleton className="h-3 w-14 bg-foreground/8" />
+          <Skeleton className="h-4 w-28 bg-zinc-900/10" />
+          <Skeleton className="h-3 w-14 bg-zinc-600/15" />
         </div>
         <div className="flex gap-2">
           <Skeleton className="size-9 rounded-full bg-white/50" />

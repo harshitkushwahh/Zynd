@@ -24,7 +24,7 @@ export function RiskAssessmentPageSkeleton() {
         </div>
 
         <div className="pointer-events-none absolute inset-y-4 right-4 z-0 hidden w-24 sm:block sm:w-28 md:w-32">
-          <Skeleton className="h-full w-full rounded-[var(--radius-card)] opacity-60" />
+          <Skeleton className={cn("h-full w-full opacity-60", RISK_PROFILE_HERO_RADIUS_CLASS)} />
         </div>
 
         <div className="relative z-10 mt-4 flex items-center gap-2 overflow-hidden">
@@ -71,7 +71,7 @@ export function RiskAssessmentPageSkeleton() {
           <div className="auth-brand-pattern pointer-events-none absolute inset-0 opacity-15" aria-hidden />
           <div className="relative z-10 flex flex-1 flex-col">
             <Skeleton className="h-6 w-32 bg-skeleton-on-brand" />
-            <Skeleton className="mx-auto my-4 h-28 w-full max-w-[11rem] rounded-[var(--radius-card)] bg-skeleton-on-brand" />
+            <Skeleton className={cn("mx-auto my-4 h-28 w-full max-w-[11rem] bg-skeleton-on-brand", RISK_PROFILE_HERO_RADIUS_CLASS)} />
             <div className="mt-auto space-y-3">
               {Array.from({ length: 3 }, (_, index) => (
                 <div key={index} className="flex items-start gap-3">

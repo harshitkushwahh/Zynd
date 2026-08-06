@@ -15,7 +15,6 @@ from app.application.kyc.bank_verification_core import (
     resolve_bank_holder_names,
     run_hybrid_bank_verification,
 )
-from app.application.investor.investor_bank_account_service import sync_bank_account_from_kyc_journey
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_gate_service import require_phase1_complete
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status
@@ -96,8 +95,6 @@ async def verify_bank_hybrid(
         status.bank_step_status = KycStepStatus.failed
 
     await db.flush()
-
-    await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
 
     return {
         "success": outcome.bank_verified,
@@ -223,8 +220,6 @@ async def verify_bank_manual(
         status.overall_status = KycOverallStatus.phase2_complete
 
     await db.flush()
-
-    await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
 
     return {
         "success": bank_verified,

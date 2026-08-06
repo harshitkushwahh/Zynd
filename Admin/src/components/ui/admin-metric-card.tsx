@@ -13,7 +13,7 @@ export type AdminMetricCardTone = "default" | "success" | "warning" | "info" | "
 type AdminMetricCardProps = {
   label: string;
   value: React.ReactNode;
-  hint?: string;
+  hint?: React.ReactNode;
   infoDescription?: string;
   infoDetails?: string[];
   icon: LucideIcon;

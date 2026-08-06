@@ -10,7 +10,6 @@ import {
   type ReactNode,
 } from "react";
 
-import { DUMMY_BRANCH_DISTRIBUTORS } from "@/lib/dummy/branch-distributors";
 import {
   readResidentAssignments,
   writeResidentAssignments,
@@ -44,13 +43,11 @@ export function ResidentDistributorAssignmentProvider({ children }: { children: 
 
   const requestAssignment = useCallback(
     (investorId: string, distributorId: string) => {
-      const distributor = DUMMY_BRANCH_DISTRIBUTORS.find((row) => row.id === distributorId);
-      if (!distributor) return;
       const record: ResidentDistributorAssignment = {
         investorId,
         distributorId,
-        distributorName: distributor.name,
-        distributorArn: distributor.arn,
+        distributorName: distributorId,
+        distributorArn: distributorId,
         status: "pending_confirmation",
         magicLinkSentAt: new Date().toISOString(),
       };

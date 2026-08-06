@@ -8,7 +8,7 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import {
   DUMMY_BRANCH_DISTRIBUTORS,
   type BranchDistributorRecord,
-} from "@/lib/dummy/branch-distributors";
+} from "@/lib/distributor-branch-distributors-data";
 import { formatAum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";

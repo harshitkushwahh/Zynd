@@ -8,7 +8,7 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import {
   getDistributorComplianceSummary,
   type DistributorComplianceQueueRow,
-} from "@/lib/dummy/distributor-compliance";
+} from "@/lib/distributor-compliance-data";
 import {
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS,

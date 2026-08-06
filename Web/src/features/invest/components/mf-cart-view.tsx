@@ -54,6 +54,27 @@ import { cn } from "@/lib/utils";
 
 type CartTab = "lumpsum" | "sip";
 
+function CartTabPanel({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      role="tabpanel"
+      aria-hidden={!active}
+      className={cn(
+        "col-start-1 row-start-1 min-w-0 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+        active ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 function CartTabToggle({
   tab,
   onChange,
@@ -86,7 +107,8 @@ function CartTabToggle({
             aria-selected={isActive}
             onClick={() => onChange(option.id)}
             className={cn(
-              "inline-flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-compact font-medium transition-colors",
+              "inline-flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-compact font-medium",
+              "transition-[color,background-color,box-shadow,opacity] duration-200 ease-out motion-reduce:transition-none",
               isActive
                 ? "bg-foreground text-background shadow-zynd-low"
                 : "text-muted-foreground hover:text-foreground",
@@ -281,8 +303,6 @@ function CartCheckoutPanel({
   className?: string;
 }) {
   const checkoutDisabled = isEmpty || checkingOut || banksLoading || !hasPaymentReadyAccount;
-  const checkoutHint =
-    tab === "lumpsum" ? copy.mutualFunds.cartSinglePaymentHint : copy.mutualFunds.cartSipCheckoutHint;
 
   return (
     <aside
@@ -290,7 +310,6 @@ function CartCheckoutPanel({
         "flex min-w-0 flex-col overflow-hidden xl:sticky xl:top-6 xl:self-start",
         MF_INVEST_PAYMENT_CARD_CLASS,
         MF_CARD_RADIUS_CLASS,
-        isEmpty && "opacity-95",
         className,
       )}
       aria-disabled={isEmpty || undefined}
@@ -330,22 +349,52 @@ function CartCheckoutPanel({
 
         <div className="flex gap-3 rounded-[var(--radius-card)] border border-border/70 bg-muted/10 px-3.5 py-3">
           <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <p className="text-caption leading-relaxed text-muted-foreground">{checkoutHint}</p>
+          <div className="grid min-w-0 flex-1 [&>*]:col-start-1 [&>*]:row-start-1">
+            <p
+              className={cn(
+                "col-start-1 row-start-1 text-caption leading-relaxed text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                tab === "lumpsum" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+              )}
+            >
+              {copy.mutualFunds.cartSinglePaymentHint}
+            </p>
+            <p
+              className={cn(
+                "col-start-1 row-start-1 text-caption leading-relaxed text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                tab === "sip" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+              )}
+            >
+              {copy.mutualFunds.cartSipCheckoutHint}
+            </p>
+          </div>
         </div>
 
-        {tab === "lumpsum" ? (
-          <MfPaymentMethodPicker
-            value={paymentMethod}
-            onChange={onPaymentMethodChange}
-            disabled={checkoutDisabled}
-          />
-        ) : (
-          <MfMandateTypePicker
-            value={mandateType}
-            onChange={onMandateTypeChange}
-            disabled={checkoutDisabled}
-          />
-        )}
+        <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+          <div
+            className={cn(
+              "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "lumpsum" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          >
+            <MfPaymentMethodPicker
+              value={paymentMethod}
+              onChange={onPaymentMethodChange}
+              disabled={checkoutDisabled}
+            />
+          </div>
+          <div
+            className={cn(
+              "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "sip" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          >
+            <MfMandateTypePicker
+              value={mandateType}
+              onChange={onMandateTypeChange}
+              disabled={checkoutDisabled}
+            />
+          </div>
+        </div>
 
         <div className="space-y-2">
           <MfBankAccountPicker
@@ -417,11 +466,12 @@ export function MfCartView() {
     void loadCart();
   }, [loadCart]);
 
-  const activeItems = tab === "lumpsum" ? cart?.lumpsum_items ?? [] : cart?.sip_items ?? [];
-  const activeTotal =
-    tab === "lumpsum" ? cart?.lumpsum_total_amount_inr ?? 0 : cart?.sip_total_amount_inr ?? 0;
-  const activeCount =
-    tab === "lumpsum" ? cart?.lumpsum_item_count ?? 0 : cart?.sip_item_count ?? 0;
+  const lumpsumItems = cart?.lumpsum_items ?? [];
+  const sipItems = cart?.sip_items ?? [];
+  const lumpsumCount = cart?.lumpsum_item_count ?? 0;
+  const sipCount = cart?.sip_item_count ?? 0;
+  const activeCount = tab === "lumpsum" ? lumpsumCount : sipCount;
+  const totalItemCount = cart?.item_count ?? 0;
 
   async function handleRemove(productId: string) {
     setRemovingProductId(productId);
@@ -491,9 +541,6 @@ export function MfCartView() {
     }
   }
 
-  const description =
-    tab === "lumpsum" ? copy.mutualFunds.cartDescription : copy.mutualFunds.cartSipDescription;
-  const DescriptionIcon = tab === "lumpsum" ? Wallet : CalendarDays;
   const clearDisabled = activeCount === 0 || clearingTab || removingProductId !== null || checkingOut;
 
   if (loading) {
@@ -514,16 +561,34 @@ export function MfCartView() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <PageTitle>{copy.mutualFunds.cartTitle}</PageTitle>
-            {activeCount > 0 ? (
+            {totalItemCount > 0 ? (
               <Badge variant="secondary" className="font-normal tabular-nums">
-                {copy.mutualFunds.cartItemCount.replace("{count}", String(activeCount))}
+                {copy.mutualFunds.cartItemCount.replace("{count}", String(totalItemCount))}
               </Badge>
             ) : null}
           </div>
-          <p className="mt-2 flex items-start gap-2 text-compact leading-relaxed text-muted-foreground">
-            <DescriptionIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {description}
-          </p>
+          <div className="relative mt-2 min-h-[2.75rem]">
+            <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+              <p
+                className={cn(
+                  "col-start-1 row-start-1 flex items-start gap-2 text-compact leading-relaxed text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  tab === "lumpsum" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+                )}
+              >
+                <Wallet className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {copy.mutualFunds.cartDescription}
+              </p>
+              <p
+                className={cn(
+                  "col-start-1 row-start-1 flex items-start gap-2 text-compact leading-relaxed text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  tab === "sip" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+                )}
+              >
+                <CalendarDays className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {copy.mutualFunds.cartSipDescription}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -531,8 +596,8 @@ export function MfCartView() {
         <CartTabToggle
           tab={tab}
           onChange={setTab}
-          lumpsumCount={cart?.lumpsum_item_count ?? 0}
-          sipCount={cart?.sip_item_count ?? 0}
+          lumpsumCount={lumpsumCount}
+          sipCount={sipCount}
         />
         <Button
           type="button"
@@ -554,37 +619,79 @@ export function MfCartView() {
       {error ? <FieldMessage variant="error" message={error} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
-        <div className="min-w-0">
-          {activeCount === 0 ? (
-            <CartEmptyState tab={tab} />
-          ) : (
-            <CartItemsList
-              items={activeItems}
-              tab={tab}
-              removingProductId={removingProductId}
-              onRemove={handleRemove}
-            />
-          )}
+        <div className="grid min-w-0 [&>*]:col-start-1 [&>*]:row-start-1">
+          <CartTabPanel active={tab === "lumpsum"}>
+            {lumpsumCount === 0 ? (
+              <CartEmptyState tab="lumpsum" />
+            ) : (
+              <CartItemsList
+                items={lumpsumItems}
+                tab="lumpsum"
+                removingProductId={removingProductId}
+                onRemove={handleRemove}
+              />
+            )}
+          </CartTabPanel>
+          <CartTabPanel active={tab === "sip"}>
+            {sipCount === 0 ? (
+              <CartEmptyState tab="sip" />
+            ) : (
+              <CartItemsList
+                items={sipItems}
+                tab="sip"
+                removingProductId={removingProductId}
+                onRemove={handleRemove}
+              />
+            )}
+          </CartTabPanel>
         </div>
 
-        <CartCheckoutPanel
-          tab={tab}
-          activeCount={activeCount}
-          activeTotal={activeTotal}
-          checkingOut={checkingOut}
-          banksLoading={banksLoading}
-          hasPaymentReadyAccount={hasPaymentReadyAccount}
-          accounts={accounts}
-          selectedBankAccountId={selectedBankAccountId}
-          onSelectBankAccount={setSelectedBankAccountId}
-          banksError={banksError}
-          onCheckout={() => void handleCheckout()}
-          paymentMethod={paymentMethod}
-          onPaymentMethodChange={setPaymentMethod}
-          mandateType={mandateType}
-          onMandateTypeChange={setMandateType}
-          isEmpty={activeCount === 0}
-        />
+        <div className="grid min-w-0 [&>*]:col-start-1 [&>*]:row-start-1">
+          <CartCheckoutPanel
+            tab="lumpsum"
+            activeCount={lumpsumCount}
+            activeTotal={cart?.lumpsum_total_amount_inr ?? 0}
+            checkingOut={checkingOut}
+            banksLoading={banksLoading}
+            hasPaymentReadyAccount={hasPaymentReadyAccount}
+            accounts={accounts}
+            selectedBankAccountId={selectedBankAccountId}
+            onSelectBankAccount={setSelectedBankAccountId}
+            banksError={banksError}
+            onCheckout={() => void handleCheckout()}
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            mandateType={mandateType}
+            onMandateTypeChange={setMandateType}
+            isEmpty={lumpsumCount === 0}
+            className={cn(
+              "transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "lumpsum" ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          />
+          <CartCheckoutPanel
+            tab="sip"
+            activeCount={sipCount}
+            activeTotal={cart?.sip_total_amount_inr ?? 0}
+            checkingOut={checkingOut}
+            banksLoading={banksLoading}
+            hasPaymentReadyAccount={hasPaymentReadyAccount}
+            accounts={accounts}
+            selectedBankAccountId={selectedBankAccountId}
+            onSelectBankAccount={setSelectedBankAccountId}
+            banksError={banksError}
+            onCheckout={() => void handleCheckout()}
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            mandateType={mandateType}
+            onMandateTypeChange={setMandateType}
+            isEmpty={sipCount === 0}
+            className={cn(
+              "transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "sip" ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          />
+        </div>
       </div>
     </div>
   );

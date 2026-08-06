@@ -28,6 +28,7 @@ import {
   distributorHeadDistributorHref,
   matchesDistributorSearch,
 } from "@/lib/distributor-head-queries";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { formatDistributorHeadInr } from "@/lib/distributor-head-format";
 
 const STATUS_ALL = "all";
@@ -118,7 +119,7 @@ export function DistributorHeadManagerDistributorsTab({
       >
         <AdminTableHeader>
           <tr>
-            <AdminTableHeadCell>Distributor</AdminTableHeadCell>
+            <AdminTableHeadCell>{MITRA_HIERARCHY_COPY.zyndMitra}</AdminTableHeadCell>
             <AdminTableHeadCell>Branch</AdminTableHeadCell>
             <AdminTableHeadCell>Clients</AdminTableHeadCell>
             <AdminTableHeadCell>AUM</AdminTableHeadCell>
@@ -130,7 +131,7 @@ export function DistributorHeadManagerDistributorsTab({
         <AdminTableBody>
           {pagination.items.length === 0 ? (
             <AdminTableStateRow colSpan={TABLE_COLUMNS}>
-              No distributors on this team match your filters.
+              No {MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()} on this team match your filters.
             </AdminTableStateRow>
           ) : (
             pagination.items.map((row) => (

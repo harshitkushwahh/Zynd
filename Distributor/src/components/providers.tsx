@@ -2,6 +2,7 @@
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DistributorAuthProvider } from "@/contexts/distributor-auth-context";
+import { DistributorZyndPinProvider } from "@/contexts/distributor-zynd-pin-context";
 import { DistributorNotificationsProvider } from "@/contexts/distributor-notifications-context";
 import { DistributorTxnRequestsProvider } from "@/contexts/distributor-txn-requests-context";
 import { ResidentDistributorAssignmentProvider } from "@/contexts/resident-distributor-assignment-context";
@@ -12,11 +13,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <ThemeProvider>
       <TooltipProvider>
         <DistributorAuthProvider>
-          <DistributorTxnRequestsProvider>
-            <DistributorNotificationsProvider>
-              <ResidentDistributorAssignmentProvider>{children}</ResidentDistributorAssignmentProvider>
-            </DistributorNotificationsProvider>
-          </DistributorTxnRequestsProvider>
+          <DistributorZyndPinProvider>
+            <DistributorTxnRequestsProvider>
+              <DistributorNotificationsProvider>
+                <ResidentDistributorAssignmentProvider>{children}</ResidentDistributorAssignmentProvider>
+              </DistributorNotificationsProvider>
+            </DistributorTxnRequestsProvider>
+          </DistributorZyndPinProvider>
         </DistributorAuthProvider>
       </TooltipProvider>
     </ThemeProvider>

@@ -10,6 +10,7 @@ import {
   fetchReferralQrBlob,
   triggerReferralQrDownload,
 } from "@/features/referral/lib/referral-qr-download";
+import { REFERRAL_CARD_RADIUS_CLASS } from "@/features/referral/lib/referral-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -190,8 +191,8 @@ export function ReferralQrDialog({ open, onOpenChange, shareUrl, code }: Referra
     >
       <div className="space-y-5 px-6 py-5">
         <div className="flex justify-center">
-          <div className="rounded-[var(--radius-card)] bg-gradient-to-br from-primary/25 via-primary/10 to-emerald-500/20 p-[3px]">
-            <div className="rounded-[calc(var(--radius-card)-2px)] bg-white p-4 sm:p-5">
+          <div className={cn("bg-gradient-to-br from-primary/25 via-primary/10 to-emerald-500/20 p-[3px]", REFERRAL_CARD_RADIUS_CLASS)}>
+            <div className="rounded-[calc(var(--radius-3xl)-2px)] bg-white p-4 sm:p-5">
               {loading ? (
                 <div className="flex size-[220px] items-center justify-center sm:size-[240px]">
                   <Loader2 className="size-9 animate-spin text-muted-foreground" aria-hidden />

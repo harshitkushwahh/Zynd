@@ -4,18 +4,14 @@ import {
 } from "@/lib/distributor-navigation";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 import { distributorClientDetailHref } from "@/lib/distributor-client-routes";
-import { DUMMY_INVESTORS, searchInvestors } from "@/lib/dummy/investors";
-import { DUMMY_ORDERS } from "@/lib/dummy/orders";
-import { DUMMY_SYSTEMATIC_PLANS } from "@/lib/dummy/systematic-plans";
-import { DUMMY_TRANSACTION_GROUPS } from "@/lib/dummy/transaction-groups";
-import { DUMMY_TXN_REQUESTS } from "@/lib/dummy/txn-requests";
+import { searchInvestors } from "@/lib/distributor-investor-utils";
 import type {
   DistributorInvestor,
   DistributorOrder,
   DistributorSystematicPlan,
   DistributorTransactionGroup,
   DistributorTxnRequest,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 const RESULT_LIMIT = 6;
 
@@ -43,13 +39,7 @@ export function getInvestorListHref(investor: DistributorInvestor): string {
   return distributorClientDetailHref(origin, investor.id);
 }
 
-export function searchDistributorInvestors(query: string): DistributorInvestor[] {
-  const normalized = normalizeQuery(query);
-  if (!normalized) return [];
-  return searchInvestors(DUMMY_INVESTORS, normalized).slice(0, RESULT_LIMIT);
-}
-
-export function searchDistributorInvestorsInList(
+export function searchDistributorInvestors(
   source: DistributorInvestor[],
   query: string,
 ): DistributorInvestor[] {
@@ -58,29 +48,27 @@ export function searchDistributorInvestorsInList(
   return searchInvestors(source, normalized).slice(0, RESULT_LIMIT);
 }
 
-export function searchDistributorOrders(query: string): DistributorOrder[] {
-  const normalized = normalizeQuery(query);
-  if (!normalized) return [];
-  return DUMMY_ORDERS.filter((order) => {
-    const haystack = `${order.orderRef} ${order.clientCode} ${order.investorEmailMasked} ${order.schemeName} ${order.orderType} ${order.status}`;
-    return includesQuery(haystack, normalized);
-  }).slice(0, RESULT_LIMIT);
+export function searchDistributorInvestorsInList(
+  source: DistributorInvestor[],
+  query: string,
+): DistributorInvestor[] {
+  return searchDistributorInvestors(source, query);
+}
+
+export function searchDistributorOrders(_query: string, _orders: DistributorOrder[] = []): DistributorOrder[] {
+  return [];
 }
 
 export function searchDistributorSystematicPlans(
-  query: string,
+  _query: string,
+  _plans: DistributorSystematicPlan[] = [],
 ): DistributorSystematicPlan[] {
-  const normalized = normalizeQuery(query);
-  if (!normalized) return [];
-  return DUMMY_SYSTEMATIC_PLANS.filter((plan) => {
-    const haystack = `${plan.planRef} ${plan.clientCode} ${plan.investorEmailMasked} ${plan.schemeName} ${plan.planType} ${plan.status}`;
-    return includesQuery(haystack, normalized);
-  }).slice(0, RESULT_LIMIT);
+  return [];
 }
 
 export function searchDistributorTxnRequests(
   query: string,
-  requests: DistributorTxnRequest[] = DUMMY_TXN_REQUESTS,
+  requests: DistributorTxnRequest[] = [],
 ): DistributorTxnRequest[] {
   const normalized = normalizeQuery(query);
   if (!normalized) return [];
@@ -91,12 +79,8 @@ export function searchDistributorTxnRequests(
 }
 
 export function searchDistributorTransactionGroups(
-  query: string,
+  _query: string,
+  _groups: DistributorTransactionGroup[] = [],
 ): DistributorTransactionGroup[] {
-  const normalized = normalizeQuery(query);
-  if (!normalized) return [];
-  return DUMMY_TRANSACTION_GROUPS.filter((group) => {
-    const haystack = `${group.groupRef} ${group.label} ${group.status}`;
-    return includesQuery(haystack, normalized);
-  }).slice(0, RESULT_LIMIT);
+  return [];
 }

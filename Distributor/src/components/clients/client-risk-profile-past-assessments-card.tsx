@@ -6,7 +6,7 @@ import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientRiskAssessment } from "@/lib/dummy/types";
+import type { DistributorClientRiskAssessment } from "@/lib/distributor-types";
 import { formatDistributorDate } from "@/lib/format";
 import { resolveRiskTierVisual } from "@/lib/risk-profile/risk-tier-ui";
 import { cn } from "@/lib/utils";

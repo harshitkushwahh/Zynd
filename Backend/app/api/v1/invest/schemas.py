@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -467,6 +467,207 @@ class MfExternalHoldingResponse(BaseModel):
 
 class MfHoldingsResponse(BaseModel):
     external_holdings: list[MfExternalHoldingResponse]
+
+
+class PortfolioAllocationSliceResponse(BaseModel):
+    id: str
+    label: str
+    value_pct: float
+    color: str
+
+
+class PortfolioGrowthPointResponse(BaseModel):
+    label: str
+    value: float
+    date: Optional[str] = None
+    invested: Optional[float] = None
+
+
+class PortfolioSummaryResponse(BaseModel):
+    status: str
+    has_pending_orders: bool = False
+    current_value_inr: float = 0
+    invested_inr: float = 0
+    total_return_inr: float = 0
+    total_return_pct: float = 0
+    day_change_inr: Optional[float] = None
+    day_change_pct: Optional[float] = None
+    xirr_pct: Optional[float] = None
+    holdings_count: int = 0
+    active_sips_count: int = 0
+    monthly_sip_inr: float = 0
+    allocation: list[PortfolioAllocationSliceResponse] = Field(default_factory=list)
+    growth: list[PortfolioGrowthPointResponse] = Field(default_factory=list)
+    as_on: Optional[str] = None
+
+
+class PortfolioHoldingResponse(BaseModel):
+    id: str
+    folio_number: str
+    isin: str
+    fund_name: str
+    amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
+    units: float
+    redeemable_units: float
+    current_value_inr: float
+    redeemable_amount_inr: Optional[float] = None
+    invested_inr: float
+    return_inr: float
+    return_pct: float
+    allocation_pct: float
+    nav: Optional[float] = None
+    nav_as_on: Optional[str] = None
+    source: Optional[str] = None
+    day_change_inr: Optional[float] = None
+    day_change_pct: Optional[float] = None
+
+
+class PortfolioHoldingsListResponse(BaseModel):
+    status: str
+    has_pending_orders: bool = False
+    holdings: list[PortfolioHoldingResponse] = Field(default_factory=list)
+    as_on: Optional[str] = None
+
+
+class PortfolioHoldingTransactionResponse(BaseModel):
+    id: str
+    date: str
+    type: str
+    units: float
+    nav: float
+    value_inr: float
+
+
+class PortfolioHoldingDetailResponse(BaseModel):
+    id: str
+    folio_number: str
+    isin: str
+    fund_name: str
+    amc_name: Optional[str] = None
+    amc_logo_url: Optional[str] = None
+    units: float
+    redeemable_units: float
+    current_value_inr: float
+    redeemable_amount_inr: Optional[float] = None
+    invested_inr: float
+    return_inr: float
+    return_pct: float
+    allocation_pct: float = 0
+    nav: Optional[float] = None
+    nav_as_on: Optional[str] = None
+    holding_mode: Optional[str] = None
+    invested_months: Optional[int] = None
+    avg_nav: Optional[float] = None
+    current_nav: Optional[float] = None
+    day_change_inr: Optional[float] = None
+    day_change_pct: Optional[float] = None
+    xirr_pct: Optional[float] = None
+    redeem_bank_label: Optional[str] = None
+    nominee_name: Optional[str] = None
+    transactions: list[PortfolioHoldingTransactionResponse] = Field(default_factory=list)
+
+
+class PortfolioHoldingDetailEnvelopeResponse(BaseModel):
+    status: str
+    holding: Optional[PortfolioHoldingDetailResponse] = None
+
+
+class PortfolioActiveRedemptionResponse(BaseModel):
+    fp_redemption_id: str
+    status: str
+    amount_inr: float
+    units: float
+    placed_at: Optional[str] = None
+    folio_number: str
+    isin: Optional[str] = None
+
+
+class PortfolioRedeemUnitsItemResponse(PortfolioHoldingResponse):
+    active_redemption: Optional[PortfolioActiveRedemptionResponse] = None
+
+
+class PortfolioRedeemUnitsListResponse(BaseModel):
+    status: str
+    items: list[PortfolioRedeemUnitsItemResponse] = Field(default_factory=list)
+    as_on: Optional[str] = None
+
+
+class MfRedemptionJourneyEventResponse(BaseModel):
+    from_status: Optional[str] = None
+    to_status: str
+    source: str
+    payload: Optional[dict[str, Any]] = None
+    created_at: Optional[str] = None
+
+
+class MfRedemptionJourneyResponse(BaseModel):
+    order_id: str
+    status: str
+    amount_inr: float
+    units: float
+    placed_at: str
+    folio_number: Optional[str] = None
+    isin: Optional[str] = None
+    events: list[MfRedemptionJourneyEventResponse] = Field(default_factory=list)
+
+
+class MfRedemptionJourneyEnvelopeResponse(BaseModel):
+    status: str
+    journey: Optional[MfRedemptionJourneyResponse] = None
+
+
+class CreateMfRedemptionRequest(BaseModel):
+    holding_id: str
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    redeem_mode: Literal["amount", "units", "all"]
+    amount_inr: Optional[float] = Field(default=None, gt=0)
+    units: Optional[float] = Field(default=None, gt=0)
+
+
+class ConfirmMfRedemptionRequest(BaseModel):
+    otp: str = Field(min_length=4, max_length=8)
+
+
+class MfRedemptionOrderResponse(BaseModel):
+    order_id: str
+    product_id: str
+    product_name: Optional[str] = None
+    order_type: str
+    amount_inr: float
+    status: str
+    fp_redemption_id: Optional[str] = None
+    fp_state: Optional[str] = None
+    holding_id: Optional[str] = None
+    folio_number: Optional[str] = None
+    isin: Optional[str] = None
+    units: Optional[float] = None
+    redeem_mode: Optional[str] = None
+    next_action: Optional[str] = None
+    consent_otp_sent: bool = False
+    redemption_confirmed: bool = False
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    created_at: Optional[str] = None
+    submitted_at: Optional[str] = None
+    settled_at: Optional[str] = None
+
+
+class MfRedemptionConsentResponse(BaseModel):
+    order_id: str
+    fp_redemption_id: str
+    status: str
+    fp_state: Optional[str] = None
+    masked_email: str
+    masked_mobile: str
+    consent_otp_sent: bool = False
+    redemption_confirmed: bool = False
+
+
+class MfRedemptionOtpSendResponse(BaseModel):
+    order_id: str
+    masked_mobile: str
+    retry_after_seconds: int
 
 
 class MfCasImportResponse(BaseModel):

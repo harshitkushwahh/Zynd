@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
-import { PageTitle } from "@/components/ui/page-title";
+import { PageHeader } from "@/components/ui/page-header";
 import { ReferralLeaderboardPodium } from "@/features/referral/components/referral-leaderboard-podium";
 import { ReferralLeaderboardSidebar } from "@/features/referral/components/referral-leaderboard-sidebar";
 import { ReferralLeaderboardTable } from "@/features/referral/components/referral-leaderboard-table";
@@ -109,15 +109,13 @@ export function ReferralLeaderboardPanel() {
       >
         <div className="min-w-0 flex-1 space-y-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-warning/10">
-                <Trophy className="size-5 text-warning" strokeWidth={2.25} />
-              </div>
-              <div>
-                <PageTitle>{copy.referral.leaderboardPageTitle}</PageTitle>
-                <p className="mt-1 text-compact text-muted-foreground">{copy.referral.leaderboardPageSubtitle}</p>
-              </div>
-            </div>
+            <PageHeader
+              icon={Trophy}
+              title={copy.referral.leaderboardPageTitle}
+              description={copy.referral.leaderboardPageSubtitle}
+              iconClassName="text-warning"
+              descriptionClassName="mt-1"
+            />
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
               <Select

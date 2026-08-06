@@ -26,7 +26,7 @@ import type {
   DistributorClientFamilyGroup,
   DistributorClientFamilyMember,
   DistributorClientGoal,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 import {
   familyGroupAvatarInitials,

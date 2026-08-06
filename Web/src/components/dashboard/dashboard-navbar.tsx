@@ -213,6 +213,9 @@ export function DashboardNavbar() {
         <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
           <Link
             href="/dashboard/mutual-funds/cart"
+            prefetch={false}
+            scroll={false}
+            aria-current={pathname.startsWith("/dashboard/mutual-funds/cart") ? "page" : undefined}
             className={cn(
               DASHBOARD_NAV_ITEM_CLASS,
               "relative px-2.5 outline-none transition-colors",

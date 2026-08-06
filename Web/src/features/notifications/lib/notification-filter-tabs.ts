@@ -1,8 +1,9 @@
+import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
 
 export type NotificationFilter = "all" | "unread";
 
-export const NOTIFICATION_SURFACE_RADIUS_CLASS = "rounded-[var(--radius-xl)]";
+export const NOTIFICATION_SURFACE_RADIUS_CLASS = ZYND_3XL_RADIUS_CLASS;
 
 export const NOTIFICATION_FILTER_TAB_TRACK_CLASS =
   "flex gap-1 rounded-[var(--radius-full)] bg-tab-track p-1";

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.application.investor.investor_provision_worker_service import process_pending_investor_provisions
 from app.application.mf.cas_import_service import process_cas_import
 from app.application.mf.mf_ondc_order_service import advance_ondc_orders, process_pending_orders, sync_open_orders
+from app.application.mf.mf_redemption_service import sync_open_redemption_orders
 from app.application.mf.mf_sip_worker_service import (
     advance_sip_plans,
     process_pending_mandates,
@@ -72,6 +73,10 @@ async def run_mf_order_worker_once() -> dict:
         sync_result = {}
         if settings.zynd_mf_order_status_sync_enabled:
             sync_result = await sync_open_orders(session, batch_size=settings.zynd_mf_order_worker_batch_size)
+            sync_result["redemptions"] = await sync_open_redemption_orders(
+                session,
+                batch_size=settings.zynd_mf_order_worker_batch_size,
+            )
         ops_result = {"expire": await expire_stale_checkouts(session)}
         if settings.zynd_mf_webhook_replay_enabled:
             ops_result["webhook_replay"] = await replay_failed_webhooks(

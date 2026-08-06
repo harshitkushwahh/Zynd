@@ -8,7 +8,7 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import {
   getDistributorLeadSummary,
   type DistributorLeadRow,
-} from "@/lib/dummy/distributor-leads";
+} from "@/lib/distributor-leads-data";
 import {
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS,

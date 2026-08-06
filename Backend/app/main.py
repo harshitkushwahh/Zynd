@@ -1,13 +1,13 @@
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.application.admin.dev_admin_seed_service import ensure_dev_admin_seed
-from app.application.admin.dev_distributor_seed_service import ensure_dev_distributor_seed
-from app.application.admin.rbac_service import ensure_rbac_seed
 from app.application.compliance.retention_service import ensure_retention_seed
 from app.application.risk_profile.risk_profile_seed_service import ensure_risk_profile_seed
 from app.application.goals.goal_template_seed_service import ensure_goal_template_seed
@@ -19,9 +19,15 @@ from app.application.security.security_config_service import ensure_security_con
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.redis import close_redis
+from app.core.startup import (
+    distributor_branches_table_exists,
+    refresh_database_pool,
+    run_dev_migrations,
+)
 from app.middleware.idempotency import IdempotencyMiddleware
 
-load_dotenv()
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(_BACKEND_ROOT / ".env")
 
 # Settings are cached; ensure env is loaded before the first read.
 get_settings.cache_clear()
@@ -39,11 +45,26 @@ async def lifespan(_: FastAPI):
             "`python -m app.jobs.run_event_worker` (and outbox relay) or set "
             "EVENT_USE_WORKER_IN_DEV=false for inline email delivery."
         )
+    if settings.sms_provider == "twilio":
+        if not settings.twilio_from_number and not settings.twilio_messaging_service_sid:
+            logger.error(
+                "SMS_PROVIDER=twilio but TWILIO_FROM_NUMBER and TWILIO_MESSAGING_SERVICE_SID "
+                "are both empty. Load Backend/.env and restart, or quote the number: "
+                'TWILIO_FROM_NUMBER="+91..."'
+            )
+        elif settings.debug:
+            logger.info(
+                "Twilio SMS enabled (from=%s, messaging_service=%s)",
+                settings.twilio_from_number or "—",
+                settings.twilio_messaging_service_sid or "—",
+            )
+
+    if settings.app_env == "development":
+        run_dev_migrations(settings)
+        await refresh_database_pool()
 
     async with AsyncSessionLocal() as session:
         await ensure_dev_admin_seed(session)
-        await ensure_dev_distributor_seed(session)
-        await ensure_rbac_seed(session)
         await ensure_security_config_seed(session)
         await ensure_risk_profile_seed(session)
         await ensure_goal_template_seed(session)

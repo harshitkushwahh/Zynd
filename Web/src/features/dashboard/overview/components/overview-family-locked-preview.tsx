@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, ArrowUpRight } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { FamilyGroupSummary } from "@/features/family-groups/api/family-groups-api";
@@ -57,27 +57,24 @@ export function OverviewFamilyLockedPreview() {
 
   return (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <div
-            className={cn(
-              "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1",
-              GROUP_AVATAR_COLOR,
-            )}
-          >
-            <span className="text-caption font-semibold">
-              {familyMemberInitials(fakeGroup.title)}
-            </span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-compact font-semibold text-foreground">{fakeGroup.title}</p>
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-foreground" />
-              <span className="size-1.5 rounded-full bg-muted-foreground/35" />
-            </div>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <div
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1",
+            GROUP_AVATAR_COLOR,
+          )}
+        >
+          <span className="text-caption font-semibold">
+            {familyMemberInitials(fakeGroup.title)}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-compact font-semibold text-foreground">{fakeGroup.title}</p>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-foreground" />
+            <span className="size-1.5 rounded-full bg-muted-foreground/35" />
           </div>
         </div>
-        <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={2.25} />
       </div>
 
       <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 sm:gap-x-3">

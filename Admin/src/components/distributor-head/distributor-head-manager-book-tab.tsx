@@ -26,6 +26,7 @@ import type {
   DistributorHeadBookSipPlan,
 } from "@/lib/dummy/distributor-head-data";
 import type { ManagerBookSummary } from "@/lib/distributor-head-queries";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { formatDistributorHeadInr } from "@/lib/distributor-head-format";
 import { IndianRupee, Repeat, ShoppingBag } from "lucide-react";
 
@@ -131,7 +132,7 @@ export function DistributorHeadManagerBookTab({
           icon={IndianRupee}
           label="Total AUM"
           value={formatDistributorHeadInr(book.totalAumInr)}
-          hint="Combined distributor books"
+          hint={`Combined ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} books`}
           tone="success"
           accent
         />
@@ -174,7 +175,7 @@ export function DistributorHeadManagerBookTab({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <AdminSearchInput
               containerClassName="max-w-sm"
-              placeholder="Search SIPs by client, distributor, or scheme"
+              placeholder={`Search SIPs by client, ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}, or scheme`}
               value={sipSearch}
               onChange={(event) => {
                 setSipSearch(event.target.value);
@@ -216,7 +217,7 @@ export function DistributorHeadManagerBookTab({
             <AdminTableHeader>
               <tr>
                 <AdminTableHeadCell>Client</AdminTableHeadCell>
-                <AdminTableHeadCell>Distributor</AdminTableHeadCell>
+                <AdminTableHeadCell>{MITRA_HIERARCHY_COPY.zyndMitra}</AdminTableHeadCell>
                 <AdminTableHeadCell>Scheme</AdminTableHeadCell>
                 <AdminTableHeadCell>Amount</AdminTableHeadCell>
                 <AdminTableHeadCell>Frequency</AdminTableHeadCell>
@@ -254,7 +255,7 @@ export function DistributorHeadManagerBookTab({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <AdminSearchInput
               containerClassName="max-w-sm"
-              placeholder="Search purchases by client, distributor, or scheme"
+              placeholder={`Search purchases by client, ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}, or scheme`}
               value={purchaseSearch}
               onChange={(event) => {
                 setPurchaseSearch(event.target.value);
@@ -296,7 +297,7 @@ export function DistributorHeadManagerBookTab({
             <AdminTableHeader>
               <tr>
                 <AdminTableHeadCell>Client</AdminTableHeadCell>
-                <AdminTableHeadCell>Distributor</AdminTableHeadCell>
+                <AdminTableHeadCell>{MITRA_HIERARCHY_COPY.zyndMitra}</AdminTableHeadCell>
                 <AdminTableHeadCell>Scheme</AdminTableHeadCell>
                 <AdminTableHeadCell>Amount</AdminTableHeadCell>
                 <AdminTableHeadCell>Order date</AdminTableHeadCell>

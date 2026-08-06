@@ -1,6 +1,6 @@
 # ZYND Distributor
 
-Frontend-first console for distributors to manage investors, orders, and transactions.
+Frontend console for distributors to manage investors, orders, and transactions.
 
 ## Run
 
@@ -12,11 +12,6 @@ cd Distributor && npm run dev
 
 App runs on [http://localhost:9900](http://localhost:9900).
 
-## Demo login
+## Backend
 
-| Email | Password |
-|-------|----------|
-| `riya@zynd.distributor` | `distributor123` |
-| `arjun@zynd.distributor` | `distributor123` |
-
-No backend is wired yet — investors, orders, and related screens use dummy data.
+The console expects the Zynd API for authentication and client data. Configure `NEXT_PUBLIC_API_URL` if your backend is not proxied at `/api/v1`.

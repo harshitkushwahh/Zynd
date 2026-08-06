@@ -1312,6 +1312,10 @@ async def post_forgot_password(
             email=body.email,
             turnstile_token=body.turnstile_token,
             ip=get_client_ip(request),
+            client=body.client,
+            origin=request.headers.get("origin"),
+            referer=request.headers.get("referer"),
+            header_client=request.headers.get("x-zynd-client"),
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc

@@ -1,8 +1,8 @@
 import type { DistributorOperationsSectionId } from "@/lib/distributor-operations-sections";
-import type { DistributorOrder } from "@/lib/dummy/types";
-import { DUMMY_TRANSACTION_GROUPS } from "@/lib/dummy/transaction-groups";
-import { DUMMY_SYSTEMATIC_PLANS } from "@/lib/dummy/systematic-plans";
-import { DUMMY_TXN_REQUESTS } from "@/lib/dummy/txn-requests";
+import type { DistributorOrder } from "@/lib/distributor-types";
+import { DUMMY_TRANSACTION_GROUPS } from "@/lib/distributor-operations-list-data";
+import { DUMMY_SYSTEMATIC_PLANS } from "@/lib/distributor-operations-list-data";
+import { DUMMY_TXN_REQUESTS } from "@/lib/distributor-operations-list-data";
 
 export type OperationsDualRingMetrics = {
   outerPct: number;

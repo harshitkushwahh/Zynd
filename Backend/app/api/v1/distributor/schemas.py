@@ -7,6 +7,199 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class DistributorPartnerListItemResponse(BaseModel):
+    id: str
+    partner_id: str
+    user_id: UUID
+    client_id: str
+    name: str
+    email: str
+    arn: str = ""
+    client_count: int = 0
+    aum: float = 0.0
+    status: str
+    onboarding_status: str
+    joined_at: datetime
+    profile_image_url: str | None = None
+
+
+class DistributorPartnerAddressResponse(BaseModel):
+    line1: str = ""
+    line2: str = ""
+    city: str = ""
+    state: str = ""
+    pincode: str = ""
+    country: str = "India"
+
+
+class DistributorPartnerDetailResponse(DistributorPartnerListItemResponse):
+    mobile: str = ""
+    mobile_masked: str = ""
+    branch_id: str | None = None
+    branch_name: str = ""
+    euin: str = "—"
+    pan_masked: str = ""
+    address: DistributorPartnerAddressResponse
+    active_sip_count: int = 0
+    mtd_inflow: float = 0.0
+    lumpsum_mtd: float = 0.0
+    onboarding_complete_pct: int = 0
+
+
+class DistributorBranchResponse(BaseModel):
+    id: str
+    name: str
+    city: str | None = None
+
+
+class DistributorConsoleContextResponse(BaseModel):
+    persona: str
+    client_id: str
+    branch: DistributorBranchResponse | None = None
+
+
+class DistributorPartnerListResponse(BaseModel):
+    items: list[DistributorPartnerListItemResponse]
+
+
+class PartnerOnboardingStartRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+
+
+class PartnerOnboardingStartResponse(BaseModel):
+    onboarding_token: str
+    retry_after_seconds: int
+    expires_in: int
+
+
+class PartnerOnboardingTokenRequest(BaseModel):
+    onboarding_token: str = Field(min_length=8, max_length=256)
+
+
+class PartnerOnboardingVerifyOtpRequest(PartnerOnboardingTokenRequest):
+    otp: str = Field(min_length=6, max_length=6)
+
+
+class PartnerOnboardingMobileOtpRequest(PartnerOnboardingTokenRequest):
+    mobile: str = Field(min_length=10, max_length=15)
+
+
+class PartnerOnboardingDraftUpdateRequest(PartnerOnboardingTokenRequest):
+    pan: str | None = None
+    pan_verified_name: str | None = None
+    first_name: str | None = None
+    middle_name: str | None = None
+    last_name: str | None = None
+    bank: dict[str, Any] | None = None
+    address: dict[str, Any] | None = None
+    documents: dict[str, Any] | None = None
+
+
+class PartnerOnboardingSubmitResponse(BaseModel):
+    partner_id: UUID
+    user_id: UUID
+    email: str
+    display_name: str
+    status: str
+
+
+class PartnerOnboardingProfilePhotoResponse(BaseModel):
+    uploaded: bool = True
+    file_name: str
+
+
+class PartnerOnboardingPanVerifyRequest(PartnerOnboardingTokenRequest):
+    pan: str = Field(min_length=10, max_length=10)
+
+
+class PartnerOnboardingPanVerifyResponse(BaseModel):
+    verified: bool = True
+    verified_name: str
+
+
+class PartnerOnboardingBankVerifyRequest(PartnerOnboardingTokenRequest):
+    account_number: str = Field(min_length=9, max_length=18)
+    account_type: str = Field(min_length=3, max_length=20)
+    ifsc: str = Field(min_length=11, max_length=11)
+
+
+class PartnerOnboardingBankVerifyResponse(BaseModel):
+    verified: bool = True
+    verified_holder_name: str
+    bank_name: str = ""
+    branch_name: str = ""
+    account_type: str = ""
+    verification_mode: str = "auto"
+
+
+class PartnerOnboardingBankManualVerifyRequest(PartnerOnboardingTokenRequest):
+    account_holder_name: str = Field(min_length=3, max_length=120)
+    account_number: str = Field(min_length=9, max_length=18)
+    confirm_account_number: str = Field(min_length=9, max_length=18)
+    account_type: str = Field(min_length=3, max_length=20)
+    ifsc: str = Field(min_length=11, max_length=11)
+    bank_name: str = Field(min_length=2, max_length=120)
+    branch_name: str = Field(min_length=2, max_length=120)
+
+
+class PartnerOnboardingBankManualVerifyResponse(BaseModel):
+    verified: bool = True
+    verified_holder_name: str
+    bank_name: str = ""
+    branch_name: str = ""
+    account_type: str = ""
+    verification_mode: str = "manual"
+
+
+class PartnerOnboardingDocumentResponse(BaseModel):
+    uploaded: bool = True
+    file_name: str
+    doc_type: str
+
+
+class PartnerOnboardingDraftDocumentsResponse(BaseModel):
+    pan_file_name: str | None = None
+    aadhaar_file_name: str | None = None
+    pan_uploaded: bool = False
+    aadhaar_uploaded: bool = False
+
+
+class PartnerOnboardingDraftProfilePhotoResponse(BaseModel):
+    uploaded: bool = False
+    file_name: str | None = None
+
+
+class PartnerOnboardingDraftResponse(BaseModel):
+    email: str | None = None
+    email_verified: bool = False
+    mobile: str | None = None
+    mobile_verified: bool = False
+    pan: str | None = None
+    pan_verified: bool = False
+    pan_verified_name: str | None = None
+    first_name: str | None = None
+    middle_name: str | None = None
+    last_name: str | None = None
+    bank_verified: bool = False
+    bank: dict[str, Any] | None = None
+    address: dict[str, Any] | None = None
+    documents: PartnerOnboardingDraftDocumentsResponse
+    profile_photo: PartnerOnboardingDraftProfilePhotoResponse
+
+
+class VerifiedResponse(BaseModel):
+    verified: bool = True
+
+
+class OtpSendResponse(BaseModel):
+    retry_after_seconds: int
+    expires_in: int
+
+
+class OkResponse(BaseModel):
+    ok: bool = True
+
+
 class DistributorClientListItemResponse(BaseModel):
     user_id: UUID
     client_id: str | None = None

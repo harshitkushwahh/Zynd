@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.kyc.journey_gate_service import is_rekyc_modification, requires_full_kyc_submission
+from app.application.kyc.journey_gate_service import requires_digilocker, requires_full_kyc_submission
 from app.application.kyc.kyc_notification_service import notify_kyc_initiated, notify_kyc_under_review
 from app.infrastructure.persistence.models import (
     KycJourneyState,
@@ -26,6 +26,8 @@ def _step_index(
     *,
     kyc_already_registered: bool = False,
     requires_full_kyc: bool = False,
+    digilocker_required: bool = False,
+    digilocker_complete: bool = False,
 ) -> int:
     """Map last completed step to the next active journey step index."""
     if not step:
@@ -53,7 +55,29 @@ def _step_index(
             "signature": 6,
             "review": 6,
         }
-    return mapping.get(step, 0)
+    index = mapping.get(step, 0)
+    if digilocker_required and not digilocker_complete and index >= 1:
+        return 0
+    return index
+
+
+def _digilocker_complete(journey: KycJourneyState | None) -> bool:
+    if journey is None:
+        return False
+    return journey.external_kyc_status == "returned_success"
+
+
+def resolve_active_step_index(journey: KycJourneyState | None, *, step: str | None = None) -> int:
+    if journey is None:
+        return 0
+    last_step = step if step is not None else journey.last_completed_step
+    return _step_index(
+        last_step,
+        kyc_already_registered=bool(journey.kyc_already_registered),
+        requires_full_kyc=requires_full_kyc_submission(journey),
+        digilocker_required=requires_digilocker(journey),
+        digilocker_complete=_digilocker_complete(journey),
+    )
 
 
 async def get_or_create_journey(db: AsyncSession, user_id: UUID) -> KycJourneyState:
@@ -125,15 +149,12 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
             "kycFormFailureReason": None,
             "proofDetailsStatus": None,
             "esignDetailsStatus": None,
+            "geolocationDraft": None,
             "stepStatuses": None,
         }
     return {
         "lastCompletedStep": journey.last_completed_step,
-        "activeStepIndex": _step_index(
-            journey.last_completed_step,
-            kyc_already_registered=bool(journey.kyc_already_registered),
-            requires_full_kyc=requires_full_kyc_submission(journey),
-        ),
+        "activeStepIndex": resolve_active_step_index(journey),
         "panDraft": journey.pan_draft_json,
         "contactDraft": journey.contact_draft_json,
         "personalDraft": journey.personal_draft_json,
@@ -158,6 +179,7 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
         "kycFormFailureReason": journey.kyc_form_failure_reason,
         "proofDetailsStatus": journey.proof_details_status,
         "esignDetailsStatus": journey.esign_details_status,
+        "geolocationDraft": journey.geolocation_json,
         "stepStatuses": {
             "pan": status.pan_step_status.value if status else "pending",
             "digilocker": status.digilocker_step_status.value if status else "pending",
@@ -291,7 +313,7 @@ async def save_journey_state(
             status.review_step_status = KycStepStatus.saved
 
     if (
-        (journey.kyc_already_registered or is_rekyc_modification(journey))
+        not requires_digilocker(journey)
         and status.digilocker_step_status == KycStepStatus.pending
     ):
         status.digilocker_step_status = KycStepStatus.skipped

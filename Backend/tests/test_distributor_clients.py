@@ -34,7 +34,7 @@ async def _admin_auth_headers(
 
     session = Session(
         user_id=admin.id,
-        refresh_token_hash="x" * 64,
+        refresh_token_hash=f"{uuid4().hex}{uuid4().hex}",
         token_family_id=admin.id,
         expires_at=datetime.now(timezone.utc) + timedelta(days=30),
     )

@@ -17,7 +17,7 @@ import {
   getDistributorNetSalesHyperCardData,
   getDistributorNetSalesTrendForPeriod,
   type DistributorNetSalesChartPeriod,
-} from "@/lib/dummy/distributor-reports";
+} from "@/lib/distributor-reports-data";
 import { DistributorInsightCardHeader } from "@/components/ui/distributor-insight-card-header";
 import { DistributorGrowthBadge } from "@/components/ui/distributor-growth-badge";
 import { formatAum } from "@/lib/format";

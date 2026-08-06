@@ -10,7 +10,7 @@ import {
 
 import { ClientPortfolioValueChart } from "@/components/clients/client-portfolio-value-chart";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientProfile } from "@/lib/dummy/types";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
 import { formatAum, formatPortfolioMetricAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

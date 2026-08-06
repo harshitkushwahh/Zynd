@@ -96,10 +96,10 @@ export function PersonalDetailsSettingsPanel({
   const [authError, setAuthError] = useState("");
   const [pendingPassword, setPendingPassword] = useState("");
 
-  const hasIdentity = Boolean(kycProfile?.panNumber || personalInfo);
-  const hasAddress = Boolean(kycProfile?.address);
+  const hasIdentity = Boolean(kycProfile?.kycVerified && (kycProfile?.panNumber || personalInfo));
+  const hasAddress = Boolean(kycProfile?.kycVerified && kycProfile?.address);
   const showIdentitySection = kycProfileLoading || hasIdentity || kyc?.kycAllowed;
-  const showAddressSection = kycProfileLoading || hasAddress;
+  const showAddressSection = kycProfileLoading || hasAddress || kyc?.kycAllowed;
 
   const loadConnections = useCallback(async () => {
     setLoading(true);
@@ -322,7 +322,7 @@ export function PersonalDetailsSettingsPanel({
               icon={ShieldCheck}
               tone="success"
               badge={
-                hasIdentity && kycProfile?.panVerified ? (
+                kycProfile?.kycVerified ? (
                   <span className="rounded-[var(--radius-full)] bg-success/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success">
                     KYC verified
                   </span>

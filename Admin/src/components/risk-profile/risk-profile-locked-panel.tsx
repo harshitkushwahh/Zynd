@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Lock, MoreHorizontal, CheckCircle2, RefreshCw } from "lucide-react";
 
@@ -48,9 +48,23 @@ import { cn } from "@/lib/utils";
 
 const RISK_PROFILE_UNLOCK_ATTEMPTS = 3;
 
-export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
+export function RiskProfileLockedPanel({
+  canManage,
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  refreshKey,
+}: {
+  canManage: boolean;
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  refreshKey?: number;
+}) {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
+  const [internalSearch, setInternalSearch] = useState("");
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [error, setError] = useState("");
@@ -72,6 +86,11 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
 
   const refreshLockedUsers = () =>
     queryClient.invalidateQueries({ queryKey: lockedRiskProfilesQueryKey(queryParams) });
+
+  useEffect(() => {
+    if (refreshKey == null || refreshKey === 0) return;
+    void refreshLockedUsers();
+  }, [refreshKey]);
 
   const openRevokeDialog = (user: LockedRiskProfileUser) => {
     setSelectedUser(user);
@@ -134,22 +153,26 @@ export function RiskProfileLockedPanel({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search by name, email, or ID"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => void refreshLockedUsers()}
-          aria-label="Refresh"
-        >
-          <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
-        </Button>
-      </div>
+      {showToolbar ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder="Search by name, email, or ID"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void refreshLockedUsers()}
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {error || loadError ? (
         <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>

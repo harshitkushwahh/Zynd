@@ -8,7 +8,7 @@ import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { FieldMessage } from "@/components/ui/ui-message";
-import { PageTitle } from "@/components/ui/page-title";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   fetchFamilyGroup,
   revokeFamilyGroupInvite,
@@ -189,15 +189,11 @@ export function FamilyGroupActivityPage() {
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin]">
           <div className="mb-6 space-y-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-                <Clock3 className="size-4" strokeWidth={2.25} />
-              </div>
-              <div className="min-w-0">
-                <PageTitle>{copy.familyGroups.activity.pageTitle}</PageTitle>
-                <p className="mt-2 max-w-2xl text-compact text-muted-foreground">{pageDescription}</p>
-              </div>
-            </div>
+            <PageHeader
+              icon={Clock3}
+              title={copy.familyGroups.activity.pageTitle}
+              description={pageDescription}
+            />
             {groupReady && canViewInvites ? (
               <ActivityPageTabToggle
                 tab={tab}

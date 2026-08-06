@@ -1,4 +1,4 @@
-import type { DistributorWorkAttendanceRow, DistributorWorkLocationType } from "@/lib/dummy/distributor-job-dashboard";
+import type { DistributorWorkAttendanceRow, DistributorWorkLocationType } from "@/lib/distributor-job-dashboard-data";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 
 export const WORK_TYPE_OPTIONS: Array<{ value: DistributorWorkLocationType; label: string }> = [

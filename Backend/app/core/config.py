@@ -24,7 +24,7 @@ def _read_pem_file(path: str) -> str:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_BACKEND_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
 
     cors_origins: str = (
-        "http://localhost:7777,http://localhost:8888,"
-        "http://127.0.0.1:7777,http://127.0.0.1:8888"
+        "http://localhost:7777,http://localhost:8888,http://localhost:9900,"
+        "http://127.0.0.1:7777,http://127.0.0.1:8888,http://127.0.0.1:9900"
     )
 
     database_url: str = "postgresql+asyncpg://zynd:zynd@localhost:5432/zynd"
@@ -157,6 +157,7 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:7777"
     admin_frontend_url: str = "http://localhost:8888"
+    distributor_frontend_url: str = "http://localhost:9900"
     referral_min_first_investment_inr: int = 1000
     referral_qualification_hold_days: int = 30
     referral_min_engagement_investment_inr: int = 1000
@@ -362,6 +363,7 @@ class Settings(BaseSettings):
     zynd_mf_invest_cache_search_ttl_seconds: int = 300
     zynd_mf_invest_cache_config_ttl_seconds: int = 900
     zynd_mf_invest_cache_calc_ttl_seconds: int = 86400
+    zynd_mf_portfolio_cache_ttl_seconds: int = 300
     zynd_mf_amfi_scheme_master_enabled: bool = True
     zynd_mf_amfi_scheme_master_cron: str = "1 21 * * *"
     zynd_mf_return_calculator_enabled: bool = True
@@ -522,6 +524,14 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def normalize_twilio_settings(self) -> "Settings":
+        object.__setattr__(self, "twilio_from_number", self.twilio_from_number.strip())
+        object.__setattr__(self, "twilio_messaging_service_sid", self.twilio_messaging_service_sid.strip())
+        object.__setattr__(self, "twilio_account_sid", self.twilio_account_sid.strip())
+        object.__setattr__(self, "twilio_auth_token", self.twilio_auth_token.strip())
+        return self
+
+    @model_validator(mode="after")
     def default_document_scan_mode_for_development(self) -> "Settings":
         import os
 
@@ -619,7 +629,11 @@ class Settings(BaseSettings):
     def webauthn_origin_list(self) -> list[str]:
         if self.webauthn_origins.strip():
             return [origin.strip() for origin in self.webauthn_origins.split(",") if origin.strip()]
-        origins = {self.frontend_url.rstrip("/"), self.admin_frontend_url.rstrip("/")}
+        origins = {
+            self.frontend_url.rstrip("/"),
+            self.admin_frontend_url.rstrip("/"),
+            self.distributor_frontend_url.rstrip("/"),
+        }
         origins.update(self.cors_origin_list)
         return sorted(origin for origin in origins if origin)
 

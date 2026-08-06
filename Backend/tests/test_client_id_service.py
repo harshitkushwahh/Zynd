@@ -4,7 +4,12 @@ import pytest
 
 from app.application.documents.client_id_service import (
     build_client_id_candidate,
+    build_zynd_persona_client_id,
+    build_zynd_persona_initials,
+    is_zynd_persona_client_id,
     with_collision_suffix,
+    ZYND_PERSONA_MANAGER,
+    ZYND_PERSONA_MITRA,
 )
 
 
@@ -29,3 +34,30 @@ def test_build_client_id_candidate_without_phone_uses_random_suffix() -> None:
 def test_with_collision_suffix() -> None:
     assert with_collision_suffix("rahul9876543210@zynd", 1) == "rahul9876543210@zynd"
     assert with_collision_suffix("rahul9876543210@zynd", 2) == "rahul9876543210-2@zynd"
+
+
+def test_build_zynd_persona_initials() -> None:
+    assert build_zynd_persona_initials("Harshit", "Kushwah") == "HK"
+    assert build_zynd_persona_initials("Neha", "Patil") == "NP"
+
+
+def test_build_zynd_persona_client_id() -> None:
+    assert build_zynd_persona_client_id(
+        first_name="Harshit",
+        last_name="Kushwah",
+        role_code=ZYND_PERSONA_MITRA,
+        series=1,
+    ) == "ZYND-M-HK001"
+    assert build_zynd_persona_client_id(
+        first_name="Neha",
+        last_name="Patil",
+        role_code=ZYND_PERSONA_MANAGER,
+        series=2,
+    ) == "ZYND-MG-NP002"
+
+
+def test_is_zynd_persona_client_id() -> None:
+    assert is_zynd_persona_client_id("ZYND-M-HK001", ZYND_PERSONA_MITRA)
+    assert is_zynd_persona_client_id("ZYND-MG-NP001", ZYND_PERSONA_MANAGER)
+    assert not is_zynd_persona_client_id("ZYND-MG-NP001", ZYND_PERSONA_MITRA)
+    assert not is_zynd_persona_client_id("harshit5314@zynd", ZYND_PERSONA_MITRA)

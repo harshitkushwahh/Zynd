@@ -31,7 +31,9 @@ import {
   paginateItems,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
-import { ApiError } from "@/lib/api-client";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
+import { cn } from "@/lib/utils";
 import {
   fetchMfIngestionRuns,
   fetchMfJobs,
@@ -42,6 +44,8 @@ import {
 
 const ALL_PHASES = "all";
 const ALL_STATUSES = "all";
+
+type OperationsView = "jobs" | "runs";
 
 
 function runStatusTone(status: string | null | undefined): MfStatusTone {
@@ -65,7 +69,8 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [jobSearch, setJobSearch] = useState("");
+  const [activeView, setActiveView] = useState<OperationsView>("jobs");
+  const [listSearch, setListSearch] = useState("");
   const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES);
   const [runStatusFilter, setRunStatusFilter] = useState(ALL_STATUSES);
   const [jobPage, setJobPage] = useState(0);
@@ -100,7 +105,7 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   );
 
   const filteredJobs = useMemo(() => {
-    const query = jobSearch.trim().toLowerCase();
+    const query = listSearch.trim().toLowerCase();
     return jobs.filter((job) => {
       if (phaseFilter !== ALL_PHASES && String(job.phase) !== phaseFilter) return false;
       if (!query) return true;
@@ -110,7 +115,7 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
         job.cron.toLowerCase().includes(query)
       );
     });
-  }, [jobSearch, jobs, phaseFilter]);
+  }, [listSearch, jobs, phaseFilter]);
 
   const jobPagination = useMemo(
     () => paginateItems(filteredJobs, jobPage, jobPageSize),
@@ -130,9 +135,21 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   );
 
   const filteredRuns = useMemo(() => {
-    if (runStatusFilter === ALL_STATUSES) return runs;
-    return runs.filter((run) => (run.status ?? "").toLowerCase() === runStatusFilter.toLowerCase());
-  }, [runStatusFilter, runs]);
+    const query = listSearch.trim().toLowerCase();
+
+    return runs.filter((run) => {
+      if (
+        runStatusFilter !== ALL_STATUSES &&
+        (run.status ?? "").toLowerCase() !== runStatusFilter.toLowerCase()
+      ) {
+        return false;
+      }
+
+      if (!query) return true;
+
+      return (run.job_name ?? "").toLowerCase().includes(query);
+    });
+  }, [listSearch, runStatusFilter, runs]);
 
   const runPagination = useMemo(
     () => paginateItems(filteredRuns, runPage, runPageSize),
@@ -163,11 +180,11 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
 
   useEffect(() => {
     setJobPage(0);
-  }, [jobSearch, phaseFilter, jobPageSize]);
+  }, [listSearch, phaseFilter, jobPageSize]);
 
   useEffect(() => {
     setRunPage(0);
-  }, [runStatusFilter, runPageSize]);
+  }, [listSearch, runStatusFilter, runPageSize]);
 
   const succeededJobs = jobs.filter(
     (job) => (job.last_run?.status ?? "").toLowerCase() === "succeeded",
@@ -227,35 +244,65 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
         />
       </AdminMetricCardsGrid>
 
-      <div className="space-y-3">
+      <Tabs
+        value={activeView}
+        onValueChange={(value) => setActiveView(value as OperationsView)}
+        className="gap-4"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <AdminSearchInput
-            containerClassName="max-w-sm"
-            placeholder="Search jobs"
-            value={jobSearch}
-            onChange={(event) => setJobSearch(event.target.value)}
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder={activeView === "jobs" ? "Search jobs" : "Search runs"}
+            value={listSearch}
+            onChange={(event) => setListSearch(event.target.value)}
           />
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <AdminSelect
-              value={phaseFilter}
-              onValueChange={setPhaseFilter}
-              options={phaseOptions}
-              placeholder="Phase"
-              className="min-w-select-sm"
-            />
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <AdminTabList variant="secondary">
+              <AdminTabTrigger value="jobs" className="gap-2">
+                <Settings2 className="size-4 shrink-0" />
+                Scheduler jobs
+              </AdminTabTrigger>
+              <AdminTabTrigger value="runs" className="gap-2">
+                <Clock3 className="size-4 shrink-0" />
+                Recent runs
+              </AdminTabTrigger>
+            </AdminTabList>
+
+            {activeView === "jobs" ? (
+              <AdminSelect
+                value={phaseFilter}
+                onValueChange={setPhaseFilter}
+                options={phaseOptions}
+                placeholder="Phase"
+                className="min-w-select-sm"
+                triggerClassName="w-auto"
+              />
+            ) : (
+              <AdminSelect
+                value={runStatusFilter}
+                onValueChange={setRunStatusFilter}
+                options={runStatusOptions}
+                placeholder="Status"
+                className="min-w-select-sm"
+                triggerClassName="w-auto"
+              />
+            )}
+
             <Button
               variant="outline"
-              size="icon"
+              size="sm"
               disabled={loading}
               onClick={() => void loadData()}
-              aria-label="Refresh operations"
             >
-              <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              Refresh
             </Button>
           </div>
         </div>
 
-        <AdminDataTable
+        <TabsContent value="jobs" className="mt-0 space-y-3">
+          <AdminDataTable
           minWidth="4xl"
           footer={
             <AdminTablePagination
@@ -345,21 +392,11 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
               ))
             )}
           </AdminTableBody>
-        </AdminDataTable>
-      </div>
+          </AdminDataTable>
+        </TabsContent>
 
-      <div className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <AdminSelect
-            value={runStatusFilter}
-            onValueChange={setRunStatusFilter}
-            options={runStatusOptions}
-            placeholder="Status"
-            className="min-w-select-sm"
-          />
-        </div>
-
-        <AdminDataTable
+        <TabsContent value="runs" className="mt-0 space-y-3">
+          <AdminDataTable
           minWidth="lg"
           footer={
             <AdminTablePagination
@@ -420,8 +457,9 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
               ))
             )}
           </AdminTableBody>
-        </AdminDataTable>
-      </div>
+          </AdminDataTable>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

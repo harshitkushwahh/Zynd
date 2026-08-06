@@ -162,6 +162,29 @@ def require_permission(permission_key: str):
     return _require_permission
 
 
+def require_any_permission(*permission_keys: str):
+    normalized_keys = tuple(dict.fromkeys(permission_keys))
+
+    async def _require_any_permission(
+        db: Annotated[AsyncSession, Depends(get_db)],
+        current_user: Annotated[User, Depends(require_admin_user)],
+    ) -> User:
+        from app.application.admin.rbac_service import user_has_permission
+
+        for permission_key in normalized_keys:
+            if await user_has_permission(db, current_user.id, permission_key):
+                return current_user
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "permission_denied",
+                "message": f"Missing one of: {', '.join(normalized_keys)}",
+            },
+        )
+
+    return _require_any_permission
+
+
 async def require_fund_eligible_user(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],

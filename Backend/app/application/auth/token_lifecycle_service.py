@@ -6,6 +6,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.distributor.partner_access_service import (
+    assert_distributor_partner_may_set_password,
+    distributor_partner_may_request_password_reset,
+    resolve_auth_client_hint,
+    resolve_password_reset_target,
+)
+
 from app.application.auth.audit_service import write_audit
 from app.application.auth.auth_session_context import create_authenticated_session
 from app.application.auth.errors import AuthError
@@ -159,6 +166,10 @@ async def forgot_password(
     email: str,
     turnstile_token: str | None,
     ip: str | None,
+    client: str | None = None,
+    origin: str | None = None,
+    referer: str | None = None,
+    header_client: str | None = None,
 ) -> dict[str, bool]:
     if not await check_rate_limit(f"forgot:{ip or email}", 5, 3600):
         raise AuthError("Too many reset requests. Try again later.", "rate_limited", 429)
@@ -169,17 +180,41 @@ async def forgot_password(
     result = await db.execute(select(User).where(User.email == normalized))
     user = result.scalar_one_or_none()
     if user:
+        if not await distributor_partner_may_request_password_reset(db, user=user):
+            return {"ok": True}
+
         token = await create_reset_token(str(user.id))
         settings = get_settings()
-        reset_url = f"{settings.frontend_url}/reset-password?token={token}"
-        await send_security_email(
-            to_email=user.email,
-            subject="Reset your ZYND password",
-            body=(
-                "We received a request to reset your ZYND password.\n\n"
+        client_hint = resolve_auth_client_hint(body_client=client, header_client=header_client)
+        reset_base, product_label = await resolve_password_reset_target(
+            db,
+            settings,
+            user=user,
+            client=client_hint,
+            origin=origin,
+            referer=referer,
+        )
+        reset_url = f"{reset_base}/reset-password?token={token}"
+        is_first_password = not user.password_hash
+        if is_first_password:
+            subject = f"Set your {product_label} password"
+            body = (
+                f"Your {product_label} account is ready.\n\n"
+                f"Set your password using the link below (valid for a short time):\n"
+                f"{reset_url}\n\n"
+                "If you did not expect this email, you can ignore it."
+            )
+        else:
+            subject = f"Reset your {product_label} password"
+            body = (
+                f"We received a request to reset your {product_label} password.\n\n"
                 f"Reset link (valid for a short time):\n{reset_url}\n\n"
                 "If you did not request this, you can ignore this email."
-            ),
+            )
+        await send_security_email(
+            to_email=user.email,
+            subject=subject,
+            body=body,
         )
         await write_audit(
             db,
@@ -206,6 +241,8 @@ async def reset_password(
     user = result.scalar_one_or_none()
     if not user:
         raise AuthError("User not found.", "user_not_found", 404)
+
+    await assert_distributor_partner_may_set_password(db, user=user)
 
     if user_has_mfa(user):
         from app.application.auth.mfa_service import verify_user_backup_code, verify_user_totp
@@ -247,6 +284,9 @@ async def reset_password(
     user.locked_until = None
     await revoke_all_sessions(db, user_id=user.id, ip=ip, reason="password_reset")
     await write_audit(db, event_type=AuditEventType.password_changed, user_id=user.id, ip=ip)
+    from app.application.distributor.partner_approval_service import activate_distributor_partner_after_password_set
+
+    await activate_distributor_partner_after_password_set(db, user_id=user.id)
     schedule_user_notification(
         user_id=user.id,
         user_email=user.email,

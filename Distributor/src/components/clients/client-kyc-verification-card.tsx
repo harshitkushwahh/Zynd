@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { summarizeKycProgress } from "@/lib/distributor-client-kyc-steps";
-import type { DistributorClientKycStep } from "@/lib/dummy/types";
+import type { DistributorClientKycStep } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 import {
   DISTRIBUTOR_LABEL_CAPS_INLINE_END_CLASS,

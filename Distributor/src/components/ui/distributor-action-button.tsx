@@ -73,7 +73,7 @@ export function DistributorActionButton({
   );
 
   if (asChild && isValidElement(children)) {
-    const child = children as ReactElement<{ className?: string }>;
+    const child = children as ReactElement<{ className?: string; children?: ReactNode }>;
     return cloneElement(child, {
       ...props,
       className: cn(mergedClassName, child.props.className),

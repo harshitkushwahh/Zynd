@@ -59,7 +59,7 @@ export const DUMMY_STATE_HEAD = {
   email: "priya.kulkarni@zynd.distributor",
   state: "Maharashtra",
   stateCode: "MH",
-  roleLabel: "State Head",
+  roleLabel: "Mitra State Head",
 } as const;
 
 export const DUMMY_MANAGERS: DistributorHeadManager[] = [

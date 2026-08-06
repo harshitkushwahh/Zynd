@@ -867,6 +867,9 @@ class AdminInvitation(Base):
     )
 
 
+from app.infrastructure.persistence import distributor_partner_models as _distributor_partner_models  # noqa: F401,E402
+from app.infrastructure.persistence import distributor_branch_models as _distributor_branch_models  # noqa: F401,E402
+from app.infrastructure.persistence import distributor_state_head_models as _distributor_state_head_models  # noqa: F401,E402
 from app.infrastructure.persistence import family_group_models as _family_group_models  # noqa: F401,E402
 from app.infrastructure.persistence import investor_models as _investor_profile_models  # noqa: F401,E402
 from app.infrastructure.persistence import mf_models as _mf_models  # noqa: F401,E402

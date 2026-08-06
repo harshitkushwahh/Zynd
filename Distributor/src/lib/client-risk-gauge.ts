@@ -1,4 +1,4 @@
-import type { DistributorClientProfile } from "@/lib/dummy/types";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
 import {
   tierIdFromLabel,
   type RiskTierId,

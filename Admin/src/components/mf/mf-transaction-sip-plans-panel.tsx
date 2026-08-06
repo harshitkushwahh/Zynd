@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const SIP_STATUS_OPTIONS: AdminSelectOption[] = [
+export const SIP_STATUS_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "PENDING", label: "Pending" },
   { value: "REVIEW", label: "Review" },
@@ -76,17 +76,33 @@ function matchesSearch(plan: MfTransactionSipPlan, query: string) {
 export function MfTransactionSipPlansPanel({
   canRead,
   canManage,
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  statusFilter: statusFilterProp,
+  onStatusFilterChange,
+  refreshKey,
 }: {
   canRead: boolean;
   canManage: boolean;
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  statusFilter?: string;
+  onStatusFilterChange?: (value: string) => void;
+  refreshKey?: number;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [plans, setPlans] = useState<MfTransactionSipPlan[]>([]);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalStatusFilter, setInternalStatusFilter] = useState(ALL);
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const statusFilter = onStatusFilterChange ? (statusFilterProp ?? ALL) : internalStatusFilter;
+  const setStatusFilter = onStatusFilterChange ?? setInternalStatusFilter;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
@@ -110,6 +126,11 @@ export function MfTransactionSipPlansPanel({
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (refreshKey == null || refreshKey === 0) return;
+    void loadData();
+  }, [loadData, refreshKey]);
 
   useEffect(() => {
     setPage(0);
@@ -145,31 +166,34 @@ export function MfTransactionSipPlansPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search by fund, customer, or ID"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminSelect
-            value={statusFilter}
-            onValueChange={(value) => setStatusFilter(value)}
-            options={SIP_STATUS_OPTIONS}
-            placeholder="Status"
-            className="min-w-select-sm"
+      {showToolbar ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder="Search by fund, customer, or ID"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => void loadData()}
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <AdminSelect
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value)}
+              options={SIP_STATUS_OPTIONS}
+              placeholder="Status"
+              className="min-w-select-sm"
+              triggerClassName="w-auto"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void loadData()}
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}

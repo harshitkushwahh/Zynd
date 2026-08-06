@@ -139,7 +139,8 @@ export function AddInvestorAddressPanel({
   const trimmedCity = activeFields.city.trim();
   const cityValue = trimmedCity && cityOptions.includes(trimmedCity) ? trimmedCity : "";
 
-  const handleStateChange = (value: string) => {
+  const handleStateChange = (value: string | null) => {
+    if (!value) return;
     const nextState = value ?? "";
     const nextCities = resolveAddInvestorCityOptions(nextState, "");
     const keepsCity = nextCities.includes(activeFields.city.trim());

@@ -10,10 +10,9 @@ import {
 } from "react";
 
 import {
-  DISTRIBUTOR_DUMMY_NOTIFICATIONS,
   inferDistributorNotificationKind,
   type DistributorNotification,
-} from "@/lib/dummy/notifications";
+} from "@/lib/distributor-notifications-data";
 
 type DistributorNotificationsContextValue = {
   notifications: DistributorNotification[];
@@ -27,9 +26,7 @@ const DistributorNotificationsContext =
   createContext<DistributorNotificationsContextValue | null>(null);
 
 export function DistributorNotificationsProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<DistributorNotification[]>(() =>
-    DISTRIBUTOR_DUMMY_NOTIFICATIONS.map((item) => ({ ...item })),
-  );
+  const [notifications, setNotifications] = useState<DistributorNotification[]>([]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !item.read).length,

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DUMMY_STATE_HEAD, type DistributorHeadManager } from "@/lib/dummy/distributor-head-data";
 import type { ManagerBookSummary } from "@/lib/distributor-head-queries";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { formatDistributorHeadCount, formatDistributorHeadInr } from "@/lib/distributor-head-format";
 import { Mail, MapPin } from "lucide-react";
 
@@ -72,7 +73,7 @@ export function DistributorHeadManagerHeroSection({
                 Reports to {DUMMY_STATE_HEAD.name}
               </Badge>
               <Badge variant="outline" className="font-normal tabular-nums">
-                {branchCount} branches · {distributorCount} distributors
+                {branchCount} branches · {distributorCount} {MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()}
               </Badge>
             </div>
           </div>
@@ -83,7 +84,7 @@ export function DistributorHeadManagerHeroSection({
         <AdminMetricCard
           label="Total AUM"
           value={formatDistributorHeadInr(book.totalAumInr)}
-          hint="Across distributor books"
+          hint={`Across ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} books`}
           icon={IndianRupee}
           tone="success"
           accent
@@ -105,7 +106,7 @@ export function DistributorHeadManagerHeroSection({
         <AdminMetricCard
           label="Investor clients"
           value={formatDistributorHeadCount(book.totalClients)}
-          hint={`${activeDistributors} active distributors`}
+          hint={`${activeDistributors} active ${MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()}`}
           icon={Users2}
           tone="muted"
         />
@@ -119,12 +120,12 @@ export function DistributorHeadManagerHeroSection({
         <AdminMetricCard
           label="Branches"
           value={formatDistributorHeadCount(branchCount)}
-          hint="Locations this manager runs"
+          hint={`Locations this ${MITRA_HIERARCHY_COPY.branchManager.toLowerCase()} runs`}
           icon={Building2}
           tone="info"
         />
         <AdminMetricCard
-          label="Distributors"
+          label={MITRA_HIERARCHY_COPY.zyndMitras}
           value={formatDistributorHeadCount(distributorCount)}
           hint={`${activeDistributors} active on team`}
           icon={Network}

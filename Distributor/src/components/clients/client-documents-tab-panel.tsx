@@ -22,7 +22,7 @@ import type {
   DistributorClientDocument,
   DistributorClientDocumentStatus,
   DistributorClientProfile,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import { env } from "@/lib/env";
 import { formatDistributorDate } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";

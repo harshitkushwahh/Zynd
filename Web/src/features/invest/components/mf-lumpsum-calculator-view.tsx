@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LineChart, TrendingUp } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { PAGE_HEADER_ICON_CLASS } from "@/components/ui/page-header";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   fetchInvestFundDetail,
@@ -18,8 +19,10 @@ import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculat
 import { MfCalculatorSliderField } from "@/features/invest/components/mf-calculator-slider-field";
 import { LumpsumCorpusDonut } from "@/features/invest/components/mf-lumpsum-corpus-donut";
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
+import { MfGrowthProjectionHeader } from "@/features/invest/components/mf-growth-projection-header";
 import { MfLumpsumCalculatorResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
+import { MF_TOOL_ICONS } from "@/features/invest/lib/mf-dashboard-sidebar-data";
 import {
   MF_CALC_CARD_CLASS,
   MF_CALC_CARD_CONTENT_CLASS,
@@ -43,6 +46,7 @@ import {
   scenariosToChartSeries,
 } from "@/features/invest/lib/mf-lumpsum-calculator";
 import { copy } from "@/shared/config/copy";
+import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
 
 function findBestScenario(scenarios: InvestReturnCalculatorScenario[]) {
@@ -337,16 +341,17 @@ export function MfLumpsumCalculatorView() {
         { label: copy.mutualFunds.lumpsumCalcTitle, href: "/dashboard/mutual-funds/calculators/lumpsum" },
       ]}
       title={copy.mutualFunds.lumpsumCalcTitle}
-      description={copy.mutualFunds.lumpsumCalcDescription}
+      icon={MF_TOOL_ICONS["lumpsum-calc"]}
     >
       <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
         <Card className={cn("h-full", MF_CALC_CARD_CLASS)}>
           <CardContent className={MF_CALC_CARD_CONTENT_CLASS}>
             <div className="flex items-center gap-2.5 text-body font-semibold tracking-tight">
-              <span className={MF_CALC_ICON_BADGE_CLASS}>
-                <LineChart className="size-4" strokeWidth={2.25} />
-              </span>
+              <LineChart
+                className={cn("size-5 shrink-0", PAGE_HEADER_ICON_CLASS)}
+                strokeWidth={2.25}
+              />
               {copy.mutualFunds.lumpsumInputsTitle}
             </div>
 
@@ -383,7 +388,7 @@ export function MfLumpsumCalculatorView() {
 
         <div className="flex h-full min-h-0 flex-col gap-4">
           {!fund ? (
-            <Card className="h-full flex-1 rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
+            <Card className={cn("h-full flex-1 border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]", ZYND_3XL_RADIUS_CLASS)}>
               <CardContent className="flex h-full min-h-full flex-col items-center justify-center gap-3 p-5 text-center sm:p-6">
                 <TrendingUp className="size-8 text-[var(--sip-empty-icon)]" />
                 <div>
@@ -412,10 +417,10 @@ export function MfLumpsumCalculatorView() {
 
         <Card className={cn("w-full", MF_CALC_CARD_CLASS)}>
           <CardContent className={cn(MF_CALC_CARD_CONTENT_CLASS, "gap-4")}>
-            <div className="space-y-1">
-              <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
-              <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
-            </div>
+            <MfGrowthProjectionHeader
+              title={copy.mutualFunds.sipChartTitle}
+              description={copy.mutualFunds.lumpsumChartDescription}
+            />
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">

@@ -20,7 +20,7 @@ export function preloadRiskProfileGauge() {
 
 const GaugeComponent = dynamic(() => preloadRiskProfileGauge(), { ssr: false });
 
-export type RiskProfileGaugeSize = "navbar" | "mini" | "full";
+export type RiskProfileGaugeSize = "navbar" | "overview" | "mini" | "full";
 
 type RiskProfileGaugeProps = {
   score: number;
@@ -51,6 +51,14 @@ const SIZE_CONFIG: Record<RiskProfileGaugeSize, GaugeSizeConfig> = {
     arcWidth: 0.24,
     pointerWidth: 7,
     animationDuration: 450,
+  },
+  overview: {
+    containerClass:
+      "h-8 w-[3.25rem] shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full",
+    marginInPercent: 0.03,
+    arcWidth: 0.22,
+    pointerWidth: 9,
+    animationDuration: 900,
   },
   mini: {
     containerClass:

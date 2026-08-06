@@ -13,7 +13,7 @@ import {
   type DistributorLeaveBalance,
   type DistributorLeaveRequest,
   type DistributorLeaveType,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/status-badge";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   DashboardMobileNav,
@@ -35,6 +35,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading, sessionRetrying } = useAuth();
   const pinContext = useZyndPinOptional();
   const kyc = useKycOptional();
+  const resumeAfterDigilocker = kyc?.resumeAfterDigilocker;
+  const resumeAfterKycSubmission = kyc?.resumeAfterKycSubmission;
+  const digilockerReturnHandledRef = useRef(false);
+  const kycSubmissionReturnHandledRef = useRef(false);
 
   useEffect(() => {
     if (!loading && !sessionRetrying && !user) {
@@ -43,16 +47,28 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [loading, router, sessionRetrying, user]);
 
   useEffect(() => {
-    if (!kyc || typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
+
     const params = new URLSearchParams(window.location.search);
+
     if (params.get("kyc_digilocker_return") === "1") {
-      kyc.resumeAfterDigilocker();
+      if (!digilockerReturnHandledRef.current && resumeAfterDigilocker) {
+        digilockerReturnHandledRef.current = true;
+        resumeAfterDigilocker();
+      }
       return;
     }
-    if (params.get("kyc_proof_return") === "1" || params.get("kyc_esign_return") === "1") {
-      kyc.resumeAfterKycSubmission();
+
+    if (
+      params.get("kyc_proof_return") === "1" ||
+      params.get("kyc_esign_return") === "1"
+    ) {
+      if (!kycSubmissionReturnHandledRef.current && resumeAfterKycSubmission) {
+        kycSubmissionReturnHandledRef.current = true;
+        resumeAfterKycSubmission();
+      }
     }
-  }, [kyc]);
+  }, [resumeAfterDigilocker, resumeAfterKycSubmission]);
 
   const showInitialAuthLoader = loading && !user;
   const showReconnectLoader = sessionRetrying && !user;

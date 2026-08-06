@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSignature, Smartphone } from "lucide-react";
+import { Landmark } from "lucide-react";
 
 import type { MfMandateType } from "@/features/invest/api/invest-api";
 import {
@@ -13,14 +13,12 @@ const MANDATE_TYPE_OPTIONS: readonly MfPaymentOption<MfMandateType>[] = [
   {
     id: "upi",
     label: copy.mutualFunds.paymentCardMandateTypeUpi,
-    subtitle: copy.mutualFunds.paymentCardMandateTypeUpiSubtitle,
-    icon: Smartphone,
+    imageSrc: "/upi.png",
   },
   {
     id: "nach",
     label: copy.mutualFunds.paymentCardMandateTypeNach,
-    subtitle: copy.mutualFunds.paymentCardMandateTypeNachSubtitle,
-    icon: FileSignature,
+    icon: Landmark,
   },
 ] as const;
 
@@ -35,7 +33,6 @@ export function MfMandateTypePicker({
 }) {
   return (
     <MfPaymentOptionToggle
-      label={copy.mutualFunds.paymentCardMandateTypeLabel}
       value={value}
       onChange={onChange}
       options={MANDATE_TYPE_OPTIONS}

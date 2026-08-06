@@ -7,6 +7,7 @@ import { DistributorHeadStatusBadge } from "@/components/distributor-head/distri
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import type { DistributorHeadLeaveApplication } from "@/lib/dummy/distributor-head-data";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +65,8 @@ export function DistributorHeadDistributorLeaveTab({
               Leave history
             </CardTitle>
             <p className="mt-1 text-caption text-muted-foreground">
-              Read-only — distributor leave is approved by the branch manager
+              Read-only — {MITRA_HIERARCHY_COPY.zyndMitra} leave is approved by the{" "}
+              {MITRA_HIERARCHY_COPY.branchManager.toLowerCase()}
             </p>
           </div>
           <div className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-import type { DistributorClientRiskAssessment } from "@/lib/dummy/types";
+import type { DistributorClientRiskAssessment } from "@/lib/distributor-types";
 
 export type RiskAssessmentTrendPoint = {
   assessmentId: string;

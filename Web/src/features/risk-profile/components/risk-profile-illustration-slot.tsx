@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
+import { RISK_PROFILE_HERO_RADIUS_CLASS } from "@/features/risk-profile/lib/risk-tier-ui";
 import { cn } from "@/lib/utils";
 
 type RiskProfileIllustrationSlotProps = {
@@ -23,7 +24,8 @@ export function RiskProfileIllustrationSlot({
     <div
       aria-hidden
       className={cn(
-        "relative min-h-[11rem] shrink-0 overflow-hidden rounded-[var(--radius-medium)] sm:min-h-[12.5rem]",
+        "relative min-h-[11rem] shrink-0 overflow-hidden sm:min-h-[12.5rem]",
+        RISK_PROFILE_HERO_RADIUS_CLASS,
         isHero
           ? "border border-primary-foreground/15 bg-primary-foreground/8 backdrop-blur-sm"
           : "border border-dashed border-border/80 bg-gradient-to-br from-primary/8 via-muted/20 to-transparent",

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Goal, Target, TrendingUp, Wallet } from "lucide-react";
 
+import { AdminUserProfileSectionEmptyState } from "@/components/users/admin-user-profile-section-empty-state";
 import { AdminFamilyGroupGoalTile } from "@/components/users/admin-family-group-goal-tile";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
@@ -69,16 +70,11 @@ export function UserGoalsDetailSection({ userRef }: UserGoalsDetailSectionProps)
 
   if (goals.length === 0) {
     return (
-      <div className="flex flex-col items-center rounded-[var(--radius-card)] border border-dashed border-border px-6 py-empty-state-lg text-center">
-        <div className="rounded-full bg-muted/40 p-3 text-muted-foreground">
-          <Goal className="size-5" />
-        </div>
-        <p className="mt-3 text-compact font-medium text-foreground">No goals yet</p>
-        <p className="mt-1 max-w-sm text-caption text-muted-foreground">
-          This user has not created any personal goals. Goal calculator plans will appear here once
-          they set a target.
-        </p>
-      </div>
+      <AdminUserProfileSectionEmptyState
+        icon={Goal}
+        title="No goals yet"
+        description="This user has not created any personal goals. Goal calculator plans will appear here once they set a target."
+      />
     );
   }
 

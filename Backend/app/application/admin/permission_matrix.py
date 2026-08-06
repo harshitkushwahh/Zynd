@@ -431,6 +431,80 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         ],
         "notes": "Distributor console masked client profile aggregate.",
     },
+    {
+        "permission": "distributor.partners.list",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/partners",
+            "GET /distributor/partners/{reference}",
+        ],
+        "notes": "Branch manager Zynd Mitra directory.",
+    },
+    {
+        "permission": "distributor.partners.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /distributor/partners/onboarding/start",
+            "PATCH /distributor/partners/onboarding/draft",
+            "GET /distributor/partners/onboarding/draft",
+            "POST /distributor/partners/onboarding/submit",
+        ],
+        "notes": "Branch manager Zynd Mitra onboarding wizard.",
+    },
+    {
+        "permission": "admin.distributor_partners.list",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-partners/pending",
+            "GET /admin/distributor-partners/{partner_id}",
+        ],
+        "notes": "HO review queue for pending Zynd Mitra applications.",
+    },
+    {
+        "permission": "admin.distributor_partners.approve",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/distributor-partners/{partner_id}/approve",
+            "POST /admin/distributor-partners/{partner_id}/reject",
+        ],
+        "notes": "Approve or reject Zynd Mitra HO applications.",
+    },
+    {
+        "permission": "admin.distributor_hierarchy.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/overview",
+            "GET /admin/distributor-hierarchy/partners",
+            "GET /admin/distributor-hierarchy/state-heads",
+        ],
+        "notes": "Read Mitra hierarchy overview and partner directory.",
+    },
+    {
+        "permission": "admin.distributor_branches.list",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/branches",
+        ],
+        "notes": "List branches in admin Mitra hierarchy.",
+    },
+    {
+        "permission": "admin.distributor_branches.manage",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/branch-manager-candidates",
+            "POST /admin/distributor-hierarchy/branches",
+            "POST /admin/distributor-hierarchy/state-heads",
+        ],
+        "notes": "Create distributor branches and Mitra State Head accounts.",
+    },
+    {
+        "permission": "admin.distributor_managers.list",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/managers",
+        ],
+        "notes": "List branch managers in admin Mitra hierarchy.",
+    },
 ]
 
 

@@ -33,6 +33,7 @@ function bootstrap(overrides: Partial<KycBootstrapResponse> = {}): KycBootstrapR
     kyc_form_failure_reason: null,
     proof_details_status: null,
     esign_details_status: null,
+    geolocation_draft: null,
     step_statuses: {
       pan: "pending",
       digilocker: "pending",

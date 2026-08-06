@@ -1,5 +1,3 @@
-import { DUMMY_BRANCH_DISTRIBUTORS } from "@/lib/dummy/branch-distributors";
-
 export type ResidentAssignmentStatus = "pending_confirmation" | "assigned";
 
 export type ResidentDistributorAssignment = {
@@ -14,8 +12,10 @@ export type ResidentDistributorAssignment = {
 
 const STORAGE_KEY = "zynd-resident-distributor-assignments";
 
-export function getBranchDistributorsForAssignment() {
-  return DUMMY_BRANCH_DISTRIBUTORS.filter((row) => row.status === "Active");
+import type { BranchDistributorRecord } from "@/lib/distributor-domain-types";
+
+export function getBranchDistributorsForAssignment(): BranchDistributorRecord[] {
+  return [];
 }
 
 export function readResidentAssignments(): Record<string, ResidentDistributorAssignment> {
@@ -33,6 +33,6 @@ export function writeResidentAssignments(map: Record<string, ResidentDistributor
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
 }
 
-export function buildDemoMagicLink(investorId: string): string {
-  return `https://app.zynd.in/assign-distributor?token=demo-${investorId}`;
+export function buildAssignmentMagicLink(investorId: string): string {
+  return `https://app.zynd.in/assign-distributor?investor=${encodeURIComponent(investorId)}`;
 }

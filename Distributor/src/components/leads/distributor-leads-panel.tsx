@@ -21,7 +21,7 @@ import {
   type DistributorLeadRow,
   type DistributorLeadSource,
   type DistributorLeadStage,
-} from "@/lib/dummy/distributor-leads";
+} from "@/lib/distributor-leads-data";
 import { distributorClientDetailHref } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";

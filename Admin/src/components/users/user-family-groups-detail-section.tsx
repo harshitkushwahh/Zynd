@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { UsersRound } from "lucide-react";
 
+import { AdminUserProfileSectionEmptyState } from "@/components/users/admin-user-profile-section-empty-state";
 import { AdminFamilyGroupSubCard } from "@/components/users/admin-family-group-sub-card";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
@@ -79,9 +81,11 @@ export function UserFamilyGroupsDetailSection({
 
   if (!payload || (!hasCreated && !hasMemberships)) {
     return (
-      <p className="text-caption text-muted-foreground">
-        This user is not part of any family groups yet.
-      </p>
+      <AdminUserProfileSectionEmptyState
+        icon={UsersRound}
+        title="No family groups yet"
+        description="This user is not part of any family groups yet."
+      />
     );
   }
 

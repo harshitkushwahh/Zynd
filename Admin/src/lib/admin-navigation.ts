@@ -26,6 +26,10 @@ import {
   type AdminSectionTab,
 } from "@/lib/admin-transaction-sections";
 import {
+  mitraSuperHeadDocumentTitle,
+  MITRA_HIERARCHY_COPY,
+} from "@/lib/mitra-hierarchy-copy";
+import {
   getDistributorHeadDistributor,
   getDistributorHeadManager,
 } from "@/lib/distributor-head-queries";
@@ -134,10 +138,14 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
   },
   {
     id: "distributor-head",
-    label: "Distributor Head",
+    label: MITRA_HIERARCHY_COPY.superHead,
     href: "/dashboard/distributor-head",
     icon: Crown,
-    description: "State head view of managers, branches, distributors, and sales",
+    description: MITRA_HIERARCHY_COPY.navDescription,
+    permissions: [
+      "admin.distributor_partners.list",
+      "admin.distributor_hierarchy.read",
+    ],
   },
   {
     id: "zynd-web",
@@ -391,17 +399,23 @@ export function getAdminPageTitle(pathname: string) {
     const entityId = parts[1];
     if (section === "managers" && entityId) {
       const manager = getDistributorHeadManager(entityId);
-      return manager ? `Distributor Head · ${manager.name}` : "Distributor Head · Manager";
+      return manager
+        ? mitraSuperHeadDocumentTitle(manager.name)
+        : mitraSuperHeadDocumentTitle(MITRA_HIERARCHY_COPY.branchManager);
     }
     if (section === "distributors" && entityId) {
       const distributor = getDistributorHeadDistributor(entityId);
-      return distributor ? `Distributor Head · ${distributor.name}` : "Distributor Head · Distributor";
+      return distributor
+        ? mitraSuperHeadDocumentTitle(distributor.name)
+        : mitraSuperHeadDocumentTitle(MITRA_HIERARCHY_COPY.zyndMitra);
     }
-    if (section === "managers") return "Distributor Head · Managers";
-    if (section === "distributors") return "Distributor Head · Distributors";
-    if (section === "branches") return "Distributor Head · Branches";
-    if (section === "sales") return "Distributor Head · Sales";
-    return "Distributor Head";
+    if (section === "queue") return mitraSuperHeadDocumentTitle("Queue");
+    if (section === "state-heads") return mitraSuperHeadDocumentTitle(`${MITRA_HIERARCHY_COPY.stateHead}s`);
+    if (section === "managers") return mitraSuperHeadDocumentTitle(MITRA_HIERARCHY_COPY.branchManagers);
+    if (section === "distributors") return mitraSuperHeadDocumentTitle(MITRA_HIERARCHY_COPY.zyndMitras);
+    if (section === "branches") return mitraSuperHeadDocumentTitle("Branches");
+    if (section === "sales") return mitraSuperHeadDocumentTitle("Sales");
+    return MITRA_HIERARCHY_COPY.superHead;
   }
   return route?.label ?? "Admin Console";
 }

@@ -8,8 +8,8 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import {
   DUMMY_DISTRIBUTOR_JOB_COMPENSATION,
   getDistributorJobCompensationSummary,
-} from "@/lib/dummy/distributor-job-dashboard";
-import { getDistributorPayoutSummary, DUMMY_DISTRIBUTOR_PAYOUTS } from "@/lib/dummy/distributor-payouts";
+} from "@/lib/distributor-job-dashboard-data";
+import { getDistributorPayoutSummary, DUMMY_DISTRIBUTOR_PAYOUTS } from "@/lib/distributor-payouts-data";
 import {
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS,

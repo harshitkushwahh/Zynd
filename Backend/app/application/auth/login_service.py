@@ -13,6 +13,8 @@ from app.application.auth.auth_session_context import (
     maybe_mfa_pending_login,
 )
 from app.application.auth.auth_client_policy import validate_user_role_for_client
+from app.application.admin.rbac_service import list_user_role_keys
+from app.application.distributor.partner_access_service import assert_distributor_partner_may_sign_in
 from app.application.auth.errors import AuthError
 from app.application.auth.mfa_service import user_has_mfa
 from app.application.auth.progressive_lockout_service import (
@@ -196,6 +198,9 @@ async def login_with_email(
     user.locked_until = None
 
     validate_user_role_for_client(user, admin_client=admin_client)
+
+    role_keys = await list_user_role_keys(db, user.id)
+    await assert_distributor_partner_may_sign_in(db, user=user, role_keys=role_keys)
 
     device, is_new_device = await get_or_create_device(
         db, user=user, fingerprint=device_fingerprint, user_agent=user_agent

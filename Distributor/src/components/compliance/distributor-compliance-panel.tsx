@@ -19,7 +19,7 @@ import {
   DUMMY_DISTRIBUTOR_COMPLIANCE_QUEUE,
   type DistributorComplianceIssueType,
   type DistributorComplianceQueueRow,
-} from "@/lib/dummy/distributor-compliance";
+} from "@/lib/distributor-compliance-data";
 import { distributorClientDetailHref } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";

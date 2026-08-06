@@ -94,7 +94,16 @@ class KycBootstrapResponse(BaseModel):
     kyc_form_failure_reason: Optional[str] = None
     proof_details_status: Optional[str] = None
     esign_details_status: Optional[str] = None
+    geolocation_draft: Optional[dict[str, Any]] = None
     step_statuses: Optional[KycStepStatuses] = None
+
+
+class KycGeolocationDraft(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy_meters: float = Field(alias="accuracyMeters")
+
+    model_config = {"populate_by_name": True}
 
 
 class KycJourneyStateRequest(BaseModel):
@@ -104,6 +113,7 @@ class KycJourneyStateRequest(BaseModel):
     nominee_draft_json: Optional[list[dict[str, Any]]] = None
     bank_draft_json: Optional[dict[str, Any]] = None
     signature_draft_json: Optional[dict[str, Any]] = None
+    geolocation_json: Optional[KycGeolocationDraft] = None
     last_completed_step: Optional[
         Literal["pan", "digilocker", "address", "personal", "nominee", "bank", "signature", "review"]
     ] = None

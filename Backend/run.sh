@@ -11,12 +11,149 @@ if [ -f .env ]; then
     # Skip comments and blank lines
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
     [[ -z "${line//[[:space:]]/}" ]] && continue
-    # Only export valid KEY=VALUE assignments
+    # Only export valid KEY=VALUE assignments (quote values in .env when they start with +)
     if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-      export "$line"
+      key="${line%%=*}"
+      value="${line#*=}"
+      export "${key}=${value}"
     fi
   done < .env
 fi
+
+parse_database_target() {
+  local url="${DATABASE_URL:-}"
+  DB_HOST="${DATABASE_HOST:-localhost}"
+  DB_PORT="${DATABASE_PORT:-5432}"
+  DB_NAME="${DATABASE_NAME:-zynd}"
+
+  if [[ -n "$url" ]]; then
+    if [[ "$url" =~ @([^:/]+):([0-9]+)/([^?]+) ]]; then
+      DB_HOST="${BASH_REMATCH[1]}"
+      DB_PORT="${BASH_REMATCH[2]}"
+      DB_NAME="${BASH_REMATCH[3]}"
+    elif [[ "$url" =~ @([^:/]+)/([^?]+) ]]; then
+      DB_HOST="${BASH_REMATCH[1]}"
+      DB_NAME="${BASH_REMATCH[2]}"
+    fi
+  fi
+}
+
+print_postgres_help() {
+  echo ""
+  echo "PostgreSQL is not reachable at ${DB_HOST}:${DB_PORT} (database: ${DB_NAME})."
+  echo ""
+  echo "Checks:"
+  echo "  1. DATABASE_URL in Backend/.env (currently targets ${DB_HOST}:${DB_PORT})"
+  echo "  2. Start Postgres:  docker compose up -d postgres   (from repo root)"
+  echo "  3. Or local brew:   brew services start postgresql@16"
+  echo ""
+  echo "Listening ports that look like PostgreSQL on this machine:"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null | awk '/:(543[0-9]|5432)/ {print "  " $0}' || true
+    if ! lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null | grep -qE ':(543[0-9]|5432)'; then
+      echo "  (none found — Postgres is probably not running)"
+    fi
+  else
+    echo "  (install lsof to auto-detect ports)"
+  fi
+  echo ""
+  echo "If Postgres runs on a different port, update Backend/.env:"
+  echo "  DATABASE_URL=postgresql+asyncpg://zynd:zynd@localhost:<port>/zynd"
+  echo "  DATABASE_PORT=<port>"
+}
+
+check_database_connection() {
+  parse_database_target
+
+  if [ -z "${DATABASE_URL:-}" ]; then
+    echo "ERROR: DATABASE_URL is not set."
+    echo "Copy Backend/.env.example to Backend/.env and configure PostgreSQL."
+    exit 1
+  fi
+
+  if command -v pg_isready >/dev/null 2>&1; then
+    if pg_isready -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -q; then
+      return 0
+    fi
+  elif command -v nc >/dev/null 2>&1; then
+    if nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; then
+      return 0
+    fi
+  elif command -v python3 >/dev/null 2>&1; then
+    if python3 - <<PY
+import socket
+s = socket.socket()
+s.settimeout(2)
+try:
+    s.connect(("${DB_HOST}", int("${DB_PORT}")))
+except OSError:
+    raise SystemExit(1)
+finally:
+    s.close()
+PY
+    then
+      return 0
+    fi
+  fi
+
+  print_postgres_help
+  exit 1
+}
+
+ensure_alembic_version_column() {
+  if [ ! -x ".venv/bin/python" ]; then
+    return 0
+  fi
+  .venv/bin/python - <<'PY' || true
+import asyncio
+import os
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+
+async def main() -> None:
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return
+    engine = create_async_engine(url)
+    try:
+        async with engine.begin() as conn:
+            exists = await conn.scalar(
+                text(
+                    "SELECT EXISTS ("
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_name = 'alembic_version'"
+                    ")"
+                )
+            )
+            if not exists:
+                return
+            await conn.execute(
+                text(
+                    "ALTER TABLE alembic_version "
+                    "ALTER COLUMN version_num TYPE VARCHAR(64)"
+                )
+            )
+    finally:
+        await engine.dispose()
+
+
+asyncio.run(main())
+PY
+}
+
+run_migrations() {
+  echo "Applying database migrations..."
+  if ! .venv/bin/alembic upgrade head; then
+    echo ""
+    echo "Migration failed."
+    echo "  Database target: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    echo "  If the revision id was too long, pull latest and re-run ./run.sh"
+    echo "  If schema was partially applied, try: .venv/bin/alembic upgrade head"
+    exit 1
+  fi
+}
 
 PYTHON_BIN=""
 for candidate in \
@@ -53,8 +190,11 @@ if [ -x ".venv/bin/python" ]; then
   fi
 fi
 
-echo "Applying database migrations..."
-.venv/bin/alembic upgrade head
+parse_database_target
+echo "Checking database connection (${DB_HOST}:${DB_PORT}/${DB_NAME})..."
+check_database_connection
+ensure_alembic_version_column
+run_migrations
 
 if [ "${ZYND_MF_WORKER_AUTOSTART:-true}" = "true" ]; then
   if pgrep -f "app.jobs.run_mf_transaction_workers" >/dev/null 2>&1; then

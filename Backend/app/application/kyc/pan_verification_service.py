@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.errors import KycError
-from app.application.kyc.journey_gate_service import is_rekyc_readiness_code
+from app.application.kyc.journey_gate_service import requires_digilocker, requires_digilocker_for_readiness
 from app.application.investor.investor_early_provision_service import ensure_investor_profile_after_pan_confirm
 from app.application.kyc.journey_state_service import get_or_create_journey, save_journey_state
 from app.application.kyc.master_data import TERMINAL_READINESS_CODES
@@ -150,7 +150,10 @@ async def verify_pan(db: AsyncSession, *, user: User, pan_number: str) -> dict[s
             "code": readiness_code,
             "reason": readiness_reason,
         },
-        "requiresDigilocker": not kyc_already_registered and not is_rekyc_readiness_code(readiness_code),
+        "requiresDigilocker": requires_digilocker_for_readiness(
+            kyc_already_registered=kyc_already_registered,
+            readiness_code=readiness_code,
+        ),
     }
 
 
@@ -233,4 +236,6 @@ async def confirm_pan_names(
         "success": True,
         "blocked": False,
         "panDraft": updated_draft,
+        "kycAlreadyRegistered": journey.kyc_already_registered,
+        "requiresDigilocker": requires_digilocker(journey),
     }

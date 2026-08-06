@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   DUMMY_DISTRIBUTOR_REPORT_BOOK_COMPOSITION,
   type DistributorReportBookCompositionRow,
-} from "@/lib/dummy/distributor-reports";
+} from "@/lib/distributor-reports-data";
 import { formatAum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

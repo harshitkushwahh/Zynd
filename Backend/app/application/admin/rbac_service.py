@@ -59,7 +59,23 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("goals.templates.manage", "Update predefined goal templates"),
     ("distributor.clients.list", "List investor clients in the distributor console"),
     ("distributor.clients.read", "View masked investor client profiles in the distributor console"),
+    ("distributor.partners.list", "List Zynd Mitras onboarded by the branch manager"),
+    ("distributor.partners.manage", "Onboard and manage Zynd Mitras for the branch"),
+    ("admin.distributor_partners.list", "Review pending Zynd Mitra onboarding applications"),
+    ("admin.distributor_partners.approve", "Approve or reject Zynd Mitra onboarding applications"),
+    ("admin.distributor_hierarchy.read", "View Mitra hierarchy branches, managers, and partners"),
+    ("admin.distributor_branches.list", "List distributor branches in admin hierarchy"),
+    ("admin.distributor_branches.manage", "Create and update distributor branches"),
+    ("admin.distributor_managers.list", "List branch managers in admin hierarchy"),
 ]
+
+DISTRIBUTOR_PARTNER_ROLE_KEY = "distributor_console"
+DISTRIBUTOR_MANAGER_ROLE_KEY = "distributor_manager"
+MITRA_SUPER_HEAD_ROLE_KEY = "mitra_super_head"
+MITRA_STATE_HEAD_ROLE_KEY = "mitra_state_head"
+DISTRIBUTOR_CONSOLE_ROLE_KEYS = frozenset(
+    {DISTRIBUTOR_PARTNER_ROLE_KEY, DISTRIBUTOR_MANAGER_ROLE_KEY}
+)
 
 ROLES: dict[str, dict[str, object]] = {
     "super_admin": {
@@ -84,6 +100,8 @@ ROLES: dict[str, dict[str, object]] = {
             "documents.download",
             "documents.verify",
             "documents.legal_hold",
+            "admin.distributor_partners.list",
+            "admin.distributor_partners.approve",
             "risk_profile.read",
             "risk_profile.users.read",
         ],
@@ -138,6 +156,39 @@ ROLES: dict[str, dict[str, object]] = {
             "distributor.clients.read",
         ],
     },
+    "distributor_manager": {
+        "name": "Distributor Manager",
+        "description": "Branch manager access for the Zynd Mitra console.",
+        "permissions": [
+            "distributor.clients.list",
+            "distributor.clients.read",
+            "distributor.partners.list",
+            "distributor.partners.manage",
+        ],
+    },
+    "mitra_super_head": {
+        "name": "Mitra Super Head",
+        "description": "Platform-wide Mitra hierarchy administration.",
+        "permissions": [
+            "admin.distributor_hierarchy.read",
+            "admin.distributor_branches.list",
+            "admin.distributor_branches.manage",
+            "admin.distributor_managers.list",
+            "admin.distributor_partners.list",
+            "admin.distributor_partners.approve",
+        ],
+    },
+    "mitra_state_head": {
+        "name": "Mitra State Head",
+        "description": "State-scoped Mitra hierarchy and HO review access.",
+        "permissions": [
+            "admin.distributor_hierarchy.read",
+            "admin.distributor_branches.list",
+            "admin.distributor_managers.list",
+            "admin.distributor_partners.list",
+            "admin.distributor_partners.approve",
+        ],
+    },
 }
 
 SEEDED_ROLE_KEYS = frozenset(ROLES.keys())
@@ -176,23 +227,30 @@ async def ensure_rbac_seed(db: AsyncSession) -> None:
         existing = await db.execute(
             select(AdminRolePermission).where(AdminRolePermission.role_id == row.id)
         )
-        current_permission_ids = {item.permission_id for item in existing.scalars()}
+        current_rows = list(existing.scalars())
+        current_permission_ids = {item.permission_id for item in current_rows}
         for permission_id in desired_permission_ids - current_permission_ids:
             db.add(AdminRolePermission(role_id=row.id, permission_id=permission_id))
+        for assignment in current_rows:
+            if assignment.permission_id not in desired_permission_ids:
+                await db.delete(assignment)
 
     await db.flush()
 
     admin_users = await db.execute(select(User).where(User.role == UserRole.admin))
     super_admin_role = role_rows["super_admin"]
     for admin_user in admin_users.scalars():
-        assignment = await db.execute(
+        existing_assignments = await db.execute(
             select(AdminUserRoleAssignment).where(
-                AdminUserRoleAssignment.user_id == admin_user.id,
-                AdminUserRoleAssignment.role_id == super_admin_role.id,
+                AdminUserRoleAssignment.user_id == admin_user.id
             )
         )
-        if assignment.scalar_one_or_none() is None:
-            db.add(AdminUserRoleAssignment(user_id=admin_user.id, role_id=super_admin_role.id))
+        if existing_assignments.scalars().first() is not None:
+            continue
+
+        db.add(
+            AdminUserRoleAssignment(user_id=admin_user.id, role_id=super_admin_role.id)
+        )
 
     await db.flush()
 

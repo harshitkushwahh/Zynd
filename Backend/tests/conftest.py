@@ -415,6 +415,26 @@ async def db_session() -> AsyncSession:
         await conn.execute(text("ALTER TABLE goals ADD COLUMN IF NOT EXISTS created_by_user_id UUID"))
         await conn.execute(text("ALTER TABLE goals ADD COLUMN IF NOT EXISTS linked_product_id UUID"))
         await conn.run_sync(goal_models.GoalContribution.__table__.create, checkfirst=True)
+        await conn.execute(
+            text("ALTER TABLE distributor_partners ADD COLUMN IF NOT EXISTS branch_id VARCHAR(32)")
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS state_code VARCHAR(8) DEFAULT 'MH' NOT NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS state_name VARCHAR(80) DEFAULT 'Maharashtra' NOT NULL"
+            )
+        )
+        await conn.run_sync(
+            __import__(
+                "app.infrastructure.persistence.distributor_state_head_models",
+                fromlist=["DistributorStateHead"],
+            ).DistributorStateHead.__table__.create,
+            checkfirst=True,
+        )
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     begin_event_batch()

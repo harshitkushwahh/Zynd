@@ -43,7 +43,9 @@ export function KycSelectField({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id} className="whitespace-nowrap">
+        {label}
+      </Label>
       <Select
         value={value || null}
         onValueChange={(nextValue) => onChange(nextValue ?? "")}

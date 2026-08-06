@@ -7,7 +7,7 @@ import { CheckCircle2, Loader2, Mail, Pencil, Phone } from "lucide-react";
 import { AddInvestorOtpField } from "@/components/add-investor/add-investor-otp-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ADD_INVESTOR_DEMO_OTP } from "@/lib/add-investor/add-investor-journey";
+import { isValidSixDigitOtp } from "@/lib/add-investor/add-investor-journey";
 import { delay } from "@/lib/add-investor/add-investor-demo";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { cn } from "@/lib/utils";
@@ -71,7 +71,7 @@ export function AddInvestorVerifyChannel({
       ? DISTRIBUTOR_CHANNEL_DESC[channel]
       : meta.description;
   const otpComplete = otp.length === 6;
-  const verified = otpSent && otp === ADD_INVESTOR_DEMO_OTP;
+  const verified = otpSent && isValidSixDigitOtp(otp);
 
   const destination =
     channel === "email" ? value : value.length === 10 ? `+91 ${value}` : "+91 —";
@@ -205,13 +205,6 @@ export function AddInvestorVerifyChannel({
               onChange={onOtpChange}
             />
             <div className="add-investor-verify__otp-footer">
-              <p className="add-investor-verify__hint">
-                Demo code:{" "}
-                <span className="font-mono font-medium text-foreground">{ADD_INVESTOR_DEMO_OTP}</span>
-                {otpComplete && !verified ? (
-                  <span className="text-destructive"> · Code doesn&apos;t match demo OTP</span>
-                ) : null}
-              </p>
               <Button
                 type="button"
                 variant="link"

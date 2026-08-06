@@ -100,10 +100,10 @@ export function titleCaseWords(value: string): string {
 }
 
 export function lookupKycEnumLabel(
-  value: string,
+  value: string | null | undefined,
   options: readonly KycMasterDataOption[] = ALL_ENUM_OPTIONS,
 ): string {
-  const normalized = value.trim();
+  const normalized = value?.trim() ?? "";
   if (!normalized) return "";
 
   const match = options.find(

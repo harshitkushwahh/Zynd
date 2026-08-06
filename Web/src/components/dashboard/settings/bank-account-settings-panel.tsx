@@ -20,7 +20,8 @@ const MAX_BANK_ACCOUNTS = 5;
 export function BankAccountSettingsPanel() {
   const sectionMeta = SETTINGS_NAV.find((item) => item.id === "bank-account")!;
   const kyc = useKycOptional();
-  const { accounts, loading, error, reloadAccounts } = useInvestorBankAccounts(true);
+  const kycVerified = kyc?.overallStatus === "completed";
+  const { accounts, loading, error, reloadAccounts } = useInvestorBankAccounts(kycVerified);
   const [showAddForm, setShowAddForm] = useState(false);
   const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function BankAccountSettingsPanel() {
   const canAddMore = accounts.length < MAX_BANK_ACCOUNTS;
 
   const headerActions =
-    !loading && !error && accounts.length > 0 && canAddMore && !showAddForm ? (
+    kycVerified && !loading && !error && accounts.length > 0 && canAddMore && !showAddForm ? (
       <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
         <Plus className="mr-1.5 size-4" />
         {copy.settings.bankAccounts.addBankAccount}
@@ -92,20 +93,15 @@ export function BankAccountSettingsPanel() {
           {copy.settings.bankAccountEmptyDescription}
         </p>
       </div>
-      {kyc?.kycAllowed ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button type="button" size="sm" onClick={() => kyc.openDialog()}>
-            {copy.kyc.menuLabel}
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
-            {copy.settings.bankAccounts.addBankAccount}
-          </Button>
-        </div>
-      ) : (
+      {kycVerified ? (
         <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
           {copy.settings.bankAccounts.addBankAccount}
         </Button>
-      )}
+      ) : kyc?.kycAllowed ? (
+        <Button type="button" size="sm" onClick={() => kyc.openDialog()}>
+          {copy.kyc.menuLabel}
+        </Button>
+      ) : null}
     </div>
   );
 
@@ -131,6 +127,21 @@ export function BankAccountSettingsPanel() {
               {copy.kyc.menuLabel}
             </Button>
           ) : null}
+        </div>
+      ) : !kycVerified && kyc?.kycAllowed ? (
+        <div className="flex flex-col items-center gap-4 rounded-[var(--radius-card)] border border-dashed border-border px-6 py-10 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Building2 className="size-5" strokeWidth={2} />
+          </div>
+          <div className="space-y-1">
+            <p className="text-body font-semibold text-foreground">{copy.settings.bankAccountEmptyTitle}</p>
+            <p className="max-w-sm text-caption text-muted-foreground">
+              {copy.settings.bankAccountEmptyDescription}
+            </p>
+          </div>
+          <Button type="button" size="sm" onClick={() => kyc.openDialog()}>
+            {copy.kyc.menuLabel}
+          </Button>
         </div>
       ) : showAddForm && accounts.length === 0 ? (
         <SettingsAddBankAccountForm

@@ -1,4 +1,17 @@
-import type { DistributorOperationsSectionId } from "@/lib/distributor-operations-sections";
+export type DistributorOperationsSectionId =
+  | "orders"
+  | "systematic-plans"
+  | "txn-requests"
+  | "transaction-groups";
+
+export const DISTRIBUTOR_OPERATIONS_DEFAULT_SECTION: DistributorOperationsSectionId = "orders";
+
+export const DISTRIBUTOR_OPERATIONS_SECTION_IDS: DistributorOperationsSectionId[] = [
+  "orders",
+  "systematic-plans",
+  "txn-requests",
+  "transaction-groups",
+];
 
 export type DistributorOperationsVariant = {
   id: string;
@@ -84,14 +97,9 @@ export function parseYourOperationsPathname(pathname: string): ParsedYourOperati
   const sectionRaw = parts[2];
   const variantRaw = parts[3];
 
-  const sectionIds: DistributorOperationsSectionId[] = [
-    "orders",
-    "systematic-plans",
-    "txn-requests",
-    "transaction-groups",
-  ];
-
-  const sectionId = sectionIds.includes(sectionRaw as DistributorOperationsSectionId)
+  const sectionId = DISTRIBUTOR_OPERATIONS_SECTION_IDS.includes(
+    sectionRaw as DistributorOperationsSectionId,
+  )
     ? (sectionRaw as DistributorOperationsSectionId)
     : null;
 

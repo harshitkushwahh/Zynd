@@ -1,5 +1,7 @@
-import { MfMySipsPage } from "@/features/invest/components/mf-my-sips-page";
+import { redirect } from "next/navigation";
+
+import { portfolioTabHref } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
 
 export default function MySipsPage() {
-  return <MfMySipsPage />;
+  redirect(portfolioTabHref("sips"));
 }

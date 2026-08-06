@@ -16,6 +16,7 @@ import {
   resolveDisplayScore,
   resolveRiskTierVisual,
   resolveTierMessageParts,
+  RISK_PROFILE_HERO_RADIUS_CLASS,
 } from "@/features/risk-profile/lib/risk-tier-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -88,7 +89,10 @@ export function RiskProfileAssessmentResultDialog({
 
         {summary ? (
           <div
-            className="relative overflow-hidden rounded-[var(--radius-card)] border border-border/70 shadow-zynd-low"
+            className={cn(
+              "relative overflow-hidden border border-border/70 shadow-zynd-low",
+              RISK_PROFILE_HERO_RADIUS_CLASS,
+            )}
             style={{
               background: `linear-gradient(145deg, color-mix(in srgb, ${tierVisual.gaugeColor} 11%, var(--card)) 0%, color-mix(in srgb, ${tierVisual.gaugeColor} 4%, var(--muted)) 100%)`,
             }}

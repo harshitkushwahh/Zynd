@@ -186,7 +186,8 @@ export function AddInvestorBankPanel({
     onBankChange({ accountNumber: value.replace(/\D/g, "") });
   };
 
-  const handleAccountTypeChange = (value: string) => {
+  const handleAccountTypeChange = (value: string | null) => {
+    if (!value) return;
     resetFetchedDetails();
     onBankChange({ accountType: value });
   };

@@ -15,7 +15,7 @@ import { FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ADD_INVESTOR_DEMO_OTP } from "@/lib/add-investor/add-investor-journey";
+import { isValidSixDigitOtp } from "@/lib/add-investor/add-investor-journey";
 import { delay } from "@/lib/add-investor/add-investor-demo";
 import {
   getContactOnboardingProgressIndex,
@@ -65,8 +65,8 @@ export function AddInvestorOnboardingPanel({
   const [sendingOtp, setSendingOtp] = useState(false);
 
   const progressIndex = getContactOnboardingProgressIndex(phase, contactScreen);
-  const emailVerified = emailOtp === ADD_INVESTOR_DEMO_OTP;
-  const mobileVerified = mobileOtp === ADD_INVESTOR_DEMO_OTP;
+  const emailVerified = isValidSixDigitOtp(emailOtp);
+  const mobileVerified = isValidSixDigitOtp(mobileOtp);
   const mfaComplete = mfaBound && mfaCode.length === 6;
 
   const destination = useMemo(() => {
@@ -272,10 +272,6 @@ export function AddInvestorOnboardingPanel({
                 onChange={phase === "email" ? onEmailOtpChange : onMobileOtpChange}
                 autoFocus
               />
-              <p className="add-investor-onboarding-wizard__hint">
-                Demo code:{" "}
-                <span className="font-mono font-medium text-foreground">{ADD_INVESTOR_DEMO_OTP}</span>
-              </p>
               <Button
                 type="button"
                 variant="link"

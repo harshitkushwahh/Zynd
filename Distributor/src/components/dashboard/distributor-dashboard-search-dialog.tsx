@@ -16,7 +16,6 @@ import { fetchDistributorClients } from "@/lib/distributor-clients-api";
 import { distributorOperationsSectionHref } from "@/lib/distributor-operations-sections";
 import {
   getInvestorListHref,
-  searchDistributorInvestors,
   searchDistributorInvestorsInList,
   searchDistributorOrders,
   searchDistributorPages,
@@ -26,7 +25,7 @@ import {
 } from "@/lib/distributor-global-search";
 import { env } from "@/lib/env";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
-import type { DistributorInvestor } from "@/lib/dummy/types";
+import type { DistributorInvestor } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
@@ -87,7 +86,7 @@ export function DistributorDashboardSearchDialog({
   const [apiClients, setApiClients] = useState<DistributorInvestor[] | null>(null);
 
   useEffect(() => {
-    if (!open || !env.useBackendClients) return;
+    if (!open) return;
     let cancelled = false;
     void fetchDistributorClients({ limit: 100 })
       .then((items) => {
@@ -102,12 +101,10 @@ export function DistributorDashboardSearchDialog({
   }, [open]);
 
   const pages = useMemo(() => searchDistributorPages(query), [query]);
-  const investors = useMemo(() => {
-    if (env.useBackendClients && apiClients) {
-      return searchDistributorInvestorsInList(apiClients, query);
-    }
-    return searchDistributorInvestors(query);
-  }, [query, apiClients]);
+  const investors = useMemo(
+    () => searchDistributorInvestorsInList(apiClients ?? [], query),
+    [query, apiClients],
+  );
   const orders = useMemo(() => searchDistributorOrders(query), [query]);
   const plans = useMemo(() => searchDistributorSystematicPlans(query), [query]);
   const txnRequests = useMemo(

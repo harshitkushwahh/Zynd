@@ -72,6 +72,25 @@ from app.api.v1.invest.schemas import (
     MfSipCartCheckoutResponse,
     MfSipPlanListResponse,
     MfSipPlanResponse,
+    PortfolioHoldingsListResponse,
+    PortfolioHoldingResponse,
+    PortfolioHoldingDetailEnvelopeResponse,
+    PortfolioHoldingDetailResponse,
+    PortfolioHoldingTransactionResponse,
+    PortfolioRedeemUnitsListResponse,
+    PortfolioRedeemUnitsItemResponse,
+    PortfolioActiveRedemptionResponse,
+    MfRedemptionJourneyEnvelopeResponse,
+    MfRedemptionJourneyResponse,
+    MfRedemptionJourneyEventResponse,
+    CreateMfRedemptionRequest,
+    ConfirmMfRedemptionRequest,
+    MfRedemptionOrderResponse,
+    MfRedemptionConsentResponse,
+    MfRedemptionOtpSendResponse,
+    PortfolioSummaryResponse,
+    PortfolioAllocationSliceResponse,
+    PortfolioGrowthPointResponse,
     UpsertMfCartItemRequest,
 )
 from app.application.investor.investor_bank_account_errors import InvestorBankAccountError
@@ -101,7 +120,21 @@ from app.application.mf.invest_cached_read_service import (
 from app.application.mf.invest_fund_slug import resolve_invest_fund_product_id
 from app.application.mf.invest_home_service import list_invest_fund_navs
 from app.application.mf.mf_calculator_errors import MfCalculatorError
-from app.application.mf.mf_compare_service import compare_invest_funds
+from app.application.mf.portfolio_holdings_service import (
+    get_user_portfolio_holding_detail,
+    get_user_portfolio_summary,
+    get_user_redemption_journey,
+    list_user_portfolio_holdings,
+    list_user_redeemable_holdings,
+)
+from app.application.mf.mf_redemption_service import (
+    confirm_redemption_order,
+    create_redemption_order,
+    get_redemption_consent_context,
+    get_redemption_order,
+    send_redemption_consent_otp,
+    serialize_redemption_order,
+)
 from app.application.mf.return_calculator_service import (
     cached_compute_lumpsum_calculator,
     cached_compute_return_calculator,
@@ -1079,6 +1112,205 @@ async def list_external_holdings(
     return MfHoldingsResponse(
         external_holdings=[MfExternalHoldingResponse(**item) for item in holdings]
     )
+
+
+@router.get("/portfolio/summary", response_model=PortfolioSummaryResponse)
+async def get_portfolio_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> PortfolioSummaryResponse:
+    payload = await get_user_portfolio_summary(db, user_id=current_user.id)
+    return PortfolioSummaryResponse(
+        status=payload["status"],
+        has_pending_orders=payload["has_pending_orders"],
+        current_value_inr=payload["current_value_inr"],
+        invested_inr=payload["invested_inr"],
+        total_return_inr=payload["total_return_inr"],
+        total_return_pct=payload["total_return_pct"],
+        day_change_inr=payload["day_change_inr"],
+        day_change_pct=payload["day_change_pct"],
+        xirr_pct=payload["xirr_pct"],
+        holdings_count=payload["holdings_count"],
+        active_sips_count=payload["active_sips_count"],
+        monthly_sip_inr=payload["monthly_sip_inr"],
+        allocation=[PortfolioAllocationSliceResponse(**item) for item in payload["allocation"]],
+        growth=[PortfolioGrowthPointResponse(**item) for item in payload["growth"]],
+        as_on=payload["as_on"],
+    )
+
+
+@router.get("/portfolio/holdings", response_model=PortfolioHoldingsListResponse)
+async def list_portfolio_holdings(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> PortfolioHoldingsListResponse:
+    payload = await list_user_portfolio_holdings(db, user_id=current_user.id)
+    return PortfolioHoldingsListResponse(
+        status=payload["status"],
+        has_pending_orders=payload["has_pending_orders"],
+        holdings=[PortfolioHoldingResponse(**item) for item in payload["holdings"]],
+        as_on=payload["as_on"],
+    )
+
+
+@router.get("/portfolio/holdings/detail", response_model=PortfolioHoldingDetailEnvelopeResponse)
+async def get_portfolio_holding_detail(
+    holding_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> PortfolioHoldingDetailEnvelopeResponse:
+    payload = await get_user_portfolio_holding_detail(
+        db,
+        user_id=current_user.id,
+        holding_id=holding_id,
+    )
+    holding_payload = payload.get("holding")
+    holding = PortfolioHoldingDetailResponse(**holding_payload) if holding_payload else None
+    return PortfolioHoldingDetailEnvelopeResponse(status=payload["status"], holding=holding)
+
+
+@router.get("/portfolio/redeem-units", response_model=PortfolioRedeemUnitsListResponse)
+async def list_portfolio_redeem_units(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> PortfolioRedeemUnitsListResponse:
+    payload = await list_user_redeemable_holdings(db, user_id=current_user.id)
+    return PortfolioRedeemUnitsListResponse(
+        status=payload["status"],
+        as_on=payload.get("as_on"),
+        items=[
+            PortfolioRedeemUnitsItemResponse(
+                **{k: v for k, v in item.items() if k != "active_redemption"},
+                active_redemption=(
+                    PortfolioActiveRedemptionResponse(**item["active_redemption"])
+                    if item.get("active_redemption")
+                    else None
+                ),
+            )
+            for item in payload["items"]
+        ],
+    )
+
+
+@router.get("/redemptions/{fp_redemption_id}/journey", response_model=MfRedemptionJourneyEnvelopeResponse)
+async def get_mf_redemption_journey_route(
+    fp_redemption_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfRedemptionJourneyEnvelopeResponse:
+    payload = await get_user_redemption_journey(
+        db,
+        user_id=current_user.id,
+        fp_redemption_id=fp_redemption_id,
+    )
+    journey_payload = payload.get("journey")
+    journey = MfRedemptionJourneyResponse(**journey_payload) if journey_payload else None
+    return MfRedemptionJourneyEnvelopeResponse(status=payload["status"], journey=journey)
+
+
+async def _redemption_order_response(db: AsyncSession, order) -> MfRedemptionOrderResponse:
+    product = await db.get(Product, order.product_id)
+    return MfRedemptionOrderResponse(**serialize_redemption_order(order, product_name=product.name if product else None))
+
+
+@router.post("/redemptions", response_model=MfRedemptionOrderResponse)
+async def create_mf_redemption_route(
+    body: CreateMfRedemptionRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfRedemptionOrderResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled:
+        raise HTTPException(status_code=503, detail="MF redemptions are temporarily unavailable")
+
+    try:
+        order = await create_redemption_order(
+            db,
+            user_id=current_user.id,
+            holding_id=body.holding_id,
+            idempotency_key=body.idempotency_key,
+            redeem_mode=body.redeem_mode,
+            amount_inr=Decimal(str(body.amount_inr)) if body.amount_inr is not None else None,
+            units=body.units,
+            user_ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return await _redemption_order_response(db, order)
+
+
+@router.get("/redemptions/{order_id}/consent", response_model=MfRedemptionConsentResponse)
+async def get_mf_redemption_consent_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfRedemptionConsentResponse:
+    try:
+        payload = await get_redemption_consent_context(db, user_id=current_user.id, order_id=order_id)
+    except MfOrderError as exc:
+        raise _handle_mf_order_error(exc) from exc
+    return MfRedemptionConsentResponse(**payload)
+
+
+@router.post("/redemptions/{order_id}/consent/send-otp", response_model=MfRedemptionOtpSendResponse)
+async def send_mf_redemption_consent_otp_route(
+    order_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfRedemptionOtpSendResponse:
+    try:
+        payload = await send_redemption_consent_otp(
+            db,
+            user_id=current_user.id,
+            order_id=order_id,
+            ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+    return MfRedemptionOtpSendResponse(**payload)
+
+
+@router.post("/redemptions/{order_id}/confirm", response_model=MfRedemptionOrderResponse)
+async def confirm_mf_redemption_route(
+    order_id: UUID,
+    body: ConfirmMfRedemptionRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfRedemptionOrderResponse:
+    try:
+        order = await confirm_redemption_order(
+            db,
+            user_id=current_user.id,
+            order_id=order_id,
+            otp=body.otp,
+            ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError as exc:
+        await db.rollback()
+        raise _handle_mf_order_error(exc) from exc
+
+    return await _redemption_order_response(db, order)
+
+
+@router.get("/redemptions/{order_id}", response_model=MfRedemptionOrderResponse)
+async def get_mf_redemption_order_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfRedemptionOrderResponse:
+    order = await get_redemption_order(db, user_id=current_user.id, order_id=order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Redemption order not found")
+    return await _redemption_order_response(db, order)
 
 
 @router.post("/cas/imports", response_model=MfCasImportResponse)

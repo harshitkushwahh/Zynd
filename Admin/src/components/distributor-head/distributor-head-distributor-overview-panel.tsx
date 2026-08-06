@@ -22,6 +22,7 @@ import type {
   DistributorHeadBookHolding,
   DistributorHeadDistributor,
 } from "@/lib/dummy/distributor-head-data";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { distributorHeadManagerHref } from "@/lib/distributor-head-queries";
 import { formatDistributorHeadInr } from "@/lib/distributor-head-format";
 
@@ -91,7 +92,7 @@ export function DistributorHeadDistributorOverviewPanel({
             <AdminTableBody>
               {holdings.length === 0 ? (
                 <AdminTableStateRow colSpan={HOLDINGS_COLUMNS}>
-                  No holdings data for this distributor.
+                  No holdings data for this {MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}.
                 </AdminTableStateRow>
               ) : (
                 holdings.map((row) => (

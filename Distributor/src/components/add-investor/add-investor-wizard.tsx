@@ -54,7 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ADD_INVESTOR_DEMO_OTP,
+  isValidSixDigitOtp,
   ADD_INVESTOR_JOURNEY_PHASE_LABEL,
   addInvestorStepIndex,
   buildAddInvestorJourneySteps,
@@ -296,9 +296,9 @@ export function AddInvestorWizard() {
       case "onboarding":
         return (
           isValidEmail(email) &&
-          emailOtp === ADD_INVESTOR_DEMO_OTP &&
+          isValidSixDigitOtp(emailOtp) &&
           mobile.length === 10 &&
-          mobileOtp === ADD_INVESTOR_DEMO_OTP &&
+          isValidSixDigitOtp(mobileOtp) &&
           mfaBound &&
           mfaCode.length === 6
         );
@@ -350,7 +350,7 @@ export function AddInvestorWizard() {
     setPanError("");
     setPanLoading(true);
     await delay(700);
-    const result = verifyDemoPan(pan);
+    const result = await verifyDemoPan(pan);
     setPanLoading(false);
     if (!result.ok) {
       setPanError(result.error);
@@ -359,9 +359,27 @@ export function AddInvestorWizard() {
       setReadiness(null);
       return;
     }
-    setPanName(result.panName);
-    setMiddleName("");
-    setReadiness(result.readiness);
+    const nameParts = result.displayName.trim().split(/\s+/);
+    setPanName({
+      firstName: nameParts[0] ?? "",
+      lastName: nameParts.length > 1 ? (nameParts.at(-1) ?? "") : "",
+      dateOfBirth: "",
+      panCategory: "",
+    });
+    setMiddleName(nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : "");
+    setReadiness(
+      result.kycAlreadyRegistered
+        ? {
+            code: "kra_registered",
+            label: "KRA registered",
+            hint: "Existing KYC on record.",
+          }
+        : {
+            code: "new_to_kyc",
+            label: "New to KYC",
+            hint: "Complete DigiLocker and e-sign.",
+          },
+    );
     setRequiresDigilocker(!result.kycAlreadyRegistered);
     setPanVerified(true);
     markStepReached(addInvestorStepIndex(journeySteps, "pan"));

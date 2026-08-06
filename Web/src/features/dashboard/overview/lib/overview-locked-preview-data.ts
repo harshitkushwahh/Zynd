@@ -69,7 +69,7 @@ export const OVERVIEW_HOLDINGS_LOCKED_PREVIEW: OverviewHoldingCardItem[] = [
     amcName: "HDFC Mutual Fund",
     amcLogoUrl: null,
     investedInr: 74_500,
-    monthReturnPct: 4.21,
+    returnPct: 4.21,
   },
   {
     id: "locked-sbi-small-cap",
@@ -77,7 +77,7 @@ export const OVERVIEW_HOLDINGS_LOCKED_PREVIEW: OverviewHoldingCardItem[] = [
     amcName: "SBI Mutual Fund",
     amcLogoUrl: null,
     investedInr: 38_000,
-    monthReturnPct: -1.02,
+    returnPct: -1.02,
   },
   {
     id: "locked-icici-bluechip",
@@ -85,7 +85,7 @@ export const OVERVIEW_HOLDINGS_LOCKED_PREVIEW: OverviewHoldingCardItem[] = [
     amcName: "ICICI Prudential Mutual Fund",
     amcLogoUrl: null,
     investedInr: 58_900,
-    monthReturnPct: 2.35,
+    returnPct: 2.35,
   },
 ];
 

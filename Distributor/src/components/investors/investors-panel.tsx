@@ -28,15 +28,13 @@ import {
   distributorClientDetailHref,
 } from "@/lib/distributor-client-routes";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
+import type { DistributorInvestor, InvestorType } from "@/lib/distributor-types";
 import {
-  DUMMY_INVESTORS,
   filterDistributorBookInvestors,
   filterInvestorsByType,
   filterSystemResidentInvestors,
-} from "@/lib/dummy/investors";
+} from "@/lib/distributor-investor-utils";
 import { fetchDistributorClients } from "@/lib/distributor-clients-api";
-import { env } from "@/lib/env";
-import type { InvestorType } from "@/lib/dummy/types";
 import { formatDistributorDate } from "@/lib/format";
 import {
   DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS,
@@ -78,20 +76,17 @@ export function InvestorsPanel({
   const showManagerAssignment =
     isBranchManager && investorScope === "system-residents" && listOrigin === "system-resident";
   const { assignments } = useResidentDistributorAssignment();
-  const [assignInvestor, setAssignInvestor] = useState<(typeof DUMMY_INVESTORS)[number] | null>(
-    null,
-  );
+  const [assignInvestor, setAssignInvestor] = useState<DistributorInvestor | null>(null);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [filters, setFilters] = useState<InvestorTableFilters>(DEFAULT_INVESTOR_TABLE_FILTERS);
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
     column: "createdAt",
     direction: "descending",
   });
-  const [apiInvestors, setApiInvestors] = useState<typeof DUMMY_INVESTORS | null>(null);
+  const [apiInvestors, setApiInvestors] = useState<DistributorInvestor[] | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!env.useBackendClients) return;
     let cancelled = false;
     void fetchDistributorClients({ limit: 100 })
       .then((items) => {
@@ -111,7 +106,7 @@ export function InvestorsPanel({
     };
   }, []);
 
-  const sourceInvestors = env.useBackendClients ? (apiInvestors ?? []) : DUMMY_INVESTORS;
+  const sourceInvestors = apiInvestors ?? [];
 
   const scoped = useMemo(() => {
     let rows = sourceInvestors;
@@ -146,7 +141,7 @@ export function InvestorsPanel({
   const nonCompliantCount = scoped.length - compliantCount;
 
   const clearDisabled = investorFiltersAreDefault(filters);
-  const isLoadingApi = env.useBackendClients && apiInvestors === null;
+  const isLoadingApi = apiInvestors === null;
   const clientCodeColumnClass = showServiceModel
     ? DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_WIDE_CLASS
     : DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS;
@@ -170,7 +165,7 @@ export function InvestorsPanel({
     />
   );
 
-  const openAssignDialog = (investor: (typeof DUMMY_INVESTORS)[number]) => {
+  const openAssignDialog = (investor: DistributorInvestor) => {
     setAssignInvestor(investor);
     setAssignDialogOpen(true);
   };

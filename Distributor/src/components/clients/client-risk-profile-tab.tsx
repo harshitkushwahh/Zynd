@@ -15,11 +15,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { buildDemoClientRiskAssessments } from "@/lib/client-risk-assessments";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { fetchDistributorClientRiskAssessments } from "@/lib/distributor-client-risk-api";
-import type { DistributorClientProfile, DistributorClientRiskAssessment } from "@/lib/dummy/types";
-import { env } from "@/lib/env";
+import type { DistributorClientProfile, DistributorClientRiskAssessment } from "@/lib/distributor-types";
 
 type ClientRiskProfileTabProps = {
   profile: DistributorClientProfile;
@@ -34,21 +32,13 @@ function resolveCurrentAssessment(
 
 export function ClientRiskProfileTab({ profile, clientReference }: ClientRiskProfileTabProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.riskProfile;
-  const [assessments, setAssessments] = useState<DistributorClientRiskAssessment[]>(() =>
-    buildDemoClientRiskAssessments(profile),
-  );
-  const [loading, setLoading] = useState(env.useBackendClients);
+  const [assessments, setAssessments] = useState<DistributorClientRiskAssessment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<DistributorClientRiskAssessment | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [createHintOpen, setCreateHintOpen] = useState(false);
 
   useEffect(() => {
-    if (!env.useBackendClients) {
-      setAssessments(buildDemoClientRiskAssessments(profile));
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
     setLoading(true);
     void fetchDistributorClientRiskAssessments(clientReference)

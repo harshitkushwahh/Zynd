@@ -2,7 +2,7 @@
 
 import { getDistributorOAuthProviderIconSvg } from "@/lib/distributor-oauth-provider-icons";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientPersonalInfo } from "@/lib/dummy/types";
+import type { DistributorClientPersonalInfo } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 type ClientProfileHeroOAuthIconsProps = {

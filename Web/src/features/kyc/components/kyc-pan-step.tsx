@@ -12,6 +12,7 @@ import {
   type KycPanDraft,
   type KycPanVerifyResponse,
 } from "@/features/kyc/lib/kyc-api";
+import { isDigilockerRequired } from "@/features/kyc/lib/kyc-pan-readiness";
 import { normalizePersonNameInput, validateKycPersonName } from "@/features/kyc/lib/kyc-name-validation";
 import { ApiError } from "@/lib/api-client";
 import { copy } from "@/shared/config/copy";
@@ -19,11 +20,24 @@ import { cn } from "@/lib/utils";
 
 const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
+function hasPanNameFields(firstName: string, lastName: string) {
+  return firstName.trim().length >= 2 && lastName.trim().length >= 2;
+}
+
+function isPanDraftVerified(
+  draft: KycPanDraft | null | undefined,
+  initiallyVerified: boolean,
+) {
+  if (initiallyVerified) return true;
+  return Boolean(draft?.panNumber && hasPanNameFields(draft.firstName, draft.lastName));
+}
+
 type KycPanStepProps = {
   disabled?: boolean;
   initialDraft?: KycPanDraft | null;
   initiallyVerified?: boolean;
   initialKycAlreadyRegistered?: boolean | null;
+  initialReadinessCode?: string | null;
   onBlocked: (response: KycPanVerifyResponse) => void;
   onPanVerified?: (info: {
     kycAlreadyRegistered: boolean;
@@ -38,6 +52,7 @@ export function KycPanStep({
   initialDraft,
   initiallyVerified = false,
   initialKycAlreadyRegistered = null,
+  initialReadinessCode = null,
   onBlocked,
   onPanVerified,
   onPanReset,
@@ -51,20 +66,24 @@ export function KycPanStep({
   const [nameError, setNameError] = useState("");
   const [fetchError, setFetchError] = useState("");
   const [isFetching, setIsFetching] = useState(false);
-  const [isVerified, setIsVerified] = useState(initiallyVerified);
+  const [isVerified, setIsVerified] = useState(() =>
+    isPanDraftVerified(initialDraft, initiallyVerified),
+  );
   const [verifiedDraft, setVerifiedDraft] = useState<KycPanDraft | null>(initialDraft ?? null);
   const [requiresDigilocker, setRequiresDigilocker] = useState<boolean | null>(
-    initialKycAlreadyRegistered == null ? null : !initialKycAlreadyRegistered,
+    initialKycAlreadyRegistered == null
+      ? null
+      : isDigilockerRequired(initialKycAlreadyRegistered, initialReadinessCode),
   );
   const [kycAlreadyRegistered, setKycAlreadyRegistered] = useState<boolean | null>(
     initialKycAlreadyRegistered,
   );
 
   useEffect(() => {
-    if (initialKycAlreadyRegistered == null) return;
+    if (initialKycAlreadyRegistered == null && initialReadinessCode == null) return;
     setKycAlreadyRegistered(initialKycAlreadyRegistered);
-    setRequiresDigilocker(!initialKycAlreadyRegistered);
-  }, [initialKycAlreadyRegistered]);
+    setRequiresDigilocker(isDigilockerRequired(initialKycAlreadyRegistered, initialReadinessCode));
+  }, [initialKycAlreadyRegistered, initialReadinessCode]);
 
   useEffect(() => {
     if (!initialDraft) return;
@@ -73,7 +92,7 @@ export function KycPanStep({
     setMiddleName(initialDraft.middleName ?? "");
     setLastName(initialDraft.lastName);
     setVerifiedDraft(initialDraft);
-    setIsVerified(initiallyVerified);
+    setIsVerified(isPanDraftVerified(initialDraft, initiallyVerified));
   }, [initialDraft, initiallyVerified]);
 
   const handlePanChange = (value: string) => {
@@ -198,9 +217,14 @@ export function KycPanStep({
         return;
       }
 
+      const digilockerRequired =
+        confirmResult.requires_digilocker ??
+        isDigilockerRequired(kycAlreadyRegistered, initialReadinessCode);
+      setRequiresDigilocker(Boolean(digilockerRequired));
+
       onSubmit({
         ...confirmResult.pan_draft,
-        requiresDigilocker: Boolean(requiresDigilocker),
+        requiresDigilocker: Boolean(digilockerRequired),
         kycAlreadyRegistered: Boolean(kycAlreadyRegistered),
       });
     } catch (error) {
@@ -214,13 +238,15 @@ export function KycPanStep({
     }
   };
 
+  const nameCardFetched = isVerified || hasPanNameFields(firstName, lastName);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
         <KycPanNameCard
-          isFetched={isVerified}
+          isFetched={nameCardFetched}
           isFetching={isFetching}
-          panName={isVerified ? { firstName, lastName } : null}
+          panName={nameCardFetched ? { firstName, lastName } : null}
           middleName={middleName}
           onFirstNameChange={(value) => {
             setFirstName(normalizePersonNameInput(value));
@@ -246,7 +272,7 @@ export function KycPanStep({
           placeholder={copy.kyc.pan.numberPlaceholder}
           autoComplete="off"
           spellCheck={false}
-          disabled={disabled || isFetching || isVerified}
+          disabled={disabled || isFetching || nameCardFetched}
           aria-label={copy.kyc.pan.numberLabel}
           aria-invalid={Boolean(panError)}
           className="h-14 text-center font-mono text-h4 uppercase tracking-[0.2em]"

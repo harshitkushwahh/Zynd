@@ -2728,6 +2728,35 @@
     }
   }
 
+  .distributor-profile-hero-card--initials {
+    background: var(--distributor-metric-tile-accent-gradient);
+  }
+
+  .distributor-profile-hero-card__initials-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--distributor-metric-tile-accent-gradient);
+  }
+
+  .distributor-profile-hero-card__initials-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(4.75rem, 30%, 7rem);
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    border: 2px solid color-mix(in srgb, var(--distributor-metric-tile-accent-fg) 34%, transparent);
+    background: color-mix(in srgb, var(--distributor-metric-tile-accent-fg) 12%, transparent);
+    font-size: clamp(1.75rem, 8vw, 2.75rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--distributor-metric-tile-accent-fg);
+  }
+
   .distributor-profile-hero-card__image {
     z-index: 0;
     object-fit: cover;
@@ -13339,6 +13368,24 @@
     text-align: left;
   }
 
+  .add-distributor-wizard-feedback {
+    align-self: stretch;
+    max-width: 100%;
+    margin-top: var(--space-sm);
+  }
+
+  .add-distributor-review-panel__content {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: var(--space-md);
+    margin-top: var(--space-md);
+  }
+
+  .add-distributor-review-panel__content .add-distributor-wizard-feedback {
+    margin-top: 0;
+  }
+
   .add-distributor-pan-panel__verified {
     display: flex;
     align-items: flex-start;
@@ -13379,6 +13426,342 @@
 
   .add-distributor-bank-panel {
     max-width: 40rem;
+  }
+
+  .add-distributor-bank-panel .add-investor-bank-panel__form {
+    margin-top: var(--space-md);
+  }
+
+  .add-distributor-bank-panel .add-investor-bank-details-card--fetched {
+    gap: var(--space-sm);
+    padding-block: var(--space-md) var(--space-lg);
+  }
+
+  .add-distributor-bank-panel__fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    padding-top: var(--space-sm);
+  }
+
+  .add-distributor-bank-panel__fallback-text {
+    margin: 0;
+    font-size: var(--text-caption);
+    color: var(--muted-foreground);
+    text-align: left;
+  }
+
+  .add-distributor-bank-panel__manual {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .add-distributor-bank-panel__manual-note {
+    margin: 0;
+    font-size: var(--text-caption);
+    color: var(--muted-foreground);
+    text-align: left;
+  }
+
+  .add-distributor-address-panel__fields {
+    gap: var(--space-md);
+  }
+
+  .add-distributor-profile-photo-panel__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .add-distributor-profile-photo-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-sm);
+  }
+
+  .add-distributor-doc__file {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .add-distributor-doc__thumb {
+    display: block;
+    overflow: hidden;
+    width: 3.5rem;
+    height: 3.5rem;
+    flex-shrink: 0;
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--muted) 30%, var(--card));
+  }
+
+  .add-distributor-doc__thumb-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .add-distributor-doc__file-meta {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .add-distributor-doc__file-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+
+  .add-distributor-doc__preview-image {
+    width: 100%;
+    max-height: 70vh;
+    border-radius: var(--radius-lg);
+    object-fit: contain;
+  }
+
+  .add-distributor-doc__preview-frame {
+    width: 100%;
+    height: 70vh;
+    border: none;
+    border-radius: var(--radius-lg);
+    background: var(--muted);
+  }
+
+  .add-distributor-doc-preview-dialog__header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    padding: var(--space-md) var(--space-lg);
+    padding-right: 3rem;
+  }
+
+  .add-distributor-doc-preview-dialog__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--primary) 10%, var(--card));
+    color: var(--primary);
+  }
+
+  .add-distributor-doc-preview-dialog__stage {
+    display: flex;
+    min-height: 18rem;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--muted) 24%, var(--background));
+    padding: var(--space-md);
+  }
+
+  .add-distributor-doc-preview-dialog__stage--loading {
+    min-height: 14rem;
+  }
+
+  .add-distributor-doc-preview-dialog__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--muted-foreground);
+    font-size: var(--text-body-sm);
+  }
+
+  .add-distributor-doc-preview-dialog__image {
+    width: 100%;
+    max-height: min(72vh, 42rem);
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    object-fit: contain;
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--foreground) 8%, transparent);
+  }
+
+  .add-distributor-doc-preview-dialog__frame {
+    width: 100%;
+    height: min(72vh, 42rem);
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+  }
+
+  .add-distributor-doc-preview-dialog__empty {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: var(--text-body-sm);
+  }
+
+  .add-distributor-doc-preview-dialog__footer {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .add-distributor-doc__thumb--pdf,
+  .add-distributor-review-form__doc-thumb--pdf {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  }
+
+  .add-distributor-review-form__doc-thumb-button {
+    display: block;
+    overflow: hidden;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: var(--radius-control);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .add-distributor-review-form__doc-thumb-button:hover {
+    border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  }
+
+  .add-distributor-review-form__doc-thumb--loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted-foreground);
+    background: color-mix(in srgb, var(--muted) 40%, var(--card));
+  }
+
+  .add-distributor-review-form {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: var(--space-md);
+    text-align: left;
+  }
+
+  .add-distributor-review-form__section {
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: var(--radius-xl);
+    background: color-mix(in srgb, var(--muted) 14%, var(--card));
+    padding: var(--space-md);
+  }
+
+  .add-distributor-review-form__section--hero {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary) 4%, var(--card)),
+      color-mix(in srgb, var(--muted) 18%, var(--card))
+    );
+  }
+
+  .add-distributor-review-form__hero {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .add-distributor-review-form__hero-name {
+    margin: 0;
+    font-size: var(--text-body-lg);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .add-distributor-review-form__hero-meta {
+    margin: 0.125rem 0 0;
+    font-size: var(--text-caption);
+    color: var(--muted-foreground);
+  }
+
+  .add-distributor-review-form__title {
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .add-distributor-review-form__body {
+    display: grid;
+    gap: var(--space-xs);
+  }
+
+  .add-distributor-review-form__row {
+    display: grid;
+    grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+    gap: var(--space-sm);
+    align-items: baseline;
+  }
+
+  .add-distributor-review-form__row dt {
+    margin: 0;
+    font-size: var(--text-caption);
+    color: var(--muted-foreground);
+  }
+
+  .add-distributor-review-form__row dd {
+    margin: 0;
+    font-size: var(--text-body-sm);
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .add-distributor-review-form__address {
+    margin: 0;
+    font-size: var(--text-body-sm);
+    line-height: 1.55;
+    color: var(--foreground);
+  }
+
+  .add-distributor-review-form__docs {
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .add-distributor-review-form__doc {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    padding: var(--space-sm);
+  }
+
+  .add-distributor-review-form__doc-thumb {
+    width: 3rem;
+    height: 3rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-control);
+    object-fit: cover;
+  }
+
+  .add-distributor-review-form__doc-thumb--placeholder {
+    background: color-mix(in srgb, var(--muted) 40%, var(--card));
+  }
+
+  .add-distributor-review-form__doc-label {
+    margin: 0;
+    font-size: var(--text-caption);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .add-distributor-review-form__doc-name {
+    margin: 0.125rem 0 0;
+    font-size: 11px;
+    color: var(--muted-foreground);
   }
 
   .add-distributor-bank-panel__grid,

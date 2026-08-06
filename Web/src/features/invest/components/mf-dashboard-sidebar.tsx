@@ -12,7 +12,7 @@ export function MfDashboardSidebar({ className }: MfDashboardSidebarProps) {
   return (
     <aside
       className={cn(
-        "flex w-full shrink-0 flex-col gap-4 xl:w-[21rem] xl:sticky xl:top-6 xl:self-start",
+        "flex w-full shrink-0 flex-col gap-3 xl:w-[21rem] xl:sticky xl:top-6 xl:self-start",
         className,
       )}
     >

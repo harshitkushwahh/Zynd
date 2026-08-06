@@ -7,7 +7,7 @@ import { DistributorInsightCardHeader } from "@/components/ui/distributor-insigh
 import {
   getDistributorComplianceResolutionStats,
   type DistributorComplianceQueueRow,
-} from "@/lib/dummy/distributor-compliance";
+} from "@/lib/distributor-compliance-data";
 import { cn } from "@/lib/utils";
 
 const RESOLVED_COLOR = "#3d6b5e";

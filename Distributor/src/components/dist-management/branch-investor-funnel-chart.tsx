@@ -14,7 +14,7 @@ import {
 } from "recharts";
 
 import { DistributorChartTooltip } from "@/components/ui/distributor-chart-tooltip";
-import { DUMMY_BRANCH_INVESTOR_FUNNEL } from "@/lib/dummy/branch-team-performance";
+import { DUMMY_BRANCH_INVESTOR_FUNNEL } from "@/lib/distributor-branch-team-performance-data";
 
 const CHART_HEIGHT = 260;
 

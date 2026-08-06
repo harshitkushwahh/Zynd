@@ -10,8 +10,8 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import { DistributorInsightCardHeader } from "@/components/ui/distributor-insight-card-header";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { summarizeClientGoals, type ClientGoalsSummary } from "@/lib/client-goals-summary";
-import type { DistributorClientProfile } from "@/lib/dummy/types";
-import { buildClientGoalsForInvestor } from "@/lib/dummy/client-profile";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
+import { buildClientGoalsForInvestor } from "@/lib/distributor-client-profile-data";
 import { env } from "@/lib/env";
 import { formatAum } from "@/lib/format";
 

@@ -8,6 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.admin.distributor_partners_router import router as distributor_partners_router
+from app.api.v1.admin.distributor_hierarchy_router import router as distributor_hierarchy_router
+from app.api.v1.admin.master_data_router import router as master_data_router
 from app.api.v1.admin.admin_invitations_router import router as admin_invitations_router
 from app.api.v1.admin.mf_integrations_router import router as mf_integrations_router
 from app.api.v1.admin.mf_router import router as mf_admin_router
@@ -140,6 +143,9 @@ router.include_router(mf_admin_router)
 router.include_router(risk_profile_router)
 router.include_router(family_groups_router)
 router.include_router(goals_router)
+router.include_router(distributor_partners_router)
+router.include_router(distributor_hierarchy_router)
+router.include_router(master_data_router)
 router.include_router(admin_invitations_router)
 router.include_router(mf_integrations_router)
 router.include_router(mf_transactions_router)
@@ -199,7 +205,8 @@ async def get_admin_permissions(
     current_user: Annotated[User, Depends(require_admin_user)],
 ) -> AdminPermissionsResponse:
     permissions = sorted(await get_user_permission_keys(db, current_user.id))
-    return AdminPermissionsResponse(permissions=permissions)
+    role_keys = sorted(await list_user_role_keys(db, current_user.id))
+    return AdminPermissionsResponse(permissions=permissions, role_keys=role_keys)
 
 
 @router.get("/rbac/roles", response_model=AdminRolesResponse)

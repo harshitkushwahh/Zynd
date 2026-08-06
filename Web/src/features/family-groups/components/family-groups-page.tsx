@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
-import { PageTitle } from "@/components/ui/page-title";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   createFamilyGroup,
@@ -166,50 +166,34 @@ export function FamilyGroupsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
         <div className="mb-6 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-                <FamilyRouteIcon className="size-4" strokeWidth={2.25} />
-              </div>
-              <div className="min-w-0">
-                {showSkeleton ? (
-                  <div className="space-y-2" aria-hidden="true">
-                    <Skeleton className="h-7 w-40" />
-                    <Skeleton className="h-4 w-full max-w-xl" />
-                  </div>
-                ) : (
-                  <>
-                    <PageTitle>{copy.familyGroups.dashboard.heroTitle}</PageTitle>
-                    <p className="mt-2 max-w-2xl text-compact text-muted-foreground">
-                      {copy.familyGroups.dashboard.heroSubtitle}
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {!showSkeleton && data && data.items.length === 0 ? (
-              <Button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                disabled={atLimit}
-                className="shrink-0"
-              >
-                <Plus className="size-4" strokeWidth={2} />
-                {copy.familyGroups.createAction}
-              </Button>
-            ) : selectedGroup?.my_role === "head" ? (
-              <Button
-                type="button"
-                onClick={() => setInviteOpen(true)}
-                disabled={inviteDisabled}
-                className="shrink-0"
-              >
-                <UserPlus className="size-4" strokeWidth={2} />
-                {copy.familyGroups.dashboard.inviteAction}
-              </Button>
-            ) : null}
-          </div>
+          <PageHeader
+            icon={FamilyRouteIcon}
+            title={copy.familyGroups.dashboard.heroTitle}
+            loading={showSkeleton}
+            action={
+              !showSkeleton && data && data.items.length === 0 ? (
+                <Button
+                  type="button"
+                  onClick={() => setCreateOpen(true)}
+                  disabled={atLimit}
+                  className="shrink-0"
+                >
+                  <Plus className="size-4" strokeWidth={2} />
+                  {copy.familyGroups.createAction}
+                </Button>
+              ) : !showSkeleton && selectedGroup?.my_role === "head" ? (
+                <Button
+                  type="button"
+                  onClick={() => setInviteOpen(true)}
+                  disabled={inviteDisabled}
+                  className="shrink-0"
+                >
+                  <UserPlus className="size-4" strokeWidth={2} />
+                  {copy.familyGroups.dashboard.inviteAction}
+                </Button>
+              ) : null
+            }
+          />
 
           {showSkeleton ? (
             <div className="flex gap-2 overflow-hidden pb-1" aria-hidden="true">

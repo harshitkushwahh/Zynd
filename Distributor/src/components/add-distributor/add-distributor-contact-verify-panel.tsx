@@ -10,9 +10,18 @@ import { AddDistributorWizardPanelShell } from "@/components/add-distributor/add
 import { AddInvestorOtpField } from "@/components/add-investor/add-investor-otp-field";
 import { AddInvestorWizardStepFooter } from "@/components/add-investor/add-investor-wizard-step-footer";
 import { Button } from "@/components/ui/button";
+import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
 import { Input } from "@/components/ui/input";
-import { ADD_DISTRIBUTOR_DEMO_OTP } from "@/lib/add-distributor/add-distributor-journey";
-import { delay } from "@/lib/add-investor/add-investor-demo";
+import { isValidSixDigitOtp } from "@/lib/add-investor/add-investor-journey";
+import {
+  resendPartnerOnboardingEmailOtp,
+  resendPartnerOnboardingMobileOtp,
+  sendPartnerOnboardingMobileOtp,
+  startPartnerOnboarding,
+  verifyPartnerOnboardingEmail,
+  verifyPartnerOnboardingMobile,
+} from "@/lib/distributor-partners-api";
+import { ApiError } from "@/lib/api-client";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 type ContactChannel = "email" | "mobile";
@@ -55,6 +64,8 @@ const CHANNEL_META: Record<
 
 type AddDistributorContactVerifyPanelProps = {
   channel: ContactChannel;
+  onboardingToken: string | null;
+  onOnboardingTokenChange: (token: string) => void;
   value: string;
   onValueChange: (value: string) => void;
   otp: string;
@@ -65,8 +76,17 @@ type AddDistributorContactVerifyPanelProps = {
   canBack: boolean;
 };
 
+function readApiError(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    return error.message || fallback;
+  }
+  return fallback;
+}
+
 export function AddDistributorContactVerifyPanel({
   channel,
+  onboardingToken,
+  onOnboardingTokenChange,
   value,
   onValueChange,
   otp,
@@ -79,30 +99,97 @@ export function AddDistributorContactVerifyPanel({
   const meta = CHANNEL_META[channel];
   const [screen, setScreen] = useState<ContactScreen>("input");
   const [sendingOtp, setSendingOtp] = useState(false);
-  const verified = otp === ADD_DISTRIBUTOR_DEMO_OTP;
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState("");
+  const verified = isValidSixDigitOtp(otp);
   const PhaseIcon = meta.icon;
 
   const destination =
     channel === "email" ? value : value.length === 10 ? `+91 ${value}` : "+91 —";
 
   const handleSendOtp = async () => {
-    if (!inputValid) return;
+    if (!inputValid || sendingOtp) return;
+    setError("");
     setSendingOtp(true);
-    await delay(500);
-    setSendingOtp(false);
-    setScreen("otp");
-    onOtpChange("");
+    try {
+      if (channel === "email") {
+        if (onboardingToken) {
+          await resendPartnerOnboardingEmailOtp(onboardingToken);
+        } else {
+          const result = await startPartnerOnboarding(value.trim());
+          onOnboardingTokenChange(result.onboarding_token);
+        }
+      } else {
+        if (!onboardingToken) {
+          setError("Start with email verification first.");
+          return;
+        }
+        await sendPartnerOnboardingMobileOtp(onboardingToken, value);
+      }
+      setScreen("otp");
+      onOtpChange("");
+    } catch (nextError) {
+      setError(readApiError(nextError, "Could not send verification code."));
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!inputValid || sendingOtp || !onboardingToken) return;
+    setError("");
+    setSendingOtp(true);
+    try {
+      if (channel === "email") {
+        await resendPartnerOnboardingEmailOtp(onboardingToken);
+      } else {
+        await resendPartnerOnboardingMobileOtp(onboardingToken);
+      }
+      onOtpChange("");
+    } catch (nextError) {
+      setError(readApiError(nextError, "Could not resend verification code."));
+    } finally {
+      setSendingOtp(false);
+    }
   };
 
   const handleEditDestination = () => {
     setScreen("input");
     onOtpChange("");
+    setError("");
+  };
+
+  const verifyAndContinue = async () => {
+    if (!verified || verifying) return;
+    if (channel === "mobile" && !onboardingToken) {
+      setError("Onboarding session expired. Start again from email.");
+      return;
+    }
+    setError("");
+    setVerifying(true);
+    try {
+      if (channel === "email") {
+        if (!onboardingToken) {
+          setError("Onboarding session expired. Start again.");
+          return;
+        }
+        await verifyPartnerOnboardingEmail(onboardingToken, otp);
+      } else {
+        await verifyPartnerOnboardingMobile(onboardingToken!, otp);
+      }
+      onContinue();
+    } catch (nextError) {
+      setError(readApiError(nextError, "Invalid or expired verification code."));
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const goToPrevious = () => {
     if (screen === "otp") {
       setScreen("input");
       onOtpChange("");
+      setError("");
       return;
     }
     onBack();
@@ -113,16 +200,22 @@ export function AddDistributorContactVerifyPanel({
       void handleSendOtp();
       return;
     }
-    if (verified) {
-      onContinue();
-    }
+    void verifyAndContinue();
   };
 
   const primaryDisabled =
-    screen === "input" ? !inputValid || sendingOtp : !verified;
+    screen === "input"
+      ? !inputValid || sendingOtp
+      : !verified || verifying;
 
   const primaryLabel =
-    screen === "input" ? (sendingOtp ? "Sending…" : "Send code") : "Continue";
+    screen === "input"
+      ? sendingOtp
+        ? "Sending…"
+        : "Send code"
+      : verifying
+        ? "Verifying…"
+        : "Continue";
 
   useWizardKeyboardNavigation({
     onContinue: goToNext,
@@ -147,6 +240,11 @@ export function AddDistributorContactVerifyPanel({
               <>
                 <Loader2 className="size-4 animate-spin" aria-hidden />
                 Sending…
+              </>
+            ) : verifying && screen === "otp" ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                Verifying…
               </>
             ) : (
               primaryLabel
@@ -188,6 +286,15 @@ export function AddDistributorContactVerifyPanel({
               />
             )}
           </div>
+          {error ? (
+            <DistributorFeedbackMessage
+              variant="error"
+              className="add-distributor-wizard-feedback"
+              onDismiss={() => setError("")}
+            >
+              {error}
+            </DistributorFeedbackMessage>
+          ) : null}
         </div>
       ) : (
         <div className="add-investor-onboarding-wizard__center">
@@ -219,20 +326,25 @@ export function AddDistributorContactVerifyPanel({
               onChange={onOtpChange}
               autoFocus
             />
-            <p className="add-investor-onboarding-wizard__hint">
-              Demo code:{" "}
-              <span className="font-mono font-medium text-foreground">{ADD_DISTRIBUTOR_DEMO_OTP}</span>
-            </p>
             <Button
               type="button"
               variant="link"
               className="h-auto px-0 text-caption"
-              disabled={sendingOtp || !inputValid}
-              onClick={() => void handleSendOtp()}
+              disabled={sendingOtp || !inputValid || !onboardingToken}
+              onClick={() => void handleResendOtp()}
             >
               Resend code
             </Button>
           </div>
+          {error ? (
+            <DistributorFeedbackMessage
+              variant="error"
+              className="add-distributor-wizard-feedback"
+              onDismiss={() => setError("")}
+            >
+              {error}
+            </DistributorFeedbackMessage>
+          ) : null}
         </div>
       )}
     </AddDistributorWizardPanelShell>

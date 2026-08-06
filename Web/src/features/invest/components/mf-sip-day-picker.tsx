@@ -82,14 +82,17 @@ export function MfSipDayPicker({
           className={cn(
             "flex w-full items-center text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
             compact
-              ? "h-9 gap-2 rounded-[var(--radius-control)] border border-input bg-background px-3 text-compact hover:bg-muted/40"
+              ? "min-h-10 gap-2.5 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 px-3 py-2 hover:bg-muted/25 data-popup-open:bg-muted/30"
               : "gap-2.5 rounded-[var(--radius-medium)] border border-border bg-background px-3 py-2 hover:bg-muted/20 data-popup-open:bg-muted/20",
           )}
         >
           {compact ? (
             <>
               <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate font-medium text-foreground">{formatSipDay(value)}</span>
+              <span className="min-w-0 flex-1 truncate text-compact font-medium text-foreground">
+                {formatSipDay(value)}
+              </span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
             </>
           ) : (
             <>

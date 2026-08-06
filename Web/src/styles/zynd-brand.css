@@ -413,6 +413,9 @@
   .rounded-invest-card {
     border-radius: var(--radius-invest-card);
   }
+  .rounded-3xl {
+    border-radius: var(--radius-3xl);
+  }
   .bg-gradient-blue {
     background: var(--gradient-blue);
   }

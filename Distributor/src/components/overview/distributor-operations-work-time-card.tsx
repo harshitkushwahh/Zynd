@@ -14,18 +14,10 @@ import {
 
 import { DistributorGrowthBadge } from "@/components/ui/distributor-growth-badge";
 
-const WORK_HOURS_SERIES = [
-  { day: "Mon", hours: 6.5 },
-  { day: "Tue", hours: 7.2 },
-  { day: "Wed", hours: 8 },
-  { day: "Thu", hours: 7.4 },
-  { day: "Fri", hours: 9.1 },
-  { day: "Sat", hours: 5.8 },
-  { day: "Sun", hours: 4.2 },
-] as const;
+const WORK_HOURS_SERIES: ReadonlyArray<{ day: string; hours: number }> = [];
 
-const AVERAGE_HOURS = 46;
-const TREND_PCT = 0.5;
+const AVERAGE_HOURS = 0;
+const TREND_PCT = 0;
 
 type WorkHoursTooltipProps = {
   active?: boolean;

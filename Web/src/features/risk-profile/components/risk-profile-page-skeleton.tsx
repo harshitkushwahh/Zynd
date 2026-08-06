@@ -54,7 +54,7 @@ export function RiskProfilePageSkeleton() {
       <div className="flex min-w-0 flex-col gap-4">
         <section className={cn(RISK_PROFILE_CARD_CLASS, "p-4 sm:p-5")}>
           <Skeleton className="mx-auto h-5 w-32" />
-          <Skeleton className="mx-auto mt-4 h-28 w-full max-w-[11rem] rounded-[var(--radius-card)]" />
+          <Skeleton className={cn("mx-auto mt-4 h-28 w-full max-w-[11rem]", RISK_PROFILE_HERO_RADIUS_CLASS)} />
           <div className="mt-4 flex justify-center gap-2">
             <Skeleton className="h-6 w-20 rounded-full" />
             <Skeleton className="h-6 w-16 rounded-full" />

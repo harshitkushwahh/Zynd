@@ -49,7 +49,7 @@ import {
   getBranchAumSalesRollup,
   type BranchComplianceException,
   type BranchReportRollupPeriod,
-} from "@/lib/dummy/branch-reports";
+} from "@/lib/distributor-branch-reports-data";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";

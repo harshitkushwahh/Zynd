@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { FieldMessage } from "@/components/ui/ui-message";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +10,7 @@ import {
   OverviewLockedCardBackdrop,
   OverviewLockedCardOverlay,
 } from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
 import { OVERVIEW_TRANSACTIONS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import { type MfOrder } from "@/features/invest/api/invest-api";
 import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
@@ -21,12 +22,13 @@ import {
 import { MfOrderJourneyDialog } from "@/features/invest/components/payment-dialog";
 import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import { sortMfTransactions } from "@/features/invest/lib/mf-transaction-filters";
+import { portfolioTabHref } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_LIMIT = 5;
 const OVERVIEW_ORDERS_LIMIT = 100;
-const TRANSACTIONS_HREF = "/dashboard/transactions";
+const TRANSACTIONS_HREF = portfolioTabHref("transactions");
 
 function formatOrderType(orderType: string) {
   const normalized = orderType.trim().toUpperCase();
@@ -181,21 +183,16 @@ export function OverviewRecentTransactions({ className }: OverviewRecentTransact
           className,
         )}
       >
+        <OverviewCompactCardHeader
+          title={overview.recentTransactionsTitle}
+          href={TRANSACTIONS_HREF}
+          ariaLabel={overview.recentTransactionsViewAll}
+        />
+
         {isLocked ? (
-          <div className="relative flex min-h-[12rem] flex-1 flex-col">
+          <div className="relative mt-4 flex min-h-[12rem] flex-1 flex-col">
             <div className="pointer-events-none flex flex-1 select-none flex-col blur-[5px]">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-compact font-semibold text-foreground">
-                    {overview.recentTransactionsTitle}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {overview.recentTransactionsDescription}
-                  </p>
-                </div>
-                <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={2.25} />
-              </div>
-              <div className="mt-4 min-h-0 flex-1 rounded-[1.25rem] bg-muted/45 p-2 sm:p-2.5">
+              <div className="min-h-0 flex-1 rounded-[1.25rem] bg-muted/45 p-2 sm:p-2.5">
                 <div className="space-y-0.5">
                   {OVERVIEW_TRANSACTIONS_LOCKED_PREVIEW.map((order) => (
                     <RecentTransactionRowPreview key={order.order_id} order={order} />
@@ -211,24 +208,6 @@ export function OverviewRecentTransactions({ className }: OverviewRecentTransact
           </div>
         ) : (
           <>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-compact font-semibold text-foreground">
-                  {overview.recentTransactionsTitle}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {overview.recentTransactionsDescription}
-                </p>
-              </div>
-              <Link
-                href={TRANSACTIONS_HREF}
-                className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
-                aria-label={overview.recentTransactionsViewAll}
-              >
-                <ArrowUpRight className="size-3.5" strokeWidth={2.25} />
-              </Link>
-            </div>
-
             {loading ? (
               <div className="mt-4 rounded-[1.25rem] bg-muted/45 p-2.5">
                 <div className="space-y-1.5">
@@ -291,10 +270,7 @@ export function OverviewRecentTransactionsSkeleton({ className }: { className?: 
       aria-hidden="true"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="space-y-1.5">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-3 w-36" />
-        </div>
+        <Skeleton className="h-4 w-24" />
         <Skeleton className="size-3.5" />
       </div>
       <div className="mt-4 rounded-[1.25rem] bg-muted/45 p-2.5">

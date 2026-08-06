@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { useKycOptional } from "@/contexts/kyc-context";
 import { ensureKycToken, fetchKycBootstrap } from "@/features/kyc/lib/kyc-api";
 import {
   mapBootstrapToKycProfile,
@@ -9,11 +10,16 @@ import {
 } from "@/features/kyc/lib/settings-kyc-profile";
 
 export function useSettingsKycProfile(enabled: boolean) {
+  const kyc = useKycOptional();
+  const kycStatusResolved = !kyc?.kycAllowed || kyc.overallStatus != null;
+  const kycVerified = kyc?.overallStatus === "completed";
+  const shouldLoadProfile = enabled && kycStatusResolved && kycVerified;
+
   const [profile, setProfile] = useState<SettingsKycProfile | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(enabled && !kycStatusResolved);
 
   const loadProfile = useCallback(async () => {
-    if (!enabled) {
+    if (!shouldLoadProfile) {
       setProfile(null);
       setLoading(false);
       return;
@@ -22,17 +28,25 @@ export function useSettingsKycProfile(enabled: boolean) {
     try {
       await ensureKycToken();
       const bootstrap = await fetchKycBootstrap();
+      if (bootstrap.step_statuses?.overall !== "completed") {
+        setProfile(null);
+        return;
+      }
       setProfile(mapBootstrapToKycProfile(bootstrap));
     } catch {
       setProfile(null);
     } finally {
       setLoading(false);
     }
-  }, [enabled]);
+  }, [shouldLoadProfile]);
 
   useEffect(() => {
+    if (enabled && !kycStatusResolved) {
+      setLoading(true);
+      return;
+    }
     void loadProfile();
-  }, [loadProfile]);
+  }, [enabled, kycStatusResolved, loadProfile]);
 
   return { profile, loading, reloadProfile: loadProfile };
 }

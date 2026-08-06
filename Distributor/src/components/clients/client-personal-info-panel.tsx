@@ -13,7 +13,7 @@ import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import type {
   DistributorClientPersonalInfo,
   DistributorClientProfile,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import { formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

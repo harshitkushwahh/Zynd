@@ -23,6 +23,23 @@ OCCUPATION_MAP = {
     "others": "others",
 }
 
+MARITAL_STATUS_MAP = {
+    "single": "unmarried",
+    "unmarried": "unmarried",
+    "married": "married",
+    "others": "others",
+}
+
+INCOME_SLAB_MAP = {
+    "below_1l": "upto_1lakh",
+    "upto_1lakh": "upto_1lakh",
+    "above_1lakh_upto_5lakh": "above_1lakh_upto_5lakh",
+    "above_5lakh_upto_10lakh": "above_5lakh_upto_10lakh",
+    "above_10lakh_upto_25lakh": "above_10lakh_upto_25lakh",
+    "above_25lakh_upto_1cr": "above_25lakh_upto_1cr",
+    "above_1cr": "above_1cr",
+}
+
 PEP_MAP = {
     "not_applicable": "no_exposure",
     "pep_exposed": "pep",
@@ -128,13 +145,19 @@ def build_kyc_form_patch_payload(
     nominee_draft = journey.nominee_draft_json
 
     permanent = (contact.get("permanent") or {}) if isinstance(contact, dict) else {}
-    gender = str(personal.get("gender") or "").strip()
-    marital_status = str(personal.get("maritalStatus") or "").strip()
-    occupation = str(personal.get("occupation") or "").strip()
-    income_slab = str(personal.get("incomeSlab") or "").strip()
-    pep = str(personal.get("pepExposed") or "").strip()
+    gender = str(personal.get("gender") or "").strip().lower() or "male"
+    marital_status = MARITAL_STATUS_MAP.get(
+        str(personal.get("maritalStatus") or "").strip().lower(),
+        "unmarried",
+    )
+    occupation = str(personal.get("occupation") or "").strip().lower() or "others"
+    income_slab = INCOME_SLAB_MAP.get(
+        str(personal.get("incomeSlab") or "").strip().lower(),
+        "upto_1lakh",
+    )
+    pep = str(personal.get("pepExposed") or "").strip().lower() or "no_exposure"
     nationality = _country_code(str(personal.get("nationality") or "India"))
-    place_of_birth = str(personal.get("placeOfBirth") or permanent.get("city") or "India").strip()
+    place_of_birth = str(personal.get("placeOfBirth") or permanent.get("city") or "India").strip() or "India"
 
     payload: dict[str, Any] = {
         "email_address": user_email,
@@ -142,11 +165,11 @@ def build_kyc_form_patch_payload(
         "residential_status": "resident",
         "gender": gender,
         "marital_status": marital_status,
-        "occupation_type": OCCUPATION_MAP.get(occupation, occupation or "others"),
+        "occupation_type": OCCUPATION_MAP.get(occupation, occupation),
         "country_of_birth": nationality,
         "place_of_birth": place_of_birth[:60],
         "income_slab": income_slab,
-        "pep_details": PEP_MAP.get(pep, pep or "no_exposure"),
+        "pep_details": PEP_MAP.get(pep, pep),
         "citizenship_countries": [nationality],
         "nationality_country": nationality,
         "tax_residency_other_than_india": False,

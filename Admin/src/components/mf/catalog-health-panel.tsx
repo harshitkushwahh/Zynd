@@ -207,13 +207,14 @@ export function CatalogHealthPanel({
       </AdminMetricCardsGrid>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <AdminSelect
             value={activeCheck ?? ALL_CHECKS}
             onValueChange={(value) => setActiveCheck(value === ALL_CHECKS ? null : value)}
             options={checkOptions}
             placeholder="All issues"
             className="min-w-select-md"
+            triggerClassName="w-auto"
           />
           <Button
             variant="outline"

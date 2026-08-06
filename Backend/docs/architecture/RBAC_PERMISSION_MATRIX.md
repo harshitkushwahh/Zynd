@@ -45,6 +45,28 @@ Enforcement helper: `require_permission(key)` in `app/api/v1/auth/deps.py`
 | `mf.integrations.manage` | enforced | `PATCH /admin/mf/integrations/{provider}/environment` | Switch provider test/live mode |
 | `goals.templates.read` | enforced | `GET /admin/goals/templates`, `GET /admin/goals/templates/{template_id}` | Predefined goal templates |
 | `goals.templates.manage` | enforced | `PATCH /admin/goals/templates/{template_id}` | Update goal template metadata |
+| `distributor.clients.list` | enforced | `GET /distributor/clients` | Distributor console investor list with masked PII |
+| `distributor.clients.read` | enforced | `GET /distributor/clients/{client_reference}` | Distributor console masked client profile aggregate |
+| `admin.distributor_partners.list` | enforced | `GET /admin/distributor-partners/pending`, `GET /admin/distributor-partners/{partner_id}` | HO review queue for Zynd Mitra onboarding |
+| `admin.distributor_partners.approve` | enforced | `POST /admin/distributor-partners/{partner_id}/approve`, `POST /admin/distributor-partners/{partner_id}/reject` | Approve or reject Zynd Mitra applications |
+| `admin.distributor_hierarchy.read` | enforced | `GET /admin/distributor-hierarchy/overview`, `GET /admin/distributor-hierarchy/branches`, `GET /admin/distributor-hierarchy/managers`, `GET /admin/distributor-hierarchy/partners` | Mitra hierarchy read APIs for admin console |
+| `admin.distributor_branches.list` | enforced | `GET /admin/distributor-hierarchy/branches` | Branch listing scope in hierarchy console |
+| `admin.distributor_branches.manage` | enforced | `POST /admin/distributor-hierarchy/branches` | Create branches and assign branch managers |
+| `admin.distributor_managers.list` | enforced | `GET /admin/distributor-hierarchy/managers` | Branch manager listing scope in hierarchy console |
+
+## Seeded Mitra hierarchy admin roles
+
+| Role key | Persona | Permissions |
+|----------|---------|-------------|
+| `mitra_super_head` | Mitra Super Head | Full hierarchy read, branch manage, HO partner review |
+| `mitra_state_head` | Mitra State Head | State-scoped hierarchy read and HO partner review (no branch manage) |
+
+## Seeded distributor console roles
+
+| Role key | Persona | Permissions |
+|----------|---------|-------------|
+| `distributor_console` | Field distributor | `distributor.clients.list`, `distributor.clients.read` |
+| `distributor_manager` | Branch manager | Same client permissions; additional manager APIs ship in later phases |
 
 ## Non-RBAC admin routes
 

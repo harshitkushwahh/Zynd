@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
-import { PageTitle } from "@/components/ui/page-title";
 import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { RiskProfileAssessmentResultDialog } from "@/features/risk-profile/components/risk-profile-assessment-result-dialog";
@@ -24,7 +23,6 @@ import {
 import { copy } from "@/shared/config/copy";
 
 const riskProfileRoute = DASHBOARD_ROUTES.find((route) => route.id === "risk-profile")!;
-const RiskProfileIcon = riskProfileRoute.icon;
 
 export function RiskProfilePage() {
   const riskProfile = useRiskProfileOptional();
@@ -47,18 +45,6 @@ export function RiskProfilePage() {
       <DashboardBreadcrumb items={[{ label: riskProfileRoute.label }]} />
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
-        <div className="mb-6 flex items-start gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-            <RiskProfileIcon className="size-4" strokeWidth={2.25} />
-          </div>
-          <div className="min-w-0">
-            <PageTitle>{copy.riskProfile.settingsTitle}</PageTitle>
-            <p className="mt-2 max-w-2xl text-compact text-muted-foreground">
-              {copy.riskProfile.settingsDescription}
-            </p>
-          </div>
-        </div>
-
         {loading ? (
           <RiskProfilePageSkeleton />
         ) : error && !profile ? (

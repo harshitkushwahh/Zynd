@@ -1,9 +1,9 @@
 import { YOUR_CLIENTS_LIST_HREF } from "@/lib/distributor-client-routes";
-import type { DistributorInvestor } from "@/lib/dummy/types";
+import type { DistributorInvestor } from "@/lib/distributor-types";
 import {
   filterDistributorBookInvestors,
   filterSystemResidentInvestors,
-} from "@/lib/dummy/investors";
+} from "@/lib/distributor-investor-utils";
 
 /** Your clients list scope: distributor book vs platform-wide residents. */
 export type DistributorClientsListScope = "your-book" | "all";

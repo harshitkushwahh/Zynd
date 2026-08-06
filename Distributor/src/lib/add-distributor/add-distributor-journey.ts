@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
+  Camera,
   FileUp,
   Home,
   Landmark,
@@ -20,6 +21,7 @@ export type AddDistributorStepId =
   | "bank"
   | "address"
   | "documents"
+  | "photo"
   | "review";
 
 export type AddDistributorJourneyStep = {
@@ -73,6 +75,12 @@ export const ADD_DISTRIBUTOR_JOURNEY_STEPS: AddDistributorJourneyStep[] = [
     icon: FileUp,
   },
   {
+    id: "photo",
+    label: "Photo",
+    description: "Profile picture",
+    icon: Camera,
+  },
+  {
     id: "review",
     label: "Review",
     description: "Submit to branch",
@@ -99,13 +107,55 @@ export type AddDistributorNameDraft = {
 };
 
 export type AddDistributorBankDraft = {
-  accountHolderName: string;
   accountNumber: string;
   confirmAccountNumber: string;
+  accountType: string;
   ifsc: string;
+  accountVerified: boolean;
+  verificationMode: "" | "auto" | "manual";
+  manualMode: boolean;
+  accountHolderName: string;
   bankName: string;
   branchName: string;
 };
+
+export const ADD_DISTRIBUTOR_BANK_ACCOUNT_TYPE_OPTIONS = [
+  { value: "Savings", label: "Savings" },
+  { value: "Current", label: "Current" },
+  { value: "NRE", label: "NRE" },
+  { value: "NRO", label: "NRO" },
+] as const;
+
+export function distributorBankAccountTypeLabel(accountType: string): string {
+  return (
+    ADD_DISTRIBUTOR_BANK_ACCOUNT_TYPE_OPTIONS.find((option) => option.value === accountType)
+      ?.label ?? accountType
+  );
+}
+
+export function isValidDistributorIfsc(value: string): boolean {
+  return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(value.trim().toUpperCase());
+}
+
+export function isAddDistributorBankDraftReady(bank: AddDistributorBankDraft): boolean {
+  return (
+    Boolean(bank.accountType) &&
+    bank.accountNumber.replace(/\D/g, "").length >= 9 &&
+    isValidDistributorIfsc(bank.ifsc)
+  );
+}
+
+export function isAddDistributorBankManualDraftReady(bank: AddDistributorBankDraft): boolean {
+  const account = bank.accountNumber.replace(/\D/g, "");
+  const confirm = bank.confirmAccountNumber.replace(/\D/g, "");
+  return (
+    isAddDistributorBankDraftReady(bank) &&
+    account === confirm &&
+    bank.accountHolderName.trim().length >= 3 &&
+    bank.bankName.trim().length >= 2 &&
+    bank.branchName.trim().length >= 2
+  );
+}
 
 export type AddDistributorAddressDraft = {
   line1: string;
@@ -119,6 +169,8 @@ export type AddDistributorAddressDraft = {
 export type AddDistributorDocumentDraft = {
   panFileName: string | null;
   aadharFileName: string | null;
+  panPreviewUrl: string | null;
+  aadhaarPreviewUrl: string | null;
 };
 
 export function emptyNameDraft(): AddDistributorNameDraft {
@@ -127,10 +179,14 @@ export function emptyNameDraft(): AddDistributorNameDraft {
 
 export function emptyBankDraft(): AddDistributorBankDraft {
   return {
-    accountHolderName: "",
     accountNumber: "",
     confirmAccountNumber: "",
+    accountType: "",
     ifsc: "",
+    accountVerified: false,
+    verificationMode: "",
+    manualMode: false,
+    accountHolderName: "",
     bankName: "",
     branchName: "",
   };
@@ -148,10 +204,12 @@ export function emptyAddressDraft(): AddDistributorAddressDraft {
 }
 
 export function emptyDocumentDraft(): AddDistributorDocumentDraft {
-  return { panFileName: null, aadharFileName: null };
+  return {
+    panFileName: null,
+    aadharFileName: null,
+    panPreviewUrl: null,
+    aadhaarPreviewUrl: null,
+  };
 }
-
-/** Same demo OTP as investor onboarding. */
-export const ADD_DISTRIBUTOR_DEMO_OTP = "123456";
 
 export const ADD_DISTRIBUTOR_ACCEPTED_DOC_TYPES = ".pdf,.jpg,.jpeg,.png";

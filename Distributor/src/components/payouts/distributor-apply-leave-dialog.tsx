@@ -18,7 +18,7 @@ import {
   DUMMY_DISTRIBUTOR_LEAVE_BALANCES,
   type DistributorLeaveBalance,
   type DistributorLeaveType,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { cn } from "@/lib/utils";
 import {
   Select,

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.mf_fp_state import map_fp_mandate_status, map_fp_purchase_state, map_fp_purchase_state_to_checkout
+from app.application.mf.mf_redemption_service import apply_redemption_fp_state
 from app.application.mf.mf_sip_plan_service import _apply_plan_state
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event
 from app.application.referral.referral_investment_service import record_referral_investment_activity
@@ -20,6 +21,7 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfFinprimWebhookEvent,
     MfMandate,
     MfOrder,
+    MfOrderType,
     MfSipPlan,
     MfWebhookProcessingStatus,
 )
@@ -30,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 MF_PURCHASE_EVENT_PREFIX = "mf_purchase"
 MF_PURCHASE_PLAN_EVENT_PREFIX = "mf_purchase_plan"
+MF_REDEMPTION_EVENT_PREFIX = "mf_redemption"
 MANDATE_EVENT_PREFIX = "mandate"
 PAYMENT_EVENT_PREFIX = "payment"
 
@@ -288,6 +291,61 @@ async def _handle_mandate_event(session: AsyncSession, *, event_type: str, paylo
     return True
 
 
+async def _find_order_for_redemption_object(
+    session: AsyncSession,
+    redemption_obj: dict[str, Any],
+) -> MfOrder | None:
+    source_ref_id = redemption_obj.get("source_ref_id")
+    if source_ref_id:
+        try:
+            order_id = UUID(str(source_ref_id))
+        except ValueError:
+            order_id = None
+        if order_id:
+            order = await session.get(MfOrder, order_id)
+            if order and order.order_type == MfOrderType.redemption:
+                return order
+
+    fp_redemption_id = redemption_obj.get("id")
+    if fp_redemption_id:
+        order = await session.scalar(
+            select(MfOrder).where(
+                MfOrder.order_type == MfOrderType.redemption,
+                MfOrder.metadata_["fp_redemption_id"].as_string() == str(fp_redemption_id),
+            )
+        )
+        if order:
+            return order
+    return None
+
+
+async def _handle_mf_redemption_event(session: AsyncSession, *, event_type: str, payload: dict[str, Any]) -> bool:
+    redemption_obj = _extract_event_object(payload)
+    if not redemption_obj:
+        return False
+
+    order = await _find_order_for_redemption_object(session, redemption_obj)
+    if not order:
+        logger.info("Finprim webhook %s: no matching redemption order for %s", event_type, redemption_obj.get("id"))
+        return False
+
+    meta = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    if not meta.get("fp_redemption_id") and redemption_obj.get("id"):
+        order.metadata_ = {**meta, "fp_redemption_id": str(redemption_obj["id"])}
+
+    fp_state = redemption_obj.get("state")
+    if event_type.endswith("review_completed") and fp_state is None:
+        fp_state = "pending"
+
+    return await apply_redemption_fp_state(
+        session,
+        order,
+        fp_state=str(fp_state) if fp_state is not None else order.fp_state,
+        source="WEBHOOK",
+        payload=redemption_obj,
+    )
+
+
 async def _dispatch_finprim_event(
     session: AsyncSession,
     *,
@@ -298,6 +356,8 @@ async def _dispatch_finprim_event(
         return await _handle_mf_purchase_event(session, event_type=event_type, payload=payload)
     if event_type.startswith(MF_PURCHASE_PLAN_EVENT_PREFIX):
         return await _handle_mf_purchase_plan_event(session, event_type=event_type, payload=payload)
+    if event_type.startswith(MF_REDEMPTION_EVENT_PREFIX):
+        return await _handle_mf_redemption_event(session, event_type=event_type, payload=payload)
     if event_type.startswith(MANDATE_EVENT_PREFIX):
         return await _handle_mandate_event(session, event_type=event_type, payload=payload)
     if event_type.startswith(PAYMENT_EVENT_PREFIX):
@@ -317,6 +377,7 @@ async def replay_finprim_webhook_event(session: AsyncSession, *, event_id: int) 
         if not handled and not (
             event_type.startswith(MF_PURCHASE_EVENT_PREFIX)
             or event_type.startswith(MF_PURCHASE_PLAN_EVENT_PREFIX)
+            or event_type.startswith(MF_REDEMPTION_EVENT_PREFIX)
             or event_type.startswith(MANDATE_EVENT_PREFIX)
             or event_type.startswith(PAYMENT_EVENT_PREFIX)
         ):
@@ -383,6 +444,7 @@ async def process_finprim_webhook(
         if not handled and not (
             event_type.startswith(MF_PURCHASE_EVENT_PREFIX)
             or event_type.startswith(MF_PURCHASE_PLAN_EVENT_PREFIX)
+            or event_type.startswith(MF_REDEMPTION_EVENT_PREFIX)
             or event_type.startswith(MANDATE_EVENT_PREFIX)
             or event_type.startswith(PAYMENT_EVENT_PREFIX)
         ):

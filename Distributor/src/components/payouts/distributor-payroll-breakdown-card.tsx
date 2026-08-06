@@ -10,7 +10,7 @@ import {
   DUMMY_DISTRIBUTOR_JOB_PERFORMANCE,
   DUMMY_DISTRIBUTOR_PAYROLL_PROMOTION,
   getSalaryPaymentStatusLabel,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { formatAum, formatPortfolioMetricAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -348,23 +348,14 @@ export function DistributorPayrollBreakdownCard({
   const perf = DUMMY_DISTRIBUTOR_JOB_PERFORMANCE;
   const promotion = DUMMY_DISTRIBUTOR_PAYROLL_PROMOTION;
   const isDashboard = variant === "dashboard";
-  const Root = isDashboard ? Link : "article";
-  const rootProps = isDashboard
-    ? {
-        href: PAYROLL_HISTORY_HREF,
-        "aria-label": "Sales and incentives payroll detail",
-      }
-    : {};
+  const cardClassName = cn(
+    "distributor-compensation-breakdown-card",
+    isDashboard && "distributor-compensation-breakdown-card--dashboard",
+    className,
+  );
 
-  return (
-    <Root
-      {...rootProps}
-      className={cn(
-        "distributor-compensation-breakdown-card",
-        isDashboard && "distributor-compensation-breakdown-card--dashboard",
-        className,
-      )}
-    >
+  const cardBody = (
+    <>
       <div className="distributor-compensation-breakdown-card__head">
         <div className="distributor-compensation-breakdown-card__head-copy">
           {isDashboard ? (
@@ -420,6 +411,20 @@ export function DistributorPayrollBreakdownCard({
           <ArrowUpRight className="size-4" strokeWidth={2.25} aria-hidden />
         </Link>
       ) : null}
-    </Root>
+    </>
   );
+
+  if (isDashboard) {
+    return (
+      <Link
+        href={PAYROLL_HISTORY_HREF}
+        aria-label="Sales and incentives payroll detail"
+        className={cardClassName}
+      >
+        {cardBody}
+      </Link>
+    );
+  }
+
+  return <article className={cardClassName}>{cardBody}</article>;
 }

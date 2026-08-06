@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,28 +13,107 @@ import {
   KYC_SIGNATURE_MAX_BYTES,
   type KycSignatureTab,
 } from "@/features/kyc/lib/kyc-signature";
+import {
+  resolveSignatureDataUrl,
+  resolveSignatureImageSrc,
+} from "@/features/kyc/lib/kyc-signature-preview";
 import type { KycSignatureDraft } from "@/features/kyc/lib/kyc-journey-draft";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api-client";
 
 type KycSignatureStepProps = {
+  initialValue?: KycSignatureDraft | null;
   onSubmit: (value: KycSignatureDraft) => void;
 };
 
-export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
+type HydratedSignature = {
+  mode: KycSignatureTab;
+  src: string;
+  documentId?: string;
+  dataUrl?: string;
+};
+
+export function KycSignatureStep({ initialValue, onSubmit }: KycSignatureStepProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<KycSignatureTab>("draw");
+  const hydratedRef = useRef<HydratedSignature | null>(null);
+  const [activeTab, setActiveTab] = useState<KycSignatureTab>(initialValue?.mode ?? "draw");
   const [drawnSignature, setDrawnSignature] = useState("");
   const [uploadedSignature, setUploadedSignature] = useState("");
   const [uploadFileName, setUploadFileName] = useState("");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(Boolean(initialValue));
+
+  useEffect(() => {
+    if (!initialValue) {
+      hydratedRef.current = null;
+      setIsHydrating(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function hydrate() {
+      setIsHydrating(true);
+      setError("");
+
+      try {
+        const src = await resolveSignatureImageSrc(initialValue);
+        if (cancelled || !src) return;
+
+        setActiveTab(initialValue.mode);
+        if (initialValue.mode === "draw") {
+          setDrawnSignature(src);
+        } else {
+          setUploadedSignature(src);
+          setUploadFileName(copy.kyc.signature.savedUploadLabel);
+        }
+
+        hydratedRef.current = {
+          mode: initialValue.mode,
+          src,
+          documentId: initialValue.documentId,
+          dataUrl: initialValue.dataUrl,
+        };
+      } catch {
+        if (!cancelled) {
+          setError(copy.kyc.signature.restoreFailed);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsHydrating(false);
+        }
+      }
+    }
+
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialValue]);
 
   const activeSignature = activeTab === "draw" ? drawnSignature : uploadedSignature;
+  const isBusy = isSaving || isHydrating;
+  const hasDrawnSignature = Boolean(drawnSignature);
+  const hasUploadedSignature = Boolean(uploadedSignature);
+  const lockedTab: KycSignatureTab | null = hasDrawnSignature
+    ? "upload"
+    : hasUploadedSignature
+      ? "draw"
+      : null;
 
   const handleTabChange = (tab: KycSignatureTab) => {
+    if (lockedTab === tab) return;
     setActiveTab(tab);
+    setError("");
+  };
+
+  const handleDrawnChange = (value: string) => {
+    setDrawnSignature(value);
+    if (!value && hydratedRef.current?.mode === "draw") {
+      hydratedRef.current = null;
+    }
     setError("");
   };
 
@@ -68,6 +147,32 @@ export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
     setUploadedSignature("");
     setUploadFileName("");
     setError("");
+    if (hydratedRef.current?.mode === "upload") {
+      hydratedRef.current = null;
+    }
+  };
+
+  const submitSavedSignature = async (saved: HydratedSignature) => {
+    let dataUrl = saved.dataUrl?.startsWith("data:") ? saved.dataUrl : undefined;
+    if (!dataUrl) {
+      dataUrl =
+        (await resolveSignatureDataUrl({
+          mode: saved.mode,
+          dataUrl: saved.src,
+          documentId: saved.documentId,
+        })) ?? undefined;
+    }
+
+    if (!dataUrl) {
+      setError(copy.kyc.signature.restoreFailed);
+      return;
+    }
+
+    onSubmit({
+      mode: saved.mode,
+      dataUrl,
+      documentId: saved.documentId,
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -79,6 +184,22 @@ export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
           ? copy.kyc.signature.drawRequired
           : copy.kyc.signature.uploadRequired,
       );
+      return;
+    }
+
+    const saved = hydratedRef.current;
+    if (
+      saved?.documentId &&
+      activeTab === saved.mode &&
+      activeSignature === saved.src
+    ) {
+      setIsSaving(true);
+      setError("");
+      try {
+        await submitSavedSignature(saved);
+      } finally {
+        setIsSaving(false);
+      }
       return;
     }
 
@@ -110,18 +231,21 @@ export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
       <div className="flex rounded-[var(--radius-full)] border border-border bg-muted/40 p-1">
         {(["draw", "upload"] as const).map((tab) => {
           const isActive = activeTab === tab;
+          const isLocked = lockedTab === tab;
 
           return (
             <button
               key={tab}
               type="button"
               onClick={() => handleTabChange(tab)}
-              disabled={isSaving}
+              disabled={isBusy || isLocked}
+              aria-disabled={isBusy || isLocked}
               className={cn(
                 "flex-1 rounded-[var(--radius-full)] px-3 py-2 text-caption font-medium transition-colors",
                 isActive
                   ? "bg-foreground text-background shadow-zynd-low"
                   : "text-muted-foreground hover:text-foreground",
+                isLocked && "cursor-not-allowed opacity-45 hover:text-muted-foreground",
               )}
             >
               {tab === "draw" ? copy.kyc.signature.drawTab : copy.kyc.signature.uploadTab}
@@ -130,15 +254,17 @@ export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
         })}
       </div>
 
-      {activeTab === "draw" ? (
+      {isHydrating ? (
+        <div className="flex min-h-40 items-center justify-center rounded-[var(--radius-card)] border border-border bg-muted/15 px-4 py-8 text-[11px] text-muted-foreground">
+          {copy.kyc.signature.loadingPreview}
+        </div>
+      ) : activeTab === "draw" ? (
         <div className="space-y-2">
           <p className="text-[11px] text-muted-foreground">{copy.kyc.signature.drawHint}</p>
-          <KycSignaturePad value={drawnSignature} onChange={setDrawnSignature} />
+          <KycSignaturePad value={drawnSignature} onChange={handleDrawnChange} disabled={isBusy} />
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-[11px] text-muted-foreground">{copy.kyc.signature.uploadHint}</p>
-
           <input
             ref={fileInputRef}
             type="file"
@@ -151,7 +277,7 @@ export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={isSaving}
+              disabled={isBusy}
               className={cn(
                 "flex w-full flex-col items-center gap-3 rounded-[var(--radius-card)] border border-dashed border-primary/30 bg-primary/[0.03] px-5 py-8 text-center transition-colors",
                 "hover:border-primary/45 hover:bg-primary/[0.06]",
@@ -175,7 +301,7 @@ export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
             <div className="space-y-3 rounded-[var(--radius-card)] border border-border bg-muted/15 p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="truncate text-caption font-medium text-foreground">{uploadFileName}</p>
-                <Button type="button" variant="outline" size="sm" onClick={handleRemoveUpload} disabled={isSaving}>
+                <Button type="button" variant="outline" size="sm" onClick={handleRemoveUpload} disabled={isBusy}>
                   <Trash2 className="size-3.5" />
                   {copy.kyc.signature.removeImage}
                 </Button>
@@ -195,7 +321,7 @@ export function KycSignatureStep({ onSubmit }: KycSignatureStepProps) {
 
       {error ? <FieldMessage message={error} /> : null}
 
-      <Button type="submit" size="lg" className="w-full" disabled={isSaving}>
+      <Button type="submit" size="lg" className="w-full" disabled={isBusy}>
         {isSaving ? copy.kyc.signature.processing : copy.kyc.continue}
       </Button>
     </form>

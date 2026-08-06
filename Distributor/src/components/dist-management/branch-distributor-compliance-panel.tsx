@@ -16,13 +16,13 @@ import { DistributorTableToolbar } from "@/components/dashboard/distributor-tabl
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
-import type { BranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
-import { getComplianceQueueForBranchDistributor } from "@/lib/dummy/branch-distributor-ops-data";
+import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
+import { getComplianceQueueForBranchDistributor } from "@/lib/distributor-branch-distributor-ops-data";
 import {
   getDistributorComplianceSummary,
   type DistributorComplianceIssueType,
   type DistributorComplianceQueueRow,
-} from "@/lib/dummy/distributor-compliance";
+} from "@/lib/distributor-compliance-data";
 import { distributorClientDetailHref } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";

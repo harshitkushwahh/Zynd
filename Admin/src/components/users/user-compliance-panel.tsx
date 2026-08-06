@@ -343,24 +343,50 @@ export function UserCompliancePanel({
         className="gap-4"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <AdminTabList variant="secondary">
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <AdminTabTrigger
-                  key={tab.key}
-                  value={tab.key}
-                  className="gap-2"
-                >
-                  <Icon className="size-4 shrink-0" />
-                  {tab.label}
-                  <TabCount count={tab.count} active={activeTab === tab.key} />
-                </AdminTabTrigger>
-              );
-            })}
-          </AdminTabList>
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder={
+              activeTab === "reviews"
+                ? "Search reviews"
+                : activeTab === "deletions"
+                  ? "Search deletions"
+                  : "Search actions"
+            }
+            value={
+              activeTab === "reviews"
+                ? reviewQuery
+                : activeTab === "deletions"
+                  ? deletionQuery
+                  : actionQuery
+            }
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              if (activeTab === "reviews") {
+                setReviewQuery(nextValue);
+                return;
+              }
+              if (activeTab === "deletions") {
+                setDeletionQuery(nextValue);
+                return;
+              }
+              setActionQuery(nextValue);
+            }}
+          />
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <AdminTabList variant="secondary">
+              {visibleTabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <AdminTabTrigger key={tab.key} value={tab.key} className="gap-2">
+                    <Icon className="size-4 shrink-0" />
+                    {tab.label}
+                    <TabCount count={tab.count} active={activeTab === tab.key} />
+                  </AdminTabTrigger>
+                );
+              })}
+            </AdminTabList>
+
             <Button
               variant="outline"
               size="sm"
@@ -375,15 +401,6 @@ export function UserCompliancePanel({
 
         {canReadReviews ? (
           <TabsContent value="reviews" className="mt-0 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSearchInput
-                containerClassName="max-w-sm"
-                placeholder="Search reviews"
-                value={reviewQuery}
-                onChange={(event) => setReviewQuery(event.target.value)}
-              />
-            </div>
-
             <AdminDataTable
               minWidth="lg"
               footer={
@@ -486,13 +503,7 @@ export function UserCompliancePanel({
 
         {canExecuteDeletions ? (
           <TabsContent value="deletions" className="mt-0 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSearchInput
-                containerClassName="max-w-sm"
-                placeholder="Search deletions"
-                value={deletionQuery}
-                onChange={(event) => setDeletionQuery(event.target.value)}
-              />
+            <div className="flex justify-end">
               <Button
                 size="sm"
                 disabled={actionLoading === "deletion-executor"}
@@ -586,15 +597,6 @@ export function UserCompliancePanel({
 
         {canApproveActions ? (
           <TabsContent value="actions" className="mt-0 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSearchInput
-                containerClassName="max-w-sm"
-                placeholder="Search actions"
-                value={actionQuery}
-                onChange={(event) => setActionQuery(event.target.value)}
-              />
-            </div>
-
             <AdminDataTable
               minWidth="xl"
               footer={

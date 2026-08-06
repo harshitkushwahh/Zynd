@@ -1,7 +1,7 @@
-import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
+import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 
-/** Dashboard card radius — same token as family groups and risk profile. */
-export const REFERRAL_CARD_RADIUS_CLASS = ZYND_CARD_RADIUS_CLASS;
+/** Referral dashboard card radius — `--radius-3xl` promo surfaces. */
+export const REFERRAL_CARD_RADIUS_CLASS = ZYND_3XL_RADIUS_CLASS;
 
 /** Same navy → blue hero gradient as risk profile, mirrored direction (145° → 325°). */
 export const REFERRAL_HERO_GRADIENT_CLASS =

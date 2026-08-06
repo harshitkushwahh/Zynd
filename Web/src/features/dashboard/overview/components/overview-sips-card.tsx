@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { ArrowUpRight } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -11,16 +10,18 @@ import {
   OverviewLockedCardBackdrop,
   OverviewLockedCardOverlay,
 } from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
 import { OVERVIEW_SIPS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import { type MfSipPlan } from "@/features/invest/api/invest-api";
 import { useMfSipPlansQuery } from "@/features/invest/hooks/use-mf-sip-plans-query";
 import { mfSipPlanStatusVariant } from "@/features/invest/components/mf-sip-plan-status-badge";
 import { formatInr, resolveInvestAssetUrl } from "@/features/invest/lib/mf-format";
+import { portfolioTabHref } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_LIMIT = 4;
-const MY_SIPS_HREF = "/dashboard/my-sips";
+const MY_SIPS_HREF = portfolioTabHref("sips");
 
 function isActiveSip(status: string) {
   const normalized = status.trim().toLowerCase();
@@ -184,10 +185,7 @@ export function OverviewSipsCard({ className }: OverviewSipsCardProps) {
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-caption font-semibold text-foreground">{overview.sipsTitle}</p>
-        <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-      </div>
+      <OverviewCompactCardHeader title={overview.sipsTitle} groupHover />
 
       <div className="mt-3 flex flex-1 flex-col justify-center">
         {loading ? (

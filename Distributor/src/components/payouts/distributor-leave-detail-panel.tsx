@@ -22,7 +22,7 @@ import {
   type DistributorLeaveRequest,
   type DistributorLeaveRequestStatus,
   type DistributorLeaveType,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import {
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,
   DISTRIBUTOR_PAGE_STACK_CLASS,

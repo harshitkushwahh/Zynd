@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Loader2, ShoppingCart, Wallet } from "lucide-react";
+import { ChevronRight, Loader2, ShoppingCart, Wallet, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -32,12 +32,20 @@ import {
   SIP_ORDER_DEFAULT_INSTALLMENTS,
 } from "@/features/invest/lib/mf-sip-calculator";
 import { formatInr } from "@/features/invest/lib/mf-format";
+import {
+  MfRedeemPaymentCardContent,
+  type MfRedeemInputMode,
+  type MfRedeemProceedPayload,
+} from "@/features/invest/components/mf-invest-payment-card-redeem";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 export type MfInvestPaymentMode = "sip" | "lumpsum";
+export type MfPaymentCardVariant = "invest" | "redeem";
+export type { MfRedeemInputMode };
 
 export type MfInvestPaymentCardProps = {
+  variant?: MfPaymentCardVariant;
   fundName?: string | null;
   productId?: string | null;
   minLumpsumAmountInr?: number | null;
@@ -46,10 +54,20 @@ export type MfInvestPaymentCardProps = {
   sticky?: boolean;
   showFundName?: boolean;
   preview?: boolean;
+  previewBankLabel?: string;
   canInvest?: boolean;
+  canRedeem?: boolean;
   sipEnabled?: boolean;
+  defaultMode?: MfInvestPaymentMode;
   amount?: number;
   onAmountChange?: (amount: number) => void;
+  redeemableValueInr?: number;
+  redeemableUnits?: number;
+  currentNav?: number;
+  expectedTransferBy?: string;
+  exitLoadPct?: number;
+  onRedeemProceed?: (payload: MfRedeemProceedPayload) => void | Promise<void>;
+  onRedeemBack?: () => void;
 };
 
 const QUICK_AMOUNTS = [1000, 2000, 5000] as const;
@@ -175,7 +193,7 @@ function AmountInput({
         ? "text-[1.875rem]"
         : formattedAmount.length > 7
           ? "text-[2.25rem]"
-          : "text-[2.75rem]";
+          : "text-[3rem]";
 
   const displayLength = Math.max(formattedAmount.length, isEmpty ? 1 : 0);
 
@@ -195,7 +213,7 @@ function AmountInput({
 
   return (
     <div className="w-full min-w-0 px-2">
-      <div className="flex min-h-[4.25rem] items-center justify-center">
+      <div className="flex min-h-[4rem] items-center justify-center">
         <div className="inline-flex max-w-full min-w-0 items-center gap-0.5">
           <span
             className={cn(
@@ -251,7 +269,7 @@ function QuickAmountChips({
   const maxAmount = paymentMaxAmount(mode);
 
   return (
-    <div className="flex flex-wrap justify-center gap-2">
+    <div className="flex flex-wrap justify-center gap-2.5">
       {QUICK_AMOUNTS.map((increment) => {
         const disabled = amount + increment > maxAmount;
         return (
@@ -261,7 +279,7 @@ function QuickAmountChips({
             disabled={disabled}
             onClick={() => onAdd(increment)}
             className={cn(
-              "rounded-full border px-3.5 py-1.5 text-caption font-medium transition-all",
+              "rounded-full border px-5 py-2 text-compact font-medium transition-all",
               disabled
                 ? "cursor-not-allowed border-border/60 bg-muted/20 text-muted-foreground/45"
                 : "border-border/80 bg-card text-foreground hover:border-primary/35 hover:bg-muted/40",
@@ -311,6 +329,33 @@ function PaymentMethodRow({
   );
 }
 
+function PreviewBankAccountRow({
+  label,
+  sectionLabel,
+}: {
+  label: string;
+  sectionLabel?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {sectionLabel ? (
+        <p className="text-caption font-medium text-muted-foreground">{sectionLabel}</p>
+      ) : null}
+      <div className="flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-primary/25 bg-primary/[0.03] px-3.5 py-2.5">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success/15 text-success ring-1 ring-success/25">
+          <Building2 className="size-4" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-compact font-medium text-foreground">{label}</p>
+          <p className="mt-0.5 truncate text-caption text-muted-foreground">
+            {copy.mutualFunds.bankPickerUnknownBank}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LumpsumRow() {
   return (
     <PaymentMethodRow
@@ -323,6 +368,7 @@ function LumpsumRow() {
 }
 
 export function MfInvestPaymentCard({
+  variant = "invest",
   fundName,
   productId,
   minLumpsumAmountInr,
@@ -331,14 +377,65 @@ export function MfInvestPaymentCard({
   sticky = true,
   showFundName = true,
   preview = true,
+  previewBankLabel,
   canInvest = false,
+  canRedeem = false,
   sipEnabled = true,
+  defaultMode = "lumpsum",
   amount: controlledAmount,
   onAmountChange,
+  redeemableValueInr,
+  redeemableUnits,
+  currentNav,
+  expectedTransferBy,
+  exitLoadPct,
+  onRedeemProceed,
+  onRedeemBack,
 }: MfInvestPaymentCardProps) {
+  const hasFundForUi = Boolean(fundName?.trim());
+
+  if (variant === "redeem") {
+    const resolvedRedeemableValue =
+      redeemableValueInr ??
+      (redeemableUnits != null && currentNav != null
+        ? Math.round(redeemableUnits * currentNav * 100) / 100
+        : 0);
+    const resolvedRedeemableUnits =
+      redeemableUnits ??
+      (redeemableValueInr != null && currentNav != null && currentNav > 0
+        ? Math.round((redeemableValueInr / currentNav) * 1000) / 1000
+        : 0);
+
+    return (
+      <div
+        className={cn(
+          MF_INVEST_PAYMENT_CARD_CLASS,
+          "flex w-full min-w-0 flex-col overflow-x-hidden min-h-[34rem]",
+          sticky && "lg:sticky lg:top-6",
+          !hasFundForUi && "border-dashed",
+          className,
+        )}
+      >
+        <MfRedeemPaymentCardContent
+          fundName={fundName}
+          previewBankLabel={previewBankLabel}
+          preview={preview}
+          canRedeem={canRedeem}
+          redeemableValueInr={resolvedRedeemableValue}
+          redeemableUnits={resolvedRedeemableUnits}
+          currentNav={currentNav ?? 0}
+          expectedTransferBy={expectedTransferBy}
+          exitLoadPct={exitLoadPct}
+          onProceed={onRedeemProceed}
+          onBack={onRedeemBack}
+        />
+      </div>
+    );
+  }
+
   const router = useRouter();
   const { openOrderPayment, openSipMandate } = useMfPaymentOverlay();
-  const [mode, setMode] = useState<MfInvestPaymentMode>("lumpsum");
+  const [mode, setMode] = useState<MfInvestPaymentMode>(defaultMode);
   const [internalAmount, setInternalAmount] = useState(0);
   const amount = controlledAmount ?? internalAmount;
   const setAmount = onAmountChange ?? setInternalAmount;
@@ -355,6 +452,9 @@ export function MfInvestPaymentCard({
   const interactive = canInvest && !preview;
   const showSip = sipEnabled;
   const hasFund = Boolean(fundName?.trim() && productId);
+  const showPaymentSection = interactive || (preview && hasFundForUi);
+  const previewBankDisplay =
+    previewBankLabel?.trim() || copy.mutualFunds.paymentCardPreviewBankLabel;
   const shouldLoadBankAccounts = canInvest || (hasFund && mode === "sip" && showSip);
   const {
     accounts,
@@ -531,17 +631,18 @@ export function MfInvestPaymentCard({
     <div
       className={cn(
         MF_INVEST_PAYMENT_CARD_CLASS,
-        "flex min-h-[27rem] w-full min-w-0 flex-col overflow-x-hidden",
+        "flex w-full min-w-0 flex-col overflow-x-hidden",
+        showPaymentSection ? "min-h-[26rem]" : "min-h-[20rem]",
         sticky && "lg:sticky lg:top-6",
-        !hasFund && "border-dashed",
+        !hasFundForUi && "border-dashed",
         className,
       )}
     >
       {showFundName ? (
-        <div className="border-b border-zinc-200 bg-muted/10 px-6 py-3 dark:border-zinc-700/80">
+        <div className="border-b border-zinc-200 bg-muted/10 px-4 py-2 dark:border-zinc-700/80">
           <p
             className={cn(
-              "line-clamp-2 text-body font-semibold leading-snug",
+              "line-clamp-2 text-compact font-semibold leading-snug",
               hasFund ? "text-foreground" : "text-muted-foreground",
             )}
           >
@@ -550,10 +651,10 @@ export function MfInvestPaymentCard({
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col justify-between gap-5 px-5 pt-4 pb-5">
+      <div className="flex flex-1 flex-col justify-between gap-4 px-4 pt-3.5 pb-4">
         {showSip ? <ModeToggle mode={mode} onChange={handleModeChange} /> : null}
 
-        <div className="space-y-4">
+        <div className={cn("space-y-2.5", mode === "lumpsum" && "mt-6")}>
           <AmountInput
             amount={amount}
             mode={mode}
@@ -563,19 +664,14 @@ export function MfInvestPaymentCard({
           <QuickAmountChips amount={amount} mode={mode} onAdd={handleQuickAdd} />
 
           {mode === "sip" && showSip ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <p className="text-caption font-medium text-muted-foreground">
-                  {copy.mutualFunds.sipDayLabel}
-                </p>
-                <MfSipDayPicker
-                  compact
-                  maxDay={SIP_MAX_INSTALLMENT_DAY}
-                  value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
-                  onChange={setInstallmentDay}
-                  disabled={submitting}
-                />
-              </div>
+            <div className="space-y-2.5">
+              <MfSipDayPicker
+                compact
+                maxDay={SIP_MAX_INSTALLMENT_DAY}
+                value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
+                onChange={setInstallmentDay}
+                disabled={submitting}
+              />
               <MfSipInstallmentsInput
                 value={numberOfInstallments}
                 onChange={setNumberOfInstallments}
@@ -585,7 +681,7 @@ export function MfInvestPaymentCard({
           ) : null}
         </div>
 
-        <div className="mt-auto space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700/80">
+        <div className="mt-auto space-y-3 pt-3.5">
           {interactive && canInvest ? (
             <MfFamilyGoalLinkPicker
               selectedGoalId={selectedFamilyGoalId}
@@ -594,42 +690,48 @@ export function MfInvestPaymentCard({
             />
           ) : null}
 
-          {mode === "sip" && showSip ? (
-            <>
-              {interactive && canInvest ? (
+          {showPaymentSection ? (
+            mode === "sip" && showSip ? (
+              <>
                 <MfMandateTypePicker
                   value={mandateType}
                   onChange={setMandateType}
-                  disabled={submitting}
+                  disabled={!interactive || submitting}
                 />
-              ) : null}
-              <MfBankAccountPicker
-                label={copy.mutualFunds.paymentCardPayViaMandate}
-                hint=""
-                accounts={accounts}
-                selectedId={selectedBankAccountId}
-                onSelect={setSelectedBankAccountId}
-                loading={banksLoading}
-                error={banksError}
-                disabled={submitting}
-              />
-            </>
-          ) : interactive && canInvest ? (
-            <>
-              <MfPaymentMethodPicker
-                value={paymentMethod}
-                onChange={setPaymentMethod}
-                disabled={submitting}
-              />
-              <MfBankAccountPicker
-                accounts={accounts}
-                selectedId={selectedBankAccountId}
-                onSelect={setSelectedBankAccountId}
-                loading={banksLoading}
-                error={banksError}
-                disabled={submitting}
-              />
-            </>
+                {interactive && canInvest ? (
+                  <MfBankAccountPicker
+                    accounts={accounts}
+                    selectedId={selectedBankAccountId}
+                    onSelect={setSelectedBankAccountId}
+                    loading={banksLoading}
+                    error={banksError}
+                    disabled={submitting}
+                  />
+                ) : (
+                  <PreviewBankAccountRow label={previewBankDisplay} />
+                )}
+              </>
+            ) : (
+              <>
+                <MfPaymentMethodPicker
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                  disabled={!interactive || submitting}
+                />
+                {interactive && canInvest ? (
+                  <MfBankAccountPicker
+                    accounts={accounts}
+                    selectedId={selectedBankAccountId}
+                    onSelect={setSelectedBankAccountId}
+                    loading={banksLoading}
+                    error={banksError}
+                    disabled={submitting}
+                  />
+                ) : (
+                  <PreviewBankAccountRow label={previewBankDisplay} />
+                )}
+              </>
+            )
           ) : (
             <LumpsumRow />
           )}
@@ -637,37 +739,37 @@ export function MfInvestPaymentCard({
           {actionError ? <FieldMessage variant="error" message={actionError} /> : null}
 
           {mode === "lumpsum" || (mode === "sip" && showSip) ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <Button
                 variant="outline"
-                className="h-11 gap-2 rounded-[var(--radius-control)] border-success/25 bg-success/5 text-success hover:bg-success/10 hover:text-success"
+                className="h-9.5 gap-1.5 rounded-[var(--radius-control)] border-success/25 bg-success/5 text-success hover:bg-success/10 hover:text-success"
                 disabled={!interactive || !canSubmit || submitting || banksLoading || !hasPaymentReadyAccount}
                 onClick={() => void handleAddToCart()}
               >
-                {submitting ? <Loader2 className="size-4 animate-spin" /> : <ShoppingCart className="size-4" />}
+                {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <ShoppingCart className="size-3.5" />}
                 {copy.mutualFunds.paymentCardAddToCart}
               </Button>
               <Button
-                className="h-11 rounded-[var(--radius-control)] shadow-zynd-low"
+                className="h-9.5 rounded-[var(--radius-control)] shadow-zynd-low"
                 disabled={!interactive || !canSubmit || submitting || banksLoading || !hasPaymentReadyAccount}
                 onClick={() => void handlePrimaryAction()}
               >
-                {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+                {submitting ? <Loader2 className="size-3.5 animate-spin" /> : null}
                 {primaryCta}
               </Button>
             </div>
           ) : (
             <Button
-              className="h-11 w-full rounded-[var(--radius-control)] shadow-zynd-low"
+              className="h-9.5 w-full rounded-[var(--radius-control)] shadow-zynd-low"
               disabled={!interactive || !canSubmit || submitting || banksLoading || !hasPaymentReadyAccount}
               onClick={() => void handlePrimaryAction()}
             >
-              {submitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              {submitting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
               {primaryCta}
             </Button>
           )}
 
-          {preview && !hasFund ? (
+          {preview && !hasFundForUi ? (
             <p className="text-center text-caption leading-relaxed text-muted-foreground">
               {copy.mutualFunds.paymentCardEmptyDescription}
             </p>

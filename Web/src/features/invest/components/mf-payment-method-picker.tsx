@@ -1,6 +1,6 @@
 "use client";
 
-import { Landmark, Smartphone } from "lucide-react";
+import { Landmark } from "lucide-react";
 
 import type { MfPaymentMethod } from "@/features/invest/api/invest-api";
 import {
@@ -13,13 +13,11 @@ const PAYMENT_METHOD_OPTIONS: readonly MfPaymentOption<MfPaymentMethod>[] = [
   {
     id: "upi",
     label: copy.mutualFunds.paymentCardMethodUpi,
-    subtitle: copy.mutualFunds.paymentCardMethodUpiSubtitle,
-    icon: Smartphone,
+    imageSrc: "/upi.png",
   },
   {
     id: "netbanking",
     label: copy.mutualFunds.paymentCardMethodNetbanking,
-    subtitle: copy.mutualFunds.paymentCardMethodNetbankingSubtitle,
     icon: Landmark,
   },
 ] as const;
@@ -35,7 +33,6 @@ export function MfPaymentMethodPicker({
 }) {
   return (
     <MfPaymentOptionToggle
-      label={copy.mutualFunds.paymentCardMethodLabel}
       value={value}
       onChange={onChange}
       options={PAYMENT_METHOD_OPTIONS}

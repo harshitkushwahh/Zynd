@@ -42,8 +42,9 @@ export function DistributorAccountMenu() {
   const email = user?.email?.trim() || null;
 
   const handleSignOut = () => {
-    signOut();
-    router.replace("/");
+    void signOut().finally(() => {
+      router.replace("/");
+    });
   };
 
   return (

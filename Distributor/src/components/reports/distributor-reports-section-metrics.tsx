@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { FileSpreadsheet, IndianRupee, TrendingUp, Users } from "lucide-react";
 
 import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
-import { getDistributorReportSummary } from "@/lib/dummy/distributor-reports";
+import { getDistributorReportSummary } from "@/lib/distributor-reports-data";
 import {
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS,

@@ -17,7 +17,7 @@
 
 .kyc-dialog-surface--journey {
   border: none;
-  border-radius: 2.5rem;
+  border-radius: var(--radius-3xl);
   box-shadow: var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.18));
   height: min(88vh, 720px);
   max-height: min(88vh, 720px);
@@ -79,6 +79,10 @@
 }
 
 /* Journey → outcome resizes instantly; avoid width/height easing from the base dialog shell. */
+.kyc-subdialog-surface {
+  border-radius: var(--radius-3xl);
+}
+
 .kyc-dialog-root.kyc-dialog-surface {
   transition: none !important;
 }
@@ -103,4 +107,12 @@
 .kyc-redirect-dialog-root [data-slot="dialog-content"],
 .kyc-esign-dialog-root [data-slot="dialog-content"] {
   z-index: 61;
+  border-radius: 2rem;
+}
+
+@media (min-width: 640px) {
+  .kyc-redirect-dialog-root [data-slot="dialog-content"],
+  .kyc-esign-dialog-root [data-slot="dialog-content"] {
+    border-radius: 2.25rem;
+  }
 }

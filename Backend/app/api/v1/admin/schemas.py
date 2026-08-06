@@ -36,6 +36,7 @@ class ResolveSecurityReviewResponse(BaseModel):
 
 class AdminPermissionsResponse(BaseModel):
     permissions: list[str]
+    role_keys: list[str] = Field(default_factory=list)
 
 
 class AdminRoleResponse(BaseModel):

@@ -13,7 +13,7 @@ import {
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_TILES_ONLY_CLASS,
 } from "@/lib/distributor-layout";
-import type { DistributorClientKycStep } from "@/lib/dummy/types";
+import type { DistributorClientKycStep } from "@/lib/distributor-types";
 import { formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

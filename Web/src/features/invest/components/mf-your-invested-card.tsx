@@ -1,95 +1,137 @@
 "use client";
 
-import { Activity, PieChart, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  MF_INVESTED_PREVIEW,
+  OverviewLockedCardBackdrop,
+  OverviewLockedCardOverlay,
+} from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { PORTFOLIO_PAGE_HREF } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
+import { usePortfolioSummaryQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
+import {
+  investedChartTone,
+  MfYourInvestedChart,
+} from "@/features/invest/components/mf-your-invested-chart";
+import {
+  MF_INVESTED_LOCKED_PREVIEW,
   type MfInvestedPreview,
 } from "@/features/invest/lib/mf-dashboard-sidebar-data";
+import {
+  mapPortfolioSummaryToInvestedPreview,
+  portfolioSummaryHasInvestments,
+} from "@/features/invest/lib/mf-invested-card-mapper";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
-import { MF_CARD_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-type MfYourInvestedCardProps = {
-  data?: MfInvestedPreview;
-};
-
-function toneClass(tone: "positive" | "negative" | "muted") {
+function changePillClass(tone: "positive" | "negative" | "muted") {
   return cn(
-    tone === "positive" && "text-success",
-    tone === "negative" && "text-destructive",
-    tone === "muted" && "text-foreground",
+    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+    tone === "positive" && "bg-success/12 text-success",
+    tone === "negative" && "bg-destructive/12 text-destructive",
+    tone === "muted" && "bg-muted text-foreground",
   );
 }
 
-function ReturnStat({
-  icon: Icon,
-  label,
-  value,
+function MfYourInvestedCardBody({
+  data,
+  dayChangePct,
 }: {
-  icon: typeof TrendingUp;
-  label: string;
-  value: number;
+  data: MfInvestedPreview;
+  dayChangePct: number;
 }) {
-  const display = formatSignedReturn(value);
+  const dayChange = formatSignedReturn(dayChangePct);
+  const totalReturn = formatSignedReturn(data.totalReturnPct);
+  const chartTone = investedChartTone(dayChangePct);
 
   return (
-    <div className="min-w-0 flex-1 rounded-[var(--radius-control)] border border-border/60 bg-background/70 px-2.5 py-2">
-      <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
-        <Icon className="size-3 shrink-0" strokeWidth={2.25} />
-        <span className="truncate">{label}</span>
+    <>
+      <div className="relative z-10 px-3.5 pb-0 pt-3.5 text-center">
+        <p className="text-caption text-muted-foreground">{copy.mutualFunds.yourInvestedTitle}</p>
+        <p className="mt-0.5 text-h4 font-bold tabular-nums tracking-tight text-foreground">
+          {formatInr(data.totalValueInr)}
+        </p>
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+          <span className={changePillClass(dayChange.tone)}>{dayChange.text}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {copy.mutualFunds.yourInvestedTotalReturn}{" "}
+            <span
+              className={cn(
+                "font-medium tabular-nums",
+                totalReturn.tone === "positive" && "text-success",
+                totalReturn.tone === "negative" && "text-destructive",
+                totalReturn.tone === "muted" && "text-foreground",
+              )}
+            >
+              {totalReturn.text}
+            </span>
+          </span>
+        </div>
       </div>
-      <p className={cn("mt-1 text-compact font-semibold tabular-nums", toneClass(display.tone))}>
-        {display.text}
-      </p>
-    </div>
+
+      <div className="relative mt-2 w-full pointer-events-none [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible">
+        <MfYourInvestedChart points={data.dayChangePoints} tone={chartTone} className="w-full" />
+      </div>
+    </>
   );
 }
 
-export function MfYourInvestedCard({ data = MF_INVESTED_PREVIEW }: MfYourInvestedCardProps) {
+export function MfYourInvestedCard() {
+  const { summary, showSkeleton } = usePortfolioSummaryQuery();
+  const hasInvestments = summary ? portfolioSummaryHasInvestments(summary) : false;
+  const liveData = summary ? mapPortfolioSummaryToInvestedPreview(summary) : null;
+  const previewData = MF_INVESTED_LOCKED_PREVIEW;
+  const isLocked = !showSkeleton && summary != null && !hasInvestments;
+
   return (
-    <section
-      className={cn(
-        "min-w-0 max-w-full overflow-hidden border border-border bg-card",
-        MF_CARD_RADIUS_CLASS,
-      )}
+    <Link
+      href={PORTFOLIO_PAGE_HREF}
+      aria-label={copy.mutualFunds.yourInvestedViewPortfolio}
+      className="group relative block min-w-0 max-w-full overflow-hidden rounded-3xl border border-border/70 bg-card transition-colors hover:border-border hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      <div className="px-3.5 pb-3 pt-3.5">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/15">
-            <PieChart className="size-4 text-primary" strokeWidth={2.25} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-compact font-semibold text-foreground">{copy.mutualFunds.yourInvestedTitle}</p>
-            <p className="mt-0.5 text-caption leading-snug text-muted-foreground [overflow-wrap:anywhere]">
-              {copy.mutualFunds.yourInvestedDescription}
-            </p>
-          </div>
-        </div>
-      </div>
+      <span
+        aria-hidden="true"
+        className="absolute right-2.5 top-2.5 z-20 flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/20 text-muted-foreground transition-colors group-hover:bg-muted/40 group-hover:text-foreground"
+      >
+        <ArrowUpRight className="size-3.5" strokeWidth={2.25} />
+      </span>
 
-      <div className="px-3.5 pb-3.5">
-        <div className="rounded-[var(--radius-control)] border border-border/70 bg-muted/15 px-3 py-2.5">
-          <p className="text-caption text-muted-foreground">{copy.mutualFunds.yourInvestedTotalLabel}</p>
-          <p className="mt-0.5 text-h4 font-semibold tabular-nums tracking-tight text-foreground">
-            {formatInr(data.totalValueInr)}
-          </p>
-        </div>
-
-        <div className="mt-2.5 flex min-w-0 gap-2">
-          <ReturnStat
-            icon={TrendingUp}
-            label={copy.mutualFunds.yourInvestedTotalReturn}
-            value={data.totalReturnPct}
+      {showSkeleton ? (
+        <>
+          <div className="relative z-10 px-3.5 pb-0 pt-3.5 text-center">
+            <p className="text-caption text-muted-foreground">{copy.mutualFunds.yourInvestedTitle}</p>
+            <div className="mt-1 flex flex-col items-center gap-2">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-5 w-40" />
+            </div>
+          </div>
+          <div className="relative mt-2 w-full">
+            <Skeleton className="mx-auto h-14 w-[calc(100%-1rem)] rounded-[var(--radius-control)]" />
+          </div>
+        </>
+      ) : isLocked ? (
+        <div className="relative flex min-h-[9.5rem] flex-col">
+          <div className="pointer-events-none flex flex-1 select-none flex-col blur-[5px]">
+            <MfYourInvestedCardBody
+              data={previewData}
+              dayChangePct={previewData.dayChangePct}
+            />
+          </div>
+          <OverviewLockedCardBackdrop />
+          <OverviewLockedCardOverlay
+            compact
+            title={copy.dashboard.overview.holdingsInvestmentsTitle}
+            subtitle={copy.dashboard.overview.holdingsEmpty}
           />
-          <ReturnStat
-            icon={Activity}
-            label={copy.mutualFunds.yourInvestedDayChange}
-            value={data.dayChangePct}
-          />
         </div>
-      </div>
-    </section>
+      ) : liveData ? (
+        <MfYourInvestedCardBody
+          data={liveData}
+          dayChangePct={liveData.dayChangePct}
+        />
+      ) : null}
+    </Link>
   );
 }

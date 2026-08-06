@@ -22,7 +22,7 @@ import {
   type DistributorReportExportPeriodFilter,
   type DistributorReportExportRow,
   type DistributorReportFormat,
-} from "@/lib/dummy/distributor-reports";
+} from "@/lib/distributor-reports-data";
 import {
   DISTRIBUTOR_PAGE_STACK_CLASS,
   DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,

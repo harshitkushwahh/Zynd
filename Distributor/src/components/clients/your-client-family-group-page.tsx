@@ -5,14 +5,9 @@ import { useEffect, useState } from "react";
 import { ClientFamilyGroupPageSkeleton } from "@/components/clients/client-family-group-page-skeleton";
 import { FamilyGroupDashboard } from "@/components/clients/family-group-dashboard";
 import { useClientPageReveal } from "@/components/clients/use-client-page-reveal";
-import {
-  getDistributorClientProfile,
-  getFamilyGroupFromProfile,
-} from "@/lib/dummy/client-profile";
 import { canDistributorAccessClientFamilyGroup } from "@/lib/distributor-client-family-groups";
 import { fetchDistributorClientFamilyGroup } from "@/lib/distributor-clients-api";
-import { env } from "@/lib/env";
-import type { DistributorClientFamilyGroup } from "@/lib/dummy/types";
+import type { DistributorClientFamilyGroup } from "@/lib/distributor-types";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 
 type YourClientFamilyGroupPageProps = {
@@ -39,30 +34,13 @@ export function YourClientFamilyGroupPage({
     setLoading(true);
     setGroup(null);
 
-    if (!env.useBackendClients) {
-      const profile = getDistributorClientProfile(clientId);
-      setClientName(profile?.displayName ?? "Client");
-      const rawGroup = profile ? getFamilyGroupFromProfile(profile, groupId) ?? null : null;
-      const accessible =
-        rawGroup && profile
-          ? canDistributorAccessClientFamilyGroup(rawGroup, profile.investor.inDistributorBook)
-          : false;
-      setGroup(accessible ? rawGroup : null);
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
     void fetchDistributorClientFamilyGroup(clientId, groupId)
       .then((payload) => {
         if (cancelled) return;
         const { clientDisplayName, clientUserId: _uid, ...rest } = payload;
         setClientName(clientDisplayName);
-        const profile = getDistributorClientProfile(clientId);
-        const accessible = canDistributorAccessClientFamilyGroup(
-          rest,
-          profile?.investor.inDistributorBook ?? true,
-        );
+        const accessible = canDistributorAccessClientFamilyGroup(rest, true);
         setGroup(accessible ? rest : null);
       })
       .catch(() => {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
-import { PageTitle } from "@/components/ui/page-title";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GoalsListPageSkeleton } from "@/features/goals/components/goals-list-page-skeleton";
 import { GoalsPageSkeleton } from "@/features/goals/components/goals-page-skeleton";
@@ -13,55 +13,22 @@ import { cn } from "@/lib/utils";
 const goalsRoute = DASHBOARD_ROUTES.find((route) => route.id === "goals")!;
 const GoalsIcon = goalsRoute.icon;
 
-type GoalsListPageHeaderProps = {
-  title: string;
-  description: string;
-  loading?: boolean;
-};
-
-export function GoalsListPageHeader({ title, description, loading = false }: GoalsListPageHeaderProps) {
-  return (
-    <div className="flex min-w-0 items-start gap-3">
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-        <GoalsIcon className="size-4" strokeWidth={2.25} />
-      </div>
-      <div className="min-w-0">
-        {loading ? (
-          <div className="space-y-2" aria-hidden="true">
-            <Skeleton className="h-7 w-48 max-w-full" />
-            <Skeleton className="h-4 w-full max-w-xl" />
-          </div>
-        ) : (
-          <>
-            <PageTitle>{title}</PageTitle>
-            <p className="mt-2 max-w-2xl text-compact text-muted-foreground">{description}</p>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function GoalsPageLoadingView() {
   return (
     <div className="animate-in fade-in space-y-6 duration-200">
       <DashboardBreadcrumb items={[{ label: copy.goals.title }]} />
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-            <GoalsIcon className="size-4" strokeWidth={2.25} />
+      <PageHeader
+        icon={GoalsIcon}
+        title={copy.goals.title}
+        loading
+        action={
+          <div className="flex shrink-0 items-center gap-2" aria-hidden="true">
+            <Skeleton className="size-10 rounded-full" />
+            <Skeleton className="h-10 w-36 rounded-[var(--radius-control)]" />
           </div>
-          <div className="min-w-0 space-y-2" aria-hidden="true">
-            <Skeleton className="h-7 w-32" />
-            <Skeleton className="h-4 w-full max-w-xl" />
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2" aria-hidden="true">
-          <Skeleton className="size-10 rounded-full" />
-          <Skeleton className="h-10 w-36 rounded-[var(--radius-control)]" />
-        </div>
-      </div>
+        }
+      />
 
       <GoalsPageSkeleton />
     </div>
@@ -89,7 +56,7 @@ export function GoalsListPageLoadingView({ variant }: GoalsListPageLoadingViewPr
         ]}
       />
 
-      <GoalsListPageHeader title={title} description={description} loading />
+      <PageHeader icon={GoalsIcon} title={title} description={description} loading />
 
       <GoalsListPageSkeleton variant={variant} />
     </div>

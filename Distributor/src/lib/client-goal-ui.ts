@@ -6,7 +6,7 @@ import type {
   DistributorClientGoal,
   DistributorClientGoalPriority,
   DistributorClientGoalType,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {

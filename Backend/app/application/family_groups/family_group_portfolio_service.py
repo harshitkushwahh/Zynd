@@ -17,9 +17,11 @@ from app.infrastructure.persistence.family_group_models import (
     FamilyGroupMemberStatus,
 )
 from app.infrastructure.persistence.goal_models import Goal, GoalContribution, GoalContributionSourceType, GoalStatus
-from app.infrastructure.persistence.mf_models import MutualFund
+from app.application.mf.portfolio_holdings_service import (
+    get_user_portfolio_summary,
+    list_user_portfolio_holdings,
+)
 from app.infrastructure.persistence.mf_transaction_models import (
-    MfExternalHolding,
     MfOrder,
     MfOrderStatus,
     MfSipPlan,
@@ -117,32 +119,47 @@ async def load_member_invested_totals(
     if not user_ids:
         return {}
 
-    holdings_rows = await db.execute(
-        select(MfExternalHolding.user_id, func.coalesce(func.sum(MfExternalHolding.market_value_inr), 0))
-        .where(
-            MfExternalHolding.user_id.in_(user_ids),
-            MfExternalHolding.market_value_inr.is_not(None),
-        )
-        .group_by(MfExternalHolding.user_id)
-    )
-    totals = {user_id: Decimal(str(total)) for user_id, total in holdings_rows.all()}
-
-    missing_ids = [user_id for user_id in user_ids if totals.get(user_id, Decimal("0")) <= 0]
-    if missing_ids:
-        order_rows = await db.execute(
-            select(MfOrder.user_id, func.coalesce(func.sum(MfOrder.amount_inr), 0))
-            .where(
-                MfOrder.user_id.in_(missing_ids),
-                MfOrder.status == MfOrderStatus.succeeded,
-            )
-            .group_by(MfOrder.user_id)
-        )
-        for user_id, total in order_rows.all():
-            amount = Decimal(str(total))
-            if amount > 0:
-                totals[user_id] = amount
-
+    totals: dict[UUID, Decimal] = {}
+    for user_id in user_ids:
+        summary = await get_user_portfolio_summary(db, user_id=user_id)
+        invested = Decimal(str(summary.get("invested_inr") or 0))
+        if invested > 0:
+            totals[user_id] = invested
+            continue
+        current = Decimal(str(summary.get("current_value_inr") or 0))
+        if current > 0:
+            totals[user_id] = current
     return totals
+
+
+async def _aggregate_member_portfolios(
+    db: AsyncSession,
+    *,
+    member_ids: list[UUID],
+) -> tuple[Decimal, dict[str, Decimal], bool]:
+    total_current_value = Decimal("0")
+    slice_totals: dict[str, Decimal] = {key: Decimal("0") for key in PORTFOLIO_SLICE_LABELS}
+    has_holdings_data = False
+
+    for user_id in member_ids:
+        summary = await get_user_portfolio_summary(db, user_id=user_id)
+        current = Decimal(str(summary.get("current_value_inr") or 0))
+        if current <= 0:
+            continue
+
+        has_holdings_data = True
+        total_current_value += current
+        allocation = summary.get("allocation") or []
+        if not allocation:
+            slice_totals["other"] = slice_totals.get("other", Decimal("0")) + current
+            continue
+
+        for slice_item in allocation:
+            slice_id = str(slice_item.get("id") or "other")
+            pct = Decimal(str(slice_item.get("value_pct") or 0))
+            slice_totals[slice_id] = slice_totals.get(slice_id, Decimal("0")) + (current * pct / Decimal("100"))
+
+    return total_current_value, slice_totals, has_holdings_data
 
 
 async def _build_family_group_portfolio_payload(
@@ -152,47 +169,25 @@ async def _build_family_group_portfolio_payload(
 ) -> dict[str, Any]:
     member_ids = await _active_member_user_ids(db, group_id=group_id)
 
-    total_current_value = Decimal("0")
-    slice_totals: dict[str, Decimal] = {key: Decimal("0") for key in PORTFOLIO_SLICE_LABELS}
-    has_holdings_data = False
+    total_current_value, slice_totals, has_holdings_data = await _aggregate_member_portfolios(
+        db,
+        member_ids=member_ids,
+    )
 
+    total_invested_inr = Decimal("0")
     if member_ids:
-        holdings_rows = (
-            await db.execute(
-                select(MfExternalHolding.market_value_inr, MutualFund.sebi_category)
-                .outerjoin(MutualFund, MutualFund.id == MfExternalHolding.matched_fund_id)
-                .where(
-                    MfExternalHolding.user_id.in_(member_ids),
-                    MfExternalHolding.market_value_inr.is_not(None),
-                )
-            )
-        ).all()
-        for market_value, sebi_category in holdings_rows:
-            amount = Decimal(str(market_value))
-            has_holdings_data = True
-            total_current_value += amount
-            slice_key = _portfolio_slice_for_sebi(sebi_category)
-            slice_totals[slice_key] = slice_totals.get(slice_key, Decimal("0")) + amount
+        for user_id in member_ids:
+            summary = await get_user_portfolio_summary(db, user_id=user_id)
+            total_invested_inr += Decimal(str(summary.get("invested_inr") or 0))
 
-        if not has_holdings_data:
-            invested_rows = await db.execute(
-                select(func.coalesce(func.sum(MfOrder.amount_inr), 0)).where(
-                    MfOrder.user_id.in_(member_ids),
-                    MfOrder.status == MfOrderStatus.succeeded,
-                )
+    if total_invested_inr <= 0 and member_ids:
+        invested_result = await db.execute(
+            select(func.coalesce(func.sum(MfOrder.amount_inr), 0)).where(
+                MfOrder.user_id.in_(member_ids),
+                MfOrder.status == MfOrderStatus.succeeded,
             )
-            total_invested_fallback = Decimal(str(invested_rows.scalar_one()))
-            total_current_value = total_invested_fallback
-            if total_invested_fallback > 0:
-                slice_totals["equity"] = total_invested_fallback
-
-    invested_result = await db.execute(
-        select(func.coalesce(func.sum(MfOrder.amount_inr), 0)).where(
-            MfOrder.user_id.in_(member_ids),
-            MfOrder.status == MfOrderStatus.succeeded,
         )
-    ) if member_ids else None
-    total_invested_inr = Decimal(str(invested_result.scalar_one())) if invested_result else Decimal("0")
+        total_invested_inr = Decimal(str(invested_result.scalar_one()))
 
     sip_result = await db.execute(
         select(func.count())
@@ -429,42 +424,32 @@ async def load_family_group_mf_holdings(
     if not member_labels:
         return []
 
-    rows = (
-        await db.execute(
-            select(MfExternalHolding, MutualFund.scheme_name)
-            .outerjoin(MutualFund, MutualFund.id == MfExternalHolding.matched_fund_id)
-            .where(MfExternalHolding.user_id.in_(list(member_labels.keys())))
-            .order_by(
-                MfExternalHolding.market_value_inr.desc().nullslast(),
-                MfExternalHolding.scheme_name.asc(),
-            )
-        )
-    ).all()
-
     holdings: list[dict[str, Any]] = []
-    for holding, matched_name in rows:
-        display_name = member_labels.get(holding.user_id, "Member")
-        holdings.append(
-            {
-                "holding_id": holding.id,
-                "user_id": holding.user_id,
-                "member_label": display_name.split(" ")[0] if display_name else "Member",
-                "member_display_name": display_name,
-                "scheme_name": holding.scheme_name,
-                "matched_scheme_name": matched_name,
-                "folio_number": holding.folio_number,
-                "isin": holding.isin,
-                "units": float(holding.units),
-                "nav_value": float(holding.nav_value) if holding.nav_value is not None else None,
-                "market_value_inr": float(holding.market_value_inr)
-                if holding.market_value_inr is not None
-                else None,
-                "as_of_date": holding.as_of_date.isoformat() if holding.as_of_date else None,
-                "amc_name": holding.amc_name,
-                "source": holding.source,
-            }
-        )
+    for user_id, display_name in member_labels.items():
+        payload = await list_user_portfolio_holdings(db, user_id=user_id)
+        for row in payload.get("holdings") or []:
+            holdings.append(
+                {
+                    "holding_id": row.get("id"),
+                    "user_id": user_id,
+                    "member_label": display_name.split(" ")[0] if display_name else "Member",
+                    "member_display_name": display_name,
+                    "scheme_name": row.get("fund_name"),
+                    "matched_scheme_name": row.get("fund_name"),
+                    "folio_number": row.get("folio_number"),
+                    "isin": row.get("isin"),
+                    "units": row.get("units"),
+                    "nav_value": row.get("nav"),
+                    "market_value_inr": row.get("current_value_inr"),
+                    "as_of_date": row.get("nav_as_on"),
+                    "amc_name": row.get("amc_name"),
+                    "source": row.get("source") or "zynd",
+                }
+            )
 
+    holdings.sort(
+        key=lambda item: (-(item.get("market_value_inr") or 0), item.get("scheme_name") or "")
+    )
     return holdings
 
 

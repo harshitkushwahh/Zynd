@@ -2,16 +2,17 @@
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
+import { PageHeader } from "@/components/ui/page-header";
 import { FamilyGoalProgressCard } from "@/features/goals/components/family-goal-progress-card";
 import { GoalsSectionEmptyState } from "@/features/goals/components/goals-section-empty-state";
-import {
-  GoalsContentFade,
-  GoalsListPageHeader,
-} from "@/features/goals/components/goals-page-loading-view";
+import { GoalsContentFade } from "@/features/goals/components/goals-page-loading-view";
 import { GoalsListPageSkeleton } from "@/features/goals/components/goals-list-page-skeleton";
 import { useCachedFamilyGoalsList } from "@/features/goals/hooks/use-cached-family-goals-list";
 import { GOALS_LIST_HREF } from "@/features/goals/lib/goal-navigation";
+import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { copy } from "@/shared/config/copy";
+
+const GoalsIcon = DASHBOARD_ROUTES.find((route) => route.id === "goals")!.icon;
 
 export function GoalsFamilyListPage() {
   const { familyGoals, error, showSkeleton, hasResolved, reload } = useCachedFamilyGoalsList();
@@ -25,7 +26,8 @@ export function GoalsFamilyListPage() {
         ]}
       />
 
-      <GoalsListPageHeader
+      <PageHeader
+        icon={GoalsIcon}
         title={copy.goals.familyGoalsListTitle}
         description={copy.goals.familyGoalsListDescription}
         loading={showSkeleton}

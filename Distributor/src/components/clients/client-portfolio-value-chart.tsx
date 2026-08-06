@@ -29,7 +29,6 @@ import {
   type PortfolioChartPeriod,
   type PortfolioChartPoint,
 } from "@/lib/client-portfolio-chart-data";
-import { resolvePortfolioChartAnchorValue } from "@/lib/distributor-client-portfolio-demo";
 import { formatAum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -201,7 +200,7 @@ export function ClientPortfolioValueChart({
   const [plotLayout, setPlotLayout] = useState({ width: 0, height: 0 });
   const valueGradientId = useId().replace(/:/g, "");
   const investedGradientId = `${valueGradientId}-invested`;
-  const chartAnchor = resolvePortfolioChartAnchorValue(clientId, currentValue);
+  const chartAnchor = currentValue ?? 0;
   const chartInvested =
     investedAmount > 0 ? investedAmount : Math.round(chartAnchor * 0.82);
 

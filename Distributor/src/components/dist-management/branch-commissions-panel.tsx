@@ -33,15 +33,15 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 import {
   BRANCH_COMMISSION_PERIOD_OPTIONS,
-  DUMMY_BRANCH_COMMISSION_CATEGORIES,
-  DUMMY_BRANCH_COMMISSION_CATEGORY_MIX,
-  DUMMY_BRANCH_COMMISSION_HOLDS,
-  DUMMY_BRANCH_COMMISSION_TREND,
+  BRANCH_COMMISSION_CATEGORIES,
+  BRANCH_COMMISSION_CATEGORY_MIX,
+  BRANCH_COMMISSION_HOLDS,
+  BRANCH_COMMISSION_TREND,
   getBranchCommissionDistributorRows,
   type BranchCommissionHoldEntry,
   type BranchCommissionPeriod,
   type BranchDistributorCommissionRow,
-} from "@/lib/dummy/branch-commissions";
+} from "@/lib/distributor-branch-commissions-data";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
@@ -158,7 +158,7 @@ export function BranchCommissionsPanel({
 
   const categoryChartData = useMemo<CategoryChartRow[]>(
     () =>
-      DUMMY_BRANCH_COMMISSION_CATEGORY_MIX.map((row) => ({
+      BRANCH_COMMISSION_CATEGORY_MIX.map((row) => ({
         name: row.name,
         equity: row.equity,
         debt: row.debt,
@@ -170,7 +170,7 @@ export function BranchCommissionsPanel({
   );
 
   const filteredHolds = useMemo(() => {
-    let rows = DUMMY_BRANCH_COMMISSION_HOLDS;
+    let rows = BRANCH_COMMISSION_HOLDS;
     if (holdDistributorFilter !== "all") {
       rows = rows.filter((row) => row.distributorId === holdDistributorFilter);
     }
@@ -363,7 +363,7 @@ export function BranchCommissionsPanel({
             aria-label="Incentive accrual trend"
           >
             <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
-              <LineChart data={DUMMY_BRANCH_COMMISSION_TREND} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+              <LineChart data={BRANCH_COMMISSION_TREND} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
                 <XAxis
                   dataKey="month"
@@ -417,7 +417,7 @@ export function BranchCommissionsPanel({
         <BranchPerfCardHeader eyebrow="Category share" title="MTD by category (branch)" />
         <div className="branch-perf-card__body">
           <ul className="space-y-4">
-          {DUMMY_BRANCH_COMMISSION_CATEGORIES.map((row) => (
+          {BRANCH_COMMISSION_CATEGORIES.map((row) => (
             <li key={row.id}>
               <div className="flex items-center justify-between gap-3 text-caption">
                 <span className="font-medium text-foreground">{row.label}</span>
@@ -466,8 +466,16 @@ export function BranchCommissionsPanel({
             <DistributorTableOnlyShell
               toolbar={distributorToolbar}
               isEmpty={filteredDistributorRows.length === 0}
-              emptyTitle={ZYND_MITRA_COPY.emptyFiltered}
-              emptyDescription={ZYND_MITRA_COPY.adjustPeriodMitra}
+              emptyTitle={
+                distributorRows.length === 0 && filtersDefault
+                  ? "No incentive data yet"
+                  : ZYND_MITRA_COPY.emptyFiltered
+              }
+              emptyDescription={
+                distributorRows.length === 0 && filtersDefault
+                  ? "Accrued and released incentives will appear here once available."
+                  : ZYND_MITRA_COPY.adjustPeriodMitra
+              }
               tableSize="md"
             >
               {wrapDistributorTableBody(

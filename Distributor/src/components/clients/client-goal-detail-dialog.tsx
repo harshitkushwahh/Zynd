@@ -16,7 +16,7 @@ import {
   resolveGoalStatusBadgeVariant,
   resolveGoalStatusLabel,
 } from "@/lib/client-goal-ui";
-import type { DistributorClientGoal } from "@/lib/dummy/types";
+import type { DistributorClientGoal } from "@/lib/distributor-types";
 import { formatAum, formatDistributorDate } from "@/lib/format";
 import {
   DISTRIBUTOR_INSET_SECTION_BODY_CLASS,

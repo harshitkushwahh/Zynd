@@ -21,6 +21,9 @@ const AUTH_PATHS_SKIP_SESSION_REFRESH = [
 ] as const;
 
 function applyClientHeaders(headers: Headers) {
+  if (headers.has("X-Zynd-Client")) {
+    return;
+  }
   if (getClientKind() === "admin") {
     headers.set("X-Zynd-Client", "admin");
   }

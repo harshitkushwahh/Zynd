@@ -10,7 +10,7 @@ import type {
   InvestorOnboardingStatus,
   InvestorServiceModel,
   InvestorType,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 const ONBOARDING_OPTIONS: Array<{ value: InvestorOnboardingStatus; label: string }> = [
   { value: "Onboarded", label: "Onboarded" },

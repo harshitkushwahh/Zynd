@@ -103,6 +103,7 @@ function ProfileProgressRing({
 
 type ProfileStatusBadgeProps = {
   href?: string;
+  onClick?: () => void;
   ariaLabel: string;
   tooltipTitle: string;
   tooltipDetail: string;
@@ -114,6 +115,7 @@ type ProfileStatusBadgeProps = {
 
 export function ProfileStatusBadge({
   href,
+  onClick,
   ariaLabel,
   tooltipTitle,
   tooltipDetail,
@@ -147,19 +149,28 @@ export function ProfileStatusBadge({
 
   const triggerClass = cn(
     "inline-flex shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-    href && "cursor-pointer transition-transform hover:scale-105 active:scale-95",
+    (href || onClick) && "cursor-pointer transition-transform hover:scale-105 active:scale-95",
   );
+
+  const triggerProps = {
+    "aria-label": ariaLabel,
+    className: triggerClass,
+  };
 
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           href ? (
-            <Link href={href} aria-label={ariaLabel} className={triggerClass}>
+            <Link href={href} {...triggerProps}>
               {inner}
             </Link>
+          ) : onClick ? (
+            <button type="button" onClick={onClick} {...triggerProps}>
+              {inner}
+            </button>
           ) : (
-            <button type="button" aria-label={ariaLabel} className={triggerClass}>
+            <button type="button" {...triggerProps}>
               {inner}
             </button>
           )

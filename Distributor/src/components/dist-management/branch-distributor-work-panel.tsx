@@ -39,10 +39,10 @@ import {
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
-import type { BranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
+import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
 import {
   getBranchDistributorWorkSnapshot,
-} from "@/lib/dummy/branch-distributor-ops-data";
+} from "@/lib/distributor-branch-distributor-ops-data";
 import {
   getLeaveRequestStatusLabel,
   LEAVE_REQUEST_STATUS_OPTIONS,
@@ -53,7 +53,7 @@ import {
   type DistributorWorkAttendanceRow,
   type DistributorWorkAttendanceStatus,
   type DistributorWorkLocationType,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate, formatPortfolioMetricAmount } from "@/lib/format";
@@ -138,8 +138,8 @@ export function BranchDistributorWorkPanel({
   className,
 }: BranchDistributorWorkPanelProps) {
   const snapshot = useMemo(
-    () => getBranchDistributorWorkSnapshot(profile.id),
-    [profile.id],
+    () => getBranchDistributorWorkSnapshot(profile),
+    [profile],
   );
   const [leaveRequests, setLeaveRequests] = useState(snapshot.leaveRequests);
   const [selectedLeave, setSelectedLeave] = useState<DistributorLeaveRequest | null>(null);

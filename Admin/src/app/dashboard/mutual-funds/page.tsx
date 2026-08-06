@@ -1069,7 +1069,7 @@ export default function MutualFundsAdminPage() {
                 <TabsContent value="funds" className="mt-0 space-y-4" keepMounted={keepTabMounted("funds")}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <AdminSearchInput
-                      containerClassName="max-w-sm"
+                      containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
                       placeholder="Search scheme, ISIN, or product"
                       value={fundSearch}
                       onChange={(event) => {
@@ -1078,7 +1078,7 @@ export default function MutualFundsAdminPage() {
                       }}
                     />
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       <AdminSelect
                         value={fundLifecycle || ALL}
                         onValueChange={(value) => {
@@ -1088,6 +1088,7 @@ export default function MutualFundsAdminPage() {
                         options={FUND_LIFECYCLE_OPTIONS}
                         placeholder="Lifecycle"
                         className="min-w-select-sm"
+                        triggerClassName="w-auto"
                       />
                       <AdminSelect
                         value={fundCategory || ALL}
@@ -1098,6 +1099,7 @@ export default function MutualFundsAdminPage() {
                         options={fundCategoryOptions}
                         placeholder="Category"
                         className="min-w-select-sm"
+                        triggerClassName="w-auto"
                       />
                     </div>
                   </div>
