@@ -1,5 +1,5 @@
-import { MfSipMandateReturnView } from "@/features/invest/components/mf-sip-mandate-view";
+import { MfSipMandateReturnHost } from "@/features/invest/components/mf-sip-mandate-return-host";
 
 export default function MutualFundsSipMandateReturnPage() {
-  return <MfSipMandateReturnView />;
+  return <MfSipMandateReturnHost />;
 }

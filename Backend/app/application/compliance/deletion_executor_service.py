@@ -27,6 +27,7 @@ from app.infrastructure.persistence.models import (
     User,
     UserBackupCode,
     UserMfaSecret,
+    UserRole,
     UserStatus,
 )
 
@@ -46,6 +47,7 @@ async def fetch_due_deletion_users(
         select(User)
         .where(
             User.status == UserStatus.deletion_pending,
+            User.role == UserRole.user,
             User.deletion_scheduled_at.is_not(None),
             User.deletion_scheduled_at <= _now(),
         )
@@ -78,6 +80,8 @@ async def execute_account_deletion(
 ) -> dict[str, Any]:
     if user.status != UserStatus.deletion_pending:
         raise ValueError("User is not pending deletion.")
+    if user.role != UserRole.user:
+        raise ValueError("Only customer accounts can be erased through the deletion executor.")
     if user.deletion_scheduled_at and user.deletion_scheduled_at > _now():
         raise ValueError("Deletion grace period has not expired.")
 

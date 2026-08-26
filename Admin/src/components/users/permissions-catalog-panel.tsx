@@ -119,7 +119,7 @@ function AddPermissionDialog({
         />
       }
     >
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <div className="space-y-4">
         <div className="space-y-2">
@@ -271,7 +271,7 @@ export function PermissionsCatalogPanel({
           </div>
         </div>
 
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
         <AdminDataTable
           minWidth="sm"

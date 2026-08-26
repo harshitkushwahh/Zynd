@@ -23,7 +23,7 @@ import {
   type DistributorComplianceIssueType,
   type DistributorComplianceQueueRow,
 } from "@/lib/distributor-compliance-data";
-import { distributorClientDetailHref } from "@/lib/distributor-client-routes";
+import { distributorClientDetailHref, distributorClientPathRef } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
@@ -171,7 +171,10 @@ export function BranchDistributorCompliancePanel({
           <Table.Row id={row.id}>
             <Table.Cell>
               <Link
-                href={distributorClientDetailHref("your-book", row.clientId)}
+                href={distributorClientDetailHref(
+                  "your-book",
+                  distributorClientPathRef({ id: row.clientId, clientCode: row.clientCode }),
+                )}
                 className="font-medium hover:underline"
               >
                 {row.clientLabel}

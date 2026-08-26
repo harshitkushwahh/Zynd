@@ -7,6 +7,7 @@ import { ClientDetailEmptyState } from "@/components/clients/client-detail-empty
 import { ClientRiskProfileDetailDialog } from "@/components/clients/client-risk-profile-detail-dialog";
 import { ClientRiskProfileHeroCard } from "@/components/clients/client-risk-profile-hero-card";
 import { ClientRiskProfilePastAssessmentsCard } from "@/components/clients/client-risk-profile-past-assessments-card";
+import { ClientRiskProfileTabSkeleton } from "@/components/clients/client-risk-profile-tab-skeleton";
 import { ClientRiskProfileTrendsCard } from "@/components/clients/client-risk-profile-trends-card";
 import {
   Dialog,
@@ -73,9 +74,7 @@ export function ClientRiskProfileTab({ profile, clientReference }: ClientRiskPro
     <>
       <div className="flex flex-col gap-4">
         {loading ? (
-          <p className="py-8 text-center text-caption text-muted-foreground">
-            {DISTRIBUTOR_CLIENT_COPY.loadingProfile}
-          </p>
+          <ClientRiskProfileTabSkeleton />
         ) : currentAssessment ? (
           <div className="distributor-client-risk-top-row">
             <ClientRiskProfileHeroCard

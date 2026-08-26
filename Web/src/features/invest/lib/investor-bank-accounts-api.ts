@@ -1,6 +1,8 @@
 import { env } from "@/lib/env";
 import { apiRequest, getAccessToken } from "@/lib/api-client";
 
+export const MAX_BANK_ACCOUNTS = 5;
+
 export type InvestorBankAccountFailure = {
   field: string;
   code?: string | null;
@@ -28,6 +30,10 @@ export type InvestorBankAccount = {
   failure?: InvestorBankAccountFailure | null;
   readiness_verified: boolean;
   external_bank_account_id?: string | null;
+  is_payment_ready?: boolean;
+  active_sip_count?: number;
+  blocks_removal?: boolean;
+  blocks_primary_switch?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -131,6 +137,9 @@ export function isInvestorBankAccountVerified(account: InvestorBankAccount): boo
 }
 
 export function isInvestorBankAccountPaymentReady(account: InvestorBankAccount): boolean {
+  if (typeof account.is_payment_ready === "boolean") {
+    return account.is_payment_ready;
+  }
   return (
     isInvestorBankAccountVerified(account) &&
     account.sync_status === "active" &&

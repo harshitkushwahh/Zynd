@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, XCircle } from "lucide-react";
 
 import {
   AdminDetailDialog,
@@ -11,6 +11,7 @@ import {
 import { AdminDialogFooter } from "@/components/ui/admin-dialog";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminDetailDialogSkeleton } from "@/components/ui/admin-skeletons";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -45,12 +46,39 @@ function readNestedString(payload: Record<string, unknown>, section: string, key
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function ProfileField({ label, value }: { label: string; value: string | null | undefined }) {
+function readMaskedBankAccount(payload: Record<string, unknown>) {
+  const masked = readNestedString(payload, "bank", "account_number_masked");
+  if (masked) return masked;
+
+  const accountNumber = readNestedString(payload, "bank", "account_number");
+  if (!accountNumber) return null;
+
+  const digits = accountNumber.replace(/\D/g, "");
+  if (digits.length < 4) return "••••";
+  return `•••• ${digits.slice(-4)}`;
+}
+
+function formatMaskedBankSummary(payload: Record<string, unknown>) {
+  const bankName = readNestedString(payload, "bank", "bank_name");
+  const accountMasked = readMaskedBankAccount(payload);
+  if (bankName && accountMasked) return `${bankName} · ${accountMasked}`;
+  return bankName ?? accountMasked;
+}
+
+function ProfileField({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string | null | undefined;
+  mono?: boolean;
+}) {
   if (!value) return null;
   return (
     <div className="space-y-1">
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="text-compact text-foreground">{value}</dd>
+      <dd className={mono ? "font-mono text-compact text-foreground" : "text-compact text-foreground"}>{value}</dd>
     </div>
   );
 }
@@ -68,7 +96,6 @@ export function DistributorPartnerReviewDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [arn, setArn] = useState("");
   const [euin, setEuin] = useState("");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -80,7 +107,6 @@ export function DistributorPartnerReviewDialog({
     try {
       const result = await fetchDistributorPartner(partnerId);
       setPartner(result.partner);
-      setArn(result.partner.arn || "");
       setEuin(result.partner.euin || "");
     } catch (err) {
       setPartner(null);
@@ -94,7 +120,6 @@ export function DistributorPartnerReviewDialog({
     if (!open || !partnerId) {
       setPartner(null);
       setError("");
-      setArn("");
       setEuin("");
       setRejectReason("");
       setRejectDialogOpen(false);
@@ -105,17 +130,11 @@ export function DistributorPartnerReviewDialog({
 
   const handleApprove = async () => {
     if (!partner || !canApprove) return;
-    const normalizedArn = arn.trim();
-    if (!normalizedArn) {
-      setError("Enter an ARN before approving.");
-      return;
-    }
 
     setActionLoading(true);
     setError("");
     try {
       await approveDistributorPartner(partner.id, {
-        arn: normalizedArn,
         euin: euin.trim() || undefined,
       });
       onOpenChange(false);
@@ -151,9 +170,8 @@ export function DistributorPartnerReviewDialog({
 
   const payload = partner?.profile_payload ?? {};
   const panVerifiedName = readPayloadString(payload, "pan_verified_name");
-  const bankName = readNestedString(payload, "bank", "bank_name");
   const branchName = readNestedString(payload, "bank", "branch_name");
-  const accountMasked = readNestedString(payload, "bank", "account_number_masked");
+  const maskedBankSummary = formatMaskedBankSummary(payload);
   const city = readNestedString(payload, "address", "city");
   const state = readNestedString(payload, "address", "state");
 
@@ -164,61 +182,62 @@ export function DistributorPartnerReviewDialog({
         onOpenChange={onOpenChange}
         title={partner?.name ?? "Zynd Mitra application"}
         description={
-          partner
-            ? `${partner.email}${partner.created_at ? ` · Submitted ${formatTimestampDetail(partner.created_at)}` : ""}`
+          partner?.created_at
+            ? `Submitted ${formatTimestampDetail(partner.created_at)}`
             : "Review onboarding details before HO approval."
         }
         icon={ClipboardList}
         iconTone="info"
+        headerClassName="items-center"
+        headerAside={
+          partner && !loading ? (
+            <StatusBadge variant="warning">Pending HO review</StatusBadge>
+          ) : undefined
+        }
         footer={
           canApprove ? (
-            <AdminDialogFooter className="flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="grid w-full gap-3 sm:max-w-md sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="partner-review-arn">ARN</Label>
-                  <Input
-                    id="partner-review-arn"
-                    placeholder="ARN"
-                    value={arn}
-                    disabled={loading || actionLoading || !partner}
-                    onChange={(event) => setArn(event.target.value.toUpperCase())}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="partner-review-euin">EUIN (optional)</Label>
-                  <Input
-                    id="partner-review-euin"
-                    placeholder="EUIN"
-                    value={euin}
-                    disabled={loading || actionLoading || !partner}
-                    onChange={(event) => setEuin(event.target.value.toUpperCase())}
-                  />
-                </div>
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="w-full space-y-2 sm:max-w-xs">
+                <Label htmlFor="partner-review-euin">EUIN (optional)</Label>
+                <Input
+                  id="partner-review-euin"
+                  placeholder="EUIN"
+                  value={euin}
+                  disabled={loading || actionLoading || !partner}
+                  onChange={(event) => setEuin(event.target.value.toUpperCase())}
+                />
               </div>
-              <AdminDialogFooterActions
-                cancelLabel="Close"
-                confirmLabel="Approve & send password email"
-                loading={actionLoading}
-                confirmDisabled={!partner || !arn.trim()}
-                onCancel={() => onOpenChange(false)}
-                onConfirm={() => void handleApprove()}
-              />
-            </AdminDialogFooter>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading || actionLoading || !partner}
+                  onClick={() => {
+                    setRejectReason("");
+                    setRejectDialogOpen(true);
+                  }}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <XCircle className="size-3.5" />
+                  Reject application
+                </Button>
+                <Button
+                  type="button"
+                  disabled={loading || actionLoading || !partner}
+                  onClick={() => void handleApprove()}
+                >
+                  {actionLoading ? "Working…" : "Approve & send password email"}
+                </Button>
+              </div>
+            </div>
           ) : undefined
         }
       >
         {loading ? <AdminDetailDialogSkeleton /> : null}
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
         {!loading && partner ? (
           <div className="space-y-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge variant="warning">Pending HO review</StatusBadge>
-              {partner.pan_masked ? (
-                <span className="font-mono text-caption text-muted-foreground">{partner.pan_masked}</span>
-              ) : null}
-            </div>
-
             {partner.profile_image_url ? (
               <div className="flex items-center gap-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -237,35 +256,21 @@ export function DistributorPartnerReviewDialog({
             <dl className="grid gap-4 sm:grid-cols-2">
               <ProfileField label="Email" value={partner.email} />
               <ProfileField label="Phone" value={partner.phone} />
+              <ProfileField label="PAN" value={partner.pan_masked} mono />
               <ProfileField label="PAN verified name" value={panVerifiedName} />
+              <ProfileField label="Bank" value={maskedBankSummary} />
               <ProfileField label="City" value={city} />
               <ProfileField label="State" value={state} />
               <ProfileField label={MITRA_HIERARCHY_COPY.branchManager} value={partner.manager_name} />
               <ProfileField label="Branch" value={partner.branch_name ?? branchName} />
-              <ProfileField label="Bank" value={bankName} />
               <ProfileField label="Bank branch" value={branchName} />
-              <ProfileField label="Account" value={accountMasked} />
             </dl>
 
-            {canApprove ? (
-              <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-                <button
-                  type="button"
-                  className="text-compact text-destructive underline-offset-4 hover:underline"
-                  disabled={actionLoading}
-                  onClick={() => {
-                    setRejectReason("");
-                    setRejectDialogOpen(true);
-                  }}
-                >
-                  Reject application
-                </button>
-              </div>
-            ) : (
-              <AdminFeedbackMessage variant="warning">
+            {!canApprove ? (
+              <AdminFeedbackMessage variant="warning" dismissible={false}>
                 You can view this application but do not have permission to approve or reject it.
               </AdminFeedbackMessage>
-            )}
+            ) : null}
           </div>
         ) : null}
       </AdminDetailDialog>

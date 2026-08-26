@@ -327,8 +327,8 @@ export function RoleEditorDialog({
             </div>
           </div>
 
-          {localError ? <AdminFeedbackMessage variant="destructive">{localError}</AdminFeedbackMessage> : null}
-          {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+          {localError ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setLocalError("")}>{localError}</AdminFeedbackMessage> : null}
+          {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
         </div>
     </AdminFormDialog>
   );

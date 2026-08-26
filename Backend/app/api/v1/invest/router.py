@@ -6,7 +6,7 @@ from uuid import UUID
 from decimal import Decimal
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,8 @@ from app.api.v1.invest.schemas import (
     CreateMfMandateRequest,
     CreateMfOrderRequest,
     CreateMfSipPlanRequest,
+    ValidateMfSipPlanRequest,
+    ValidateMfSipPlanResponse,
     InvestCategoryListResponse,
     InvestCategoryResponse,
     InvestConfigResponse,
@@ -69,7 +71,12 @@ from app.api.v1.invest.schemas import (
     MfOrderListResponse,
     MfOrderJourneyResponse,
     MfOrderResponse,
+    MfPaymentStatusResponse,
     MfSipCartCheckoutResponse,
+    MfSipPlanBankSwitchRequest,
+    MfSipPlanBankSwitchSummary,
+    MfSipFirstInstallmentSummary,
+    MfSipPlanJourneyResponse,
     MfSipPlanListResponse,
     MfSipPlanResponse,
     PortfolioHoldingsListResponse,
@@ -89,6 +96,7 @@ from app.api.v1.invest.schemas import (
     MfRedemptionConsentResponse,
     MfRedemptionOtpSendResponse,
     PortfolioSummaryResponse,
+    PortfolioUpcomingSipResponse,
     PortfolioAllocationSliceResponse,
     PortfolioGrowthPointResponse,
     UpsertMfCartItemRequest,
@@ -120,6 +128,7 @@ from app.application.mf.invest_cached_read_service import (
 from app.application.mf.invest_fund_slug import resolve_invest_fund_product_id
 from app.application.mf.invest_home_service import list_invest_fund_navs
 from app.application.mf.mf_calculator_errors import MfCalculatorError
+from app.application.mf.mf_compare_service import compare_invest_funds
 from app.application.mf.portfolio_holdings_service import (
     get_user_portfolio_holding_detail,
     get_user_portfolio_summary,
@@ -176,9 +185,13 @@ from app.application.mf.mf_mandate_service import (
     serialize_mandate,
 )
 from app.application.mf.mf_sip_plan_service import (
+    abandon_unfinished_mandate_auth,
+    confirm_mandate_return,
     cancel_sip_plan,
     create_sip_plan,
+    validate_sip_plan_inputs,
     get_user_sip_plan,
+    get_user_sip_plan_journey,
     list_user_sip_plans,
     load_sip_plan_fund_metadata,
     serialize_sip_plan,
@@ -189,13 +202,20 @@ from app.application.mf.mf_order_service import (
     get_user_order_journey,
     list_user_orders,
     load_order_fund_metadata,
+    load_order_product_slugs,
     serialize_order,
+)
+from app.application.mf.mf_lumpsum_reconciliation_service import (
+    reconcile_checkout_payment,
+    reconcile_order_payment,
 )
 from app.application.mf.mf_payment_flow_service import (
     abandon_unpaid_checkout_payment,
     abandon_unpaid_order_payment,
     advance_checkout_for_payment,
     advance_order_for_payment,
+    confirm_checkout_payment_return,
+    confirm_order_payment_return,
 )
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -211,22 +231,6 @@ async def _resolve_fund_product_id(db: AsyncSession, fund_ref: str) -> UUID:
     if not product_id:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return product_id
-
-
-def _handle_mf_order_error(exc: MfOrderError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": exc.message}})
-
-
-def _handle_mf_cas_error(exc: MfCasError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": exc.message}})
-
-
-def _handle_mf_calculator_error(exc: MfCalculatorError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": exc.message}})
-
-
-def _handle_investor_bank_account_error(exc: InvestorBankAccountError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": {"code": exc.code, "message": exc.message}})
 
 
 def _bank_account_response(payload: dict) -> InvestorBankAccountResponse:
@@ -255,6 +259,10 @@ def _bank_account_response(payload: dict) -> InvestorBankAccountResponse:
         failure=failure_model,
         readiness_verified=bool(payload.get("readiness_verified")),
         external_bank_account_id=payload.get("external_bank_account_id"),
+        is_payment_ready=bool(payload.get("is_payment_ready")),
+        active_sip_count=int(payload.get("active_sip_count") or 0),
+        blocks_removal=bool(payload.get("blocks_removal")),
+        blocks_primary_switch=bool(payload.get("blocks_primary_switch")),
         created_at=payload.get("created_at"),
         updated_at=payload.get("updated_at"),
     )
@@ -267,11 +275,21 @@ async def _order_response(
     product_name: str | None,
     amc_name: str | None = None,
     amc_logo_url: str | None = None,
+    amc_slug: str | None = None,
+    product_slug: str | None = None,
 ) -> MfOrderResponse:
-    if amc_name is None and amc_logo_url is None:
-        amc_names, amc_logos = await load_order_fund_metadata(db, [order])
+    if amc_name is None and amc_logo_url is None and amc_slug is None:
+        amc_names, amc_logos, amc_slugs = await load_order_fund_metadata(db, [order])
         amc_name = amc_names.get(order.fund_id)
         amc_logo_url = amc_logos.get(order.fund_id)
+        amc_slug = amc_slugs.get(order.fund_id)
+    if product_slug is None:
+        product_slugs = await load_order_product_slugs(
+            db,
+            [order],
+            product_names={order.product_id: product_name} if product_name else None,
+        )
+        product_slug = product_slugs.get(order.product_id)
     checkout = await db.get(MfCheckout, order.checkout_id) if order.checkout_id else None
     return MfOrderResponse(
         **serialize_order(
@@ -280,8 +298,20 @@ async def _order_response(
             checkout=checkout,
             amc_name=amc_name,
             amc_logo_url=amc_logo_url,
+            amc_slug=amc_slug,
+            product_slug=product_slug,
         )
     )
+
+
+def _payment_status_message(outcome: str) -> str | None:
+    if outcome == "success":
+        return "Payment confirmed."
+    if outcome == "failed":
+        return "Payment was not completed."
+    if outcome == "unclear":
+        return "Payment confirmation is taking longer than expected. We will keep checking."
+    return "Payment is being confirmed."
 
 
 @router.get("/home", response_model=InvestHomeResponse)
@@ -377,8 +407,8 @@ async def invest_compare_funds(
 ) -> MfCompareResponse:
     try:
         payload = await compare_invest_funds(db, product_ids=body.product_ids)
-    except MfCalculatorError as exc:
-        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    except MfCalculatorError:
+        raise
     return MfCompareResponse(
         funds=[InvestFundDetailResponse(**item) for item in payload["funds"]],
         disclaimer=payload["disclaimer"],
@@ -435,8 +465,8 @@ async def invest_return_calculator(
             duration_months=duration_months,
             sip_day=sip_day,
         )
-    except MfCalculatorError as exc:
-        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    except MfCalculatorError:
+        raise
     if not payload:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return InvestReturnCalculatorResponse(**payload)
@@ -459,8 +489,8 @@ async def invest_lumpsum_calculator(
             amount_inr=amount_inr,
             horizons=horizon_list,
         )
-    except MfCalculatorError as exc:
-        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    except MfCalculatorError:
+        raise
     if not payload:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return MfLumpsumCalculatorResponse(**payload)
@@ -484,8 +514,8 @@ async def invest_sip_calculator(
             duration_months=duration_months,
             sip_day=sip_day,
         )
-    except MfCalculatorError as exc:
-        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    except MfCalculatorError:
+        raise
     if not payload:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return MfSipCalculatorResponse(**payload)
@@ -511,8 +541,8 @@ async def invest_swp_calculator(
             duration_months=duration_months,
             withdrawal_day=withdrawal_day,
         )
-    except MfCalculatorError as exc:
-        return _handle_mf_calculator_error(exc)  # type: ignore[return-value]
+    except MfCalculatorError:
+        raise
     if not payload:
         raise HTTPException(status_code=404, detail="Fund not found in catalog")
     return MfSwpCalculatorResponse(**payload)
@@ -566,9 +596,9 @@ async def create_mf_order(
         )
         product = await db.get(Product, order.product_id)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return await _order_response(db, order, product_name=product.name if product else None)
 
@@ -607,9 +637,9 @@ async def upsert_mf_cart_item(
         )
         payload = await get_cart_summary(db, user_id=current_user.id)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return MfCartResponse(**payload)
 
@@ -632,9 +662,9 @@ async def bulk_upsert_mf_cart_items(
         )
         payload = await get_cart_summary(db, user_id=current_user.id)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return MfCartResponse(**payload)
 
@@ -655,9 +685,9 @@ async def delete_mf_cart_item(
         )
         payload = await get_cart_summary(db, user_id=current_user.id)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return MfCartResponse(**payload)
 
@@ -675,9 +705,9 @@ async def clear_mf_cart_tab(
             await clear_sip_cart(db, user_id=current_user.id)
         payload = await get_cart_summary(db, user_id=current_user.id)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return MfCartResponse(**payload)
 
@@ -711,9 +741,9 @@ async def checkout_mf_cart(
             ).scalars()
         } if product_ids else {}
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return MfCheckoutResponse(**serialize_checkout(checkout, orders, product_names=products))
 
@@ -747,9 +777,9 @@ async def checkout_mf_sip_cart(
             ).scalars()
         } if product_ids else {}
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     amc_names, amc_logos, isins = await load_sip_plan_fund_metadata(db, plans)
     responses: list[MfSipPlanResponse] = []
@@ -793,6 +823,58 @@ async def get_mf_cart_checkout(
     return MfCheckoutResponse(**serialize_checkout(checkout, orders, product_names=products))
 
 
+@router.get("/cart/checkout/{checkout_id}/payment-status", response_model=MfPaymentStatusResponse)
+async def get_mf_cart_checkout_payment_status(
+    checkout_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfPaymentStatusResponse:
+    result = await get_user_checkout(db, user_id=current_user.id, checkout_id=checkout_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    checkout, orders = result
+    reconcile = await reconcile_checkout_payment(db, checkout, user_ip=get_client_ip(request))
+    await db.commit()
+    product_ids = {order.product_id for order in orders}
+    products = {
+        row.id: row.name
+        for row in (
+            await db.execute(select(Product).where(Product.id.in_(product_ids)))
+        ).scalars()
+    } if product_ids else {}
+    return MfPaymentStatusResponse(
+        outcome=reconcile["outcome"],
+        fp_payment_status=reconcile.get("fp_payment_status"),
+        repaired=bool(reconcile.get("repaired")),
+        message=_payment_status_message(reconcile["outcome"]),
+        checkout=MfCheckoutResponse(**serialize_checkout(checkout, orders, product_names=products)),
+    )
+
+
+@router.post("/cart/checkout/{checkout_id}/confirm-payment-return", response_model=MfCheckoutResponse)
+async def confirm_mf_cart_checkout_payment_return(
+    checkout_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCheckoutResponse:
+    result = await get_user_checkout(db, user_id=current_user.id, checkout_id=checkout_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Checkout not found")
+    checkout, orders = result
+    await confirm_checkout_payment_return(db, checkout, user_ip=get_client_ip(request))
+    await db.commit()
+    product_ids = {order.product_id for order in orders}
+    products = {
+        row.id: row.name
+        for row in (
+            await db.execute(select(Product).where(Product.id.in_(product_ids)))
+        ).scalars()
+    } if product_ids else {}
+    return MfCheckoutResponse(**serialize_checkout(checkout, orders, product_names=products))
+
+
 @router.post("/cart/checkout/{checkout_id}/abandon-payment", response_model=MfCheckoutResponse)
 async def abandon_mf_cart_checkout_payment(
     checkout_id: UUID,
@@ -824,28 +906,53 @@ async def _sip_plan_response(
     amc_name: str | None = None,
     amc_logo_url: str | None = None,
     isin: str | None = None,
+    user_id=None,
 ) -> MfSipPlanResponse:
-    from app.application.mf.mf_mandate_service import refresh_mandate_status_from_fp
+    from app.application.investor.investor_bank_account_resolver import load_mandate_bank_account
+    from app.application.mf.mf_sip_first_installment_service import resolve_sip_first_installment
+    from app.application.mf.mf_sip_plan_service import sync_sip_plan_after_mandate_auth
+    from app.application.mf.mf_sip_plan_mandate_switch_service import (
+        build_bank_switch_response,
+        resolve_switch_target_mandate,
+    )
     from app.infrastructure.persistence.mf_transaction_models import MfMandate
 
     mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
-    if mandate_row is not None:
-        await refresh_mandate_status_from_fp(db, mandate_row, force=True)
+    await sync_sip_plan_after_mandate_auth(db, plan, mandate=mandate_row)
+    first_installment = await resolve_sip_first_installment(db, plan, mandate=mandate_row)
+    switch_target_mandate = await resolve_switch_target_mandate(db, plan)
+    bank_switch = await build_bank_switch_response(db, plan, mandate=mandate_row)
+    mandate_bank_account = None
+    if mandate_row is not None and user_id is not None:
+        mandate_bank_account = await load_mandate_bank_account(
+            db,
+            user_id=user_id,
+            mandate=mandate_row,
+        )
     if amc_name is None and amc_logo_url is None and isin is None:
         amc_names, amc_logos, isins = await load_sip_plan_fund_metadata(db, [plan])
         amc_name = amc_names.get(plan.fund_id)
         amc_logo_url = amc_logos.get(plan.fund_id)
         isin = isins.get(plan.fund_id)
-    return MfSipPlanResponse(
-        **serialize_sip_plan(
-            plan,
-            product_name=product_name,
-            mandate=mandate_row,
-            amc_name=amc_name,
-            amc_logo_url=amc_logo_url,
-            isin=isin,
-        )
+    payload = serialize_sip_plan(
+        plan,
+        product_name=product_name,
+        mandate=mandate_row,
+        mandate_bank_account=mandate_bank_account,
+        switch_target_mandate=switch_target_mandate,
+        bank_switch=bank_switch,
+        amc_name=amc_name,
+        amc_logo_url=amc_logo_url,
+        isin=isin,
+        first_installment=first_installment,
     )
+    bank_switch = payload.get("bank_switch")
+    if isinstance(bank_switch, dict):
+        payload["bank_switch"] = MfSipPlanBankSwitchSummary(**bank_switch)
+    first_installment_payload = payload.get("first_installment")
+    if isinstance(first_installment_payload, dict):
+        payload["first_installment"] = MfSipFirstInstallmentSummary(**first_installment_payload)
+    return MfSipPlanResponse(**payload)
 
 
 @router.get("/mandates", response_model=MfMandateListResponse)
@@ -878,9 +985,9 @@ async def create_mf_mandate(
             mandate_type=body.mandate_type,
         )
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return MfMandateResponse(**serialize_mandate(mandate))
 
@@ -909,9 +1016,9 @@ async def auth_mf_mandate(
     try:
         mandate = await initiate_mandate_auth(db, mandate)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
     return MfMandateResponse(**serialize_mandate(mandate))
 
 
@@ -927,10 +1034,36 @@ async def cancel_mf_mandate(
     try:
         mandate = await cancel_user_mandate(db, mandate)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
     return MfMandateResponse(**serialize_mandate(mandate))
+
+
+@router.post("/sip/plans/validate", response_model=ValidateMfSipPlanResponse)
+async def validate_mf_sip_plan(
+    body: ValidateMfSipPlanRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> ValidateMfSipPlanResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled or not settings.zynd_mf_sip_enabled:
+        raise HTTPException(status_code=503, detail="SIP is temporarily unavailable")
+
+    try:
+        payload = await validate_sip_plan_inputs(
+            db,
+            product_id=body.product_id,
+            amount_inr=Decimal(str(body.amount_inr)),
+            frequency=body.frequency,
+            installment_day=body.installment_day,
+            number_of_installments=body.number_of_installments,
+        )
+    except MfOrderError:
+        await db.rollback()
+        raise
+
+    return ValidateMfSipPlanResponse(**payload)
 
 
 @router.post("/sip/plans", response_model=MfSipPlanResponse)
@@ -962,11 +1095,13 @@ async def create_mf_sip_plan(
         )
         product = await db.get(Product, plan.product_id)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
-    return await _sip_plan_response(db, plan, product_name=product.name if product else None)
+    return await _sip_plan_response(
+        db, plan, product_name=product.name if product else None, user_id=current_user.id
+    )
 
 
 @router.get("/sip/plans", response_model=MfSipPlanListResponse)
@@ -992,6 +1127,7 @@ async def list_mf_sip_plans(
             amc_name=amc_names.get(plan.fund_id),
             amc_logo_url=amc_logos.get(plan.fund_id),
             isin=isins.get(plan.fund_id),
+            user_id=current_user.id,
         )
         for plan in plans
     ]
@@ -1008,7 +1144,73 @@ async def get_mf_sip_plan(
     if not plan:
         raise HTTPException(status_code=404, detail="SIP plan not found")
     product = await db.get(Product, plan.product_id)
-    return await _sip_plan_response(db, plan, product_name=product.name if product else None)
+    return await _sip_plan_response(
+        db, plan, product_name=product.name if product else None, user_id=current_user.id
+    )
+
+
+@router.get("/sip/plans/{plan_id}/journey", response_model=MfSipPlanJourneyResponse)
+async def get_mf_sip_plan_journey(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfSipPlanJourneyResponse:
+    payload = await get_user_sip_plan_journey(db, user_id=current_user.id, plan_id=plan_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    return MfSipPlanJourneyResponse(**payload)
+
+
+@router.get("/sip/plans/{plan_id}/bank-switch", response_model=MfSipPlanBankSwitchSummary)
+async def get_mf_sip_plan_bank_switch(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfSipPlanBankSwitchSummary:
+    from app.application.mf.mf_sip_plan_mandate_switch_service import build_bank_switch_response
+    from app.infrastructure.persistence.mf_transaction_models import MfMandate
+
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+    payload = await build_bank_switch_response(db, plan, mandate=mandate_row)
+    return MfSipPlanBankSwitchSummary(**payload)
+
+
+@router.post("/sip/plans/{plan_id}/bank-switch", response_model=MfSipPlanResponse)
+async def post_mf_sip_plan_bank_switch(
+    plan_id: UUID,
+    body: MfSipPlanBankSwitchRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipPlanResponse:
+    from app.application.mf.mf_sip_plan_mandate_switch_service import switch_sip_plan_mandate
+
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled or not settings.zynd_mf_sip_enabled:
+        raise HTTPException(status_code=503, detail="SIP is temporarily unavailable")
+
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    try:
+        plan = await switch_sip_plan_mandate(
+            db,
+            plan,
+            user_id=current_user.id,
+            bank_account_id=body.bank_account_id,
+            mandate_type=body.mandate_type,
+            idempotency_key=body.idempotency_key,
+        )
+        product = await db.get(Product, plan.product_id)
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _sip_plan_response(
+        db, plan, product_name=product.name if product else None, user_id=current_user.id
+    )
 
 
 @router.post("/sip/plans/{plan_id}/cancel", response_model=MfSipPlanResponse)
@@ -1024,10 +1226,77 @@ async def cancel_mf_sip_plan(
         plan = await cancel_sip_plan(db, plan)
         product = await db.get(Product, plan.product_id)
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
-    return await _sip_plan_response(db, plan, product_name=product.name if product else None)
+        raise
+    return await _sip_plan_response(
+        db, plan, product_name=product.name if product else None, user_id=current_user.id
+    )
+
+
+@router.post("/sip/plans/{plan_id}/first-installment/pay", response_model=MfSipFirstInstallmentSummary)
+async def pay_mf_sip_first_installment(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipFirstInstallmentSummary:
+    from app.application.mf.mf_sip_first_installment_service import initiate_sip_first_installment_payment
+    from app.infrastructure.kyc.fp_clients import FpClientError
+    from app.infrastructure.persistence.mf_transaction_models import MfMandate
+
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+    try:
+        payload = await initiate_sip_first_installment_payment(db, plan, mandate=mandate_row)
+        await db.commit()
+    except FpClientError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=exc.status_code or 502, detail=exc.message) from exc
+    return MfSipFirstInstallmentSummary(**payload)
+
+
+@router.post("/sip/plans/{plan_id}/confirm-mandate-return", response_model=MfSipPlanResponse)
+async def confirm_mf_sip_mandate_return(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipPlanResponse:
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    try:
+        await confirm_mandate_return(db, plan)
+        product = await db.get(Product, plan.product_id)
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _sip_plan_response(
+        db, plan, product_name=product.name if product else None, user_id=current_user.id
+    )
+
+
+@router.post("/sip/plans/{plan_id}/abandon-mandate", response_model=MfSipPlanResponse)
+async def abandon_mf_sip_mandate(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipPlanResponse:
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    try:
+        await abandon_unfinished_mandate_auth(db, plan)
+        product = await db.get(Product, plan.product_id)
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _sip_plan_response(
+        db, plan, product_name=product.name if product else None, user_id=current_user.id
+    )
 
 
 @router.get("/orders", response_model=MfOrderListResponse)
@@ -1044,7 +1313,8 @@ async def list_mf_orders(
             await db.execute(select(Product).where(Product.id.in_(product_ids)))
         ).scalars()
     } if product_ids else {}
-    amc_names, amc_logos = await load_order_fund_metadata(db, orders)
+    amc_names, amc_logos, amc_slugs = await load_order_fund_metadata(db, orders)
+    product_slugs = await load_order_product_slugs(db, orders, product_names=products)
     responses: list[MfOrderResponse] = []
     for order in orders:
         responses.append(
@@ -1054,6 +1324,8 @@ async def list_mf_orders(
                 product_name=products.get(order.product_id),
                 amc_name=amc_names.get(order.fund_id),
                 amc_logo_url=amc_logos.get(order.fund_id),
+                amc_slug=amc_slugs.get(order.fund_id),
+                product_slug=product_slugs.get(order.product_id),
             )
         )
     return MfOrderListResponse(orders=responses)
@@ -1062,9 +1334,15 @@ async def list_mf_orders(
 @router.get("/orders/{order_id}/journey", response_model=MfOrderJourneyResponse)
 async def get_mf_order_journey(
     order_id: UUID,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfOrderJourneyResponse:
+    order = await get_user_order(db, user_id=current_user.id, order_id=order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if await advance_order_for_payment(db, order, user_ip=get_client_ip(request)):
+        await db.commit()
     payload = await get_user_order_journey(db, user_id=current_user.id, order_id=order_id)
     if not payload:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1083,6 +1361,44 @@ async def get_mf_order(
         raise HTTPException(status_code=404, detail="Order not found")
     if await advance_order_for_payment(db, order, user_ip=get_client_ip(request)):
         await db.commit()
+    product = await db.get(Product, order.product_id)
+    return await _order_response(db, order, product_name=product.name if product else None)
+
+
+@router.get("/orders/{order_id}/payment-status", response_model=MfPaymentStatusResponse)
+async def get_mf_order_payment_status(
+    order_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfPaymentStatusResponse:
+    order = await get_user_order(db, user_id=current_user.id, order_id=order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    reconcile = await reconcile_order_payment(db, order, user_ip=get_client_ip(request))
+    await db.commit()
+    product = await db.get(Product, order.product_id)
+    return MfPaymentStatusResponse(
+        outcome=reconcile["outcome"],
+        fp_payment_status=reconcile.get("fp_payment_status"),
+        repaired=bool(reconcile.get("repaired")),
+        message=_payment_status_message(reconcile["outcome"]),
+        order=await _order_response(db, order, product_name=product.name if product else None),
+    )
+
+
+@router.post("/orders/{order_id}/confirm-payment-return", response_model=MfOrderResponse)
+async def confirm_mf_order_payment_return(
+    order_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfOrderResponse:
+    order = await get_user_order(db, user_id=current_user.id, order_id=order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    await confirm_order_payment_return(db, order, user_ip=get_client_ip(request))
+    await db.commit()
     product = await db.get(Product, order.product_id)
     return await _order_response(db, order, product_name=product.name if product else None)
 
@@ -1133,6 +1449,7 @@ async def get_portfolio_summary(
         holdings_count=payload["holdings_count"],
         active_sips_count=payload["active_sips_count"],
         monthly_sip_inr=payload["monthly_sip_inr"],
+        upcoming_sips=[PortfolioUpcomingSipResponse(**item) for item in payload.get("upcoming_sips", [])],
         allocation=[PortfolioAllocationSliceResponse(**item) for item in payload["allocation"]],
         growth=[PortfolioGrowthPointResponse(**item) for item in payload["growth"]],
         as_on=payload["as_on"],
@@ -1236,9 +1553,9 @@ async def create_mf_redemption_route(
             user_ip=get_client_ip(request),
         )
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return await _redemption_order_response(db, order)
 
@@ -1251,8 +1568,8 @@ async def get_mf_redemption_consent_route(
 ) -> MfRedemptionConsentResponse:
     try:
         payload = await get_redemption_consent_context(db, user_id=current_user.id, order_id=order_id)
-    except MfOrderError as exc:
-        raise _handle_mf_order_error(exc) from exc
+    except MfOrderError:
+        raise
     return MfRedemptionConsentResponse(**payload)
 
 
@@ -1271,9 +1588,9 @@ async def send_mf_redemption_consent_otp_route(
             ip=get_client_ip(request),
         )
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
     return MfRedemptionOtpSendResponse(**payload)
 
 
@@ -1294,9 +1611,9 @@ async def confirm_mf_redemption_route(
             ip=get_client_ip(request),
         )
         await db.commit()
-    except MfOrderError as exc:
+    except MfOrderError:
         await db.rollback()
-        raise _handle_mf_order_error(exc) from exc
+        raise
 
     return await _redemption_order_response(db, order)
 
@@ -1325,9 +1642,9 @@ async def request_cas_import(
     try:
         import_row = await request_user_cas_import(db, user=current_user)
         await db.commit()
-    except MfCasError as exc:
+    except MfCasError:
         await db.rollback()
-        raise _handle_mf_cas_error(exc) from exc
+        raise
 
     return MfCasImportResponse(
         import_id=str(import_row.id),
@@ -1369,8 +1686,8 @@ async def get_investor_bank_accounts(
 ) -> InvestorBankAccountListResponse:
     try:
         accounts = await list_user_bank_accounts(db, user_id=current_user.id)
-    except InvestorBankAccountError as exc:
-        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    except InvestorBankAccountError:
+        raise
     return InvestorBankAccountListResponse(
         bank_accounts=[_bank_account_response(account) for account in accounts]
     )
@@ -1390,8 +1707,8 @@ async def post_investor_bank_account_verify(
             account_type=body.account_type,
             ifsc_code=body.ifsc_code,
         )
-    except InvestorBankAccountError as exc:
-        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    except InvestorBankAccountError:
+        raise
     await db.commit()
     base = _bank_account_response(result)
     return InvestorBankAccountVerifyResponse(
@@ -1419,8 +1736,8 @@ async def post_investor_bank_account_upload_proof(
             filename=file.filename or "bank-proof.pdf",
             content_type=file.content_type or "application/octet-stream",
         )
-    except InvestorBankAccountError as exc:
-        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    except InvestorBankAccountError:
+        raise
     await db.commit()
     return InvestorBankAccountProofUploadResponse(
         file_id=result["file_id"],
@@ -1443,8 +1760,8 @@ async def post_investor_bank_account_verify_manual(
             user=current_user,
             bank_account_id=bank_account_id,
         )
-    except InvestorBankAccountError as exc:
-        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    except InvestorBankAccountError:
+        raise
     await db.commit()
     base = _bank_account_response(result)
     return InvestorBankAccountManualVerifyResponse(
@@ -1472,8 +1789,8 @@ async def get_investor_bank_account_preverify_status(
             bank_account_id=bank_account_id,
             preverify_id=preverify_id,
         )
-    except InvestorBankAccountError as exc:
-        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    except InvestorBankAccountError:
+        raise
     return InvestorBankAccountPreverifyStatusResponse(**result)
 
 
@@ -1489,8 +1806,8 @@ async def patch_investor_bank_account_set_primary(
             user_id=current_user.id,
             bank_account_id=bank_account_id,
         )
-    except InvestorBankAccountError as exc:
-        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    except InvestorBankAccountError:
+        raise
     await db.commit()
     return _bank_account_response(result)
 
@@ -1507,8 +1824,8 @@ async def delete_investor_bank_account(
             user_id=current_user.id,
             bank_account_id=bank_account_id,
         )
-    except InvestorBankAccountError as exc:
-        return _handle_investor_bank_account_error(exc)  # type: ignore[return-value]
+    except InvestorBankAccountError:
+        raise
     await db.commit()
 
 

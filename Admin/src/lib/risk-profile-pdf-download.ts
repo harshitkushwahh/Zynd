@@ -1,5 +1,6 @@
 import { ApiError, getAccessToken } from "@/lib/api-client";
 import { env } from "@/lib/env";
+import { pickUserRef, userRefToPath } from "@/lib/admin-user-ref";
 import { toast } from "sonner";
 
 function parseContentDispositionFilename(header: string | null): string | null {
@@ -21,12 +22,15 @@ function triggerBrowserDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export async function downloadAdminRiskProfileReport(userId: string, assessmentId: string) {
+export async function downloadAdminRiskProfileReport(userRef: string, assessmentId: string) {
   const toastId = toast.loading("Preparing risk profile report…");
+  const userPath = encodeURIComponent(
+    userRefToPath(pickUserRef({ client_id: userRef, user_id: userRef })),
+  );
 
   try {
     const response = await fetch(
-      `${env.apiUrl}/admin/risk-profile/users/${encodeURIComponent(userId)}/assessments/${encodeURIComponent(assessmentId)}/report/download`,
+      `${env.apiUrl}/admin/risk-profile/users/${userPath}/assessments/${encodeURIComponent(assessmentId)}/report/download`,
       {
         credentials: "include",
         headers: {

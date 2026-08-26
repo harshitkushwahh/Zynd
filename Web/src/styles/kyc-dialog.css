@@ -7,8 +7,8 @@
 }
 
 .kyc-dialog-surface {
-  background: var(--card);
-  color: var(--card-foreground);
+  background: var(--popover);
+  color: var(--popover-foreground);
   border: 1px solid color-mix(in srgb, var(--border) 88%, var(--primary) 12%);
   box-shadow:
     var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.18)),
@@ -27,7 +27,7 @@
 .kyc-dialog-form-panel {
   position: relative;
   isolation: isolate;
-  background-color: var(--card);
+  background-color: var(--popover);
 }
 
 .kyc-dialog-visual-panel {

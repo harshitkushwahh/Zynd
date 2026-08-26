@@ -6,16 +6,18 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.mf.mf_lumpsum_reconciliation_service import (
+    reconcile_checkout_payment,
+    reconcile_order_payment,
+)
 from app.application.mf.mf_ondc_order_service import (
     _load_checkout_orders,
-    advance_ondc_cart_checkout,
-    advance_ondc_order,
     submit_pending_cart_checkout,
     submit_pending_order,
-    sync_order_from_fp,
 )
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event
 from app.core.config import get_settings
+from app.infrastructure.mf.fp_payment_client import is_payment_success_status
 from app.infrastructure.persistence.mf_transaction_models import (
     MfCheckout,
     MfCheckoutStatus,
@@ -25,7 +27,6 @@ from app.infrastructure.persistence.mf_transaction_models import (
 )
 
 _ABANDONABLE_ORDER_STATUSES = {
-    MfOrderStatus.submitted,
     MfOrderStatus.payment_pending,
     MfOrderStatus.processing,
 }
@@ -46,20 +47,15 @@ async def advance_order_for_payment(
     *,
     user_ip: str | None = None,
 ) -> bool:
-    if not _ondc_gateway_enabled() or order.status in TERMINAL_STATUSES:
+    if not _ondc_gateway_enabled():
         return False
 
-    changed = False
     if order.status == MfOrderStatus.pending:
         if await submit_pending_order(session, order, user_ip=user_ip):
-            changed = True
+            pass
 
-    if order.fp_purchase_id and order.status not in TERMINAL_STATUSES:
-        if await sync_order_from_fp(session, order):
-            changed = True
-        if await advance_ondc_order(session, order):
-            changed = True
-    return changed
+    result = await reconcile_order_payment(session, order, user_ip=user_ip)
+    return bool(result.get("repaired") or result.get("advanced"))
 
 
 async def advance_checkout_for_payment(
@@ -68,35 +64,22 @@ async def advance_checkout_for_payment(
     *,
     user_ip: str | None = None,
 ) -> bool:
-    if not _ondc_gateway_enabled() or checkout.status in {
-        MfCheckoutStatus.succeeded,
-        MfCheckoutStatus.failed,
-        MfCheckoutStatus.cancelled,
-    }:
+    if not _ondc_gateway_enabled():
         return False
 
     orders = await _load_checkout_orders(session, checkout.id)
-    changed = False
 
     if checkout.status == MfCheckoutStatus.pending and orders and all(
         order.status == MfOrderStatus.pending for order in orders
     ):
         if checkout.checkout_type == MfCheckoutType.cart:
-            if await submit_pending_cart_checkout(session, checkout, orders, user_ip=user_ip):
-                changed = True
+            await submit_pending_cart_checkout(session, checkout, orders, user_ip=user_ip)
         else:
             for order in orders:
-                if await submit_pending_order(session, order, user_ip=user_ip):
-                    changed = True
+                await submit_pending_order(session, order, user_ip=user_ip)
 
-    if checkout.checkout_type == MfCheckoutType.cart:
-        if await advance_ondc_cart_checkout(session, checkout):
-            changed = True
-    else:
-        for order in orders:
-            if await advance_order_for_payment(session, order, user_ip=user_ip):
-                changed = True
-    return changed
+    result = await reconcile_checkout_payment(session, checkout, user_ip=user_ip)
+    return bool(result.get("repaired") or result.get("advanced"))
 
 
 async def _cancel_checkout_orders(
@@ -135,10 +118,42 @@ async def _cancel_checkout_orders(
     return True
 
 
+async def confirm_order_payment_return(
+    session: AsyncSession,
+    order: MfOrder,
+    *,
+    user_ip: str | None = None,
+) -> bool:
+    """Sync/advance ONDC payment pipeline after investor returns from the gateway (never cancels)."""
+    result = await reconcile_order_payment(session, order, user_ip=user_ip)
+    return bool(result.get("repaired") or result.get("advanced") or result.get("outcome") == "success")
+
+
+async def confirm_checkout_payment_return(
+    session: AsyncSession,
+    checkout: MfCheckout,
+    *,
+    user_ip: str | None = None,
+) -> bool:
+    result = await reconcile_checkout_payment(session, checkout, user_ip=user_ip)
+    return bool(result.get("repaired") or result.get("advanced") or result.get("outcome") == "success")
+
+
 async def abandon_unpaid_order_payment(session: AsyncSession, order: MfOrder) -> bool:
     if order.status not in _ABANDONABLE_ORDER_STATUSES:
         return False
+
     checkout = await session.get(MfCheckout, order.checkout_id) if order.checkout_id else None
+    if checkout:
+        reconcile = await reconcile_checkout_payment(session, checkout)
+    else:
+        reconcile = await reconcile_order_payment(session, order)
+    if reconcile.get("repaired") or is_payment_success_status(reconcile.get("fp_payment_status")):
+        return False
+    await session.refresh(order)
+    if order.status not in _ABANDONABLE_ORDER_STATUSES:
+        return False
+
     if checkout:
         return await _cancel_checkout_orders(session, checkout, source="USER")
 
@@ -162,4 +177,12 @@ async def abandon_unpaid_checkout_payment(session: AsyncSession, checkout_id: uu
     checkout = await session.get(MfCheckout, checkout_id)
     if not checkout or checkout.status not in _ABANDONABLE_CHECKOUT_STATUSES:
         return False
+
+    reconcile = await reconcile_checkout_payment(session, checkout)
+    if reconcile.get("repaired") or is_payment_success_status(reconcile.get("fp_payment_status")):
+        return False
+    await session.refresh(checkout)
+    if checkout.status not in _ABANDONABLE_CHECKOUT_STATUSES:
+        return False
+
     return await _cancel_checkout_orders(session, checkout, source="USER")

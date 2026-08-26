@@ -6,6 +6,7 @@ import { Trophy } from "lucide-react";
 
 import { type ReferralLeaderboardPeriod } from "@/features/referral/api/referral-api";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -78,7 +79,7 @@ export function ReferralLeaderboardPanel() {
 
   if (errorMessage) {
     return (
-      <>
+      <DashboardContentFade>
         <ReferralLeaderboardBreadcrumb />
         <LoadErrorCard
           title={copy.referral.loadFailedTitle}
@@ -93,12 +94,12 @@ export function ReferralLeaderboardPanel() {
             </Button>
           }
         />
-      </>
+      </DashboardContentFade>
     );
   }
 
   return (
-    <>
+    <DashboardContentFade>
       <ReferralLeaderboardBreadcrumb />
 
       <div
@@ -157,6 +158,6 @@ export function ReferralLeaderboardPanel() {
           />
         </div>
       </div>
-    </>
+    </DashboardContentFade>
   );
 }

@@ -26,7 +26,9 @@ import type {
   AdminHierarchyManager,
   AdminHierarchyOverview,
   AdminHierarchyPartner,
+  AdminHierarchyStateHead,
 } from "@/lib/admin-distributor-hierarchy-api";
+import type { MitraHierarchyPersona } from "@/lib/admin-mitra-roles";
 import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import type { Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -44,10 +46,14 @@ type DistributorHeadHierarchyChartProps = {
   overview: AdminHierarchyOverview | null;
   managers: AdminHierarchyManager[];
   partners: AdminHierarchyPartner[];
+  stateHeads?: AdminHierarchyStateHead[];
   loading?: boolean;
   error?: string;
+  superHeadName?: string;
+  superHeadEmail?: string;
   stateHeadName?: string;
   stateHeadEmail?: string;
+  persona?: MitraHierarchyPersona | null;
 };
 
 type HierarchyFlowNodeData = {
@@ -163,10 +169,11 @@ const HierarchyFlowNode = memo(HierarchyFlowNodeComponent);
 
 const nodeTypes = { hierarchyStep: HierarchyFlowNode };
 
-function buildEmptyHierarchyGraph(
+function buildEmptyStateHeadHierarchyGraph(
   width: number,
-  stateHeadPrimary: string,
-  stateHeadSecondary: string,
+  rootTitle: string,
+  rootPrimary: string,
+  rootSecondary: string,
 ): { nodes: Node<HierarchyFlowNodeData>[]; edges: Edge[] } {
   const centerX = (width - NODE_WIDTH) / 2;
   const stateHeadY = FRAME_PADDING_Y;
@@ -179,9 +186,9 @@ function buildEmptyHierarchyGraph(
       { x: centerX, y: stateHeadY },
       {
         step: 1,
-        title: MITRA_HIERARCHY_COPY.stateHead,
-        primary: stateHeadPrimary,
-        secondary: stateHeadSecondary,
+        title: rootTitle,
+        primary: rootPrimary,
+        secondary: rootSecondary,
         variant: "root",
         nodeRole: "root",
       },
@@ -218,58 +225,65 @@ function buildEmptyHierarchyGraph(
   return { nodes, edges };
 }
 
-function buildHierarchyGraph({
-  overview,
+function appendManagerMitraTiers({
+  nodes,
+  edges,
   managers,
   partners,
-  stateHeadName,
-  stateHeadEmail,
-  frameWidth,
+  width,
+  managerTierY,
+  parentNodeIds,
 }: {
-  overview: AdminHierarchyOverview;
+  nodes: Node<HierarchyFlowNodeData>[];
+  edges: Edge[];
   managers: AdminHierarchyManager[];
   partners: AdminHierarchyPartner[];
-  stateHeadName?: string;
-  stateHeadEmail?: string;
-  frameWidth: number;
-}): { nodes: Node<HierarchyFlowNodeData>[]; edges: Edge[] } {
-  const width = Math.max(frameWidth, NODE_WIDTH * 2 + NODE_GAP_X + 32);
-  const stateHeadPrimary = stateHeadName || overview.state_name;
-  const stateHeadSecondary = [
-    stateHeadEmail,
-    `${overview.state_name} · ${overview.state_code}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  width: number;
+  managerTierY: number;
+  parentNodeIds: string[];
+}) {
+  const mitraTierY = managerTierY + NODE_HEIGHT + TIER_GAP_Y;
+  const fallbackParentId = parentNodeIds[0] ?? "state-head";
 
   if (managers.length === 0) {
-    return buildEmptyHierarchyGraph(width, stateHeadPrimary, stateHeadSecondary);
+    const centerX = (width - NODE_WIDTH) / 2;
+    nodes.push(
+      createFlowNode(
+        "managers-empty",
+        { x: centerX, y: managerTierY },
+        {
+          step: 3,
+          title: MITRA_HIERARCHY_COPY.branchManagers,
+          primary: `No ${MITRA_HIERARCHY_COPY.branchManagers.toLowerCase()} yet`,
+          variant: "empty",
+          nodeRole: "branch",
+        },
+      ),
+      createFlowNode(
+        "mitras-empty",
+        { x: centerX, y: mitraTierY },
+        {
+          step: 4,
+          title: MITRA_HIERARCHY_COPY.zyndMitras,
+          primary: `No ${MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()} yet`,
+          variant: "empty",
+          nodeRole: "leaf",
+        },
+      ),
+    );
+    for (const parentId of parentNodeIds) {
+      edges.push(createEdge(`${parentId}-managers-empty`, parentId, "managers-empty"));
+    }
+    edges.push(createEdge("managers-empty-mitras-empty", "managers-empty", "mitras-empty"));
+    return;
   }
 
-  const nodes: Node<HierarchyFlowNodeData>[] = [];
-  const edges: Edge[] = [];
-
-  const stateHeadY = FRAME_PADDING_Y;
-  const stateHeadX = (width - NODE_WIDTH) / 2;
-  const managerTierY = stateHeadY + ROOT_NODE_HEIGHT + TIER_GAP_Y;
-  const mitraTierY = managerTierY + NODE_HEIGHT + TIER_GAP_Y;
-
-  nodes.push(
-    createFlowNode(
-      "state-head",
-      { x: stateHeadX, y: stateHeadY },
-      {
-        step: 1,
-        title: MITRA_HIERARCHY_COPY.stateHead,
-        primary: stateHeadPrimary,
-        secondary: stateHeadSecondary,
-        variant: "root",
-        nodeRole: "root",
-      },
-    ),
-  );
-
   const managerPositions = rowPositions(managers.length, width, managerTierY);
+  const stateHeadByCode = new Map(
+    parentNodeIds
+      .filter((id) => id.startsWith("state-head-"))
+      .map((id) => [id.replace("state-head-", ""), id] as const),
+  );
 
   managers.forEach((manager, index) => {
     const managerNodeId = `manager-${manager.id}`;
@@ -290,7 +304,11 @@ function buildHierarchyGraph({
       ),
     );
 
-    edges.push(createEdge(`state-head-${managerNodeId}`, "state-head", managerNodeId));
+    const parentId =
+      stateHeadByCode.get(manager.state_code) ??
+      parentNodeIds.find((id) => id.startsWith("state-head-")) ??
+      fallbackParentId;
+    edges.push(createEdge(`${parentId}-${managerNodeId}`, parentId, managerNodeId));
 
     const managerPartners = partnersForManager(manager.id, partners);
     const summary = partnerSummary(managerPartners);
@@ -312,8 +330,223 @@ function buildHierarchyGraph({
 
     edges.push(createEdge(`${managerNodeId}-${mitraNodeId}`, managerNodeId, mitraNodeId));
   });
+}
+
+function buildSuperHeadHierarchyGraph({
+  overview,
+  managers,
+  partners,
+  stateHeads,
+  superHeadName,
+  superHeadEmail,
+  frameWidth,
+}: {
+  overview: AdminHierarchyOverview;
+  managers: AdminHierarchyManager[];
+  partners: AdminHierarchyPartner[];
+  stateHeads: AdminHierarchyStateHead[];
+  superHeadName?: string;
+  superHeadEmail?: string;
+  frameWidth: number;
+}): { nodes: Node<HierarchyFlowNodeData>[]; edges: Edge[] } {
+  const width = Math.max(frameWidth, NODE_WIDTH * 2 + NODE_GAP_X + 32);
+  const nodes: Node<HierarchyFlowNodeData>[] = [];
+  const edges: Edge[] = [];
+
+  const superHeadY = FRAME_PADDING_Y;
+  const stateHeadTierY = superHeadY + ROOT_NODE_HEIGHT + TIER_GAP_Y;
+  const managerTierY = stateHeadTierY + NODE_HEIGHT + TIER_GAP_Y;
+  const superHeadX = (width - NODE_WIDTH) / 2;
+
+  nodes.push(
+    createFlowNode(
+      "super-head",
+      { x: superHeadX, y: superHeadY },
+      {
+        step: 1,
+        title: MITRA_HIERARCHY_COPY.superHead,
+        primary: superHeadName || "Pan India",
+        secondary: superHeadEmail || "Company-wide oversight",
+        variant: "root",
+        nodeRole: "root",
+      },
+    ),
+  );
+
+  const visibleStateHeads = stateHeads;
+
+  let parentNodeIds: string[] = [];
+
+  if (visibleStateHeads.length === 0) {
+    nodes.push(
+      createFlowNode(
+        "state-head-empty",
+        { x: superHeadX, y: stateHeadTierY },
+        {
+          step: 2,
+          title: MITRA_HIERARCHY_COPY.stateHead,
+          primary: `No ${MITRA_HIERARCHY_COPY.stateHead.toLowerCase()} assigned yet`,
+          secondary: overview.state_name
+            ? `${overview.state_name} · assign on State Heads tab`
+            : "Assign on State Heads tab",
+          variant: "empty",
+          nodeRole: "branch",
+        },
+      ),
+    );
+    edges.push(createEdge("super-head-state-head-empty", "super-head", "state-head-empty"));
+    parentNodeIds = ["state-head-empty"];
+  } else {
+    const stateHeadPositions = rowPositions(visibleStateHeads.length, width, stateHeadTierY);
+    visibleStateHeads.forEach((stateHead, index) => {
+      const nodeId = `state-head-${stateHead.state_code}`;
+      const position = stateHeadPositions[index];
+      if (!position) return;
+
+      nodes.push(
+        createFlowNode(
+          nodeId,
+          position,
+          {
+            step: 2,
+            title: MITRA_HIERARCHY_COPY.stateHead,
+            primary: stateHead.name,
+            secondary: `${stateHead.state_name} · ${stateHead.state_code}`,
+            variant: "manager",
+            nodeRole: "branch",
+          },
+        ),
+      );
+      edges.push(createEdge(`super-head-${nodeId}`, "super-head", nodeId));
+      parentNodeIds.push(nodeId);
+    });
+  }
+
+  appendManagerMitraTiers({
+    nodes,
+    edges,
+    managers,
+    partners,
+    width,
+    managerTierY,
+    parentNodeIds,
+  });
 
   return { nodes, edges };
+}
+
+function buildStateHeadHierarchyGraph({
+  overview,
+  managers,
+  partners,
+  stateHeadName,
+  stateHeadEmail,
+  persona,
+  frameWidth,
+}: {
+  overview: AdminHierarchyOverview;
+  managers: AdminHierarchyManager[];
+  partners: AdminHierarchyPartner[];
+  stateHeadName?: string;
+  stateHeadEmail?: string;
+  persona?: MitraHierarchyPersona | null;
+  frameWidth: number;
+}): { nodes: Node<HierarchyFlowNodeData>[]; edges: Edge[] } {
+  const width = Math.max(frameWidth, NODE_WIDTH * 2 + NODE_GAP_X + 32);
+  const isStateHeadPersona = persona === "state_head";
+  const rootTitle = isStateHeadPersona
+    ? MITRA_HIERARCHY_COPY.stateHead
+    : MITRA_HIERARCHY_COPY.superHead;
+  const stateHeadPrimary = isStateHeadPersona
+    ? stateHeadName || overview.state_name
+    : overview.state_name;
+  const stateHeadSecondary = isStateHeadPersona
+    ? [stateHeadEmail, `${overview.state_name} · ${overview.state_code}`].filter(Boolean).join(" · ")
+    : `${overview.state_name} · ${overview.state_code}`;
+
+  if (managers.length === 0) {
+    return buildEmptyStateHeadHierarchyGraph(width, rootTitle, stateHeadPrimary, stateHeadSecondary);
+  }
+
+  const nodes: Node<HierarchyFlowNodeData>[] = [];
+  const edges: Edge[] = [];
+
+  const stateHeadY = FRAME_PADDING_Y;
+  const stateHeadX = (width - NODE_WIDTH) / 2;
+  const managerTierY = stateHeadY + ROOT_NODE_HEIGHT + TIER_GAP_Y;
+
+  nodes.push(
+    createFlowNode(
+      "state-head",
+      { x: stateHeadX, y: stateHeadY },
+      {
+        step: 1,
+        title: rootTitle,
+        primary: stateHeadPrimary,
+        secondary: stateHeadSecondary,
+        variant: "root",
+        nodeRole: "root",
+      },
+    ),
+  );
+
+  appendManagerMitraTiers({
+    nodes,
+    edges,
+    managers,
+    partners,
+    width,
+    managerTierY,
+    parentNodeIds: ["state-head"],
+  });
+
+  return { nodes, edges };
+}
+
+function buildHierarchyGraph({
+  overview,
+  managers,
+  partners,
+  stateHeads = [],
+  superHeadName,
+  superHeadEmail,
+  stateHeadName,
+  stateHeadEmail,
+  persona,
+  frameWidth,
+}: {
+  overview: AdminHierarchyOverview;
+  managers: AdminHierarchyManager[];
+  partners: AdminHierarchyPartner[];
+  stateHeads?: AdminHierarchyStateHead[];
+  superHeadName?: string;
+  superHeadEmail?: string;
+  stateHeadName?: string;
+  stateHeadEmail?: string;
+  persona?: MitraHierarchyPersona | null;
+  frameWidth: number;
+}): { nodes: Node<HierarchyFlowNodeData>[]; edges: Edge[] } {
+  if (persona === "super_head") {
+    return buildSuperHeadHierarchyGraph({
+      overview,
+      managers,
+      partners,
+      stateHeads,
+      superHeadName,
+      superHeadEmail,
+      frameWidth,
+    });
+  }
+
+  return buildStateHeadHierarchyGraph({
+    overview,
+    managers,
+    partners,
+    stateHeadName,
+    stateHeadEmail,
+    persona,
+    frameWidth,
+  });
 }
 
 function computeTranslateExtent(nodes: Node<HierarchyFlowNodeData>[]): CoordinateExtent {
@@ -389,7 +622,7 @@ function HierarchyFlowCanvas({
       zoomOnScroll={false}
       zoomOnPinch={false}
       zoomOnDoubleClick={false}
-      preventScrolling
+      preventScrolling={false}
       minZoom={1}
       maxZoom={1}
       translateExtent={translateExtent}
@@ -411,10 +644,14 @@ export function DistributorHeadHierarchyChart({
   overview,
   managers,
   partners,
+  stateHeads = [],
   loading = false,
   error = "",
+  superHeadName,
+  superHeadEmail,
   stateHeadName,
   stateHeadEmail,
+  persona,
 }: DistributorHeadHierarchyChartProps) {
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -446,11 +683,26 @@ export function DistributorHeadHierarchyChart({
       overview,
       managers,
       partners,
+      stateHeads,
+      superHeadName,
+      superHeadEmail,
       stateHeadName,
       stateHeadEmail,
+      persona,
       frameWidth: frameWidth || 560,
     });
-  }, [overview, managers, partners, stateHeadName, stateHeadEmail, frameWidth]);
+  }, [
+    overview,
+    managers,
+    partners,
+    stateHeads,
+    superHeadName,
+    superHeadEmail,
+    stateHeadName,
+    stateHeadEmail,
+    persona,
+    frameWidth,
+  ]);
 
   const contentHeight = useMemo(() => computeContentHeight(graph.nodes), [graph.nodes]);
 
@@ -464,12 +716,12 @@ export function DistributorHeadHierarchyChart({
   }
 
   if (error) {
-    return <AdminFeedbackMessage variant="warning">{error}</AdminFeedbackMessage>;
+    return <AdminFeedbackMessage variant="warning" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>;
   }
 
   if (!overview) {
     return (
-      <AdminFeedbackMessage variant="warning">
+      <AdminFeedbackMessage variant="warning" dismissible={false}>
         Hierarchy data is unavailable for your account scope.
       </AdminFeedbackMessage>
     );

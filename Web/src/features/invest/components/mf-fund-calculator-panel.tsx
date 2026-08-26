@@ -233,7 +233,7 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
 
       <div
         key={mode}
-        className="w-full max-w-md animate-in fade-in space-y-2 text-center duration-200"
+        className="w-full max-w-md space-y-2 text-center"
       >
         <p className="text-caption font-medium text-muted-foreground">{amountLabel}</p>
         <div className="flex items-center justify-center gap-1">
@@ -248,11 +248,6 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
             className="w-full max-w-[16rem] border-0 bg-transparent text-center text-h2 font-semibold tabular-nums text-foreground shadow-none outline-none focus-visible:ring-0"
           />
         </div>
-        {mode === "lumpsum" && fund.min_lumpsum_amount_inr != null ? (
-          <p className="text-caption text-muted-foreground">
-            {copy.mutualFunds.lumpsumFundMinNote.replace("{amount}", formatInr(fund.min_lumpsum_amount_inr))}
-          </p>
-        ) : null}
         {mode === "sip" && fund.min_sip_amount_inr != null ? (
           <p className="text-caption text-muted-foreground">
             {copy.mutualFunds.sipFundMinNote.replace("{amount}", formatInr(fund.min_sip_amount_inr))}
@@ -280,7 +275,7 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
       {loading ? (
         <MfFundCalculatorResultsSkeleton />
       ) : calculator && calculator.scenarios.length > 0 ? (
-        <div className="w-full animate-in fade-in space-y-4 duration-200">
+        <div className="w-full space-y-4">
           <div className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
             <table className="w-full text-left text-compact">
               <thead>
@@ -324,15 +319,13 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
             </table>
           </div>
 
-          <p className="text-center text-caption text-muted-foreground">
-            {copy.mutualFunds.lumpsumHorizonsNote}
-            {calculator.as_of_date ? ` · ${formatDate(calculator.as_of_date)}` : ""}
-          </p>
-
-          {calculator.disclaimer ? (
+          {calculator.disclaimer || calculator.as_of_date ? (
             <MfCalculatorDisclaimer
-              disclaimer={calculator.disclaimer}
+              disclaimer={calculator.disclaimer ?? ""}
               dataQuality={calculator.data_quality}
+              note={`${copy.mutualFunds.lumpsumHorizonsNote}${
+                calculator.as_of_date ? ` · ${formatDate(calculator.as_of_date)}` : ""
+              }`}
             />
           ) : null}
         </div>

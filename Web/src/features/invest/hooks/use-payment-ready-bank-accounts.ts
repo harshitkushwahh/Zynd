@@ -15,7 +15,7 @@ function sortBankAccountsForPicker(accounts: InvestorBankAccount[]) {
     if (left.is_primary !== right.is_primary) {
       return left.is_primary ? -1 : 1;
     }
-    return 0;
+    return (left.bank_name ?? "").localeCompare(right.bank_name ?? "");
   });
 }
 
@@ -54,6 +54,7 @@ export function usePaymentReadyBankAccounts(enabled: boolean) {
 
   return {
     accounts: pickerAccounts,
+    allAccounts: accounts,
     paymentReadyAccounts,
     selectedBankAccountId: resolvedBankAccountId,
     selectedAccount,
@@ -69,6 +70,7 @@ export function usePaymentReadyBankAccounts(enabled: boolean) {
 
 export type PaymentReadyBankAccountsState = {
   accounts: InvestorBankAccount[];
+  allAccounts: InvestorBankAccount[];
   paymentReadyAccounts: InvestorBankAccount[];
   selectedBankAccountId: string | null;
   selectedAccount: InvestorBankAccount | null;

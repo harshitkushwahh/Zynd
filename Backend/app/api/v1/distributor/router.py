@@ -14,9 +14,17 @@ from app.api.v1.admin.risk_profile_schemas import (
 )
 from app.api.v1.auth.deps import get_client_ip, require_permission
 from app.api.v1.distributor.schemas import (
+    ClientOnboardingContactUpdateRequest,
+    ClientOnboardingContactUpdateResponse,
+    ClientOnboardingDraftResponse,
+    ClientOnboardingMobileOtpRequest,
+    ClientOnboardingStartRequest,
+    ClientOnboardingStartResponse,
+    ClientOnboardingSubmitResponse,
     DistributorClientDetailResponse,
     DistributorClientFamilyGroupDetailResponse,
     DistributorClientListResponse,
+    DistributorComplianceQueueResponse,
     DistributorConsoleContextResponse,
     DistributorPartnerDetailResponse,
     DistributorPartnerListResponse,
@@ -40,7 +48,59 @@ from app.api.v1.distributor.schemas import (
     PartnerOnboardingVerifyOtpRequest,
     VerifiedResponse,
 )
+from app.api.v1.kyc.schemas import (
+    KycBankVerifyRequest,
+    KycBankVerifyResponse,
+    KycBootstrapResponse,
+    KycBankPreverifyStatusResponse,
+    KycFormSubmitRequest,
+    KycFormSubmitResponse,
+    KycJourneyStateRequest,
+    KycJourneyStateResponse,
+    build_kyc_bank_preverify_status_response,
+    build_kyc_bank_verify_response,
+    KycCountryItem,
+    KycMasterDataEnumsResponse,
+    KycMasterDataOption,
+    KycNomineeEnumsResponse,
+    KycPanConfirmNamesRequest,
+    KycPanConfirmNamesResponse,
+    KycPanFailure,
+    KycPanVerifyRequest,
+    KycPanVerifyResponse,
+    KycPincodeResponse,
+    KycReadinessInfo,
+    KycStateItem,
+    KycStepStatuses,
+)
+from app.application.distributor.client_onboarding_service import (
+    ClientOnboardingError,
+    discard_client_onboarding_draft,
+    get_client_onboarding_draft_snapshot,
+    resend_client_onboarding_email_otp,
+    resend_client_onboarding_mobile_otp,
+    send_client_onboarding_mobile_otp,
+    start_client_onboarding,
+    submit_client_onboarding,
+    update_client_onboarding_contact,
+    verify_client_onboarding_email,
+    verify_client_onboarding_mobile,
+)
+from app.application.distributor.distributor_client_kyc_service import (
+    confirm_distributor_client_kyc_pan_names,
+    get_distributor_client_kyc_bank_preverify_status,
+    get_distributor_client_kyc_bootstrap,
+    save_distributor_client_kyc_journey_state,
+    submit_distributor_client_kyc,
+    verify_distributor_client_kyc_bank_hybrid,
+    verify_distributor_client_kyc_pan,
+)
+from app.application.distributor.distributor_client_link_service import DistributorClientBookError
+from app.application.kyc.errors import KycError
+from app.application.kyc.master_data import master_data_enums
+from app.application.kyc.nominee_master_data import nominee_master_data_enums
 from app.application.distributor.distributor_console_service import get_distributor_console_context
+from app.application.distributor.distributor_compliance_service import list_distributor_compliance_queue
 from app.application.distributor.distributor_client_service import (
     download_distributor_client_risk_report,
     get_distributor_client_detail,
@@ -76,12 +136,28 @@ from app.application.distributor.partner_verification_service import (
 )
 from app.application.risk_profile.errors import RiskProfileError
 from app.core.database import get_db
+from app.infrastructure.kyc.fp_clients import list_countries, list_states, lookup_pincode
 from app.infrastructure.persistence.models import User
 
 router = APIRouter(prefix="/distributor", tags=["distributor"])
 
 
 def _partner_onboarding_http_error(exc: PartnerOnboardingError) -> HTTPException:
+    detail: dict[str, object] = {"code": exc.code, "message": exc.message}
+    return HTTPException(status_code=exc.status_code, detail=detail)
+
+
+def _client_onboarding_http_error(exc: ClientOnboardingError) -> HTTPException:
+    detail: dict[str, object] = {"code": exc.code, "message": exc.message}
+    return HTTPException(status_code=exc.status_code, detail=detail)
+
+
+def _client_book_http_error(exc: DistributorClientBookError) -> HTTPException:
+    detail: dict[str, object] = {"code": exc.code, "message": exc.message}
+    return HTTPException(status_code=exc.status_code, detail=detail)
+
+
+def _kyc_http_error(exc: KycError) -> HTTPException:
     detail: dict[str, object] = {"code": exc.code, "message": exc.message}
     return HTTPException(status_code=exc.status_code, detail=detail)
 
@@ -182,10 +258,12 @@ async def post_partner_onboarding_send_mobile_otp(
     body: PartnerOnboardingMobileOtpRequest,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
+    manager: Annotated[User, Depends(require_permission("distributor.partners.manage"))],
 ) -> OtpSendResponse:
     try:
         result = await send_partner_onboarding_mobile_otp(
             db,
+            manager=manager,
             onboarding_token=body.onboarding_token,
             mobile=body.mobile,
             ip=get_client_ip(request),
@@ -298,11 +376,13 @@ async def get_partner_onboarding_profile_photo_route(
 async def post_partner_onboarding_profile_photo(
     onboarding_token: Annotated[str, Form(min_length=8, max_length=256)],
     file: Annotated[UploadFile, File()],
+    db: Annotated[AsyncSession, Depends(get_db)],
     manager: Annotated[User, Depends(require_permission("distributor.partners.manage"))],
 ) -> PartnerOnboardingProfilePhotoResponse:
     content = await file.read()
     try:
         result = await upload_partner_onboarding_profile_photo(
+            db,
             manager=manager,
             onboarding_token=onboarding_token,
             filename=file.filename or "profile-photo.jpg",
@@ -408,11 +488,13 @@ async def post_partner_onboarding_document(
     doc_type: str,
     onboarding_token: Annotated[str, Form(min_length=8, max_length=256)],
     file: Annotated[UploadFile, File()],
+    db: Annotated[AsyncSession, Depends(get_db)],
     manager: Annotated[User, Depends(require_permission("distributor.partners.manage"))],
 ) -> PartnerOnboardingDocumentResponse:
     content = await file.read()
     try:
         result = await upload_partner_onboarding_document(
+            db,
             manager=manager,
             onboarding_token=onboarding_token,
             doc_type=doc_type,
@@ -429,10 +511,12 @@ async def post_partner_onboarding_document(
 async def delete_partner_onboarding_document_route(
     doc_type: str,
     body: PartnerOnboardingTokenRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
     manager: Annotated[User, Depends(require_permission("distributor.partners.manage"))],
 ) -> OkResponse:
     try:
         await clear_partner_onboarding_document(
+            db,
             manager=manager,
             onboarding_token=body.onboarding_token,
             doc_type=doc_type,
@@ -445,10 +529,12 @@ async def delete_partner_onboarding_document_route(
 @router.delete("/partners/onboarding/profile-photo", response_model=OkResponse)
 async def delete_partner_onboarding_profile_photo_route(
     body: PartnerOnboardingTokenRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
     manager: Annotated[User, Depends(require_permission("distributor.partners.manage"))],
 ) -> OkResponse:
     try:
         await clear_partner_onboarding_profile_photo(
+            db,
             manager=manager,
             onboarding_token=body.onboarding_token,
         )
@@ -478,15 +564,513 @@ async def post_partner_onboarding_submit(
     return PartnerOnboardingSubmitResponse(**result)
 
 
+@router.post("/clients/onboarding/start", response_model=ClientOnboardingStartResponse)
+async def post_client_onboarding_start(
+    body: ClientOnboardingStartRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> ClientOnboardingStartResponse:
+    try:
+        result = await start_client_onboarding(
+            db,
+            actor=actor,
+            email=body.email,
+            ip=get_client_ip(request),
+        )
+    except ClientOnboardingError as exc:
+        await db.rollback()
+        raise _client_onboarding_http_error(exc) from exc
+    await db.commit()
+    return ClientOnboardingStartResponse(**result)
+
+
+@router.post("/clients/onboarding/verify-email", response_model=VerifiedResponse)
+async def post_client_onboarding_verify_email(
+    body: PartnerOnboardingVerifyOtpRequest,
+) -> VerifiedResponse:
+    try:
+        await verify_client_onboarding_email(
+            onboarding_token=body.onboarding_token,
+            otp=body.otp,
+        )
+    except ClientOnboardingError as exc:
+        raise _client_onboarding_http_error(exc) from exc
+    return VerifiedResponse()
+
+
+@router.post("/clients/onboarding/resend-email-otp", response_model=OtpSendResponse)
+async def post_client_onboarding_resend_email_otp(
+    body: PartnerOnboardingTokenRequest,
+    request: Request,
+) -> OtpSendResponse:
+    try:
+        result = await resend_client_onboarding_email_otp(
+            onboarding_token=body.onboarding_token,
+            ip=get_client_ip(request),
+        )
+    except ClientOnboardingError as exc:
+        raise _client_onboarding_http_error(exc) from exc
+    return OtpSendResponse(**result)
+
+
+@router.post("/clients/onboarding/send-mobile-otp", response_model=OtpSendResponse)
+async def post_client_onboarding_send_mobile_otp(
+    body: ClientOnboardingMobileOtpRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OtpSendResponse:
+    try:
+        result = await send_client_onboarding_mobile_otp(
+            db,
+            onboarding_token=body.onboarding_token,
+            mobile=body.mobile,
+            ip=get_client_ip(request),
+        )
+    except ClientOnboardingError as exc:
+        await db.rollback()
+        raise _client_onboarding_http_error(exc) from exc
+    await db.commit()
+    return OtpSendResponse(**result)
+
+
+@router.post("/clients/onboarding/resend-mobile-otp", response_model=OtpSendResponse)
+async def post_client_onboarding_resend_mobile_otp(
+    body: PartnerOnboardingTokenRequest,
+    request: Request,
+) -> OtpSendResponse:
+    try:
+        result = await resend_client_onboarding_mobile_otp(
+            onboarding_token=body.onboarding_token,
+            ip=get_client_ip(request),
+        )
+    except ClientOnboardingError as exc:
+        raise _client_onboarding_http_error(exc) from exc
+    return OtpSendResponse(**result)
+
+
+@router.post("/clients/onboarding/verify-mobile", response_model=VerifiedResponse)
+async def post_client_onboarding_verify_mobile(
+    body: PartnerOnboardingVerifyOtpRequest,
+) -> VerifiedResponse:
+    try:
+        await verify_client_onboarding_mobile(
+            onboarding_token=body.onboarding_token,
+            otp=body.otp,
+        )
+    except ClientOnboardingError as exc:
+        raise _client_onboarding_http_error(exc) from exc
+    return VerifiedResponse()
+
+
+@router.post("/clients/onboarding/submit", response_model=ClientOnboardingSubmitResponse)
+async def post_client_onboarding_submit(
+    body: PartnerOnboardingTokenRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> ClientOnboardingSubmitResponse:
+    try:
+        result = await submit_client_onboarding(
+            db,
+            actor=actor,
+            onboarding_token=body.onboarding_token,
+            ip=get_client_ip(request),
+        )
+    except ClientOnboardingError as exc:
+        await db.rollback()
+        raise _client_onboarding_http_error(exc) from exc
+    await db.commit()
+    return ClientOnboardingSubmitResponse(**result)
+
+
+@router.get("/clients/onboarding/draft", response_model=ClientOnboardingDraftResponse)
+async def get_client_onboarding_draft_route(
+    onboarding_token: Annotated[str, Query(min_length=16, max_length=256)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> ClientOnboardingDraftResponse:
+    try:
+        result = await get_client_onboarding_draft_snapshot(
+            actor=actor,
+            onboarding_token=onboarding_token,
+        )
+    except ClientOnboardingError as exc:
+        raise _client_onboarding_http_error(exc) from exc
+    return ClientOnboardingDraftResponse(**result)
+
+
+@router.patch("/clients/onboarding/draft", response_model=ClientOnboardingContactUpdateResponse)
+async def patch_client_onboarding_draft_route(
+    body: ClientOnboardingContactUpdateRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> ClientOnboardingContactUpdateResponse:
+    try:
+        result = await update_client_onboarding_contact(
+            db,
+            actor=actor,
+            onboarding_token=body.onboarding_token,
+            email=body.email,
+            mobile=body.mobile,
+            ip=get_client_ip(request),
+        )
+    except ClientOnboardingError as exc:
+        await db.rollback()
+        raise _client_onboarding_http_error(exc) from exc
+    await db.commit()
+    return ClientOnboardingContactUpdateResponse(**result)
+
+
+@router.delete("/clients/onboarding/draft", response_model=OkResponse)
+async def delete_client_onboarding_draft_route(
+    onboarding_token: Annotated[str, Query(min_length=16, max_length=256)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> OkResponse:
+    try:
+        await discard_client_onboarding_draft(actor=actor, onboarding_token=onboarding_token)
+    except ClientOnboardingError as exc:
+        raise _client_onboarding_http_error(exc) from exc
+    return OkResponse()
+
+
+@router.post("/clients/{client_user_id}/kyc/pan/verify", response_model=KycPanVerifyResponse)
+async def post_distributor_client_kyc_pan_verify(
+    client_user_id: UUID,
+    body: KycPanVerifyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycPanVerifyResponse:
+    try:
+        result = await verify_distributor_client_kyc_pan(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+            pan_number=body.pan_number,
+        )
+    except DistributorClientBookError as exc:
+        raise _client_book_http_error(exc) from exc
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    await db.commit()
+
+    if result.get("blocked"):
+        return KycPanVerifyResponse(
+            success=False,
+            blocked=True,
+            block_type=result.get("blockType"),
+            message=result.get("message"),
+            failure=KycPanFailure(**result["failure"]) if result.get("failure") else None,
+            readiness=KycReadinessInfo(**result["readiness"]) if result.get("readiness") else None,
+        )
+
+    return KycPanVerifyResponse(
+        success=True,
+        pan_draft=result.get("panDraft"),
+        kyc_already_registered=result.get("kycAlreadyRegistered"),
+        readiness=KycReadinessInfo(**result["readiness"]) if result.get("readiness") else None,
+        requires_digilocker=result.get("requiresDigilocker"),
+    )
+
+
+@router.get("/clients/{client_user_id}/kyc/bootstrap", response_model=KycBootstrapResponse)
+async def get_distributor_client_kyc_bootstrap_route(
+    client_user_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycBootstrapResponse:
+    try:
+        payload = await get_distributor_client_kyc_bootstrap(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+        )
+    except DistributorClientBookError as exc:
+        raise _client_book_http_error(exc) from exc
+    await db.commit()
+    step_statuses = payload.get("stepStatuses")
+    return KycBootstrapResponse(
+        eligible=True,
+        reasons=[],
+        last_completed_step=payload["lastCompletedStep"],
+        active_step_index=payload["activeStepIndex"],
+        pan_draft=payload["panDraft"],
+        contact_draft=payload["contactDraft"],
+        personal_draft=payload["personalDraft"],
+        nominee_draft=payload["nomineeDraft"],
+        bank_draft=payload["bankDraft"],
+        kyc_already_registered=payload["kycAlreadyRegistered"],
+        readiness_code=payload["readinessCode"],
+        readiness_reason=payload["readinessReason"],
+        pan_verification_status=payload["panVerificationStatus"],
+        pan_verification_failure=payload["panVerificationFailure"],
+        external_identity_document_id=payload["externalIdentityDocumentId"],
+        external_kyc_status=payload["externalKycStatus"],
+        digilocker_failure_reason=payload["digilockerFailureReason"],
+        bank_verification_status=payload["bankVerificationStatus"],
+        bank_verification_failure=payload["bankVerificationFailure"],
+        poa_bank_preverify_id=payload["poaBankPreverifyId"],
+        poa_bank_proof_file_id=payload["poaBankProofFileId"],
+        signature_draft=payload["signatureDraft"],
+        external_kyc_form_id=payload["externalKycFormId"],
+        kyc_form_status=payload["kycFormStatus"],
+        kyc_form_type=payload["kycFormType"],
+        kyc_form_failure_reason=payload["kycFormFailureReason"],
+        proof_details_status=payload["proofDetailsStatus"],
+        esign_details_status=payload["esignDetailsStatus"],
+        geolocation_draft=payload["geolocationDraft"],
+        step_statuses=KycStepStatuses(**step_statuses) if step_statuses else None,
+        client_id=payload.get("clientId"),
+    )
+
+
+@router.post("/clients/{client_user_id}/kyc/pan/confirm-names", response_model=KycPanConfirmNamesResponse)
+async def post_distributor_client_kyc_pan_confirm_names(
+    client_user_id: UUID,
+    body: KycPanConfirmNamesRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycPanConfirmNamesResponse:
+    try:
+        result = await confirm_distributor_client_kyc_pan_names(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+            first_name=body.first_name,
+            middle_name=body.middle_name,
+            last_name=body.last_name,
+        )
+    except DistributorClientBookError as exc:
+        raise _client_book_http_error(exc) from exc
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    await db.commit()
+
+    if result.get("blocked"):
+        return KycPanConfirmNamesResponse(
+            success=False,
+            blocked=True,
+            block_type=result.get("blockType"),
+            failure=KycPanFailure(**result["failure"]) if result.get("failure") else None,
+        )
+
+    return KycPanConfirmNamesResponse(
+        success=True,
+        pan_draft=result.get("panDraft"),
+    )
+
+
+@router.post("/clients/{client_user_id}/kyc/bank/verify-hybrid", response_model=KycBankVerifyResponse)
+async def post_distributor_client_kyc_bank_verify_hybrid(
+    client_user_id: UUID,
+    body: KycBankVerifyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycBankVerifyResponse:
+    try:
+        result = await verify_distributor_client_kyc_bank_hybrid(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+            account_number=body.account_number,
+            account_type=body.account_type,
+            ifsc_code=body.ifsc_code,
+        )
+    except DistributorClientBookError as exc:
+        raise _client_book_http_error(exc) from exc
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    await db.commit()
+    return build_kyc_bank_verify_response(result)
+
+
+@router.get(
+    "/clients/{client_user_id}/kyc/bank/preverify/{preverify_id}",
+    response_model=KycBankPreverifyStatusResponse,
+)
+async def get_distributor_client_kyc_bank_preverify_status_route(
+    client_user_id: UUID,
+    preverify_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycBankPreverifyStatusResponse:
+    try:
+        result = await get_distributor_client_kyc_bank_preverify_status(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+            preverify_id=preverify_id,
+        )
+    except DistributorClientBookError as exc:
+        raise _client_book_http_error(exc) from exc
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    await db.commit()
+    return build_kyc_bank_preverify_status_response(result)
+
+
+def _kyc_form_submit_response(result: dict[str, object]) -> KycFormSubmitResponse:
+    return KycFormSubmitResponse(
+        form_id=result.get("formId") or result.get("form_id"),  # type: ignore[arg-type]
+        form_status=result.get("formStatus") or result.get("form_status"),  # type: ignore[arg-type]
+        next_action=str(result.get("nextAction") or result.get("next_action") or "none"),
+        redirect_url=result.get("redirectUrl") or result.get("redirect_url"),  # type: ignore[arg-type]
+        message=result.get("message"),  # type: ignore[arg-type]
+        signature_provided=bool(result.get("signatureProvided") or result.get("signature_provided")),
+        proof_status=result.get("proofStatus") or result.get("proof_status"),  # type: ignore[arg-type]
+        esign_status=result.get("esignStatus") or result.get("esign_status"),  # type: ignore[arg-type]
+        failure_reason=result.get("failureReason") or result.get("failure_reason"),  # type: ignore[arg-type]
+    )
+
+
+@router.post("/clients/{client_user_id}/kyc/journey/state", response_model=KycJourneyStateResponse)
+async def post_distributor_client_kyc_journey_state(
+    client_user_id: UUID,
+    body: KycJourneyStateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycJourneyStateResponse:
+    geolocation_json = (
+        body.geolocation_json.model_dump(by_alias=True) if body.geolocation_json is not None else None
+    )
+    try:
+        result = await save_distributor_client_kyc_journey_state(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+            pan_draft_json=body.pan_draft_json,
+            contact_draft_json=body.contact_draft_json,
+            personal_draft_json=body.personal_draft_json,
+            nominee_draft_json=body.nominee_draft_json,
+            bank_draft_json=body.bank_draft_json,
+            signature_draft_json=body.signature_draft_json,
+            geolocation_json=geolocation_json,
+            last_completed_step=body.last_completed_step,
+            middle_name=body.middle_name,
+        )
+    except DistributorClientBookError as exc:
+        raise _client_book_http_error(exc) from exc
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    await db.commit()
+    return KycJourneyStateResponse(
+        last_completed_step=result["lastCompletedStep"],
+        active_step_index=result["activeStepIndex"],
+    )
+
+
+@router.post("/clients/{client_user_id}/kyc/submit", response_model=KycFormSubmitResponse)
+async def post_distributor_client_kyc_submit(
+    client_user_id: UUID,
+    body: KycFormSubmitRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycFormSubmitResponse:
+    try:
+        result = await submit_distributor_client_kyc(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            accuracy_meters=body.accuracy_meters,
+            client_ip=get_client_ip(request),
+        )
+    except DistributorClientBookError as exc:
+        raise _client_book_http_error(exc) from exc
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    await db.commit()
+    return _kyc_form_submit_response(result)
+
+
+@router.get("/kyc/master-data/enums", response_model=KycMasterDataEnumsResponse)
+async def get_distributor_kyc_master_data_enums(
+    _: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycMasterDataEnumsResponse:
+    enums = master_data_enums()
+    return KycMasterDataEnumsResponse(
+        gender=[KycMasterDataOption(**item) for item in enums["gender"]],
+        marital_status=[KycMasterDataOption(**item) for item in enums["maritalStatus"]],
+        occupation=[KycMasterDataOption(**item) for item in enums["occupation"]],
+        income_slab=[KycMasterDataOption(**item) for item in enums["incomeSlab"]],
+        pep_exposed=[KycMasterDataOption(**item) for item in enums["pepExposed"]],
+    )
+
+
+@router.get("/kyc/master-data/nominee-enums", response_model=KycNomineeEnumsResponse)
+async def get_distributor_kyc_nominee_enums(
+    _: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycNomineeEnumsResponse:
+    enums = nominee_master_data_enums()
+    return KycNomineeEnumsResponse(
+        relationships=[KycMasterDataOption(**item) for item in enums["relationships"]],
+        source_of_wealth=[KycMasterDataOption(**item) for item in enums["sourceOfWealth"]],
+        document_types=[KycMasterDataOption(**item) for item in enums["documentTypes"]],
+    )
+
+
+@router.get("/kyc/master-data/states", response_model=list[KycStateItem])
+async def get_distributor_kyc_states(
+    _: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> list[KycStateItem]:
+    items = await list_states()
+    return [KycStateItem(**item) for item in items]
+
+
+@router.get("/kyc/master-data/countries", response_model=list[KycCountryItem])
+async def get_distributor_kyc_countries(
+    _: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> list[KycCountryItem]:
+    items = await list_countries()
+    return [KycCountryItem(name=item["name"], ansi_code=item["ansi_code"]) for item in items]
+
+
+@router.get("/kyc/master-data/pincode/{pincode}", response_model=KycPincodeResponse)
+async def get_distributor_kyc_pincode(
+    pincode: str,
+    _: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycPincodeResponse:
+    if not pincode.isdigit() or len(pincode) != 6:
+        raise HTTPException(status_code=400, detail={"code": "invalid_pincode", "message": "Invalid pincode."})
+    payload = await lookup_pincode(pincode)
+    return KycPincodeResponse(
+        code=str(payload.get("code") or pincode),
+        city=str(payload.get("city") or ""),
+        district=str(payload.get("district") or ""),
+        state_name=str(payload.get("state_name") or ""),
+        country_ansi_code=str(payload.get("country_ansi_code") or "IN"),
+    )
+
+
+@router.get("/compliance/queue", response_model=DistributorComplianceQueueResponse)
+async def get_distributor_compliance_queue_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.compliance.list"))],
+) -> DistributorComplianceQueueResponse:
+    items = await list_distributor_compliance_queue(db, actor=actor)
+    await db.commit()
+    return DistributorComplianceQueueResponse(items=items)
+
+
 @router.get("/clients", response_model=DistributorClientListResponse)
 async def list_distributor_clients_route(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(require_permission("distributor.clients.list"))],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.list"))],
     email: str | None = Query(default=None),
+    scope: str = Query(default="book"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> DistributorClientListResponse:
-    items = await list_distributor_clients(db, email=email, limit=limit, offset=offset)
+    items = await list_distributor_clients(
+        db,
+        actor=actor,
+        scope=scope,
+        email=email,
+        limit=limit,
+        offset=offset,
+    )
     await db.commit()
     return DistributorClientListResponse(items=items)
 
@@ -495,9 +1079,9 @@ async def list_distributor_clients_route(
 async def get_distributor_client_detail_route(
     client_reference: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(require_permission("distributor.clients.read"))],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.read"))],
 ) -> DistributorClientDetailResponse:
-    payload = await get_distributor_client_detail(db, client_reference)
+    payload = await get_distributor_client_detail(db, client_reference, actor=actor)
     if payload is None:
         raise HTTPException(
             status_code=404,
@@ -608,3 +1192,8 @@ async def download_distributor_client_risk_report_route(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+from app.api.v1.distributor.work_router import router as distributor_work_router
+
+router.include_router(distributor_work_router)

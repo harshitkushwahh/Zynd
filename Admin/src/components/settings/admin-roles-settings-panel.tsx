@@ -29,7 +29,7 @@ export function AdminRolesSettingsPanel() {
   return (
     <div className="space-y-3">
       {errorMessage ? (
-        <AdminFeedbackMessage variant="destructive">{errorMessage}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setErrorMessage("")}>{errorMessage}</AdminFeedbackMessage>
       ) : null}
       <RolesPermissionsPanel
         roles={roles}

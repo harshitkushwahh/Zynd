@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell,
   Building2,
@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useProfileImage } from "@/contexts/profile-image-context";
 import { copy } from "@/shared/config/copy";
 import { getUserInitials } from "@/shared/utils/user-display";
+import { useResolvedDisplayName } from "@/shared/hooks/use-resolved-display-name";
 import { cn } from "@/lib/utils";
 
 export type SettingsSection =
@@ -113,22 +114,62 @@ export function SettingsSidebar({
   activeSection,
   onSectionChange,
 }: SettingsSidebarProps) {
-  const { user, displayName } = useAuth();
+  const { user } = useAuth();
+  const resolvedDisplayName = useResolvedDisplayName();
   const { profileUrl, refreshProfileImage } = useProfileImage();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const [navScrollable, setNavScrollable] = useState(false);
+
+  const updateNavScrollable = useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    setNavScrollable(nav.scrollHeight > nav.clientHeight + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const measure = () => {
+      requestAnimationFrame(updateNavScrollable);
+    };
+
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    if (nav.parentElement) {
+      observer.observe(nav.parentElement);
+    }
+
+    return () => observer.disconnect();
+  }, [updateNavScrollable, user]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const activeButton = nav.querySelector<HTMLButtonElement>(`[data-settings-section="${activeSection}"]`);
+    activeButton?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeSection]);
 
   if (!user) {
     return null;
   }
 
-  const initials = getUserInitials(user.first_name, user.email);
+  const initials = getUserInitials(resolvedDisplayName.split(/\s+/)[0], user.email);
 
   return (
-    <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card md:h-full md:max-h-full md:w-72">
+    <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card md:h-full md:max-h-full md:w-72 md:min-h-0">
       <div className="shrink-0 border-b border-border px-5 py-6 text-center">
         <div className="relative mx-auto size-[4.5rem]">
           <Avatar className="size-full">
-            {profileUrl ? <AvatarImage src={profileUrl} alt={displayName || copy.settings.profilePhotoAlt} /> : null}
+            {profileUrl ? (
+              <AvatarImage src={profileUrl} alt={resolvedDisplayName || copy.settings.profilePhotoAlt} />
+            ) : null}
             <AvatarFallback className="bg-primary/10 text-h3 font-semibold text-primary">
               {initials}
             </AvatarFallback>
@@ -143,7 +184,7 @@ export function SettingsSidebar({
           </button>
         </div>
         <p className="mt-3.5 truncate text-body font-semibold text-foreground">
-          {displayName || copy.settings.accountFallbackName}
+          {resolvedDisplayName || copy.settings.accountFallbackName}
         </p>
       </div>
 
@@ -153,7 +194,15 @@ export function SettingsSidebar({
         onUploaded={() => void refreshProfileImage()}
       />
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav
+        ref={navRef}
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-1.5 p-4",
+          navScrollable
+            ? "overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+            : "overflow-y-hidden",
+        )}
+      >
         {SETTINGS_NAV.map((item) => {
           const Icon = item.icon;
           const active = activeSection === item.id;
@@ -162,9 +211,10 @@ export function SettingsSidebar({
             <button
               key={item.id}
               type="button"
+              data-settings-section={item.id}
               onClick={() => onSectionChange(item.id)}
               className={cn(
-                "flex items-center gap-3 rounded-[var(--radius-control)] px-3.5 py-3 text-left text-compact font-medium transition-colors",
+                "flex items-center gap-3 rounded-[var(--radius-control)] px-3.5 py-3 text-left text-compact font-medium transition-[color,background-color,transform] duration-200 ease-out motion-reduce:transition-none",
                 active
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",

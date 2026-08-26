@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { DistributorHeadStatusBadge } from "@/components/distributor-head/distributor-head-badge";
@@ -17,6 +16,7 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
+  AdminTableSkeletonRows,
   AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
@@ -109,16 +109,16 @@ export function DistributorHeadDistributorsPanel() {
 
   return (
     <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <AdminSearchInput
-          containerClassName="max-w-sm"
+          containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
           placeholder={`Search by name, ARN, ${MITRA_HIERARCHY_COPY.branchManager.toLowerCase()}, or branch`}
           value={search}
           onChange={(event) => handleSearchChange(event.target.value)}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
           <AdminSelect
             value={managerFilter}
             onValueChange={(value) => {
@@ -127,7 +127,8 @@ export function DistributorHeadDistributorsPanel() {
             }}
             options={managerFilterOptions}
             placeholder={MITRA_HIERARCHY_COPY.branchManager}
-            className="min-w-select-md"
+            className="min-w-select-md shrink-0"
+            triggerClassName="w-auto"
           />
           <AdminSelect
             value={statusFilter}
@@ -137,7 +138,8 @@ export function DistributorHeadDistributorsPanel() {
             }}
             options={STATUS_FILTER_OPTIONS}
             placeholder="Status"
-            className="min-w-select-sm"
+            className="min-w-select-sm shrink-0"
+            triggerClassName="w-auto"
           />
         </div>
       </div>
@@ -176,12 +178,7 @@ export function DistributorHeadDistributorsPanel() {
         </AdminTableHeader>
         <AdminTableBody>
           {loading ? (
-            <AdminTableStateRow colSpan={TABLE_COLUMN_COUNT}>
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="size-4 animate-spin" />
-                Loading {MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()}…
-              </span>
-            </AdminTableStateRow>
+            <AdminTableSkeletonRows columns={TABLE_COLUMN_COUNT} rows={6} />
           ) : pagination.items.length === 0 ? (
             <AdminTableStateRow colSpan={TABLE_COLUMN_COUNT}>
               No {MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()} match your search or filters.

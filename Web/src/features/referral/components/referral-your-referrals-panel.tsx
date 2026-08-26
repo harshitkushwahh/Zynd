@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -128,7 +129,7 @@ export function ReferralYourReferralsPanel() {
 
   if (errorMessage) {
     return (
-      <>
+      <DashboardContentFade>
         <ReferralYourReferralsBreadcrumb />
         <LoadErrorCard
           title={copy.referral.loadFailedTitle}
@@ -143,12 +144,12 @@ export function ReferralYourReferralsPanel() {
             </Button>
           }
         />
-      </>
+      </DashboardContentFade>
     );
   }
 
   return (
-    <>
+    <DashboardContentFade>
       <ReferralYourReferralsBreadcrumb />
 
       <div className="space-y-5">
@@ -156,7 +157,6 @@ export function ReferralYourReferralsPanel() {
           <PageHeader
             icon={Users}
             title={copy.referral.referralsPageTitle}
-            description={copy.referral.referralsPageSubtitle}
             descriptionClassName="mt-1"
           />
 
@@ -268,6 +268,6 @@ export function ReferralYourReferralsPanel() {
           ) : null}
         </section>
       </div>
-    </>
+    </DashboardContentFade>
   );
 }

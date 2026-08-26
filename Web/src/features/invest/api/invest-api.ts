@@ -82,6 +82,7 @@ export type InvestFundSummary = {
   sebi_category: string | null;
   min_sip_amount_inr: number | null;
   min_lumpsum_amount_inr: number | null;
+  sip_allowed?: boolean;
   is_featured?: boolean;
   display_order?: number;
   health_badges?: string[];
@@ -339,7 +340,9 @@ export type MfOrder = {
   checkout_id: string | null;
   product_id: string;
   product_name: string | null;
+  product_slug: string | null;
   amc_name: string | null;
+  amc_slug: string | null;
   amc_logo_url: string | null;
   order_type: string;
   amount_inr: number;
@@ -403,8 +406,29 @@ export function fetchMfOrder(orderId: string) {
   return apiRequest<MfOrder>(`/invest/orders/${orderId}`);
 }
 
+export type MfPaymentReconcileOutcome = "success" | "failed" | "pending" | "unclear";
+
+export type MfPaymentStatusResponse = {
+  outcome: MfPaymentReconcileOutcome;
+  fp_payment_status?: string | null;
+  repaired?: boolean;
+  message?: string | null;
+  order?: MfOrder | null;
+  checkout?: MfCheckout | null;
+};
+
+export function fetchMfOrderPaymentStatus(orderId: string) {
+  return apiRequest<MfPaymentStatusResponse>(`/invest/orders/${orderId}/payment-status`);
+}
+
 export function fetchMfOrderJourney(orderId: string) {
   return apiRequest<MfOrderJourneyResponse>(`/invest/orders/${orderId}/journey`);
+}
+
+export function confirmMfOrderPaymentReturn(orderId: string) {
+  return apiRequest<MfOrder>(`/invest/orders/${orderId}/confirm-payment-return`, {
+    method: "POST",
+  });
 }
 
 export function abandonMfOrderPayment(orderId: string) {
@@ -538,6 +562,16 @@ export function fetchMfCheckout(checkoutId: string) {
   return apiRequest<MfCheckout>(`/invest/cart/checkout/${checkoutId}`);
 }
 
+export function fetchMfCheckoutPaymentStatus(checkoutId: string) {
+  return apiRequest<MfPaymentStatusResponse>(`/invest/cart/checkout/${checkoutId}/payment-status`);
+}
+
+export function confirmMfCheckoutPaymentReturn(checkoutId: string) {
+  return apiRequest<MfCheckout>(`/invest/cart/checkout/${checkoutId}/confirm-payment-return`, {
+    method: "POST",
+  });
+}
+
 export function abandonMfCheckoutPayment(checkoutId: string) {
   return apiRequest<MfCheckout>(`/invest/cart/checkout/${checkoutId}/abandon-payment`, {
     method: "POST",
@@ -550,7 +584,7 @@ export type MfMandate = {
   fp_mandate_id: number | null;
   bank_account_old_id: number;
   mandate_type: string;
-  mandate_limit: number;
+  mandate_limit?: number;
   fp_mandate_status: string | null;
   auth_url: string | null;
   next_action: string | null;
@@ -558,6 +592,24 @@ export type MfMandate = {
   failure_reason: string | null;
   created_at: string | null;
   approved_at: string | null;
+  investor_bank_account_id: string | null;
+  bank_name: string | null;
+  bank_account_masked: string | null;
+  bank_ifsc_code: string | null;
+};
+
+export type MfSipPlanBankSwitch = {
+  eligible: boolean;
+  used: boolean;
+  in_progress: boolean;
+  reason: string | null;
+  target_bank_account_id: string | null;
+};
+
+export type MfSipFirstInstallment = {
+  status: "not_applicable" | "pending" | "paid" | "failed";
+  amount_inr: number | null;
+  payment_url: string | null;
 };
 
 export type MfSipPlan = {
@@ -578,10 +630,26 @@ export type MfSipPlan = {
   mandate: MfMandate | null;
   mandate_auth_url: string | null;
   next_action: string | null;
+  bank_switch?: MfSipPlanBankSwitch | null;
+  first_installment?: MfSipFirstInstallment | null;
+  payment_url?: string | null;
   failure_code: string | null;
   failure_reason: string | null;
   created_at: string | null;
   activated_at: string | null;
+};
+
+export type MfSipPlanEvent = {
+  from_status: string | null;
+  to_status: string;
+  source: string;
+  payload: Record<string, unknown> | null;
+  created_at: string | null;
+};
+
+export type MfSipPlanJourneyResponse = {
+  plan: MfSipPlan;
+  events: MfSipPlanEvent[];
 };
 
 export type MfMandateListResponse = {
@@ -636,13 +704,72 @@ export function createMfSipPlan(body: {
   });
 }
 
+export function validateMfSipPlan(body: {
+  product_id: string;
+  amount_inr: number;
+  frequency: "monthly" | "daily";
+  installment_day?: number;
+  number_of_installments: number;
+}) {
+  return apiRequest<{
+    valid: boolean;
+    frequency: string;
+    installment_day: number | null;
+    number_of_installments: number;
+    min_amount_inr: number | null;
+  }>("/invest/sip/plans/validate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function fetchMfSipPlan(planId: string) {
   return apiRequest<MfSipPlan>(`/invest/sip/plans/${planId}`);
+}
+
+export function fetchMfSipPlanJourney(planId: string) {
+  return apiRequest<MfSipPlanJourneyResponse>(`/invest/sip/plans/${planId}/journey`);
 }
 
 export function cancelMfSipPlan(planId: string) {
   return apiRequest<MfSipPlan>(`/invest/sip/plans/${planId}/cancel`, {
     method: "POST",
+  });
+}
+
+export function confirmMfSipMandateReturn(planId: string) {
+  return apiRequest<MfSipPlan>(`/invest/sip/plans/${planId}/confirm-mandate-return`, {
+    method: "POST",
+  });
+}
+
+export function abandonMfSipMandate(planId: string) {
+  return apiRequest<MfSipPlan>(`/invest/sip/plans/${planId}/abandon-mandate`, {
+    method: "POST",
+  });
+}
+
+export function payMfSipFirstInstallment(planId: string) {
+  return apiRequest<MfSipFirstInstallment>(`/invest/sip/plans/${planId}/first-installment/pay`, {
+    method: "POST",
+  });
+}
+
+export function fetchMfSipPlanBankSwitch(planId: string) {
+  return apiRequest<MfSipPlanBankSwitch>(`/invest/sip/plans/${planId}/bank-switch`);
+}
+
+export function switchMfSipPlanBank(
+  planId: string,
+  body: {
+    bank_account_id: string;
+    mandate_type?: MfMandateType;
+    idempotency_key: string;
+  },
+) {
+  return apiRequest<MfSipPlan>(`/invest/sip/plans/${planId}/bank-switch`, {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 

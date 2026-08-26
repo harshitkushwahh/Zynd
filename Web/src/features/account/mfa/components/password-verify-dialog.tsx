@@ -1,13 +1,13 @@
 "use client";
 
-import { KeyRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { AuthSubmitFooter } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { useResetWhenDialogOpens } from "@/hooks/use-reset-when-dialog-opens";
 
 type PasswordVerifyDialogProps = {
   open: boolean;
@@ -32,16 +32,13 @@ export function PasswordVerifyDialog({
 }: PasswordVerifyDialogProps) {
   const [password, setPassword] = useState("");
 
-  useEffect(() => {
-    if (!open) {
-      setPassword("");
-    }
-  }, [open]);
+  const reset = useCallback(() => {
+    setPassword("");
+  }, []);
+
+  useResetWhenDialogOpens(open, reset);
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      setPassword("");
-    }
     onOpenChange(next);
   };
 
@@ -56,8 +53,6 @@ export function PasswordVerifyDialog({
       open={open}
       onOpenChange={handleOpenChange}
       title={title}
-      description={description}
-      icon={KeyRound}
     >
       <form className="space-y-4 p-6" onSubmit={handleSubmit}>
         <div className="space-y-2">

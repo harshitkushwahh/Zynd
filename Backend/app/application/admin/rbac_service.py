@@ -13,6 +13,7 @@ from app.infrastructure.persistence.models import (
     AdminUserRoleAssignment,
     User,
     UserRole,
+    UserStatus,
 )
 
 PERMISSIONS: list[tuple[str, str]] = [
@@ -28,6 +29,7 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("transactions.execute", "Execute money-moving transaction requests"),
     ("retention.read", "View regulatory retention schedule"),
     ("deletion.execute", "Run account deletion executor and view pending deletions"),
+    ("admin.accounts.manage", "Manage platform admin account access and offboarding"),
     ("documents.read", "View user document metadata"),
     ("documents.download", "Download user documents for compliance review"),
     ("documents.verify", "Verify KYC documents and apply WORM immutability"),
@@ -35,6 +37,7 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("documents.delete", "Break-glass deletion of protected documents"),
     ("mf.jobs.read", "View MF ingestion jobs, runs, and metrics"),
     ("mf.jobs.run", "Manually trigger MF ingestion jobs"),
+    ("mf.pipeline.run", "Run full MF bootstrap pipelines (start, resume, cancel)"),
     ("mf.amcs.read", "View mutual fund AMC empanelment status"),
     ("mf.amcs.manage", "Update AMC empanelment and AMFI codes"),
     ("mf.catalog.read", "View mutual fund catalog, categories, and NAV history"),
@@ -55,26 +58,61 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("risk_profile.templates.manage", "Create and update risk profile assessment templates"),
     ("family_groups.read", "View family groups, members, and invites"),
     ("family_groups.manage", "Moderate family groups and force-remove members"),
+    ("referrals.read", "View referral attributions, metrics, and user referral activity"),
+    ("referrals.manage", "Manage referral codes and referral program overrides"),
     ("goals.templates.read", "View predefined goal templates"),
     ("goals.templates.manage", "Update predefined goal templates"),
     ("distributor.clients.list", "List investor clients in the distributor console"),
     ("distributor.clients.read", "View masked investor client profiles in the distributor console"),
+    ("distributor.clients.onboard", "Onboard investors into the Zynd Mitra book"),
+    ("distributor.compliance.list", "View compliance queue for book clients"),
     ("distributor.partners.list", "List Zynd Mitras onboarded by the branch manager"),
     ("distributor.partners.manage", "Onboard and manage Zynd Mitras for the branch"),
+    ("distributor.work.manage", "Sign in and out for work and view attendance records"),
+    ("distributor.leave.apply", "Apply for leave from the Zynd Mitra console"),
+    ("distributor.leave.review", "Review branch Mitra leave requests"),
+    ("distributor.payroll.read", "View payroll, incentives, and promotions in My work"),
+    ("admin.distributor_promotions.manage", "Grant Zynd Mitra salary promotions"),
     ("admin.distributor_partners.list", "Review pending Zynd Mitra onboarding applications"),
     ("admin.distributor_partners.approve", "Approve or reject Zynd Mitra onboarding applications"),
     ("admin.distributor_hierarchy.read", "View Mitra hierarchy branches, managers, and partners"),
     ("admin.distributor_branches.list", "List distributor branches in admin hierarchy"),
     ("admin.distributor_branches.manage", "Create and update distributor branches"),
+    ("admin.distributor_branches.approve", "Approve or reject branch opening requests"),
     ("admin.distributor_managers.list", "List branch managers in admin hierarchy"),
 ]
 
-DISTRIBUTOR_PARTNER_ROLE_KEY = "distributor_console"
-DISTRIBUTOR_MANAGER_ROLE_KEY = "distributor_manager"
+MITRA_ROLE_KEY = "mitra"
+MITRA_MANAGER_ROLE_KEY = "mitra_manager"
 MITRA_SUPER_HEAD_ROLE_KEY = "mitra_super_head"
 MITRA_STATE_HEAD_ROLE_KEY = "mitra_state_head"
-DISTRIBUTOR_CONSOLE_ROLE_KEYS = frozenset(
-    {DISTRIBUTOR_PARTNER_ROLE_KEY, DISTRIBUTOR_MANAGER_ROLE_KEY}
+SUPER_ADMIN_ROLE_KEY = "super_admin"
+# Backward-compatible aliases used by distributor services and tests.
+DISTRIBUTOR_PARTNER_ROLE_KEY = MITRA_ROLE_KEY
+DISTRIBUTOR_MANAGER_ROLE_KEY = MITRA_MANAGER_ROLE_KEY
+DISTRIBUTOR_CONSOLE_ROLE_KEYS = frozenset({MITRA_ROLE_KEY, MITRA_MANAGER_ROLE_KEY})
+ADMIN_CONSOLE_ROLE_KEYS = frozenset(
+    {
+        SUPER_ADMIN_ROLE_KEY,
+        MITRA_SUPER_HEAD_ROLE_KEY,
+        MITRA_STATE_HEAD_ROLE_KEY,
+    }
+)
+
+ROLE_KEY_MIGRATIONS: dict[str, str] = {
+    "distributor_console": MITRA_ROLE_KEY,
+    "distributor_manager": MITRA_MANAGER_ROLE_KEY,
+}
+
+REMOVED_BUILTIN_ROLE_KEYS = frozenset(
+    {
+        "compliance_officer",
+        "support_agent",
+        "operations",
+        "catalog_publisher",
+        "distributor_console",
+        "distributor_manager",
+    }
 )
 
 ROLES: dict[str, dict[str, object]] = {
@@ -83,89 +121,6 @@ ROLES: dict[str, dict[str, object]] = {
         "description": "Full platform administration access.",
         "permissions": [key for key, _ in PERMISSIONS],
     },
-    "compliance_officer": {
-        "name": "Compliance Officer",
-        "description": "Review security events and audit activity.",
-        "permissions": [
-            "security_reviews.read",
-            "security_reviews.resolve",
-            "audit.read",
-            "users.read",
-            "users.suspend",
-            "admin_actions.approve",
-            "security.manage",
-            "retention.read",
-            "deletion.execute",
-            "documents.read",
-            "documents.download",
-            "documents.verify",
-            "documents.legal_hold",
-            "admin.distributor_partners.list",
-            "admin.distributor_partners.approve",
-            "risk_profile.read",
-            "risk_profile.users.read",
-        ],
-    },
-    "support_agent": {
-        "name": "Support Agent",
-        "description": "Read-only support access for user lookups and open reviews.",
-        "permissions": ["security_reviews.read", "users.read", "documents.read"],
-    },
-    "operations": {
-        "name": "Operations",
-        "description": "Run and monitor mutual fund ingestion jobs.",
-        "permissions": [
-            "mf.jobs.read",
-            "mf.jobs.run",
-            "mf.amcs.manage",
-            "mf.catalog.read",
-            "mf.catalog.manage",
-            "mf.content.manage",
-            "mf.rules.manage",
-            "mf.transactions.read",
-            "mf.transactions.manage",
-            "mf.integrations.read",
-            "mf.integrations.manage",
-            "risk_profile.read",
-            "risk_profile.categories.manage",
-            "risk_profile.questions.manage",
-            "risk_profile.tiers.manage",
-            "risk_profile.templates.manage",
-            "risk_profile.users.read",
-            "goals.templates.read",
-            "goals.templates.manage",
-            "audit.read",
-        ],
-    },
-    "catalog_publisher": {
-        "name": "Catalog Publisher",
-        "description": "Apply MF catalog rules and bulk publish operations.",
-        "permissions": [
-            "mf.catalog.read",
-            "mf.rules.manage",
-            "mf.catalog.publish",
-            "admin_actions.approve",
-            "audit.read",
-        ],
-    },
-    "distributor_console": {
-        "name": "Distributor Console",
-        "description": "View masked investor profiles and activity for distributor partners.",
-        "permissions": [
-            "distributor.clients.list",
-            "distributor.clients.read",
-        ],
-    },
-    "distributor_manager": {
-        "name": "Distributor Manager",
-        "description": "Branch manager access for the Zynd Mitra console.",
-        "permissions": [
-            "distributor.clients.list",
-            "distributor.clients.read",
-            "distributor.partners.list",
-            "distributor.partners.manage",
-        ],
-    },
     "mitra_super_head": {
         "name": "Mitra Super Head",
         "description": "Platform-wide Mitra hierarchy administration.",
@@ -173,9 +128,11 @@ ROLES: dict[str, dict[str, object]] = {
             "admin.distributor_hierarchy.read",
             "admin.distributor_branches.list",
             "admin.distributor_branches.manage",
+            "admin.distributor_branches.approve",
             "admin.distributor_managers.list",
             "admin.distributor_partners.list",
             "admin.distributor_partners.approve",
+            "admin.distributor_promotions.manage",
         ],
     },
     "mitra_state_head": {
@@ -184,9 +141,37 @@ ROLES: dict[str, dict[str, object]] = {
         "permissions": [
             "admin.distributor_hierarchy.read",
             "admin.distributor_branches.list",
+            "admin.distributor_branches.manage",
             "admin.distributor_managers.list",
             "admin.distributor_partners.list",
             "admin.distributor_partners.approve",
+            "admin.distributor_promotions.manage",
+        ],
+    },
+    "mitra_manager": {
+        "name": "Mitra Manager",
+        "description": "Branch manager access for the Zynd Mitra console.",
+        "permissions": [
+            "distributor.clients.list",
+            "distributor.clients.read",
+            "distributor.clients.onboard",
+            "distributor.compliance.list",
+            "distributor.partners.list",
+            "distributor.partners.manage",
+            "distributor.leave.review",
+        ],
+    },
+    "mitra": {
+        "name": "Mitra",
+        "description": "Field Zynd Mitra access to client profiles in the distributor console.",
+        "permissions": [
+            "distributor.clients.list",
+            "distributor.clients.read",
+            "distributor.clients.onboard",
+            "distributor.compliance.list",
+            "distributor.work.manage",
+            "distributor.leave.apply",
+            "distributor.payroll.read",
         ],
     },
 }
@@ -194,6 +179,97 @@ ROLES: dict[str, dict[str, object]] = {
 SEEDED_ROLE_KEYS = frozenset(ROLES.keys())
 PERMISSION_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]+)+$")
 ROLE_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]+$")
+
+
+async def _delete_admin_role_row(db: AsyncSession, role: AdminRole) -> None:
+    await db.execute(delete(AdminRolePermission).where(AdminRolePermission.role_id == role.id))
+    await db.execute(
+        delete(AdminUserRoleAssignment).where(AdminUserRoleAssignment.role_id == role.id)
+    )
+    await db.delete(role)
+
+
+async def _ensure_admin_user_has_role(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    role_id: UUID,
+) -> None:
+    existing = await db.execute(
+        select(AdminUserRoleAssignment).where(
+            AdminUserRoleAssignment.user_id == user_id,
+            AdminUserRoleAssignment.role_id == role_id,
+        )
+    )
+    if existing.scalar_one_or_none() is None:
+        db.add(AdminUserRoleAssignment(user_id=user_id, role_id=role_id))
+
+
+async def _migrate_role_assignments(
+    db: AsyncSession,
+    *,
+    old_role: AdminRole,
+    new_role: AdminRole,
+) -> None:
+    assignments = await db.execute(
+        select(AdminUserRoleAssignment).where(AdminUserRoleAssignment.role_id == old_role.id)
+    )
+    for assignment in assignments.scalars():
+        await _ensure_admin_user_has_role(
+            db,
+            user_id=assignment.user_id,
+            role_id=new_role.id,
+        )
+        await db.delete(assignment)
+
+
+async def _remove_deprecated_builtin_roles(
+    db: AsyncSession,
+    *,
+    role_rows: dict[str, AdminRole],
+) -> None:
+    super_admin_role = role_rows["super_admin"]
+
+    for old_key, new_key in ROLE_KEY_MIGRATIONS.items():
+        old_result = await db.execute(select(AdminRole).where(AdminRole.key == old_key))
+        old_role = old_result.scalar_one_or_none()
+        new_role = role_rows.get(new_key)
+        if old_role is None or new_role is None:
+            continue
+        await _migrate_role_assignments(db, old_role=old_role, new_role=new_role)
+        await _delete_admin_role_row(db, old_role)
+
+    for role_key in REMOVED_BUILTIN_ROLE_KEYS:
+        if role_key in ROLE_KEY_MIGRATIONS:
+            continue
+        role_result = await db.execute(select(AdminRole).where(AdminRole.key == role_key))
+        role = role_result.scalar_one_or_none()
+        if role is None:
+            continue
+
+        affected_users = await db.execute(
+            select(AdminUserRoleAssignment.user_id).where(
+                AdminUserRoleAssignment.role_id == role.id
+            )
+        )
+        user_ids = list(affected_users.scalars())
+        await _delete_admin_role_row(db, role)
+
+        for user_id in user_ids:
+            remaining = await db.execute(
+                select(AdminUserRoleAssignment.id).where(
+                    AdminUserRoleAssignment.user_id == user_id
+                )
+            )
+            if remaining.scalars().first() is None:
+                db.add(
+                    AdminUserRoleAssignment(
+                        user_id=user_id,
+                        role_id=super_admin_role.id,
+                    )
+                )
+
+    await db.flush()
 
 
 async def ensure_rbac_seed(db: AsyncSession) -> None:
@@ -219,6 +295,9 @@ async def ensure_rbac_seed(db: AsyncSession) -> None:
             )
             db.add(row)
             await db.flush()
+        else:
+            row.name = str(config["name"])
+            row.description = str(config["description"])
         role_rows[role_key] = row
 
         desired_permission_ids = {
@@ -234,6 +313,8 @@ async def ensure_rbac_seed(db: AsyncSession) -> None:
         for assignment in current_rows:
             if assignment.permission_id not in desired_permission_ids:
                 await db.delete(assignment)
+
+    await _remove_deprecated_builtin_roles(db, role_rows=role_rows)
 
     await db.flush()
 
@@ -426,6 +507,31 @@ async def list_user_role_keys(db: AsyncSession, user_id: UUID) -> list[str]:
         .where(AdminUserRoleAssignment.user_id == user_id)
     )
     return list(result.scalars())
+
+
+async def count_active_super_admins(db: AsyncSession) -> int:
+    result = await db.execute(
+        select(func.count(func.distinct(User.id)))
+        .select_from(User)
+        .join(AdminUserRoleAssignment, AdminUserRoleAssignment.user_id == User.id)
+        .join(AdminRole, AdminRole.id == AdminUserRoleAssignment.role_id)
+        .where(
+            User.role == UserRole.admin,
+            User.status == UserStatus.active,
+            AdminRole.key == SUPER_ADMIN_ROLE_KEY,
+        )
+    )
+    return int(result.scalar_one())
+
+
+async def is_sole_active_super_admin(db: AsyncSession, user_id: UUID) -> bool:
+    user = await db.get(User, user_id)
+    if not user or user.role != UserRole.admin or user.status != UserStatus.active:
+        return False
+    role_keys = await list_user_role_keys(db, user_id)
+    if SUPER_ADMIN_ROLE_KEY not in role_keys:
+        return False
+    return await count_active_super_admins(db) <= 1
 
 
 async def assign_role_to_admin_user(

@@ -81,9 +81,11 @@ export function matchesHierarchyBranchSearch(row: AdminHierarchyBranch, query: s
   return (
     row.name.toLowerCase().includes(normalized) ||
     (row.city ?? "").toLowerCase().includes(normalized) ||
-    row.manager_name.toLowerCase().includes(normalized) ||
-    row.manager_email.toLowerCase().includes(normalized) ||
+    (row.branch_code ?? "").toLowerCase().includes(normalized) ||
+    (row.manager_name ?? "").toLowerCase().includes(normalized) ||
+    (row.manager_email ?? "").toLowerCase().includes(normalized) ||
     row.state_name.toLowerCase().includes(normalized) ||
-    row.state_code.toLowerCase().includes(normalized)
+    row.state_code.toLowerCase().includes(normalized) ||
+    row.status_label.toLowerCase().includes(normalized)
   );
 }

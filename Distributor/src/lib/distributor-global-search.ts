@@ -2,8 +2,10 @@ import {
   DISTRIBUTOR_NAV_FLAT,
   type DistributorNavItem,
 } from "@/lib/distributor-navigation";
-import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
-import { distributorClientDetailHref } from "@/lib/distributor-client-routes";
+import {
+  distributorClientDetailHrefForInvestor,
+  type DistributorClientListOrigin,
+} from "@/lib/distributor-client-routes";
 import { searchInvestors } from "@/lib/distributor-investor-utils";
 import type {
   DistributorInvestor,
@@ -36,7 +38,7 @@ export function getInvestorListHref(investor: DistributorInvestor): string {
   const origin: DistributorClientListOrigin = investor.inDistributorBook
     ? "your-book"
     : "system-resident";
-  return distributorClientDetailHref(origin, investor.id);
+  return distributorClientDetailHrefForInvestor(origin, investor);
 }
 
 export function searchDistributorInvestors(

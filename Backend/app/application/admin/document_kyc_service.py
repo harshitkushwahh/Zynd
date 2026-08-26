@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.documents.document_audit_service import audit_document_kyc_rejected
@@ -12,9 +12,19 @@ from app.application.documents.errors import DocumentError
 from app.application.kyc.kyc_notification_service import notify_kyc_rejected
 from app.infrastructure.persistence.models import (
     DocumentStatus,
+    DocumentType,
     KycReviewStatus,
     User,
     UserDocument,
+)
+
+_KYC_REVIEW_DOC_TYPES = (
+    DocumentType.aadhaar,
+    DocumentType.pan,
+    DocumentType.signature,
+    DocumentType.bank_statement,
+    DocumentType.address_proof,
+    DocumentType.nominee_id,
 )
 
 
@@ -30,6 +40,19 @@ def _kyc_document_dict(document: UserDocument) -> dict[str, Any]:
         "mime_type": document.mime_type,
         "created_at": document.created_at,
     }
+
+
+async def count_pending_kyc_reviews(db: AsyncSession) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(UserDocument)
+        .where(
+            UserDocument.status == DocumentStatus.active,
+            UserDocument.kyc_review_status == KycReviewStatus.pending,
+            UserDocument.doc_type.in_(_KYC_REVIEW_DOC_TYPES),
+        )
+    )
+    return int(result.scalar_one())
 
 
 async def get_user_kyc_review(

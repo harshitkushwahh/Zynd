@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 
 import { Table, TableCard } from "@/components/core/table";
 import type { MfOrder } from "@/features/invest/api/invest-api";
-import { MfOrderStatusBadge } from "@/features/invest/components/mf-order-status-badge";
+import { MfOrderStatusBadge, mfOrderRowHoverClass } from "@/features/invest/components/mf-order-status-badge";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
@@ -29,12 +29,12 @@ type MfTransactionsTableProps = {
   onOrderClick?: (order: MfOrder) => void;
 };
 
-const TABLE_LAYOUT_CLASS = "w-full min-w-[720px] table-fixed border-collapse border-spacing-0";
-const COL_FUND = "w-[38%]";
-const COL_TYPE = "w-[14%]";
-const COL_AMOUNT = "w-[16%] text-right [&>div]:w-full [&>div]:justify-end";
-const COL_DATE = "w-[16%]";
-const COL_STATUS = "w-[16%]";
+const TABLE_LAYOUT_CLASS = "w-full min-w-[760px] table-fixed border-collapse border-spacing-0";
+const COL_FUND = "w-[34%]";
+const COL_TYPE = "w-[12%]";
+const COL_AMOUNT = "w-[14%] text-right [&>div]:w-full [&>div]:justify-end";
+const COL_DATE = "w-[14%]";
+const COL_STATUS = "w-[26%]";
 const HEADER_SURFACE_CLASS =
   "bg-card/95 backdrop-blur-[var(--blur-sm)] supports-[backdrop-filter]:bg-card/80";
 const HEADER_ROW_CLASS =
@@ -203,7 +203,11 @@ export function MfTransactionsTable({
               {(order) => (
                 <Table.Row
                   id={order.tableId}
-                  className={cn("hover:bg-muted/30", onOrderClick && "cursor-pointer")}
+                  className={cn(
+                    "transition-colors duration-200",
+                    mfOrderRowHoverClass(order.status, order.fp_state),
+                    onOrderClick && "cursor-pointer",
+                  )}
                   onAction={onOrderClick ? () => onOrderClick(order) : undefined}
                 >
                   <Table.Cell className={BODY_CELL_CLASS}>
@@ -218,8 +222,8 @@ export function MfTransactionsTable({
                   <Table.Cell className={cn(BODY_CELL_CLASS, "text-compact text-muted-foreground")}>
                     {formatDate(order.created_at)}
                   </Table.Cell>
-                  <Table.Cell className={BODY_CELL_CLASS}>
-                    <MfOrderStatusBadge status={order.status} />
+                  <Table.Cell className={cn(BODY_CELL_CLASS, "overflow-visible")}>
+                    <MfOrderStatusBadge status={order.status} fpState={order.fp_state} />
                   </Table.Cell>
                 </Table.Row>
               )}

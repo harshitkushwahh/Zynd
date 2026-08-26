@@ -31,7 +31,7 @@ export function KycDialogLayout({
           hidePanelVisual={hidePanelVisual}
           className="kyc-dialog-visual-panel"
         />
-        <div className="kyc-dialog-form-panel relative flex h-full min-h-0 flex-col bg-card">
+        <div className="kyc-dialog-form-panel relative flex h-full min-h-0 flex-col">
           <div className="relative z-[1] flex min-h-0 flex-1 flex-col">{children}</div>
         </div>
       </div>

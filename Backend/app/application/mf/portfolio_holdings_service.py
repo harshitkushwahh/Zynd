@@ -10,11 +10,17 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.investor.indian_bank_display import format_bank_account_label, resolve_bank_display_name
 from app.application.mf.cas_import_service import list_user_external_holdings
 from app.application.mf.mf_redemption_journey_service import (
     get_fp_redemption_journey,
     index_active_redemptions,
     list_fp_redemptions_for_mfia,
+)
+from app.application.mf.mf_scheme_resolution import (
+    matching_fund_isins,
+    mutual_fund_isin_equals,
+    mutual_fund_isin_in,
 )
 from app.application.mf.mf_investment_account_service import ensure_fp_mfia, ensure_mfia_old_id
 from app.application.mf.mf_order_service import get_or_create_mf_investment_account
@@ -204,6 +210,8 @@ def _extract_folio_meta(folio_payload: dict[str, Any]) -> dict[str, Any]:
         nominee_name = nominee.get("name") or nominee.get("nominee_name")
 
     redeem_bank_label = None
+    redeem_bank_name = None
+    redeem_bank_ifsc = None
     payout_details = folio.get("payout_details")
     if isinstance(payout_details, list):
         for detail in payout_details:
@@ -214,15 +222,25 @@ def _extract_folio_meta(folio_payload: dict[str, Any]) -> dict[str, Any]:
                 continue
             account_number = str(bank.get("account_number") or bank.get("number") or "")
             last4 = account_number[-4:] if len(account_number) >= 4 else account_number
-            bank_name = bank.get("bank_name") or bank.get("name") or "Bank"
-            if last4:
-                redeem_bank_label = f"{bank_name} ....{last4}"
+            ifsc_code = str(bank.get("ifsc_code") or bank.get("ifsc") or "").strip().upper() or None
+            raw_bank_name = bank.get("bank_name") or bank.get("name")
+            resolved_bank_name = resolve_bank_display_name(raw_bank_name, ifsc_code)
+            if last4 and resolved_bank_name:
+                redeem_bank_label = format_bank_account_label(
+                    bank_name=raw_bank_name,
+                    last4=last4,
+                    ifsc_code=ifsc_code,
+                )
+                redeem_bank_name = resolved_bank_name
+                redeem_bank_ifsc = ifsc_code
                 break
 
     return {
         "holding_mode": holding_mode,
         "nominee_name": str(nominee_name) if nominee_name else None,
         "redeem_bank_label": redeem_bank_label,
+        "redeem_bank_name": redeem_bank_name,
+        "redeem_bank_ifsc": redeem_bank_ifsc,
     }
 
 
@@ -352,15 +370,22 @@ async def _load_return_1d_by_isin(session: AsyncSession, *, isins: set[str]) -> 
         return {}
     rows = (
         await session.execute(
-            select(MutualFund.isin, FundNavMetrics.return_1d)
+            select(MutualFund.isin_growth, MutualFund.isin_div_reinvestment, FundNavMetrics.return_1d)
             .join(FundNavMetrics, FundNavMetrics.fund_id == MutualFund.id)
-            .where(MutualFund.isin.in_(list(isins)))
+            .where(mutual_fund_isin_in(isins))
         )
     ).all()
     mapped: dict[str, float] = {}
-    for isin, return_1d in rows:
-        if isin and return_1d is not None:
-            mapped[str(isin).upper()] = float(return_1d)
+    for isin_growth, isin_div, return_1d in rows:
+        if return_1d is None:
+            continue
+        value = float(return_1d)
+        for key in matching_fund_isins(
+            isin_growth=isin_growth,
+            isin_div_reinvestment=isin_div,
+            requested=isins,
+        ):
+            mapped[key] = value
     return mapped
 
 
@@ -609,9 +634,11 @@ async def _load_fund_metadata(
     if not isins:
         return {}
 
+    isins_upper = {str(isin).upper() for isin in isins}
     result = await session.execute(
         select(
-            MutualFund.isin,
+            MutualFund.isin_growth,
+            MutualFund.isin_div_reinvestment,
             MutualFund.scheme_name,
             MutualFund.sebi_category,
             FundAmc.name,
@@ -619,26 +646,34 @@ async def _load_fund_metadata(
             FundAmc.slug,
         )
         .join(FundAmc, FundAmc.id == MutualFund.amc_id)
-        .where(MutualFund.isin.in_(isins))
+        .where(mutual_fund_isin_in(isins_upper))
     )
 
     metadata: dict[str, dict[str, Any]] = {}
-    for isin, scheme_name, sebi_category, amc_name, logo_url, slug in result:
-        metadata[str(isin).upper()] = {
+    for isin_growth, isin_div, scheme_name, sebi_category, amc_name, logo_url, slug in result:
+        payload = {
             "matched_fund_name": scheme_name,
             "sebi_category": sebi_category,
             "amc_name": amc_name,
             "amc_logo_url": resolve_amc_logo_url(logo_url, slug, settings),
         }
+        for key in matching_fund_isins(
+            isin_growth=isin_growth,
+            isin_div_reinvestment=isin_div,
+            requested=isins_upper,
+        ):
+            metadata[key] = payload
     return metadata
 
 
 async def _load_sip_stats(session: AsyncSession, *, user_id: uuid.UUID) -> tuple[int, float]:
+    from app.application.mf.mf_sip_plan_service import operational_sip_plan_filters
+
     rows = (
         await session.execute(
             select(MfSipPlan.amount_inr, MfSipPlan.frequency).where(
                 MfSipPlan.user_id == user_id,
-                MfSipPlan.status == MfSipPlanStatus.active,
+                *operational_sip_plan_filters(),
             )
         )
     ).all()
@@ -652,6 +687,45 @@ async def _load_sip_stats(session: AsyncSession, *, user_id: uuid.UUID) -> tuple
         elif freq == "daily":
             monthly_total += Decimal(str(amount)) * Decimal("30")
     return active_count, float(monthly_total)
+
+
+async def _load_upcoming_sips(session: AsyncSession, *, user_id: uuid.UUID, limit: int = 5) -> list[dict[str, Any]]:
+    from app.application.mf.mf_sip_plan_service import operational_sip_plan_filters, sip_plan_is_operational
+    from app.infrastructure.persistence.mf_models import Product
+
+    rows = (
+        await session.execute(
+            select(MfSipPlan, Product.name)
+            .join(Product, Product.id == MfSipPlan.product_id, isouter=True)
+            .where(
+                MfSipPlan.user_id == user_id,
+                MfSipPlan.next_installment_date.is_not(None),
+                *operational_sip_plan_filters(),
+            )
+            .order_by(MfSipPlan.next_installment_date.asc())
+            .limit(limit * 2)
+        )
+    ).all()
+
+    upcoming: list[dict[str, Any]] = []
+    for plan, product_name in rows:
+        if not sip_plan_is_operational(plan):
+            continue
+        upcoming.append(
+            {
+                "plan_id": str(plan.id),
+                "product_id": str(plan.product_id),
+                "product_name": product_name,
+                "amount_inr": float(plan.amount_inr),
+                "next_installment_date": plan.next_installment_date.isoformat()
+                if plan.next_installment_date
+                else None,
+            }
+        )
+        if len(upcoming) >= limit:
+            break
+
+    return upcoming
 
 
 async def _has_processing_orders(session: AsyncSession, *, user_id: uuid.UUID) -> bool:
@@ -781,6 +855,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
 
     _mfia, old_id, fp_mfia_id, readiness = await _resolve_mfia_context(session, user_id=user_id)
     active_sips, monthly_sip_inr = await _load_sip_stats(session, user_id=user_id)
+    upcoming_sips = await _load_upcoming_sips(session, user_id=user_id)
     processing = await _has_processing_orders(session, user_id=user_id)
 
     if readiness != "ready" or old_id is None or fp_mfia_id is None:
@@ -819,6 +894,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
                 "holdings_count": len(external_holdings),
                 "active_sips_count": active_sips,
                 "monthly_sip_inr": monthly_sip_inr,
+                "upcoming_sips": upcoming_sips,
                 "allocation": allocation,
                 "growth": await _build_portfolio_growth_series(
                     session,
@@ -842,6 +918,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
                 "holdings_count": 0,
                 "active_sips_count": active_sips,
                 "monthly_sip_inr": monthly_sip_inr,
+                "upcoming_sips": upcoming_sips,
                 "allocation": [],
                 "growth": [],
                 "as_on": None,
@@ -911,6 +988,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
         "holdings_count": len(holdings),
         "active_sips_count": active_sips,
         "monthly_sip_inr": monthly_sip_inr,
+        "upcoming_sips": upcoming_sips,
         "allocation": allocation,
         "growth": await _build_portfolio_growth_series(
             session,
@@ -999,7 +1077,7 @@ async def list_user_portfolio_holdings(session: AsyncSession, *, user_id: uuid.U
     return payload
 
 
-async def _load_primary_bank_label(session: AsyncSession, *, user_id: uuid.UUID) -> str | None:
+async def _load_primary_bank_details(session: AsyncSession, *, user_id: uuid.UUID) -> dict[str, str | None]:
     row = await session.scalar(
         select(InvestorBankAccount)
         .where(InvestorBankAccount.investor_profile_id == user_id)
@@ -1007,10 +1085,17 @@ async def _load_primary_bank_label(session: AsyncSession, *, user_id: uuid.UUID)
         .limit(1)
     )
     if row is None:
-        return None
-    bank_name = row.bank_name or "Bank"
+        return {"redeem_bank_label": None, "redeem_bank_name": None, "redeem_bank_ifsc": None}
+
+    ifsc_code = str(row.ifsc_code or "").strip().upper() or None
+    bank_name = resolve_bank_display_name(row.bank_name, ifsc_code)
     last4 = row.account_number_last4
-    return f"{bank_name} ....{last4}" if last4 else bank_name
+    label = format_bank_account_label(bank_name=row.bank_name, last4=last4, ifsc_code=ifsc_code)
+    return {
+        "redeem_bank_label": label,
+        "redeem_bank_name": bank_name,
+        "redeem_bank_ifsc": ifsc_code,
+    }
 
 
 async def _load_primary_nominee_name(session: AsyncSession, *, user_id: uuid.UUID) -> str | None:
@@ -1035,7 +1120,7 @@ async def _load_local_order_transactions(
             .join(MutualFund, MutualFund.id == MfOrder.fund_id)
             .where(
                 MfOrder.user_id == user_id,
-                MutualFund.isin == isin,
+                mutual_fund_isin_equals(isin),
                 MfOrder.status == MfOrderStatus.succeeded,
             )
             .order_by(MfOrder.settled_at.desc().nullslast(), MfOrder.created_at.desc())
@@ -1128,7 +1213,10 @@ async def get_user_portfolio_holding_detail(
     first_txn_date = transactions[-1]["date"] if transactions else None
     invested_months = _months_invested(first_txn_date)
 
-    bank_label = folio_meta.get("redeem_bank_label") or await _load_primary_bank_label(session, user_id=user_id)
+    primary_bank = await _load_primary_bank_details(session, user_id=user_id)
+    bank_label = folio_meta.get("redeem_bank_label") or primary_bank["redeem_bank_label"]
+    bank_name = folio_meta.get("redeem_bank_name") or primary_bank["redeem_bank_name"]
+    bank_ifsc = folio_meta.get("redeem_bank_ifsc") or primary_bank["redeem_bank_ifsc"]
     nominee_name = folio_meta.get("nominee_name") or await _load_primary_nominee_name(session, user_id=user_id)
 
     xirr_pct = scheme_returns.get("xirr_pct")
@@ -1167,6 +1255,8 @@ async def get_user_portfolio_holding_detail(
         "day_change_pct": day_change_row.get("day_change_pct"),
         "xirr_pct": xirr_pct,
         "redeem_bank_label": bank_label,
+        "redeem_bank_name": bank_name,
+        "redeem_bank_ifsc": bank_ifsc,
         "nominee_name": nominee_name,
         "transactions": transactions,
     }

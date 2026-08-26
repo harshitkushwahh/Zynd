@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.admin.rbac_service import (
     DISTRIBUTOR_PARTNER_ROLE_KEY,
+    MITRA_MANAGER_ROLE_KEY,
     assign_role_to_admin_user,
 )
 from app.application.auth.errors import AuthError
@@ -49,7 +50,7 @@ from app.application.distributor.partner_onboarding_filenames import (
     partner_onboarding_document_filename,
     partner_onboarding_profile_photo_filename,
 )
-from app.infrastructure.security.rate_limit import check_rate_limit
+from app.application.distributor.distributor_client_link_service import count_clients_for_mitra
 
 _PAN_PATTERN = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 _IFSC_PATTERN = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
@@ -86,12 +87,28 @@ async def _assert_manager_can_onboard(db: AsyncSession, manager: User) -> None:
         assert_distributor_console_access(role_keys)
     except AuthError as exc:
         raise PartnerOnboardingError(exc.message, exc.code, exc.status_code) from exc
-    if "distributor_manager" not in role_keys:
+    if MITRA_MANAGER_ROLE_KEY not in role_keys:
         raise PartnerOnboardingError(
             "Only branch managers can onboard Zynd Mitras.",
             "manager_required",
             403,
         )
+
+
+async def _assert_manager_has_assigned_branch(db: AsyncSession, manager: User):
+    branch = await get_distributor_branch_for_manager(db, manager_user_id=manager.id)
+    if not branch:
+        raise PartnerOnboardingError(
+            "A branch must be assigned before onboarding Zynd Mitras or clients.",
+            "branch_assignment_required",
+            403,
+        )
+    return branch
+
+
+async def _assert_manager_can_onboard_partners(db: AsyncSession, manager: User):
+    await _assert_manager_can_onboard(db, manager)
+    return await _assert_manager_has_assigned_branch(db, manager)
 
 
 async def _assert_email_available(db: AsyncSession, email: str) -> None:
@@ -136,7 +153,7 @@ async def start_partner_onboarding(
     email: str,
     ip: str | None,
 ) -> dict[str, str | int]:
-    await _assert_manager_can_onboard(db, manager)
+    await _assert_manager_can_onboard_partners(db, manager)
     normalized = email.lower().strip()
     if "@" not in normalized:
         raise PartnerOnboardingError("Enter a valid work email.", "invalid_email", 400)
@@ -191,11 +208,14 @@ async def verify_partner_onboarding_email(
 async def send_partner_onboarding_mobile_otp(
     db: AsyncSession,
     *,
+    manager: User,
     onboarding_token: str,
     mobile: str,
     ip: str | None,
 ) -> dict[str, int]:
+    await _assert_manager_can_onboard_partners(db, manager)
     draft = await _load_draft(onboarding_token)
+    await _assert_manager_owns_draft(draft, manager)
     if not draft.get("email_verified"):
         raise PartnerOnboardingError("Verify the work email first.", "email_not_verified", 400)
 
@@ -284,18 +304,12 @@ def _partner_public_id(user: User) -> str:
     return user.client_id or str(user.id)
 
 
-def _mask_phone(phone: str | None) -> str:
-    digits = re.sub(r"\D", "", phone or "")
-    if len(digits) < 4:
-        return digits or "—"
-    return f"+91 {digits[-10:]}" if len(digits) >= 10 else digits
-
-
 def _serialize_partner_list_item(
     *,
     partner: DistributorPartner,
     user: User,
     profile_image_url: str | None,
+    client_count: int = 0,
 ) -> dict[str, Any]:
     display_name = " ".join(
         part for part in [user.first_name, user.middle_name, user.last_name] if part
@@ -309,7 +323,7 @@ def _serialize_partner_list_item(
         "name": display_name or user.email,
         "email": user.email,
         "arn": partner.arn or "",
-        "client_count": 0,
+        "client_count": client_count,
         "aum": 0.0,
         "status": _partner_list_status(partner.status),
         "onboarding_status": partner.status.value,
@@ -334,8 +348,8 @@ def _serialize_partner_detail(
     )
     base.update(
         {
-            "mobile": _mask_phone(user.phone),
-            "mobile_masked": _mask_phone(user.phone),
+            "mobile": (user.phone or "").strip() or "—",
+            "mobile_masked": (user.phone or "").strip() or "—",
             "branch_id": partner.branch_id,
             "branch_name": branch_name,
             "euin": partner.euin or "—",
@@ -358,6 +372,7 @@ def _serialize_partner_detail(
 
 
 async def upload_partner_onboarding_document(
+    db: AsyncSession,
     *,
     manager: User,
     onboarding_token: str,
@@ -366,6 +381,7 @@ async def upload_partner_onboarding_document(
     mime_type: str,
     content: bytes,
 ) -> dict[str, str | bool]:
+    await _assert_manager_can_onboard_partners(db, manager)
     draft = await _load_draft(onboarding_token)
     await _assert_manager_owns_draft(draft, manager)
     if not draft.get("email_verified") or not draft.get("mobile_verified"):
@@ -421,11 +437,13 @@ async def upload_partner_onboarding_document(
 
 
 async def clear_partner_onboarding_document(
+    db: AsyncSession,
     *,
     manager: User,
     onboarding_token: str,
     doc_type: str,
 ) -> dict[str, bool]:
+    await _assert_manager_can_onboard_partners(db, manager)
     draft = await _load_draft(onboarding_token)
     await _assert_manager_owns_draft(draft, manager)
     normalized_type = doc_type.strip().lower()
@@ -444,6 +462,7 @@ async def clear_partner_onboarding_document(
 
 
 async def upload_partner_onboarding_profile_photo(
+    db: AsyncSession,
     *,
     manager: User,
     onboarding_token: str,
@@ -451,6 +470,7 @@ async def upload_partner_onboarding_profile_photo(
     mime_type: str,
     content: bytes,
 ) -> dict[str, str | bool]:
+    await _assert_manager_can_onboard_partners(db, manager)
     draft = await _load_draft(onboarding_token)
     await _assert_manager_owns_draft(draft, manager)
     if not draft.get("email_verified") or not draft.get("mobile_verified"):
@@ -484,10 +504,12 @@ async def upload_partner_onboarding_profile_photo(
 
 
 async def clear_partner_onboarding_profile_photo(
+    db: AsyncSession,
     *,
     manager: User,
     onboarding_token: str,
 ) -> dict[str, bool]:
+    await _assert_manager_can_onboard_partners(db, manager)
     draft = await _load_draft(onboarding_token)
     await _assert_manager_owns_draft(draft, manager)
     from app.infrastructure.persistence.partner_onboarding_draft_store import (
@@ -708,7 +730,7 @@ async def submit_partner_onboarding(
     onboarding_token: str,
     ip: str | None,
 ) -> dict[str, Any]:
-    await _assert_manager_can_onboard(db, manager)
+    manager_branch = await _assert_manager_can_onboard_partners(db, manager)
     draft = await _load_draft(onboarding_token)
     if str(draft.get("manager_user_id")) != str(manager.id):
         raise PartnerOnboardingError("Invalid onboarding session.", "onboarding_invalid", 403)
@@ -750,7 +772,6 @@ async def submit_partner_onboarding(
     )
 
     pan = str(draft.get("pan") or "").strip().upper()
-    manager_branch = await get_distributor_branch_for_manager(db, manager_user_id=manager.id)
     profile_payload = {
         "bank": draft.get("bank"),
         "address": draft.get("address"),
@@ -760,7 +781,7 @@ async def submit_partner_onboarding(
     partner = DistributorPartner(
         user_id=user.id,
         onboarded_by_user_id=manager.id,
-        branch_id=manager_branch.id if manager_branch else None,
+        branch_id=manager_branch.id,
         pan_masked=_mask_pan(pan),
         profile_payload=profile_payload,
         status=DistributorPartnerStatus.pending_ho_review,
@@ -826,6 +847,7 @@ async def list_distributor_partners(
                 partner=partner,
                 user=user,
                 profile_image_url=profile_images.get(user.id),
+                client_count=await count_clients_for_mitra(db, mitra_user_id=user.id),
             )
         )
     return rows

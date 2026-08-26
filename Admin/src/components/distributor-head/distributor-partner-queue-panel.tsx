@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 
 import { DistributorPartnerReviewDialog } from "@/components/distributor-head/distributor-partner-review-dialog";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -82,7 +82,7 @@ export function DistributorPartnerQueuePanel() {
 
   return (
     <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <AdminSearchInput
@@ -108,10 +108,7 @@ export function DistributorPartnerQueuePanel() {
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-          Loading applications…
-        </div>
+        <AdminTableSkeleton columns={TABLE_COLUMN_COUNT} rows={6} minWidth="5xl" />
       ) : (
         <AdminDataTable
           minWidth="5xl"

@@ -28,12 +28,12 @@ export function ReferralYourReferralsEmptyState({
     >
       <div
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-full bg-primary/10",
+          "flex shrink-0 items-center justify-center rounded-full bg-muted/60 text-muted-foreground",
           isCompact ? "size-10" : "size-12"
         )}
       >
         <UserPlus
-          className={cn("text-primary", isCompact ? "size-5" : "size-6")}
+          className={cn(isCompact ? "size-5" : "size-6")}
           strokeWidth={2}
         />
       </div>

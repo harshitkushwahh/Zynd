@@ -4,6 +4,7 @@ import { Archive, Loader2, PencilLine, Pin, Plus, UsersRound } from "lucide-reac
 
 import type { FamilyGroupSummary } from "@/features/family-groups/api/family-groups-api";
 import { orderFamilyGroupsForTabs } from "@/features/family-groups/lib/family-group-tab-order";
+import { familyGroupTabLabel } from "@/features/family-groups/lib/family-group-slug";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -97,7 +98,7 @@ export function FamilyGroupTabs({
                     </span>
                   ) : null}
                 </span>
-                <span className="min-w-0 truncate">{group.title}</span>
+                <span className="min-w-0 truncate">{familyGroupTabLabel(group)}</span>
                 <span
                   className={cn(
                     "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",

@@ -5,6 +5,7 @@ import { CalendarDays, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
+import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import { getDaypartGreeting } from "@/lib/get-daypart-greeting";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ export type DistributorDashboardGreetingProps = {
 };
 
 export function DistributorDashboardGreeting({ name, className }: DistributorDashboardGreetingProps) {
+  const { canManageBranchBook } = useDistributorAuth();
   const [greeting, setGreeting] = useState(() => getDaypartGreeting());
   const [dateLabel, setDateLabel] = useState(() => formatDashboardDate(new Date()));
 
@@ -51,14 +53,16 @@ export function DistributorDashboardGreeting({ name, className }: DistributorDas
             {dateLabel}
           </span>
         </DistributorActionButton>
-        <DistributorActionButton
-          variant="primary"
-          nativeButton={false}
-          render={<Link href={ADD_CLIENT_HREF} />}
-        >
-          <UserPlus className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-          Add client
-        </DistributorActionButton>
+        {canManageBranchBook ? (
+          <DistributorActionButton
+            variant="primary"
+            nativeButton={false}
+            render={<Link href={ADD_CLIENT_HREF} />}
+          >
+            <UserPlus className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+            Add client
+          </DistributorActionButton>
+        ) : null}
       </div>
     </header>
   );

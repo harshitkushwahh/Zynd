@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import time
 from typing import Any
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 _fp_mf_token: str | None = None
 _token_lock = asyncio.Lock()
+_public_ip_cache: tuple[str, float] | None = None
+_public_ip_fetch_lock = asyncio.Lock()
+PUBLIC_IP_CACHE_TTL_SECONDS = 3600
 
 
 def _invalidate_mf_token() -> None:
@@ -30,17 +34,133 @@ def invalidate_mf_token() -> None:
 
 
 def normalize_fp_user_ip(user_ip: str | None) -> str | None:
-    """Finprim requires IPv4 (n.n.n.n). Normalize local/dev proxy addresses."""
+    """Return a public IPv4 suitable for Finprim when already known; no network lookup."""
+    return _parse_client_fp_user_ip(user_ip) or _configured_fp_user_ip_fallback()
+
+
+def _configured_fp_user_ip_fallback() -> str | None:
+    configured = get_settings().zynd_mf_fp_user_ip_fallback.strip()
+    if not configured:
+        return None
+    return _parse_client_fp_user_ip(configured)
+
+
+def _cached_public_ip() -> str | None:
+    if _public_ip_cache is None:
+        return None
+    cached_ip, cached_at = _public_ip_cache
+    if time.time() - cached_at > PUBLIC_IP_CACHE_TTL_SECONDS:
+        return None
+    return cached_ip
+
+
+async def fetch_host_public_ip() -> str | None:
+    """Best-effort public IPv4 for this machine (local dev / private client IPs)."""
+    cached = _cached_public_ip()
+    if cached:
+        return cached
+
+    async with _public_ip_fetch_lock:
+        cached = _cached_public_ip()
+        if cached:
+            return cached
+
+        configured = _configured_fp_user_ip_fallback()
+        if configured:
+            global _public_ip_cache
+            _public_ip_cache = (configured, time.time())
+            return configured
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get("https://api.ipify.org?format=text")
+                response.raise_for_status()
+                candidate = response.text.strip()
+        except Exception:
+            logger.warning("Unable to resolve host public IP for Finprim user_ip", exc_info=True)
+            return None
+
+        parsed = _parse_client_fp_user_ip(candidate)
+        if parsed:
+            _public_ip_cache = (parsed, time.time())
+            return parsed
+        return None
+
+
+async def resolve_fp_user_ip(user_ip: str | None) -> str | None:
+    """Resolve the IPv4 address Finprim should receive for an investor action."""
+    parsed = _parse_client_fp_user_ip(user_ip)
+    if parsed:
+        return parsed
+
+    configured = _configured_fp_user_ip_fallback()
+    if configured:
+        return configured
+
+    settings = get_settings()
+    if settings.app_env == "development":
+        return await fetch_host_public_ip()
+    return None
+
+
+def _parse_client_fp_user_ip(user_ip: str | None) -> str | None:
     if not user_ip:
         return None
+
     cleaned = user_ip.strip()
-    if cleaned in {"::1", "0:0:0:0:0:0:0:1"}:
-        return "127.0.0.1"
+    if not cleaned:
+        return None
+
+    if cleaned in {"::1", "0:0:0:0:0:0:0:1"} or cleaned.startswith("::1"):
+        return None
+
     if cleaned.startswith("::ffff:"):
-        candidate = cleaned.rsplit(":", 1)[-1]
-        if candidate.count(".") == 3:
-            return candidate
-    return cleaned
+        cleaned = cleaned.removeprefix("::ffff:")
+
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
+    try:
+        address = ipaddress.ip_address(cleaned)
+    except ValueError:
+        if "." in cleaned:
+            candidate = cleaned.rsplit(":", 1)[-1]
+            try:
+                address = ipaddress.ip_address(candidate)
+            except ValueError:
+                return None
+        else:
+            return None
+
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            mapped = address.ipv4_mapped
+            if _is_fp_acceptable_ipv4(mapped):
+                return str(mapped)
+            return None
+        return None
+
+    if isinstance(address, ipaddress.IPv4Address) and _is_fp_acceptable_ipv4(address):
+        return str(address)
+
+    return None
+
+
+def _is_fp_acceptable_ipv4(address: ipaddress.IPv4Address) -> bool:
+    if address.is_private or address.is_loopback or address.is_reserved or address.is_multicast:
+        return False
+    documentation_blocks = (
+        ipaddress.ip_network("192.0.2.0/24"),
+        ipaddress.ip_network("198.51.100.0/24"),
+        ipaddress.ip_network("203.0.113.0/24"),
+    )
+    return not any(address in block for block in documentation_blocks)
+
+
+async def _attach_fp_user_ip(body: dict[str, Any], user_ip: str | None) -> None:
+    resolved = await resolve_fp_user_ip(user_ip)
+    if resolved:
+        body["user_ip"] = resolved
+    else:
+        body.pop("user_ip", None)
 
 
 async def _get_mf_token(*, force_refresh: bool = False) -> str:
@@ -223,8 +343,7 @@ async def create_mf_purchase(
         "gateway": gateway,
         "source_ref_id": source_ref_id,
     }
-    if user_ip:
-        body["user_ip"] = normalize_fp_user_ip(user_ip)
+    await _attach_fp_user_ip(body, user_ip)
     if settings.zynd_distributor_arn.strip():
         body["distributor_arn"] = settings.zynd_distributor_arn.strip()
     if settings.zynd_distributor_euin.strip():
@@ -241,6 +360,43 @@ async def create_mf_purchase(
 
 async def get_mf_purchase(fp_purchase_id: str) -> dict[str, Any]:
     return await fp_mf_get(f"/v2/mf_purchases/{fp_purchase_id}")
+
+
+def _purchase_belongs_to_plan(item: dict[str, Any], fp_plan_id: str) -> bool:
+    raw = item.get("raw") if isinstance(item.get("raw"), dict) else item
+    plan_ref = raw.get("plan") or raw.get("mf_purchase_plan") or raw.get("purchase_plan")
+    if isinstance(plan_ref, str):
+        return plan_ref == fp_plan_id
+    if isinstance(plan_ref, dict):
+        return plan_ref.get("id") == fp_plan_id
+    return False
+
+
+async def list_mf_purchases_for_plan(*, fp_plan_id: str) -> list[dict[str, Any]]:
+    settings = get_settings()
+    if not settings.resolved_fp_enabled:
+        return [
+            {
+                "fp_purchase_id": "stub-first-installment",
+                "fp_purchase_old_id": 3004,
+                "state": "submitted",
+                "source_ref_id": fp_plan_id,
+                "scheme": None,
+                "raw": {"amount": 100, "plan": fp_plan_id, "state": "submitted"},
+            }
+        ]
+
+    payload = await fp_mf_get("/v2/mf_purchases", params={"plan": fp_plan_id})
+    items = [_serialize_mf_purchase_item(item) for item in _parse_mf_purchase_list(payload)]
+    if items:
+        return items
+
+    payload = await fp_mf_get("/v2/mf_purchases", params={"size": 100})
+    return [
+        item
+        for item in (_serialize_mf_purchase_item(row) for row in _parse_mf_purchase_list(payload))
+        if _purchase_belongs_to_plan(item, fp_plan_id)
+    ]
 
 
 async def update_mf_purchase(fp_purchase_id: str, *, body: dict[str, Any]) -> dict[str, Any]:
@@ -283,6 +439,7 @@ async def create_mf_purchases_batch(
 ) -> list[dict[str, Any]]:
     settings = get_settings()
     gateway = settings.zynd_mf_order_payment_gateway
+    resolved_ip = await resolve_fp_user_ip(user_ip)
     mf_purchases: list[dict[str, Any]] = []
     for purchase in purchases:
         item: dict[str, Any] = {
@@ -292,8 +449,8 @@ async def create_mf_purchases_batch(
             "gateway": purchase.get("gateway", gateway),
             "source_ref_id": purchase["source_ref_id"],
         }
-        if user_ip:
-            item["user_ip"] = normalize_fp_user_ip(user_ip)
+        if resolved_ip:
+            item["user_ip"] = resolved_ip
         if settings.zynd_distributor_arn.strip():
             item["distributor_arn"] = settings.zynd_distributor_arn.strip()
         if settings.zynd_distributor_euin.strip():
@@ -367,7 +524,10 @@ async def create_mf_purchase_plan(*, body: dict[str, Any]) -> dict[str, Any]:
             "raw": body,
         }
 
-    payload = await fp_mf_post("/v2/mf_purchase_plans", body=body)
+    payload_body = dict(body)
+    await _attach_fp_user_ip(payload_body, payload_body.get("user_ip"))
+
+    payload = await fp_mf_post("/v2/mf_purchase_plans", body=payload_body)
     obj = _extract_fp_object(payload)
     return _serialize_mf_plan_item(obj)
 
@@ -408,7 +568,7 @@ async def update_mf_purchase_plan(*, body: dict[str, Any]) -> dict[str, Any]:
     return _serialize_mf_plan_item(obj)
 
 
-async def cancel_mf_purchase_plan(*, fp_plan_id: str, cancellation_code: str = "investor_request") -> dict[str, Any]:
+async def cancel_mf_purchase_plan(*, fp_plan_id: str, cancellation_code: str = "invest_later") -> dict[str, Any]:
     body = {"id": fp_plan_id, "cancellation_code": cancellation_code}
     if not is_finprim_enabled():
         return {
@@ -422,6 +582,45 @@ async def cancel_mf_purchase_plan(*, fp_plan_id: str, cancellation_code: str = "
     payload = await fp_mf_post("/v2/mf_purchase_plans/cancel", body=body)
     obj = _extract_fp_object(payload)
     return _serialize_mf_plan_item(obj)
+
+
+async def create_mf_plan_modification_instruction(
+    *,
+    plan_id: str,
+    payment_method: str,
+    payment_source: int,
+    consent: dict[str, Any],
+) -> dict[str, Any]:
+    body = {
+        "plan": plan_id,
+        "payment_method": payment_method,
+        "payment_source": payment_source,
+        "consent": consent,
+    }
+    if not is_finprim_enabled():
+        return {
+            "id": "stub-mpmi-id",
+            "plan": plan_id,
+            "state": "created",
+            "payment_method": payment_method,
+            "payment_source": {"from": 1, "to": payment_source},
+            "consent": consent,
+            "raw": body,
+        }
+
+    payload = await fp_mf_post("/v2/mf_plan_modification_instructions", body=body)
+    obj = _extract_fp_object(payload)
+    return dict(obj) if isinstance(obj, dict) else {"raw": payload}
+
+
+async def get_mf_plan_modification_instruction(instruction_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {
+            "id": instruction_id,
+            "state": "completed",
+            "object": "mf_plan_modification_instruction",
+        }
+    return await fp_mf_get(f"/v2/mf_plan_modification_instructions/{instruction_id}")
 
 
 async def create_mf_investment_account(*, investor_profile_id: str) -> dict[str, Any]:
@@ -608,8 +807,7 @@ async def create_mf_redemption(
         body["amount"] = amount_inr
     elif units is not None:
         body["units"] = units
-    if user_ip:
-        body["user_ip"] = normalize_fp_user_ip(user_ip)
+    await _attach_fp_user_ip(body, user_ip)
     if settings.zynd_distributor_arn.strip():
         body["distributor_arn"] = settings.zynd_distributor_arn.strip()
     if settings.zynd_distributor_euin.strip():

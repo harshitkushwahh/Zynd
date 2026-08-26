@@ -5,7 +5,7 @@ export const ADMIN_METRIC_CARDS_GRID_CLASS = "admin-metric-cards-grid";
 type AdminMetricCardsGridProps = {
   children: React.ReactNode;
   className?: string;
-  columns?: "auto" | "three" | "four";
+  columns?: "auto" | "two" | "three" | "four";
 };
 
 export function AdminMetricCardsGrid({
@@ -17,6 +17,7 @@ export function AdminMetricCardsGrid({
     <div
       className={cn(
         ADMIN_METRIC_CARDS_GRID_CLASS,
+        columns === "two" && "admin-metric-cards-grid--two",
         columns === "three" && "admin-metric-cards-grid--three",
         columns === "four" && "admin-metric-cards-grid--four",
         className,

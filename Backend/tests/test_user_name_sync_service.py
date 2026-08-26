@@ -23,6 +23,22 @@ def test_names_from_pan_draft_returns_none_without_name() -> None:
     assert names_from_pan_draft({}) == (None, None, None)
 
 
+def test_names_from_pan_draft_uses_first_name_when_last_missing() -> None:
+    first, middle, last = names_from_pan_draft({"firstName": "HARSHIT", "lastName": ""})
+    assert first == "HARSHIT"
+    assert middle is None
+    assert last is None
+
+
+def test_names_from_pan_draft_supports_single_name_only() -> None:
+    first, middle, last = names_from_pan_draft(
+        {"firstName": "ARUN", "singleNameOnly": True},
+    )
+    assert first == "ARUN"
+    assert middle is None
+    assert last is None
+
+
 async def test_sync_user_name_from_verified_kyc_updates_user(db_session) -> None:
     from uuid import uuid4
 

@@ -35,7 +35,12 @@ import {
   adminUserActivityQueryKey,
   useAdminUserActivityQuery,
 } from "@/hooks/use-admin-user-activity-query";
-import { AUDIT_EVENT_GROUPS, formatAuditEvent } from "@/lib/admin-audit-events";
+import {
+  ADMIN_ACCOUNT_JOURNEY_EVENT_GROUPS,
+  AUDIT_EVENT_GROUPS,
+  formatAuditEvent,
+  isAdminAccountJourneyEvent,
+} from "@/lib/admin-audit-events";
 import { type AuditLogItem } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
 
@@ -57,14 +62,24 @@ function matchesSearch(log: AuditLogItem, query: string) {
   return haystack.includes(normalized);
 }
 
-function matchesGroupFilter(log: AuditLogItem, groupKey: string) {
+function matchesGroupFilter(
+  log: AuditLogItem,
+  groupKey: string,
+  groups: ReadonlyArray<{ label: string; types: readonly string[] }> = AUDIT_EVENT_GROUPS,
+) {
   if (groupKey === ALL) return true;
-  const group = AUDIT_EVENT_GROUPS.find((item) => item.label === groupKey);
+  const group = groups.find((item) => item.label === groupKey);
   if (!group) return true;
   return (group.types as readonly string[]).includes(log.event_type);
 }
 
-export function UserActivityTable({ userId }: { userId: string }) {
+export function UserActivityTable({
+  userId,
+  adminJourneyOnly = false,
+}: {
+  userId: string;
+  adminJourneyOnly?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState(ALL);
@@ -84,9 +99,17 @@ export function UserActivityTable({ userId }: { userId: string }) {
   const showSkeleton = isPending && logs.length === 0;
   const error = queryError ? getErrorMessage(queryError, "Could not load activity.") : "";
 
+  const eventGroups = adminJourneyOnly ? ADMIN_ACCOUNT_JOURNEY_EVENT_GROUPS : AUDIT_EVENT_GROUPS;
+
   const filteredLogs = useMemo(
-    () => logs.filter((log) => matchesGroupFilter(log, groupFilter) && matchesSearch(log, search)),
-    [groupFilter, logs, search],
+    () =>
+      logs.filter(
+        (log) =>
+          (!adminJourneyOnly || isAdminAccountJourneyEvent(log.event_type)) &&
+          matchesGroupFilter(log, groupFilter, eventGroups) &&
+          matchesSearch(log, search),
+      ),
+    [adminJourneyOnly, eventGroups, groupFilter, logs, search],
   );
 
   const handleEventFilterChange = (value: string | null) => {
@@ -119,7 +142,7 @@ export function UserActivityTable({ userId }: { userId: string }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All categories</SelectItem>
-              {AUDIT_EVENT_GROUPS.map((group) => (
+              {eventGroups.map((group) => (
                 <SelectItem key={group.label} value={group.label}>
                   {group.label}
                 </SelectItem>
@@ -133,7 +156,7 @@ export function UserActivityTable({ userId }: { userId: string }) {
             </SelectTrigger>
             <SelectContent className="max-h-scroll-md">
               <SelectItem value={ALL}>All event types</SelectItem>
-              {AUDIT_EVENT_GROUPS.map((group) => (
+              {eventGroups.map((group) => (
                 <SelectGroup key={group.label}>
                   <SelectLabel>{group.label}</SelectLabel>
                   {group.types.map((eventType) => (
@@ -152,7 +175,7 @@ export function UserActivityTable({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <AdminDataTable minWidth="md">
         <AdminTableHeader>

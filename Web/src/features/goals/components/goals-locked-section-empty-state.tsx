@@ -205,9 +205,7 @@ function GoalsSectionLockedOverlay({ variant }: { variant: "personal" | "family"
   const title =
     variant === "personal" ? copy.goals.personalGoalsLockedTitle : copy.goals.familyGoalsLockedTitle;
   const description =
-    variant === "personal"
-      ? copy.goals.personalGoalsLockedDescription
-      : copy.goals.familyGoalsLockedDescription;
+    variant === "family" ? copy.goals.familyGoalsLockedDescription : null;
 
   return (
     <div className="absolute inset-0 flex items-center justify-center px-3">
@@ -222,7 +220,9 @@ function GoalsSectionLockedOverlay({ variant }: { variant: "personal" | "family"
         </div>
         <div className="min-w-0 text-left">
           <p className="text-compact font-semibold text-foreground">{title}</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{description}</p>
+          {description ? (
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{description}</p>
+          ) : null}
         </div>
       </div>
     </div>

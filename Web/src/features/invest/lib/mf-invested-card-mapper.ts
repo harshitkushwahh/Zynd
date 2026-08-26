@@ -33,6 +33,7 @@ export function portfolioSummaryHasInvestments(summary: PortfolioSummaryResponse
   return (
     summary.holdings_count > 0 ||
     summary.current_value_inr > 0 ||
-    summary.invested_inr > 0
+    summary.invested_inr > 0 ||
+    summary.has_pending_orders
   );
 }

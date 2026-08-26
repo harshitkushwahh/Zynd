@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
-import Script from "next/script";
 
 import { AppProviders } from "@/components/providers";
 import { themeInitScript } from "@/lib/theme";
@@ -47,9 +46,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <Script id="zynd-distributor-theme-init" strategy="beforeInteractive">
-          {themeInitScript}
-        </Script>
+        <script
+          id="zynd-distributor-theme-init"
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
       </head>
       <body className="flex min-h-full flex-col bg-background">
         <AppProviders>{children}</AppProviders>

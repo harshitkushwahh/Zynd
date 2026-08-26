@@ -1,27 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, Loader2 } from "lucide-react";
 
 import { AdminFormDialog, AdminDialogFooterActions } from "@/components/ui/admin-dialog-presets";
 import { AdminDialogFooter } from "@/components/ui/admin-dialog";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
-import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   createAdminHierarchyBranch,
-  fetchAdminHierarchyBranchManagerCandidates,
-  type AdminHierarchyBranchManagerCandidate,
+  fetchAdminHierarchyOverview,
   type CreateAdminBranchPayload,
 } from "@/lib/admin-distributor-hierarchy-api";
+import { isMitraStateHeadOnly } from "@/lib/admin-mitra-roles";
 import { fetchAdminPincodeLookup } from "@/lib/admin-master-data-api";
-import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { getErrorMessage } from "@/lib/errors";
 
-type BranchFormState = Omit<CreateAdminBranchPayload, "manager_user_id"> & {
-  manager_user_id: string;
-};
+type BranchFormState = CreateAdminBranchPayload;
 
 type DistributorHeadAddBranchDialogProps = {
   open: boolean;
@@ -36,66 +33,54 @@ export function DistributorHeadAddBranchDialog({
   onOpenChange,
   onCreated,
 }: DistributorHeadAddBranchDialogProps) {
+  const { roleKeys } = useAdminAuth();
+  const isStateHeadOnly = isMitraStateHeadOnly(roleKeys);
   const [form, setForm] = useState<BranchFormState>({
     name: "",
     city: "",
     state_code: "",
     state_name: "",
-    manager_user_id: "",
   });
+  const [lockedState, setLockedState] = useState<{ state_code: string; state_name: string } | null>(
+    null,
+  );
   const [pincode, setPincode] = useState("");
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [pincodeError, setPincodeError] = useState("");
   const [locationResolved, setLocationResolved] = useState(false);
-  const [candidates, setCandidates] = useState<AdminHierarchyBranchManagerCandidate[]>([]);
-  const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [managerSelectOpen, setManagerSelectOpen] = useState(false);
   const lastResolvedPincodeRef = useRef("");
 
   useEffect(() => {
-    if (!open) {
-      setManagerSelectOpen(false);
-      return;
-    }
+    if (!open) return;
 
     setForm({
       name: "",
       city: "",
       state_code: "",
       state_name: "",
-      manager_user_id: "",
     });
+    setLockedState(null);
     setPincode("");
     setPincodeError("");
     setLocationResolved(false);
     lastResolvedPincodeRef.current = "";
     setError("");
-    setCandidatesLoading(true);
 
-    void fetchAdminHierarchyBranchManagerCandidates()
-      .then((items) => {
-        setCandidates(items);
-        if (items.length === 1) {
-          setForm((current) => ({ ...current, manager_user_id: items[0]?.user_id ?? "" }));
+    if (!isStateHeadOnly) return;
+
+    void fetchAdminHierarchyOverview()
+      .then((overview) => {
+        if (overview.state_assigned && overview.state_code && overview.state_name) {
+          setLockedState({
+            state_code: overview.state_code,
+            state_name: overview.state_name,
+          });
         }
       })
-      .catch((err) => {
-        setCandidates([]);
-        setError(getErrorMessage(err, `Could not load ${MITRA_HIERARCHY_COPY.branchManager.toLowerCase()} options.`));
-      })
-      .finally(() => setCandidatesLoading(false));
-  }, [open]);
-
-  const managerOptions = useMemo<AdminSelectOption[]>(
-    () =>
-      candidates.map((candidate) => ({
-        value: candidate.user_id,
-        label: `${candidate.name} · ${candidate.email}`,
-      })),
-    [candidates],
-  );
+      .catch(() => setLockedState(null));
+  }, [isStateHeadOnly, open]);
 
   const applyPincodeLookup = useCallback(
     async (nextPincode: string) => {
@@ -127,13 +112,25 @@ export function DistributorHeadAddBranchDialog({
 
       try {
         const result = await fetchAdminPincodeLookup(nextPincode);
+        const resolvedStateCode = result.state_code.trim().toUpperCase();
+        if (
+          lockedState &&
+          resolvedStateCode !== lockedState.state_code.trim().toUpperCase()
+        ) {
+          setPincodeError(
+            `This PIN code is outside ${lockedState.state_name} (${lockedState.state_code}). Branches must be opened in your assigned state.`,
+          );
+          lastResolvedPincodeRef.current = "";
+          return;
+        }
+
         lastResolvedPincodeRef.current = nextPincode;
         setLocationResolved(true);
         setForm((current) => ({
           ...current,
           city: result.city,
-          state_code: result.state_code,
-          state_name: result.state_name,
+          state_code: lockedState?.state_code ?? result.state_code,
+          state_name: lockedState?.state_name ?? result.state_name,
         }));
       } catch (err) {
         lastResolvedPincodeRef.current = "";
@@ -142,7 +139,7 @@ export function DistributorHeadAddBranchDialog({
         setPincodeLoading(false);
       }
     },
-    [],
+    [lockedState],
   );
 
   const handlePincodeChange = (value: string) => {
@@ -172,12 +169,11 @@ export function DistributorHeadAddBranchDialog({
         city: form.city?.trim() || undefined,
         state_code: form.state_code.trim().toUpperCase(),
         state_name: form.state_name.trim(),
-        manager_user_id: form.manager_user_id,
       });
       onOpenChange(false);
       onCreated?.();
     } catch (err) {
-      setError(getErrorMessage(err, "Could not create branch."));
+      setError(getErrorMessage(err, "Could not submit branch opening request."));
     } finally {
       setLoading(false);
     }
@@ -188,13 +184,17 @@ export function DistributorHeadAddBranchDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Add branch"
-      description="Create a branch and assign a branch manager admin user."
+      description={
+        lockedState
+          ? `Submit a branch opening request in ${lockedState.state_name} (${lockedState.state_code}) for Super Head approval.`
+          : "Submit a branch opening request for Super Head approval. You can assign a manager after it is approved."
+      }
       icon={Building2}
       footer={
         <AdminDialogFooter>
           <AdminDialogFooterActions
             cancelLabel="Cancel"
-            confirmLabel="Create branch"
+            confirmLabel="Submit for approval"
             loading={loading}
             confirmDisabled={
               !form.name.trim() ||
@@ -203,9 +203,8 @@ export function DistributorHeadAddBranchDialog({
               !form.city.trim() ||
               !form.state_code.trim() ||
               !form.state_name.trim() ||
-              !form.manager_user_id ||
-              candidatesLoading ||
-              pincodeLoading
+              pincodeLoading ||
+              Boolean(pincodeError)
             }
             onCancel={() => onOpenChange(false)}
             onConfirm={() => void handleSubmit()}
@@ -213,9 +212,20 @@ export function DistributorHeadAddBranchDialog({
         </AdminDialogFooter>
       }
     >
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
+        {lockedState ? (
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Assigned state</Label>
+            <Input
+              value={`${lockedState.state_name} (${lockedState.state_code})`}
+              readOnly
+              disabled
+            />
+          </div>
+        ) : null}
+
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="branch-name">Branch name</Label>
           <Input
@@ -233,7 +243,7 @@ export function DistributorHeadAddBranchDialog({
               id="branch-pincode"
               inputMode="numeric"
               maxLength={6}
-              placeholder="560102"
+              placeholder="462001"
               value={pincode}
               className="font-mono"
               onChange={(event) => handlePincodeChange(event.target.value)}
@@ -251,54 +261,28 @@ export function DistributorHeadAddBranchDialog({
           {!pincodeError && !locationResolved && pincode.length > 0 && pincode.length < 6 ? (
             <p className="text-sm text-muted-foreground">Enter all 6 digits to load city and state.</p>
           ) : null}
+          {!pincodeError && lockedState ? (
+            <p className="text-sm text-muted-foreground">
+              PIN code must resolve to {lockedState.state_name} ({lockedState.state_code}).
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="branch-city">City</Label>
-          <Input
-            id="branch-city"
-            value={form.city}
-            placeholder="Resolved from PIN code"
-            readOnly
-            disabled
-          />
+          <Input id="branch-city" value={form.city} placeholder="Resolved from PIN code" readOnly disabled />
         </div>
         <div className="space-y-2">
           <Label htmlFor="branch-state">State</Label>
           <Input
             id="branch-state"
             value={
-              form.state_name && form.state_code
-                ? `${form.state_name} (${form.state_code})`
-                : ""
+              form.state_name && form.state_code ? `${form.state_name} (${form.state_code})` : ""
             }
             placeholder="Resolved from PIN code"
             readOnly
             disabled
           />
-        </div>
-
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="branch-manager">{MITRA_HIERARCHY_COPY.branchManager}</Label>
-          {candidatesLoading ? (
-            <div className="flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Loading {MITRA_HIERARCHY_COPY.branchManager.toLowerCase()} options…
-            </div>
-          ) : (
-            <AdminSelect
-              value={form.manager_user_id}
-              open={managerSelectOpen}
-              onOpenChange={setManagerSelectOpen}
-              size="default"
-              onValueChange={(value) => setForm((current) => ({ ...current, manager_user_id: value }))}
-              options={managerOptions}
-              placeholder={`Select ${MITRA_HIERARCHY_COPY.branchManager.toLowerCase()}`}
-              disabled={candidates.length === 0}
-              className="w-full"
-              triggerClassName="w-full"
-            />
-          )}
         </div>
       </div>
     </AdminFormDialog>

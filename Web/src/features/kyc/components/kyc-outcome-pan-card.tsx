@@ -3,7 +3,6 @@
 import { CreditCard } from "lucide-react";
 
 import type { KycOutcomeVariant } from "@/features/kyc/lib/kyc-outcome-lottie";
-import { maskPanNumber } from "@/features/kyc/lib/mask-pan-number";
 import { cn } from "@/lib/utils";
 
 type KycOutcomePanCardProps = {
@@ -12,33 +11,6 @@ type KycOutcomePanCardProps = {
   variant: KycOutcomeVariant;
   className?: string;
 };
-
-function MaskedPanValue({ pan }: { pan: string }) {
-  const masked = maskPanNumber(pan);
-
-  if (masked.length <= 2) {
-    return (
-      <span className="whitespace-nowrap font-mono text-body font-semibold uppercase tracking-[0.18em] text-foreground">
-        {masked}
-      </span>
-    );
-  }
-
-  const first = masked[0];
-  const middle = masked.slice(1, -1);
-  const last = masked[masked.length - 1];
-
-  return (
-    <span
-      className="whitespace-nowrap font-mono text-body font-semibold uppercase tabular-nums tracking-[0.18em]"
-      aria-label={`PAN ending in ${last}`}
-    >
-      <span className="text-foreground">{first}</span>
-      <span className="text-muted-foreground/55">{middle}</span>
-      <span className="text-foreground">{last}</span>
-    </span>
-  );
-}
 
 const variantStyles = {
   success: {
@@ -94,7 +66,9 @@ export function KycOutcomePanCard({ label, pan, variant, className }: KycOutcome
           styles.panSurface,
         )}
       >
-        <MaskedPanValue pan={pan} />
+        <span className="whitespace-nowrap font-mono text-body font-semibold uppercase tracking-[0.18em] text-foreground">
+          {pan}
+        </span>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ import {
   adminLogout,
   adminVerifyMfa,
   bootstrapAdminSession,
-  fetchAdminPermissions,
+  fetchAdminRbacMe,
   fetchCurrentAdminUser,
   getDisplayName,
   isAuthenticatedResponse,
@@ -27,6 +27,8 @@ import { setAccessToken } from "@/lib/api-client";
 type AdminAuthContextValue = {
   user: AdminUser | null;
   permissions: string[];
+  roleKeys: string[];
+  soleSuperAdmin: boolean;
   loading: boolean;
   displayName: string;
   signIn: (
@@ -40,13 +42,25 @@ type AdminAuthContextValue = {
   refreshUser: () => Promise<AdminUser | null>;
   completeSession: () => Promise<void>;
   hasPermission: (key: string) => boolean;
+  hasRole: (roleKey: string) => boolean;
 };
 
 const AdminAuthContext = createContext<AdminAuthContextValue | null>(null);
 
+async function loadRbacState() {
+  const rbac = await fetchAdminRbacMe();
+  return {
+    permissions: rbac.permissions,
+    roleKeys: rbac.role_keys,
+    soleSuperAdmin: rbac.sole_super_admin ?? false,
+  };
+}
+
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [roleKeys, setRoleKeys] = useState<string[]>([]);
+  const [soleSuperAdmin, setSoleSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,6 +70,8 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setUser(result.user);
       setPermissions(result.permissions);
+      setRoleKeys(result.roleKeys);
+      setSoleSuperAdmin(result.soleSuperAdmin);
       setLoading(false);
     });
 
@@ -68,8 +84,10 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     const result = await adminLogin(email, password, turnstileToken);
     if (isAuthenticatedResponse(result)) {
       setUser(result.user);
-      const nextPermissions = await fetchAdminPermissions();
-      setPermissions(nextPermissions);
+      const rbac = await loadRbacState();
+      setPermissions(rbac.permissions);
+      setRoleKeys(rbac.roleKeys);
+      setSoleSuperAdmin(rbac.soleSuperAdmin);
     }
     return result;
   }, []);
@@ -77,21 +95,27 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const verifyMfa = useCallback(async (mfaToken: string, totpCode: string) => {
     const result = await adminVerifyMfa(mfaToken, totpCode);
     setUser(result.user);
-    const nextPermissions = await fetchAdminPermissions();
-    setPermissions(nextPermissions);
+    const rbac = await loadRbacState();
+    setPermissions(rbac.permissions);
+    setRoleKeys(rbac.roleKeys);
+    setSoleSuperAdmin(rbac.soleSuperAdmin);
   }, []);
 
   const signOut = useCallback(async () => {
     await adminLogout();
     setUser(null);
     setPermissions([]);
+    setRoleKeys([]);
+    setSoleSuperAdmin(false);
     setAccessToken(null);
   }, []);
 
   const refreshPermissions = useCallback(async () => {
-    const next = await fetchAdminPermissions();
-    setPermissions(next);
-    return next;
+    const rbac = await loadRbacState();
+    setPermissions(rbac.permissions);
+    setRoleKeys(rbac.roleKeys);
+    setSoleSuperAdmin(rbac.soleSuperAdmin);
+    return rbac.permissions;
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -107,14 +131,18 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const completeSession = useCallback(async () => {
     const next = await fetchCurrentAdminUser();
     setUser(next);
-    const nextPermissions = await fetchAdminPermissions();
-    setPermissions(nextPermissions);
+    const rbac = await loadRbacState();
+    setPermissions(rbac.permissions);
+    setRoleKeys(rbac.roleKeys);
+    setSoleSuperAdmin(rbac.soleSuperAdmin);
   }, []);
 
   const value = useMemo<AdminAuthContextValue>(
     () => ({
       user,
       permissions,
+      roleKeys,
+      soleSuperAdmin,
       loading,
       displayName: user ? getDisplayName(user) : "",
       signIn,
@@ -124,8 +152,21 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       completeSession,
       hasPermission: (key: string) => permissions.includes(key),
+      hasRole: (roleKey: string) => roleKeys.includes(roleKey),
     }),
-    [completeSession, loading, permissions, refreshPermissions, refreshUser, signIn, signOut, user, verifyMfa]
+    [
+      completeSession,
+      loading,
+      permissions,
+      refreshPermissions,
+      refreshUser,
+      roleKeys,
+      signIn,
+      signOut,
+      soleSuperAdmin,
+      user,
+      verifyMfa,
+    ],
   );
 
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>;

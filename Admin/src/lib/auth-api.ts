@@ -35,28 +35,40 @@ export function getDisplayName(user: AdminUser) {
   return parts.length ? parts.join(" ") : user.email.split("@")[0];
 }
 
+import { isDistributorConsoleOnlyUser } from "@/lib/admin-mitra-roles";
+
+const ADMIN_CONSOLE_ACCESS_ERROR =
+  "This account is for the Zynd Mitra console. Sign in at the distributor dashboard.";
+
 function assertAdminUser(user: AdminUser) {
   if (user.role !== "admin") {
     throw new Error("This account does not have admin access.");
   }
 }
 
+function assertAdminConsoleAccess(roleKeys: string[]) {
+  if (isDistributorConsoleOnlyUser(roleKeys)) {
+    throw new Error(ADMIN_CONSOLE_ACCESS_ERROR);
+  }
+}
+
 export async function bootstrapAdminSession() {
   const result = await refreshSession();
   if (!result.ok) {
-    return { user: null as AdminUser | null, permissions: [] as string[], reason: result.reason };
+    return { user: null as AdminUser | null, permissions: [] as string[], roleKeys: [] as string[], soleSuperAdmin: false, reason: result.reason };
   }
 
   try {
-    const [user, permissions] = await Promise.all([
+    const [user, rbac] = await Promise.all([
       apiRequest<AdminUser>("/auth/me"),
-      apiRequest<{ permissions: string[] }>("/admin/rbac/me"),
+      fetchAdminRbacMe(),
     ]);
     assertAdminUser(user);
-    return { user, permissions: permissions.permissions, reason: null };
+    assertAdminConsoleAccess(rbac.role_keys);
+    return { user, permissions: rbac.permissions, roleKeys: rbac.role_keys, soleSuperAdmin: rbac.sole_super_admin ?? false, reason: null };
   } catch {
     setAccessToken(null);
-    return { user: null, permissions: [], reason: "expired" as const };
+    return { user: null, permissions: [], roleKeys: [] as string[], soleSuperAdmin: false, reason: "expired" as const };
   }
 }
 
@@ -78,6 +90,13 @@ export async function adminLogin(
   if (isAuthenticatedResponse(result)) {
     assertAdminUser(result.user);
     setAccessToken(result.access_token);
+    try {
+      const rbac = await fetchAdminRbacMe();
+      assertAdminConsoleAccess(rbac.role_keys);
+    } catch (error) {
+      setAccessToken(null);
+      throw error;
+    }
   }
 
   return result;
@@ -96,6 +115,13 @@ export async function adminVerifyMfa(
   });
   assertAdminUser(result.user);
   setAccessToken(result.access_token);
+  try {
+    const rbac = await fetchAdminRbacMe();
+    assertAdminConsoleAccess(rbac.role_keys);
+  } catch (error) {
+    setAccessToken(null);
+    throw error;
+  }
   return result;
 }
 
@@ -104,9 +130,24 @@ export async function adminLogout() {
   setAccessToken(null);
 }
 
+export type AdminRbacMe = {
+  permissions: string[];
+  role_keys: string[];
+  sole_super_admin?: boolean;
+};
+
+export async function fetchAdminRbacMe(): Promise<AdminRbacMe> {
+  return apiRequest<AdminRbacMe>("/admin/rbac/me");
+}
+
 export async function fetchAdminPermissions() {
-  const result = await apiRequest<{ permissions: string[] }>("/admin/rbac/me");
+  const result = await fetchAdminRbacMe();
   return result.permissions;
+}
+
+export async function fetchAdminRoleKeys() {
+  const result = await fetchAdminRbacMe();
+  return result.role_keys;
 }
 
 export async function fetchCurrentAdminUser() {
@@ -123,6 +164,7 @@ export type AdminInvitePreview = {
   role_name: string | null;
   inviter_name: string | null;
   expires_at: string;
+  target_console: "admin" | "distributor";
 };
 
 export async function validateAdminInvite(token: string) {
@@ -136,13 +178,65 @@ export async function acceptAdminInvite(payload: {
   last_name?: string;
   password: string;
 }) {
-  const result = await apiRequest<AuthSuccessResponse>("/auth/admin-invite/accept", {
+  return apiRequest<{
+    next: "onboarding";
+    onboarding_token: string;
+    expires_in: number;
+  }>("/auth/admin-invite/accept", {
     method: "POST",
     body: JSON.stringify({
       token: payload.token,
       first_name: payload.first_name,
       last_name: payload.last_name ?? null,
       password: payload.password,
+      device_fingerprint: "admin-console",
+    }),
+  });
+}
+
+export async function adminInviteMfaStart(onboardingToken: string) {
+  return apiRequest<{
+    enroll_token: string;
+    qr_uri: string;
+    manual_secret: string;
+    expires_in: number;
+  }>("/auth/admin-invite/mfa/start", {
+    method: "POST",
+    body: JSON.stringify({ onboarding_token: onboardingToken }),
+  });
+}
+
+export async function adminInviteMfaConfirm(
+  onboardingToken: string,
+  enrollToken: string,
+  totpCode: string,
+) {
+  return apiRequest<{
+    enrolled: boolean;
+    backup_codes: string[];
+  }>("/auth/admin-invite/mfa/confirm", {
+    method: "POST",
+    body: JSON.stringify({
+      onboarding_token: onboardingToken,
+      enroll_token: enrollToken,
+      totp_code: totpCode,
+    }),
+  });
+}
+
+export async function completeAdminInvite(payload: {
+  onboardingToken: string;
+  pin: string;
+  confirmPin: string;
+  totpCode: string;
+}) {
+  const result = await apiRequest<AuthSuccessResponse>("/auth/admin-invite/complete", {
+    method: "POST",
+    body: JSON.stringify({
+      onboarding_token: payload.onboardingToken,
+      pin: payload.pin,
+      confirm_pin: payload.confirmPin,
+      totp_code: payload.totpCode,
       device_fingerprint: "admin-console",
     }),
   });

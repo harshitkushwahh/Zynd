@@ -44,15 +44,6 @@ export type DistributorHeadDistributor = {
   onboardingCompletePct?: number;
 };
 
-export type DistributorHeadSalesRow = {
-  id: string;
-  periodLabel: string;
-  lumpsumInr: number;
-  sipInr: number;
-  totalInr: number;
-  transactionCount: number;
-};
-
 export const DUMMY_STATE_HEAD = {
   id: "sh-mh-1",
   name: "Priya Kulkarni",
@@ -286,41 +277,6 @@ export const DUMMY_DISTRIBUTORS: DistributorHeadDistributor[] = [
   },
 ];
 
-export const DUMMY_SALES_ROWS: DistributorHeadSalesRow[] = [
-  {
-    id: "sales-jul",
-    periodLabel: "Jul 2026 (MTD)",
-    lumpsumInr: 2_84_00_000,
-    sipInr: 1_75_70_000,
-    totalInr: 4_59_70_000,
-    transactionCount: 1_842,
-  },
-  {
-    id: "sales-jun",
-    periodLabel: "Jun 2026",
-    lumpsumInr: 3_12_00_000,
-    sipInr: 1_68_40_000,
-    totalInr: 4_80_40_000,
-    transactionCount: 1_956,
-  },
-  {
-    id: "sales-may",
-    periodLabel: "May 2026",
-    lumpsumInr: 2_95_50_000,
-    sipInr: 1_62_10_000,
-    totalInr: 4_57_60_000,
-    transactionCount: 1_788,
-  },
-  {
-    id: "sales-apr",
-    periodLabel: "Apr 2026",
-    lumpsumInr: 3_08_20_000,
-    sipInr: 1_59_80_000,
-    totalInr: 4_68_00_000,
-    transactionCount: 1_801,
-  },
-];
-
 export type DistributorHeadLeaveApplication = {
   id: string;
   applicantName: string;
@@ -336,78 +292,7 @@ export type DistributorHeadLeaveApplication = {
   reason: string;
 };
 
-export const DUMMY_LEAVE_APPLICATIONS: DistributorHeadLeaveApplication[] = [
-  {
-    id: "leave-1",
-    applicantName: "Sneha Rao",
-    applicantRole: "Manager",
-    branchName: "College Road",
-    city: "Nashik",
-    leaveType: "Annual leave",
-    startDate: "2026-07-28",
-    endDate: "2026-08-08",
-    days: 10,
-    status: "Pending",
-    submittedAt: "2026-07-25T09:12:00.000Z",
-    reason: "Family travel — handover to deputy manager.",
-  },
-  {
-    id: "leave-2",
-    applicantName: "Mohit Agarwal",
-    applicantRole: "Distributor",
-    branchName: "PCMC",
-    city: "Pune",
-    leaveType: "Sick leave",
-    startDate: "2026-07-29",
-    endDate: "2026-07-31",
-    days: 3,
-    status: "Pending",
-    submittedAt: "2026-07-28T06:40:00.000Z",
-    reason: "Medical rest per clinic note.",
-  },
-  {
-    id: "leave-3",
-    applicantName: "Pooja Nair",
-    applicantRole: "Distributor",
-    branchName: "College Road",
-    city: "Nashik",
-    leaveType: "Casual leave",
-    startDate: "2026-08-02",
-    endDate: "2026-08-02",
-    days: 1,
-    status: "Pending",
-    submittedAt: "2026-07-27T14:20:00.000Z",
-    reason: "Personal errand.",
-  },
-  {
-    id: "leave-4",
-    applicantName: "Karan Joshi",
-    applicantRole: "Distributor",
-    branchName: "Thane",
-    city: "Mumbai NCR",
-    leaveType: "Annual leave",
-    startDate: "2026-07-10",
-    endDate: "2026-07-14",
-    days: 5,
-    status: "Approved",
-    submittedAt: "2026-07-01T11:00:00.000Z",
-    reason: "Short break after quarter close.",
-  },
-  {
-    id: "leave-5",
-    applicantName: "Vikram Singh",
-    applicantRole: "Distributor",
-    branchName: "Koregaon Park",
-    city: "Pune",
-    leaveType: "Unpaid leave",
-    startDate: "2026-07-20",
-    endDate: "2026-07-22",
-    days: 3,
-    status: "Rejected",
-    submittedAt: "2026-07-15T08:55:00.000Z",
-    reason: "Overlap with branch onboarding week.",
-  },
-];
+export const DUMMY_LEAVE_APPLICATIONS: DistributorHeadLeaveApplication[] = [];
 
 export function sumManagersSalesMtd() {
   return DUMMY_MANAGERS.reduce((sum, row) => sum + row.salesMtdInr, 0);

@@ -11,6 +11,7 @@ export type DistributorAgent = {
   branchName?: string;
   branchCode?: string;
   zyndClientId?: string;
+  phoneMasked?: string;
   avatarUrl?: string | null;
   /** ISO timestamp when the distributor account was created. */
   joinedAt?: string;

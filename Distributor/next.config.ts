@@ -6,6 +6,17 @@ const monorepoRoot = path.join(distributorRoot, "..");
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@zynd/shared"],
+  images: {
+    localPatterns: [
+      {
+        pathname: "/api/v1/documents/public/**",
+      },
+      {
+        pathname: "/**",
+        search: "",
+      },
+    ],
+  },
   turbopack: {
     root: monorepoRoot,
     resolveAlias: {

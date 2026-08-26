@@ -16,8 +16,8 @@ export function SettingsContentCard({ header, children, className }: SettingsCon
         className,
       )}
     >
-      <div className="shrink-0 px-6 pt-6 sm:px-8">{header}</div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-8 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
+      <div className="shrink-0 px-5 pt-5 sm:px-6">{header}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
         {children}
       </div>
     </div>

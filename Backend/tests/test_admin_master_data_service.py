@@ -6,6 +6,29 @@ from app.application.admin.admin_master_data_service import lookup_admin_pincode
 
 
 @pytest.mark.asyncio
+async def test_list_admin_states_normalizes_and_sorts(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_list_states() -> list[dict[str, str]]:
+        return [
+            {"name": "Maharashtra", "state_code": "MH", "country_ansi_code": "IN"},
+            {"name": "Karnataka", "state_code": "KA", "country_ansi_code": "IN"},
+            {"name": "", "state_code": "XX", "country_ansi_code": "IN"},
+        ]
+
+    monkeypatch.setattr(
+        "app.application.admin.admin_master_data_service.list_states",
+        fake_list_states,
+    )
+
+    from app.application.admin.admin_master_data_service import list_admin_states
+
+    result = await list_admin_states()
+    assert result == [
+        {"state_name": "Karnataka", "state_code": "KA"},
+        {"state_name": "Maharashtra", "state_code": "MH"},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_resolve_state_code_for_name_uses_finprim_states(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_list_states() -> list[dict[str, str]]:
         return [{"name": "Karnataka", "state_code": "KA", "country_ansi_code": "IN"}]

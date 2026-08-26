@@ -1,6 +1,19 @@
 import { env } from "@/lib/env";
 import type { AppleLoginProfile } from "@/features/auth/api/types";
 
+export class OAuthFlowCancelledError extends Error {
+  readonly cancelled = true;
+
+  constructor(readonly provider: "Google" | "Apple") {
+    super(`${provider} Sign-In was cancelled.`);
+    this.name = "OAuthFlowCancelledError";
+  }
+}
+
+export function isOAuthFlowCancelledError(error: unknown): boolean {
+  return error instanceof OAuthFlowCancelledError;
+}
+
 export type GoogleCredentialResult = {
   idToken: string;
 };
@@ -12,6 +25,31 @@ export type AppleCredentialResult = {
 
 const GOOGLE_SCRIPT_ID = "zynd-google-gsi-client";
 const APPLE_SCRIPT_ID = "zynd-apple-auth-js";
+const POPUP_CLOSED_GRACE_MS = 500;
+
+function attachPopupClosedDetector(onClosed: () => void): () => void {
+  let popupLikelyOpen = false;
+  let graceTimer = 0;
+
+  const handleBlur = () => {
+    popupLikelyOpen = true;
+  };
+
+  const handleFocus = () => {
+    if (!popupLikelyOpen) return;
+    window.clearTimeout(graceTimer);
+    graceTimer = window.setTimeout(onClosed, POPUP_CLOSED_GRACE_MS);
+  };
+
+  window.addEventListener("blur", handleBlur);
+  window.addEventListener("focus", handleFocus);
+
+  return () => {
+    window.removeEventListener("blur", handleBlur);
+    window.removeEventListener("focus", handleFocus);
+    window.clearTimeout(graceTimer);
+  };
+}
 
 function waitForGoogleSdk(timeoutMs = 8000): Promise<NonNullable<Window["google"]>> {
   return new Promise((resolve, reject) => {
@@ -127,7 +165,10 @@ export async function requestGoogleIdToken(): Promise<GoogleCredentialResult> {
       "position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;";
     document.body.appendChild(container);
 
+    let detachPopupDetector: () => void = () => undefined;
+
     const cleanup = () => {
+      detachPopupDetector();
       container.remove();
     };
 
@@ -139,6 +180,10 @@ export async function requestGoogleIdToken(): Promise<GoogleCredentialResult> {
       cleanup();
       handler();
     };
+
+    detachPopupDetector = attachPopupClosedDetector(() => {
+      finish(() => reject(new OAuthFlowCancelledError("Google")));
+    });
 
     const timeoutId = window.setTimeout(() => {
       finish(() => reject(new Error("Google Sign-In timed out. Try again.")));
@@ -152,7 +197,7 @@ export async function requestGoogleIdToken(): Promise<GoogleCredentialResult> {
       callback: (response: { credential?: string }) => {
         const credential = response.credential;
         if (!credential) {
-          finish(() => reject(new Error("Google Sign-In was cancelled.")));
+          finish(() => reject(new OAuthFlowCancelledError("Google")));
           return;
         }
         finish(() => resolve({ idToken: credential }));
@@ -209,20 +254,62 @@ export async function requestAppleIdToken(): Promise<AppleCredentialResult> {
     usePopup: true,
   });
 
-  const response = await apple.auth.signIn();
-  const idToken = response.authorization?.id_token;
-  if (!idToken) {
-    throw new Error("Apple Sign-In was cancelled.");
-  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let detachPopupDetector: () => void = () => undefined;
 
-  return {
-    idToken,
-    profile: {
-      userEmail: response.user?.email,
-      firstName: response.user?.name?.firstName,
-      lastName: response.user?.name?.lastName,
-    },
-  };
+    const handleFailure = (event: Event) => {
+      const detail = (event as CustomEvent<{ error?: string }>).detail;
+      if (detail?.error === "popup_closed_by_user") {
+        finish(() => reject(new OAuthFlowCancelledError("Apple")));
+      }
+    };
+
+    const finish = (handler: () => void) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("AppleIDSignInOnFailure", handleFailure);
+      detachPopupDetector();
+      handler();
+    };
+
+    document.addEventListener("AppleIDSignInOnFailure", handleFailure);
+
+    detachPopupDetector = attachPopupClosedDetector(() => {
+      finish(() => reject(new OAuthFlowCancelledError("Apple")));
+    });
+
+    void apple.auth
+      .signIn()
+      .then((response) => {
+        const idToken = response.authorization?.id_token;
+        if (!idToken) {
+          finish(() => reject(new OAuthFlowCancelledError("Apple")));
+          return;
+        }
+
+        finish(() =>
+          resolve({
+            idToken,
+            profile: {
+              userEmail: response.user?.email,
+              firstName: response.user?.name?.firstName,
+              lastName: response.user?.name?.lastName,
+            },
+          }),
+        );
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/cancel|popup_closed|user closed/i.test(message)) {
+          finish(() => reject(new OAuthFlowCancelledError("Apple")));
+          return;
+        }
+        finish(() =>
+          reject(error instanceof Error ? error : new Error("Apple Sign-In failed. Try again.")),
+        );
+      });
+  });
 }
 
 declare global {

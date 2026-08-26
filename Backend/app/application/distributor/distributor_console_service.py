@@ -42,5 +42,7 @@ async def get_distributor_console_context(
     return {
         "persona": persona,
         "client_id": user.client_id,
+        "phone_masked": (user.phone or "").strip(),
         "branch": branch_payload,
+        "branch_assigned": branch_payload is not None,
     }

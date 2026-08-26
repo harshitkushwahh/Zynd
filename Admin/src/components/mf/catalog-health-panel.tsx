@@ -191,7 +191,7 @@ export function CatalogHealthPanel({
 
   return (
     <section className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <AdminMetricCardsGrid>
         {healthMetrics.map((metric) => (

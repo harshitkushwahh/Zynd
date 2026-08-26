@@ -19,6 +19,50 @@ class DistributorPartnerStatus(str, enum.Enum):
     rejected = "rejected"
 
 
+class DistributorClientLink(Base):
+    """Investor book entry: one investor client attached to one Zynd Mitra code."""
+
+    __tablename__ = "distributor_client_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=False,
+    )
+    mitra_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    mitra_client_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    branch_id: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        ForeignKey("distributor_branches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    onboarded_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class DistributorPartner(Base):
     __tablename__ = "distributor_partners"
 

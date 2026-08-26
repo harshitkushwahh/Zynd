@@ -1,24 +1,38 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { Clock, LineChart } from "lucide-react";
+import { TabPanel } from "@/shared/ui/tab-panel";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { LineChart } from "lucide-react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { PortfolioAllocationPanel } from "@/features/dashboard/portfolio/components/portfolio-allocation-panel";
 import { PortfolioHoldingsTable } from "@/features/dashboard/portfolio/components/portfolio-holdings-table";
 import { PortfolioOverviewSkeleton } from "@/features/dashboard/portfolio/components/portfolio-overview-skeleton";
 import { PortfolioPageTabs } from "@/features/dashboard/portfolio/components/portfolio-page-tabs";
+import { PortfolioProcessingBanner } from "@/features/dashboard/portfolio/components/portfolio-processing-banner";
 import { PortfolioRedeemUnitsPanel } from "@/features/dashboard/portfolio/components/portfolio-redeem-units-panel";
 import { PortfolioSipsPanel } from "@/features/dashboard/portfolio/components/portfolio-sips-panel";
 import { PortfolioSummaryCard } from "@/features/dashboard/portfolio/components/portfolio-summary-card";
-import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
+import { PortfolioUninvestedEmptyState } from "@/features/dashboard/portfolio/components/portfolio-uninvested-empty-state";
 import { PortfolioTransactionsPanel } from "@/features/dashboard/portfolio/components/portfolio-transactions-panel";
+import { PortfolioUpcomingSipsPanel } from "@/features/dashboard/portfolio/components/portfolio-upcoming-sips-panel";
+import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
+import { useMfSipPlansQuery } from "@/features/invest/hooks/use-mf-sip-plans-query";
+import {
+  getUpcomingHoldingOrders,
+  sumUpcomingHoldingOrdersInr,
+} from "@/features/invest/lib/mf-transaction-filters";
+import { usePortfolioUninvestedEmpty } from "@/features/dashboard/portfolio/hooks/use-portfolio-uninvested-empty";
 import {
   usePortfolioHoldingsQuery,
   usePortfolioSummaryQuery,
 } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
+import { usePrefetchPortfolioTabs } from "@/features/dashboard/portfolio/hooks/use-prefetch-portfolio-tabs";
 import { getPortfolioTabMeta } from "@/features/dashboard/portfolio/lib/portfolio-page-tab-meta";
 import type { PortfolioPageTab } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
 import {
@@ -26,6 +40,10 @@ import {
   parsePortfolioPageTab,
   portfolioTabHref,
 } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
+import {
+  buildProcessingPortfolioFlowSeries,
+  buildProcessingPortfolioPreview,
+} from "@/features/dashboard/portfolio/lib/portfolio-processing-preview";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
@@ -81,11 +99,21 @@ function PortfolioOverviewPanel() {
   const overview = copy.dashboard.overview;
   const portfolioCopy = copy.dashboard.portfolio;
   const {
+    showUninvestedEmpty,
+    isProcessing,
+    processingTitle,
+    processingDescription,
+  } = usePortfolioUninvestedEmpty();
+  const { orders } = useMfOrdersQuery(100);
+  const upcomingOrders = useMemo(() => getUpcomingHoldingOrders(orders), [orders]);
+  const pendingInr = useMemo(() => sumUpcomingHoldingOrdersInr(orders), [orders]);
+  const {
     preview,
     flowSeries,
     showDayChange,
     summary,
     showSkeleton: summaryLoading,
+    hasResolved: summaryHasResolved,
     errorMessage: summaryError,
     refetch: refetchSummary,
     isFetching: summaryFetching,
@@ -93,17 +121,33 @@ function PortfolioOverviewPanel() {
   const {
     holdings,
     showSkeleton: holdingsLoading,
+    hasResolved: holdingsHasResolved,
     errorMessage: holdingsError,
-    status: holdingsStatus,
-    hasPendingOrders,
     refetch: refetchHoldings,
     isFetching: holdingsFetching,
   } = usePortfolioHoldingsQuery();
+  const { plans: sipPlans } = useMfSipPlansQuery();
 
-  const loading = summaryLoading || holdingsLoading;
+  const hasResolved = summaryHasResolved && holdingsHasResolved;
+  const showInitialSkeleton = !hasResolved && (summaryLoading || holdingsLoading);
   const errorMessage = summaryError || holdingsError;
+  const hasHoldings = holdings.length > 0;
+  const hasUpcoming = upcomingOrders.length > 0;
+  const showPortfolioOverview = hasHoldings || isProcessing || hasUpcoming;
 
-  if (loading) {
+  const displayPreview = useMemo(() => {
+    if (preview && hasHoldings) return preview;
+    if (isProcessing && pendingInr > 0) return buildProcessingPortfolioPreview(pendingInr, summary);
+    return preview;
+  }, [preview, hasHoldings, isProcessing, pendingInr, summary]);
+
+  const displaySeries = useMemo(() => {
+    if (flowSeries.length > 0) return flowSeries;
+    if (isProcessing && pendingInr > 0) return buildProcessingPortfolioFlowSeries(pendingInr);
+    return flowSeries;
+  }, [flowSeries, isProcessing, pendingInr]);
+
+  if (showInitialSkeleton) {
     return (
       <>
         <span className="sr-only">{portfolioCopy.overviewLoading}</span>
@@ -112,97 +156,126 @@ function PortfolioOverviewPanel() {
     );
   }
 
-  if (errorMessage || !preview || !summary) {
+  if (!hasResolved && errorMessage) {
     return (
-      <LoadErrorCard
-        icon={LineChart}
-        title={portfolioCopy.overviewLoadFailed}
-        description={errorMessage ?? portfolioCopy.overviewLoadFailedDescription}
-        retryLabel={portfolioCopy.retry}
-        retryLoading={summaryFetching || holdingsFetching}
-        onRetry={() => {
-          void refetchSummary();
-          void refetchHoldings();
-        }}
-      />
+      <DashboardContentFade>
+        <LoadErrorCard
+          icon={LineChart}
+          title={portfolioCopy.overviewLoadFailed}
+          description={errorMessage ?? portfolioCopy.overviewLoadFailedDescription}
+          retryLabel={portfolioCopy.retry}
+          retryLoading={summaryFetching || holdingsFetching}
+          onRetry={() => {
+            void refetchSummary();
+            void refetchHoldings();
+          }}
+        />
+      </DashboardContentFade>
     );
   }
 
-  const totalReturn = formatSignedReturn(preview.totalReturnPct);
-  const showEmpty = holdings.length === 0;
-  const showProcessing = showEmpty && (summary.status === "processing" || hasPendingOrders);
+  if (showUninvestedEmpty && !hasUpcoming) {
+    return (
+      <DashboardContentFade>
+        <PortfolioUninvestedEmptyState />
+      </DashboardContentFade>
+    );
+  }
+
+  if (!showPortfolioOverview || !displayPreview) {
+    return null;
+  }
+
+  const totalReturn = formatSignedReturn(displayPreview.totalReturnPct);
 
   return (
-    <>
+    <DashboardContentFade>
+      {isProcessing ? (
+        <PortfolioProcessingBanner title={processingTitle} description={processingDescription} />
+      ) : null}
+
       <div className="grid gap-3 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] lg:items-stretch">
         <div className="flex flex-col gap-3 lg:content-start">
           <PortfolioStatCard
             icon={Wallet}
             label={overview.portfolioInvested}
-            value={formatInr(preview.investedInr)}
+            value={formatInr(displayPreview.investedInr)}
           />
           <PortfolioStatCard
             icon={TrendingUp}
             label={overview.portfolioReturns}
             value={totalReturn.text}
-            sub={formatInr(preview.totalReturnInr)}
+            sub={formatInr(displayPreview.totalReturnInr)}
             tone={totalReturn.tone}
           />
           <div className="grid grid-cols-2 gap-3">
             <PortfolioStatCard
               icon={TrendingUp}
               label={overview.portfolioXirr}
-              value={preview.xirrPct > 0 ? `${preview.xirrPct.toFixed(1)}%` : overview.portfolioXirrUnavailable}
-              tone={preview.xirrPct > 0 ? "positive" : "muted"}
+              value={displayPreview.xirrPct > 0 ? `${displayPreview.xirrPct.toFixed(1)}%` : overview.portfolioXirrUnavailable}
+              tone={displayPreview.xirrPct > 0 ? "positive" : "muted"}
             />
             <PortfolioStatCard
               icon={CalendarClock}
               label={overview.portfolioActiveSips}
-              value={String(preview.activeSipsCount)}
-              sub={`${formatInr(preview.monthlySipInr)}/mo`}
+              value={String(displayPreview.activeSipsCount)}
+              sub={`${formatInr(displayPreview.monthlySipInr)}/mo`}
             />
           </div>
         </div>
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_15rem] lg:grid-cols-[minmax(0,1fr)_16rem] lg:items-stretch">
           <PortfolioSummaryCard
-            data={preview}
-            series={flowSeries}
-            showDayChange={showDayChange}
+            data={displayPreview}
+            series={displaySeries}
+            showDayChange={showDayChange && hasHoldings}
             className="shadow-zynd-low"
           />
           <PortfolioAllocationPanel
-            slices={preview.allocation}
+            slices={displayPreview.allocation}
             className="min-h-[13.5rem]"
           />
         </div>
       </div>
 
-      {showProcessing ? (
-        <PortfolioTabEmptyState
-          icon={Clock}
-          title={portfolioCopy.overviewProcessingTitle}
-          description={portfolioCopy.overviewProcessingDescription}
+      {summary?.upcoming_sips?.length ? (
+        <PortfolioUpcomingSipsPanel upcomingSips={summary.upcoming_sips} className="mt-4" />
+      ) : null}
+
+      {hasHoldings || hasUpcoming ? (
+        <PortfolioHoldingsTable
+          holdings={holdings}
+          upcomingOrders={upcomingOrders}
+          sipPlans={sipPlans}
           className="mt-4"
         />
       ) : null}
-
-      {showEmpty && !showProcessing ? (
-        <PortfolioTabEmptyState
-          icon={LineChart}
-          title={portfolioCopy.overviewEmptyTitle}
-          description={
-            holdingsStatus === "no_mfia" || holdingsStatus === "mfia_not_ready"
-              ? portfolioCopy.overviewMfiaPendingDescription
-              : portfolioCopy.overviewEmptyDescription
-          }
-          className="mt-4"
-        />
-      ) : null}
-
-      {!showEmpty ? <PortfolioHoldingsTable holdings={holdings} className="mt-4" /> : null}
-    </>
+    </DashboardContentFade>
   );
+}
+
+function PortfolioTabPanel({
+  tab,
+  activeTab,
+  children,
+}: {
+  tab: PortfolioPageTab;
+  activeTab: PortfolioPageTab;
+  children: ReactNode;
+}) {
+  return (
+    <TabPanel active={tab === activeTab}>
+      {children}
+    </TabPanel>
+  );
+}
+
+function readPortfolioTabFromLocation() {
+  if (typeof window === "undefined") {
+    return "overview" satisfies PortfolioPageTab;
+  }
+
+  return parsePortfolioPageTab(new URLSearchParams(window.location.search).get("tab"));
 }
 
 function portfolioBreadcrumbItems(tab: PortfolioPageTab) {
@@ -220,14 +293,32 @@ function portfolioBreadcrumbItems(tab: PortfolioPageTab) {
 }
 
 export function PortfolioPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = parsePortfolioPageTab(searchParams.get("tab"));
+  const [activeTab, setActiveTab] = useState<PortfolioPageTab>(() =>
+    parsePortfolioPageTab(searchParams.get("tab")),
+  );
   const tabMeta = getPortfolioTabMeta(activeTab);
   const HeaderIcon = tabMeta.icon;
 
+  usePrefetchPortfolioTabs();
+
+  useEffect(() => {
+    setActiveTab(parsePortfolioPageTab(searchParams.get("tab")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    function handlePopState() {
+      setActiveTab(readPortfolioTabFromLocation());
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   function handleTabChange(tab: PortfolioPageTab) {
-    router.replace(portfolioTabHref(tab), { scroll: false });
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    window.history.replaceState(window.history.state, "", portfolioTabHref(tab));
   }
 
   return (
@@ -240,11 +331,19 @@ export function PortfolioPage() {
         action={<PortfolioPageTabs value={activeTab} onChange={handleTabChange} />}
       />
 
-      <div className="mt-6" role="tabpanel">
-        {activeTab === "overview" ? <PortfolioOverviewPanel /> : null}
-        {activeTab === "sips" ? <PortfolioSipsPanel /> : null}
-        {activeTab === "redeem-units" ? <PortfolioRedeemUnitsPanel /> : null}
-        {activeTab === "transactions" ? <PortfolioTransactionsPanel /> : null}
+      <div className="mt-6">
+        <PortfolioTabPanel tab="overview" activeTab={activeTab}>
+          <PortfolioOverviewPanel />
+        </PortfolioTabPanel>
+        <PortfolioTabPanel tab="sips" activeTab={activeTab}>
+          <PortfolioSipsPanel />
+        </PortfolioTabPanel>
+        <PortfolioTabPanel tab="redeem-units" activeTab={activeTab}>
+          <PortfolioRedeemUnitsPanel />
+        </PortfolioTabPanel>
+        <PortfolioTabPanel tab="transactions" activeTab={activeTab}>
+          <PortfolioTransactionsPanel />
+        </PortfolioTabPanel>
       </div>
     </div>
   );

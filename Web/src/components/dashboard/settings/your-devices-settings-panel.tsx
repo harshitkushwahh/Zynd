@@ -124,8 +124,10 @@ export function YourDevicesSettingsPanel() {
   const [error, setError] = useState("");
   const [revokingAll, setRevokingAll] = useState(false);
 
-  const loadSessions = useCallback(async () => {
-    setLoading(true);
+  const loadSessions = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setError("");
     try {
       const result = await fetchSessions();
@@ -144,7 +146,7 @@ export function YourDevicesSettingsPanel() {
   const handleRevoke = async (sessionId: string) => {
     try {
       await revokeSession(sessionId);
-      await loadSessions();
+      await loadSessions(true);
     } catch (err) {
       setError(getErrorMessage(err, copy.settings.devicesRevokeFailed));
     }
@@ -155,7 +157,7 @@ export function YourDevicesSettingsPanel() {
     setError("");
     try {
       await revokeAllOtherSessions();
-      await loadSessions();
+      await loadSessions(true);
     } catch (err) {
       setError(getErrorMessage(err, copy.settings.devicesRevokeAllFailed));
     } finally {

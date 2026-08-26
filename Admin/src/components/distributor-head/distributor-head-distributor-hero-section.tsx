@@ -41,7 +41,7 @@ export function DistributorHeadDistributorHeroSection({
       <Card className="border-border/80">
         <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:gap-5">
           <Avatar className="size-14 shrink-0 rounded-xl">
-            <AvatarFallback className="rounded-xl bg-primary/10 text-lg font-semibold text-primary">
+            <AvatarFallback className="rounded-xl text-lg font-semibold">
               {initialsFromName(distributor.name)}
             </AvatarFallback>
           </Avatar>

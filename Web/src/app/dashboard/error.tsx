@@ -14,5 +14,9 @@ export default function DashboardError({ error, reset }: DashboardErrorProps) {
     console.error("[dashboard/error]", error);
   }, [error]);
 
-  return <ZyndErrorFallback variant="page" onRetry={reset} />;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ZyndErrorFallback variant="page" onRetry={reset} className="min-h-0 flex-1" />
+    </div>
+  );
 }

@@ -29,17 +29,28 @@ const RiskProfileGauge = dynamic(
     ),
   {
     ssr: false,
-    loading: () => <Skeleton className="h-8 w-[3.25rem]" />,
+    loading: () => <Skeleton className="h-14 w-[4.75rem]" />,
   },
 );
 
-const OVERVIEW_RISK_GAUGE_SIZE = "overview" as const;
+const OVERVIEW_RISK_GAUGE_SIZE = "mini" as const;
 
-const RISK_GAUGE_TILE_CLASS =
-  "flex size-11 shrink-0 items-end justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40 shadow-zynd-low";
-
-function RiskGaugeTile({ children }: { children: React.ReactNode }) {
-  return <div className={RISK_GAUGE_TILE_CLASS}>{children}</div>;
+function OverviewRiskGauge(props: {
+  score: number;
+  displayScore?: number | null;
+  tier: string;
+}) {
+  return (
+    <div className="flex shrink-0 items-center justify-center">
+      <RiskProfileGauge
+        score={props.score}
+        displayScore={props.displayScore}
+        tier={props.tier}
+        size={OVERVIEW_RISK_GAUGE_SIZE}
+        showCaption={false}
+      />
+    </div>
+  );
 }
 
 function RiskCardContent({
@@ -54,9 +65,9 @@ function RiskCardContent({
   scoreLabel: string;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-1 px-1 text-center">
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-1 px-1 text-center">
       {gauge}
-      <p className={cn("mt-1 text-caption font-semibold", tierClassName)}>{tierLabel}</p>
+      <p className={cn("text-caption font-semibold", tierClassName)}>{tierLabel}</p>
       <p className="text-[11px] tabular-nums text-muted-foreground">{scoreLabel}</p>
     </div>
   );
@@ -86,21 +97,17 @@ export function OverviewRiskCard({ className }: { className?: string }) {
     >
       <OverviewCompactCardHeader title={overview.riskTitle} groupHover />
 
-      <div className="mt-3 flex min-h-0 flex-1 flex-col">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col items-center justify-center">
       {isLocked ? (
-        <div className="relative flex h-full min-h-0 flex-1 flex-col">
-          <div className="pointer-events-none flex h-full min-h-0 flex-1 select-none flex-col blur-[5px]">
+        <div className="relative flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center">
+          <div className="pointer-events-none flex h-full min-h-0 w-full flex-1 select-none flex-col items-center justify-center blur-[5px]">
             <RiskCardContent
               gauge={
-                <RiskGaugeTile>
-                  <RiskProfileGauge
-                    score={OVERVIEW_RISK_LOCKED_SCORE}
-                    displayScore={OVERVIEW_RISK_LOCKED_DISPLAY_SCORE}
-                    tier={OVERVIEW_RISK_LOCKED_TIER}
-                    size={OVERVIEW_RISK_GAUGE_SIZE}
-                    showCaption={false}
-                  />
-                </RiskGaugeTile>
+                <OverviewRiskGauge
+                  score={OVERVIEW_RISK_LOCKED_SCORE}
+                  displayScore={OVERVIEW_RISK_LOCKED_DISPLAY_SCORE}
+                  tier={OVERVIEW_RISK_LOCKED_TIER}
+                />
               }
               tierLabel={placeholderTierVisual.label}
               tierClassName={placeholderTierVisual.textClass}
@@ -108,29 +115,19 @@ export function OverviewRiskCard({ className }: { className?: string }) {
             />
           </div>
           <OverviewLockedCardBackdrop />
-          <OverviewLockedCardOverlay
-            compact
-            title={overview.riskTitle}
-            subtitle={copy.riskProfile.lockedGaugeDescription}
-          />
+          <OverviewLockedCardOverlay stacked title={overview.riskTitle} />
         </div>
       ) : (
         <RiskCardContent
           gauge={
             loading && !profile ? (
-              <RiskGaugeTile>
-                <Skeleton className="h-8 w-[3.25rem]" />
-              </RiskGaugeTile>
+              <Skeleton className="h-14 w-[4.75rem]" />
             ) : hasProfile && profile && tierVisual && displayScore != null ? (
-              <RiskGaugeTile>
-                <RiskProfileGauge
-                  score={profile.score}
-                  displayScore={profile.display_score}
-                  tier={profile.tier}
-                  size={OVERVIEW_RISK_GAUGE_SIZE}
-                  showCaption={false}
-                />
-              </RiskGaugeTile>
+              <OverviewRiskGauge
+                score={profile.score}
+                displayScore={profile.display_score}
+                tier={profile.tier}
+              />
             ) : null
           }
           tierLabel={
@@ -169,7 +166,7 @@ export function OverviewRiskCardSkeleton({ className }: { className?: string }) 
         <Skeleton className="size-3.5" />
       </div>
       <div className="flex flex-1 flex-col items-center justify-center gap-2 px-1">
-        <Skeleton className="size-11 rounded-full" />
+        <Skeleton className="h-14 w-[4.75rem]" />
         <Skeleton className="h-4 w-16" />
         <Skeleton className="h-3 w-12" />
       </div>

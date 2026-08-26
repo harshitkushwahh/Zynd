@@ -33,6 +33,7 @@ from app.application.distributor.partner_verification_service import (
 from app.application.kyc.bank_verification_core import HybridBankVerificationOutcome
 from app.core.config import get_settings
 from app.infrastructure.persistence.distributor_partner_models import DistributorPartner
+from app.infrastructure.persistence.distributor_branch_models import DistributorBranch, DistributorBranchStatus
 from app.infrastructure.persistence.models import User, UserRole, UserStatus
 
 
@@ -54,7 +55,28 @@ def _png_bytes(width: int = 256, height: int = 256) -> bytes:
         )
 
 
-async def _create_manager(db: AsyncSession, email: str | None = None) -> User:
+async def _assign_manager_branch(db: AsyncSession, manager: User) -> DistributorBranch:
+    branch = DistributorBranch(
+        id=f"br-{uuid.uuid4().hex[:8]}",
+        branch_code=f"T{uuid.uuid4().hex[:6].upper()}",
+        name="Test Branch",
+        city="Mumbai",
+        state_code="MH",
+        state_name="Maharashtra",
+        status=DistributorBranchStatus.active,
+        manager_user_id=manager.id,
+    )
+    db.add(branch)
+    await db.flush()
+    return branch
+
+
+async def _create_manager(
+    db: AsyncSession,
+    email: str | None = None,
+    *,
+    assign_branch: bool = True,
+) -> User:
     manager_email = email or f"manager-onboard-{uuid.uuid4().hex[:8]}@example.com"
     await ensure_rbac_seed(db)
     manager = User(
@@ -68,6 +90,8 @@ async def _create_manager(db: AsyncSession, email: str | None = None) -> User:
     db.add(manager)
     await db.flush()
     await set_admin_user_roles(db, user_id=manager.id, role_keys=[DISTRIBUTOR_MANAGER_ROLE_KEY])
+    if assign_branch:
+        await _assign_manager_branch(db, manager)
     return manager
 
 
@@ -98,8 +122,12 @@ async def test_partner_onboarding_submits_for_ho_review(
             requires_manual=False,
             requires_proof_upload=False,
             failure=None,
-            display_holder_name="New Mitra",
+            kyckart_holder_name="New Mitra",
+            kyckart_lookup_error=None,
             pan_holder_name="New Mitra",
+            poa_pan_status={"status": "verified"},
+            poa_bank_status={"status": "verified"},
+            poa_readiness_status={"status": "failed"},
             bank_name="HDFC Bank",
             branch="Mumbai",
             poa_account_type="savings",
@@ -141,6 +169,7 @@ async def test_partner_onboarding_submits_for_ho_review(
     mobile = f"91{uuid.uuid4().int % 10_000_000_00:08d}"[-10:]
     await send_partner_onboarding_mobile_otp(
         db_session,
+        manager=manager,
         onboarding_token=token,
         mobile=mobile,
         ip="127.0.0.1",
@@ -169,6 +198,7 @@ async def test_partner_onboarding_submits_for_ho_review(
         },
     )
     await upload_partner_onboarding_document(
+        db_session,
         manager=manager,
         onboarding_token=token,
         doc_type="pan",
@@ -177,6 +207,7 @@ async def test_partner_onboarding_submits_for_ho_review(
         content=b"%PDF-1.4 test",
     )
     await upload_partner_onboarding_document(
+        db_session,
         manager=manager,
         onboarding_token=token,
         doc_type="aadhaar",
@@ -185,6 +216,7 @@ async def test_partner_onboarding_submits_for_ho_review(
         content=b"%PDF-1.4 test",
     )
     await upload_partner_onboarding_profile_photo(
+        db_session,
         manager=manager,
         onboarding_token=token,
         filename="avatar.png",
@@ -230,7 +262,7 @@ async def test_partner_onboarding_rejects_non_manager(db_session: AsyncSession) 
     )
     db_session.add(user)
     await db_session.flush()
-    await set_admin_user_roles(db_session, user_id=user.id, role_keys=["distributor_console"])
+    await set_admin_user_roles(db_session, user_id=user.id, role_keys=["mitra"])
 
     with pytest.raises(PartnerOnboardingError) as exc_info:
         await start_partner_onboarding(
@@ -240,6 +272,20 @@ async def test_partner_onboarding_rejects_non_manager(db_session: AsyncSession) 
             ip=None,
         )
     assert exc_info.value.code == "manager_required"
+
+
+@pytest.mark.asyncio
+async def test_partner_onboarding_requires_branch_assignment(db_session: AsyncSession) -> None:
+    manager = await _create_manager(db_session, assign_branch=False)
+
+    with pytest.raises(PartnerOnboardingError) as exc_info:
+        await start_partner_onboarding(
+            db_session,
+            manager=manager,
+            email="unassigned.branch@example.com",
+            ip="127.0.0.1",
+        )
+    assert exc_info.value.code == "branch_assignment_required"
 
 
 @pytest.mark.asyncio
@@ -278,6 +324,7 @@ async def test_partner_onboarding_manual_bank_verify(
     await verify_partner_onboarding_email(onboarding_token=token, otp="123456")
     await send_partner_onboarding_mobile_otp(
         db_session,
+        manager=manager,
         onboarding_token=token,
         mobile="9123456780",
         ip="127.0.0.1",
@@ -318,6 +365,7 @@ async def _verified_onboarding_token(
     await verify_partner_onboarding_email(onboarding_token=token, otp="123456")
     await send_partner_onboarding_mobile_otp(
         db_session,
+        manager=manager,
         onboarding_token=token,
         mobile=mobile,
         ip="127.0.0.1",
@@ -353,6 +401,7 @@ async def test_partner_onboarding_document_patch_preserves_upload_flags(
     )
 
     pan_result = await upload_partner_onboarding_document(
+        db_session,
         manager=manager,
         onboarding_token=token,
         doc_type="pan",
@@ -405,6 +454,7 @@ async def test_partner_onboarding_upload_uses_generated_filenames(
     )
 
     pan_result = await upload_partner_onboarding_document(
+        db_session,
         manager=manager,
         onboarding_token=token,
         doc_type="pan",
@@ -413,6 +463,7 @@ async def test_partner_onboarding_upload_uses_generated_filenames(
         content=b"%PDF-1.4 test",
     )
     aadhaar_result = await upload_partner_onboarding_document(
+        db_session,
         manager=manager,
         onboarding_token=token,
         doc_type="aadhaar",
@@ -421,6 +472,7 @@ async def test_partner_onboarding_upload_uses_generated_filenames(
         content=b"%PDF-1.4 test",
     )
     photo_result = await upload_partner_onboarding_profile_photo(
+        db_session,
         manager=manager,
         onboarding_token=token,
         filename="avatar.png",

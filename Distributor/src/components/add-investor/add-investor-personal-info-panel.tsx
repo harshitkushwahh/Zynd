@@ -10,45 +10,56 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ADD_INVESTOR_PERSONAL_OPTIONS,
-  normalizeAddInvestorPersonalDraft,
-  type AddInvestorPersonalDraft,
-} from "@/lib/add-investor/add-investor-journey";
+  lookupAddInvestorEnumLabel,
+  type AddInvestorPersonalOptions,
+} from "@/lib/add-investor/add-investor-kyc-master-data";
+import { ADD_INVESTOR_PERSONAL_OPTIONS, normalizeAddInvestorPersonalDraft, type AddInvestorPersonalDraft } from "@/lib/add-investor/add-investor-journey";
 import { cn } from "@/lib/utils";
 
 type AddInvestorPersonalInfoPanelProps = {
   personal: AddInvestorPersonalDraft;
   onPersonalChange: (patch: Partial<AddInvestorPersonalDraft>) => void;
+  personalOptions?: AddInvestorPersonalOptions;
 };
 
-function countryOfOriginLabel(value: string): string {
-  return (
-    ADD_INVESTOR_PERSONAL_OPTIONS.countryOfOrigin.find((option) => option.value === value)?.label ??
-    value
-  );
+function resolvePersonalOptions(personalOptions?: AddInvestorPersonalOptions): AddInvestorPersonalOptions {
+  if (personalOptions) return personalOptions;
+  return {
+    gender: [...ADD_INVESTOR_PERSONAL_OPTIONS.gender],
+    maritalStatus: [...ADD_INVESTOR_PERSONAL_OPTIONS.maritalStatus],
+    occupation: [...ADD_INVESTOR_PERSONAL_OPTIONS.occupation],
+    incomeSlab: [...ADD_INVESTOR_PERSONAL_OPTIONS.incomeSlab],
+    pepExposed: [...ADD_INVESTOR_PERSONAL_OPTIONS.pepExposed],
+    countryOfOrigin: [...ADD_INVESTOR_PERSONAL_OPTIONS.countryOfOrigin],
+  };
 }
 
 function personalOptionLabel(
-  field: keyof typeof ADD_INVESTOR_PERSONAL_OPTIONS,
+  options: AddInvestorPersonalOptions,
+  field: keyof Omit<AddInvestorPersonalOptions, "countryOfOrigin">,
   value: string,
 ): string {
-  return (
-    ADD_INVESTOR_PERSONAL_OPTIONS[field].find((option) => option.value === value)?.label ?? value
-  );
+  return lookupAddInvestorEnumLabel(value, options[field]);
 }
 
-export function formatAddInvestorPersonalSummary(personal: AddInvestorPersonalDraft): string {
+export function formatAddInvestorPersonalSummary(
+  personal: AddInvestorPersonalDraft,
+  personalOptions?: AddInvestorPersonalOptions,
+): string {
+  const options = resolvePersonalOptions(personalOptions);
   const normalized = normalizeAddInvestorPersonalDraft(personal);
   const parts = [
     normalized.fathersName.trim(),
-    personalOptionLabel("occupation", normalized.occupation),
-    personalOptionLabel("incomeSlab", normalized.incomeSlab),
-    `PEP: ${personalOptionLabel("pepExposed", normalized.pepExposed)}`,
+    personalOptionLabel(options, "occupation", normalized.occupation),
+    personalOptionLabel(options, "incomeSlab", normalized.incomeSlab),
+    `PEP: ${personalOptionLabel(options, "pepExposed", normalized.pepExposed)}`,
     normalized.placeOfBirth.trim(),
   ];
 
   if (normalized.countryOfOrigin) {
-    parts.push(`Origin: ${countryOfOriginLabel(normalized.countryOfOrigin)}`);
+    parts.push(
+      `Origin: ${lookupAddInvestorEnumLabel(normalized.countryOfOrigin, options.countryOfOrigin)}`,
+    );
   }
 
   return parts.filter(Boolean).join(" · ");
@@ -56,28 +67,30 @@ export function formatAddInvestorPersonalSummary(personal: AddInvestorPersonalDr
 
 export function formatAddInvestorPersonalReviewItems(
   personal: AddInvestorPersonalDraft,
+  personalOptions?: AddInvestorPersonalOptions,
 ): Array<{ label: string; value: string }> {
+  const options = resolvePersonalOptions(personalOptions);
   const normalized = normalizeAddInvestorPersonalDraft(personal);
 
   return [
     { label: "Father's name", value: normalized.fathersName.trim() },
     {
       label: "Occupation",
-      value: personalOptionLabel("occupation", normalized.occupation),
+      value: personalOptionLabel(options, "occupation", normalized.occupation),
     },
     {
       label: "Income slab",
-      value: personalOptionLabel("incomeSlab", normalized.incomeSlab),
+      value: personalOptionLabel(options, "incomeSlab", normalized.incomeSlab),
     },
     {
       label: "PEP status",
-      value: personalOptionLabel("pepExposed", normalized.pepExposed),
+      value: personalOptionLabel(options, "pepExposed", normalized.pepExposed),
     },
     { label: "Place of birth", value: normalized.placeOfBirth.trim() },
     {
       label: "Country of origin",
       value: normalized.countryOfOrigin
-        ? countryOfOriginLabel(normalized.countryOfOrigin)
+        ? lookupAddInvestorEnumLabel(normalized.countryOfOrigin, options.countryOfOrigin)
         : "",
     },
   ].filter((item) => item.value.trim());
@@ -120,7 +133,10 @@ function PersonalSelectField({
 export function AddInvestorPersonalInfoPanel({
   personal,
   onPersonalChange,
+  personalOptions,
 }: AddInvestorPersonalInfoPanelProps) {
+  const options = resolvePersonalOptions(personalOptions);
+
   return (
     <div className="add-investor-personal-info-panel">
       <FieldGroup className="add-investor-personal-info-panel__fields">
@@ -138,7 +154,7 @@ export function AddInvestorPersonalInfoPanel({
         <fieldset className="add-investor-personal-info-panel__gender">
           <legend className="add-investor-personal-info-panel__gender-label">Gender</legend>
           <div className="add-investor-personal-info-panel__gender-options" role="radiogroup">
-            {ADD_INVESTOR_PERSONAL_OPTIONS.gender.map((option) => {
+            {options.gender.map((option) => {
               const isSelected = personal.gender === option.value;
               return (
                 <label
@@ -169,7 +185,7 @@ export function AddInvestorPersonalInfoPanel({
             label="Occupation"
             value={personal.occupation}
             placeholder="Select occupation"
-            options={ADD_INVESTOR_PERSONAL_OPTIONS.occupation}
+            options={options.occupation}
             onChange={(value) => onPersonalChange({ occupation: value })}
           />
           <PersonalSelectField
@@ -177,7 +193,7 @@ export function AddInvestorPersonalInfoPanel({
             label="Income slab"
             value={personal.incomeSlab}
             placeholder="Select income"
-            options={ADD_INVESTOR_PERSONAL_OPTIONS.incomeSlab}
+            options={options.incomeSlab}
             onChange={(value) => onPersonalChange({ incomeSlab: value })}
           />
         </div>
@@ -188,7 +204,7 @@ export function AddInvestorPersonalInfoPanel({
             label="Marital status"
             value={personal.maritalStatus}
             placeholder="Select status"
-            options={ADD_INVESTOR_PERSONAL_OPTIONS.maritalStatus}
+            options={options.maritalStatus}
             onChange={(value) => onPersonalChange({ maritalStatus: value })}
           />
           <PersonalSelectField
@@ -196,8 +212,8 @@ export function AddInvestorPersonalInfoPanel({
             label="Politically exposed person (PEP)"
             value={personal.pepExposed}
             placeholder="Select PEP status"
-            options={ADD_INVESTOR_PERSONAL_OPTIONS.pepExposed}
-            onChange={(value) => onPersonalChange({ pepExposed: value || "no" })}
+            options={options.pepExposed}
+            onChange={(value) => onPersonalChange({ pepExposed: value || "not_applicable" })}
           />
         </div>
 
@@ -227,7 +243,7 @@ export function AddInvestorPersonalInfoPanel({
                 <SelectValue placeholder="Select country (optional)" />
               </SelectTrigger>
               <SelectContent>
-                {ADD_INVESTOR_PERSONAL_OPTIONS.countryOfOrigin.map((option) => (
+                {options.countryOfOrigin.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

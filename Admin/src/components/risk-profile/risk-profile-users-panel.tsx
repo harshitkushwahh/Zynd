@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { pickUserRef } from "@/lib/admin-user-ref";
 import { getErrorMessage } from "@/lib/errors";
 import { downloadAdminRiskProfileReport } from "@/lib/risk-profile-pdf-download";
 import {
@@ -127,7 +128,7 @@ export function RiskProfileUsersPanel({
   };
 
   const handleDownloadReport = async (item: UserRiskProfileItem) => {
-    await downloadAdminRiskProfileReport(item.user_id, item.assessment_id);
+    await downloadAdminRiskProfileReport(pickUserRef(item), item.assessment_id);
   };
 
   return (
@@ -167,7 +168,7 @@ export function RiskProfileUsersPanel({
       ) : null}
 
       {error || loadError ? (
-        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
       ) : null}
 
       <AdminDataTable
@@ -278,7 +279,7 @@ export function RiskProfileUsersPanel({
       <RiskProfileAssessmentDetailDialog
         open={Boolean(detailState)}
         user={detailState?.user ?? null}
-        userId={detailState?.user.user_id ?? null}
+        userId={detailState ? pickUserRef(detailState.user) : null}
         assessmentId={detailState?.assessmentId ?? null}
         onClose={() => setDetailState(null)}
       />

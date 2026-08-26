@@ -44,7 +44,7 @@ async def list_security_review_items(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     query = (
-        select(SecurityReviewItem, User.email)
+        select(SecurityReviewItem, User.email, User.client_id)
         .join(User, SecurityReviewItem.user_id == User.id)
         .order_by(SecurityReviewItem.created_at.desc())
         .limit(limit)
@@ -54,11 +54,12 @@ async def list_security_review_items(
 
     result = await db.execute(query)
     items: list[dict[str, Any]] = []
-    for review, email in result.all():
+    for review, email, client_id in result.all():
         items.append(
             {
                 "id": review.id,
                 "user_id": review.user_id,
+                "client_id": client_id or "",
                 "user_email": email,
                 "reason": review.reason.value,
                 "status": review.status.value,

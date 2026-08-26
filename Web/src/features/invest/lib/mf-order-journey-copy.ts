@@ -1,39 +1,45 @@
+import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 import type { MfOrder, MfOrderEvent } from "@/features/invest/api/invest-api";
+import { copy } from "@/shared/config/copy";
 
 const SOURCE_LABELS: Record<string, string> = {
   SYSTEM: "Zynd",
-  WORKER: "Automatic update",
+  WORKER: "Zynd",
   USER: "You",
-  WEBHOOK: "Payment update",
+  WEBHOOK: "Zynd",
+  RECONCILE: "Zynd",
 };
 
 export type JourneyDisplayStep = {
-  event: MfOrderEvent;
+  event: MfOrderEvent | null;
   title: string;
   description: string | null;
   actor: string;
   toStatus: string;
+  badgeVariant: StatusBadgeVariant;
   isTerminal: boolean;
+  isComplete: boolean;
 };
 
 export type OrderJourneyView = {
   steps: JourneyDisplayStep[];
-  outcomeSummary: string | null;
 };
-
-function titleCaseStatus(status?: string | null) {
-  if (!status) return "Unknown";
-  return status
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
 
 function payloadString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function isPaymentAbandoned(order: MfOrder, events: MfOrderEvent[]) {
+  const status = order.status?.toUpperCase();
+  if (
+    status &&
+    status !== "CANCELLED" &&
+    status !== "FAILED" &&
+    order.failure_code !== "payment_abandoned"
+  ) {
+    return false;
+  }
+
   if (order.failure_code === "payment_abandoned") return true;
 
   const lastEvent = events[events.length - 1];
@@ -48,170 +54,242 @@ function isPaymentAbandoned(order: MfOrder, events: MfOrderEvent[]) {
   return events.some((event) => payloadString(event.payload?.reason) === "payment_abandoned");
 }
 
-function isTerminalStatus(status?: string | null) {
-  const normalized = status?.toLowerCase();
-  return normalized === "cancelled" || normalized === "failed";
+function wasRepairedAfterAbandon(events: MfOrderEvent[]) {
+  return events.some(
+    (event) =>
+      event.source?.toUpperCase() === "RECONCILE" ||
+      payloadString(event.payload?.repair) === "abandoned_paid",
+  );
 }
 
-function describePayload(
-  payload: Record<string, unknown> | null | undefined,
-  options?: { paymentAbandoned?: boolean },
-) {
-  if (!payload) return null;
-
-  const reason = payloadString(payload.reason);
-  if (reason === "payment_abandoned") {
-    return "Payment was not completed.";
+function hasPaymentCompleted(order: MfOrder, events: MfOrderEvent[]) {
+  const status = order.status?.toUpperCase();
+  if (status === "SUCCEEDED" || status === "SUBMITTED") return true;
+  if (status === "CANCELLED" || status === "FAILED") {
+    return wasRepairedAfterAbandon(events);
   }
 
-  if (reason) {
-    return reason.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
-  }
-
-  const fpState = payloadString(payload.fp_state);
-  const stage = payloadString(payload.stage);
-
-  if (options?.paymentAbandoned) return null;
-
-  if (stage === "poll" && fpState === "pending") {
-    return "Confirming your payment with the provider.";
-  }
-
-  if (stage === "poll" && fpState === "submitted") {
-    return "Your order was submitted to the fund house.";
-  }
-
-  if (stage === "confirm") {
-    return "Confirming your order.";
-  }
-
-  if (fpState) {
-    return `Provider status: ${titleCaseStatus(fpState).toLowerCase()}.`;
-  }
-
-  return null;
+  return events.some((event) => event.to_status?.toUpperCase() === "SUBMITTED");
 }
 
-function describeTransition(
-  fromStatus: string | null | undefined,
-  toStatus: string,
-  options?: { paymentAbandoned?: boolean; isCancelStep?: boolean },
-) {
-  const from = fromStatus?.toLowerCase();
-  const to = toStatus.toLowerCase();
-
-  if (options?.isCancelStep && options.paymentAbandoned) {
-    return "Checkout closed";
-  }
-
-  if (!from) {
-    if (to === "pending") return "Order placed";
-    if (to === "processing") return "Checkout prepared";
-    if (to === "payment_pending") return "Awaiting payment";
-    if (to === "submitted") return "Submitted to fund house";
-    if (to === "succeeded") return "Investment completed";
-    if (to === "failed") return "Order failed";
-    if (to === "cancelled") return "Order cancelled";
-    return `Moved to ${titleCaseStatus(to)}`;
-  }
-
-  if (from === "pending" && to === "processing") return "Sent for processing";
-  if (from === "processing" && to === "payment_pending") return "Awaiting payment";
-  if (from === "payment_pending" && to === "processing") {
-    return options?.paymentAbandoned ? "Syncing payment status" : "Payment received";
-  }
-  if (from === "processing" && to === "submitted") return "Submitted to fund house";
-  if (from === "submitted" && to === "succeeded") return "Units allotted";
-  if (to === "cancelled") return options?.paymentAbandoned ? "Checkout closed" : "Order cancelled";
-  if (to === "failed") return "Order failed";
-  if (to === "succeeded") return "Investment completed";
-
-  return `${titleCaseStatus(from)} to ${titleCaseStatus(to)}`;
+function findTimestamp(
+  order: MfOrder,
+  events: MfOrderEvent[],
+  matcher: (event: MfOrderEvent) => boolean,
+): string | null {
+  const matched = events.find(matcher);
+  return matched?.created_at ?? order.created_at ?? null;
 }
 
-function toDisplayStep(
-  event: MfOrderEvent,
-  options?: { paymentAbandoned?: boolean; isCancelStep?: boolean },
-): JourneyDisplayStep {
-  const paymentAbandoned = options?.paymentAbandoned ?? false;
-  const isCancelStep = options?.isCancelStep ?? false;
-  let description = describePayload(event.payload, { paymentAbandoned });
-
-  if (paymentAbandoned && !description && event.to_status === "payment_pending") {
-    description = "You were redirected to complete payment.";
-  }
-
+function syntheticEvent(createdAt: string | null): MfOrderEvent {
   return {
-    event,
-    title: describeTransition(event.from_status, event.to_status, {
-      paymentAbandoned,
-      isCancelStep,
-    }),
-    description,
-    actor: formatEventSource(event.source),
-    toStatus: titleCaseStatus(event.to_status),
-    isTerminal: isTerminalStatus(event.to_status),
+    from_status: null,
+    to_status: "",
+    source: "SYSTEM",
+    payload: null,
+    created_at: createdAt,
   };
 }
 
-function pickAbandonedJourneyEvents(events: MfOrderEvent[]) {
-  if (events.length === 0) return [];
+function buildStep(args: {
+  title: string;
+  description: string | null;
+  actor?: string;
+  toStatus: string;
+  badgeVariant: StatusBadgeVariant;
+  isTerminal?: boolean;
+  isComplete: boolean;
+  createdAt: string | null;
+}): JourneyDisplayStep {
+  return {
+    event: syntheticEvent(args.createdAt),
+    title: args.title,
+    description: args.description,
+    actor: args.actor ?? "Zynd",
+    toStatus: args.toStatus,
+    badgeVariant: args.badgeVariant,
+    isTerminal: args.isTerminal ?? false,
+    isComplete: args.isComplete,
+  };
+}
 
-  const selected: MfOrderEvent[] = [];
-  const first = events[0];
-  selected.push(first);
-
-  const paymentEvent = events.find((event) => event.to_status === "payment_pending");
-  if (paymentEvent && paymentEvent !== first) {
-    selected.push(paymentEvent);
-  } else {
-    const checkoutPrepared = events.find(
-      (event) => event.from_status === "pending" && event.to_status === "processing",
-    );
-    if (checkoutPrepared && checkoutPrepared !== first) {
-      selected.push(checkoutPrepared);
-    }
-  }
-
+function buildAbandonedJourney(order: MfOrder, events: MfOrderEvent[]): OrderJourneyView {
+  const placedAt = order.created_at ?? events[0]?.created_at ?? null;
   const cancelEvent = [...events]
     .reverse()
     .find((event) => event.to_status?.toLowerCase() === "cancelled");
-  if (cancelEvent) {
-    selected.push(cancelEvent);
+
+  return {
+    steps: [
+      buildStep({
+        title: copy.transactions.journeyStepOrderPlaced,
+        description: null,
+        toStatus: copy.transactions.journeyStatusDone,
+        badgeVariant: "success",
+        isComplete: true,
+        createdAt: placedAt,
+      }),
+      buildStep({
+        title: copy.transactions.journeyStepPaymentNotCompleted,
+        description: copy.transactions.journeyStepPaymentNotCompletedDescription,
+        actor: "You",
+        toStatus: copy.transactions.journeyStatusFailed,
+        badgeVariant: "destructive",
+        isTerminal: true,
+        isComplete: false,
+        createdAt: cancelEvent?.created_at ?? placedAt,
+      }),
+    ],
+  };
+}
+
+function buildActiveLumpsumJourney(order: MfOrder, events: MfOrderEvent[]): OrderJourneyView {
+  const placedAt = order.created_at ?? events[0]?.created_at ?? null;
+  const paymentCompletedAt =
+    findTimestamp(
+      order,
+      events,
+      (event) =>
+        event.source?.toUpperCase() === "RECONCILE" ||
+        payloadString(event.payload?.repair) === "abandoned_paid",
+    ) ??
+    findTimestamp(order, events, (event) => event.to_status?.toUpperCase() === "SUBMITTED") ??
+    placedAt;
+
+  const steps: JourneyDisplayStep[] = [
+    buildStep({
+      title: copy.transactions.journeyStepOrderPlaced,
+      description: null,
+      toStatus: copy.transactions.journeyStatusDone,
+      badgeVariant: "success",
+      isComplete: true,
+      createdAt: placedAt,
+    }),
+  ];
+
+  if (!hasPaymentCompleted(order, events)) {
+    steps.push(
+      buildStep({
+        title: copy.transactions.journeyStepAwaitingPayment,
+        description: copy.transactions.journeyStepAwaitingPaymentDescription,
+        toStatus: copy.transactions.journeyStatusAwaitingPayment,
+        badgeVariant: "warning",
+        isComplete: false,
+        createdAt: placedAt,
+      }),
+    );
+    return { steps };
   }
 
-  return selected;
+  steps.push(
+    buildStep({
+      title: copy.transactions.journeyStepPaymentCompleted,
+      description: copy.transactions.journeyStepPaymentCompletedDescription,
+      toStatus: copy.transactions.journeyStatusPaymentCompleted,
+      badgeVariant: "success",
+      isComplete: true,
+      createdAt: paymentCompletedAt,
+    }),
+  );
+
+  if (order.status?.toUpperCase() === "SUCCEEDED") {
+    const allottedAt =
+      findTimestamp(order, events, (event) => event.to_status?.toUpperCase() === "SUCCEEDED") ??
+      order.settled_at ??
+      paymentCompletedAt;
+
+    steps.push(
+      buildStep({
+        title: copy.transactions.journeyStepUnitsAllotted,
+        description: copy.transactions.journeyStepUnitsAllottedDescription,
+        toStatus: copy.transactions.journeyStatusCompleted,
+        badgeVariant: "success",
+        isComplete: true,
+        createdAt: allottedAt,
+      }),
+    );
+    return { steps };
+  }
+
+  if (order.status?.toUpperCase() === "FAILED") {
+    steps.push(
+      buildStep({
+        title: copy.transactions.journeyStatusFailed,
+        description: order.failure_reason ?? null,
+        toStatus: copy.transactions.journeyStatusFailed,
+        badgeVariant: "destructive",
+        isTerminal: true,
+        isComplete: false,
+        createdAt: events.at(-1)?.created_at ?? placedAt,
+      }),
+    );
+    return { steps };
+  }
+
+  steps.push(
+    buildStep({
+      title: copy.transactions.journeyStepAwaitingAllotment,
+      description: copy.transactions.journeyStepAwaitingAllotmentDescription,
+      toStatus: copy.transactions.journeyStatusInProgress,
+      badgeVariant: "info",
+      isComplete: false,
+      createdAt: paymentCompletedAt,
+    }),
+  );
+
+  return { steps };
 }
 
 export function formatEventSource(source?: string | null) {
-  if (!source) return "Unknown";
-  return SOURCE_LABELS[source.toUpperCase()] ?? titleCaseStatus(source);
+  if (!source) return "Zynd";
+  return SOURCE_LABELS[source.toUpperCase()] ?? "Zynd";
 }
 
 export function buildOrderJourneyView(order: MfOrder, events: MfOrderEvent[]): OrderJourneyView {
   const paymentAbandoned = isPaymentAbandoned(order, events);
-  const displayEvents = paymentAbandoned ? pickAbandonedJourneyEvents(events) : events;
-
-  const steps = displayEvents.map((event, index) =>
-    toDisplayStep(event, {
-      paymentAbandoned,
-      isCancelStep:
-        paymentAbandoned &&
-        event.to_status === "cancelled" &&
-        index === displayEvents.length - 1,
-    }),
-  );
-
-  let outcomeSummary: string | null = null;
-  if (paymentAbandoned) {
-    outcomeSummary = "Cancelled because payment was not completed.";
-  } else if (order.status?.toLowerCase() === "cancelled") {
-    outcomeSummary = "This order was cancelled before completion.";
-  } else if (order.status?.toLowerCase() === "failed") {
-    outcomeSummary = "This order failed before completion.";
-  } else if (order.status?.toLowerCase() === "succeeded") {
-    outcomeSummary = "This order completed successfully.";
+  if (paymentAbandoned && !wasRepairedAfterAbandon(events)) {
+    return buildAbandonedJourney(order, events);
   }
 
-  return { steps, outcomeSummary };
+  return buildActiveLumpsumJourney(order, events);
+}
+
+export function formatMfOrderStatusLabel(status: string, order?: Pick<MfOrder, "fp_state">) {
+  const normalized = status.trim().toUpperCase();
+  if (normalized === "SUBMITTED") {
+    return copy.transactions.orderStatusAwaitingAllotment;
+  }
+  if (normalized === "SUCCEEDED") {
+    return copy.transactions.journeyStatusCompleted;
+  }
+  if (normalized === "CANCELLED" || normalized === "FAILED") {
+    return normalized === "CANCELLED" ? "Cancelled" : "Failed";
+  }
+  if (normalized === "PAYMENT_PENDING") {
+    return copy.transactions.journeyStatusAwaitingPayment;
+  }
+  if (normalized === "PROCESSING" && order?.fp_state?.toLowerCase() === "submitted") {
+    return copy.transactions.orderStatusAwaitingAllotment;
+  }
+  return status
+    .trim()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function mfOrderStatusVariantForInvestor(
+  status: string,
+  order?: Pick<MfOrder, "fp_state">,
+): StatusBadgeVariant {
+  const normalized = status.trim().toUpperCase();
+  if (normalized === "SUCCEEDED") return "success";
+  if (normalized === "FAILED" || normalized === "CANCELLED") return "destructive";
+  if (normalized === "SUBMITTED") return "warning";
+  if (normalized === "PROCESSING" && order?.fp_state?.toLowerCase() === "submitted") {
+    return "warning";
+  }
+  if (normalized === "PAYMENT_PENDING" || normalized === "PENDING" || normalized === "PROCESSING") {
+    return "warning";
+  }
+  return "neutral";
 }

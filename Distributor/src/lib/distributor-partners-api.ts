@@ -60,6 +60,8 @@ export type DistributorPartnerDetail = DistributorPartnerListItem & {
 export type DistributorConsoleContext = {
   persona: string;
   client_id: string;
+  phone_masked?: string;
+  branch_assigned: boolean;
   branch: {
     id: string;
     name: string;

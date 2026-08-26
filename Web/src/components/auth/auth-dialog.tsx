@@ -39,7 +39,7 @@ export function AuthDialog() {
             setOpen(false);
           }}
         >
-          <ZyndErrorBoundary onReset={() => setFlowKey((current) => current + 1)}>
+          <ZyndErrorBoundary variant="inline" onReset={() => setFlowKey((current) => current + 1)}>
             <AuthDialogSteps />
           </ZyndErrorBoundary>
         </AuthDialogFlowProvider>

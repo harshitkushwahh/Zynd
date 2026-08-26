@@ -14,6 +14,14 @@ export type PortfolioGrowthPoint = {
   invested?: number | null;
 };
 
+export type PortfolioUpcomingSip = {
+  plan_id: string;
+  product_id: string;
+  product_name: string | null;
+  amount_inr: number;
+  next_installment_date: string | null;
+};
+
 export type PortfolioSummaryResponse = {
   status: string;
   has_pending_orders: boolean;
@@ -27,6 +35,7 @@ export type PortfolioSummaryResponse = {
   holdings_count: number;
   active_sips_count: number;
   monthly_sip_inr: number;
+  upcoming_sips: PortfolioUpcomingSip[];
   allocation: PortfolioAllocationSlice[];
   growth: PortfolioGrowthPoint[];
   as_on: string | null;
@@ -79,6 +88,8 @@ export type PortfolioHoldingDetailResponse = PortfolioHoldingResponse & {
   day_change_pct: number | null;
   xirr_pct: number | null;
   redeem_bank_label: string | null;
+  redeem_bank_name: string | null;
+  redeem_bank_ifsc: string | null;
   nominee_name: string | null;
   transactions: PortfolioHoldingTransactionResponse[];
 };

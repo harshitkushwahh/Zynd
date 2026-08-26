@@ -15,6 +15,18 @@ async def resolve_state_code_for_name(state_name: str) -> str:
     return ""
 
 
+async def list_admin_states() -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for item in await list_states():
+        name = str(item.get("name") or "").strip()
+        code = str(item.get("state_code") or "").strip().upper()
+        if len(name) < 2 or len(code) < 2:
+            continue
+        items.append({"state_name": name, "state_code": code})
+    items.sort(key=lambda row: row["state_name"].casefold())
+    return items
+
+
 async def lookup_admin_pincode(pincode: str) -> dict[str, str]:
     payload = await lookup_pincode(pincode)
     state_name = str(payload.get("state_name") or "").strip()

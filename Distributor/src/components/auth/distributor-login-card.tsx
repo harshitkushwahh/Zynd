@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+import { DistributorAuthShellThemeToggle } from "@/components/auth/distributor-auth-shell-theme-toggle";
 import { DistributorLoginVisualPanel } from "@/components/auth/distributor-login-visual-panel";
 import { DistributorGlobalLoading } from "@/components/auth/distributor-global-loading";
 import { OtpInput } from "@/components/auth/otp-input";
@@ -24,6 +25,7 @@ import {
   ZYND_DISTRIBUTOR_LOGIN_VISUAL_GRADIENT,
   ZYND_DISTRIBUTOR_LOGO_SRC,
 } from "@/lib/distributor-brand-assets";
+import { ApiError } from "@/lib/api-client";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { cn } from "@/lib/utils";
 
@@ -56,10 +58,10 @@ export function DistributorLoginCard() {
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   useEffect(() => {
-    if (!loading && user) {
+    if (user) {
       router.replace("/dashboard");
     }
-  }, [loading, router, user]);
+  }, [router, user]);
 
   useEffect(() => {
     if (smsResendSeconds <= 0) return;
@@ -69,7 +71,11 @@ export function DistributorLoginCard() {
     return () => window.clearInterval(timerId);
   }, [smsResendSeconds]);
 
-  if (loading || user) {
+  if (user) {
+    return <DistributorGlobalLoading />;
+  }
+
+  if (loading) {
     return <DistributorGlobalLoading />;
   }
 
@@ -219,7 +225,11 @@ export function DistributorLoginCard() {
       setForgotSent(true);
       resetTurnstile();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Could not send reset link.");
+      if (error instanceof ApiError) {
+        setFormError(error.message);
+      } else {
+        setFormError(error instanceof Error ? error.message : "Could not send reset link.");
+      }
       resetTurnstile();
     } finally {
       setIsSendingResetLink(false);
@@ -228,6 +238,7 @@ export function DistributorLoginCard() {
 
   return (
     <div className="distributor-login-page">
+      <DistributorAuthShellThemeToggle />
       <div className="distributor-login-page__visual" aria-hidden>
         <DistributorLoginVisualPanel gradient={ZYND_DISTRIBUTOR_LOGIN_VISUAL_GRADIENT} />
       </div>
@@ -498,7 +509,7 @@ export function DistributorLoginCard() {
                   <h1 className="distributor-login-page__title">Forgot password?</h1>
                   <p className="distributor-login-page__subtitle">
                     {forgotSent
-                      ? "If an account exists for this email, a reset link is on its way."
+                      ? "Check your inbox and follow the link to reset your password."
                       : "Enter your email and we'll send you a link to reset your password."}
                   </p>
                 </div>

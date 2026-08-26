@@ -16,7 +16,6 @@ import { DistributorOverviewSection } from "@/components/overview/distributor-ov
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import { getDistributorNavGroup } from "@/lib/distributor-navigation";
-import { getDistributorProfile } from "@/lib/distributor-profile";
 import { getDistributorExperienceLabel } from "@/lib/distributor-profile-hero";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { cn } from "@/lib/utils";
@@ -30,8 +29,7 @@ export function DistributorOverviewPanel() {
     : ZYND_MITRA_COPY.defaultRoleLabel;
   const pendingTxnRequests = txnRequests.filter((r) => r.status === "Pending").length;
   const operationsGroup = getDistributorNavGroup("operations");
-  const distributorProfile = getDistributorProfile(user?.id);
-  const distributorCode = distributorProfile.distributorCode.trim();
+  const distributorCode = user?.zyndClientId?.trim() ?? "";
   const experienceLabel = user?.joinedAt
     ? getDistributorExperienceLabel(user.joinedAt)
     : undefined;
@@ -64,7 +62,7 @@ export function DistributorOverviewPanel() {
               experienceLabel={experienceLabel}
               imageSrc={user?.avatarUrl}
               email={user?.email}
-              phone={distributorProfile.mobile}
+              phone={user?.phoneMasked}
               badge={
                 distributorCode ? (
                   <DistributorCodeCopyBadge distributorCode={distributorCode} />

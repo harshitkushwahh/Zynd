@@ -12,6 +12,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  documentFileLabel,
+  documentIdentifierLabel,
+  documentUploadedLabel,
+} from "@/lib/client-documents";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import type {
   DistributorClientDocument,
@@ -65,7 +70,7 @@ export function ClientDocumentViewDialog({
   if (!doc) return null;
 
   const Icon = CATEGORY_ICONS[doc.category];
-  const hasPreview = doc.status === "uploaded" && doc.fileName;
+  const hasPreview = doc.status === "uploaded" && Boolean(doc.fileName?.trim());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -110,19 +115,21 @@ export function ClientDocumentViewDialog({
               </>
             ) : (
               <p className="text-compact text-muted-foreground">
-                {doc.status === "not_required" ? copy.viewNotRequiredBody : copy.viewMissingBody}
+                {doc.status === "not_required"
+                  ? copy.viewNotRequiredBody
+                  : copy.viewMissingBody}
               </p>
             )}
           </div>
           <dl className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
             <MetaRow
               label={copy.columnIdentifier}
-              value={doc.identifierMasked ?? copy.identifierNone}
+              value={documentIdentifierLabel(doc, copy)}
             />
-            <MetaRow label={copy.columnFile} value={doc.fileName ?? copy.fileNone} />
+            <MetaRow label={copy.columnFile} value={documentFileLabel(doc, copy)} />
             <MetaRow
               label={copy.columnUploaded}
-              value={doc.uploadedAt ? formatDistributorDate(doc.uploadedAt) : copy.dateNone}
+              value={documentUploadedLabel(doc, copy, formatDistributorDate)}
             />
             <MetaRow label={copy.columnSource} value={doc.source} />
             <div className="grid gap-0.5 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">

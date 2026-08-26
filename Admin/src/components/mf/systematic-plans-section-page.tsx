@@ -6,6 +6,7 @@ import { RefreshCw, Repeat, ShieldCheck, Timer, Users } from "lucide-react";
 
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { AdminTabComingSoon } from "@/components/dashboard/admin-tab-coming-soon";
+import { AdminTabDisabled } from "@/components/dashboard/admin-tab-disabled";
 import { MANDATE_STATUS_OPTIONS, MfMandatesPanel } from "@/components/mf/mf-mandates-panel";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
@@ -20,6 +21,7 @@ import { useSystematicPlansSummaryQuery } from "@/hooks/use-systematic-plans-sum
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   getTransactionSection,
+  isSectionTabEnabled,
   resolveSectionTab,
   sectionTabHref,
 } from "@/lib/admin-transaction-sections";
@@ -105,7 +107,7 @@ export function SystematicPlansSectionPage({ tabSlug }: SystematicPlansSectionPa
       icon={Repeat}
     >
       {!canRead ? (
-        <AdminFeedbackMessage variant="warning">
+        <AdminFeedbackMessage variant="warning" dismissible={false}>
           You do not have permission to view systematic plans.
         </AdminFeedbackMessage>
       ) : (
@@ -117,7 +119,12 @@ export function SystematicPlansSectionPage({ tabSlug }: SystematicPlansSectionPa
               {section.tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
-                  <AdminTabTrigger key={tab.slug} value={tab.slug} className="gap-2">
+                  <AdminTabTrigger
+                    key={tab.slug}
+                    value={tab.slug}
+                    className="gap-2"
+                    disabled={!isSectionTabEnabled(tab)}
+                  >
                     <Icon className="size-4 shrink-0" />
                     {tab.label}
                   </AdminTabTrigger>
@@ -164,7 +171,9 @@ export function SystematicPlansSectionPage({ tabSlug }: SystematicPlansSectionPa
                 keepMounted={keepMounted(tab.slug)}
                 className="mt-0"
               >
-                {tab.slug === "sips" ? (
+                {!isSectionTabEnabled(tab) ? (
+                  <AdminTabDisabled label={tab.label} description={tab.description} />
+                ) : tab.slug === "sips" ? (
                   <MfMandatesPanel
                     canRead={canRead}
                     canManage={canManage}

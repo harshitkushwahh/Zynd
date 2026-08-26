@@ -106,15 +106,17 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
 
   const filteredJobs = useMemo(() => {
     const query = listSearch.trim().toLowerCase();
-    return jobs.filter((job) => {
-      if (phaseFilter !== ALL_PHASES && String(job.phase) !== phaseFilter) return false;
-      if (!query) return true;
-      return (
-        job.name.toLowerCase().includes(query) ||
-        job.description.toLowerCase().includes(query) ||
-        job.cron.toLowerCase().includes(query)
-      );
-    });
+    return jobs
+      .filter((job) => {
+        if (phaseFilter !== ALL_PHASES && String(job.phase) !== phaseFilter) return false;
+        if (!query) return true;
+        return (
+          job.name.toLowerCase().includes(query) ||
+          job.description.toLowerCase().includes(query) ||
+          job.cron.toLowerCase().includes(query)
+        );
+      })
+      .sort((left, right) => left.sequence - right.sequence || left.name.localeCompare(right.name));
   }, [listSearch, jobs, phaseFilter]);
 
   const jobPagination = useMemo(
@@ -136,20 +138,31 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
 
   const filteredRuns = useMemo(() => {
     const query = listSearch.trim().toLowerCase();
+    const jobSequence = new Map(jobs.map((job) => [job.name, job.sequence]));
 
-    return runs.filter((run) => {
-      if (
-        runStatusFilter !== ALL_STATUSES &&
-        (run.status ?? "").toLowerCase() !== runStatusFilter.toLowerCase()
-      ) {
-        return false;
-      }
+    return runs
+      .filter((run) => {
+        if (
+          runStatusFilter !== ALL_STATUSES &&
+          (run.status ?? "").toLowerCase() !== runStatusFilter.toLowerCase()
+        ) {
+          return false;
+        }
 
-      if (!query) return true;
+        if (!query) return true;
 
-      return (run.job_name ?? "").toLowerCase().includes(query);
-    });
-  }, [listSearch, runStatusFilter, runs]);
+        return (run.job_name ?? "").toLowerCase().includes(query);
+      })
+      .sort((left, right) => {
+        const leftStarted = left.started_at ? Date.parse(left.started_at) : 0;
+        const rightStarted = right.started_at ? Date.parse(right.started_at) : 0;
+        if (leftStarted !== rightStarted) return rightStarted - leftStarted;
+
+        const leftSequence = jobSequence.get(left.job_name ?? "") ?? Number.MAX_SAFE_INTEGER;
+        const rightSequence = jobSequence.get(right.job_name ?? "") ?? Number.MAX_SAFE_INTEGER;
+        return leftSequence - rightSequence;
+      });
+  }, [jobs, listSearch, runStatusFilter, runs]);
 
   const runPagination = useMemo(
     () => paginateItems(filteredRuns, runPage, runPageSize),
@@ -212,8 +225,8 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
 
   return (
     <div className="space-y-5">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <AdminMetricCardsGrid>
         <AdminMetricCard
@@ -325,6 +338,7 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
         >
           <AdminTableHeader>
             <tr>
+              <AdminTableHeadCell className="w-14 text-right">#</AdminTableHeadCell>
               {canRunJobs ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
               <AdminTableHeadCell>Job</AdminTableHeadCell>
               <AdminTableHeadCell>Phase</AdminTableHeadCell>
@@ -335,12 +349,15 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
           </AdminTableHeader>
           <AdminTableBody>
             {loading ? (
-              <AdminTableSkeletonRows columns={canRunJobs ? 6 : 5} />
+              <AdminTableSkeletonRows columns={canRunJobs ? 7 : 6} />
             ) : jobPagination.items.length === 0 ? (
-              <AdminTableStateRow colSpan={canRunJobs ? 6 : 5}>No jobs match your filters.</AdminTableStateRow>
+              <AdminTableStateRow colSpan={canRunJobs ? 7 : 6}>No jobs match your filters.</AdminTableStateRow>
             ) : (
               jobPagination.items.map((job) => (
                 <AdminTableRow key={job.name}>
+                  <AdminTableCell className="text-right tabular-nums text-muted-foreground">
+                    {job.sequence}
+                  </AdminTableCell>
                   {canRunJobs ? (
                     <AdminTableCell className="text-right">
                       <Button

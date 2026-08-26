@@ -227,6 +227,23 @@ export function getDistributorWorkAttendanceChartData(
     });
 }
 
+export function hasPayrollPromotion(promotion: DistributorPayrollPromotion): boolean {
+  return Boolean(
+    promotion.label.trim() &&
+      promotion.newBaseSalary > 0 &&
+      promotion.previousBaseSalary > 0 &&
+      promotion.hikePct > 0,
+  );
+}
+
+export function hasPerformanceIncentivePlan(perf: DistributorJobPerformanceCalc): boolean {
+  return perf.netSalesTarget > 0 || perf.incentiveSlab > 0;
+}
+
+export function shouldShowPayrollWaitingBadge(comp: DistributorJobCompensation): boolean {
+  return Boolean(comp.periodLabel.trim()) && comp.paymentStatus === "waiting";
+}
+
 export function getSalaryPaymentStatusLabel(status: DistributorSalaryPaymentStatus): string {
   switch (status) {
     case "waiting":

@@ -15,6 +15,11 @@ from app.domain.account.events import SecurityEmailRequestedPayload, security_em
 logger = logging.getLogger(__name__)
 
 
+def smtp_configured() -> bool:
+    settings = get_settings()
+    return bool(settings.smtp_host and settings.email_from)
+
+
 async def send_security_email(*, to_email: str, subject: str, body: str) -> None:
     settings = get_settings()
     schedule_domain_event(

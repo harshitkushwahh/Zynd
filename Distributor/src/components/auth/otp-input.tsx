@@ -31,6 +31,19 @@ export function OtpInput({
   };
 
   const handleKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const form = event.currentTarget.form;
+      if (form) {
+        const submitButton = form.querySelector<HTMLButtonElement>(
+          'button[type="submit"]:not([disabled])',
+        );
+        if (submitButton) {
+          form.requestSubmit(submitButton);
+        }
+      }
+      return;
+    }
     if (event.key === "Backspace" && !digits[index]?.trim() && index > 0) {
       inputsRef.current[index - 1]?.focus();
     }

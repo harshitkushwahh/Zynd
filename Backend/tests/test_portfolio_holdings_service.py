@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.application.mf.portfolio_holdings_service import (
+    _extract_folio_meta,
     build_portfolio_holding_id,
     parse_holdings_report,
     parse_holding_id,
@@ -193,3 +194,26 @@ def test_compute_portfolio_day_change_returns_none_without_nav_coverage() -> Non
 
     assert day_change_inr is None
     assert day_change_pct is None
+
+
+def test_extract_folio_meta_resolves_bank_name_from_ifsc() -> None:
+    meta = _extract_folio_meta(
+        {
+            "data": [
+                {
+                    "payout_details": [
+                        {
+                            "bank_account": {
+                                "account_number": "1234569725",
+                                "ifsc_code": "KKBK0000591",
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    )
+
+    assert meta["redeem_bank_label"] == "Kotak Mahindra Bank ....9725"
+    assert meta["redeem_bank_name"] == "Kotak Mahindra Bank"
+    assert meta["redeem_bank_ifsc"] == "KKBK0000591"

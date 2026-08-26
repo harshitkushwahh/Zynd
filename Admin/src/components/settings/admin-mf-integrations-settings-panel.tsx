@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Plug } from "lucide-react";
+import { ArrowUpRight, Building2, Plug } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
@@ -10,6 +10,8 @@ import { AdminCardListSkeleton } from "@/components/ui/admin-skeletons";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
@@ -19,15 +21,18 @@ import {
 } from "@/lib/admin-settings-navigation";
 import {
   fetchMfIntegrations,
+  fetchZyndCompanySettings,
   updateMfIntegrationEnvironment,
+  updateZyndCompanySettings,
   type IntegrationEnvironment,
   type MfIntegrationProfilePreview,
   type MfIntegrationProviderStatus,
+  type ZyndCompanySettings,
 } from "@/lib/mf-integrations-admin-api";
 import { cn } from "@/lib/utils";
 
-const INTEGRATION_CARD_GRID_CLASS = "grid grid-cols-1 gap-4 sm:grid-cols-2";
-const INTEGRATION_CARD_ITEM_CLASS = "w-full max-w-xl sm:max-w-none";
+const INTEGRATION_CARD_GRID_CLASS = "grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2";
+const INTEGRATION_CARD_CLASS = "w-full min-w-0 border border-border ring-0 shadow-none";
 
 function environmentLabel(environment: IntegrationEnvironment) {
   return environment === "live" ? "Live" : "Test";
@@ -169,7 +174,7 @@ function IntegrationProviderCard({
       value={viewEnvironment}
       onValueChange={(value) => handleEnvironmentSelect(value as IntegrationEnvironment)}
     >
-      <Card className="h-full w-full">
+      <Card className={cn("h-full", INTEGRATION_CARD_CLASS)}>
         <CardHeader className="gap-4 border-b border-border pb-4">
           <div className="space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -256,12 +261,113 @@ function IntegrationProviderCard({
   );
 }
 
+function ZyndCompanyDetailsCard({
+  settings,
+  loading,
+  saving,
+  canManage,
+  onSave,
+}: {
+  settings: ZyndCompanySettings | null;
+  loading: boolean;
+  saving: boolean;
+  canManage: boolean;
+  onSave: (payload: { distributor_arn: string; distributor_euin: string }) => Promise<void>;
+}) {
+  const [arn, setArn] = useState("");
+  const [euin, setEuin] = useState("");
+
+  useEffect(() => {
+    setArn(settings?.distributor_arn ?? "");
+    setEuin(settings?.distributor_euin ?? "");
+  }, [settings?.distributor_arn, settings?.distributor_euin]);
+
+  const arnConfigured = Boolean(settings?.distributor_arn?.trim());
+
+  return (
+    <Card className={INTEGRATION_CARD_CLASS}>
+      <CardHeader className="gap-4 border-b border-border pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
+              <Building2 className="size-5" />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <CardTitle className="text-base">Zynd company details</CardTitle>
+              <StatusBadge variant={arnConfigured ? "success" : "warning"} showIcon={false}>
+                {arnConfigured ? "Distributor ARN configured" : "Distributor ARN required"}
+              </StatusBadge>
+            </div>
+          </div>
+        </div>
+        <CardDescription className="text-pretty">
+          Global distributor ARN for mutual fund orders and Zynd Mitra HO approvals. All Mitras operate under
+          this company ARN.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-4">
+        {loading ? (
+          <AdminCardListSkeleton count={1} lines={2} />
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="zynd-company-arn">Distributor ARN</Label>
+                <Input
+                  id="zynd-company-arn"
+                  placeholder="ARN-…"
+                  value={arn}
+                  disabled={!canManage || saving}
+                  onChange={(event) => setArn(event.target.value.toUpperCase())}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="zynd-company-euin">EUIN (optional)</Label>
+                <Input
+                  id="zynd-company-euin"
+                  placeholder="EUIN"
+                  value={euin}
+                  disabled={!canManage || saving}
+                  onChange={(event) => setEuin(event.target.value.toUpperCase())}
+                />
+              </div>
+            </div>
+            {canManage ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  disabled={saving || !arn.trim()}
+                  onClick={() => void onSave({ distributor_arn: arn.trim(), distributor_euin: euin.trim() })}
+                >
+                  {saving ? "Saving…" : "Save company details"}
+                </Button>
+                {settings?.updated_at ? (
+                  <p className="text-caption text-muted-foreground">
+                    Updated {new Date(settings.updated_at).toLocaleString()}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-caption text-muted-foreground">
+                You can view company details but do not have permission to edit them.
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AdminMfIntegrationsSettingsPanel() {
   const { hasPermission } = useAdminAuth();
   const canManage = hasPermission("mf.integrations.manage");
 
   const [providers, setProviders] = useState<MfIntegrationProviderStatus[]>([]);
+  const [companySettings, setCompanySettings] = useState<ZyndCompanySettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [companyLoading, setCompanyLoading] = useState(true);
+  const [companySaving, setCompanySaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -285,9 +391,23 @@ export function AdminMfIntegrationsSettingsPanel() {
     }
   }, []);
 
+  const loadCompanySettings = useCallback(async () => {
+    setCompanyLoading(true);
+    try {
+      const settings = await fetchZyndCompanySettings();
+      setCompanySettings(settings);
+    } catch (err) {
+      setCompanySettings(null);
+      setError(getErrorMessage(err, "Could not load Zynd company details."));
+    } finally {
+      setCompanyLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadIntegrations();
-  }, [loadIntegrations]);
+    void loadCompanySettings();
+  }, [loadCompanySettings, loadIntegrations]);
 
   const handleEnvironmentChange = async (
     providerId: MfIntegrationProviderStatus["id"],
@@ -311,38 +431,58 @@ export function AdminMfIntegrationsSettingsPanel() {
     }
   };
 
-  if (loading) {
+  const handleCompanySave = async (payload: { distributor_arn: string; distributor_euin: string }) => {
+    setCompanySaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const updated = await updateZyndCompanySettings({
+        distributor_arn: payload.distributor_arn,
+        distributor_euin: payload.distributor_euin || undefined,
+        clear_distributor_euin: !payload.distributor_euin,
+      });
+      setCompanySettings(updated);
+      setMessage("Zynd company details saved.");
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not save Zynd company details."));
+    } finally {
+      setCompanySaving(false);
+    }
+  };
+
+  if (loading && companyLoading) {
     return (
       <div className={INTEGRATION_CARD_GRID_CLASS}>
-        <div className={INTEGRATION_CARD_ITEM_CLASS}>
-          <AdminCardListSkeleton count={1} lines={2} />
-        </div>
-        <div className={INTEGRATION_CARD_ITEM_CLASS}>
-          <AdminCardListSkeleton count={1} lines={2} />
-        </div>
-        <div className={INTEGRATION_CARD_ITEM_CLASS}>
-          <AdminCardListSkeleton count={1} lines={2} />
-        </div>
+        <AdminCardListSkeleton count={1} lines={2} />
+        <AdminCardListSkeleton count={1} lines={2} />
+        <AdminCardListSkeleton count={1} lines={2} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+    <div className="min-w-0 space-y-4">
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
+
+      <ZyndCompanyDetailsCard
+        settings={companySettings}
+        loading={companyLoading}
+        saving={companySaving}
+        canManage={canManage}
+        onSave={handleCompanySave}
+      />
 
       <div className={INTEGRATION_CARD_GRID_CLASS}>
         {providers.map((provider) => (
-          <div key={provider.id} className={INTEGRATION_CARD_ITEM_CLASS}>
-            <IntegrationProviderCard
-              provider={provider}
-              meta={providerMeta[provider.id]}
-              canManage={canManage}
-              isSwitching={switchingId === provider.id}
-              onEnvironmentChange={handleEnvironmentChange}
-            />
-          </div>
+          <IntegrationProviderCard
+            key={provider.id}
+            provider={provider}
+            meta={providerMeta[provider.id]}
+            canManage={canManage}
+            isSwitching={switchingId === provider.id}
+            onEnvironmentChange={handleEnvironmentChange}
+          />
         ))}
       </div>
     </div>

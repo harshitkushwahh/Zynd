@@ -30,9 +30,9 @@ def _png_bytes() -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_support_agent_can_read_documents_not_download(db_session: AsyncSession) -> None:
+async def test_mitra_lacks_document_permissions(db_session: AsyncSession) -> None:
     admin = User(
-        email=f"support-docs-{uuid4()}@example.com",
+        email=f"mitra-docs-{uuid4()}@example.com",
         password_hash="hash",
         role=UserRole.admin,
         status=UserStatus.active,
@@ -41,20 +41,20 @@ async def test_support_agent_can_read_documents_not_download(db_session: AsyncSe
     await db_session.flush()
     await ensure_rbac_seed(db_session)
 
-    await assign_role_to_admin_user(db_session, user_id=admin.id, role_key="support_agent")
+    await assign_role_to_admin_user(db_session, user_id=admin.id, role_key="mitra")
     await revoke_role_from_admin_user(db_session, user_id=admin.id, role_key="super_admin")
 
     permissions = await get_user_permission_keys(db_session, admin.id)
-    assert "documents.read" in permissions
+    assert "documents.read" not in permissions
     assert "documents.download" not in permissions
-    assert await user_has_permission(db_session, admin.id, "documents.read")
+    assert not await user_has_permission(db_session, admin.id, "documents.read")
     assert not await user_has_permission(db_session, admin.id, "documents.download")
 
 
 @pytest.mark.asyncio
-async def test_compliance_officer_can_download_documents(db_session: AsyncSession) -> None:
+async def test_super_admin_can_download_documents(db_session: AsyncSession) -> None:
     admin = User(
-        email=f"co-docs-{uuid4()}@example.com",
+        email=f"sa-docs-{uuid4()}@example.com",
         password_hash="hash",
         role=UserRole.admin,
         status=UserStatus.active,
@@ -62,9 +62,6 @@ async def test_compliance_officer_can_download_documents(db_session: AsyncSessio
     db_session.add(admin)
     await db_session.flush()
     await ensure_rbac_seed(db_session)
-
-    await assign_role_to_admin_user(db_session, user_id=admin.id, role_key="compliance_officer")
-    await revoke_role_from_admin_user(db_session, user_id=admin.id, role_key="super_admin")
 
     assert await user_has_permission(db_session, admin.id, "documents.read")
     assert await user_has_permission(db_session, admin.id, "documents.download")
@@ -90,7 +87,7 @@ async def test_admin_document_metadata_and_download(
     await db_session.flush()
 
     compliance = User(
-        email=f"compliance-{uuid4()}@example.com",
+        email=f"reviewer-{uuid4()}@example.com",
         password_hash="hash",
         role=UserRole.admin,
         status=UserStatus.active,
@@ -98,8 +95,6 @@ async def test_admin_document_metadata_and_download(
     db_session.add(compliance)
     await db_session.flush()
     await ensure_rbac_seed(db_session)
-    await assign_role_to_admin_user(db_session, user_id=compliance.id, role_key="compliance_officer")
-    await revoke_role_from_admin_user(db_session, user_id=compliance.id, role_key="super_admin")
 
     uploaded = await upload_user_document(
         db_session,

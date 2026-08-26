@@ -98,4 +98,7 @@ export const ZYND_MITRA_COPY = {
   reportClosingAumDesc: "Closing AUM by Zynd Mitra and product category for HO finance.",
   reportNetSalesDesc: "Gross inflow, redemptions, and net sales by Zynd Mitra.",
   kycFollowUpDesc: "Open KYC cases and exceptions requiring Zynd Mitra follow-up.",
+  branchAssignmentRequiredTitle: "Branch assignment required",
+  branchAssignmentRequiredDesc:
+    "Your State Head must assign you to a branch before you can onboard Zynd Mitras or add clients.",
 } as const;

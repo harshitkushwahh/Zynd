@@ -30,7 +30,6 @@ class AdminDistributorPartnerDetailResponse(BaseModel):
 
 
 class AdminDistributorPartnerApproveRequest(BaseModel):
-    arn: str = Field(min_length=4, max_length=32)
     euin: str | None = Field(default=None, max_length=32)
 
 
@@ -88,7 +87,6 @@ async def approve_distributor_partner_route(
             db,
             reviewer=reviewer,
             partner_id=partner_id,
-            arn=body.arn,
             euin=body.euin,
             ip=get_client_ip(request),
         )

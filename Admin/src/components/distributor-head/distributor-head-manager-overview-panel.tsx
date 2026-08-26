@@ -28,7 +28,7 @@ export function DistributorHeadManagerOverviewPanel({
 }: DistributorHeadManagerOverviewPanelProps) {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-5">
+      <div className="grid min-w-0 gap-4 overflow-visible px-0.5 lg:grid-cols-5">
         <div className="lg:col-span-2">
           <DistributorHeadManagerIncentivesCard incentive={incentive} />
         </div>

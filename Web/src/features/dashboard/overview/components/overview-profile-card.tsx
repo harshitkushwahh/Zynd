@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ShieldCheck } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-context";
+import { useResolvedDisplayName } from "@/shared/hooks/use-resolved-display-name";
 import { useKycOptional } from "@/contexts/kyc-context";
 import { useProfileImage } from "@/contexts/profile-image-context";
 import { fetchAuthSecurityPolicy } from "@/features/account/api/mfa-api";
-import { ProfileStatusBadge } from "@/features/dashboard/overview/components/overview-profile-status-badge";
+import { ProfileKycStatusBadge } from "@/features/dashboard/overview/components/profile-kyc-status-badge";
+import { ProfileMfaStatusBadge } from "@/features/dashboard/overview/components/profile-mfa-status-badge";
+import type { OverviewKycProfileProgress } from "@/features/dashboard/overview/lib/overview-profile-kyc-state";
 import { getKycStepFormMeta } from "@/features/kyc/lib/kyc-step-form-meta";
 import { initialsFromName } from "@/features/referral/lib/referral-initials";
 import { copy } from "@/shared/config/copy";
@@ -32,7 +34,7 @@ const PROFILE_FOOTER_CLASS =
 const PROFILE_FOOTER_NAME_CLASS = "text-zinc-900 dark:text-white";
 const PROFILE_FOOTER_SUBTITLE_CLASS = "text-zinc-600 dark:text-white/75";
 
-function useProfileMfaTooltip() {
+function useProfileMfaStatus() {
   const { user } = useAuth();
   const overview = copy.dashboard.overview;
   const mfaComplete = Boolean(user?.mfa_enrolled);
@@ -62,66 +64,91 @@ function useProfileMfaTooltip() {
   }, [mfaComplete]);
 
   return useMemo(() => {
+    const href = "/dashboard/settings?section=security" as const;
+
     if (!mfaComplete) {
       return {
         complete: false,
         title: overview.profileMfaTooltipPendingTitle,
-        detail: overview.profileMfaTooltipPending,
-        href: "/dashboard/settings?section=security" as const,
+        detailLines: [
+          overview.profileMfaTooltipPendingLine1,
+          overview.profileMfaTooltipPendingLine2,
+        ] as [string, string],
+        href,
       };
     }
 
-    let detail = overview.profileMfaTooltipComplete;
-    if (smsFallbackEnabled && phoneVerified) {
-      detail = `${detail} ${overview.profileMfaTooltipCompleteSms}`;
-    }
+    const detailLines: [string, string] =
+      smsFallbackEnabled && phoneVerified
+        ? [overview.profileMfaTooltipCompleteLine1, overview.profileMfaTooltipCompleteSms]
+        : [overview.profileMfaTooltipCompleteLine1, overview.profileMfaTooltipCompleteLine2];
 
     return {
       complete: true,
       title: overview.profileMfaTooltipCompleteTitle,
-      detail,
-      href: "/dashboard/settings?section=security" as const,
+      detailLines,
+      href,
     };
   }, [mfaComplete, overview, phoneVerified, smsFallbackEnabled]);
 }
 
 export function OverviewProfileCard({ className }: OverviewProfileCardProps) {
-  const { displayName, user } = useAuth();
+  const resolvedDisplayName = useResolvedDisplayName();
   const { profileUrl, loading } = useProfileImage();
   const kyc = useKycOptional();
-  const mfaTooltip = useProfileMfaTooltip();
-  const name = displayName || user?.email || "User";
+  const mfaStatus = useProfileMfaStatus();
+  const name = resolvedDisplayName || "User";
   const initials = initialsFromName(name);
   const overview = copy.dashboard.overview;
   const hasPhoto = Boolean(profileUrl);
 
-  const kycComplete = kyc?.status === "complete";
   const kycProgress = kyc?.profileProgress;
   const kycAllowed = kyc?.kycAllowed ?? false;
+  const kycComplete =
+    kyc?.status === "complete" || kycProgress?.overallStatus === "completed";
 
   const kycStepIcon = kycProgress
     ? getKycStepFormMeta(kycProgress.activeStepId).icon
     : getKycStepFormMeta("pan-card").icon;
 
-  const kycTooltip = kycComplete && kycProgress
-    ? {
-        title: kycProgress.tooltipTitle,
-        detail: kycProgress.tooltipDetail,
-      }
-    : !kycAllowed
+  const kycSubmitted = kycProgress?.overallStatus === "submitted";
+  const kycTooltipProgress =
+    kycProgress ??
+    (kyc?.status === "complete"
       ? {
-          title: overview.profileKycTooltipBlockedTitle,
-          detail: overview.profileKycTooltipBlocked,
+          activeStepId: "review" as const,
+          activeStepLabel: copy.kyc.completeTitle,
+          progressFraction: 1,
+          progressPercent: 100,
+          tone: "success" as const,
+          overallStatus: "completed",
+          statusLabel: overview.profileKycStatusVerified,
+          stepTitle: copy.kyc.completeTitle,
+          tooltipVariant: "verified" as const,
+          tooltipTitle: overview.profileKycTooltipCompleteTitle,
+          tooltipDetail: overview.profileKycTooltipComplete,
         }
-      : kycProgress
-        ? {
-            title: kycProgress.tooltipTitle,
-            detail: kycProgress.tooltipDetail,
-          }
-        : {
-            title: overview.profileKycTooltipPendingTitle,
-            detail: overview.profileKycTooltipPending,
-          };
+      : null);
+
+  const kycTooltipTitle = !kycAllowed
+    ? overview.profileKycTooltipBlockedTitle
+    : kycTooltipProgress?.tooltipTitle ?? overview.profileKycTooltipPendingTitle;
+
+  const kycPopoverProgress =
+    kycTooltipProgress ??
+    ({
+      activeStepId: "pan-card",
+      activeStepLabel: overview.profileKycStatusNotStarted,
+      progressFraction: 0,
+      progressPercent: 0,
+      tone: "muted",
+      overallStatus: "none",
+      statusLabel: overview.profileKycStatusNotStarted,
+      stepTitle: getKycStepFormMeta("pan-card").title,
+      tooltipVariant: "not_started",
+      tooltipTitle: overview.profileKycTooltipPendingTitle,
+      tooltipDetail: overview.profileKycTooltipPending,
+    } satisfies OverviewKycProfileProgress);
 
   return (
     <div
@@ -159,44 +186,33 @@ export function OverviewProfileCard({ className }: OverviewProfileCardProps) {
 
       <div
         className={cn(
-          "absolute inset-x-2.5 bottom-2.5 flex items-center justify-between gap-3 rounded-[1.15rem] px-3 py-2.5",
+          "absolute inset-x-2.5 bottom-2.5 flex items-center justify-between gap-2 rounded-[1.15rem] px-2.5 py-2",
           PROFILE_FOOTER_CLASS,
         )}
       >
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-compact font-semibold", PROFILE_FOOTER_NAME_CLASS)}>{name}</p>
-          <p className={cn("mt-0.5 truncate text-caption", PROFILE_FOOTER_SUBTITLE_CLASS)}>
+          <p className={cn("truncate text-compact font-semibold leading-tight", PROFILE_FOOTER_NAME_CLASS)}>
+            {name}
+          </p>
+          <p className={cn("mt-0.5 truncate text-caption leading-tight", PROFILE_FOOTER_SUBTITLE_CLASS)}>
             {overview.profileSubtitle}
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <ProfileStatusBadge
-            onClick={kycAllowed ? () => kyc?.openDialog() : undefined}
-            ariaLabel={kycTooltip.title}
-            tooltipTitle={kycTooltip.title}
-            tooltipDetail={kycTooltip.detail}
+        <div className="flex shrink-0 items-center gap-1.5">
+          <ProfileKycStatusBadge
+            ariaLabel={kycTooltipTitle}
+            progress={kycPopoverProgress}
+            stepIcon={kycStepIcon}
+            blocked={!kycAllowed}
             complete={kycComplete}
-            ring={{
-              progressFraction: kycProgress?.progressFraction ?? 0,
-              tone: kycProgress?.tone ?? "muted",
-              icon: kycStepIcon,
-              complete: kycComplete,
-              submitted: kycProgress?.overallStatus === "submitted",
-            }}
+            submitted={kycSubmitted}
+            onActivate={kycAllowed ? () => kyc?.openDialog() : undefined}
           />
-          <ProfileStatusBadge
-            href={mfaTooltip.href}
-            ariaLabel={mfaTooltip.title}
-            tooltipTitle={mfaTooltip.title}
-            tooltipDetail={mfaTooltip.detail}
-            complete={mfaTooltip.complete}
-            ring={{
-              progressFraction: mfaTooltip.complete ? 1 : 0,
-              tone: mfaTooltip.complete ? "success" : "warning",
-              icon: ShieldCheck,
-              complete: mfaTooltip.complete,
-            }}
+          <ProfileMfaStatusBadge
+            ariaLabel={mfaStatus.title}
+            href={mfaStatus.href}
+            state={mfaStatus}
           />
         </div>
       </div>
@@ -219,7 +235,7 @@ export function OverviewProfileCardSkeleton({ className }: { className?: string 
       </div>
       <div
         className={cn(
-          "absolute inset-x-2.5 bottom-2.5 flex items-center justify-between gap-3 rounded-[1.15rem] px-3 py-2.5",
+          "absolute inset-x-2.5 bottom-2.5 flex items-center justify-between gap-2 rounded-[1.15rem] px-2.5 py-2",
           PROFILE_FOOTER_CLASS,
         )}
       >
@@ -227,9 +243,9 @@ export function OverviewProfileCardSkeleton({ className }: { className?: string 
           <Skeleton className="h-4 w-28 bg-zinc-900/10" />
           <Skeleton className="h-3 w-14 bg-zinc-600/15" />
         </div>
-        <div className="flex gap-2">
-          <Skeleton className="size-9 rounded-full bg-white/50" />
-          <Skeleton className="size-9 rounded-full bg-white/50" />
+        <div className="flex gap-1.5">
+          <Skeleton className="size-7 rounded-full bg-white/50" />
+          <Skeleton className="size-7 rounded-full bg-white/50" />
         </div>
       </div>
     </div>

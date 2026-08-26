@@ -1,32 +1,51 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.documents.client_id_service import (
+    assign_client_id,
+    is_placeholder_client_id,
+)
 from app.application.admin.user_admin_service import (
     _kyc_compliant_user_ids,
+    _kyc_onboarding_complete_user_ids,
     get_user_by_reference,
     get_user_summary,
     list_users,
 )
 from app.application.admin.user_profile_admin_service import get_user_profile_detail
 from app.application.auth.oauth_service import list_oauth_connections
+from app.application.auth.session_service import list_user_sessions
 from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
 from app.application.family_groups.admin_service import (
     get_admin_family_group_detail,
     list_admin_user_family_groups,
 )
 from app.application.family_groups.errors import FamilyGroupError
+from app.application.goals.errors import GoalError
+from app.application.goals.family_goal_service import list_family_goals
 from app.application.goals.goal_service import list_personal_goals
+from app.application.mf.portfolio_holdings_service import get_user_portfolio_summary
+from app.application.distributor.distributor_client_link_service import (
+    DistributorClientBookError,
+    assert_actor_can_read_client_profile,
+    get_client_link_for_user,
+    list_book_client_user_ids_for_actor,
+    map_client_links_by_user_id,
+    serialize_client_link,
+)
 from app.application.referral.referral_attribution_service import (
     count_first_investment_for_referrer,
     count_kyc_verified_for_referrer,
     count_qualified_for_referrer,
     count_signups_for_referrer,
-    mask_referee_email,
 )
+from app.application.referral.referral_code_service import get_or_create_referral_code
 from app.application.risk_profile.errors import RiskProfileError
 from app.application.risk_profile.report_service import get_or_create_report_pdf
 from app.application.risk_profile.scoring_service import (
@@ -37,13 +56,15 @@ from app.application.risk_profile.scoring_service import (
 from app.infrastructure.persistence.models import User, UserRole
 
 
-def _mask_phone(value: str | None) -> str | None:
+def _distributor_contact_email(value: str | None) -> str:
+    return str(value or "").strip()
+
+
+def _distributor_contact_phone(value: str | None) -> str | None:
     if not value:
         return None
-    digits = "".join(char for char in value if char.isdigit())
-    if len(digits) < 4:
-        return "***"
-    return f"••••••{digits[-4:]}"
+    normalized = str(value).strip()
+    return normalized or None
 
 
 def _mask_pan_display(pan_last4: str | None) -> str:
@@ -56,6 +77,8 @@ def _mask_address_block(payload: dict[str, Any] | None) -> dict[str, Any] | None
     if not isinstance(payload, dict):
         return None
     return {
+        "line1": payload.get("line1"),
+        "line2": payload.get("line2"),
         "city": payload.get("city"),
         "state": payload.get("state"),
         "pincode": payload.get("pincode"),
@@ -85,6 +108,8 @@ def _mask_kyc_for_distributor(kyc: dict[str, Any] | None) -> dict[str, Any] | No
                 "id": row.get("id"),
                 "is_primary": row.get("is_primary"),
                 "nature": row.get("nature"),
+                "line1": row.get("line1"),
+                "line2": row.get("line2"),
                 "city": row.get("city"),
                 "state": row.get("state"),
                 "postal_code": row.get("postal_code"),
@@ -103,6 +128,7 @@ def _mask_kyc_for_distributor(kyc: dict[str, Any] | None) -> dict[str, Any] | No
                 "doc_type": document.get("doc_type"),
                 "status": document.get("status"),
                 "created_at": document.get("created_at"),
+                "original_filename": document.get("original_filename"),
             }
         )
 
@@ -120,6 +146,7 @@ def _mask_kyc_for_distributor(kyc: dict[str, Any] | None) -> dict[str, Any] | No
         "active_step_index": kyc.get("active_step_index"),
         "step_statuses": kyc.get("step_statuses"),
         "incomplete_steps": kyc.get("incomplete_steps"),
+        "kyc_already_registered": kyc.get("kyc_already_registered"),
         "pan": kyc.get("pan"),
         "address": masked_address,
         "investor_addresses": investor_addresses,
@@ -134,23 +161,121 @@ def _mask_kyc_for_distributor(kyc: dict[str, Any] | None) -> dict[str, Any] | No
         "kyc_form_status": kyc.get("kyc_form_status"),
         "investor_profile_status": kyc.get("investor_profile_status"),
         "documents": documents,
+        "audit_log": kyc.get("audit_log"),
     }
 
 
-def _serialize_list_item(row: dict[str, Any], *, pan_last4: str | None) -> dict[str, Any]:
+def _parse_audit_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def _infer_kyc_audit_source_from_sessions(
+    occurred_at: datetime | None,
+    sessions: list[dict[str, Any]],
+) -> str:
+    if not occurred_at or not sessions:
+        return "Zynd app"
+
+    best_label = "Zynd app"
+    best_delta: float | None = None
+
+    for row in sessions:
+        for key in ("last_used_at", "created_at"):
+            timestamp = _parse_audit_timestamp(row.get(key))
+            if timestamp is None:
+                continue
+            delta = abs((timestamp - occurred_at).total_seconds())
+            if best_delta is not None and delta >= best_delta:
+                continue
+            best_delta = delta
+            os_label = str(row.get("os") or "").lower()
+            browser = str(row.get("browser") or "").lower()
+            if any(token in os_label for token in ("ios", "android", "ipad")):
+                best_label = "Mobile app"
+            elif browser and browser not in {"browser", "unknown"}:
+                best_label = "Web app"
+            else:
+                best_label = "Zynd app"
+
+    return best_label
+
+
+def _normalize_kyc_audit_source(
+    source: str | None,
+    *,
+    actor: str,
+    occurred_at: datetime | None,
+    sessions: list[dict[str, Any]],
+) -> str:
+    normalized = (source or "").strip()
+    if normalized == "KRA provider":
+        return "KRA"
+    if normalized == "System" or actor == "system":
+        return "System"
+    if normalized in {"Mobile app", "Web app", "Zynd app"}:
+        return normalized
+    if normalized == "App" or actor == "investor":
+        return _infer_kyc_audit_source_from_sessions(occurred_at, sessions)
+    return normalized or "—"
+
+
+def _enrich_kyc_audit_log_sources(
+    audit_log: list[dict[str, Any]] | None,
+    *,
+    sessions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not audit_log:
+        return []
+
+    enriched: list[dict[str, Any]] = []
+    for entry in audit_log:
+        if not isinstance(entry, dict):
+            continue
+        occurred_at = _parse_audit_timestamp(entry.get("occurred_at"))
+        actor = str(entry.get("actor") or "system")
+        enriched.append(
+            {
+                **entry,
+                "source": _normalize_kyc_audit_source(
+                    entry.get("source") if isinstance(entry.get("source"), str) else None,
+                    actor=actor,
+                    occurred_at=occurred_at,
+                    sessions=sessions,
+                ),
+            }
+        )
+    return enriched
+
+
+def _serialize_list_item(
+    row: dict[str, Any],
+    *,
+    pan_last4: str | None,
+    kyc_onboarding_complete: bool | None = None,
+) -> dict[str, Any]:
     kyc_compliant = bool(row.get("kyc_compliant"))
+    onboarding_complete = (
+        kyc_onboarding_complete if kyc_onboarding_complete is not None else kyc_compliant
+    )
     has_invested = bool(row.get("has_invested"))
     return {
         "user_id": row["user_id"],
         "client_id": row.get("client_id"),
         "display_name": row.get("display_name"),
-        "email_masked": mask_referee_email(str(row.get("email") or "")),
-        "phone_masked": _mask_phone(row.get("phone")),
+        "email_masked": _distributor_contact_email(str(row.get("email") or "")),
+        "phone_masked": _distributor_contact_phone(row.get("phone")),
         "pan_masked": _mask_pan_display(pan_last4),
         "status": row.get("status"),
         "kyc_compliant": kyc_compliant,
         "has_invested": has_invested,
-        "onboarding_status": "Onboarded" if kyc_compliant else "Pending",
+        "onboarding_status": "Onboarded" if onboarding_complete else "Pending",
         "compliance_status": "Compliant" if kyc_compliant else "Non Compliant",
         "investment_status": "Invested" if has_invested else "Non Invested",
         "investor_type": "Resident Individual",
@@ -162,22 +287,58 @@ def _serialize_list_item(row: dict[str, Any], *, pan_last4: str | None) -> dict[
 async def list_distributor_clients(
     db: AsyncSession,
     *,
+    actor: User,
+    scope: str = "book",
     email: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
+    book_client_ids = set(await list_book_client_user_ids_for_actor(db, actor=actor))
+    normalized_scope = scope.strip().lower()
+    platform_scope = normalized_scope in {"platform", "all", "platform-wide"}
+
+    if not platform_scope and not book_client_ids:
+        return []
+
     rows = await list_users(
         db,
         email=email,
         role=UserRole.user,
         limit=limit,
         offset=offset,
+        user_ids=None if platform_scope else list(book_client_ids),
     )
     items: list[dict[str, Any]] = []
+    prepared_rows: list[dict[str, Any]] = []
     for row in rows:
         user = await db.get(User, row["user_id"])
+        if user and is_placeholder_client_id(user.client_id):
+            await assign_client_id(db, user)
+            await db.flush()
+            row = {**row, "client_id": user.client_id}
         phone = user.phone if user else None
-        payload = _serialize_list_item({**row, "phone": phone}, pan_last4=None)
+        prepared_rows.append({**row, "phone": phone})
+
+    links_by_user_id = await map_client_links_by_user_id(
+        db,
+        client_user_ids=[row["user_id"] for row in prepared_rows],
+    )
+    onboarding_complete_ids = await _kyc_onboarding_complete_user_ids(
+        db,
+        [row["user_id"] for row in prepared_rows],
+    )
+
+    for row in prepared_rows:
+        payload = _serialize_list_item(
+            row,
+            pan_last4=None,
+            kyc_onboarding_complete=row["user_id"] in onboarding_complete_ids,
+        )
+        in_book = row["user_id"] in book_client_ids
+        link = links_by_user_id.get(row["user_id"])
+        payload["mitra_client_id"] = link.mitra_client_id if link else None
+        payload["in_distributor_book"] = in_book
+        payload["service_model"] = "pm" if link else "diy"
         items.append(payload)
     return items
 
@@ -215,6 +376,10 @@ async def _serialize_distributor_family_group(
 
     user_ids = [row["user_id"] for row in detail.get("members") or []]
     profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=user_ids)
+    member_emails: dict[UUID, str] = {}
+    if user_ids:
+        member_rows = await db.execute(select(User.id, User.email).where(User.id.in_(user_ids)))
+        member_emails = {row.id: row.email for row in member_rows.all()}
     members: list[dict[str, Any]] = []
     for row in detail.get("members") or []:
         uid = row["user_id"]
@@ -222,7 +387,9 @@ async def _serialize_distributor_family_group(
             {
                 "user_id": uid,
                 "display_name": row.get("display_name"),
-                "email_masked": row.get("email_masked"),
+                "email_masked": _distributor_contact_email(
+                    member_emails.get(uid) or row.get("email_masked")
+                ),
                 "role": row.get("role"),
                 "badge_label": row.get("badge_label"),
                 "profile_image_url": profile_images.get(uid),
@@ -242,6 +409,38 @@ async def _serialize_distributor_family_group(
         "client_role": client_role,
         "members": members,
     }
+
+
+async def _list_distributor_client_goals(db: AsyncSession, *, user_id: UUID) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for goal in await list_personal_goals(db, user_id=user_id):
+        items.append({**goal, "scope": "personal"})
+
+    memberships_payload = await list_admin_user_family_groups(db, user_id=user_id)
+    group_names: dict[UUID, str] = {}
+    for membership in memberships_payload.get("memberships") or []:
+        group_id = membership.get("group_id")
+        if not group_id:
+            continue
+        group_names[group_id] = str(membership.get("title") or membership.get("name") or "Family group")
+    for created in memberships_payload.get("created_groups") or []:
+        group_id = created.get("id")
+        if not group_id:
+            continue
+        group_names.setdefault(
+            group_id,
+            str(created.get("title") or created.get("name") or "Family group"),
+        )
+
+    for group_id, group_name in group_names.items():
+        try:
+            family_goals = await list_family_goals(db, group_id=group_id, user_id=user_id)
+        except GoalError:
+            continue
+        for goal in family_goals:
+            items.append({**goal, "scope": "family", "family_group_name": group_name})
+
+    return items
 
 
 async def _build_family_groups(db: AsyncSession, *, user_id: UUID) -> list[dict[str, Any]]:
@@ -307,7 +506,7 @@ def _display_name_from_user(user: User) -> str:
     name = " ".join(part.strip() for part in parts if part and part.strip())
     if name:
         return name
-    return mask_referee_email(user.email)
+    return user.email
 
 
 def _serialize_sessions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -328,27 +527,34 @@ def _serialize_sessions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return items
 
 
-def _mask_oauth_connections(raw: dict[str, Any]) -> dict[str, Any]:
-    masked: dict[str, Any] = {}
+def _serialize_oauth_connections(raw: dict[str, Any]) -> dict[str, Any]:
+    serialized: dict[str, Any] = {}
     for provider in ("google", "apple"):
         entry = raw.get(provider)
         if not isinstance(entry, dict):
-            masked[provider] = {"connected": False, "email": None}
+            serialized[provider] = {"connected": False, "email": None}
             continue
         email = entry.get("email")
-        masked[provider] = {
+        serialized[provider] = {
             "connected": bool(entry.get("connected")),
-            "email": mask_referee_email(email) if isinstance(email, str) and email else None,
+            "email": email.strip() if isinstance(email, str) and email.strip() else None,
         }
-    return masked
+    return serialized
 
 
 async def get_distributor_client_detail(
     db: AsyncSession,
     reference: str,
+    *,
+    actor: User,
 ) -> dict[str, Any] | None:
     user = await get_user_by_reference(db, reference)
     if not user or user.role != UserRole.user:
+        return None
+
+    try:
+        await assert_actor_can_read_client_profile(db, actor=actor, client_user=user)
+    except DistributorClientBookError:
         return None
 
     summary = await get_user_summary(db, user.id)
@@ -361,7 +567,14 @@ async def get_distributor_client_detail(
         include_kyc=True,
         include_investments=True,
     )
+    raw_sessions = await list_user_sessions(db, user_id=user.id)
     kyc = _mask_kyc_for_distributor(profile.get("kyc") if profile else None)
+    if kyc:
+        audit_log = kyc.get("audit_log")
+        kyc["audit_log"] = _enrich_kyc_audit_log_sources(
+            audit_log if isinstance(audit_log, list) else None,
+            sessions=raw_sessions,
+        )
     pan_last4 = None
     if kyc and isinstance(kyc.get("pan"), dict):
         pan_last4 = kyc["pan"].get("pan_last4")
@@ -381,11 +594,11 @@ async def get_distributor_client_detail(
             "display_score": risk.get("display_score"),
         }
 
-    goals = await list_personal_goals(db, user_id=user.id)
+    goals = await _list_distributor_client_goals(db, user_id=user.id)
     family_groups = await _build_family_groups(db, user_id=user.id)
     referrals = await _build_referrals(db, user_id=user.id)
-    sessions = _serialize_sessions(await list_user_sessions(db, user_id=user.id))
-    connected_accounts = _mask_oauth_connections(await list_oauth_connections(db, user))
+    sessions = _serialize_sessions(raw_sessions)
+    connected_accounts = _serialize_oauth_connections(await list_oauth_connections(db, user))
     profile_images = await resolve_profile_image_urls_by_user_id(db, user_ids=[user.id])
 
     kyc_compliant_ids = await _kyc_compliant_user_ids(db, [user.id])
@@ -402,12 +615,24 @@ async def get_distributor_client_detail(
         pan_last4=pan_last4,
     )
 
+    link = await get_client_link_for_user(db, client_user_id=user.id)
+    list_row["service_model"] = "pm" if link else "diy"
+    list_row["mitra_client_id"] = link.mitra_client_id if link else None
+
+    investments = profile.get("investments") if profile else None
+    if isinstance(investments, dict):
+        portfolio_summary = await get_user_portfolio_summary(db, user_id=user.id)
+        investments = {
+            **investments,
+            "growth": portfolio_summary.get("growth") or [],
+        }
+
     return {
         "summary": list_row,
         "display_name": summary.get("display_name"),
-        "email_masked": mask_referee_email(user.email),
-        "email_display": mask_referee_email(user.email),
-        "phone_masked": _mask_phone(user.phone),
+        "email_masked": _distributor_contact_email(user.email),
+        "email_display": _distributor_contact_email(user.email),
+        "phone_masked": _distributor_contact_phone(user.phone),
         "pan_masked": _mask_pan_display(pan_last4),
         "risk_profile_label": risk_label,
         "risk_profile": risk_payload,
@@ -416,12 +641,13 @@ async def get_distributor_client_detail(
         "kyc_overall_status": (kyc or {}).get("overall_status") if kyc else "none",
         "kyc": kyc,
         "connected_accounts": connected_accounts,
-        "investments": profile.get("investments") if profile else None,
+        "investments": investments,
         "goals": goals,
         "family_groups": family_groups,
         "referrals": referrals,
         "sessions": sessions,
         "created_at": user.created_at,
+        "book_link": serialize_client_link(link),
     }
 
 

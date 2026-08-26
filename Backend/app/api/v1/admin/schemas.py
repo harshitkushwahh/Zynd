@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class SecurityReviewItemResponse(BaseModel):
     id: UUID
     user_id: UUID
+    client_id: str
     user_email: str
     reason: str
     status: str
@@ -37,6 +38,7 @@ class ResolveSecurityReviewResponse(BaseModel):
 class AdminPermissionsResponse(BaseModel):
     permissions: list[str]
     role_keys: list[str] = Field(default_factory=list)
+    sole_super_admin: bool = False
 
 
 class AdminRoleResponse(BaseModel):
@@ -100,6 +102,7 @@ class RetentionScheduleResponse(BaseModel):
 
 class PendingDeletionItemResponse(BaseModel):
     user_id: UUID
+    client_id: str
     email: str
     deletion_requested_at: Optional[datetime] = None
     deletion_scheduled_at: Optional[datetime] = None
@@ -319,12 +322,15 @@ class AdminActionRequestResponse(BaseModel):
     status: str
     target_type: Optional[str] = None
     target_id: Optional[UUID] = None
+    target_client_id: Optional[str] = None
     target_email: Optional[str] = None
     payload: dict
     reason: Optional[str] = None
     requested_by: UUID
+    requested_by_client_id: Optional[str] = None
     requested_by_email: Optional[str] = None
     approved_by: Optional[UUID] = None
+    approved_by_client_id: Optional[str] = None
     approved_by_email: Optional[str] = None
     rejection_notes: Optional[str] = None
     resolved_at: Optional[datetime] = None
@@ -343,6 +349,11 @@ class RejectAdminActionRequest(BaseModel):
 class PendingActionResponse(BaseModel):
     status: Literal["pending"] = "pending"
     action_id: UUID
+    message: str
+
+
+class AdminAccountActionResponse(BaseModel):
+    status: Literal["completed"] = "completed"
     message: str
 
 
@@ -365,6 +376,37 @@ class AdminUserListResponse(BaseModel):
     items: list[AdminUserListItemResponse]
 
 
+class AdminUserDirectoryMetricsResponse(BaseModel):
+    registered_users: int
+    kyc_compliant: int
+    suspended_accounts: int
+    active_investors: int
+
+
+class AdminAccountListItemResponse(BaseModel):
+    user_id: UUID
+    client_id: str
+    user_ref: str
+    email: str
+    display_name: str
+    status: str
+    roles: list[str]
+    mfa_enrolled: bool
+    suspended_at: Optional[datetime] = None
+    suspension_reason_code: Optional[str] = None
+    deletion_requested_at: Optional[datetime] = None
+    deletion_scheduled_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class AdminAccountListResponse(BaseModel):
+    items: list[AdminAccountListItemResponse]
+
+
+class AdminAccountAccessHoldRequest(BaseModel):
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+
 class AuditLogItemResponse(BaseModel):
     id: UUID
     user_id: Optional[UUID] = None
@@ -384,6 +426,7 @@ class ZyndLogItemResponse(BaseModel):
     id: UUID
     source: str
     user_id: Optional[UUID] = None
+    client_id: Optional[str] = None
     user_email: Optional[str] = None
     action: str
     method: str
@@ -544,6 +587,10 @@ class AdminKycReviewResponse(BaseModel):
     documents: list[AdminKycDocumentResponse]
 
 
+class PendingKycReviewCountResponse(BaseModel):
+    count: int
+
+
 class MfJobLastRunResponse(BaseModel):
     run_uuid: Optional[str] = None
     status: Optional[str] = None
@@ -559,6 +606,7 @@ class MfJobLastRunResponse(BaseModel):
 
 class MfJobResponse(BaseModel):
     name: str
+    sequence: int = 0
     phase: int
     cron: str
     enabled: bool
@@ -582,6 +630,137 @@ class MfRunJobResponse(BaseModel):
     duration_seconds: Optional[float] = None
     run_uuid: Optional[str] = None
     result: dict = Field(default_factory=dict)
+
+
+class MfPipelineProgressResponse(BaseModel):
+    completed_steps: int
+    total_steps: int
+    percent: int
+
+
+class MfPipelineStepResponse(BaseModel):
+    key: str
+    label: str
+    status: str
+    result: Optional[dict] = None
+    error: Optional[str] = None
+    ingestion_run_uuid: Optional[str] = None
+
+
+class MfPipelineLogLineResponse(BaseModel):
+    timestamp: str
+    level: str
+    message: str
+
+
+class MfPipelineHealthDiffChangeResponse(BaseModel):
+    key: str
+    label: str
+    severity: Optional[str] = None
+    before: int
+    after: int
+    delta: int
+
+
+class MfPipelineHealthDiffResponse(BaseModel):
+    before_totals: dict[str, int]
+    after_totals: dict[str, int]
+    totals_delta: dict[str, int]
+    changes: list[MfPipelineHealthDiffChangeResponse]
+
+
+class MfPipelinePreviewStepResponse(BaseModel):
+    key: str
+    label: str
+
+
+class MfPipelinePreviewFlagsResponse(BaseModel):
+    app_env: str
+    scheme_staging_enabled: bool
+    scheme_promote_auto: bool
+    requires_production_confirm: bool
+    maintenance_window: dict
+    auto_resume_enabled: bool
+
+
+class MfPipelinePreviewEffectiveStepResponse(BaseModel):
+    key: str
+    label: str
+    included: bool
+
+
+class MfPipelinePreviewSchedulerStepResponse(BaseModel):
+    key: str
+    label: str
+    scheduler_job: str
+
+
+class MfPipelinePreviewResponse(BaseModel):
+    mode: str
+    dry_run: bool = True
+    step_count: int
+    included_step_count: int
+    steps: list[MfPipelinePreviewStepResponse]
+    effective_steps: list[MfPipelinePreviewEffectiveStepResponse]
+    scheduler_mapped_steps: list[MfPipelinePreviewSchedulerStepResponse]
+    skip_steps: list[str]
+    flags: MfPipelinePreviewFlagsResponse
+    blockers: list[str]
+    can_start: bool
+
+
+class MfPipelineRunResponse(BaseModel):
+    run_id: str
+    mode: str
+    triggered_by: str
+    status: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    current_step_key: Optional[str] = None
+    progress: MfPipelineProgressResponse
+    steps: list[MfPipelineStepResponse]
+    logs: list[MfPipelineLogLineResponse]
+    final_counts: Optional[dict] = None
+    health_summary: Optional[dict] = None
+    error: Optional[str] = None
+    can_resume: bool = False
+    pause_reason: Optional[str] = None
+    staging_batch_uuid: Optional[str] = None
+    can_approve_staging: bool = False
+    health_diff: Optional[MfPipelineHealthDiffResponse] = None
+    skip_steps: list[str] = Field(default_factory=list)
+    auto_resume: bool = True
+    auto_resume_pending: bool = False
+
+
+class MfPipelineRetryStepRequest(BaseModel):
+    step_key: str
+
+
+class MfPipelineClearStuckResponse(BaseModel):
+    cleaned: int
+
+
+class MfPipelineStartRequest(BaseModel):
+    mode: Literal[
+        "full",
+        "bootstrap",
+        "after-ingest",
+        "nav-analytics-only",
+        "health-repair",
+        "staging-only",
+    ] = "full"
+    confirm_production: bool = False
+    skip_steps: list[str] = Field(default_factory=list)
+    auto_resume: bool = True
+
+
+class MfPipelineStartResponse(BaseModel):
+    run: MfPipelineRunResponse
+
+
+class MfPipelineRunGetResponse(BaseModel):
+    run: MfPipelineRunResponse
 
 
 class MfIngestionRunResponse(BaseModel):
@@ -1107,6 +1286,20 @@ class MfIntegrationProviderResponse(BaseModel):
 
 class MfIntegrationsListResponse(BaseModel):
     items: list[MfIntegrationProviderResponse]
+
+
+class ZyndCompanySettingsResponse(BaseModel):
+    distributor_arn: Optional[str] = None
+    distributor_euin: Optional[str] = None
+    updated_at: Optional[str] = None
+    source: dict[str, str]
+
+
+class ZyndCompanySettingsUpdateRequest(BaseModel):
+    distributor_arn: Optional[str] = Field(default=None, max_length=64)
+    distributor_euin: Optional[str] = Field(default=None, max_length=64)
+    clear_distributor_arn: bool = False
+    clear_distributor_euin: bool = False
 
 
 class AdminInvitationResponse(BaseModel):

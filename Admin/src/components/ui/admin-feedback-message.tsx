@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
@@ -19,27 +20,31 @@ const variantConfig: Record<
 > = {
   success: {
     icon: CheckCircle2,
-    containerClassName: "border-success/30 bg-success/10",
-    iconClassName: "text-success",
-    textClassName: "text-foreground",
+    containerClassName:
+      "border-success/30 bg-success/10 dark:border-success/55 dark:bg-success/22",
+    iconClassName: "text-success dark:text-emerald-300",
+    textClassName: "text-foreground dark:text-emerald-100/95",
   },
   warning: {
     icon: AlertTriangle,
-    containerClassName: "border-warning/30 bg-warning/10",
-    iconClassName: "text-warning",
-    textClassName: "text-foreground",
+    containerClassName:
+      "border-warning/30 bg-warning/10 dark:border-warning/55 dark:bg-warning/22",
+    iconClassName: "text-warning dark:text-amber-300",
+    textClassName: "text-foreground dark:text-amber-100/95",
   },
   destructive: {
     icon: AlertCircle,
-    containerClassName: "border-destructive/30 bg-destructive/10",
-    iconClassName: "text-destructive",
-    textClassName: "text-foreground",
+    containerClassName:
+      "border-destructive/30 bg-destructive/10 dark:border-destructive/55 dark:bg-destructive/22",
+    iconClassName: "text-destructive dark:text-red-300",
+    textClassName: "text-foreground dark:text-red-200/95",
   },
   info: {
     icon: Info,
-    containerClassName: "border-primary/25 bg-primary/10",
-    iconClassName: "text-primary",
-    textClassName: "text-foreground",
+    containerClassName:
+      "border-primary/25 bg-primary/10 dark:border-info/55 dark:bg-info/22",
+    iconClassName: "text-primary dark:text-sky-300",
+    textClassName: "text-foreground dark:text-sky-100/95",
   },
   neutral: {
     icon: Circle,
@@ -55,6 +60,7 @@ type AdminFeedbackMessageProps = {
   title?: string;
   icon?: LucideIcon;
   showIcon?: boolean;
+  dismissible?: boolean;
   onDismiss?: () => void;
   className?: string;
 };
@@ -65,11 +71,26 @@ export function AdminFeedbackMessage({
   title,
   icon,
   showIcon = true,
+  dismissible = true,
   onDismiss,
   className,
 }: AdminFeedbackMessageProps) {
   const config = variantConfig[variant];
   const Icon = icon ?? config.icon;
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    setHidden(false);
+  }, [children, title, variant]);
+
+  if (hidden) {
+    return null;
+  }
+
+  const handleDismiss = () => {
+    onDismiss?.();
+    setHidden(true);
+  };
 
   return (
     <div
@@ -87,7 +108,7 @@ export function AdminFeedbackMessage({
         {title ? (
           <p className={cn("font-medium text-compact", config.textClassName)}>{title}</p>
         ) : null}
-        <p
+        <div
           className={cn(
             "text-compact leading-relaxed",
             config.textClassName,
@@ -95,13 +116,13 @@ export function AdminFeedbackMessage({
           )}
         >
           {children}
-        </p>
+        </div>
       </div>
-      {onDismiss ? (
+      {dismissible ? (
         <button
           type="button"
           className="admin-feedback-message__dismiss"
-          onClick={onDismiss}
+          onClick={handleDismiss}
           aria-label="Dismiss message"
         >
           <X className="size-4" strokeWidth={2.25} aria-hidden />

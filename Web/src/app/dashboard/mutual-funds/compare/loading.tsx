@@ -1,5 +1,5 @@
-import { MfCompareFundsPageSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
+import { DashboardQueryRouteLoading } from "@/components/dashboard/dashboard-query-route-loading";
 
 export default function MutualFundsCompareLoading() {
-  return <MfCompareFundsPageSkeleton />;
+  return <DashboardQueryRouteLoading />;
 }

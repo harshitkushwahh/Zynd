@@ -53,24 +53,27 @@ export function mapPortfolioGrowthToFlowSeries(
 
   const today = new Date();
   today.setHours(12, 0, 0, 0);
-  const start = new Date(today);
-  start.setMonth(start.getMonth() - 1);
+  const dateKey = today.toISOString().slice(0, 10);
+  const label = today.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 
   const investedPoint = growth.find((point) => point.label.toLowerCase() === "invested") ?? growth[0]!;
   const currentPoint =
     growth.find((point) => point.label.toLowerCase() === "current") ?? growth[growth.length - 1]!;
 
+  const invested = investedPoint.invested ?? investedPoint.value;
+
+  // Same-day anchors keep range tabs on 1M until dated growth history arrives.
   return [
     {
-      date: start.toISOString().slice(0, 10),
-      label: start.toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
-      invested: investedPoint.invested ?? investedPoint.value,
+      date: dateKey,
+      label,
+      invested,
       value: investedPoint.value,
     },
     {
-      date: today.toISOString().slice(0, 10),
-      label: today.toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
-      invested: investedPoint.invested ?? investedPoint.value,
+      date: dateKey,
+      label,
+      invested,
       value: currentPoint.value,
     },
   ];
@@ -81,6 +84,8 @@ export function mapPortfolioHoldingToItem(holding: PortfolioHoldingResponse): Po
     id: holding.id,
     fundName: holding.fund_name,
     amcName: holding.amc_name ?? "Mutual fund",
+    amcLogoUrl: holding.amc_logo_url,
+    isin: holding.isin,
     currentValueInr: holding.current_value_inr,
     investedInr: holding.invested_inr,
     returnPct: holding.return_pct,
@@ -99,6 +104,8 @@ export function mapPortfolioHoldingDetail(
     id: holding.id,
     fundName: holding.fund_name,
     amcName: holding.amc_name ?? "Mutual fund",
+    amcLogoUrl: holding.amc_logo_url,
+    isin: holding.isin,
     currentValueInr: holding.current_value_inr,
     investedInr: holding.invested_inr,
     returnPct: holding.return_pct,
@@ -114,6 +121,8 @@ export function mapPortfolioHoldingDetail(
     xirrPct: holding.xirr_pct,
     redeemableUnits: holding.redeemable_units,
     redeemBankLabel: holding.redeem_bank_label,
+    redeemBankName: holding.redeem_bank_name,
+    redeemBankIfsc: holding.redeem_bank_ifsc,
     nomineeName: holding.nominee_name,
     transactions: holding.transactions.map((txn) => ({
       id: txn.id,

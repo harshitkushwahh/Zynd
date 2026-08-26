@@ -68,7 +68,7 @@ export function MfTransactionCheckoutDetailDialog({
         {loading ? (
           <AdminDetailDialogSkeleton />
         ) : error ? (
-          <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+          <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
         ) : detail ? (
           <>
             <div className="grid gap-4 sm:grid-cols-2">

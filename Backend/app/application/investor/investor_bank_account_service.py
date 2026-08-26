@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.investor.investor_bank_account_crypto import encrypt_account_number, read_account_number
 from app.application.investor.investor_bank_account_errors import InvestorBankAccountError
+from app.application.investor.indian_bank_display import resolve_bank_display_name
 from app.application.investor.investor_provision_mapper import build_bank_account_payload
 from app.application.kyc.bank_verification_core import (
     BankVerificationError,
@@ -22,7 +23,11 @@ from app.application.kyc.bank_verification_core import (
 )
 from app.application.kyc.journey_state_service import get_or_create_journey
 from app.application.mf.mf_folio_defaults_service import refresh_mfia_payout_bank_account
-from app.application.mf.mf_mandate_guard import find_blocking_mandate_for_bank
+from app.application.mf.mf_mandate_guard import (
+    count_active_sips_for_bank,
+    find_blocking_mandate_for_bank,
+    has_in_flight_mandate_for_bank,
+)
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_investor_client import create_bank_account
@@ -322,10 +327,20 @@ async def _serialize_bank_account_from_session(db: AsyncSession, row: InvestorBa
     return serialize_bank_account(row)
 
 
+async def _serialize_bank_account_for_list(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    row: InvestorBankAccount,
+) -> dict[str, Any]:
+    payload = await _serialize_bank_account_from_session(db, row)
+    return await _enrich_bank_account_hub_fields(db, user_id=user_id, row=row, payload=payload)
+
+
 def serialize_bank_account(row: InvestorBankAccount) -> dict[str, Any]:
     metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
     failure = row.verification_failure_json if isinstance(row.verification_failure_json, dict) else None
-    return {
+    payload = {
         "id": str(row.id),
         "account_number_masked": f"•••• {row.account_number_last4}",
         "account_number_last4": row.account_number_last4,
@@ -333,7 +348,7 @@ def serialize_bank_account(row: InvestorBankAccount) -> dict[str, Any]:
         "account_type": row.account_type,
         "account_holder_name": row.primary_account_holder_name,
         "pan_account_holder_name": row.pan_account_holder_name,
-        "bank_name": row.bank_name,
+        "bank_name": resolve_bank_display_name(row.bank_name, row.ifsc_code),
         "branch_name": row.branch_name,
         "is_primary": row.is_primary,
         "source": row.source.value,
@@ -352,6 +367,55 @@ def serialize_bank_account(row: InvestorBankAccount) -> dict[str, Any]:
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
+    payload["is_payment_ready"] = _is_bank_account_payment_ready(row)
+    payload["active_sip_count"] = 0
+    payload["blocks_removal"] = False
+    payload["blocks_primary_switch"] = False
+    return payload
+
+
+def _is_bank_account_payment_ready(row: InvestorBankAccount) -> bool:
+    return (
+        row.verification_status == InvestorBankVerificationStatus.verified
+        and row.sync_status == InvestorObjectSyncStatus.active
+        and bool(row.external_bank_account_id)
+        and not is_bank_account_disabled(row)
+    )
+
+
+async def _enrich_bank_account_hub_fields(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    row: InvestorBankAccount,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    active_sip_count = 0
+    in_flight_mandate = False
+    if row.external_old_id is not None:
+        bank_old_id = int(row.external_old_id)
+        active_sip_count = await count_active_sips_for_bank(
+            db,
+            user_id=user_id,
+            bank_account_old_id=bank_old_id,
+        )
+        in_flight_mandate = await has_in_flight_mandate_for_bank(
+            db,
+            user_id=user_id,
+            bank_account_old_id=bank_old_id,
+        )
+    payload["active_sip_count"] = active_sip_count
+    payload["blocks_removal"] = active_sip_count > 0 or in_flight_mandate
+    if row.is_primary and row.external_old_id is not None:
+        blocking_mandate = await find_blocking_mandate_for_bank(
+            db,
+            user_id=user_id,
+            bank_account_old_id=int(row.external_old_id),
+        )
+        payload["blocks_primary_switch"] = blocking_mandate is not None
+    else:
+        payload["blocks_primary_switch"] = False
+    return payload
 
 
 async def list_user_bank_accounts(db: AsyncSession, *, user_id: UUID) -> list[dict[str, Any]]:
@@ -382,7 +446,7 @@ async def list_user_bank_accounts(db: AsyncSession, *, user_id: UUID) -> list[di
         if not settings.resolved_fp_enabled or settings.debug:
             _apply_stub_bank_payment_ids(row)
     await db.flush()
-    return [await _serialize_bank_account_from_session(db, row) for row in consolidated]
+    return [await _serialize_bank_account_for_list(db, user_id=user_id, row=row) for row in consolidated]
 
 
 async def verify_and_add_bank_account(
@@ -469,7 +533,7 @@ async def verify_and_add_bank_account(
     if existing:
         row = existing
         row.ifsc_code = ifsc
-        row.primary_account_holder_name = outcome.display_holder_name[:120]
+        row.primary_account_holder_name = (outcome.kyckart_holder_name or outcome.pan_holder_name)[:120]
         row.pan_account_holder_name = outcome.pan_holder_name[:120]
         row.bank_name = outcome.bank_name[:120] or None
         row.branch_name = outcome.branch[:120] or None
@@ -490,7 +554,7 @@ async def verify_and_add_bank_account(
             account_type=mapped_account_type,
             account_number_last4=last4,
             ifsc_code=ifsc,
-            primary_account_holder_name=outcome.display_holder_name[:120],
+            primary_account_holder_name=(outcome.kyckart_holder_name or outcome.pan_holder_name)[:120],
             pan_account_holder_name=outcome.pan_holder_name[:120],
             bank_name=outcome.bank_name[:120] or None,
             branch_name=outcome.branch[:120] or None,
@@ -752,7 +816,7 @@ async def set_primary_bank_account(
         if blocking_mandate:
             raise InvestorBankAccountError(
                 code="active_mandate_exists",
-                message="Cancel your active SIP mandate before switching payout bank accounts.",
+                message="Switch your SIP to another bank account before changing your primary payout bank.",
                 status_code=409,
             )
 
@@ -811,7 +875,7 @@ async def disable_bank_account(
         if blocking_mandate:
             raise InvestorBankAccountError(
                 code="active_mandate_exists",
-                message="Cancel your active SIP mandate before removing this bank account.",
+                message="Switch your SIP to another bank account before removing this one.",
                 status_code=409,
             )
 

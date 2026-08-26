@@ -137,8 +137,12 @@ def _verification_outcome(**overrides) -> HybridBankVerificationOutcome:
         "requires_manual": False,
         "requires_proof_upload": False,
         "failure": None,
-        "display_holder_name": "Test User",
+        "kyckart_holder_name": "Test User",
+        "kyckart_lookup_error": None,
         "pan_holder_name": "Test User",
+        "poa_pan_status": {"status": "verified"},
+        "poa_bank_status": {"status": "verified"},
+        "poa_readiness_status": {"status": "verified"},
         "bank_name": "HDFC Bank",
         "branch": "Jayanagar",
         "poa_account_type": "savings",
@@ -698,3 +702,35 @@ async def test_list_user_bank_accounts_stubs_payment_ready_verified_bank(db_sess
     assert bank.sync_status == InvestorObjectSyncStatus.active
     assert bank.external_bank_account_id
     assert bank.external_old_id is not None
+
+
+@pytest.mark.asyncio
+async def test_list_user_bank_accounts_includes_hub_fields(db_session) -> None:
+    user, primary, secondary = await _seed_user_with_two_banks(db_session)
+    mandate = MfMandate(
+        user_id=user.id,
+        investor_bank_account_id=primary.id,
+        bank_account_old_id=int(primary.external_old_id),
+        status=MfMandateStatus.approved,
+        mandate_limit=5000,
+        idempotency_key=str(uuid4()),
+        fp_mandate_id=9002,
+    )
+    db_session.add(mandate)
+    await db_session.flush()
+    await _seed_sip_plan(
+        db_session,
+        user_id=user.id,
+        mandate_id=mandate.id,
+        status=MfSipPlanStatus.active,
+    )
+
+    rows = await list_user_bank_accounts(db_session, user_id=user.id)
+    by_id = {row["id"]: row for row in rows}
+
+    assert by_id[str(primary.id)]["is_payment_ready"] is True
+    assert by_id[str(primary.id)]["active_sip_count"] == 1
+    assert by_id[str(primary.id)]["blocks_removal"] is True
+    assert by_id[str(primary.id)]["blocks_primary_switch"] is True
+    assert by_id[str(secondary.id)]["active_sip_count"] == 0
+    assert by_id[str(secondary.id)]["blocks_removal"] is False

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { AdminMetricCard } from "@/components/ui/admin-metric-card";
+import { AdminFlipMetricCard } from "@/components/ui/admin-flip-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
@@ -27,8 +27,8 @@ import type {
 } from "@/lib/dummy/distributor-head-data";
 import type { ManagerBookSummary } from "@/lib/distributor-head-queries";
 import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
-import { formatDistributorHeadInr } from "@/lib/distributor-head-format";
-import { IndianRupee, Repeat, ShoppingBag } from "lucide-react";
+import { formatDistributorHeadCount, formatDistributorHeadInr } from "@/lib/distributor-head-format";
+import { IndianRupee, Repeat, ShoppingBag, Users2 } from "lucide-react";
 
 const ALL = "all";
 const SIP_COLUMNS = 7;
@@ -124,38 +124,67 @@ export function DistributorHeadManagerBookTab({
 
   const totalMtd = book.lumpsumMtdInr + book.sipMtdInr;
   const lumpsumShare = totalMtd > 0 ? Math.round((book.lumpsumMtdInr / totalMtd) * 100) : 0;
+  const isSipsView = bookView === "sips";
+  const search = isSipsView ? sipSearch : purchaseSearch;
+  const setSearch = isSipsView ? setSipSearch : setPurchaseSearch;
+  const statusFilter = isSipsView ? sipStatus : purchaseStatus;
+  const setStatusFilter = isSipsView ? setSipStatus : setPurchaseStatus;
+  const statusOptions = isSipsView ? SIP_STATUS_OPTIONS : PURCHASE_STATUS_OPTIONS;
+  const searchPlaceholder = isSipsView
+    ? `Search SIPs by client, ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}, or scheme`
+    : `Search purchases by client, ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}, or scheme`;
 
   return (
-    <div className="space-y-6">
-      <AdminMetricCardsGrid>
-        <AdminMetricCard
-          icon={IndianRupee}
-          label="Total AUM"
-          value={formatDistributorHeadInr(book.totalAumInr)}
-          hint={`Combined ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} books`}
-          tone="success"
-          accent
+    <div className="min-w-0 max-w-full space-y-6 overflow-x-clip">
+      <AdminMetricCardsGrid columns="four" className="mt-0 mb-0 min-w-0 max-w-full">
+        <AdminFlipMetricCard
+          front={{
+            label: "Total AUM",
+            value: formatDistributorHeadInr(book.totalAumInr),
+            icon: IndianRupee,
+          }}
+          back={{
+            label: "Combined books",
+            value: MITRA_HIERARCHY_COPY.zyndMitra,
+            hint: `Across ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} books`,
+            icon: Users2,
+          }}
         />
-        <AdminMetricCard
-          icon={Repeat}
-          label="Active SIPs"
-          value={String(book.activeSipCount)}
-          hint={`${formatDistributorHeadInr(book.sipCommitmentMonthlyInr)}/month`}
-          tone="info"
+        <AdminFlipMetricCard
+          front={{
+            label: "Active SIPs",
+            value: formatDistributorHeadCount(book.activeSipCount),
+            icon: Repeat,
+          }}
+          back={{
+            label: "Monthly commitment",
+            value: formatDistributorHeadInr(book.sipCommitmentMonthlyInr),
+            icon: Repeat,
+          }}
         />
-        <AdminMetricCard
-          icon={ShoppingBag}
-          label="Lumpsum MTD"
-          value={formatDistributorHeadInr(book.lumpsumMtdInr)}
-          hint={`${lumpsumShare}% of MTD flows`}
-          tone="default"
+        <AdminFlipMetricCard
+          front={{
+            label: "Lumpsum MTD",
+            value: formatDistributorHeadInr(book.lumpsumMtdInr),
+            icon: ShoppingBag,
+          }}
+          back={{
+            label: "Share of MTD",
+            value: `${lumpsumShare}%`,
+            icon: ShoppingBag,
+          }}
         />
-        <AdminMetricCard
-          icon={Repeat}
-          label="SIP MTD"
-          value={formatDistributorHeadInr(book.sipMtdInr)}
-          hint={`Total MTD ${formatDistributorHeadInr(totalMtd)}`}
-          tone="muted"
+        <AdminFlipMetricCard
+          front={{
+            label: "SIP MTD",
+            value: formatDistributorHeadInr(book.sipMtdInr),
+            icon: Repeat,
+          }}
+          back={{
+            label: "Total MTD",
+            value: formatDistributorHeadInr(totalMtd),
+            icon: IndianRupee,
+          }}
         />
       </AdminMetricCardsGrid>
 
@@ -166,34 +195,49 @@ export function DistributorHeadManagerBookTab({
         }}
         className="gap-4"
       >
-        <AdminTabList variant="secondary">
-          <AdminTabTrigger value="sips">SIP plans ({sips.length})</AdminTabTrigger>
-          <AdminTabTrigger value="lumpsum">Lumpsum ({purchases.length})</AdminTabTrigger>
-        </AdminTabList>
-
-        <TabsContent value="sips" className="mt-0 space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <AdminSearchInput
-              containerClassName="max-w-sm"
-              placeholder={`Search SIPs by client, ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}, or scheme`}
-              value={sipSearch}
-              onChange={(event) => {
-                setSipSearch(event.target.value);
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:min-w-[14rem]"
+            placeholder={searchPlaceholder}
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              if (isSipsView) {
                 setSipPage(0);
-              }}
-            />
+              } else {
+                setPurchasePage(0);
+              }
+            }}
+          />
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <AdminSelect
-              value={sipStatus}
+              value={statusFilter}
               onValueChange={(value) => {
-                setSipStatus(value);
-                setSipPage(0);
+                setStatusFilter(value);
+                if (isSipsView) {
+                  setSipPage(0);
+                } else {
+                  setPurchasePage(0);
+                }
               }}
-              options={SIP_STATUS_OPTIONS}
+              options={statusOptions}
               placeholder="Status"
-              className="min-w-select-sm"
+              className="min-w-select-sm shrink-0 self-end sm:self-auto"
+              triggerClassName="w-auto"
+              aria-label={
+                isSipsView ? "Filter SIP plans by status" : "Filter lumpsum purchases by status"
+              }
             />
-          </div>
 
+            <AdminTabList variant="secondary" className="max-w-full overflow-x-auto">
+              <AdminTabTrigger value="sips">SIP plans ({sips.length})</AdminTabTrigger>
+              <AdminTabTrigger value="lumpsum">Lumpsum ({purchases.length})</AdminTabTrigger>
+            </AdminTabList>
+          </div>
+        </div>
+
+        <TabsContent value="sips" className="mt-0">
           <AdminDataTable
             minWidth="5xl"
             footer={
@@ -251,29 +295,7 @@ export function DistributorHeadManagerBookTab({
           </AdminDataTable>
         </TabsContent>
 
-        <TabsContent value="lumpsum" className="mt-0 space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <AdminSearchInput
-              containerClassName="max-w-sm"
-              placeholder={`Search purchases by client, ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}, or scheme`}
-              value={purchaseSearch}
-              onChange={(event) => {
-                setPurchaseSearch(event.target.value);
-                setPurchasePage(0);
-              }}
-            />
-            <AdminSelect
-              value={purchaseStatus}
-              onValueChange={(value) => {
-                setPurchaseStatus(value);
-                setPurchasePage(0);
-              }}
-              options={PURCHASE_STATUS_OPTIONS}
-              placeholder="Status"
-              className="min-w-select-sm"
-            />
-          </div>
-
+        <TabsContent value="lumpsum" className="mt-0">
           <AdminDataTable
             minWidth="5xl"
             footer={

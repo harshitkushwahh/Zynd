@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Gauge, RefreshCw } from "lucide-react";
 
-import { RiskProfileAuditPanel, RISK_PROFILE_AUDIT_EVENT_FILTER_OPTIONS } from "@/components/risk-profile/risk-profile-audit-panel";
 import {
   RiskProfileCategoriesPanel,
 } from "@/components/risk-profile/risk-profile-categories-panel";
@@ -48,7 +47,6 @@ const SEARCH_PLACEHOLDERS: Record<RiskProfileTabId, string> = {
   questions: "Search questions",
   templates: "Search templates",
   tiers: "Search tiers",
-  audit: "Search events, user, IP, or date",
 };
 
 export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
@@ -61,7 +59,6 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
 
   const [listSearch, setListSearch] = useState("");
   const [tierFilter, setTierFilter] = useState(ALL);
-  const [eventFilter, setEventFilter] = useState(ALL);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const showPageToolbar = !PANEL_TOOLBAR_TABS.includes(activeTabId);
@@ -76,8 +73,8 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
   );
 
   useEffect(() => {
-    if (tabSlug === "bulk") {
-      router.replace("/dashboard/risk-profile/questions");
+    if (tabSlug === "bulk" || tabSlug === "audit") {
+      router.replace("/dashboard/risk-profile");
       return;
     }
 
@@ -103,8 +100,7 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
   const canManageTiers = hasPermission("risk_profile.tiers.manage");
   const canManageLocked = hasPermission("risk_profile.users.manage");
 
-  const showRefresh =
-    activeTabId === "users" || activeTabId === "locked" || activeTabId === "audit";
+  const showRefresh = activeTabId === "users" || activeTabId === "locked";
 
   return (
     <AdminSectionPageShell
@@ -142,17 +138,6 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
                   options={RISK_PROFILE_USER_TIER_FILTER_OPTIONS}
                   placeholder="Tier"
                   className="min-w-select-sm shrink-0"
-                  triggerClassName="w-auto"
-                />
-              ) : null}
-
-              {activeTabId === "audit" ? (
-                <AdminSelect
-                  value={eventFilter}
-                  onValueChange={setEventFilter}
-                  options={RISK_PROFILE_AUDIT_EVENT_FILTER_OPTIONS}
-                  placeholder="Event type"
-                  className="min-w-select-xl shrink-0"
                   triggerClassName="w-auto"
                 />
               ) : null}
@@ -217,16 +202,6 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
             showToolbar={false}
             search={listSearch}
             onSearchChange={setListSearch}
-            refreshKey={refreshKey}
-          />
-        </TabsContent>
-        <TabsContent value="audit" keepMounted={keepMounted("audit")} className="mt-0">
-          <RiskProfileAuditPanel
-            showToolbar={false}
-            search={listSearch}
-            onSearchChange={setListSearch}
-            eventFilter={eventFilter}
-            onEventFilterChange={setEventFilter}
             refreshKey={refreshKey}
           />
         </TabsContent>

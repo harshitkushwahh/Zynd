@@ -43,7 +43,11 @@ const STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
   { value: "active", label: "Active" },
   { value: "suspended", label: "Suspended" },
   { value: "pending", label: "Pending" },
+  { value: "deleted", label: "Deleted" },
 ];
+
+const DELETED_ROW_CLASS = "bg-muted/15 text-muted-foreground/75";
+const DELETED_TEXT_CLASS = "line-through decoration-muted-foreground/50";
 
 const ROLE_FILTER_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All roles" },
@@ -91,7 +95,9 @@ export function UsersDirectoryPanel(_props: UsersDirectoryPanelProps) {
   };
 
   const handleOpenProfile = (user: (typeof users)[number]) => {
-    router.push(`/dashboard/users/${clientIdToProfilePath(user.client_id)}/portfolio`);
+    const profilePath = clientIdToProfilePath(user.client_id);
+    const defaultTab = user.role === "admin" ? "overview" : "portfolio";
+    router.push(`/dashboard/users/${profilePath}/${defaultTab}`);
   };
 
   const handlePageSizeChange = (nextPageSize: number) => {
@@ -199,8 +205,15 @@ export function UsersDirectoryPanel(_props: UsersDirectoryPanelProps) {
             ) : users.length === 0 ? (
               <AdminTableStateRow colSpan={8}>No users match your filters.</AdminTableStateRow>
             ) : (
-              users.map((user) => (
-                <AdminTableRow key={user.user_id} onClick={() => handleOpenProfile(user)}>
+              users.map((user) => {
+                const isDeleted = user.status === "deleted";
+
+                return (
+                <AdminTableRow
+                  key={user.user_id}
+                  onClick={isDeleted ? undefined : () => handleOpenProfile(user)}
+                  className={isDeleted ? DELETED_ROW_CLASS : undefined}
+                >
                       <AdminTableCell className={USER_CELL_CLASS}>
                         <div className="flex min-w-0 items-center gap-3">
                           <AdminUserProfileAvatar
@@ -208,11 +221,14 @@ export function UsersDirectoryPanel(_props: UsersDirectoryPanelProps) {
                             email={user.email}
                             imageSrc={user.profile_image_url}
                             size="md"
-                            className="shrink-0"
+                            className={cn("shrink-0", isDeleted && "opacity-50")}
                           />
                           <div className="min-w-0">
                             <span
-                              className="block truncate text-compact text-foreground"
+                              className={cn(
+                                "block truncate text-compact",
+                                isDeleted ? cn("text-muted-foreground", DELETED_TEXT_CLASS) : "text-foreground",
+                              )}
                               title={user.email}
                             >
                               {user.email}
@@ -220,8 +236,14 @@ export function UsersDirectoryPanel(_props: UsersDirectoryPanelProps) {
                           </div>
                         </div>
                       </AdminTableCell>
-                      <AdminTableCell className={cn("text-muted-foreground", ZYND_ID_CELL_CLASS)}>
-                        <span className="block truncate font-mono text-compact" title={user.client_id}>
+                      <AdminTableCell className={cn(ZYND_ID_CELL_CLASS)}>
+                        <span
+                          className={cn(
+                            "block truncate font-mono text-compact",
+                            isDeleted && DELETED_TEXT_CLASS,
+                          )}
+                          title={user.client_id}
+                        >
                           {user.client_id}
                         </span>
                       </AdminTableCell>
@@ -242,11 +264,12 @@ export function UsersDirectoryPanel(_props: UsersDirectoryPanelProps) {
                       <AdminTableCell>
                         <MfaStatusBadge enabled={user.mfa_enrolled} />
                       </AdminTableCell>
-                      <AdminTableCell className="text-muted-foreground">
+                      <AdminTableCell className={cn(isDeleted && DELETED_TEXT_CLASS)}>
                         {new Date(user.created_at).toLocaleDateString()}
                       </AdminTableCell>
                     </AdminTableRow>
-                ))
+                );
+              })
               )}
           </AdminTableBody>
         </AdminDataTable>

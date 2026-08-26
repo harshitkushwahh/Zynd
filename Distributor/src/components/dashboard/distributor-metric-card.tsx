@@ -15,7 +15,7 @@ type DistributorMetricCardProps = {
   className?: string;
   variant?: "default" | "tile";
   /** Dark green gradient tile (dashboard “Open orders” style) */
-  tileTone?: "default" | "accent";
+  tileTone?: "default" | "accent" | "success";
   /** Show top-right arrow control on tile cards */
   showTileAction?: boolean;
   /** Show leading icon on tile cards */
@@ -42,6 +42,7 @@ export function DistributorMetricCard({
 }: DistributorMetricCardProps) {
   const isTile = variant === "tile";
   const isAccent = tileTone === "accent";
+  const isSuccess = tileTone === "success";
   const showTileHeader = showTileIcon || showTileAction;
 
   const content = isTile ? (
@@ -53,6 +54,7 @@ export function DistributorMetricCard({
               className={cn(
                 "distributor-metric-card__tile-icon",
                 isAccent && "distributor-metric-card__tile-icon--accent",
+                isSuccess && "distributor-metric-card__tile-icon--success",
               )}
               aria-hidden
             >
@@ -66,6 +68,7 @@ export function DistributorMetricCard({
               className={cn(
                 "distributor-metric-card__tile-action",
                 isAccent && "distributor-metric-card__tile-action--accent",
+                isSuccess && "distributor-metric-card__tile-action--success",
               )}
               aria-hidden={!href}
             >
@@ -111,6 +114,7 @@ export function DistributorMetricCard({
   const cardClass = cn(
     isTile && "distributor-metric-card--tile h-full w-full ring-0 rounded-4xl overflow-hidden",
     isTile && isAccent && "distributor-metric-card--tile-accent",
+    isTile && isSuccess && "distributor-metric-card--tile-success",
     !isTile && "h-full shadow-sm",
   );
 

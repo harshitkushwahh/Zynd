@@ -86,7 +86,7 @@ export function AdminKycSignatureViewDialog({
           }
         />
         <AdminDialogBody className="space-y-3 pt-0">
-          {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+          {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
           <div className="admin-kyc-signature-view-dialog__preview">
             {loading ? (
               <Skeleton className="admin-kyc-signature-view-dialog__skeleton" />

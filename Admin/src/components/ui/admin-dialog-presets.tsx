@@ -260,6 +260,7 @@ export function AdminFormDialog({
   footer,
   bodyClassName,
   headerAside,
+  headerClassName,
   contentClassName,
 }: DialogOpenProps & {
   title: string;
@@ -271,6 +272,7 @@ export function AdminFormDialog({
   footer?: React.ReactNode;
   bodyClassName?: string;
   headerAside?: React.ReactNode;
+  headerClassName?: string;
   contentClassName?: string;
 }) {
   const dialog = useDialogHandlers({ open, onOpenChange, onClose });
@@ -284,6 +286,7 @@ export function AdminFormDialog({
           icon={icon}
           iconTone={iconTone}
           headerAside={headerAside}
+          className={headerClassName}
         />
         <AdminDialogBody className={cn(ADMIN_DIALOG_BODY_SCROLL_CLASS, bodyClassName)}>
           {children}

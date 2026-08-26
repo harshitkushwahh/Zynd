@@ -50,8 +50,6 @@ export function FamilyGroupArchivedDialog({ open, onOpenChange }: FamilyGroupArc
       open={open}
       onOpenChange={onOpenChange}
       title={copy.familyGroups.detail.archivedTitle}
-      description={copy.familyGroups.detail.archivedDescription}
-      icon={Archive}
       maxWidth="lg"
       className="max-w-xl"
     >

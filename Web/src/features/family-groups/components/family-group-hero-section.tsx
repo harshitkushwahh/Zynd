@@ -7,9 +7,9 @@ import { FamilyGroupOrbitMemberFilter } from "@/features/family-groups/component
 import { FamilyGroupOrbitVisual } from "@/features/family-groups/components/family-group-orbit-visual";
 import type { FamilyGroupMemberPreview } from "@/features/family-groups/api/family-groups-api";
 import {
-  FAMILY_GROUP_CARD_RADIUS_CLASS,
   FAMILY_GROUP_HERO_GRADIENT_CLASS,
   FAMILY_GROUP_HERO_OVERLAY_CLASS,
+  FAMILY_GROUP_HERO_RADIUS_CLASS,
   pickOrbitMembers,
 } from "@/features/family-groups/lib/family-group-ui";
 import { cn } from "@/lib/utils";
@@ -48,7 +48,7 @@ export function FamilyGroupHeroSection({
     <section
       className={cn(
         "relative isolate flex min-h-[24rem] min-w-0 flex-1 flex-col overflow-hidden p-4 shadow-zynd-mid ring-1 ring-inset ring-primary-foreground/10 sm:min-h-[26rem] sm:p-5 lg:p-6",
-        FAMILY_GROUP_CARD_RADIUS_CLASS,
+        FAMILY_GROUP_HERO_RADIUS_CLASS,
         FAMILY_GROUP_HERO_GRADIENT_CLASS,
         className,
       )}

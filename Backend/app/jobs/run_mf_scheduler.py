@@ -7,6 +7,7 @@ import logging
 from datetime import date, datetime, timezone
 
 from app.application.mf.mf_scheduler_jobs import build_scheduled_jobs, job_due, list_jobs_for_cli, run_job_once
+from app.application.mf.mf_scheduler_skip_service import is_scheduler_job_skipped_today
 from app.application.mf.mf_job_runner_service import execute_mf_job
 from app.application.mf.nav_cold_start_backfill_service import needs_cold_start_backfill, run_nav_cold_start_backfill
 from app.core.config import get_settings
@@ -18,13 +19,17 @@ logger = logging.getLogger(__name__)
 async def _run_due_jobs() -> list[dict]:
     results: list[dict] = []
     now = datetime.now(timezone.utc)
-    for job in build_scheduled_jobs():
-        if not job.enabled:
-            continue
-        if not job_due(job.cron, now=now):
-            continue
-        logger.info("MF scheduler running job=%s cron=%s", job.name, job.cron)
-        async with AsyncSessionLocal() as session:
+    async with AsyncSessionLocal() as session:
+        for job in build_scheduled_jobs():
+            if not job.enabled:
+                continue
+            if not job_due(job.cron, now=now):
+                continue
+            if await is_scheduler_job_skipped_today(session, job.name):
+                logger.info("MF scheduler skipping job=%s (manual/pipeline already ran today IST)", job.name)
+                results.append({"job": job.name, "ok": True, "skipped": True, "reason": "manual_run_today"})
+                continue
+            logger.info("MF scheduler running job=%s cron=%s", job.name, job.cron)
             try:
                 result = await execute_mf_job(session, job.name, triggered_by="SCHEDULER")
                 await session.commit()
@@ -63,6 +68,8 @@ async def _maybe_run_cold_start_on_startup() -> dict | None:
 async def run_scheduler_loop() -> None:
     settings = get_settings()
     tick = max(settings.zynd_mf_scheduler_tick_seconds, 15)
+    auto_resume_tick = max(settings.zynd_mf_pipeline_auto_resume_poll_seconds, tick)
+    ticks_since_auto_resume = auto_resume_tick
     logger.info("MF scheduler started (tick=%ss)", tick)
     startup_result = await _maybe_run_cold_start_on_startup()
     if startup_result:
@@ -72,6 +79,12 @@ async def run_scheduler_loop() -> None:
             results = await _run_due_jobs()
             if results:
                 logger.info("MF scheduler tick results: %s", results)
+            ticks_since_auto_resume += tick
+            if ticks_since_auto_resume >= auto_resume_tick:
+                ticks_since_auto_resume = 0
+                from app.application.mf.mf_pipeline_auto_resume_service import try_auto_resume_latest_eligible
+
+                await try_auto_resume_latest_eligible(source="scheduler_poll")
         except Exception:
             logger.exception("MF scheduler tick failed")
         await asyncio.sleep(tick)

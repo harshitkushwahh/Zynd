@@ -38,6 +38,7 @@ export const DISTRIBUTOR_HEAD_QUEUE_APPROVE_PERMISSION = "admin.distributor_part
 export const DISTRIBUTOR_HEAD_HIERARCHY_READ_PERMISSION = "admin.distributor_hierarchy.read";
 export const DISTRIBUTOR_HEAD_BRANCHES_LIST_PERMISSION = "admin.distributor_branches.list";
 export const DISTRIBUTOR_HEAD_BRANCHES_MANAGE_PERMISSION = "admin.distributor_branches.manage";
+export const DISTRIBUTOR_HEAD_BRANCHES_APPROVE_PERMISSION = "admin.distributor_branches.approve";
 export const DISTRIBUTOR_HEAD_MANAGERS_LIST_PERMISSION = "admin.distributor_managers.list";
 
 export const DISTRIBUTOR_HEAD_HIERARCHY_PERMISSIONS = [

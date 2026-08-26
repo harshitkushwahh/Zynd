@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ShieldCheck, Smartphone } from "lucide-react";
 
 import { OtpInfoBanner, OtpInput } from "@/components/auth/auth-shared";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { fetchStepUpOptions, sendStepUpSms } from "@/features/account/mfa/api/step-up-api";
 import { useOtpResendCooldown } from "@/hooks/use-otp-resend-cooldown";
 import { ApiError } from "@/lib/api-client";
 import { copy } from "@/shared/config/copy";
 import { storageKeys } from "@/shared/config/storage-keys";
+import { cn } from "@/lib/utils";
 
 type StepUpSecondFactorFieldsProps = {
   useSms: boolean;
@@ -23,6 +26,8 @@ type StepUpSecondFactorFieldsProps = {
   disabled?: boolean;
   error?: string;
   onErrorChange?: (message: string) => void;
+  embedded?: boolean;
+  centered?: boolean;
 };
 
 export function StepUpSecondFactorFields({
@@ -37,6 +42,8 @@ export function StepUpSecondFactorFields({
   disabled = false,
   error = "",
   onErrorChange,
+  embedded = false,
+  centered = false,
 }: StepUpSecondFactorFieldsProps) {
   const [smsFallbackAvailable, setSmsFallbackAvailable] = useState(false);
   const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
@@ -91,7 +98,43 @@ export function StepUpSecondFactorFields({
     ? maskedPhone
       ? `${copy.mfa.secondFactor.stepUpDescription} (${maskedPhone})`
       : copy.mfa.secondFactor.stepUpDescription
-    : copy.auth.mfaAuthenticatorHint;
+    : copy.auth.mfaAuthenticatorForApp;
+
+  const authenticatorFields = (
+    <div className={cn("space-y-3", !embedded && "rounded-[var(--radius-xl)] border border-border bg-muted/15 p-4")}>
+      <div className={cn("space-y-1", centered && "text-center")}>
+        {embedded && centered ? (
+          <div className="flex items-center justify-center gap-2">
+            <ShieldCheck className="size-4 text-primary" strokeWidth={2.25} aria-hidden />
+            <Label htmlFor="stepUpTotp" className="text-caption font-medium">
+              {copy.pin.setupStepMfa}
+            </Label>
+          </div>
+        ) : embedded ? (
+          <Label htmlFor="stepUpTotp" className="text-caption font-medium">
+            {copy.pin.setupStepMfa}
+          </Label>
+        ) : (
+          <div className="flex items-center justify-center gap-2">
+            <ShieldCheck className="size-4 text-primary" strokeWidth={2.25} aria-hidden />
+            <p className="text-compact font-medium text-foreground">Authenticator code</p>
+          </div>
+        )}
+        <p className={cn("text-caption text-muted-foreground", centered || !embedded ? "text-center" : "")}>
+          {copy.auth.mfaAuthenticatorForApp}
+        </p>
+      </div>
+      <OtpInput
+        id="stepUpTotp"
+        value={totpCode}
+        error={!!error}
+        onChange={(value) => {
+          onTotpCodeChange(value);
+          if (error) onErrorChange?.("");
+        }}
+      />
+    </div>
+  );
 
   return (
     <div className="space-y-3">
@@ -106,6 +149,7 @@ export function StepUpSecondFactorFields({
                     secondsLeft: smsCooldown.secondsLeft,
                     onResend: () => void handleResendSms(),
                     disabled: disabled || sendingSms,
+                    readyLabel: copy.mfa.secondFactor.smsLoginResend,
                   }
                 : undefined
             }
@@ -121,55 +165,46 @@ export function StepUpSecondFactorFields({
           />
         </>
       ) : (
-        <div className="rounded-[var(--radius-card)] border border-border bg-muted/15 p-5">
-          <p className="text-center text-compact font-medium text-foreground">Authenticator code</p>
-          <p className="mt-1 text-center text-caption text-muted-foreground">
-            {copy.auth.mfaAuthenticatorForApp}
-          </p>
-          <Input
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="000000"
-            value={totpCode}
-            onChange={(event) => {
-              onTotpCodeChange(event.target.value.replace(/\D/g, "").slice(0, 6));
-              if (error) onErrorChange?.("");
-            }}
-            maxLength={6}
-            disabled={disabled}
-            className="auth-input-underline mt-5 w-full text-center tracking-[0.35em] text-body font-medium"
-          />
-        </div>
+        authenticatorFields
       )}
 
       {smsFallbackAvailable && !useSms ? (
-        <button
-          type="button"
-          className="auth-link block"
-          disabled={disabled || sendingSms}
-          onClick={() => void handleSendSms()}
-        >
-          {copy.mfa.secondFactor.stepUpSendSms}
-        </button>
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={disabled || sendingSms}
+            onClick={() => void handleSendSms()}
+          >
+            <Smartphone className="size-3.5" strokeWidth={2.25} aria-hidden />
+            {sendingSms ? copy.mfa.verifying : copy.mfa.secondFactor.stepUpSendSms}
+          </Button>
+        </div>
       ) : null}
 
       {useSms ? (
-        <button
-          type="button"
-          className="auth-link block"
-          disabled={disabled}
-          onClick={() => {
-            onUseSmsChange(false);
-            onSmsOtpChange("");
-            onSmsSentChange(false);
-            onErrorChange?.("");
-          }}
-        >
-          {copy.mfa.secondFactor.stepUpUseAuthenticator}
-        </button>
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-muted-foreground"
+            disabled={disabled}
+            onClick={() => {
+              onUseSmsChange(false);
+              onSmsOtpChange("");
+              onSmsSentChange(false);
+              onErrorChange?.("");
+            }}
+          >
+            {copy.mfa.secondFactor.stepUpUseAuthenticator}
+          </Button>
+        </div>
       ) : null}
 
-      <FieldMessage message={error} />
+      <FieldMessage message={error} className={centered ? "text-center" : undefined} />
     </div>
   );
 }

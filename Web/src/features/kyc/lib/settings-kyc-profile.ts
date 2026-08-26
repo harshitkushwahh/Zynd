@@ -1,6 +1,7 @@
-import type { KycBootstrapResponse } from "@/features/kyc/lib/kyc-api";
+import type { KycBootstrapResponse, KycPanDraft } from "@/features/kyc/lib/kyc-api";
 import type { KycAddressFields, KycAddressFormValue } from "@/features/kyc/lib/kyc-address";
 import type { KycPersonalInfoValue } from "@/features/kyc/lib/kyc-personal-info";
+import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import { formatSettingsKycProfile } from "@/features/kyc/lib/settings-kyc-display";
 
 export type SettingsKycAddress = {
@@ -12,7 +13,7 @@ export type SettingsKycAddress = {
 
 export type SettingsKycBank = {
   accountHolderName: string;
-  accountNumber: string;
+  accountNumberMasked: string;
   accountType: string;
   ifscCode: string;
   bankName: string;
@@ -21,13 +22,25 @@ export type SettingsKycBank = {
 };
 
 export type SettingsKycProfile = {
-  panNumber: string | null;
+  panMasked: string | null;
   panVerified: boolean;
   kycVerified: boolean;
+  legalFullName: string | null;
   personalInfo: KycPersonalInfoValue | null;
   address: SettingsKycAddress | null;
   bank: SettingsKycBank | null;
 };
+
+export function formatKycPanFullName(panDraft: KycPanDraft | null | undefined): string | null {
+  if (!panDraft) return null;
+  const structured = [panDraft.firstName, panDraft.middleName, panDraft.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+  if (structured) return structured;
+  const fullName = panDraft.fullName?.trim();
+  return fullName || null;
+}
 
 function asAddressFields(raw: unknown): KycAddressFields | null {
   if (!raw || typeof raw !== "object") return null;
@@ -76,11 +89,17 @@ function mapPersonalDraft(raw: Record<string, unknown> | null | undefined): KycP
 
 function mapBankDraft(raw: Record<string, unknown> | null | undefined): SettingsKycBank | null {
   if (!raw) return null;
-  const accountNumber = String(raw.accountNumber ?? "").trim();
-  if (!accountNumber) return null;
+  const accountNumberMasked = String(raw.accountNumberMasked ?? "").trim();
+  const accountNumberLast4 = String(raw.accountNumberLast4 ?? "").trim();
+  const legacyAccountNumber = String(raw.accountNumber ?? "").trim();
+  const masked =
+    accountNumberMasked ||
+    (accountNumberLast4 ? `•••• ${accountNumberLast4}` : "") ||
+    (legacyAccountNumber.length > 4 ? `•••• ${legacyAccountNumber.slice(-4)}` : legacyAccountNumber);
+  if (!masked) return null;
   return {
     accountHolderName: String(raw.accountHolderName ?? ""),
-    accountNumber,
+    accountNumberMasked: masked,
     accountType: String(raw.accountType ?? ""),
     ifscCode: String(raw.ifscCode ?? ""),
     bankName: String(raw.bankName ?? ""),
@@ -97,9 +116,10 @@ export function mapBootstrapToKycProfile(
   const kycVerified = bootstrap?.step_statuses?.overall === "completed";
 
   return formatSettingsKycProfile({
-    panNumber: bootstrap?.pan_draft?.panNumber ?? null,
+    panMasked: resolvePanDisplay(bootstrap?.pan_draft ?? null),
     panVerified: kycVerified && bootstrap?.pan_verification_status === "verified",
     kycVerified,
+    legalFullName: formatKycPanFullName(bootstrap?.pan_draft ?? null),
     personalInfo: mapPersonalDraft(bootstrap?.personal_draft ?? null),
     address: contact
       ? {
@@ -118,9 +138,4 @@ export function mapBootstrapToKycProfile(
         }
       : null,
   });
-}
-
-export function maskAccountNumber(accountNumber: string): string {
-  if (accountNumber.length <= 4) return accountNumber;
-  return `•••• •••• ${accountNumber.slice(-4)}`;
 }

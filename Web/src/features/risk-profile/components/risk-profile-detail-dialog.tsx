@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Gauge, Lightbulb, Loader2 } from "lucide-react";
+import { Download, Lightbulb, Loader2 } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -29,13 +29,14 @@ type RiskProfileDetailDialogProps = {
 };
 
 function formatAssessmentDateTime(value: string) {
-  return new Date(value).toLocaleString(undefined, {
+  return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  });
+    hour12: true,
+  }).format(new Date(value));
 }
 
 export function RiskProfileDetailDialog({ open, onOpenChange, row }: RiskProfileDetailDialogProps) {
@@ -77,8 +78,6 @@ export function RiskProfileDetailDialog({ open, onOpenChange, row }: RiskProfile
           }
         }}
         title={copy.riskProfile.historyDetailTitle}
-        description={copy.riskProfile.historyDetailDescription}
-        icon={Gauge}
         maxWidth="md"
       >
       <div className="space-y-5 px-6 py-5">
@@ -120,13 +119,7 @@ export function RiskProfileDetailDialog({ open, onOpenChange, row }: RiskProfile
               background: `linear-gradient(145deg, color-mix(in srgb, ${tierVisual.gaugeColor} 11%, var(--card)) 0%, color-mix(in srgb, ${tierVisual.gaugeColor} 4%, var(--muted)) 100%)`,
             }}
           >
-            <div
-              className="absolute inset-y-0 left-0 w-1"
-              style={{ backgroundColor: tierVisual.gaugeColor }}
-              aria-hidden
-            />
-
-            <div className="flex gap-3 px-4 py-4 pl-5">
+            <div className="flex gap-3 px-4 py-4">
               <div
                 className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border/50 bg-background/70 shadow-zynd-low backdrop-blur-[var(--blur-sm)]"
                 style={{

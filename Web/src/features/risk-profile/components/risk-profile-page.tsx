@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { RiskProfileAssessmentResultDialog } from "@/features/risk-profile/components/risk-profile-assessment-result-dialog";
@@ -41,21 +42,23 @@ export function RiskProfilePage() {
   }, [riskProfile?.assessmentHistory]);
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
+    <>
       <DashboardBreadcrumb items={[{ label: riskProfileRoute.label }]} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
+      <div className="w-full min-w-0 pb-8">
         {loading ? (
           <RiskProfilePageSkeleton />
         ) : error && !profile ? (
-          <RiskProfileLoadErrorCard
-            title={copy.riskProfile.errors.pageLoadFailedTitle}
-            description={error}
-            retryLabel={copy.riskProfile.errors.retry}
-            onRetry={() => void riskProfile?.retryLoad()}
-          />
+          <DashboardContentFade>
+            <RiskProfileLoadErrorCard
+              title={copy.riskProfile.errors.pageLoadFailedTitle}
+              description={error}
+              retryLabel={copy.riskProfile.errors.retry}
+              onRetry={() => void riskProfile?.retryLoad()}
+            />
+          </DashboardContentFade>
         ) : (
-          <>
+          <DashboardContentFade>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,3fr)] xl:items-start">
               <div className="flex min-w-0 flex-col gap-4">
                 <RiskProfileHeroCard />
@@ -75,7 +78,7 @@ export function RiskProfilePage() {
                 <RiskProfileHowItWorksCard />
               </div>
             </div>
-          </>
+          </DashboardContentFade>
         )}
       </div>
 
@@ -91,6 +94,6 @@ export function RiskProfilePage() {
           riskProfile?.dismissCompletedAssessmentDialog();
         }}
       />
-    </div>
+    </>
   );
 }

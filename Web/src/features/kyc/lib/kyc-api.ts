@@ -9,7 +9,9 @@ export type KycEligibilityReason =
   | "pin_required";
 
 export type KycPanDraft = {
-  panNumber: string;
+  panNumber?: string;
+  panMasked?: string;
+  panLast4?: string;
   firstName: string;
   lastName: string;
   middleName: string;

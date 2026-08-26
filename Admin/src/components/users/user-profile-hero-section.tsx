@@ -32,6 +32,8 @@ type UserProfileHeroSectionProps = {
   canReadMf: boolean;
   canReadKyc: boolean;
   canReadRiskProfile: boolean;
+  isPlatformAdmin?: boolean;
+  identityActions?: React.ReactNode;
   onOpenPortfolioTab?: () => void;
   onOpenRiskTab?: () => void;
 };
@@ -469,6 +471,8 @@ export function UserProfileHeroSection({
   canReadMf,
   canReadKyc,
   canReadRiskProfile,
+  isPlatformAdmin = false,
+  identityActions,
   onOpenPortfolioTab,
   onOpenRiskTab,
 }: UserProfileHeroSectionProps) {
@@ -477,58 +481,69 @@ export function UserProfileHeroSection({
   const displayName = resolveIdentityDisplayName(summary, profileDetail);
   const formattedPhone = formatIdentityPhone(summary.phone);
   const { data: riskData, isPending: riskPending } = useAdminUserRiskProfileQuery(
-    canReadRiskProfile ? summary.user_id : "",
+    !isPlatformAdmin && canReadRiskProfile ? summary.user_id : "",
   );
   const riskProfile = riskData?.profile ?? null;
-  const riskShowSkeleton = canReadRiskProfile && riskPending && !riskData;
-  const riskLocked = canReadRiskProfile && !riskPending && !riskProfile;
+  const riskShowSkeleton = !isPlatformAdmin && canReadRiskProfile && riskPending && !riskData;
+  const riskLocked = !isPlatformAdmin && canReadRiskProfile && !riskPending && !riskProfile;
 
   return (
-    <section className="admin-user-profile-hero">
+    <section
+      className={cn("admin-user-profile-hero", isPlatformAdmin && "admin-user-profile-hero--platform-admin")}
+    >
       <Card className="admin-user-profile-hero__identity h-full ring-0">
         <CardContent className="admin-user-profile-hero__identity-body">
-          <div className="admin-user-profile-hero__identity-avatar">
-            <AdminUserProfileAvatar
-              name={displayName}
-              email={summary.email}
-              imageSrc={summary.profile_image_url}
-              size="lg"
-              className="shrink-0"
-            />
-          </div>
-          <div className="admin-user-profile-hero__identity-details">
-            <div className="admin-user-profile-hero__identity-contact min-w-0">
-              <h1 className="admin-user-profile-hero__identity-name truncate">{displayName}</h1>
-              <p className="admin-user-profile-hero__identity-email truncate">{summary.email}</p>
-              {formattedPhone ? (
-                <p className="admin-user-profile-hero__identity-phone tabular-nums">{formattedPhone}</p>
-              ) : null}
-              <UserProfileHeroClientIdCopy clientId={summary.client_id} />
+          <div className="admin-user-profile-hero__identity-main">
+            <div className="admin-user-profile-hero__identity-avatar">
+              <AdminUserProfileAvatar
+                name={displayName}
+                email={summary.email}
+                imageSrc={summary.profile_image_url}
+                size="lg"
+                className="shrink-0"
+              />
             </div>
-            <div className="admin-user-profile-hero__identity-badges">
-              <PlatformRoleBadge role={summary.role} />
-              <UserStatusBadge status={summary.status} />
-              <MfaStatusBadge enabled={summary.mfa_enrolled} />
+            <div className="admin-user-profile-hero__identity-details">
+              <div className="admin-user-profile-hero__identity-contact min-w-0">
+                <h1 className="admin-user-profile-hero__identity-name truncate">{displayName}</h1>
+                <p className="admin-user-profile-hero__identity-email truncate">{summary.email}</p>
+                {formattedPhone ? (
+                  <p className="admin-user-profile-hero__identity-phone tabular-nums">{formattedPhone}</p>
+                ) : null}
+                <UserProfileHeroClientIdCopy clientId={summary.client_id} />
+              </div>
+              <div className="admin-user-profile-hero__identity-badges">
+                <PlatformRoleBadge role={summary.role} />
+                <UserStatusBadge status={summary.status} />
+                <MfaStatusBadge enabled={summary.mfa_enrolled} />
+              </div>
             </div>
           </div>
+          {identityActions ? (
+            <div className="admin-user-profile-hero__identity-actions">{identityActions}</div>
+          ) : null}
         </CardContent>
       </Card>
 
-      <UserProfileHeroPortfolioCard
-        canReadMf={canReadMf}
-        investments={investments}
-        onOpenPortfolioTab={onOpenPortfolioTab}
-      />
+      {!isPlatformAdmin ? (
+        <>
+          <UserProfileHeroPortfolioCard
+            canReadMf={canReadMf}
+            investments={investments}
+            onOpenPortfolioTab={onOpenPortfolioTab}
+          />
 
-      <UserProfileHeroKycCard canReadKyc={canReadKyc} kyc={kyc} locked={riskLocked} />
+          <UserProfileHeroKycCard canReadKyc={canReadKyc} kyc={kyc} locked={riskLocked} />
 
-      <UserProfileHeroRiskCard
-        profile={riskProfile}
-        showSkeleton={riskShowSkeleton}
-        canReadRiskProfile={canReadRiskProfile}
-        locked={riskLocked}
-        onOpenRiskTab={onOpenRiskTab}
-      />
+          <UserProfileHeroRiskCard
+            profile={riskProfile}
+            showSkeleton={riskShowSkeleton}
+            canReadRiskProfile={canReadRiskProfile}
+            locked={riskLocked}
+            onOpenRiskTab={onOpenRiskTab}
+          />
+        </>
+      ) : null}
     </section>
   );
 }

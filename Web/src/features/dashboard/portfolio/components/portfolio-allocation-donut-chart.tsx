@@ -1,6 +1,8 @@
 "use client";
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import type { OverviewAllocationSlice } from "@/features/dashboard/overview/lib/overview-portfolio-preview";
 import { portfolioAllocationChartFill } from "@/features/dashboard/portfolio/lib/portfolio-allocation-colors";
@@ -47,7 +49,7 @@ export function PortfolioAllocationDonutChart({
   const hasSelection = selectedId !== null;
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <RechartsMeasuredContainer width="100%" height="100%" minWidth={0}>
       <PieChart>
         <Tooltip
           content={renderAllocationDonutTooltip}
@@ -80,7 +82,7 @@ export function PortfolioAllocationDonutChart({
           ))}
         </Pie>
       </PieChart>
-    </ResponsiveContainer>
+    </RechartsMeasuredContainer>
   );
 }
 

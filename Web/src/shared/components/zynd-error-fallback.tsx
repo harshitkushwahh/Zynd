@@ -28,7 +28,7 @@ export function ZyndErrorFallback({
       role="alert"
       className={cn(
         "flex flex-col items-center text-center",
-        variant === "page" ? "min-h-[40vh] justify-center px-6 py-10" : "px-6 py-8",
+        variant === "page" ? "min-h-0 flex-1 justify-center px-6 py-10" : "px-6 py-8",
         className,
       )}
     >

@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { pickUserRef } from "@/lib/admin-user-ref";
 import { getErrorMessage } from "@/lib/errors";
 import {
   confirmRiskProfileUnlock,
@@ -112,7 +113,7 @@ export function RiskProfileLockedPanel({
     setError("");
     setMessage("");
     try {
-      await requestRiskProfileUnlock(selectedUser.user_id);
+      await requestRiskProfileUnlock(pickUserRef(selectedUser));
       setOtpSent(true);
       setMessage("Unlock code sent to the user's in-app notifications.");
     } catch (err) {
@@ -128,7 +129,7 @@ export function RiskProfileLockedPanel({
     setError("");
     setMessage("");
     try {
-      await confirmRiskProfileUnlock(selectedUser.user_id, {
+      await confirmRiskProfileUnlock(pickUserRef(selectedUser), {
         otp_code: otpCode.trim(),
       });
       setMessage(`Granted ${RISK_PROFILE_UNLOCK_ATTEMPTS} attempt(s) to ${selectedUser.email}.`);
@@ -175,9 +176,9 @@ export function RiskProfileLockedPanel({
       ) : null}
 
       {error || loadError ? (
-        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
       ) : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
         minWidth="lg"

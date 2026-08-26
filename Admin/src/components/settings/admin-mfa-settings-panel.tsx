@@ -191,8 +191,8 @@ export function AdminMfaSettingsPanel() {
 
   return (
     <div className="space-y-6">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <div className="space-y-4 rounded-[var(--radius-card)] border border-border p-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -258,8 +258,8 @@ export function AdminMfaSettingsPanel() {
             <div className="rounded-[var(--radius-card)] border border-border bg-muted/20 p-4">
               {qrUri ? (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="rounded-[var(--radius-control)] border border-border bg-card p-3 shadow-zynd-low">
-                    <QRCode value={qrUri} size={140} />
+                  <div className="rounded-[var(--radius-control)] border border-border bg-white p-3 shadow-zynd-low">
+                    <QRCode value={qrUri} size={140} bgColor="#FFFFFF" fgColor="#000000" />
                   </div>
                   <p className="text-center text-caption text-muted-foreground">
                     Scan with your authenticator app

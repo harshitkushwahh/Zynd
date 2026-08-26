@@ -19,6 +19,7 @@ import {
 
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { AdminTabComingSoon } from "@/components/dashboard/admin-tab-coming-soon";
+import { AdminTabDisabled } from "@/components/dashboard/admin-tab-disabled";
 import {
   MfTransactionOrdersPanel,
   ORDER_SORT_OPTIONS,
@@ -41,6 +42,7 @@ import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { cn } from "@/lib/utils";
 import {
   getTransactionSection,
+  isSectionTabEnabled,
   resolveSectionTab,
   sectionTabHref,
 } from "@/lib/admin-transaction-sections";
@@ -311,7 +313,7 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
       icon={ShoppingBag}
     >
       {!canRead ? (
-        <AdminFeedbackMessage variant="warning">
+        <AdminFeedbackMessage variant="warning" dismissible={false}>
           You do not have permission to view orders.
         </AdminFeedbackMessage>
       ) : (
@@ -327,7 +329,12 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
               {section.tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
-                  <AdminTabTrigger key={tab.slug} value={tab.slug} className="gap-2">
+                  <AdminTabTrigger
+                    key={tab.slug}
+                    value={tab.slug}
+                    className="gap-2"
+                    disabled={!isSectionTabEnabled(tab)}
+                  >
                     <Icon className="size-4 shrink-0" />
                     {tab.label}
                   </AdminTabTrigger>
@@ -395,7 +402,9 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
                 keepMounted={keepMounted(tab.slug)}
                 className="mt-0"
               >
-                {tab.slug === "purchases" ? (
+                {!isSectionTabEnabled(tab) ? (
+                  <AdminTabDisabled label={tab.label} description={tab.description} />
+                ) : tab.slug === "purchases" ? (
                   <MfTransactionOrdersPanel
                     canRead={canRead}
                     canManage={canManage}

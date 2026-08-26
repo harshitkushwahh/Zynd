@@ -1,0 +1,543 @@
+/* Animated sun/moon theme switch — adapted from Uiverse.io by RiccardoRapelli */
+
+.zynd-theme-switch {
+  --zynd-theme-switch-width: 46px;
+  --zynd-theme-switch-height: 26px;
+  --zynd-theme-switch-pad: 3px;
+  --zynd-theme-switch-knob: 20px;
+  --zynd-theme-switch-travel: calc(
+    var(--zynd-theme-switch-width) - var(--zynd-theme-switch-pad) * 2 - var(--zynd-theme-switch-knob)
+  );
+
+  position: relative;
+  display: inline-block;
+  width: var(--zynd-theme-switch-width);
+  height: var(--zynd-theme-switch-height);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.zynd-theme-switch-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.zynd-theme-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #2196f3;
+  transition: 0.4s;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.zynd-theme-switch-sun-moon {
+  position: absolute;
+  height: var(--zynd-theme-switch-knob);
+  width: var(--zynd-theme-switch-knob);
+  left: var(--zynd-theme-switch-pad);
+  bottom: var(--zynd-theme-switch-pad);
+  background-color: yellow;
+  transition: 0.4s;
+}
+
+.zynd-theme-switch-input:checked + .zynd-theme-switch-slider {
+  background-color: black;
+}
+
+.zynd-theme-switch-input:focus-visible + .zynd-theme-switch-slider {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 45%, transparent);
+}
+
+.zynd-theme-switch-input:checked + .zynd-theme-switch-slider .zynd-theme-switch-sun-moon {
+  transform: translateX(var(--zynd-theme-switch-travel));
+  background-color: white;
+}
+
+.zynd-theme-switch-moon-dot {
+  opacity: 0;
+  transition: 0.4s;
+  fill: gray;
+}
+
+.zynd-theme-switch-input:checked + .zynd-theme-switch-slider .zynd-theme-switch-moon-dot {
+  opacity: 1;
+}
+
+.zynd-theme-switch-slider.zynd-theme-switch-round {
+  border-radius: var(--zynd-theme-switch-height);
+}
+
+.zynd-theme-switch-slider.zynd-theme-switch-round .zynd-theme-switch-sun-moon {
+  border-radius: 50%;
+}
+
+.zynd-theme-switch-moon-dot-1 {
+  left: 8px;
+  top: 2px;
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  z-index: 4;
+}
+
+.zynd-theme-switch-moon-dot-2 {
+  left: 2px;
+  top: 8px;
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  z-index: 4;
+}
+
+.zynd-theme-switch-moon-dot-3 {
+  left: 13px;
+  top: 14px;
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  z-index: 4;
+}
+
+.zynd-theme-switch-light-ray {
+  position: absolute;
+  z-index: -1;
+  fill: white;
+  opacity: 10%;
+}
+
+.zynd-theme-switch-light-ray-1 {
+  left: -6px;
+  top: -6px;
+  width: 34px;
+  height: 34px;
+}
+
+.zynd-theme-switch-light-ray-2 {
+  left: -50%;
+  top: -50%;
+  width: 44px;
+  height: 44px;
+}
+
+.zynd-theme-switch-light-ray-3 {
+  left: -14px;
+  top: -14px;
+  width: 48px;
+  height: 48px;
+}
+
+.zynd-theme-switch-cloud-light {
+  position: absolute;
+  fill: #eee;
+  animation: zynd-theme-switch-cloud-move 6s infinite;
+}
+
+.zynd-theme-switch-cloud-dark {
+  position: absolute;
+  fill: #ccc;
+  animation: zynd-theme-switch-cloud-move 6s infinite;
+  animation-delay: 1s;
+}
+
+.zynd-theme-switch-cloud-1 {
+  left: 23px;
+  top: 12px;
+  width: 32px;
+}
+
+.zynd-theme-switch-cloud-2 {
+  left: 34px;
+  top: 8px;
+  width: 16px;
+}
+
+.zynd-theme-switch-cloud-3 {
+  left: 14px;
+  top: 19px;
+  width: 24px;
+}
+
+.zynd-theme-switch-cloud-4 {
+  left: 28px;
+  top: 14px;
+  width: 32px;
+}
+
+.zynd-theme-switch-cloud-5 {
+  left: 37px;
+  top: 11px;
+  width: 16px;
+}
+
+.zynd-theme-switch-cloud-6 {
+  left: 17px;
+  top: 20px;
+  width: 24px;
+}
+
+@keyframes zynd-theme-switch-cloud-move {
+  0% {
+    transform: translateX(0);
+  }
+
+  40% {
+    transform: translateX(3px);
+  }
+
+  80% {
+    transform: translateX(-3px);
+  }
+
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.zynd-theme-switch-stars {
+  transform: translateY(-24px);
+  opacity: 0;
+  transition: 0.4s;
+}
+
+.zynd-theme-switch-star {
+  fill: white;
+  position: absolute;
+  transition: 0.4s;
+  animation: zynd-theme-switch-star-twinkle 2s infinite;
+}
+
+.zynd-theme-switch-input:checked + .zynd-theme-switch-slider .zynd-theme-switch-stars {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.zynd-theme-switch-star-1 {
+  width: 16px;
+  top: 1px;
+  left: 2px;
+  animation-delay: 0.3s;
+}
+
+.zynd-theme-switch-star-2 {
+  width: 5px;
+  top: 12px;
+  left: 2px;
+}
+
+.zynd-theme-switch-star-3 {
+  width: 10px;
+  top: 16px;
+  left: 8px;
+  animation-delay: 0.6s;
+}
+
+.zynd-theme-switch-star-4 {
+  width: 14px;
+  top: 0;
+  left: 14px;
+  animation-delay: 1.3s;
+}
+
+@keyframes zynd-theme-switch-star-twinkle {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.2);
+  }
+
+  80% {
+    transform: scale(0.8);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zynd-theme-switch-slider,
+  .zynd-theme-switch-sun-moon,
+  .zynd-theme-switch-moon-dot,
+  .zynd-theme-switch-stars,
+  .zynd-theme-switch-star,
+  .zynd-theme-switch-cloud-light,
+  .zynd-theme-switch-cloud-dark,
+  .zynd-theme-orb,
+  .zynd-theme-orb-stars,
+  .zynd-theme-orb-scene .zynd-theme-switch-star,
+  .zynd-theme-orb-scene:not(.zynd-theme-orb-scene-dark) .zynd-theme-switch-cloud-light,
+  .zynd-theme-orb-scene:not(.zynd-theme-orb-scene-dark) .zynd-theme-switch-cloud-dark {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .zynd-theme-orb-scene-dark .zynd-theme-switch-star {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+/* Full-screen overlay — sun/moon orb only (no switch track) */
+.zynd-theme-orb-scene {
+  position: relative;
+  width: 11rem;
+  height: 11rem;
+}
+
+.zynd-theme-orb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  height: 5.5rem;
+  width: 5.5rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: #facc15;
+  transition:
+    background-color 0.55s ease,
+    box-shadow 0.55s ease;
+  box-shadow: 0 12px 40px rgb(250 204 21 / 35%);
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-orb {
+  background-color: #fff;
+  box-shadow: 0 12px 40px rgb(255 255 255 / 22%);
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-moon-dot {
+  opacity: 0;
+  transition: opacity 0.55s ease;
+  fill: #9ca3af;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-moon-dot {
+  opacity: 1;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-light-ray {
+  position: absolute;
+  z-index: -1;
+  fill: white;
+  opacity: 0.12;
+  transition: opacity 0.55s ease;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-light-ray {
+  opacity: 0;
+}
+
+.zynd-theme-orb .zynd-theme-switch-moon-dot-1 {
+  left: 1.65rem;
+  top: 0.55rem;
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.zynd-theme-orb .zynd-theme-switch-moon-dot-2 {
+  left: 0.45rem;
+  top: 1.65rem;
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.zynd-theme-orb .zynd-theme-switch-moon-dot-3 {
+  left: 2.65rem;
+  top: 3rem;
+  width: 0.45rem;
+  height: 0.45rem;
+}
+
+.zynd-theme-orb .zynd-theme-switch-light-ray-1 {
+  left: -0.85rem;
+  top: -0.85rem;
+  width: 7rem;
+  height: 7rem;
+}
+
+.zynd-theme-orb .zynd-theme-switch-light-ray-2 {
+  left: -50%;
+  top: -50%;
+  width: 8.5rem;
+  height: 8.5rem;
+}
+
+.zynd-theme-orb .zynd-theme-switch-light-ray-3 {
+  left: -1.65rem;
+  top: -1.65rem;
+  width: 9rem;
+  height: 9rem;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-light,
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-dark {
+  position: absolute;
+}
+
+.zynd-theme-orb-scene:not(.zynd-theme-orb-scene-dark) .zynd-theme-switch-cloud-light,
+.zynd-theme-orb-scene:not(.zynd-theme-orb-scene-dark) .zynd-theme-switch-cloud-dark {
+  opacity: 0;
+  animation: zynd-theme-orb-cloud-fade-in 0.7s ease forwards;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-cloud-light,
+.zynd-theme-orb-scene-dark .zynd-theme-switch-cloud-dark {
+  opacity: 0;
+  animation: none;
+  visibility: hidden;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-dark {
+  fill: #cbd5e1;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-light {
+  fill: #f8fafc;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-1 {
+  left: 0.5rem;
+  top: 2.75rem;
+  width: 3.5rem;
+  animation-delay: 0.12s;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-2 {
+  left: 0;
+  top: 1.5rem;
+  width: 2rem;
+  animation-delay: 0.2s;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-3 {
+  left: 1.25rem;
+  top: 4.25rem;
+  width: 2.75rem;
+  animation-delay: 0.28s;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-4 {
+  right: 0.25rem;
+  top: 2.25rem;
+  width: 3.5rem;
+  animation-delay: 0.16s;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-5 {
+  right: 0;
+  top: 1.25rem;
+  width: 2rem;
+  animation-delay: 0.24s;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-cloud-6 {
+  right: 1rem;
+  top: 4.5rem;
+  width: 2.75rem;
+  animation-delay: 0.32s;
+}
+
+.zynd-theme-orb-stars {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+  pointer-events: none;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-orb-stars {
+  opacity: 1;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-star {
+  fill: white;
+  position: absolute;
+  opacity: 0;
+  animation: none;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-star {
+  animation: zynd-theme-orb-star-spark 1.75s ease-in-out infinite;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-star-1 {
+  animation-delay: 0s;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-star-2 {
+  animation-delay: 0.35s;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-star-3 {
+  animation-delay: 0.7s;
+}
+
+.zynd-theme-orb-scene-dark .zynd-theme-switch-star-4 {
+  animation-delay: 1.05s;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-star-1 {
+  width: 1.75rem;
+  top: 0.35rem;
+  left: 0.75rem;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-star-2 {
+  width: 0.55rem;
+  top: 2.25rem;
+  left: 0.5rem;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-star-3 {
+  width: 1.1rem;
+  top: 3rem;
+  left: 2rem;
+}
+
+.zynd-theme-orb-scene .zynd-theme-switch-star-4 {
+  width: 1.5rem;
+  top: 0.15rem;
+  right: 1rem;
+}
+
+@keyframes zynd-theme-orb-cloud-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zynd-theme-orb-star-spark {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.82);
+    filter: drop-shadow(0 0 0 rgb(255 255 255 / 0%));
+  }
+
+  45% {
+    opacity: 1;
+    transform: scale(1.18);
+    filter: drop-shadow(0 0 8px rgb(255 255 255 / 90%));
+  }
+
+  70% {
+    opacity: 0.65;
+    transform: scale(0.95);
+    filter: drop-shadow(0 0 3px rgb(255 255 255 / 45%));
+  }
+}

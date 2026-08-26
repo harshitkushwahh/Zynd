@@ -21,9 +21,7 @@ import {
 } from "@/components/investors/investor-filters";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
-import {
-  distributorClientDetailHref,
-} from "@/lib/distributor-client-routes";
+import { distributorClientDetailHrefForInvestor } from "@/lib/distributor-client-routes";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import type { DistributorInvestor } from "@/lib/distributor-types";
 import { formatAum } from "@/lib/format";
@@ -132,7 +130,7 @@ export function BranchDistributorClientsPanel({
       <Table.Body items={pageItems}>
         {(investor) => {
           const origin = investor.inDistributorBook ? "your-book" : "system-resident";
-          const href = distributorClientDetailHref(origin, investor.id);
+          const href = distributorClientDetailHrefForInvestor(origin, investor);
 
           return (
             <Table.Row

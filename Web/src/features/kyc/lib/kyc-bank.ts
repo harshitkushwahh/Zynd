@@ -28,6 +28,8 @@ export type KycBankAccountDetails = KycBankFetchResult & {
 
 export type KycBankFormValue = {
   accountNumber: string;
+  accountNumberMasked?: string;
+  accountNumberLast4?: string;
   accountType: string;
   ifscCode: string;
 };

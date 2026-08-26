@@ -296,6 +296,13 @@ export type DistributorClientSession = {
   isCurrent: boolean;
 };
 
+export type DistributorClientPortfolioGrowthPoint = {
+  label: string;
+  value: number;
+  invested: number;
+  date?: string;
+};
+
 export type DistributorClientProfile = {
   investor: DistributorInvestor;
   displayName: string;
@@ -315,6 +322,7 @@ export type DistributorClientProfile = {
   kycAuditLog: DistributorClientKycAuditEntry[];
   clientDocuments: DistributorClientDocument[];
   holdings: DistributorClientHolding[];
+  portfolioGrowth: DistributorClientPortfolioGrowthPoint[];
   goals: DistributorClientGoal[];
   familyGroups: DistributorClientFamilyGroup[];
   referrals: DistributorClientReferralSummary;

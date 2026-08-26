@@ -24,7 +24,11 @@ import {
   buildOverviewKycProfileProgress,
   type OverviewKycProfileProgress,
 } from "@/features/dashboard/overview/lib/overview-profile-kyc-state";
+import { formatKycPanFullName } from "@/features/kyc/lib/settings-kyc-profile";
+import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import type { KycRecord, KycStatus } from "@/features/kyc/lib/kyc-types";
+import { copy } from "@/shared/config/copy";
+import { getDisplayName } from "@/shared/utils/user-display";
 
 type KycContextValue = {
   status: KycStatus | null;
@@ -43,13 +47,14 @@ type KycContextValue = {
   markPhase1Complete: () => void;
   markPhase2Complete: () => void;
   markKycSubmitted: () => void;
-  markKycVerified: (panNumber?: string) => void;
+  markKycVerified: (panMasked?: string) => void;
   applyReadinessCheck: (result: KycReadinessCheckResponse) => void;
   refreshFromBootstrap: () => Promise<void>;
   resumeAfterDigilocker: () => void;
   resumeAfterKycSubmission: () => void;
   digilockerResumeToken: number;
   kycSubmissionResumeToken: number;
+  legalFullName: string | null;
 };
 
 const KycContext = createContext<KycContextValue | null>(null);
@@ -85,7 +90,7 @@ function recordFromBootstrap(payload: KycBootstrapResponse): KycRecord {
 
   return {
     status,
-    panNumber: payload.pan_draft?.panNumber,
+    panMasked: resolvePanDisplay(payload.pan_draft ?? null) ?? undefined,
     submittedAt: overall === "submitted" ? new Date().toISOString() : undefined,
     completedAt: overall === "completed" ? new Date().toISOString() : undefined,
   };
@@ -104,12 +109,14 @@ export function KycProvider({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [digilockerResumeToken, setDigilockerResumeToken] = useState(0);
   const [kycSubmissionResumeToken, setKycSubmissionResumeToken] = useState(0);
+  const [legalFullName, setLegalFullName] = useState<string | null>(null);
   const previousUserIdRef = useRef<string | null>(null);
   const kycBlockReasons = user ? getKycBlockReasons(user) : [];
   const kycAllowed = Boolean(user && kycBlockReasons.length === 0);
 
   const applyBootstrap = useCallback((payload: KycBootstrapResponse) => {
     setOverallStatus(payload.step_statuses?.overall ?? null);
+    setLegalFullName(formatKycPanFullName(payload.pan_draft ?? null));
     if (!payload.eligible) {
       setRecord(null);
       setProfileProgress(null);
@@ -124,7 +131,11 @@ export function KycProvider({ children }: { children: ReactNode }) {
     await ensureKycToken();
     const payload = await fetchKycBootstrap();
     applyBootstrap(payload);
-  }, [applyBootstrap, kycAllowed]);
+    const panName = formatKycPanFullName(payload.pan_draft ?? null);
+    if (user && !getDisplayName(user).trim() && panName) {
+      void refreshUser();
+    }
+  }, [applyBootstrap, kycAllowed, refreshUser, user]);
 
   const applyReadinessCheck = useCallback(
     (result: KycReadinessCheckResponse) => {
@@ -135,6 +146,34 @@ export function KycProvider({ children }: { children: ReactNode }) {
           status: "complete",
           completedAt: new Date().toISOString(),
         }));
+        setProfileProgress((current) =>
+          current
+            ? {
+                ...current,
+                progressFraction: 1,
+                progressPercent: 100,
+                tone: "success",
+                overallStatus: "completed",
+                statusLabel: copy.dashboard.overview.profileKycStatusVerified,
+                stepTitle: copy.kyc.completeTitle,
+                tooltipVariant: "verified",
+                tooltipTitle: copy.dashboard.overview.profileKycTooltipCompleteTitle,
+                tooltipDetail: copy.dashboard.overview.profileKycTooltipComplete,
+              }
+            : {
+                activeStepId: "review",
+                activeStepLabel: copy.kyc.completeTitle,
+                progressFraction: 1,
+                progressPercent: 100,
+                tone: "success",
+                overallStatus: "completed",
+                statusLabel: copy.dashboard.overview.profileKycStatusVerified,
+                stepTitle: copy.kyc.completeTitle,
+                tooltipVariant: "verified",
+                tooltipTitle: copy.dashboard.overview.profileKycTooltipCompleteTitle,
+                tooltipDetail: copy.dashboard.overview.profileKycTooltipComplete,
+              },
+        );
         void refreshUser();
         return;
       }
@@ -155,6 +194,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
       setRecord(null);
       setOverallStatus(null);
       setProfileProgress(null);
+      setLegalFullName(null);
       setDialogOpen(false);
       return;
     }
@@ -163,6 +203,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
       setRecord(null);
       setOverallStatus(null);
       setProfileProgress(null);
+      setLegalFullName(null);
       setDialogOpen(false);
     }
   }, [user?.id]);
@@ -256,11 +297,11 @@ export function KycProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const markKycVerified = useCallback(
-    (panNumber?: string) => {
+    (panMasked?: string) => {
       setRecord((current) => ({
         ...(current ?? { status: "complete" }),
         status: "complete",
-        panNumber: panNumber ?? current?.panNumber,
+        panMasked: panMasked ?? current?.panMasked,
         completedAt: new Date().toISOString(),
       }));
       setOverallStatus("completed");
@@ -269,13 +310,28 @@ export function KycProvider({ children }: { children: ReactNode }) {
           ? {
               ...current,
               progressFraction: 1,
+              progressPercent: 100,
               tone: "success",
               overallStatus: "completed",
               statusLabel: copy.dashboard.overview.profileKycStatusVerified,
+              stepTitle: copy.kyc.completeTitle,
+              tooltipVariant: "verified",
               tooltipTitle: copy.dashboard.overview.profileKycTooltipCompleteTitle,
               tooltipDetail: copy.dashboard.overview.profileKycTooltipComplete,
             }
-          : current,
+          : {
+              activeStepId: "review",
+              activeStepLabel: copy.kyc.completeTitle,
+              progressFraction: 1,
+              progressPercent: 100,
+              tone: "success",
+              overallStatus: "completed",
+              statusLabel: copy.dashboard.overview.profileKycStatusVerified,
+              stepTitle: copy.kyc.completeTitle,
+              tooltipVariant: "verified",
+              tooltipTitle: copy.dashboard.overview.profileKycTooltipCompleteTitle,
+              tooltipDetail: copy.dashboard.overview.profileKycTooltipComplete,
+            },
       );
       void refreshFromBootstrap();
       void refreshUser();
@@ -320,6 +376,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
       resumeAfterKycSubmission,
       digilockerResumeToken,
       kycSubmissionResumeToken,
+      legalFullName,
     };
   }, [
     applyReadinessCheck,
@@ -341,6 +398,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
     refreshFromBootstrap,
     resumeAfterDigilocker,
     user,
+    legalFullName,
   ]);
 
   return <KycContext.Provider value={value}>{children}</KycContext.Provider>;

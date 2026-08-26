@@ -17,6 +17,7 @@ import {
 } from "@/components/dashboard/dashboard-layout";
 import { cn } from "@/lib/utils";
 import { MfPaymentOverlayProvider } from "@/features/invest/contexts/mf-payment-overlay-context";
+import { AddBankAccountDialogProvider } from "@/contexts/add-bank-account-dialog-context";
 import { ProfileMenuShortcutListener } from "@/features/dashboard/navigation/profile-menu-shortcut-listener";
 import { ZyndPinLockScreen } from "@/features/account/pin";
 import { KycDialog } from "@/features/kyc/components/kyc-dialog";
@@ -90,6 +91,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <AddBankAccountDialogProvider>
     <MfPaymentOverlayProvider>
     <SettingsNavigationProvider>
     <SupportWidgetProvider>
@@ -141,5 +143,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     </SupportWidgetProvider>
     </SettingsNavigationProvider>
     </MfPaymentOverlayProvider>
+    </AddBankAccountDialogProvider>
   );
 }

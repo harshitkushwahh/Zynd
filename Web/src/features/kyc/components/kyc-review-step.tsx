@@ -12,6 +12,10 @@ import { KycSignaturePreview } from "@/features/kyc/components/kyc-signature-pre
 import type { KycJourneyDraft } from "@/features/kyc/lib/kyc-journey-draft";
 import type { KycNomineeRecord } from "@/features/kyc/lib/kyc-nominee";
 import {
+  resolveAccountNumberLast4,
+  resolvePanDisplay,
+} from "@/features/kyc/lib/kyc-sensitive-display";
+import {
   KYC_GENDER_OPTIONS,
   KYC_INCOME_SLAB_OPTIONS,
   KYC_MARITAL_STATUS_OPTIONS,
@@ -77,7 +81,7 @@ export function KycReviewStep({
   const signature = draft.signature;
 
   const panSummary = pan
-    ? `${pan.panNumber} · ${[pan.firstName, pan.middleName, pan.lastName].filter(Boolean).join(" ")}`
+    ? `${resolvePanDisplay(pan) ?? "—"} · ${[pan.firstName, pan.middleName, pan.lastName].filter(Boolean).join(" ")}`
     : undefined;
 
   const panAccordionBadge = pan ? (
@@ -100,7 +104,7 @@ export function KycReviewStep({
       : undefined;
 
   const bankSummary = bank
-    ? `${bank.accountDetails.bankName} · ••••${bank.accountNumber.slice(-4)}`
+    ? `${bank.accountDetails.bankName} · ••••${resolveAccountNumberLast4(bank) ?? "----"}`
     : undefined;
 
   const bankAccordionBadge = bank ? (

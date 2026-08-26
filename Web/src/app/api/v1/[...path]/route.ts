@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { serverEnv } from "@/shared/config/server-env";
 
+function resolveClientIp(request: NextRequest): string | null {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+
+  const cfConnectingIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfConnectingIp) return cfConnectingIp;
+
+  return null;
+}
+
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join("/");
   const targetUrl = `${serverEnv.backendUrl}/api/v1/${path}${request.nextUrl.search}`;
@@ -9,6 +25,11 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("connection");
+
+  const clientIp = resolveClientIp(request);
+  if (clientIp) {
+    headers.set("x-forwarded-for", clientIp);
+  }
 
   const init: RequestInit = {
     method: request.method,

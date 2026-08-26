@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Archive, Plus } from "lucide-react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PageHeader } from "@/components/ui/page-header";
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
@@ -21,7 +22,6 @@ import { GoalTemplateStrip } from "@/features/goals/components/goal-template-str
 import { GoalsSummaryPanel } from "@/features/goals/components/goals-summary-panel";
 import { GoalsArchivedDialog } from "@/features/goals/components/goals-archived-dialog";
 import { GoalsLockedSectionEmptyState } from "@/features/goals/components/goals-locked-section-empty-state";
-import { GoalsContentFade } from "@/features/goals/components/goals-page-loading-view";
 import { GoalsPageSkeleton } from "@/features/goals/components/goals-page-skeleton";
 import type {
   GoalCalculatorSaveInput,
@@ -192,6 +192,7 @@ export function GoalsPage() {
       <PageHeader
         icon={GoalsIcon}
         title={copy.goals.title}
+        loading={showSkeleton}
         action={
           hasResolved && !errorMessage ? (
             <div className="flex shrink-0 items-center gap-2">
@@ -215,17 +216,19 @@ export function GoalsPage() {
       {showSkeleton ? <GoalsPageSkeleton /> : null}
 
       {!showSkeleton && errorMessage ? (
-        <LoadErrorCard
-          title={copy.goals.loadFailedTitle}
-          description={errorMessage}
-          retryLabel={copy.goals.retry}
-          retryLoading={isFetching}
-          onRetry={() => void refetch()}
-        />
+        <DashboardContentFade>
+          <LoadErrorCard
+            title={copy.goals.loadFailedTitle}
+            description={errorMessage}
+            retryLabel={copy.goals.retry}
+            retryLoading={isFetching}
+            onRetry={() => void refetch()}
+          />
+        </DashboardContentFade>
       ) : null}
 
       {hasResolved && !errorMessage ? (
-        <GoalsContentFade>
+        <DashboardContentFade>
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-8">
             <div className="min-w-0 space-y-8">
               <section>
@@ -236,11 +239,6 @@ export function GoalsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold">{copy.goals.yourGoalsTitle}</h2>
-                    {activeGoals.length === 0 ? (
-                      <p className="mt-1 text-compact text-muted-foreground">
-                        {copy.goals.personalGoalsLockedDescription}
-                      </p>
-                    ) : null}
                   </div>
                   <Button
                     variant="muted"
@@ -268,7 +266,6 @@ export function GoalsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold">{copy.goals.familyGoalsTitle}</h2>
-                    <p className="mt-1 text-compact text-muted-foreground">{copy.goals.familyGoalsDescription}</p>
                   </div>
                   <Button
                     variant="muted"
@@ -298,7 +295,7 @@ export function GoalsPage() {
               <GoalsHowItWorksCard />
             </div>
           </div>
-        </GoalsContentFade>
+        </DashboardContentFade>
       ) : null}
 
       <GoalTemplateJourneyDialog

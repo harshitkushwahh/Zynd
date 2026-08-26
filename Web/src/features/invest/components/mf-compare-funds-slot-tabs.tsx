@@ -134,12 +134,9 @@ export function CompareFundSlotSearch({
     trimmedQuery.length >= MF_FUND_SEARCH_MIN_CHARS || searching || Boolean(error);
 
   return (
-    <div className="relative w-full min-w-0 max-w-full">
-      <Command
-        shouldFilter={false}
-        className="w-full min-w-0 max-w-full overflow-visible rounded-none bg-transparent"
-      >
-        <div className="relative w-full min-w-0 max-w-full">
+    <div className="relative w-full min-w-0 overflow-visible">
+      <Command shouldFilter={false} className="w-full min-w-0 overflow-visible rounded-none bg-transparent">
+        <div className="relative w-full min-w-0 overflow-visible">
           <Search
             className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
             strokeWidth={2.25}
@@ -149,7 +146,7 @@ export function CompareFundSlotSearch({
             onValueChange={setQuery}
             placeholder={copy.mutualFunds.calculatorSelectFund}
             className={cn(
-              "box-border flex h-11 w-full min-w-0 max-w-full border border-input bg-transparent py-2 pr-3 pl-10 text-compact outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30",
+              "box-border flex h-11 w-full min-w-0 border border-input bg-transparent py-2 pr-3 pl-10 text-compact outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 dark:bg-input/30",
               ZYND_3XL_RADIUS_CLASS,
             )}
           />

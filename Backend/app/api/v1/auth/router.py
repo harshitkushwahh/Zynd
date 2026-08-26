@@ -1,23 +1,28 @@
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.auth.deps import (
+    bearer_scheme,
     clear_refresh_cookie,
     get_client_ip,
     get_current_session_id,
     get_current_user,
     get_refresh_token_from_request,
     handle_auth_error,
+    is_distributor_auth_client,
     require_fund_eligible_user,
     resolve_auth_client_from_request,
     set_refresh_cookie,
+    validate_user_for_auth_client,
 )
-from app.application.auth.auth_client_policy import validate_user_role_for_client
+from app.application.auth.auth_client_policy import AuthClientKind, auth_client_from_pending_payload
 from app.api.v1.auth.schemas import (
     AuthResponse,
     ChangeEmailConfirmRequest,
@@ -28,6 +33,7 @@ from app.api.v1.auth.schemas import (
     CheckEmailRequest,
     CheckEmailResponse,
     ForgotPasswordRequest,
+    ForgotPasswordResponse,
     FundEligibilityResponse,
     FundEligibilityStatusResponse,
     AuthSecurityPolicyResponse,
@@ -58,6 +64,10 @@ from app.api.v1.auth.schemas import (
     OAuthLinkResendRequest,
     OAuthLinkRequiredResponse,
     AdminInviteAcceptRequest,
+    AdminInviteOnboardingCompleteRequest,
+    AdminInviteOnboardingMfaConfirmRequest,
+    AdminInviteOnboardingMfaStartRequest,
+    AdminInviteOnboardingStartedResponse,
     AdminInviteValidateResponse,
     OAuthStateResponse,
     OkResponse,
@@ -72,6 +82,9 @@ from app.api.v1.auth.schemas import (
     PinBiometricUnlockOptionsResponse,
     PinBiometricUnlockVerifyRequest,
     PinResetConfirmRequest,
+    PinResetLinkConfirmRequest,
+    PinResetLinkSendResponse,
+    PinResetLinkValidateResponse,
     PinSetupRequest,
     PinVerifyRequest,
     PinVerifyResponse,
@@ -97,6 +110,10 @@ from app.api.v1.auth.schemas import (
 )
 from app.application.admin.admin_invitation_service import (
     accept_admin_invitation,
+    admin_invite_onboarding_mfa_confirm,
+    admin_invite_onboarding_mfa_qr,
+    admin_invite_onboarding_mfa_start,
+    complete_admin_invite_onboarding,
     validate_admin_invite_token,
 )
 from app.application.auth.account_service import (
@@ -110,10 +127,12 @@ from app.application.auth.account_service import (
     fund_eligibility_status,
     mfa_disable,
     mfa_enroll_confirm,
+    mfa_enroll_qr,
     mfa_enroll_start,
     mfa_backup_codes_status,
     mfa_regenerate_backup_codes,
     mfa_reset_confirm,
+    mfa_reset_qr,
     mfa_reset_start,
     request_account_deletion,
     verify_account_password,
@@ -148,9 +167,13 @@ from app.application.auth.pin_biometric_service import (
     list_pin_biometric_credentials,
 )
 from app.application.auth.pin_service import (
+    get_pin_unlock_status,
+    reset_pin_with_link,
     reset_pin_with_otp,
+    send_pin_reset_link,
     send_pin_reset_otp,
     setup_pin,
+    validate_pin_reset_link,
     verify_pin,
 )
 from app.application.auth.signup_service import (
@@ -177,6 +200,7 @@ from app.application.auth.user_service import get_user_by_id, user_to_public_dic
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.infrastructure.persistence.models import User
+from app.infrastructure.security.tokens import decode_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -195,14 +219,19 @@ async def _auth_response(db: AsyncSession, result: dict[str, Any]) -> AuthRespon
     )
 
 
-def _validate_client_role(user: User, *, admin: bool) -> None:
+async def _validate_client_role(
+    db: AsyncSession,
+    user: User,
+    *,
+    client: AuthClientKind,
+) -> None:
     try:
-        validate_user_role_for_client(user, admin_client=admin)
+        await validate_user_for_auth_client(db, user, client=client)
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
 
 
-def _resolve_auth_client(request: Request, device_fingerprint: str | None) -> bool:
+def _resolve_auth_client(request: Request, device_fingerprint: str | None) -> AuthClientKind:
     try:
         return resolve_auth_client_from_request(request, device_fingerprint)
     except AuthError as exc:
@@ -214,7 +243,7 @@ async def _handle_login_result(
     result: dict[str, Any],
     response: Response,
     *,
-    admin: bool = False,
+    client: AuthClientKind,
 ) -> AuthResponse | MfaRequiredResponse | SmsOtpRequiredResponse | OAuthLinkRequiredResponse:
     if result["next"] == "mfa_required":
         return MfaRequiredResponse(
@@ -238,8 +267,8 @@ async def _handle_login_result(
             provider=result["provider"],
             retry_after_seconds=result.get("retry_after_seconds", 30),
         )
-    _validate_client_role(result["user"], admin=admin)
-    set_refresh_cookie(response, result["refresh_token"], admin=admin)
+    await _validate_client_role(db, result["user"], client=client)
+    set_refresh_cookie(response, result["refresh_token"], client=client)
     return await _auth_response(db, result)
 
 
@@ -350,7 +379,7 @@ async def post_signup_complete(
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
     _resolve_auth_client(request, body.device_fingerprint)
-    set_refresh_cookie(response, refresh_token, admin=False)
+    set_refresh_cookie(response, refresh_token, client="web")
     return AuthResponse(access_token=access_token, user=await _user_response(db, user))
 
 
@@ -362,7 +391,7 @@ async def post_login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
-        admin_client = _resolve_auth_client(request, body.device_fingerprint)
+        auth_client = _resolve_auth_client(request, body.device_fingerprint)
         result = await login_with_email(
             db,
             email=body.email,
@@ -371,11 +400,11 @@ async def post_login(
             device_fingerprint=body.device_fingerprint,
             user_agent=request.headers.get("user-agent"),
             ip=get_client_ip(request),
-            admin_client=admin_client,
+            auth_client=auth_client,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return await _handle_login_result(db, result, response, admin=admin_client)
+    return await _handle_login_result(db, result, response, client=auth_client)
 
 
 @router.post("/google")
@@ -386,7 +415,7 @@ async def post_google_login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
-        admin_client = _resolve_auth_client(request, body.device_fingerprint)
+        auth_client = _resolve_auth_client(request, body.device_fingerprint)
         result = await login_with_google(
             db,
             id_token=body.id_token,
@@ -395,11 +424,11 @@ async def post_google_login(
             ip=get_client_ip(request),
             oauth_state=body.oauth_state,
             referral_code=body.referral_code,
-            admin_client=admin_client,
+            auth_client=auth_client,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return await _handle_login_result(db, result, response, admin=admin_client)
+    return await _handle_login_result(db, result, response, client=auth_client)
 
 
 @router.post("/apple")
@@ -410,7 +439,7 @@ async def post_apple_login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     try:
-        admin_client = _resolve_auth_client(request, body.device_fingerprint)
+        auth_client = _resolve_auth_client(request, body.device_fingerprint)
         result = await login_with_apple(
             db,
             id_token=body.id_token,
@@ -422,11 +451,11 @@ async def post_apple_login(
             first_name=body.first_name,
             last_name=body.last_name,
             referral_code=body.referral_code,
-            admin_client=admin_client,
+            auth_client=auth_client,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return await _handle_login_result(db, result, response, admin=admin_client)
+    return await _handle_login_result(db, result, response, client=auth_client)
 
 
 @router.post("/mfa/verify")
@@ -447,9 +476,9 @@ async def post_mfa_verify(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    admin_client = bool(result.get("admin_client"))
+    stored_client = auth_client_from_pending_payload(result)
     resolved_client = _resolve_auth_client(request, result.get("device_fingerprint"))
-    if resolved_client != admin_client:
+    if resolved_client != stored_client:
         raise handle_auth_error(
             AuthError(
                 "Sign-in client mismatch. Use the correct app to continue.",
@@ -457,8 +486,8 @@ async def post_mfa_verify(
                 403,
             )
         )
-    _validate_client_role(result["user"], admin=admin_client)
-    set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
+    await _validate_client_role(db, result["user"], client=resolved_client)
+    set_refresh_cookie(response, result["refresh_token"], client=resolved_client)
     return await _auth_response(db, result)
 
 
@@ -499,9 +528,9 @@ async def post_login_verify_sms(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    admin_client = bool(result.get("admin_client"))
+    stored_client = auth_client_from_pending_payload(result)
     resolved_client = _resolve_auth_client(request, result.get("device_fingerprint"))
-    if resolved_client != admin_client:
+    if resolved_client != stored_client:
         raise handle_auth_error(
             AuthError(
                 "Sign-in client mismatch. Use the correct app to continue.",
@@ -509,8 +538,8 @@ async def post_login_verify_sms(
                 403,
             )
         )
-    _validate_client_role(result["user"], admin=admin_client)
-    set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
+    await _validate_client_role(db, result["user"], client=resolved_client)
+    set_refresh_cookie(response, result["refresh_token"], client=resolved_client)
     return await _auth_response(db, result)
 
 
@@ -562,8 +591,8 @@ async def post_oauth_link_confirm(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    admin_client = _resolve_auth_client(request, body.device_fingerprint)
-    return await _handle_login_result(db, result, response, admin=admin_client)
+    auth_client = _resolve_auth_client(request, body.device_fingerprint)
+    return await _handle_login_result(db, result, response, client=auth_client)
 
 
 @router.get("/oauth/connections", response_model=OAuthConnectionsResponse)
@@ -654,6 +683,36 @@ async def post_mfa_enroll_start(
     return MfaEnrollStartResponse(**result)
 
 
+@router.get("/mfa/enroll/qr")
+async def get_mfa_enroll_qr(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    enroll_token: Annotated[str, Query(min_length=8, max_length=256)],
+    size: Annotated[int, Query(ge=168, le=1024)] = 512,
+) -> Response:
+    from app.application.referral.referral_qr_service import REFERRAL_QR_TEMPLATE_VERSION
+
+    try:
+        png_bytes = await mfa_enroll_qr(
+            db,
+            user=current_user,
+            enroll_token=enroll_token,
+            size=size,
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+            "X-QR-Template-Version": str(REFERRAL_QR_TEMPLATE_VERSION),
+            "Content-Disposition": 'inline; filename="zynd-mfa-qr.png"',
+        },
+    )
+
+
 @router.post("/mfa/enroll/confirm", response_model=MfaEnrollConfirmResponse)
 async def post_mfa_enroll_confirm(
     body: MfaEnrollConfirmRequest,
@@ -694,6 +753,14 @@ async def post_mfa_disable(
     current_user: Annotated[User, Depends(get_current_user)],
     session_id: Annotated[UUID, Depends(get_current_session_id)],
 ) -> MfaDisableResponse:
+    if is_distributor_auth_client(request):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "mfa_disable_not_allowed",
+                "message": "Two-factor authentication cannot be disabled from the Zynd Mitra console.",
+            },
+        )
     try:
         result = await mfa_disable(
             db,
@@ -750,6 +817,36 @@ async def post_mfa_reset_start(
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
     return MfaResetStartResponse(**result)
+
+
+@router.get("/mfa/reset/qr")
+async def get_mfa_reset_qr(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    reset_token: Annotated[str, Query(min_length=8, max_length=256)],
+    size: Annotated[int, Query(ge=168, le=1024)] = 512,
+) -> Response:
+    from app.application.referral.referral_qr_service import REFERRAL_QR_TEMPLATE_VERSION
+
+    try:
+        png_bytes = await mfa_reset_qr(
+            db,
+            user=current_user,
+            reset_token=reset_token,
+            size=size,
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+            "X-QR-Template-Version": str(REFERRAL_QR_TEMPLATE_VERSION),
+            "Content-Disposition": 'inline; filename="zynd-mfa-qr.png"',
+        },
+    )
 
 
 @router.post("/mfa/reset/confirm", response_model=MfaEnrollConfirmResponse)
@@ -856,6 +953,15 @@ async def post_pin_setup(
     return PinOkResponse(**result)
 
 
+@router.get("/pin/unlock-status", response_model=PinVerifyResponse)
+async def get_pin_unlock_status_route(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session_id: Annotated[UUID, Depends(get_current_session_id)],
+) -> PinVerifyResponse:
+    result = await get_pin_unlock_status(current_user.id, session_id)
+    return PinVerifyResponse(**result)
+
+
 @router.post("/pin/verify", response_model=PinVerifyResponse)
 async def post_pin_verify(
     body: PinVerifyRequest,
@@ -913,6 +1019,75 @@ async def post_pin_forgot_reset(
             pin=body.pin,
             confirm_pin=body.confirm_pin,
             ip=get_client_ip(request),
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    await db.commit()
+    return PinOkResponse(**result)
+
+
+@router.post("/pin/forgot/send-link", response_model=PinResetLinkSendResponse)
+async def post_pin_forgot_send_link(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> PinResetLinkSendResponse:
+    if not is_distributor_auth_client(request):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "distributor_console_required",
+                "message": "PIN reset links can only be requested from the Zynd Mitra console.",
+            },
+        )
+    try:
+        await validate_user_for_auth_client(db, current_user, client="distributor")
+        result = await send_pin_reset_link(
+            db,
+            user=current_user,
+            ip=get_client_ip(request),
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    return PinResetLinkSendResponse(**result)
+
+
+@router.get("/pin/forgot/validate", response_model=PinResetLinkValidateResponse)
+async def get_pin_forgot_validate_link(
+    token: str,
+) -> PinResetLinkValidateResponse:
+    try:
+        result = await validate_pin_reset_link(token)
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    return PinResetLinkValidateResponse(**result)
+
+
+@router.post("/pin/forgot/reset-link", response_model=PinOkResponse)
+async def post_pin_forgot_reset_link(
+    body: PinResetLinkConfirmRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(bearer_scheme)],
+) -> PinOkResponse:
+    session_id: UUID | None = None
+    if credentials:
+        try:
+            payload = decode_access_token(credentials.credentials)
+            session_id = UUID(payload["sid"])
+        except (jwt.PyJWTError, KeyError, ValueError, TypeError):
+            session_id = None
+
+    try:
+        result = await reset_pin_with_link(
+            db,
+            token=body.token,
+            current_password=body.current_password,
+            totp_code=body.totp_code,
+            pin=body.pin,
+            confirm_pin=body.confirm_pin,
+            ip=get_client_ip(request),
+            session_id=session_id,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
@@ -1219,8 +1394,8 @@ async def post_refresh(
     response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AuthResponse:
-    refresh_token, admin_client = get_refresh_token_from_request(request)
-    if not refresh_token:
+    refresh_token, auth_client = get_refresh_token_from_request(request)
+    if not refresh_token or auth_client is None:
         raise HTTPException(
             status_code=401,
             detail={"code": "session_expired", "message": "Session expired"},
@@ -1232,7 +1407,7 @@ async def post_refresh(
             ip=get_client_ip(request),
         )
     except AuthError as exc:
-        clear_refresh_cookie(response, admin=admin_client)
+        clear_refresh_cookie(response, client=auth_client)
         raise handle_auth_error(exc) from exc
 
     from app.infrastructure.security.tokens import decode_access_token
@@ -1243,11 +1418,11 @@ async def post_refresh(
     if not user:
         raise HTTPException(status_code=401, detail={"code": "unauthorized", "message": "User not found"})
     try:
-        _validate_client_role(user, admin=admin_client)
+        await _validate_client_role(db, user, client=auth_client)
     except HTTPException:
-        clear_refresh_cookie(response, admin=admin_client)
+        clear_refresh_cookie(response, client=auth_client)
         raise
-    set_refresh_cookie(response, new_refresh_token, admin=admin_client)
+    set_refresh_cookie(response, new_refresh_token, client=auth_client)
     return AuthResponse(access_token=access_token, user=await _user_response(db, user))
 
 
@@ -1257,10 +1432,11 @@ async def post_logout(
     response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OkResponse:
-    refresh_token, admin_client = get_refresh_token_from_request(request)
+    refresh_token, auth_client = get_refresh_token_from_request(request)
     if refresh_token:
         await logout(db, refresh_token=refresh_token, ip=get_client_ip(request))
-    clear_refresh_cookie(response, admin=admin_client)
+    if auth_client is not None:
+        clear_refresh_cookie(response, client=auth_client)
     return OkResponse()
 
 
@@ -1300,14 +1476,14 @@ async def post_oauth_state_apple_connect(
     return OAuthStateResponse(state=state)
 
 
-@router.post("/forgot-password", response_model=OkResponse)
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
 async def post_forgot_password(
     body: ForgotPasswordRequest,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> OkResponse:
+) -> ForgotPasswordResponse:
     try:
-        await forgot_password(
+        result = await forgot_password(
             db,
             email=body.email,
             turnstile_token=body.turnstile_token,
@@ -1319,7 +1495,7 @@ async def post_forgot_password(
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
-    return OkResponse()
+    return ForgotPasswordResponse(**result)
 
 
 @router.post("/reset-password", response_model=OkResponse)
@@ -1354,13 +1530,12 @@ async def get_admin_invite_validate(
     return AdminInviteValidateResponse(**result)
 
 
-@router.post("/admin-invite/accept", response_model=AuthResponse)
+@router.post("/admin-invite/accept", response_model=AdminInviteOnboardingStartedResponse)
 async def post_admin_invite_accept(
     body: AdminInviteAcceptRequest,
     request: Request,
-    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> AuthResponse:
+) -> AdminInviteOnboardingStartedResponse:
     try:
         result = await accept_admin_invitation(
             db,
@@ -1370,15 +1545,105 @@ async def post_admin_invite_accept(
             password=body.password,
             device_fingerprint=body.device_fingerprint,
             user_agent=request.headers.get("user-agent"),
+            client_header=request.headers.get("x-zynd-client"),
             ip=get_client_ip(request),
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc
 
     await db.commit()
-    admin_client = _resolve_auth_client(request, body.device_fingerprint)
-    _validate_client_role(result["user"], admin=admin_client)
-    set_refresh_cookie(response, result["refresh_token"], admin=admin_client)
+    return AdminInviteOnboardingStartedResponse(**result)
+
+
+@router.post("/admin-invite/mfa/start")
+async def post_admin_invite_mfa_start(
+    body: AdminInviteOnboardingMfaStartRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    try:
+        result = await admin_invite_onboarding_mfa_start(
+            db,
+            onboarding_token=body.onboarding_token,
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    return result
+
+
+@router.get("/admin-invite/mfa/qr")
+async def get_admin_invite_mfa_qr(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    onboarding_token: Annotated[str, Query(min_length=16, max_length=256)],
+    enroll_token: Annotated[str, Query(min_length=8, max_length=256)],
+    size: Annotated[int, Query(ge=168, le=1024)] = 512,
+) -> Response:
+    from app.application.referral.referral_qr_service import REFERRAL_QR_TEMPLATE_VERSION
+
+    try:
+        png_bytes = await admin_invite_onboarding_mfa_qr(
+            db,
+            onboarding_token=onboarding_token,
+            enroll_token=enroll_token,
+            size=size,
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+            "X-QR-Template-Version": str(REFERRAL_QR_TEMPLATE_VERSION),
+            "Content-Disposition": 'inline; filename="zynd-mfa-qr.png"',
+        },
+    )
+
+
+@router.post("/admin-invite/mfa/confirm")
+async def post_admin_invite_mfa_confirm(
+    body: AdminInviteOnboardingMfaConfirmRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    try:
+        result = await admin_invite_onboarding_mfa_confirm(
+            db,
+            onboarding_token=body.onboarding_token,
+            enroll_token=body.enroll_token,
+            totp_code=body.totp_code,
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+    await db.commit()
+    return result
+
+
+@router.post("/admin-invite/complete", response_model=AuthResponse)
+async def post_admin_invite_complete(
+    body: AdminInviteOnboardingCompleteRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AuthResponse:
+    try:
+        result = await complete_admin_invite_onboarding(
+            db,
+            onboarding_token=body.onboarding_token,
+            pin=body.pin,
+            confirm_pin=body.confirm_pin,
+            totp_code=body.totp_code,
+            device_fingerprint=body.device_fingerprint,
+            user_agent=request.headers.get("user-agent"),
+            client_header=request.headers.get("x-zynd-client"),
+            ip=get_client_ip(request),
+        )
+    except AuthError as exc:
+        raise handle_auth_error(exc) from exc
+
+    await db.commit()
+    auth_client = _resolve_auth_client(request, body.device_fingerprint)
+    await _validate_client_role(db, result["user"], client=auth_client)
+    set_refresh_cookie(response, result["refresh_token"], client=auth_client)
     return await _auth_response(db, result)
 
 

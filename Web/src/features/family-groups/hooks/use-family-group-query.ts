@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { fetchFamilyGroup } from "@/features/family-groups/api/family-groups-api";
 import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
@@ -12,6 +12,8 @@ export function useFamilyGroupQuery(groupId: string | null | undefined) {
     queryKey: queryKeys.family.detail(groupId ?? ""),
     queryFn: () => fetchFamilyGroup(groupId!),
     enabled: Boolean(groupId),
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 
   const errorMessage = query.error

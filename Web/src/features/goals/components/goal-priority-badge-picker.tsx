@@ -114,6 +114,28 @@ type GoalPriorityChipProps = {
   className?: string;
 };
 
+export function GoalPriorityDot({ priority, className }: GoalPriorityChipProps) {
+  const normalized = PRIORITY_LEVELS.includes(priority as GoalPriorityLevel)
+    ? (priority as GoalPriorityLevel)
+    : 3;
+  const label = copy.goals.priorityOptions[normalized] ?? copy.goals.priorityOptions[3];
+  const dotClass: Record<GoalPriorityLevel, string> = {
+    1: "bg-blue-500",
+    2: "bg-amber-500",
+    3: "bg-violet-500",
+    4: "bg-slate-400",
+    5: "bg-zinc-400",
+  };
+
+  return (
+    <span
+      className={cn("size-2 shrink-0 rounded-full ring-2 ring-background", dotClass[normalized], className)}
+      title={label}
+      aria-label={label}
+    />
+  );
+}
+
 export function GoalPriorityChip({ priority, className }: GoalPriorityChipProps) {
   const theme = goalPriorityThemeFor(priority);
   const Icon = theme.icon;

@@ -127,31 +127,32 @@ export function BulkOrderSectionPage({ tabSlug }: BulkOrderSectionPageProps) {
   };
 
   return (
-    <AdminSectionPageShell
-      breadcrumbSegments={[{ label: "Platform" }, { label: "Bulk Order" }]}
-      title="Bulk Order"
-      icon={Layers}
-    >
-      {!canRead ? (
-        <AdminFeedbackMessage variant="warning">
-          You do not have permission to view bulk orders.
-        </AdminFeedbackMessage>
-      ) : (
-        <div className="space-y-5">
-          <BulkOrderSummaryCards canRead={canRead} />
-
-          <Tabs value={activeTabSlug} onValueChange={handleTabChange} className="space-y-4">
-            <AdminTabList>
-              {BULK_ORDER_TABS.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <AdminTabTrigger key={tab.slug} value={tab.slug} className="gap-2">
-                    <Icon className="size-4 shrink-0" />
-                    {tab.label}
-                  </AdminTabTrigger>
-                );
-              })}
-            </AdminTabList>
+    <Tabs value={activeTabSlug} onValueChange={handleTabChange} className="space-y-5">
+      <AdminSectionPageShell
+        breadcrumbSegments={[{ label: "Platform" }, { label: "Bulk Order" }]}
+        title="Bulk Order"
+        icon={Layers}
+        headerAside={
+          <AdminTabList className="max-w-full shrink-0">
+            {BULK_ORDER_TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <AdminTabTrigger key={tab.slug} value={tab.slug} className="gap-2">
+                  <Icon className="size-4 shrink-0" />
+                  {tab.label}
+                </AdminTabTrigger>
+              );
+            })}
+          </AdminTabList>
+        }
+      >
+        {!canRead ? (
+          <AdminFeedbackMessage variant="warning" dismissible={false}>
+            You do not have permission to view bulk orders.
+          </AdminFeedbackMessage>
+        ) : (
+          <div className="space-y-5">
+            <BulkOrderSummaryCards canRead={canRead} />
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <AdminSearchInput
@@ -219,9 +220,9 @@ export function BulkOrderSectionPage({ tabSlug }: BulkOrderSectionPageProps) {
                 refreshKey={refreshKey}
               />
             </TabsContent>
-          </Tabs>
-        </div>
-      )}
-    </AdminSectionPageShell>
+          </div>
+        )}
+      </AdminSectionPageShell>
+    </Tabs>
   );
 }

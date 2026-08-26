@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ClipboardList } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -71,8 +71,6 @@ export function RiskProfileViewAnswersDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.riskProfile.viewAnswersTitle}
-      description={copy.riskProfile.viewAnswersDescription}
-      icon={ClipboardList}
       maxWidth="lg"
     >
       <div className="max-h-[min(28rem,60vh)] overflow-y-auto px-6 py-5 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
@@ -103,7 +101,7 @@ export function RiskProfileViewAnswersDialog({
               return (
               <li
                 key={item.question_id}
-                className={cn("border border-border bg-background p-4", RISK_PROFILE_HERO_RADIUS_CLASS)}
+                className={cn("border border-border bg-muted/20 p-4", RISK_PROFILE_HERO_RADIUS_CLASS)}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -138,7 +136,7 @@ export function RiskProfileViewAnswersDialog({
                           "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
                           option.selected
                             ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-background text-transparent",
+                            : "border-border bg-muted/20 text-transparent",
                         )}
                         aria-hidden
                       >

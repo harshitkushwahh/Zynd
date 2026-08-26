@@ -9,10 +9,11 @@ from app.application.admin.rbac_service import ensure_rbac_seed, set_admin_user_
 from app.application.documents.client_id_service import assign_client_id
 from app.core.config import Settings, get_settings
 from app.infrastructure.persistence.models import User, UserRole, UserStatus
+from app.infrastructure.security.password_policy import validate_password_strength
 from app.infrastructure.security.passwords import hash_password, verify_password
 
 DEV_ADMIN_EMAIL = "admin@zynd.com"
-DEV_ADMIN_PASSWORD = "12345678"
+DEV_ADMIN_PASSWORD = "Zynd@1234"
 DEV_SUPER_ADMIN_ROLE_KEY = "super_admin"
 
 
@@ -23,6 +24,8 @@ async def ensure_dev_admin_seed(
     settings = settings or get_settings()
     if settings.app_env != "development":
         return
+
+    validate_password_strength(DEV_ADMIN_PASSWORD)
 
     await ensure_rbac_seed(db)
 

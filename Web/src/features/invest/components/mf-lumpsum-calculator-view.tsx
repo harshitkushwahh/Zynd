@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { LineChart, TrendingUp } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { PAGE_HEADER_ICON_CLASS } from "@/components/ui/page-header";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
@@ -34,7 +35,7 @@ import {
   MF_CALC_INVESTED_DOT_CLASS,
   MF_CALC_PANEL_CLASS,
 } from "@/features/invest/lib/mf-calculator-ui";
-import { formatDate, formatInr, formatReturn } from "@/features/invest/lib/mf-format";
+import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import {
   clampLumpsumAmount,
   LUMPSUM_CALCULATOR_DEFAULT_AMOUNT,
@@ -62,10 +63,9 @@ function findBestScenario(scenarios: InvestReturnCalculatorScenario[]) {
 type LumpsumCorpusProgressProps = {
   invested: number;
   projectedValue: number;
-  returnPct: number | null;
 };
 
-function LumpsumCorpusProgress({ invested, projectedValue, returnPct }: LumpsumCorpusProgressProps) {
+function LumpsumCorpusProgress({ invested, projectedValue }: LumpsumCorpusProgressProps) {
   const gains = Math.max(0, projectedValue - invested);
   const investedShare =
     projectedValue > 0 ? Math.min(100, (invested / projectedValue) * 100) : 100;
@@ -73,20 +73,7 @@ function LumpsumCorpusProgress({ invested, projectedValue, returnPct }: LumpsumC
 
   return (
     <div className={cn(MF_CALC_PANEL_CLASS, "mt-4")}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-caption font-medium text-foreground">{copy.mutualFunds.lumpsumChartTitle}</p>
-        {returnPct != null ? (
-          <p
-            className={cn(
-              "text-caption font-semibold tabular-nums",
-              returnPct > 0 ? MF_CALC_GAIN_TEXT_CLASS : "text-muted-foreground",
-            )}
-          >
-            {formatReturn(returnPct)}
-          </p>
-        ) : null}
-      </div>
-      <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-muted">
+      <div className="relative h-2 overflow-hidden rounded-full bg-muted">
         <div
           className={cn("absolute inset-y-0 left-0 transition-[width] duration-300", MF_CALC_INVESTED_BAR_CLASS)}
           style={{ width: `${investedShare}%` }}
@@ -218,7 +205,6 @@ function LumpsumResultsCard({ result }: LumpsumResultsCardProps) {
             <LumpsumCorpusProgress
               invested={result.amount_inr}
               projectedValue={selectedScenario.value_inr}
-              returnPct={selectedScenario.return_pct}
             />
           </div>
 
@@ -226,13 +212,10 @@ function LumpsumResultsCard({ result }: LumpsumResultsCardProps) {
             invested={result.amount_inr}
             projectedValue={selectedScenario.value_inr}
             horizonLabel={selectedScenario.horizon.toUpperCase()}
+            returnPct={selectedScenario.return_pct}
             showLegend={false}
             className="lg:px-2"
           />
-        </div>
-
-        <div className="mt-auto border-t border-border pt-3">
-          <MfCalculatorDisclaimer disclaimer={result.disclaimer} dataQuality={result.data_quality} />
         </div>
       </CardContent>
     </Card>
@@ -336,13 +319,14 @@ export function MfLumpsumCalculatorView() {
   );
 
   return (
-    <MfToolsPageShell
-      trail={[
-        { label: copy.mutualFunds.lumpsumCalcTitle, href: "/dashboard/mutual-funds/calculators/lumpsum" },
-      ]}
-      title={copy.mutualFunds.lumpsumCalcTitle}
-      icon={MF_TOOL_ICONS["lumpsum-calc"]}
-    >
+    <DashboardContentFade>
+      <MfToolsPageShell
+        trail={[
+          { label: copy.mutualFunds.lumpsumCalcTitle, href: "/dashboard/mutual-funds/calculators/lumpsum" },
+        ]}
+        title={copy.mutualFunds.lumpsumCalcTitle}
+        icon={MF_TOOL_ICONS["lumpsum-calc"]}
+      >
       <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
         <Card className={cn("h-full", MF_CALC_CARD_CLASS)}>
@@ -355,17 +339,7 @@ export function MfLumpsumCalculatorView() {
               {copy.mutualFunds.lumpsumInputsTitle}
             </div>
 
-            <div className="space-y-2">
-              <MfFundPicker value={fund} onChange={setFund} />
-              {fund?.min_lumpsum_amount_inr != null ? (
-                <p className="text-caption text-muted-foreground">
-                  {copy.mutualFunds.lumpsumFundMinNote.replace(
-                    "{amount}",
-                    formatInr(fund.min_lumpsum_amount_inr),
-                  )}
-                </p>
-              ) : null}
-            </div>
+            <MfFundPicker value={fund} onChange={setFund} />
 
             <MfCalculatorSliderField
               id="lumpsum-amount"
@@ -452,5 +426,6 @@ export function MfLumpsumCalculatorView() {
         </Card>
       </div>
     </MfToolsPageShell>
+    </DashboardContentFade>
   );
 }

@@ -21,7 +21,7 @@ from app.application.mf.investment_constraints import extract_investment_constra
 from app.application.mf.mf_fp_state import map_fp_redemption_state_to_order
 from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, get_or_create_mf_investment_account
-from app.application.mf.mf_redemption_journey_service import index_active_redemptions, list_fp_redemptions_for_mfia
+from app.application.mf.mf_scheme_resolution import mutual_fund_isin_equals
 from app.application.mf.mf_investment_account_service import ensure_fp_mfia, ensure_mfia_old_id
 from app.application.mf.portfolio_holdings_service import (
     build_portfolio_holding_id,
@@ -179,7 +179,7 @@ def _validate_redemption_units(
 async def _load_fund_context(session: AsyncSession, *, isin: str) -> tuple[Product, MutualFund]:
     row = (
         await session.execute(
-            select(Product, MutualFund).join(MutualFund, MutualFund.product_id == Product.id).where(MutualFund.isin == isin)
+            select(Product, MutualFund).join(MutualFund, MutualFund.product_id == Product.id).where(mutual_fund_isin_equals(isin))
         )
     ).first()
     if not row:

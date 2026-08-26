@@ -1,5 +1,5 @@
-import { DashboardQueryRouteLoading } from "@/components/dashboard/dashboard-query-route-loading";
+import { GoalsPageLoadingView } from "@/features/goals/components/goals-page-loading-view";
 
 export default function Loading() {
-  return <DashboardQueryRouteLoading />;
+  return <GoalsPageLoadingView />;
 }

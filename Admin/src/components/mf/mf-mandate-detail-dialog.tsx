@@ -118,10 +118,10 @@ export function MfMandateDetailDialog({
       {loading ? (
         <AdminDetailDialogSkeleton />
       ) : error && !detail ? (
-        <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
       ) : detail ? (
         <div className="space-y-5">
-          {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+          {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
           <div className="rounded-card border border-border bg-muted/15 p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

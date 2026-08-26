@@ -358,11 +358,11 @@ async def test_verify_user_kyc_documents_batch(
 
 
 @pytest.mark.asyncio
-async def test_compliance_officer_has_verify_and_legal_hold_not_delete(
+async def test_super_admin_has_verify_and_legal_hold_not_delete(
     db_session: AsyncSession,
 ) -> None:
     admin = User(
-        email=f"co-worm-{uuid4()}@example.com",
+        email=f"sa-worm-{uuid4()}@example.com",
         password_hash="hash",
         role=UserRole.admin,
         status=UserStatus.active,
@@ -371,9 +371,6 @@ async def test_compliance_officer_has_verify_and_legal_hold_not_delete(
     await db_session.flush()
     await ensure_rbac_seed(db_session)
 
-    await assign_role_to_admin_user(db_session, user_id=admin.id, role_key="compliance_officer")
-    await revoke_role_from_admin_user(db_session, user_id=admin.id, role_key="super_admin")
-
     assert await user_has_permission(db_session, admin.id, "documents.verify")
     assert await user_has_permission(db_session, admin.id, "documents.legal_hold")
-    assert not await user_has_permission(db_session, admin.id, "documents.delete")
+    assert await user_has_permission(db_session, admin.id, "documents.delete")

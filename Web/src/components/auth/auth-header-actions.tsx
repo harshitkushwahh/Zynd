@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { AuthDialog } from "@/components/auth/auth-dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
+import { useResolvedDisplayName } from "@/shared/hooks/use-resolved-display-name";
 import { APP_NAME } from "@/shared/config/brand";
 
 export function AuthHeaderActions() {
   const router = useRouter();
-  const { user, loading, signOut, displayName } = useAuth();
+  const { user, loading, signOut } = useAuth();
+  const resolvedDisplayName = useResolvedDisplayName();
 
   if (loading) {
     return <div className="h-9 w-28 animate-pulse rounded-[var(--radius-control)] bg-muted" />;
@@ -20,7 +22,7 @@ export function AuthHeaderActions() {
     return (
       <div className="flex items-center gap-2 sm:gap-3">
         <span className="hidden max-w-[160px] truncate text-compact text-muted-foreground sm:inline">
-          {displayName || user.email}
+          {resolvedDisplayName || user.email}
         </span>
         <Button className="shadow-zynd-mid" onClick={() => router.push("/dashboard")}>
           Dashboard

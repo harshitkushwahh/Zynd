@@ -6,12 +6,16 @@ import { PencilLine, Plus, UserPlus, UserRound, X } from "lucide-react";
 import { AddInvestorNomineeWizard } from "@/components/add-investor/add-investor-nominee-wizard";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
+  ADD_INVESTOR_NOMINEE_DOCUMENT_TYPES,
+  ADD_INVESTOR_NOMINEE_RELATIONSHIPS,
+  ADD_INVESTOR_NOMINEE_SOURCE_OF_WEALTH,
   getTotalNomineeShare,
   MAX_ADD_INVESTOR_NOMINEES,
   redistributeEqualNomineeShares,
   relationshipLabel,
   type AddInvestorNomineeRecord,
 } from "@/lib/add-investor/add-investor-nominee";
+import type { AddInvestorNomineeOptions } from "@/lib/add-investor/add-investor-kyc-master-data";
 import { cn } from "@/lib/utils";
 
 type NomineeView = "list" | "add" | "edit";
@@ -20,6 +24,7 @@ type AddInvestorNomineePanelProps = {
   nominees: AddInvestorNomineeRecord[];
   onNomineesChange: (nominees: AddInvestorNomineeRecord[]) => void;
   onSubWizardActiveChange?: (active: boolean) => void;
+  nomineeOptions?: AddInvestorNomineeOptions;
 };
 
 function NomineeSlotIndicators({
@@ -65,10 +70,12 @@ function NomineeListCard({
   nominee,
   onEdit,
   onRemove,
+  relationshipOptions,
 }: {
   nominee: AddInvestorNomineeRecord;
   onEdit: () => void;
   onRemove: () => void;
+  relationshipOptions: AddInvestorNomineeOptions["relationships"];
 }) {
   return (
     <div className="add-investor-nominee-panel__card">
@@ -80,7 +87,7 @@ function NomineeListCard({
           <div className="add-investor-nominee-panel__card-title-row">
             <p className="add-investor-nominee-panel__card-name">{nominee.core.fullName}</p>
             <StatusBadge variant="neutral">
-              {relationshipLabel(nominee.core.relationship)}
+              {relationshipLabel(nominee.core.relationship, relationshipOptions)}
             </StatusBadge>
             <StatusBadge variant={nominee.type === "minor" ? "warning" : "info"}>
               {nominee.type === "minor" ? "Minor" : "Adult"}
@@ -112,6 +119,7 @@ export function AddInvestorNomineePanel({
   nominees,
   onNomineesChange,
   onSubWizardActiveChange,
+  nomineeOptions,
 }: AddInvestorNomineePanelProps) {
   const [view, setView] = useState<NomineeView>("list");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -119,6 +127,11 @@ export function AddInvestorNomineePanel({
   const editingNominee = editingId ? nominees.find((item) => item.id === editingId) : undefined;
   const totalShare = getTotalNomineeShare(nominees);
   const isEmpty = nominees.length === 0;
+  const resolvedNomineeOptions = nomineeOptions ?? {
+    relationships: [...ADD_INVESTOR_NOMINEE_RELATIONSHIPS],
+    sourceOfWealth: [...ADD_INVESTOR_NOMINEE_SOURCE_OF_WEALTH],
+    documentTypes: [...ADD_INVESTOR_NOMINEE_DOCUMENT_TYPES],
+  };
 
   const setViewState = (next: NomineeView) => {
     setView(next);
@@ -155,6 +168,7 @@ export function AddInvestorNomineePanel({
       <AddInvestorNomineeWizard
         existingNominees={nominees.filter((item) => item.id !== editingId)}
         editingNominee={editingNominee}
+        nomineeOptions={resolvedNomineeOptions}
         onCancel={() => {
           setEditingId(null);
           setViewState("list");
@@ -201,6 +215,7 @@ export function AddInvestorNomineePanel({
               <NomineeListCard
                 key={nominee.id}
                 nominee={nominee}
+                relationshipOptions={resolvedNomineeOptions.relationships}
                 onEdit={() => {
                   setEditingId(nominee.id);
                   setViewState("edit");

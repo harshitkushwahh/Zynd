@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-const BADGE_SIZE = 36;
-const BADGE_RADIUS = 15;
+const BADGE_SIZE = 28;
+const BADGE_RADIUS = 11;
 const BADGE_CIRCUMFERENCE = 2 * Math.PI * BADGE_RADIUS;
 
 type ProfileStatusTooltipProps = {
@@ -31,14 +31,16 @@ type ProfileProgressRingProps = {
   icon: LucideIcon;
   complete?: boolean;
   submitted?: boolean;
+  className?: string;
 };
 
-function ProfileProgressRing({
+export function ProfileProgressRing({
   progressFraction,
   tone,
   icon: Icon,
   complete = false,
   submitted = false,
+  className,
 }: ProfileProgressRingProps) {
   const stroke =
     tone === "success"
@@ -50,28 +52,28 @@ function ProfileProgressRing({
   const dashOffset = BADGE_CIRCUMFERENCE * (1 - Math.min(Math.max(progressFraction, 0), 1));
 
   return (
-    <div className="relative size-9 shrink-0">
+    <div className={cn("relative size-7 shrink-0", className)}>
       <svg
         className="pointer-events-none absolute inset-0 size-full -rotate-90"
-        viewBox="0 0 36 36"
+        viewBox={`0 0 ${BADGE_SIZE} ${BADGE_SIZE}`}
         aria-hidden
       >
         <circle
-          cx="18"
-          cy="18"
+          cx={BADGE_SIZE / 2}
+          cy={BADGE_SIZE / 2}
           r={BADGE_RADIUS}
           fill="none"
           stroke={stroke}
-          strokeWidth="2.5"
+          strokeWidth="2"
           strokeOpacity={trackOpacity}
         />
         <circle
-          cx="18"
-          cy="18"
+          cx={BADGE_SIZE / 2}
+          cy={BADGE_SIZE / 2}
           r={BADGE_RADIUS}
           fill="none"
           stroke={stroke}
-          strokeWidth="2.5"
+          strokeWidth="2"
           strokeLinecap="round"
           strokeDasharray={BADGE_CIRCUMFERENCE}
           strokeDashoffset={complete || submitted ? 0 : dashOffset}
@@ -79,7 +81,7 @@ function ProfileProgressRing({
       </svg>
       <div
         className={cn(
-          "absolute inset-[3px] flex items-center justify-center rounded-full",
+          "absolute inset-[2px] flex items-center justify-center rounded-full",
           complete
             ? "bg-success text-success-foreground"
             : submitted
@@ -90,11 +92,11 @@ function ProfileProgressRing({
         )}
       >
         {complete ? (
-          <Check className="size-3.5" strokeWidth={2.75} aria-hidden />
+          <Check className="size-3" strokeWidth={2.75} aria-hidden />
         ) : submitted ? (
-          <Clock className="size-3.5" strokeWidth={2.5} aria-hidden />
+          <Clock className="size-3" strokeWidth={2.5} aria-hidden />
         ) : (
-          <Icon className="size-3.5" strokeWidth={2.25} aria-hidden />
+          <Icon className="size-3" strokeWidth={2.25} aria-hidden />
         )}
       </div>
     </div>
@@ -107,6 +109,7 @@ type ProfileStatusBadgeProps = {
   ariaLabel: string;
   tooltipTitle: string;
   tooltipDetail: string;
+  tooltipContent?: ReactNode;
   ring: ProfileProgressRingProps;
   label?: ReactNode;
   filled?: boolean;
@@ -119,6 +122,7 @@ export function ProfileStatusBadge({
   ariaLabel,
   tooltipTitle,
   tooltipDetail,
+  tooltipContent,
   ring,
   label,
   filled = false,
@@ -129,7 +133,7 @@ export function ProfileStatusBadge({
       {label ? (
         <span
           className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-full text-[9px] font-bold uppercase tracking-wide",
+            "flex size-7 shrink-0 items-center justify-center rounded-full text-[8px] font-bold uppercase tracking-wide",
             filled
               ? complete
                 ? "bg-success text-white"
@@ -177,10 +181,13 @@ export function ProfileStatusBadge({
         }
       />
       <TooltipContent side="top" align="center" sideOffset={8} className="max-w-[15rem] px-3 py-2">
-        <ProfileStatusTooltipBody title={tooltipTitle} detail={tooltipDetail} />
+        {tooltipContent ?? (
+          <ProfileStatusTooltipBody title={tooltipTitle} detail={tooltipDetail} />
+        )}
       </TooltipContent>
     </Tooltip>
   );
 }
 
 export { BADGE_SIZE };
+export type { ProfileProgressRingProps };

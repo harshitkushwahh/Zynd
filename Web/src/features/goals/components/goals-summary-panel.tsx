@@ -3,13 +3,16 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Car, Home, Lock, Plane, Plus, User, Users } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Cell, Pie, PieChart } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import { Badge } from "@/components/ui/badge";
 import type { Goal } from "@/features/goals/api/goals-api";
-import { GoalPriorityChip } from "@/features/goals/components/goal-priority-badge-picker";
+import { GoalPriorityDot } from "@/features/goals/components/goal-priority-badge-picker";
 import { getGoalTemplateIcon } from "@/features/goals/lib/goal-template-ui";
 import { goalTemplateIconThemeFor } from "@/features/goals/lib/goal-template-meta";
+import { familyMemberInitials } from "@/features/family-groups/lib/family-group-ui";
 import type { DashboardFamilyGoal } from "@/features/goals/lib/goal-family-goals";
 import {
   GOAL_MAX_FAMILY_ACTIVE_PER_GROUP,
@@ -23,7 +26,6 @@ import {
   type GoalSummaryChartSlice,
 } from "@/features/goals/lib/goal-summary";
 import { goalSummarySliceHref } from "@/features/goals/lib/goal-navigation";
-import { formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -65,51 +67,181 @@ function GoalsSummaryCapacityBadge({
   );
 }
 
-function GoalSummaryMiniCardFromSlice({ slice }: { slice: GoalSummaryChartSlice }) {
-  if (slice.kind === "personal" && slice.personalGoal) {
-    const goal = slice.personalGoal;
-    const Icon = getGoalTemplateIcon(goal.template?.icon_key);
-    const iconTheme = goalTemplateIconThemeFor(goal.template?.slug ?? "custom");
+function GoalsSummaryChartCenter({ totalGoals }: { totalGoals: number }) {
+  return (
+    <div className="flex flex-col items-center justify-center px-2 text-center">
+      <p className="text-xl font-semibold tabular-nums leading-none text-foreground">{totalGoals}</p>
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        {copy.goals.summaryChartCenterGoalsLabel(totalGoals)}
+      </p>
+    </div>
+  );
+}
 
-    return (
-      <div className="flex min-w-0 items-center gap-2.5 rounded-[var(--radius-card)] border border-border/70 bg-background/95 px-2.5 py-2 shadow-sm backdrop-blur-sm">
-        <div
-          className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-2px)] border",
-            iconTheme.iconBadgeClass,
-          )}
-        >
-          <Icon className="size-3.5" strokeWidth={2.1} aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[11px] font-semibold text-foreground">{goal.title}</p>
-          <p className="text-[10px] tabular-nums text-muted-foreground">
-            {copy.goals.summarySliceCovered(Math.round(slice.progress))}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (slice.kind === "family" && slice.familyGoal) {
-    const goal = slice.familyGoal;
-    return (
-      <div className="flex min-w-0 items-center gap-2.5 rounded-[var(--radius-card)] border border-border/70 bg-background/95 px-2.5 py-2 shadow-sm backdrop-blur-sm">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-2px)] border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
-          <Users className="size-3.5" strokeWidth={2.1} aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[11px] font-semibold text-foreground">{goal.title}</p>
-          <p className="truncate text-[10px] text-muted-foreground">{goal.groupTitle}</p>
-          <p className="text-[10px] tabular-nums text-muted-foreground">
-            {copy.goals.summarySliceCovered(Math.round(slice.progress))}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+function inferGoalTemplateSlugFromTitle(title: string): string | null {
+  const haystack = title.toLowerCase();
+  if (haystack.includes("car")) return "car";
+  if (haystack.includes("home") || haystack.includes("house")) return "home";
+  if (haystack.includes("travel") || haystack.includes("trip")) return "travel";
+  if (haystack.includes("wedding") || haystack.includes("marriage")) return "wedding";
+  if (haystack.includes("education") || haystack.includes("college")) return "education";
+  if (haystack.includes("retire")) return "retirement";
   return null;
+}
+
+function resolveSummarySliceSlug(slice: GoalSummaryChartSlice): string {
+  if (slice.personalGoal?.template?.slug) return slice.personalGoal.template.slug;
+  if (slice.familyGoal?.tag) return slice.familyGoal.tag.toLowerCase();
+  return inferGoalTemplateSlugFromTitle(slice.label) ?? (slice.kind === "family" ? "family" : "custom");
+}
+
+function resolveSummarySliceIconKey(slice: GoalSummaryChartSlice): string {
+  if (slice.personalGoal?.template?.icon_key) return slice.personalGoal.template.icon_key;
+  const slug = resolveSummarySliceSlug(slice);
+  const iconKeyBySlug: Record<string, string> = {
+    car: "car",
+    travel: "plane",
+    education: "graduation-cap",
+    wedding: "heart",
+    home: "home",
+    retirement: "sunset",
+    family: "target",
+  };
+  return iconKeyBySlug[slug] ?? "target";
+}
+
+function SummaryTopPriorityProgressRing({ progress }: { progress: number }) {
+  const size = 40;
+  const strokeWidth = 3.5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clampedProgress = Math.min(Math.max(progress, 0), 100);
+  const strokeDashoffset = circumference * (1 - clampedProgress / 100);
+
+  return (
+    <div
+      className="relative flex size-10 shrink-0 items-center justify-center"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clampedProgress}
+      aria-label={`${clampedProgress.toFixed(0)}% ${copy.goals.progressLabel.toLowerCase()}`}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-muted/50"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          className="text-primary transition-[stroke-dashoffset] duration-500 ease-out"
+        />
+      </svg>
+      <span className="absolute text-[10px] font-semibold tabular-nums leading-none text-foreground">
+        {clampedProgress.toFixed(0)}%
+      </span>
+    </div>
+  );
+}
+
+function goalSummaryIconColorClass(themeClass: string) {
+  return themeClass
+    .split(" ")
+    .filter((token) => token.startsWith("text-") || token.startsWith("dark:text-"))
+    .join(" ");
+}
+
+const FAMILY_GROUP_AVATAR_COLORS = [
+  "bg-sky-500/15 text-sky-700 ring-sky-500/25 dark:text-sky-300",
+  "bg-amber-500/15 text-amber-700 ring-amber-500/25 dark:text-amber-300",
+  "bg-rose-500/15 text-rose-700 ring-rose-500/25 dark:text-rose-300",
+  "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
+];
+
+function FamilyGroupCircleAvatar({
+  title,
+  avatarUrl,
+}: {
+  title: string;
+  avatarUrl?: string | null;
+}) {
+  const colorIndex =
+    title.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0) %
+    FAMILY_GROUP_AVATAR_COLORS.length;
+
+  return (
+    <div
+      className={cn(
+        "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1",
+        FAMILY_GROUP_AVATAR_COLORS[colorIndex],
+      )}
+      title={title}
+      aria-label={title}
+    >
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatarUrl} alt="" className="size-full object-cover" />
+      ) : (
+        <span className="text-[8px] font-semibold leading-none">{familyMemberInitials(title)}</span>
+      )}
+    </div>
+  );
+}
+
+function TopPrioritySummaryCardContent({
+  priority,
+  title,
+  familyGroup,
+  progress,
+  iconKey,
+  templateSlug,
+}: {
+  priority: number;
+  title: string;
+  familyGroup?: { title: string; avatarUrl?: string | null } | null;
+  progress: number;
+  iconKey: string;
+  templateSlug: string;
+}) {
+  const Icon = getGoalTemplateIcon(iconKey);
+  const iconTheme = goalTemplateIconThemeFor(templateSlug);
+  const iconColorClass = goalSummaryIconColorClass(iconTheme.headerIconClass ?? iconTheme.iconBadgeClass);
+
+  return (
+    <div className="flex items-start gap-2.5 rounded-[var(--radius-card)] border border-border/80 bg-background/95 p-2">
+      <Icon className={cn("mt-0.5 size-5 shrink-0", iconColorClass)} strokeWidth={2.1} aria-hidden />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+            {copy.goals.summaryTopPriorityLabel}
+          </p>
+          <GoalPriorityDot priority={priority} />
+        </div>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="truncate text-[12px] font-semibold leading-tight text-foreground">{title}</p>
+          {familyGroup ? (
+            <FamilyGroupCircleAvatar title={familyGroup.title} avatarUrl={familyGroup.avatarUrl} />
+          ) : null}
+        </div>
+      </div>
+
+      <SummaryTopPriorityProgressRing progress={progress} />
+    </div>
+  );
 }
 
 function TopPrioritySummaryCard({ slice }: { slice: GoalSummaryChartSlice }) {
@@ -117,71 +249,25 @@ function TopPrioritySummaryCard({ slice }: { slice: GoalSummaryChartSlice }) {
   const priority =
     slice.personalGoal?.priority ?? slice.familyGoal?.priority ?? 3;
   const title = slice.personalGoal?.title ?? slice.familyGoal?.title ?? slice.label;
-  const saved =
-    slice.personalGoal?.effective_current_amount_inr ??
-    slice.personalGoal?.current_amount_inr ??
-    slice.familyGoal?.effective_current_amount_inr ??
-    slice.familyGoal?.current_amount_inr ??
-    0;
-  const target =
-    slice.personalGoal?.target_amount_inr ?? slice.familyGoal?.target_amount_inr ?? 0;
-  const subtitle =
+  const familyGroup =
     slice.kind === "family" && slice.familyGoal
-      ? `${slice.familyGoal.groupTitle} · ${copy.goals.familyGoalBadge}`
+      ? {
+          title: slice.familyGoal.groupTitle,
+          avatarUrl: slice.familyGoal.groupAvatarUrl,
+        }
       : null;
-
-  const Icon =
-    slice.kind === "family"
-      ? Users
-      : getGoalTemplateIcon(slice.personalGoal?.template?.icon_key);
-  const iconTheme =
-    slice.kind === "family"
-      ? "border-indigo-200/70 bg-indigo-50 text-indigo-600 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
-      : goalTemplateIconThemeFor(slice.personalGoal?.template?.slug ?? "custom").iconBadgeClass;
+  const templateSlug = resolveSummarySliceSlug(slice);
+  const iconKey = resolveSummarySliceIconKey(slice);
 
   const card = (
-    <div className="rounded-[var(--radius-card)] border border-border bg-background p-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-medium tracking-wide text-muted-foreground">
-          {copy.goals.summaryTopPriorityLabel}
-        </p>
-        <GoalPriorityChip priority={priority} className="h-6 px-2 text-[9px]" />
-      </div>
-      <div className="mt-2 flex items-center gap-2">
-        <div
-          className={cn(
-            "flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-2px)] border",
-            iconTheme,
-          )}
-        >
-          <Icon className="size-3.5" strokeWidth={2.1} aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-semibold leading-tight text-foreground">{title}</p>
-          {subtitle ? (
-            <p className="truncate text-[10px] text-muted-foreground">{subtitle}</p>
-          ) : (
-            <p className="truncate text-[10px] tabular-nums text-muted-foreground">
-              <span className="font-medium text-foreground">{formatInr(saved, { compact: true })}</span>
-              {" "}{copy.goals.detailOfTargetLabel}{" "}
-              <span className="font-medium text-foreground">{formatInr(target, { compact: true })}</span>
-            </p>
-          )}
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold tabular-nums leading-none text-foreground">
-            {slice.progress.toFixed(0)}%
-          </p>
-          <p className="mt-0.5 text-[9px] text-muted-foreground">{copy.goals.progressLabel}</p>
-        </div>
-      </div>
-      <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted/80">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-500"
-          style={{ width: `${slice.progress}%` }}
-        />
-      </div>
-    </div>
+    <TopPrioritySummaryCardContent
+      priority={priority}
+      title={title}
+      familyGroup={familyGroup}
+      progress={slice.progress}
+      iconKey={iconKey}
+      templateSlug={templateSlug}
+    />
   );
 
   if (!href) return card;
@@ -208,14 +294,9 @@ function GoalSummaryChartChip({
   dimmed: boolean;
   onSelect: (id: string) => void;
 }) {
-  const Icon =
-    slice.kind === "family"
-      ? Users
-      : getGoalTemplateIcon(slice.personalGoal?.template?.icon_key);
-  const iconTheme =
-    slice.kind === "family"
-      ? "border-indigo-200/70 bg-indigo-50 text-indigo-600 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300"
-      : goalTemplateIconThemeFor(slice.personalGoal?.template?.slug ?? "custom").iconBadgeClass;
+  const templateSlug = resolveSummarySliceSlug(slice);
+  const Icon = getGoalTemplateIcon(resolveSummarySliceIconKey(slice));
+  const iconTheme = goalTemplateIconThemeFor(templateSlug).iconBadgeClass;
 
   return (
     <button
@@ -250,61 +331,23 @@ const SUMMARY_PREVIEW_SLICES = [
 ] as const;
 
 function GoalsSummaryPreviewContent() {
-  const homeTheme = goalTemplateIconThemeFor("home");
-
   return (
     <div className="space-y-4 px-1 py-1">
-      <div className="rounded-[var(--radius-card)] border border-border bg-background p-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-medium tracking-wide text-muted-foreground">
-            {copy.goals.summaryTopPriorityLabel}
-          </p>
-          <GoalPriorityChip priority={2} className="h-6 px-2 text-[9px]" />
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <div
-            className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-2px)] border",
-              homeTheme.iconBadgeClass,
-            )}
-          >
-            <Home className="size-3.5" strokeWidth={2.1} aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-semibold leading-tight text-foreground">Home down payment</p>
-            <p className="truncate text-[10px] tabular-nums text-muted-foreground">
-              <span className="font-medium text-foreground">{formatInr(32_50_000, { compact: true })}</span>
-              {" "}{copy.goals.detailOfTargetLabel}{" "}
-              <span className="font-medium text-foreground">{formatInr(50_00_000, { compact: true })}</span>
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-semibold tabular-nums leading-none text-foreground">65%</p>
-            <p className="mt-0.5 text-[9px] text-muted-foreground">{copy.goals.progressLabel}</p>
-          </div>
-        </div>
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted/80">
-          <div className="h-full w-[65%] rounded-full bg-gradient-to-r from-primary to-primary/70" />
-        </div>
-      </div>
+      <TopPrioritySummaryCardContent
+        priority={2}
+        title="Home down payment"
+        progress={65}
+        iconKey="home"
+        templateSlug="home"
+      />
 
       <div className="relative mx-auto size-[11.5rem] shrink-0">
-        <div className="pointer-events-none absolute inset-[18%] z-20 flex flex-col items-stretch justify-center gap-1.5">
-          <div className="flex min-w-0 items-center gap-2.5 rounded-[var(--radius-card)] border border-border/70 bg-background/95 px-2.5 py-2 shadow-sm backdrop-blur-sm">
-            <div className={cn("flex size-8 items-center justify-center rounded-[calc(var(--radius-control)-2px)] border", goalTemplateIconThemeFor("car").iconBadgeClass)}>
-              <Car className="size-3.5" strokeWidth={2.1} aria-hidden />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-medium text-foreground">Car fund</p>
-              <p className="text-[10px] tabular-nums text-muted-foreground">
-                {copy.goals.summarySliceCovered(42)}
-              </p>
-            </div>
-          </div>
+        <div className="pointer-events-none absolute inset-[18%] z-20 flex items-center justify-center">
+          <GoalsSummaryChartCenter totalGoals={SUMMARY_PREVIEW_SLICES.length} />
         </div>
 
         <div className="relative z-10 size-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <RechartsMeasuredContainer width="100%" height="100%" minWidth={0}>
             <PieChart>
               <Pie
                 data={[...SUMMARY_PREVIEW_SLICES]}
@@ -323,7 +366,7 @@ function GoalsSummaryPreviewContent() {
                 ))}
               </Pie>
             </PieChart>
-          </ResponsiveContainer>
+          </RechartsMeasuredContainer>
         </div>
       </div>
 
@@ -331,7 +374,6 @@ function GoalsSummaryPreviewContent() {
         <div className="flex justify-center">
           <GoalsSummaryCapacityBadge personalCount={3} familyCount={1} className="mt-0" />
         </div>
-        <p className="text-center text-[10px] text-muted-foreground">{copy.goals.summarySelectGoalHint}</p>
         <div className="flex flex-wrap justify-center gap-1.5">
           {SUMMARY_PREVIEW_SLICES.map((slice, index) => {
             const PreviewIcon =
@@ -396,7 +438,7 @@ function GoalsSummaryLockedOverlay() {
 
 function GoalsSummaryLockedEmptyState() {
   return (
-    <div className="relative mt-4 min-h-[18rem] flex-1 overflow-hidden rounded-[var(--radius-control)] border border-dashed border-border/80">
+    <div className="relative mt-2.5 min-h-[18rem] flex-1 overflow-hidden rounded-[var(--radius-control)] border border-dashed border-border/80">
       <div className="pointer-events-none select-none blur-[5px]">
         <GoalsSummaryPreviewContent />
       </div>
@@ -416,10 +458,6 @@ export function GoalsSummaryPanel({ personalGoals, familyGoals, className }: Goa
   const overallCoverage = useMemo(() => computeSummarySliceCoverage(chartData), [chartData]);
   const coveredCount = useMemo(() => countCoveredSummarySlices(chartData), [chartData]);
   const topPrioritySlice = useMemo(() => pickTopPrioritySummarySlice(chartData), [chartData]);
-  const selectedSlice = useMemo(
-    () => chartData.find((slice) => slice.id === selectedSliceId) ?? null,
-    [chartData, selectedSliceId],
-  );
   const hasGoals = chartData.length > 0;
 
   function handleSelectSlice(id: string) {
@@ -433,13 +471,13 @@ export function GoalsSummaryPanel({ personalGoals, familyGoals, className }: Goa
         className,
       )}
     >
-      <div>
+      <div className="space-y-1.5">
         <h2 className="text-sm font-semibold text-foreground">{copy.goals.summaryTitle}</h2>
-        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{copy.goals.summarySubtitle}</p>
         {hasGoals ? (
           <GoalsSummaryCapacityBadge
             personalCount={personalGoals.length}
             familyCount={familyGoals.length}
+            className="mt-0"
           />
         ) : null}
       </div>
@@ -449,35 +487,18 @@ export function GoalsSummaryPanel({ personalGoals, familyGoals, className }: Goa
       ) : (
         <>
           {topPrioritySlice ? (
-            <div className="mt-4">
+            <div className="mt-2.5">
               <TopPrioritySummaryCard slice={topPrioritySlice} />
             </div>
           ) : null}
 
-          <div className="relative mx-auto mt-4 size-[11.5rem] shrink-0">
-            <div className="pointer-events-none absolute inset-[18%] z-20 flex flex-col items-stretch justify-center gap-1.5">
-              {selectedSlice ? (
-                <GoalSummaryMiniCardFromSlice slice={selectedSlice} />
-              ) : coveredCount > 0 ? (
-                chartData
-                  .filter((slice) => slice.covered)
-                  .slice(0, 2)
-                  .map((slice) => <GoalSummaryMiniCardFromSlice key={slice.id} slice={slice} />)
-              ) : (
-                <div className="flex flex-col items-center justify-center px-2 text-center">
-                  <p className="text-lg font-semibold tabular-nums text-foreground">{overallCoverage}%</p>
-                  <p className="text-[10px] text-muted-foreground">{copy.goals.summaryOverallCoverageLabel}</p>
-                </div>
-              )}
-              {!selectedSlice && coveredCount > 2 ? (
-                <p className="text-center text-[10px] font-medium text-muted-foreground">
-                  {copy.goals.summaryMoreCovered(coveredCount - 2)}
-                </p>
-              ) : null}
+          <div className="relative mx-auto mt-3 size-[11.5rem] shrink-0">
+            <div className="pointer-events-none absolute inset-[18%] z-20 flex items-center justify-center">
+              <GoalsSummaryChartCenter totalGoals={chartData.length} />
             </div>
 
             <div className="relative z-10 size-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <RechartsMeasuredContainer width="100%" height="100%" minWidth={0}>
                 <PieChart>
                   <Pie
                     data={chartData}
@@ -510,18 +531,17 @@ export function GoalsSummaryPanel({ personalGoals, familyGoals, className }: Goa
                     })}
                   </Pie>
                 </PieChart>
-              </ResponsiveContainer>
+              </RechartsMeasuredContainer>
             </div>
           </div>
 
           <div className="mt-3 space-y-2">
-            <p className="text-center text-[11px] font-medium text-foreground">
+            <p className="text-center text-[11px] text-muted-foreground">
               {copy.goals.summaryCoveredCount(coveredCount, chartData.length)}
               {coveredCount > 0
                 ? ` · ${overallCoverage}% ${copy.goals.summaryOverallCoverageLabel.toLowerCase()}`
                 : null}
             </p>
-            <p className="text-center text-[10px] text-muted-foreground">{copy.goals.summarySelectGoalHint}</p>
             <div className="flex flex-wrap justify-center gap-1.5">
               {chartData.map((slice) => (
                 <GoalSummaryChartChip

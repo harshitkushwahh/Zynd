@@ -10,8 +10,11 @@ type AdminSectionPageShellProps = {
   breadcrumbSegments: AdminBreadcrumbSegment[];
   title: string;
   icon?: LucideIcon;
+  iconVariant?: "plain" | "tile";
   headerAside?: React.ReactNode;
   titleAddon?: React.ReactNode;
+  hideBreadcrumb?: boolean;
+  hideHeader?: boolean;
   children: React.ReactNode;
 };
 
@@ -19,19 +22,25 @@ export function AdminSectionPageShell({
   breadcrumbSegments,
   title,
   icon,
+  iconVariant = "plain",
   headerAside,
   titleAddon,
+  hideBreadcrumb = false,
+  hideHeader = false,
   children,
 }: AdminSectionPageShellProps) {
   return (
     <div className="admin-section-page-shell">
-      <AdminSectionBreadcrumb segments={breadcrumbSegments} />
-      <AdminPageHeader
-        title={title}
-        icon={icon}
-        aside={headerAside}
-        titleAddon={titleAddon}
-      />
+      {!hideBreadcrumb ? <AdminSectionBreadcrumb segments={breadcrumbSegments} /> : null}
+      {!hideHeader ? (
+        <AdminPageHeader
+          title={title}
+          icon={icon}
+          iconVariant={iconVariant}
+          aside={headerAside}
+          titleAddon={titleAddon}
+        />
+      ) : null}
       <div className="admin-section-page-shell__content">{children}</div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { getErrorMessage } from "@/lib/errors";
 
 import { AdminAuthButton } from "@/components/auth/admin-auth-button";
+import { AdminAuthShellThemeToggle } from "@/components/auth/admin-auth-shell-theme-toggle";
 import { AdminGlobalLoading } from "@/components/auth/admin-global-loading";
 import { AdminLoginVisualPanel } from "@/components/auth/admin-login-visual-panel";
 import { OtpInput } from "@/components/auth/otp-input";
@@ -16,7 +17,8 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { ApiError } from "@/lib/api-client";
-import { isAuthenticatedResponse } from "@/lib/auth-api";
+import { isAuthenticatedResponse, fetchAdminRbacMe } from "@/lib/auth-api";
+import { resolveAdminLandingPath } from "@/lib/admin-mitra-roles";
 import { isValidEmail, isValidOtp, isValidPassword } from "@/lib/admin-validation";
 import { clampToMaxLength, inputRuleProps, INPUT_RULES } from "@/lib/input-rules";
 
@@ -26,7 +28,7 @@ type LoginStep = "credentials" | "mfa";
 
 export function AdminLoginCard() {
   const router = useRouter();
-  const { user, loading, signIn, verifyMfa } = useAdminAuth();
+  const { user, loading, signIn, verifyMfa, roleKeys } = useAdminAuth();
   const [step, setStep] = useState<LoginStep>("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,9 +46,9 @@ export function AdminLoginCard() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/dashboard");
+      router.replace(resolveAdminLandingPath(roleKeys));
     }
-  }, [loading, router, user]);
+  }, [loading, router, roleKeys, user]);
 
   if (loading || user) {
     return <AdminGlobalLoading />;
@@ -85,7 +87,8 @@ export function AdminLoginCard() {
       setCaptchaRequired(false);
       setTurnstileToken("");
       if (isAuthenticatedResponse(result)) {
-        router.push("/dashboard");
+        const rbac = await fetchAdminRbacMe();
+        router.push(resolveAdminLandingPath(rbac.role_keys));
         return;
       }
       setMfaToken(result.mfa_token);
@@ -115,7 +118,8 @@ export function AdminLoginCard() {
     setFormError("");
     try {
       await verifyMfa(mfaToken, otp);
-      router.push("/dashboard");
+      const rbac = await fetchAdminRbacMe();
+      router.push(resolveAdminLandingPath(rbac.role_keys));
     } catch (error) {
       setOtpError(getErrorMessage(error, "Invalid authentication code."));
     } finally {
@@ -125,6 +129,7 @@ export function AdminLoginCard() {
 
   return (
     <div className="admin-login-split-card">
+      <AdminAuthShellThemeToggle />
       <AdminLoginVisualPanel />
 
       <div className="admin-login-form-panel">
@@ -224,11 +229,6 @@ export function AdminLoginCard() {
               <AdminAuthButton type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Please wait..." : "Login Now"}
               </AdminAuthButton>
-
-              <p className="admin-login-form-panel__footer">
-                Need access?{" "}
-                <span className="admin-login-form-panel__footer-emphasis">Contact admin</span>
-              </p>
             </form>
           ) : (
             <form onSubmit={(event) => void handleMfaSubmit(event)} className="admin-login-form">

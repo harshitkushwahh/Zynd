@@ -5,11 +5,12 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import type { MfNavChartPoint } from "@/features/invest/lib/mf-nav-history";
 import { formatNav, formatSignedReturn } from "@/features/invest/lib/mf-format";
@@ -134,7 +135,7 @@ export function MfFundNavChart({ points, periodReturn }: MfFundNavChartProps) {
       )}
     >
       <div className="h-[300px] w-full min-w-0 [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible">
-        <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
+        <RechartsMeasuredContainer className="h-full w-full" width="100%" height={CHART_HEIGHT} minWidth={0}>
           <AreaChart data={points} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -179,7 +180,7 @@ export function MfFundNavChart({ points, periodReturn }: MfFundNavChartProps) {
               animationEasing="ease-out"
             />
           </AreaChart>
-        </ResponsiveContainer>
+        </RechartsMeasuredContainer>
       </div>
     </div>
   );

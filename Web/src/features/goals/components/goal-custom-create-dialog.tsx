@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, PenLine } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import {
 import { GOAL_DIALOG_SHELL_CLASS } from "@/features/goals/components/goal-dialog-layout";
 import { defaultTargetDate } from "@/features/goals/lib/goal-calculator";
 import { getGoalFormConfig } from "@/features/goals/lib/goal-form-config";
-import { goalTemplateIconThemeFor } from "@/features/goals/lib/goal-template-meta";
 import { copy } from "@/shared/config/copy";
 
 const GOAL_CUSTOM_FORM_ID = "goal-custom-journey-form";
@@ -32,20 +31,13 @@ export function GoalCustomCreateDialog({
   error = "",
 }: GoalCustomCreateDialogProps) {
   const formConfig = getGoalFormConfig(undefined);
-  const theme = goalTemplateIconThemeFor("custom");
 
   return (
     <BrandDialog
       open={open}
       onOpenChange={onOpenChange}
       title={copy.goals.createTitle}
-      description={copy.goals.createDescription}
-      icon={PenLine}
       maxWidth="xl"
-      headerDensity="compact"
-      headerVariant="light"
-      closeTone="default"
-      iconClassName={theme.headerIconClass}
       className={GOAL_DIALOG_SHELL_CLASS}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -63,7 +55,7 @@ export function GoalCustomCreateDialog({
           saveCustomError={error}
         />
 
-        <BrandDialogFooter className="shrink-0 bg-background px-5 py-4 sm:px-6">
+        <BrandDialogFooter className="shrink-0 px-5 py-4 sm:px-6">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>

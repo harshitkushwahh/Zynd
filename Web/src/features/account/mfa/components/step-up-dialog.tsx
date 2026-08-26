@@ -1,7 +1,6 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { AuthSubmitFooter } from "@/components/auth/auth-shared";
 import { BrandDialog } from "@/components/ui/brand-dialog";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { StepUpSecondFactorFields } from "@/features/account/mfa/components/step-up-second-factor-fields";
 import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { copy } from "@/shared/config/copy";
+import { useResetWhenDialogOpens } from "@/hooks/use-reset-when-dialog-opens";
 
 type StepUpDialogProps = {
   open: boolean;
@@ -38,15 +38,15 @@ export function StepUpDialog({
   const [useSms, setUseSms] = useState(false);
   const [smsSent, setSmsSent] = useState(false);
 
-  useEffect(() => {
-    if (!open) {
-      setTotpCode("");
-      setSmsOtp("");
-      setUseSms(false);
-      setSmsSent(false);
-      onErrorChange?.("");
-    }
-  }, [open, onErrorChange]);
+  const reset = useCallback(() => {
+    setTotpCode("");
+    setSmsOtp("");
+    setUseSms(false);
+    setSmsSent(false);
+    onErrorChange?.("");
+  }, [onErrorChange]);
+
+  useResetWhenDialogOpens(open, reset);
 
   const handleOpenChange = (next: boolean) => {
     onOpenChange(next);
@@ -65,8 +65,6 @@ export function StepUpDialog({
       open={open}
       onOpenChange={handleOpenChange}
       title={title}
-      description={description}
-      icon={ShieldCheck}
     >
       <form className="space-y-4 p-6" onSubmit={handleSubmit}>
         <StepUpSecondFactorFields

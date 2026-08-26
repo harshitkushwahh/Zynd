@@ -55,7 +55,7 @@ export function UiMessage({
       )}
     >
       <Icon className="size-4" />
-      <AlertDescription className="text-caption leading-relaxed text-current/90">
+      <AlertDescription className="text-caption leading-relaxed">
         {message ?? children}
       </AlertDescription>
     </Alert>

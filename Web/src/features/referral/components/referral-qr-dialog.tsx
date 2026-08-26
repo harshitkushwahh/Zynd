@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Download, Loader2, QrCode, RotateCcw } from "lucide-react";
+import { Check, Copy, Download, Loader2, RotateCcw } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -185,8 +185,6 @@ export function ReferralQrDialog({ open, onOpenChange, shareUrl, code }: Referra
       open={open}
       onOpenChange={onOpenChange}
       title={copy.referral.qrDialogTitle}
-      description={copy.referral.qrDialogDescription}
-      icon={QrCode}
       maxWidth="md"
     >
       <div className="space-y-5 px-6 py-5">

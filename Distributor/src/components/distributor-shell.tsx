@@ -19,7 +19,11 @@ export function DistributorShell({ children }: { children: React.ReactNode }) {
     }
   }, [loading, router, user]);
 
-  if (loading || !user) {
+  if (loading && !user) {
+    return <DistributorGlobalLoading />;
+  }
+
+  if (!user) {
     return <DistributorGlobalLoading />;
   }
 

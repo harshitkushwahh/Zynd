@@ -10,5 +10,14 @@ type MfDummyInvestCardProps = {
 
 /** @deprecated Use `MfInvestPaymentCard` directly. */
 export function MfDummyInvestCard({ selectedFund, className }: MfDummyInvestCardProps) {
-  return <MfInvestPaymentCard fundName={selectedFund?.name} className={className} preview />;
+  return (
+    <MfInvestPaymentCard
+      fundName={selectedFund?.name}
+      amcLogoUrl={selectedFund?.amc_logo_url}
+      amcName={selectedFund?.amc_name}
+      amcSlug={selectedFund?.amc_slug}
+      className={className}
+      preview
+    />
+  );
 }

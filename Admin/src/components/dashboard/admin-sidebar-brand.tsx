@@ -3,20 +3,27 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { useTheme } from "@/contexts/theme-context";
+const LOGO_WIDTH = 893;
+const LOGO_HEIGHT = 242;
 
 export function AdminSidebarBrand() {
-  const { theme } = useTheme();
-  const logoSrc = theme === "dark" ? "/zynda-h.png" : "/zynd-hl.png";
-
   return (
     <Link href="/dashboard" className="admin-sidebar-brand" aria-label="ZYND Admin home">
       <Image
-        src={logoSrc}
+        src="/zynd-hl.png"
         alt="ZYND Admin"
-        width={893}
-        height={242}
-        className="admin-sidebar-brand__logo-horizontal"
+        width={LOGO_WIDTH}
+        height={LOGO_HEIGHT}
+        className="admin-sidebar-brand__logo-horizontal dark:hidden"
+        priority
+      />
+      <Image
+        src="/zynda-h.png"
+        alt=""
+        aria-hidden
+        width={LOGO_WIDTH}
+        height={LOGO_HEIGHT}
+        className="admin-sidebar-brand__logo-horizontal hidden dark:block"
         priority
       />
     </Link>

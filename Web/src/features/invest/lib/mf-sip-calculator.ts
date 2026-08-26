@@ -7,7 +7,9 @@ export const SIP_CALCULATOR_DEFAULT_DAY = 5;
 
 /** Real SIP order registration is capped well below the calculator's illustrative range. */
 export const SIP_ORDER_MIN_INSTALLMENTS = 1;
-export const SIP_ORDER_MAX_INSTALLMENTS = 60;
+export const SIP_ORDER_MAX_INSTALLMENTS = 999;
+/** Instalments picker dial range matches the order maximum. */
+export const SIP_ORDER_DIAL_MAX_INSTALLMENTS = 999;
 export const SIP_ORDER_DEFAULT_INSTALLMENTS = 12;
 
 export function clampOrderInstallments(installments: number) {
@@ -48,6 +50,30 @@ export function formatInstallmentDuration(installments: number) {
   }
 
   return `${installments} mo (${years} yr${years === 1 ? "" : "s"} ${months} mo)`;
+}
+
+/** Human-readable years/months without repeating the instalment count. */
+export function formatInstallmentDurationBreakdown(installments: number) {
+  const years = Math.floor(installments / 12);
+  const months = installments % 12;
+
+  if (years === 0) return null;
+
+  if (months === 0) {
+    return `${years} yr${years === 1 ? "" : "s"}`;
+  }
+
+  return `${years} yr${years === 1 ? "" : "s"} ${months} mo`;
+}
+
+/** Secondary dial hero label: days below 12 months, years/months from 12 onward. */
+export function formatInstallmentDialHeroSecondary(installments: number) {
+  if (installments < 12) {
+    const days = installments * 30;
+    return `${days} ${days === 1 ? "day" : "days"}`;
+  }
+
+  return formatInstallmentDurationBreakdown(installments) ?? "";
 }
 
 export function sipAmountStep(minSipAmountInr: number | null | undefined) {

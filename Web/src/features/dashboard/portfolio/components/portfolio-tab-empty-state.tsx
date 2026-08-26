@@ -26,10 +26,8 @@ export function PortfolioTabEmptyState({
         className,
       )}
     >
-      <div className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
-        <Icon className="size-6" strokeWidth={2.25} aria-hidden />
-      </div>
-      <h2 className="mt-5 max-w-md text-body font-semibold tracking-tight text-foreground">{title}</h2>
+      <Icon className="size-6 text-muted-foreground" strokeWidth={2.25} aria-hidden />
+      <h2 className="mt-4 max-w-md text-body font-semibold tracking-tight text-foreground">{title}</h2>
       <p className="mt-2 max-w-md text-compact leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );

@@ -224,18 +224,18 @@ export function OtpInfoBanner({
   return (
     <Alert
       variant="info"
-      className="mb-4 mt-0 gap-2 rounded-[var(--radius-card)] px-4 py-3.5 shadow-zynd-low has-[>svg]:gap-x-3"
+      className="mb-3 mt-0 gap-1.5 rounded-[var(--radius-card)] px-3 py-2 shadow-zynd-low has-[>svg]:gap-x-2"
     >
-      <Info className="size-5" />
-      <AlertDescription className="col-start-2 text-compact leading-relaxed text-current/90">
+      <Info className="size-4" />
+      <AlertDescription className="col-start-2 text-caption leading-snug text-current/90 [&_p:not(:last-child)]:mb-0">
         <p>{message}</p>
         {resend ? (
-          <div className="mt-3 flex justify-end border-t border-info/15 pt-3">
+          <div className="mt-2 flex justify-end border-t border-info/15 pt-2">
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="min-w-[7.5rem] border-info/30 bg-background/80 text-info hover:border-info/40 hover:bg-info/10 hover:text-info disabled:bg-background/60"
+              size="xs"
+              className="min-w-[6.25rem] border-info/30 bg-background/80 text-info hover:border-info/40 hover:bg-info/10 hover:text-info disabled:bg-background/60"
               disabled={!canResend || resend.disabled}
               onClick={resend.onResend}
               aria-label={resendLabel}
@@ -243,7 +243,7 @@ export function OtpInfoBanner({
             >
               {canResend ? (
                 <>
-                  <RefreshCw className="size-3.5" aria-hidden />
+                  <RefreshCw className="size-3" aria-hidden />
                   {resend.readyLabel ?? "Resend code"}
                 </>
               ) : (

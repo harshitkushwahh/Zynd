@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UsersRound } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -145,8 +144,6 @@ export function KycNomineeFamilyGroupDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.kyc.familyGroup.title}
-      description={copy.kyc.familyGroup.description}
-      icon={UsersRound}
       maxWidth="md"
     >
       <div className="space-y-4 px-6 py-5">

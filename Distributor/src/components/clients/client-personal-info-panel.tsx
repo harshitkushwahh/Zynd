@@ -76,6 +76,45 @@ function formatAddressCityLine(
   return [address.city, address.state, address.postalCode].filter(Boolean).join(", ");
 }
 
+function formatAddressSlideHints(
+  address: DistributorClientPersonalInfo["addresses"][number],
+  valueNotAvailable: string,
+): Pick<PersonalInfoSwiperSlide, "hint" | "hintSecondary" | "hintTertiary"> {
+  const street = formatAddressStreet(address);
+  const cityLine = formatAddressCityLine(address);
+  const country = address.country?.trim() || undefined;
+
+  if (street) {
+    return {
+      hint: street,
+      hintSecondary: cityLine || undefined,
+      hintTertiary: country,
+    };
+  }
+
+  if (cityLine) {
+    return {
+      hint: cityLine,
+      hintSecondary: country,
+      hintTertiary: undefined,
+    };
+  }
+
+  if (country) {
+    return {
+      hint: country,
+      hintSecondary: undefined,
+      hintTertiary: undefined,
+    };
+  }
+
+  return {
+    hint: valueNotAvailable,
+    hintSecondary: undefined,
+    hintTertiary: undefined,
+  };
+}
+
 function bankSlideDetails(
   account: DistributorClientPersonalInfo["bankAccounts"][number],
 ): Pick<PersonalInfoSwiperSlide, "hint" | "ifscCode" | "accountType"> {
@@ -107,9 +146,7 @@ export function ClientPersonalInfoPanel({ profile, className }: ClientPersonalIn
   const addressSlides = personalInfo.addresses.map((address) => ({
     id: address.id,
     value: `${address.label} ${copy.addressTitle}`,
-    hint: formatAddressStreet(address) || copy.valueNotAvailable,
-    hintSecondary: formatAddressCityLine(address) || undefined,
-    hintTertiary: address.country ?? undefined,
+    ...formatAddressSlideHints(address, copy.valueNotAvailable),
   }));
 
   return (

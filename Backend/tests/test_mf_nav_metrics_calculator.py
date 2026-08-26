@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.application.mf.nav_metrics_calculator import (
+    compute_cagr_return,
     compute_metrics_for_history,
     compute_period_return,
     nav_on_or_before,
@@ -15,6 +16,25 @@ from app.application.mf.nav_metrics_calculator import (
 def test_compute_period_return() -> None:
     assert compute_period_return(Decimal("110"), Decimal("100")) == Decimal("10")
     assert compute_period_return(Decimal("110"), Decimal("0")) is None
+
+
+def test_compute_cagr_return() -> None:
+    # 100 -> 140 over 3 years = 40% absolute, ~11.87% p.a. CAGR
+    assert compute_cagr_return(Decimal("140"), Decimal("100"), years=Decimal("3")) == Decimal("11.8689")
+    assert compute_cagr_return(Decimal("110"), Decimal("100"), years=Decimal("1")) == Decimal("10")
+    assert compute_cagr_return(Decimal("110"), Decimal("0"), years=Decimal("3")) is None
+
+
+def test_compute_metrics_for_history_uses_cagr_for_multi_year_horizons() -> None:
+    history = [
+        (date(2023, 1, 1), Decimal("100")),
+        (date(2026, 1, 1), Decimal("140")),
+    ]
+    result = compute_metrics_for_history(history)
+    assert result is not None
+    _as_of, metrics = result
+    assert metrics["return_3y"] == Decimal("11.8689")
+    assert metrics["return_5y"] is None
 
 
 def test_nav_on_or_before() -> None:

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Archive, Camera, PencilLine, UsersRound } from "lucide-react";
+import { Archive, Camera, UsersRound } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -125,8 +125,6 @@ export function FamilyGroupEditDialog({
         open={open}
         onOpenChange={handleOpenChange}
         title={copy.familyGroups.editTitle}
-        description={copy.familyGroups.editDescription}
-        icon={PencilLine}
         maxWidth="lg"
         className="max-w-xl"
       >

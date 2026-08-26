@@ -20,27 +20,25 @@ export function SettingsPanelHeader({
   descriptionSingleLine = false,
 }: SettingsPanelHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-      <div className="flex min-w-0 flex-1 items-start gap-4 pr-2">
+    <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-start gap-2.5 pr-2">
         <div
           className={cn(
-            "flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-card)]",
+            "flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)]",
             tone === "destructive"
               ? "bg-destructive/10 text-destructive"
-              : "bg-primary/10 text-primary",
+              : "bg-muted/60 text-muted-foreground",
           )}
         >
-          <Icon className="size-5" />
+          <Icon className="size-4" strokeWidth={2.25} />
         </div>
-        <div className="min-w-0 flex-1 pt-0.5">
-          <h2 className="text-h4 font-semibold text-foreground">{title}</h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-compact font-semibold text-foreground">{title}</h2>
           {description ? (
             <p
               className={cn(
-                "mt-2 text-muted-foreground",
-                descriptionSingleLine
-                  ? "text-compact leading-snug sm:whitespace-nowrap"
-                  : "text-body",
+                "mt-1 text-caption leading-snug text-muted-foreground",
+                descriptionSingleLine && "sm:whitespace-nowrap",
               )}
             >
               {description}

@@ -10,7 +10,11 @@ import { fetchAdminRoles, type AdminRole } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api-client";
 
 
-export function AdminTeamSettingsPanel() {
+export function AdminTeamSettingsPanel({
+  trailingToolbar,
+}: {
+  trailingToolbar?: React.ReactNode;
+}) {
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,8 +42,8 @@ export function AdminTeamSettingsPanel() {
 
   return (
     <div className="space-y-3">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      <UserRoleAssignmentPanel roles={roles} />
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      <UserRoleAssignmentPanel roles={roles} trailingToolbar={trailingToolbar} />
     </div>
   );
 }

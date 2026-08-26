@@ -15,6 +15,8 @@ export function useReferralListQuery() {
   const query = useQuery({
     queryKey: queryKeys.referral.list(),
     queryFn: fetchReferralList,
+    staleTime: 30_000,
+    placeholderData: keepPreviousQueryData,
   });
 
   return {

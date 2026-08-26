@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
+import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { MfFundSearchResultItem } from "@/features/invest/components/mf-fund-search-ui";
 import { MF_FUND_SEARCH_MIN_CHARS, useMfFundSearch } from "@/features/invest/lib/mf-fund-search";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
+import { RiskProfileSearchResultItem } from "@/features/risk-profile/components/risk-profile-search-result-item";
 import {
   Command,
   CommandDialog,
@@ -24,6 +26,9 @@ type DashboardSearchDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
+
+const RISK_PROFILE_ROUTE = DASHBOARD_ROUTES.find((route) => route.id === "risk-profile");
+const RISK_PROFILE_HREF = RISK_PROFILE_ROUTE?.href ?? "/dashboard/risk-profile";
 
 function SearchDialogFooterHint() {
   return (
@@ -49,11 +54,13 @@ export function DashboardSearchDialog({
   onOpenChange,
 }: DashboardSearchDialogProps) {
   const router = useRouter();
+  const riskProfile = useRiskProfileOptional();
   const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled && !route.disabled);
   const [query, setQuery] = useState("");
 
   const trimmedQuery = query.trim();
   const isFundSearch = trimmedQuery.length >= MF_FUND_SEARCH_MIN_CHARS;
+  const hasRiskProfile = Boolean(riskProfile?.hasProfile && riskProfile.profile);
 
   const { results: funds, searching, error: searchError } = useMfFundSearch({
     query,
@@ -69,6 +76,20 @@ export function DashboardSearchDialog({
     });
   }, [navRoutes, trimmedQuery]);
 
+  const showRiskProfileCard = useMemo(() => {
+    if (!hasRiskProfile || !riskProfile?.profile || !trimmedQuery) return false;
+    const normalized = trimmedQuery.toLowerCase();
+    const haystack = `${RISK_PROFILE_ROUTE?.label ?? ""} ${RISK_PROFILE_ROUTE?.description ?? ""} risk profile risk appetite`.toLowerCase();
+    return haystack.includes(normalized);
+  }, [hasRiskProfile, riskProfile?.profile, trimmedQuery]);
+
+  const pagesToShow = useMemo(() => {
+    if (!hasRiskProfile) {
+      return filteredPages.filter((route) => route.id !== "risk-profile");
+    }
+    return filteredPages;
+  }, [filteredPages, hasRiskProfile]);
+
   useEffect(() => {
     if (!open) {
       setQuery("");
@@ -77,11 +98,16 @@ export function DashboardSearchDialog({
 
   const showEmptyState =
     !searching &&
-    ((isFundSearch && funds.length === 0 && filteredPages.length === 0) ||
-      (!isFundSearch && filteredPages.length === 0));
+    ((isFundSearch && funds.length === 0 && pagesToShow.length === 0 && !showRiskProfileCard) ||
+      (!isFundSearch && pagesToShow.length === 0 && !showRiskProfileCard));
 
   const openFund = (fund: (typeof funds)[number]) => {
     router.push(mfFundHref(fund));
+    onOpenChange(false);
+  };
+
+  const openRiskProfilePage = () => {
+    router.push(RISK_PROFILE_HREF);
     onOpenChange(false);
   };
 
@@ -133,9 +159,21 @@ export function DashboardSearchDialog({
             </CommandGroup>
           ) : null}
 
-          {filteredPages.length > 0 ? (
+          {showRiskProfileCard && riskProfile?.profile ? (
+            <CommandGroup heading={copy.dashboard.search.currentProfileHeading} className="px-1">
+              <CommandItem
+                value="risk-profile-current"
+                className="px-2.5 py-2.5"
+                onSelect={openRiskProfilePage}
+              >
+                <RiskProfileSearchResultItem profile={riskProfile.profile} />
+              </CommandItem>
+            </CommandGroup>
+          ) : null}
+
+          {pagesToShow.length > 0 ? (
             <CommandGroup heading={copy.dashboard.search.pagesHeading} className="px-1">
-              {filteredPages.map((route) => {
+              {pagesToShow.map((route) => {
                 const Icon = route.icon;
 
                 return (

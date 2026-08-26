@@ -95,6 +95,7 @@ class InvestFundSummaryResponse(BaseModel):
     sebi_category: Optional[str] = None
     min_sip_amount_inr: Optional[float] = None
     min_lumpsum_amount_inr: Optional[float] = None
+    sip_allowed: bool = True
     is_featured: Optional[bool] = None
     display_order: Optional[int] = None
     health_badges: list[str] = Field(default_factory=list)
@@ -256,7 +257,9 @@ class MfOrderResponse(BaseModel):
     checkout_id: Optional[str] = None
     product_id: str
     product_name: Optional[str] = None
+    product_slug: Optional[str] = None
     amc_name: Optional[str] = None
+    amc_slug: Optional[str] = None
     amc_logo_url: Optional[str] = None
     order_type: str
     amount_inr: float
@@ -276,6 +279,15 @@ class MfOrderResponse(BaseModel):
     payout_bank_account_masked: Optional[str] = None
     payout_bank_ifsc_code: Optional[str] = None
     payout_bank_name: Optional[str] = None
+
+
+class MfPaymentStatusResponse(BaseModel):
+    outcome: Literal["success", "failed", "pending", "unclear"]
+    fp_payment_status: Optional[str] = None
+    repaired: bool = False
+    message: Optional[str] = None
+    order: Optional[MfOrderResponse] = None
+    checkout: Optional["MfCheckoutResponse"] = None
 
 
 class MfOrderListResponse(BaseModel):
@@ -330,7 +342,7 @@ class UpsertMfCartItemRequest(BaseModel):
     investment_type: Literal["lumpsum", "sip"] = "lumpsum"
     installment_day: Optional[int] = Field(default=None, ge=1, le=28)
     frequency: Literal["monthly", "daily"] = "monthly"
-    number_of_installments: Optional[int] = Field(default=None, ge=1, le=60)
+    number_of_installments: Optional[int] = Field(default=None, ge=1, le=999)
 
 
 class BulkUpsertMfCartItemLine(BaseModel):
@@ -392,7 +404,7 @@ class MfMandateResponse(BaseModel):
     fp_mandate_id: Optional[int] = None
     bank_account_old_id: int
     mandate_type: str
-    mandate_limit: int
+    mandate_limit: Optional[int] = None
     fp_mandate_status: Optional[str] = None
     auth_url: Optional[str] = None
     next_action: Optional[str] = None
@@ -400,6 +412,10 @@ class MfMandateResponse(BaseModel):
     failure_reason: Optional[str] = None
     created_at: Optional[str] = None
     approved_at: Optional[str] = None
+    investor_bank_account_id: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_masked: Optional[str] = None
+    bank_ifsc_code: Optional[str] = None
 
 
 class MfMandateListResponse(BaseModel):
@@ -411,12 +427,48 @@ class CreateMfSipPlanRequest(BaseModel):
     amount_inr: float = Field(gt=0)
     frequency: Literal["monthly", "daily"] = "monthly"
     installment_day: Optional[int] = Field(default=None, ge=1, le=28)
-    number_of_installments: int = Field(ge=1, le=60)
+    number_of_installments: int = Field(ge=1, le=999)
     mandate_id: Optional[UUID] = None
     idempotency_key: str = Field(min_length=8, max_length=128)
     bank_account_id: Optional[UUID] = None
     family_goal_id: Optional[UUID] = None
     mandate_type: Literal["upi", "nach"] = "upi"
+
+
+class ValidateMfSipPlanRequest(BaseModel):
+    product_id: UUID
+    amount_inr: float = Field(gt=0)
+    frequency: Literal["monthly", "daily"] = "monthly"
+    installment_day: Optional[int] = Field(default=None, ge=1, le=28)
+    number_of_installments: int = Field(ge=1, le=999)
+
+
+class ValidateMfSipPlanResponse(BaseModel):
+    valid: bool = True
+    frequency: str
+    installment_day: Optional[int] = None
+    number_of_installments: int
+    min_amount_inr: Optional[float] = None
+
+
+class MfSipPlanBankSwitchSummary(BaseModel):
+    eligible: bool = False
+    used: bool = False
+    in_progress: bool = False
+    reason: Optional[str] = None
+    target_bank_account_id: Optional[str] = None
+
+
+class MfSipFirstInstallmentSummary(BaseModel):
+    status: Literal["not_applicable", "pending", "paid", "failed"] = "not_applicable"
+    amount_inr: Optional[float] = None
+    payment_url: Optional[str] = None
+
+
+class MfSipPlanBankSwitchRequest(BaseModel):
+    bank_account_id: UUID
+    mandate_type: Literal["upi", "nach"] = "upi"
+    idempotency_key: str = Field(min_length=8, max_length=128)
 
 
 class MfSipPlanResponse(BaseModel):
@@ -437,6 +489,9 @@ class MfSipPlanResponse(BaseModel):
     mandate: Optional[MfMandateResponse] = None
     mandate_auth_url: Optional[str] = None
     next_action: Optional[str] = None
+    bank_switch: Optional[MfSipPlanBankSwitchSummary] = None
+    first_installment: Optional[MfSipFirstInstallmentSummary] = None
+    payment_url: Optional[str] = None
     failure_code: Optional[str] = None
     failure_reason: Optional[str] = None
     created_at: Optional[str] = None
@@ -445,6 +500,19 @@ class MfSipPlanResponse(BaseModel):
 
 class MfSipPlanListResponse(BaseModel):
     plans: list[MfSipPlanResponse]
+
+
+class MfSipPlanEventResponse(BaseModel):
+    from_status: Optional[str] = None
+    to_status: str
+    source: str
+    payload: Optional[dict] = None
+    created_at: Optional[str] = None
+
+
+class MfSipPlanJourneyResponse(BaseModel):
+    plan: MfSipPlanResponse
+    events: list[MfSipPlanEventResponse]
 
 
 class MfSipCartCheckoutResponse(BaseModel):
@@ -483,6 +551,14 @@ class PortfolioGrowthPointResponse(BaseModel):
     invested: Optional[float] = None
 
 
+class PortfolioUpcomingSipResponse(BaseModel):
+    plan_id: str
+    product_id: str
+    product_name: Optional[str] = None
+    amount_inr: float
+    next_installment_date: Optional[str] = None
+
+
 class PortfolioSummaryResponse(BaseModel):
     status: str
     has_pending_orders: bool = False
@@ -496,6 +572,7 @@ class PortfolioSummaryResponse(BaseModel):
     holdings_count: int = 0
     active_sips_count: int = 0
     monthly_sip_inr: float = 0
+    upcoming_sips: list[PortfolioUpcomingSipResponse] = Field(default_factory=list)
     allocation: list[PortfolioAllocationSliceResponse] = Field(default_factory=list)
     growth: list[PortfolioGrowthPointResponse] = Field(default_factory=list)
     as_on: Optional[str] = None
@@ -564,6 +641,8 @@ class PortfolioHoldingDetailResponse(BaseModel):
     day_change_pct: Optional[float] = None
     xirr_pct: Optional[float] = None
     redeem_bank_label: Optional[str] = None
+    redeem_bank_name: Optional[str] = None
+    redeem_bank_ifsc: Optional[str] = None
     nominee_name: Optional[str] = None
     transactions: list[PortfolioHoldingTransactionResponse] = Field(default_factory=list)
 
@@ -711,6 +790,10 @@ class InvestorBankAccountResponse(BaseModel):
     failure: Optional[InvestorBankAccountFailure] = None
     readiness_verified: bool = False
     external_bank_account_id: Optional[str] = None
+    is_payment_ready: bool = False
+    active_sip_count: int = 0
+    blocks_removal: bool = False
+    blocks_primary_switch: bool = False
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

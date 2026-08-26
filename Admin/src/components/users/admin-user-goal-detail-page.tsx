@@ -130,8 +130,8 @@ export function AdminUserGoalDetailPage({
             { label: "Goal detail" },
           ])}
         />
-        <AdminFeedbackMessage variant="destructive">{error || "Goal not found."}</AdminFeedbackMessage>
-        <Button variant="outline" render={<Link href={goalsTabHref} />}>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error || "Goal not found."}</AdminFeedbackMessage>
+        <Button nativeButton={false} variant="outline" render={<Link href={goalsTabHref} />}>
           Back to goals
         </Button>
       </div>

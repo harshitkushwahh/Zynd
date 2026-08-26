@@ -9,7 +9,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
-from app.application.mf.nav_metrics_calculator import compute_metrics_for_history
+from app.application.mf.nav_metrics_calculator import (
+    RETURN_CAGR_YEARS,
+    RETURN_PERIODS,
+    compute_metrics_for_history,
+    resolve_period_start_nav,
+)
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
     FundNavMetrics,
@@ -40,18 +45,34 @@ async def _load_metrics(session: AsyncSession, fund_id: int) -> FundNavMetrics |
     )
 
 
+def _growth_multiplier_from_return_pct(horizon_key: str, pct: Decimal) -> float:
+    """Convert stored return % to a lump-sum growth multiplier for the horizon."""
+    years = RETURN_CAGR_YEARS.get(f"return_{horizon_key}")
+    if years is not None:
+        return float((Decimal("1") + (pct / Decimal("100"))) ** years)
+    return float(Decimal("1") + (pct / Decimal("100")))
+
+
 def _build_horizons_from_history(history: list[tuple]) -> tuple[date | None, dict[str, dict]]:
     computed = compute_metrics_for_history(history)
     if not computed:
         return None, {}
     as_of_date, metrics = computed
+    sorted_history = sorted(history, key=lambda row: row[0])
+    _, latest_nav = sorted_history[-1]
     horizons: dict[str, dict] = {}
     for key in ("return_3m", "return_6m", "return_1y", "return_3y", "return_5y"):
         horizon_key = key.replace("return_", "")
         pct = metrics.get(key)
         if pct is None:
             continue
-        multiplier = float(Decimal("1") + (pct / Decimal("100")))
+        period_days = RETURN_PERIODS[key]
+        match = resolve_period_start_nav(sorted_history, as_of_date, period_days)
+        if match is None:
+            multiplier = _growth_multiplier_from_return_pct(horizon_key, pct)
+        else:
+            _, prior_nav = match
+            multiplier = float(latest_nav / prior_nav)
         horizons[horizon_key] = {"return_pct": float(pct), "multiplier": multiplier}
     return as_of_date, horizons
 
@@ -69,7 +90,7 @@ def _build_horizons_from_metrics(metrics: FundNavMetrics) -> tuple[date, dict[st
         if pct is None:
             continue
         pct_val = Decimal(str(pct))
-        multiplier = float(Decimal("1") + (pct_val / Decimal("100")))
+        multiplier = _growth_multiplier_from_return_pct(horizon_key, pct_val)
         horizons[horizon_key] = {"return_pct": float(pct_val), "multiplier": multiplier}
     return metrics.as_of_date, horizons
 

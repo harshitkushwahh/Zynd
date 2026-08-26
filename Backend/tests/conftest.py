@@ -428,12 +428,57 @@ async def db_session() -> AsyncSession:
                 "ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS state_name VARCHAR(80) DEFAULT 'Maharashtra' NOT NULL"
             )
         )
+        await conn.execute(
+            text(
+                """
+                DO $$ BEGIN
+                    CREATE TYPE distributor_branch_status AS ENUM (
+                        'pending_approval', 'active', 'rejected'
+                    );
+                EXCEPTION
+                    WHEN duplicate_object THEN null;
+                END $$;
+                """
+            )
+        )
+        await conn.execute(
+            text("ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS branch_code VARCHAR(16)")
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE distributor_branches
+                ADD COLUMN IF NOT EXISTS status distributor_branch_status
+                DEFAULT 'active' NOT NULL
+                """
+            )
+        )
+        await conn.execute(
+            text("ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS created_by_user_id UUID")
+        )
+        await conn.execute(
+            text("ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS approved_by_user_id UUID")
+        )
+        await conn.execute(
+            text("ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ")
+        )
+        await conn.execute(
+            text("ALTER TABLE distributor_branches ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(240)")
+        )
+        await conn.execute(
+            text("ALTER TABLE distributor_branches ALTER COLUMN manager_user_id DROP NOT NULL")
+        )
         await conn.run_sync(
             __import__(
                 "app.infrastructure.persistence.distributor_state_head_models",
                 fromlist=["DistributorStateHead"],
             ).DistributorStateHead.__table__.create,
             checkfirst=True,
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE distributor_state_heads ADD COLUMN IF NOT EXISTS status VARCHAR(16) DEFAULT 'active' NOT NULL"
+            )
         )
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)

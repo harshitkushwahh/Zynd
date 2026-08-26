@@ -33,7 +33,7 @@ type PortfolioRedeemUnitsJourneyDialogProps = {
 };
 
 const DIALOG_CLOSE_MS = 320;
-const DIALOG_SURFACE_CLASS = "overflow-hidden rounded-[var(--radius-card)] border border-border bg-card";
+const DIALOG_SURFACE_CLASS = "overflow-hidden rounded-[var(--radius-card)] border border-border bg-muted/10";
 const SECTION_HEADER_CLASS = "border-b border-border bg-muted/20 px-4 py-3";
 
 function DetailTile({
@@ -54,7 +54,7 @@ function DetailTile({
   return (
     <div
       className={cn(
-        "flex min-w-0 items-start gap-3 rounded-[var(--radius-card)] border border-border bg-card p-3.5 shadow-zynd-low",
+        "flex min-w-0 items-start gap-3 rounded-[var(--radius-card)] border border-border bg-muted/10 p-3.5 shadow-zynd-low",
         className,
       )}
     >

@@ -8,7 +8,7 @@ import { Table, TableCard } from "@/components/core/table";
 import type { MfSipPlan } from "@/features/invest/api/invest-api";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfSipPlanStatusBadge } from "@/features/invest/components/mf-sip-plan-status-badge";
-import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
+import { formatInr, formatSipNextInstallmentDate, formatSipScheduleSummary, isSipNextInstallmentNoData } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -45,12 +45,7 @@ const HEADER_LABEL_CLASS =
   "[&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground";
 
 function formatFrequency(plan: MfSipPlan) {
-  const frequency = (plan.frequency ?? "").trim().toLowerCase();
-  if (frequency === "daily") return copy.mySips.frequencyDaily;
-  if (plan.installment_day) {
-    return copy.mySips.installmentDay.replace("{day}", String(plan.installment_day));
-  }
-  return copy.mySips.frequencyMonthly;
+  return formatSipScheduleSummary(plan);
 }
 
 function FundCell({ plan }: { plan: MfSipPlan }) {
@@ -216,11 +211,19 @@ export function MfMySipsTable({
                   <Table.Cell className={cn(BODY_CELL_CLASS, "text-compact text-muted-foreground")}>
                     {formatFrequency(plan)}
                   </Table.Cell>
-                  <Table.Cell className={cn(BODY_CELL_CLASS, "text-compact text-muted-foreground")}>
-                    {formatDate(plan.next_installment_date)}
+                  <Table.Cell
+                    className={cn(
+                      BODY_CELL_CLASS,
+                      "text-compact",
+                      isSipNextInstallmentNoData(plan)
+                        ? "font-medium uppercase tracking-wide text-muted-foreground"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {formatSipNextInstallmentDate(plan)}
                   </Table.Cell>
                   <Table.Cell className={BODY_CELL_CLASS}>
-                    <MfSipPlanStatusBadge status={plan.status ?? "UNKNOWN"} />
+                    <MfSipPlanStatusBadge plan={plan} />
                   </Table.Cell>
                 </Table.Row>
               )}

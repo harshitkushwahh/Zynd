@@ -13,6 +13,7 @@ import { AddDistributorPanPanel } from "@/components/add-distributor/add-distrib
 import { AddDistributorProfilePhotoPanel } from "@/components/add-distributor/add-distributor-profile-photo-panel";
 import { AddDistributorReviewPanel } from "@/components/add-distributor/add-distributor-review-panel";
 import { AddDistributorWizardPanelShell } from "@/components/add-distributor/add-distributor-wizard-panel-shell";
+import { DistributorManagerBranchRequired } from "@/components/dashboard/distributor-manager-branch-required";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
@@ -615,6 +616,7 @@ export function AddDistributorWizard() {
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
       <DistributorPageHeader title={ZYND_MITRA_COPY.add} />
 
+      <DistributorManagerBranchRequired>
       {hydrating ? (
         <div className="add-distributor-wizard distributor-wizard-page--enter flex min-h-[320px] items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -906,6 +908,7 @@ export function AddDistributorWizard() {
         </div>
       </div>
       )}
+      </DistributorManagerBranchRequired>
     </div>
   );
 }

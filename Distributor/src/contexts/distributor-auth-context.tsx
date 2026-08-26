@@ -24,11 +24,15 @@ import {
   resendDistributorLoginSms,
   type DistributorLoginFlowResponse,
 } from "@/lib/distributor-auth-api";
-import { getManagerBranchLabel, isBranchManager } from "@/lib/distributor-persona";
+import { getManagerBranchLabel, isBranchManager, canManageBranchBook } from "@/lib/distributor-persona";
 import type { DistributorSessionUser } from "@/lib/distributor-session-types";
+import {
+  clearPersistedDistributorSession,
+  persistDistributorSession,
+  readPersistedDistributorSession,
+} from "@/lib/distributor-session-storage";
+import { clearPinUnlock } from "@/lib/distributor-pin-unlock-storage";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
-
-const SESSION_STORAGE_KEY = "zynd-distributor-session";
 
 type DistributorAuthContextValue = {
   user: DistributorSessionUser | null;
@@ -36,6 +40,7 @@ type DistributorAuthContextValue = {
   loading: boolean;
   displayName: string;
   isBranchManager: boolean;
+  canManageBranchBook: boolean;
   branchLabel: string;
   signIn: (email: string, password: string) => Promise<DistributorLoginFlowResponse>;
   verifyMfa: (mfaToken: string, totpCode: string) => Promise<void>;
@@ -48,10 +53,6 @@ type DistributorAuthContextValue = {
 
 const DistributorAuthContext = createContext<DistributorAuthContextValue | null>(null);
 
-function persistSession(user: DistributorSessionUser) {
-  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-}
-
 export function DistributorAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<DistributorSessionUser | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -61,14 +62,32 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function hydrate() {
-      const { sessionUser, permissions: nextPermissions } = await bootstrapDistributorSession();
+      const cachedUser = readPersistedDistributorSession();
+
+      const { sessionUser, permissions: nextPermissions, reason, tokenRefreshed } =
+        await bootstrapDistributorSession();
       if (cancelled) return;
+
       if (sessionUser) {
-        persistSession(sessionUser);
+        persistDistributorSession(sessionUser);
         setUser(sessionUser);
         setPermissions(nextPermissions);
+        if (nextPermissions.length === 0 && tokenRefreshed) {
+          void fetchDistributorPermissions()
+            .then((permissions) => {
+              if (!cancelled) setPermissions(permissions);
+            })
+            .catch(() => undefined);
+        }
+      } else if (reason === "expired") {
+        clearPersistedDistributorSession();
+        setUser(null);
+        setPermissions([]);
+      } else if (!tokenRefreshed && cachedUser) {
+        // Offline — keep the last known profile only when the session could not be refreshed.
+        setUser(cachedUser);
       } else {
-        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+        clearPersistedDistributorSession();
         setUser(null);
         setPermissions([]);
       }
@@ -85,7 +104,8 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
     const result = await distributorLogin(email, password);
     if (isAuthenticatedResponse(result)) {
       const session = await completeDistributorLogin(result.user);
-      persistSession(session.sessionUser);
+      clearPinUnlock(session.sessionUser.id);
+      persistDistributorSession(session.sessionUser);
       setUser(session.sessionUser);
       setPermissions(session.permissions);
     }
@@ -94,16 +114,18 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
 
   const verifyMfa = useCallback(async (mfaToken: string, totpCode: string) => {
     const sessionUser = await distributorVerifyMfa(mfaToken, totpCode);
+    clearPinUnlock(sessionUser.id);
     const nextPermissions = await fetchDistributorPermissions();
-    persistSession(sessionUser);
+    persistDistributorSession(sessionUser);
     setUser(sessionUser);
     setPermissions(nextPermissions);
   }, []);
 
   const verifyLoginSms = useCallback(async (loginToken: string, otp: string) => {
     const sessionUser = await distributorVerifyLoginSms(loginToken, otp);
+    clearPinUnlock(sessionUser.id);
     const nextPermissions = await fetchDistributorPermissions();
-    persistSession(sessionUser);
+    persistDistributorSession(sessionUser);
     setUser(sessionUser);
     setPermissions(nextPermissions);
   }, []);
@@ -119,7 +141,7 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Clear local session even if the server logout fails.
     }
-    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    clearPersistedDistributorSession();
     setUser(null);
     setPermissions([]);
   }, []);
@@ -127,7 +149,7 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       const session = await refreshDistributorSessionUser();
-      persistSession(session.sessionUser);
+      persistDistributorSession(session.sessionUser);
       setUser(session.sessionUser);
       setPermissions(session.permissions);
       return session.sessionUser;
@@ -143,6 +165,7 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
       loading,
       displayName: user?.name ?? ZYND_MITRA_COPY.defaultRoleLabel,
       isBranchManager: isBranchManager(user),
+      canManageBranchBook: canManageBranchBook(user),
       branchLabel: getManagerBranchLabel(user),
       signIn,
       verifyMfa,

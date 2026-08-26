@@ -56,6 +56,45 @@ async def test_confirm_pan_names_updates_split_without_revalidation(db_session) 
     await db_session.refresh(journey)
     assert journey.pan_draft_json["firstName"] == "POOJA"
     assert journey.poa_pan_preverify_id == "pv_existing"
+    await db_session.refresh(user)
+    assert user.first_name == "POOJA"
+    assert user.last_name == "DHAMELIYA"
+
+
+@pytest.mark.asyncio
+async def test_confirm_pan_names_syncs_name_for_mitra_onboarded_user(db_session) -> None:
+    user = User(email="mitra-client@example.com", phone="9876543210")
+    db_session.add(user)
+    await db_session.flush()
+
+    journey = KycJourneyState(
+        user_id=user.id,
+        pan_verification_status="verified",
+        pan_draft_json={
+            "panNumber": "EOCPA3056Q",
+            "firstName": "HARSHIT",
+            "lastName": "KUSHWAH",
+            "middleName": "",
+            "fullName": "HARSHIT KUSHWAH",
+            "dateOfBirth": "1995-01-01",
+            "panCategory": "individual",
+        },
+    )
+    db_session.add(journey)
+    await db_session.flush()
+
+    result = await confirm_pan_names(
+        db_session,
+        user=user,
+        first_name="HARSHIT",
+        middle_name="",
+        last_name="KUSHWAH",
+    )
+
+    assert result["success"] is True
+    await db_session.refresh(user)
+    assert user.first_name == "HARSHIT"
+    assert user.last_name == "KUSHWAH"
 
 
 @pytest.mark.asyncio
@@ -107,6 +146,44 @@ async def test_confirm_pan_names_revalidates_when_full_name_changes(db_session, 
     assert result["panDraft"]["fullName"] == "POOJA KUMAR DHAMELIYA"
     await db_session.refresh(journey)
     assert journey.poa_pan_preverify_id == "pv_revalidated"
+
+
+@pytest.mark.asyncio
+async def test_confirm_pan_names_allows_single_word_registry_name(db_session) -> None:
+    user = User(email="pan-single@example.com", first_name="Test", last_name="User")
+    db_session.add(user)
+    await db_session.flush()
+
+    journey = KycJourneyState(
+        user_id=user.id,
+        pan_verification_status="verified",
+        pan_draft_json={
+            "panNumber": "ABCDE1234F",
+            "firstName": "ARUN",
+            "lastName": "",
+            "middleName": "",
+            "fullName": "ARUN",
+            "singleNameOnly": True,
+            "dateOfBirth": "1990-02-19",
+            "panCategory": "individual",
+        },
+        poa_pan_preverify_id="pv_existing",
+    )
+    db_session.add(journey)
+    await db_session.flush()
+
+    result = await confirm_pan_names(
+        db_session,
+        user=user,
+        first_name="ARUN",
+        middle_name="",
+        last_name="",
+    )
+
+    assert result["success"] is True
+    assert result["panDraft"]["firstName"] == "ARUN"
+    assert result["panDraft"]["lastName"] == ""
+    assert result["panDraft"]["fullName"] == "ARUN"
 
 
 @pytest.mark.asyncio

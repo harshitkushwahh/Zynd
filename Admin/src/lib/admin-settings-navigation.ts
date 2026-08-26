@@ -4,9 +4,7 @@ import {
   Laptop,
   Mail,
   Shield,
-  UserCog,
   UserRound,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -16,8 +14,6 @@ export type AdminSettingsSection =
   | "change-email"
   | "mfa"
   | "devices"
-  | "team"
-  | "invitations"
   | "preferences";
 
 export type AdminSettingsNavGroup = {
@@ -84,28 +80,10 @@ export const ADMIN_SETTINGS_NAV: AdminSettingsNavItem[] = [
     group: "account",
   },
   {
-    id: "team",
-    label: "Manage team",
-    title: "Manage team",
-    description: "Internal admins, roles, and workspace access",
-    icon: Users,
-    group: "workspace",
-    permissions: ["rbac.manage"],
-  },
-  {
-    id: "invitations",
-    label: "Invitations",
-    title: "Invitations",
-    description: "Pending invites for admins and team members",
-    icon: UserCog,
-    group: "workspace",
-    permissions: ["rbac.manage"],
-  },
-  {
     id: "preferences",
     label: "Preferences",
     title: "Console preferences",
-    description: "Notifications and console defaults",
+    description: "Notifications and table display options",
     icon: Bell,
     group: "platform",
   },

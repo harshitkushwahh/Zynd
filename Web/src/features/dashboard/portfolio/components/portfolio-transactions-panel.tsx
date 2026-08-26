@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
 import { getPortfolioTabMeta } from "@/features/dashboard/portfolio/lib/portfolio-page-tab-meta";
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils";
 const TRANSACTIONS_PAGE_SIZE = 25;
 
 export function PortfolioTransactionsPanel() {
-  const { orders, showSkeleton, errorMessage, isPending, isFetching, refetch } = useMfOrdersQuery();
+  const { orders, showSkeleton, hasResolved, errorMessage, isPending, isFetching, refetch } = useMfOrdersQuery();
   const [filters, setFilters] = useState<MfTransactionFilters>(EMPTY_MF_TRANSACTION_FILTERS);
   const [visibleCount, setVisibleCount] = useState(TRANSACTIONS_PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -87,73 +88,77 @@ export function PortfolioTransactionsPanel() {
   }, [journeyOpen]);
 
   const transactionsTabMeta = getPortfolioTabMeta("transactions");
-  const showEmpty = !showSkeleton && !errorMessage && orders.length === 0;
+  const showEmpty = hasResolved && !errorMessage && orders.length === 0;
   const showFilteredEmpty =
-    !showSkeleton && !errorMessage && orders.length > 0 && filteredOrders.length === 0;
-  const showTable = !showSkeleton && !errorMessage && filteredOrders.length > 0;
+    hasResolved && !errorMessage && orders.length > 0 && filteredOrders.length === 0;
+  const showTable = hasResolved && !errorMessage && filteredOrders.length > 0;
 
   return (
     <>
-      {showSkeleton ? <MfTransactionsPageSkeleton /> : null}
+      {!hasResolved && showSkeleton ? <MfTransactionsPageSkeleton /> : null}
 
-      {!showSkeleton && errorMessage ? (
-        <LoadErrorCard
-          title={copy.transactions.loadFailedTitle}
-          description={errorMessage}
-          retryLabel={copy.transactions.retry}
-          retryLoading={isFetching}
-          onRetry={() => void refetch()}
-        />
-      ) : null}
+      {hasResolved ? (
+        <DashboardContentFade>
+          {errorMessage ? (
+            <LoadErrorCard
+              title={copy.transactions.loadFailedTitle}
+              description={errorMessage}
+              retryLabel={copy.transactions.retry}
+              retryLoading={isFetching}
+              onRetry={() => void refetch()}
+            />
+          ) : null}
 
-      {showEmpty ? (
-        <PortfolioTabEmptyState
-          icon={transactionsTabMeta.icon}
-          title={copy.transactions.empty}
-          description={copy.transactions.description}
-        />
-      ) : null}
-
-      {showFilteredEmpty ? (
-        <>
-          <MfTransactionsFilterBar filters={filters} onChange={setFilters} />
-          <div className="mt-6">
+          {!errorMessage && showEmpty ? (
             <PortfolioTabEmptyState
               icon={transactionsTabMeta.icon}
-              title={copy.transactions.emptyFiltered}
+              title={copy.transactions.empty}
               description={copy.transactions.description}
             />
-          </div>
-        </>
-      ) : null}
+          ) : null}
 
-      {showTable ? (
-        <>
-          <MfTransactionsFilterBar filters={filters} onChange={setFilters} />
+          {!errorMessage && showFilteredEmpty ? (
+            <>
+              <MfTransactionsFilterBar filters={filters} onChange={setFilters} />
+              <div className="mt-6">
+                <PortfolioTabEmptyState
+                  icon={transactionsTabMeta.icon}
+                  title={copy.transactions.emptyFiltered}
+                  description={copy.transactions.description}
+                />
+              </div>
+            </>
+          ) : null}
 
-          <div className="relative mt-6 min-w-0">
-            <div
-              className={cn(
-                "relative rounded-[var(--radius-card)] border border-border bg-card",
-                MF_TRANSACTIONS_TABLE_FRAME_CLASS,
-              )}
-            >
-              <MfTransactionsTable
-                orders={visibleOrders}
-                totalCount={filteredOrders.length}
-                loadingMore={loadingMore}
-                hasMore={hasMore}
-                ariaLabel={copy.transactions.title}
-                scrollContainerRef={scrollContainerRef}
-                loadMoreRef={loadMoreRef}
-                onOrderClick={(order: MfOrder) => {
-                  setSelectedOrderId(order.order_id);
-                  setJourneyOpen(true);
-                }}
-              />
-            </div>
-          </div>
-        </>
+          {!errorMessage && showTable ? (
+            <>
+              <MfTransactionsFilterBar filters={filters} onChange={setFilters} />
+
+              <div className="relative mt-6 min-w-0">
+                <div
+                  className={cn(
+                    "relative rounded-[var(--radius-card)] border border-border bg-card",
+                    MF_TRANSACTIONS_TABLE_FRAME_CLASS,
+                  )}
+                >
+                  <MfTransactionsTable
+                    orders={visibleOrders}
+                    totalCount={filteredOrders.length}
+                    loadingMore={loadingMore}
+                    hasMore={hasMore}
+                    ariaLabel={copy.transactions.title}
+                    scrollContainerRef={scrollContainerRef}
+                    loadMoreRef={loadMoreRef}
+                    onOrderClick={(order: MfOrder) => {
+                      setSelectedOrderId(order.order_id);
+                      setJourneyOpen(true);
+                    }}
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DashboardContentFade>
       ) : null}
 
       <MfOrderJourneyDialog

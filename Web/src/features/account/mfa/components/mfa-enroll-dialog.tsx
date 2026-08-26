@@ -1,20 +1,22 @@
 "use client";
 
-import Link from "next/link";
-import { Check, Copy, Download, ShieldCheck } from "lucide-react";
-import { useState } from "react";
-import QRCode from "react-qr-code";
+import { Check, Copy, Download } from "lucide-react";
+import { useCallback, useState } from "react";
 
-import { AuthSubmitFooter } from "@/components/auth/auth-shared";
+import { AuthSubmitFooter, OtpInput } from "@/components/auth/auth-shared";
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { useAuth } from "@/contexts/auth-context";
+import { MfaBrandedQrImage } from "@/features/account/mfa/components/mfa-branded-qr-image";
+import { MfaEnrollHeroImage } from "@/features/account/mfa/components/mfa-enroll-hero-image";
 import { ApiError } from "@/lib/api-client";
 import { mfaEnrollConfirm, mfaEnrollStart } from "@/lib/auth-api";
 import { saveMfaBackupCodes } from "@/features/account/mfa/storage/mfa-backup-codes-storage";
 import { downloadBackupCodesJson } from "@/features/account/mfa/lib/backup-codes-download";
 import { copy } from "@/shared/config/copy";
+import { useResetWhenDialogOpens } from "@/hooks/use-reset-when-dialog-opens";
 import { cn } from "@/lib/utils";
 
 type MfaEnrollDialogProps = {
@@ -48,15 +50,11 @@ const STEP_COPY: Record<EnrollStep, { title: string; description: string }> = {
 
 const START_POINTS = [...copy.mfa.enroll.benefits];
 
-function MfaEnrollProgress({ step }: { step: EnrollStep }) {
+function MfaEnrollProgress({ step, compact = false }: { step: EnrollStep; compact?: boolean }) {
   const currentIndex = STEPS.findIndex((item) => item.id === step);
 
   return (
-    <div className="mb-3">
-      <span className="inline-flex items-center rounded-[var(--radius-control)] border border-border bg-muted/50 px-2 py-0.5 text-caption font-medium text-muted-foreground">
-        Step {currentIndex + 1} of {STEPS.length}
-      </span>
-      <div className="mt-2 flex gap-1.5">
+    <div className={cn("flex gap-1.5", compact ? "mb-1" : "mb-3")}>
         {STEPS.map((item, index) => {
           const done = index < currentIndex;
           const active = index === currentIndex;
@@ -72,7 +70,6 @@ function MfaEnrollProgress({ step }: { step: EnrollStep }) {
             />
           );
         })}
-      </div>
     </div>
   );
 }
@@ -88,24 +85,25 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<"secret" | "backup" | null>(null);
   const [enrollToken, setEnrollToken] = useState("");
-  const [qrUri, setQrUri] = useState("");
   const [manualSecret, setManualSecret] = useState("");
+  const [qrPngSrc, setQrPngSrc] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     setStep("start");
     setError("");
     setCopied(null);
     setEnrollToken("");
-    setQrUri("");
     setManualSecret("");
+    setQrPngSrc(null);
     setTotpCode("");
     setBackupCodes([]);
-  };
+  }, []);
+
+  useResetWhenDialogOpens(open, reset);
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) reset();
     onOpenChange(next);
   };
 
@@ -115,8 +113,10 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
     try {
       const result = await mfaEnrollStart();
       setEnrollToken(result.enroll_token);
-      setQrUri(result.qr_uri);
       setManualSecret(result.manual_secret);
+      setQrPngSrc(
+        result.qr_png_base64 ? `data:image/png;base64,${result.qr_png_base64}` : null,
+      );
       setStep("confirm");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.mfa.enroll.couldNotStart);
@@ -164,13 +164,12 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
       open={open}
       onOpenChange={handleOpenChange}
       title={title}
-      description={description}
-      icon={ShieldCheck}
       maxWidth="lg"
-      headerDensity="compact"
     >
-      <div className="px-5 py-4">
-          <MfaEnrollProgress step={step} />
+      <div className={cn("px-5 pb-4", step === "start" ? "pt-4" : "pt-1.5")}>
+          {step === "start" ? <MfaEnrollHeroImage className="mb-4" /> : null}
+
+          <MfaEnrollProgress step={step} compact={step !== "start"} />
 
           {step === "start" ? (
             <div className="space-y-5">
@@ -196,70 +195,70 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
           ) : null}
 
           {step === "confirm" ? (
-            <div className="space-y-3">
-              <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-3 shadow-zynd-low">
-                {qrUri ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="rounded-[var(--radius-control)] border border-border bg-white p-2 shadow-zynd-low">
-                      <QRCode value={qrUri} size={112} />
-                    </div>
-                  </div>
-                ) : null}
+            <div className="space-y-2.5">
+              {enrollToken ? (
+                  <MfaBrandedQrImage
+                    kind="enroll"
+                    token={enrollToken}
+                    initialSrc={qrPngSrc}
+                    alt={copy.mfa.enroll.confirmTitle}
+                    className="-mt-0.5"
+                  />
+              ) : null}
 
-                <div className="relative my-3 flex items-center justify-center gap-3">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="shrink-0 text-center text-caption text-muted-foreground">
-                    {copy.mfa.orEnterManually}
-                  </span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-
-                <div className="mx-auto w-full max-w-sm rounded-[var(--radius-control)] border border-border bg-background px-2.5 py-2 text-center">
-                  <div className="mb-1 flex items-center justify-center gap-2">
-                    <p className="text-caption font-medium text-foreground">Setup key</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      className="shrink-0"
-                      aria-label="Copy setup key"
-                      onClick={handleCopySecret}
-                    >
-                      {copied === "secret" ? (
-                        <Check className="size-3.5 text-success" />
-                      ) : (
-                        <Copy className="size-3.5" />
-                      )}
-                    </Button>
-                  </div>
-                  <p className="break-all font-mono text-caption leading-snug">{manualSecret}</p>
-                </div>
+              <div className="relative flex items-center justify-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="shrink-0 text-center text-caption text-muted-foreground">
+                  {copy.mfa.orEnterManually}
+                </span>
+                <div className="h-px flex-1 bg-border" />
               </div>
 
-              <div>
-                <label
-                  htmlFor="mfa-enroll-code"
-                  className="mb-1 block text-caption font-medium text-foreground"
+              <div className="mx-auto flex w-full max-w-sm items-center gap-2 rounded-[var(--radius-control)] border border-border bg-muted/20 px-2.5 py-2">
+                <p className="min-w-0 flex-1 break-all text-center font-mono text-caption leading-snug">
+                  {manualSecret}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="shrink-0"
+                  aria-label="Copy setup key"
+                  onClick={handleCopySecret}
                 >
-                  Verification code
-                </label>
-                <input
-                  id="mfa-enroll-code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="000000"
-                  value={totpCode}
-                  onChange={(event) =>
-                    setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                  }
-                  maxLength={6}
-                  className="auth-input-underline w-full text-center tracking-[0.35em] text-compact font-medium"
-                />
+                  {copied === "secret" ? (
+                    <Check className="size-3.5 text-success" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                </Button>
+              </div>
+
+              <div className="rounded-[var(--radius-xl)] border border-border bg-muted/30 p-4 shadow-zynd-low">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="mfa-enroll-code" className="text-caption font-medium">
+                      Verification code
+                    </Label>
+                    <p className="text-caption leading-relaxed text-muted-foreground">
+                      {copy.mfa.enroll.confirmDescription}
+                    </p>
+                  </div>
+                  <OtpInput
+                    id="mfa-enroll-code"
+                    value={totpCode}
+                    error={!!error}
+                    onChange={(value) => {
+                      setTotpCode(value);
+                      if (error) setError("");
+                    }}
+                  />
+                </div>
               </div>
 
               <FieldMessage message={error} />
 
-              <AuthSubmitFooter className="space-y-2 pt-2">
+              <AuthSubmitFooter className="pt-2">
                 <Button
                   className="w-full"
                   onClick={confirmEnrollment}
@@ -267,113 +266,75 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
                 >
                   {loading ? copy.mfa.verifying : copy.mfa.enroll.verifyAndEnable}
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-8 w-full"
-                  disabled={loading}
-                  onClick={() => {
-                    setStep("start");
-                    setError("");
-                    setTotpCode("");
-                  }}
-                >
-                  Back
-                </Button>
               </AuthSubmitFooter>
             </div>
           ) : null}
 
           {step === "backup" ? (
-            <div className="space-y-4">
-              <div className="flex flex-col items-center rounded-[var(--radius-card)] border border-success/25 bg-success/5 px-4 py-5 text-center">
-                <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-success/15 text-success">
-                  <Check className="size-6" strokeWidth={2.5} />
+            <div className="mt-2 space-y-3">
+              <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-success/25 bg-success/5 px-3 py-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+                  <Check className="size-5" strokeWidth={2.5} />
                 </div>
-                <p className="text-compact font-semibold text-foreground">
-                  {copy.mfa.enroll.successTitle}
-                </p>
-                <p className="mt-1 max-w-sm text-caption leading-relaxed text-muted-foreground">
-                  {copy.mfa.enroll.successDescription}
-                </p>
+                <div className="min-w-0 text-left">
+                  <p className="text-compact font-semibold text-foreground">
+                    {copy.mfa.enroll.successTitle}
+                  </p>
+                  <p className="mt-0.5 text-caption leading-snug text-muted-foreground">
+                    {copy.mfa.enroll.successDescription}
+                  </p>
+                </div>
               </div>
 
-              <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-4 shadow-zynd-low">
-                <div className="mb-3 space-y-1">
-                  <p className="text-caption font-medium text-foreground">
-                    {copy.mfa.enroll.backupTitle}
-                  </p>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    {copy.mfa.enroll.backupDescription}
-                  </p>
+              <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-3">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-caption font-medium text-foreground">
+                      {copy.mfa.enroll.backupTitle}
+                    </p>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      {copy.mfa.enroll.backupDescription}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Copy all backup codes"
+                      onClick={handleCopyBackupCodes}
+                    >
+                      {copied === "backup" ? (
+                        <Check className="size-3.5 text-success" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label={copy.mfa.enroll.downloadBackupCodesJson}
+                      onClick={() => downloadBackupCodesJson(backupCodes, user?.email)}
+                    >
+                      <Download className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="mb-3 grid grid-cols-2 gap-2 font-mono text-compact">
+                <div className="grid grid-cols-2 gap-1.5 font-mono text-caption">
                   {backupCodes.map((code) => (
                     <span
                       key={code}
-                      className="rounded-[var(--radius-control)] border border-border bg-background px-2.5 py-2 text-center"
+                      className="rounded-[var(--radius-control)] border border-border bg-muted/20 px-2 py-1.5 text-center"
                     >
                       {code}
                     </span>
                   ))}
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={handleCopyBackupCodes}>
-                    {copied === "backup" ? (
-                      <>
-                        <Check className="size-3.5 text-success" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="size-3.5" />
-                        Copy all
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => downloadBackupCodesJson(backupCodes, user?.email)}
-                  >
-                    <Download className="size-3.5" />
-                    {copy.mfa.enroll.downloadBackupCodesJson}
-                  </Button>
-                </div>
               </div>
 
-              {user && !user.pin_enrolled ? (
-                <div className="rounded-[var(--radius-card)] border border-border bg-background p-4">
-                  <p className="text-compact font-medium text-foreground">
-                    {copy.mfa.enroll.nextPinTitle}
-                  </p>
-                  <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
-                    {copy.mfa.enroll.nextPinDescription}
-                  </p>
-                  <Button asChild className="mt-3 w-full sm:w-auto">
-                    <Link href="/dashboard/settings?section=security">
-                      {copy.mfa.enroll.nextPinAction}
-                    </Link>
-                  </Button>
-                </div>
-              ) : user?.fund_movement_eligible ? (
-                <div className="rounded-[var(--radius-card)] border border-success/25 bg-success/5 p-4">
-                  <p className="text-compact font-medium text-foreground">
-                    {copy.mfa.enroll.investReadyTitle}
-                  </p>
-                  <p className="mt-1 text-caption leading-relaxed text-muted-foreground">
-                    {copy.mfa.enroll.investReadyDescription}
-                  </p>
-                  <Button asChild className="mt-3 w-full sm:w-auto">
-                    <Link href="/dashboard/invest">{copy.mfa.enroll.investReadyAction}</Link>
-                  </Button>
-                </div>
-              ) : null}
-
-              <AuthSubmitFooter hint={copy.mfa.backupCodesOfflineHint}>
+              <AuthSubmitFooter>
                 <Button
                   className="w-full"
                   onClick={() => {

@@ -64,7 +64,7 @@ function ResultMetric({
   emphasize?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-[var(--radius-control)] border border-border/60 bg-background/80 px-3 py-2.5">
+    <div className="min-w-0 rounded-[var(--radius-control)] border border-border/60 bg-muted/20 px-3 py-2.5">
       <p className="text-[10px] font-medium tracking-wide text-muted-foreground">{label}</p>
       <p
         className={cn(
@@ -116,18 +116,18 @@ function PlanIllustrationHeader({
   if (illustrationUrl) {
     return (
       <div className="w-full shrink-0 border-b border-border/70 px-4 pb-4 pt-4 sm:px-5">
-        <div className="relative overflow-hidden rounded-[var(--radius-card)] border border-border/70 bg-background shadow-sm">
+        <div className="relative overflow-hidden rounded-[var(--radius-card)] border border-border/70 bg-popover shadow-sm">
           <div className="relative aspect-[4/3] w-full">
             <GoalTemplateIllustrationImage
               src={illustrationUrl}
               priority
             />
             <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-background via-background/75 to-transparent"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-popover via-popover/75 to-transparent"
               aria-hidden
             />
             <div className="absolute inset-x-0 bottom-0 flex flex-col items-center px-4 pb-3.5 pt-8 text-center">
-              <div className="flex size-9 items-center justify-center rounded-full border border-border/50 bg-white shadow-sm dark:bg-background">
+              <div className="flex size-9 items-center justify-center rounded-full border border-border/50 bg-popover shadow-sm">
                 <Icon
                   className={cn(
                     "size-4",
@@ -228,7 +228,7 @@ function SidebarPlanDurationCard({
     <div className="border-t border-border/70 px-4 py-3">
       <div className="flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-border/70 bg-muted/15 px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-2px)] border border-border/60 bg-background">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-[calc(var(--radius-control)-2px)] border border-border/60 bg-muted/20">
             <CalendarDays className={cn("size-3.5", accentIconClass)} aria-hidden />
           </div>
           <p className="truncate text-[11px] font-medium text-foreground">{label}</p>
@@ -443,7 +443,7 @@ function SidebarUnifiedPlanCard({
     : [];
 
   return (
-    <div className={cn("flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-background", className)}>
+    <div className={cn("flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-popover", className)}>
       {customSidebarTitle ? (
         <CustomGoalNameSidebarHeader title={customSidebarTitle} accentTheme={accentTheme} />
       ) : templateIllustration ? (

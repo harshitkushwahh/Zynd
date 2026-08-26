@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Fingerprint, LockKeyhole } from "lucide-react";
 
 import { DistributorPinInput } from "@/components/auth/distributor-pin-input";
+import { DistributorZyndPinForgotDialog } from "@/components/auth/distributor-zynd-pin-forgot-dialog";
 import { OtpInput } from "@/components/auth/otp-input";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
@@ -22,8 +23,6 @@ import { ApiError } from "@/lib/api-client";
 import {
   deletePinBiometricCredential,
   fetchPinBiometricStatus,
-  resetZyndPinWithOtp,
-  sendZyndPinResetOtp,
   setupZyndPin,
 } from "@/lib/distributor-pin-api";
 import {
@@ -35,8 +34,6 @@ import {
   getLocalPinBiometricCredentialId,
   hasLocalPinBiometricCredential,
 } from "@/lib/distributor-pin-biometric-storage";
-import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
-
 function isValidOtp(value: string) {
   return /^\d{6}$/.test(value);
 }
@@ -59,11 +56,6 @@ export function DistributorZyndPinSettingsSection() {
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
 
-  const [forgotStep, setForgotStep] = useState<"send" | "reset">("send");
-  const [resetOtp, setResetOtp] = useState("");
-  const [resetPin, setResetPin] = useState("");
-  const [resetConfirmPin, setResetConfirmPin] = useState("");
-
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [deviceEnrolled, setDeviceEnrolled] = useState(false);
   const [credentialRecordId, setCredentialRecordId] = useState<string | null>(null);
@@ -83,22 +75,9 @@ export function DistributorZyndPinSettingsSection() {
     setLoading(false);
   };
 
-  const resetForgotState = () => {
-    setForgotStep("send");
-    setResetOtp("");
-    setResetPin("");
-    setResetConfirmPin("");
-    setError("");
-    setLoading(false);
-  };
-
   useEffect(() => {
     if (!setupOpen) resetSetupState();
   }, [setupOpen]);
-
-  useEffect(() => {
-    if (!forgotOpen) resetForgotState();
-  }, [forgotOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,43 +150,6 @@ export function DistributorZyndPinSettingsSection() {
     }
   };
 
-  const handleSendResetOtp = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await sendZyndPinResetOtp();
-      setForgotStep("reset");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not send reset code.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResetPin = async () => {
-    if (resetPin !== resetConfirmPin) {
-      setError("PIN entries do not match.");
-      return;
-    }
-    if (resetPin.length !== 4 || !isValidOtp(resetOtp)) {
-      setError("Enter the email code and a 4-digit PIN.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    try {
-      await resetZyndPinWithOtp({ otp: resetOtp, pin: resetPin, confirmPin: resetConfirmPin });
-      await refreshUser();
-      pinContext?.markUnlocked();
-      setForgotOpen(false);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not reset PIN.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleEnableBiometric = async () => {
     if (!user?.id) return;
     setBiometricLoading(true);
@@ -252,56 +194,58 @@ export function DistributorZyndPinSettingsSection() {
 
   return (
     <>
-      <div className="space-y-4 rounded-[var(--radius-card)] border border-border p-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
-              <LockKeyhole className="size-5" />
+      <div className="space-y-4">
+        <div className="rounded-[var(--radius-card)] border border-border p-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
+                <LockKeyhole className="size-5" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-compact font-semibold text-foreground">PIN lock</p>
+                <p className="text-caption text-muted-foreground">
+                  {!mfaEnabled
+                    ? "Enable two-factor authentication first, then set a 4-digit PIN to lock the console after inactivity."
+                    : pinEnrolled
+                      ? "Your PIN is required to unlock the Zynd Mitra console on this device."
+                      : "Set a 4-digit PIN to lock the console after inactivity."}
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <p className="text-compact font-semibold text-foreground">PIN lock</p>
-              <p className="text-caption text-muted-foreground">
-                {!mfaEnabled
-                  ? "Enable two-factor authentication first, then set a 4-digit PIN to lock the console after inactivity."
-                  : pinEnrolled
-                    ? "Your PIN is required to unlock the Zynd Mitra console on this device."
-                    : "Set a 4-digit PIN to lock the console after inactivity."}
-              </p>
-            </div>
-          </div>
 
-          <div className="flex flex-wrap gap-2">
-            {!pinEnrolled ? (
-              <DistributorActionButton
-                type="button"
-                variant="primary"
-                size="sm"
-                disabled={!mfaEnabled}
-                onClick={() => setSetupOpen(true)}
-              >
-                Set up PIN
-              </DistributorActionButton>
-            ) : (
-              <DistributorActionButton
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setForgotOpen(true)}
-              >
-                Reset PIN
-              </DistributorActionButton>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {!pinEnrolled ? (
+                <DistributorActionButton
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  disabled={!mfaEnabled}
+                  onClick={() => setSetupOpen(true)}
+                >
+                  Set up PIN
+                </DistributorActionButton>
+              ) : (
+                <DistributorActionButton
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setForgotOpen(true)}
+                >
+                  Reset PIN
+                </DistributorActionButton>
+              )}
+            </div>
           </div>
         </div>
 
         {pinEnrolled ? (
-          <div className="rounded-[var(--radius-card)] border border-border bg-muted/10 p-4">
+          <div className="rounded-[var(--radius-card)] border border-border p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-start gap-3">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
                   <Fingerprint className="size-5" />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <p className="text-compact font-semibold text-foreground">Fingerprint unlock</p>
                   <p className="text-caption text-muted-foreground">
                     {biometricAvailable
@@ -431,62 +375,7 @@ export function DistributorZyndPinSettingsSection() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
-        <DialogContent className="max-w-md gap-0 p-0">
-          <DialogHeader className="border-b border-border px-5 py-4">
-            <DialogTitle>Reset PIN lock</DialogTitle>
-            <DialogDescription>
-              {ZYND_MITRA_COPY.consoleName} will email you a verification code to set a new PIN.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 px-5 py-5">
-            {forgotStep === "send" ? (
-              <>
-                {error ? <DistributorFeedbackMessage variant="error">{error}</DistributorFeedbackMessage> : null}
-                <DistributorActionButton
-                  type="button"
-                  variant="primary"
-                  className="w-full"
-                  disabled={loading}
-                  onClick={() => void handleSendResetOtp()}
-                >
-                  {loading ? "Sending…" : "Send reset code"}
-                </DistributorActionButton>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label>Email verification code</Label>
-                  <OtpInput value={resetOtp} onChange={setResetOtp} />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-center text-caption font-medium text-foreground">New PIN</p>
-                  <DistributorPinInput value={resetPin} onChange={setResetPin} />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-center text-caption font-medium text-foreground">Confirm PIN</p>
-                  <DistributorPinInput value={resetConfirmPin} onChange={setResetConfirmPin} />
-                </div>
-                {error ? <DistributorFeedbackMessage variant="error">{error}</DistributorFeedbackMessage> : null}
-                <DistributorActionButton
-                  type="button"
-                  variant="primary"
-                  className="w-full"
-                  disabled={
-                    loading ||
-                    !isValidOtp(resetOtp) ||
-                    resetPin.length !== 4 ||
-                    resetConfirmPin.length !== 4
-                  }
-                  onClick={() => void handleResetPin()}
-                >
-                  {loading ? "Saving…" : "Reset PIN"}
-                </DistributorActionButton>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DistributorZyndPinForgotDialog open={forgotOpen} onOpenChange={setForgotOpen} />
     </>
   );
 }

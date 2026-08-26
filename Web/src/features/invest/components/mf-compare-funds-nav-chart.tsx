@@ -6,11 +6,12 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import type { InvestFundDetail } from "@/features/invest/api/invest-api";
@@ -161,7 +162,7 @@ export function MfCompareFundsNavChart({
       ) : (
         <div className={cn(MF_CALC_PANEL_CLASS, "space-y-4 p-3 pt-4 sm:p-4 sm:pt-5")}>
           <div className="w-full min-w-0 pb-1 [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible">
-            <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
+            <RechartsMeasuredContainer className="h-full w-full" width="100%" height={CHART_HEIGHT} minWidth={0}>
               <LineChart data={chartRows} margin={{ top: 12, right: 12, left: 4, bottom: 28 }}>
                 <CartesianGrid
                   stroke="color-mix(in srgb, var(--border) 80%, transparent)"
@@ -210,7 +211,7 @@ export function MfCompareFundsNavChart({
                   />
                 ))}
               </LineChart>
-            </ResponsiveContainer>
+            </RechartsMeasuredContainer>
           </div>
           <CompareChartLegend funds={funds} />
         </div>

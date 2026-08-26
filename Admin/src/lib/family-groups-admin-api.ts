@@ -1,4 +1,11 @@
+import { pickUserRef, userRefToPath } from "@/lib/admin-user-ref";
 import { apiRequest } from "@/lib/api-client";
+
+function familyGroupUserPath(userRef: string) {
+  return encodeURIComponent(
+    userRefToPath(pickUserRef({ client_id: userRef, user_id: userRef })),
+  );
+}
 
 export type AdminFamilyGroupSummary = {
   id: string;
@@ -277,8 +284,10 @@ export async function fetchAdminFamilyGroupAuditLogs(params?: {
   );
 }
 
-export async function fetchAdminUserFamilyGroups(userId: string) {
-  return apiRequest<AdminUserFamilyGroups>(`/admin/family-groups/users/${userId}`);
+export async function fetchAdminUserFamilyGroups(userRef: string) {
+  return apiRequest<AdminUserFamilyGroups>(
+    `/admin/family-groups/users/${familyGroupUserPath(userRef)}`,
+  );
 }
 
 export async function adminArchiveFamilyGroup(groupId: string) {
@@ -287,8 +296,9 @@ export async function adminArchiveFamilyGroup(groupId: string) {
   });
 }
 
-export async function adminRemoveFamilyGroupMember(groupId: string, userId: string) {
-  return apiRequest<{ ok: boolean }>(`/admin/family-groups/${groupId}/members/${userId}/remove`, {
-    method: "POST",
-  });
+export async function adminRemoveFamilyGroupMember(groupId: string, userRef: string) {
+  return apiRequest<{ ok: boolean }>(
+    `/admin/family-groups/${groupId}/members/${familyGroupUserPath(userRef)}/remove`,
+    { method: "POST" },
+  );
 }

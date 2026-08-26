@@ -5,9 +5,18 @@ import { useRouter } from "next/navigation";
 import type { SortDescriptor } from "react-aria-components";
 
 import { Table, TableCard } from "@/components/core/table";
-import { portfolioHoldingDetailHref } from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
+import type { MfOrder, MfSipPlan } from "@/features/invest/api/invest-api";
 import {
-  portfolioHoldingAmcInitials,
+  formatHoldingSipPoolSummary,
+  poolSipsForHolding,
+} from "@/features/dashboard/portfolio/lib/portfolio-holding-sip";
+import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import {
+  portfolioHoldingDetailHref,
+  portfolioUpcomingHoldingDetailHref,
+  portfolioUpcomingHoldingSlug,
+} from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
+import {
   type PortfolioHoldingItem,
 } from "@/features/dashboard/portfolio/lib/portfolio-types";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
@@ -15,13 +24,24 @@ import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-type PortfolioHoldingsTableRow = PortfolioHoldingItem & {
+type PortfolioHoldingTableRow = PortfolioHoldingItem & {
+  kind: "holding";
   tableId: string;
   returnInr: number;
 };
 
+type PortfolioUpcomingTableRow = {
+  kind: "upcoming";
+  tableId: string;
+  order: MfOrder;
+};
+
+type PortfolioHoldingsTableRow = PortfolioHoldingTableRow | PortfolioUpcomingTableRow;
+
 type PortfolioHoldingsTableProps = {
   holdings: PortfolioHoldingItem[];
+  upcomingOrders?: MfOrder[];
+  sipPlans?: MfSipPlan[];
   className?: string;
 };
 
@@ -47,23 +67,67 @@ function toneClass(tone: "positive" | "negative" | "muted") {
   );
 }
 
-function FundCell({ holding }: { holding: PortfolioHoldingsTableRow }) {
+function HoldingFundCell({
+  holding,
+  sipPlans = [],
+}: {
+  holding: PortfolioHoldingTableRow;
+  sipPlans?: MfSipPlan[];
+}) {
+  const sipPool = poolSipsForHolding(
+    { fundName: holding.fundName, isin: holding.isin },
+    sipPlans,
+  );
+  const sipSummary = sipPool ? formatHoldingSipPoolSummary(sipPool) : null;
+
   return (
     <div className="flex min-w-0 items-start gap-3">
-      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-[10px] font-semibold text-muted-foreground">
-        {portfolioHoldingAmcInitials(holding.amcName)}
-      </div>
+      <MfFundAmcAvatar
+        amcLogoUrl={holding.amcLogoUrl}
+        amcName={holding.amcName}
+        size="sm"
+        className="mt-0.5 shrink-0 rounded-[var(--radius-control)]"
+      />
       <div className="min-w-0">
         <p className="font-medium leading-snug break-words whitespace-normal text-foreground">
           {holding.fundName}
         </p>
         <p className="mt-0.5 text-caption text-muted-foreground">{holding.amcName}</p>
+        {sipSummary ? (
+          <p className="mt-1 text-caption text-primary">
+            {copy.dashboard.portfolio.holdingSipMonthlyTotal.replace("{amount}", sipSummary.monthly)}
+            {sipSummary.nextDate
+              ? ` · ${copy.dashboard.portfolio.holdingSipNextDebit.replace("{date}", sipSummary.nextDate)}`
+              : ""}
+          </p>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function ValueCell({ holding }: { holding: PortfolioHoldingsTableRow }) {
+function UpcomingFundCell({ order }: { order: MfOrder }) {
+  const amcName = order.amc_name ?? copy.mutualFunds.unknownAmc;
+
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      <MfFundAmcAvatar
+        amcLogoUrl={order.amc_logo_url}
+        amcName={amcName}
+        size="sm"
+        className="mt-0.5 shrink-0 rounded-[var(--radius-control)]"
+      />
+      <div className="min-w-0">
+        <p className="font-medium leading-snug break-words whitespace-normal text-foreground">
+          {order.product_name ?? copy.mutualFunds.unknownFund}
+        </p>
+        <p className="mt-0.5 text-caption text-muted-foreground">{amcName}</p>
+      </div>
+    </div>
+  );
+}
+
+function HoldingValueCell({ holding }: { holding: PortfolioHoldingTableRow }) {
   return (
     <div className="text-right">
       <p className="font-semibold tabular-nums text-foreground">{formatInr(holding.currentValueInr)}</p>
@@ -74,7 +138,15 @@ function ValueCell({ holding }: { holding: PortfolioHoldingsTableRow }) {
   );
 }
 
-function ReturnsCell({ holding }: { holding: PortfolioHoldingsTableRow }) {
+function UpcomingValueCell({ order }: { order: MfOrder }) {
+  return (
+    <div className="text-right">
+      <p className="font-semibold tabular-nums text-foreground">{formatInr(order.amount_inr)}</p>
+    </div>
+  );
+}
+
+function HoldingReturnsCell({ holding }: { holding: PortfolioHoldingTableRow }) {
   const returnDisplay = formatSignedReturn(holding.returnPct);
 
   return (
@@ -87,20 +159,62 @@ function ReturnsCell({ holding }: { holding: PortfolioHoldingsTableRow }) {
   );
 }
 
-export function PortfolioHoldingsTable({ holdings, className }: PortfolioHoldingsTableProps) {
-  const router = useRouter();
+function UpcomingMetricCell() {
   const overview = copy.dashboard.overview;
+
+  return (
+    <div className="text-right">
+      <p className="text-caption font-semibold uppercase tracking-wide text-warning">
+        {overview.holdingsUpcomingLabel}
+      </p>
+    </div>
+  );
+}
+
+function rowFundName(row: PortfolioHoldingsTableRow) {
+  return row.kind === "holding"
+    ? row.fundName
+    : row.order.product_name ?? copy.mutualFunds.unknownFund;
+}
+
+function rowValueInr(row: PortfolioHoldingsTableRow) {
+  return row.kind === "holding" ? row.currentValueInr : row.order.amount_inr;
+}
+
+function rowReturnPct(row: PortfolioHoldingsTableRow) {
+  return row.kind === "holding" ? row.returnPct : -1;
+}
+
+function rowAllocationPct(row: PortfolioHoldingsTableRow) {
+  return row.kind === "holding" ? row.allocationPct : -1;
+}
+
+export function PortfolioHoldingsTable({
+  holdings,
+  upcomingOrders = [],
+  sipPlans = [],
+  className,
+}: PortfolioHoldingsTableProps) {
+  const router = useRouter();
+  const portfolioCopy = copy.dashboard.portfolio;
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor | undefined>(undefined);
 
-  const rows = useMemo<PortfolioHoldingsTableRow[]>(
-    () =>
-      holdings.map((holding) => ({
-        ...holding,
-        tableId: holding.id,
-        returnInr: holding.currentValueInr - holding.investedInr,
-      })),
-    [holdings],
-  );
+  const rows = useMemo<PortfolioHoldingsTableRow[]>(() => {
+    const holdingRows: PortfolioHoldingTableRow[] = holdings.map((holding) => ({
+      kind: "holding",
+      ...holding,
+      tableId: holding.id,
+      returnInr: holding.currentValueInr - holding.investedInr,
+    }));
+
+    const upcomingRows: PortfolioUpcomingTableRow[] = upcomingOrders.map((order) => ({
+      kind: "upcoming",
+      tableId: `upcoming:${portfolioUpcomingHoldingSlug(order)}`,
+      order,
+    }));
+
+    return [...holdingRows, ...upcomingRows];
+  }, [holdings, upcomingOrders]);
 
   const sortedRows = useMemo(() => {
     if (!sortDescriptor?.column) return rows;
@@ -110,20 +224,24 @@ export function PortfolioHoldingsTable({ holdings, className }: PortfolioHolding
 
     return [...rows].sort((a, b) => {
       if (column === "fund") {
-        return a.fundName.localeCompare(b.fundName) * direction;
+        return rowFundName(a).localeCompare(rowFundName(b)) * direction;
       }
       if (column === "value") {
-        return (a.currentValueInr - b.currentValueInr) * direction;
+        return (rowValueInr(a) - rowValueInr(b)) * direction;
       }
       if (column === "returns") {
-        return (a.returnPct - b.returnPct) * direction;
+        return (rowReturnPct(a) - rowReturnPct(b)) * direction;
       }
       if (column === "allocation") {
-        return (a.allocationPct - b.allocationPct) * direction;
+        return (rowAllocationPct(a) - rowAllocationPct(b)) * direction;
       }
       return 0;
     });
   }, [rows, sortDescriptor]);
+
+  if (rows.length === 0) {
+    return null;
+  }
 
   return (
     <div className={cn("min-w-0 overflow-hidden", className)}>
@@ -136,7 +254,7 @@ export function PortfolioHoldingsTable({ holdings, className }: PortfolioHolding
       >
         <div className="overflow-x-auto overscroll-x-contain">
           <Table
-            aria-label={overview.portfolioHoldingsCount}
+            aria-label={portfolioCopy.holdingsTitle}
             size="sm"
             className={TABLE_LAYOUT_CLASS}
             sortDescriptor={sortDescriptor}
@@ -153,7 +271,7 @@ export function PortfolioHoldingsTable({ holdings, className }: PortfolioHolding
               </Table.Head>
               <Table.Head
                 id="value"
-                label={overview.portfolioCurrentValue}
+                label={copy.dashboard.overview.portfolioCurrentValue}
                 allowsSorting
                 className={cn(
                   COL_VALUE,
@@ -165,7 +283,7 @@ export function PortfolioHoldingsTable({ holdings, className }: PortfolioHolding
               />
               <Table.Head
                 id="returns"
-                label={overview.portfolioReturns}
+                label={copy.dashboard.overview.portfolioReturns}
                 allowsSorting
                 className={cn(
                   COL_RETURNS,
@@ -177,7 +295,7 @@ export function PortfolioHoldingsTable({ holdings, className }: PortfolioHolding
               />
               <Table.Head
                 id="allocation"
-                label={overview.portfolioAllocationTitle}
+                label={copy.dashboard.overview.portfolioAllocationTitle}
                 allowsSorting
                 className={cn(
                   COL_ALLOCATION,
@@ -190,25 +308,46 @@ export function PortfolioHoldingsTable({ holdings, className }: PortfolioHolding
             </Table.Header>
 
             <Table.Body className="[&>tr:first-child>td]:border-t-0" items={sortedRows}>
-              {(holding) => (
+              {(row) => (
                 <Table.Row
-                  id={holding.tableId}
-                  className="cursor-pointer hover:bg-muted/30"
-                  onAction={() => router.push(portfolioHoldingDetailHref(holding.id))}
+                  id={row.tableId}
+                  className={cn(
+                    "cursor-pointer hover:bg-muted/30",
+                    row.kind === "upcoming" && "bg-muted/15",
+                  )}
+                  onAction={() =>
+                    router.push(
+                      row.kind === "holding"
+                        ? portfolioHoldingDetailHref(row.id)
+                        : portfolioUpcomingHoldingDetailHref(row.order),
+                    )
+                  }
                 >
                   <Table.Cell className={BODY_CELL_CLASS}>
-                    <FundCell holding={holding} />
+                    {row.kind === "holding" ? (
+                      <HoldingFundCell holding={row} sipPlans={sipPlans} />
+                    ) : (
+                      <UpcomingFundCell order={row.order} />
+                    )}
                   </Table.Cell>
                   <Table.Cell className={BODY_CELL_CLASS}>
-                    <ValueCell holding={holding} />
+                    {row.kind === "holding" ? (
+                      <HoldingValueCell holding={row} />
+                    ) : (
+                      <UpcomingValueCell order={row.order} />
+                    )}
                   </Table.Cell>
                   <Table.Cell className={BODY_CELL_CLASS}>
-                    <ReturnsCell holding={holding} />
+                    {row.kind === "holding" ? <HoldingReturnsCell holding={row} /> : <UpcomingMetricCell />}
                   </Table.Cell>
                   <Table.Cell className={cn(BODY_CELL_CLASS, "text-right")}>
-                    <p className="font-semibold tabular-nums text-foreground">
-                      {holding.allocationPct.toFixed(1)}%
-                    </p>
+                    {row.kind === "holding" ? (
+                      <p className="font-semibold tabular-nums text-foreground">
+                        {row.allocationPct.toFixed(1)}%
+                      </p>
+                    ) : (
+                      <UpcomingMetricCell />
+                    )}
                   </Table.Cell>
                 </Table.Row>
               )}

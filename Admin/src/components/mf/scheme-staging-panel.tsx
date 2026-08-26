@@ -176,6 +176,7 @@ function StagingDialog({
   description,
   onClose,
   children,
+  headerAside,
   size = "detail",
 }: {
   open: boolean;
@@ -183,6 +184,7 @@ function StagingDialog({
   description?: string;
   onClose: () => void;
   children: React.ReactNode;
+  headerAside?: React.ReactNode;
   size?: AdminDialogSize;
 }) {
   return (
@@ -194,6 +196,7 @@ function StagingDialog({
       icon={Layers}
       iconTone="info"
       size={size}
+      headerAside={headerAside}
     >
       {children}
     </AdminDetailDialog>
@@ -336,8 +339,8 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
 
   return (
     <section className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <div
         className={cn(
@@ -447,8 +450,7 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
         description="Select a Cybrilla ingest batch to review and promote."
         onClose={() => setBatchesDialogOpen(false)}
         size="wide"
-      >
-        <div className="mb-3 flex justify-end">
+        headerAside={
           <Button
             variant="outline"
             size="icon"
@@ -458,7 +460,8 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
           >
             <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
           </Button>
-        </div>
+        }
+      >
         <AdminDataTable minWidth="md">
           <AdminTableHeader>
             <tr>

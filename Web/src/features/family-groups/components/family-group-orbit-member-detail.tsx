@@ -9,14 +9,14 @@ import type { FamilyGroupMemberPreview } from "@/features/family-groups/api/fami
 import { FamilyMemberRoleBadge } from "@/features/family-groups/components/family-member-role-badge";
 import {
   familyMemberInitials,
-  FAMILY_GROUP_CARD_RADIUS_CLASS,
   FAMILY_GROUP_CONTROL_RADIUS_CLASS,
+  FAMILY_GROUP_HERO_RADIUS_CLASS,
 } from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 const ORBIT_MEMBER_DETAIL_SURFACE_CLASS = cn(
-  FAMILY_GROUP_CARD_RADIUS_CLASS,
+  FAMILY_GROUP_HERO_RADIUS_CLASS,
   "border border-primary-foreground/15",
 );
 const ORBIT_MEMBER_DETAIL_INNER_CLASS = cn(

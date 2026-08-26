@@ -208,8 +208,8 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
 
   return (
     <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <AdminSearchInput
@@ -253,7 +253,7 @@ export function AdminKycReviewPanel({ hasDownload, hasVerify }: AdminKycReviewPa
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <Avatar className="size-11 border border-border">
-                <AvatarFallback className="bg-primary/10 text-primary">
+                <AvatarFallback>
                   {userInitials(review.email)}
                 </AvatarFallback>
               </Avatar>

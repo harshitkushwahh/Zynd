@@ -56,13 +56,26 @@ export async function fetchMfaBackupCodesStatus() {
   }>("/auth/mfa/backup-codes/status");
 }
 
-export async function mfaDisable(payload: { currentPassword: string; totpCode?: string }) {
-  return apiRequest<{ disabled: boolean }>("/auth/mfa/disable", {
+export async function mfaResetStart(currentTotpCode: string) {
+  return apiRequest<{
+    reset_token: string;
+    qr_uri: string;
+    manual_secret: string;
+    expires_in: number;
+  }>("/auth/mfa/reset/start", {
     method: "POST",
-    body: JSON.stringify({
-      current_password: payload.currentPassword,
-      totp_code: payload.totpCode ?? null,
-    }),
+    body: JSON.stringify({ current_totp_code: currentTotpCode }),
+  });
+}
+
+export async function mfaResetConfirm(resetToken: string, totpCode: string) {
+  return apiRequest<{
+    enrolled: boolean;
+    backup_codes: string[];
+    mfa_enrolled_at: string | null;
+  }>("/auth/mfa/reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ reset_token: resetToken, totp_code: totpCode }),
   });
 }
 

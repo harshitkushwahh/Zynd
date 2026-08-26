@@ -93,11 +93,6 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
     title: "Work attendance",
     description: "",
   },
-  compliance: {
-    iconName: "clipboardCheck",
-    title: "Compliance",
-    description: "",
-  },
   leads: {
     iconName: "userRoundPlus",
     title: "Leads",

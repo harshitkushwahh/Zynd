@@ -167,6 +167,7 @@ class Settings(BaseSettings):
     webauthn_origins: str = ""
     refresh_cookie_name: str = "zynd_refresh_token"
     refresh_cookie_name_admin: str = "zynd_admin_refresh_token"
+    refresh_cookie_name_distributor: str = "zynd_distributor_refresh_token"
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: str = "lax"
 
@@ -287,12 +288,22 @@ class Settings(BaseSettings):
     zynd_mf_scheme_sync_batch_size: int = 100
     zynd_mf_scheme_staging_enabled: bool = True
     zynd_mf_scheme_promote_auto: bool = False
+    zynd_mf_ops_alert_emails: str = ""
+    zynd_mf_pipeline_audit_enabled: bool = True
+    zynd_mf_pipeline_manual_window_enabled: bool = True
+    zynd_mf_pipeline_manual_window_start_ist: str = "00:00"
+    zynd_mf_pipeline_manual_window_end_ist: str = "18:00"
+    zynd_mf_pipeline_window_enforce_in_dev: bool = False
+    zynd_mf_pipeline_auto_resume_enabled: bool = True
+    zynd_mf_pipeline_auto_resume_poll_seconds: int = 60
+    zynd_mf_pipeline_auto_resume_max_attempts: int = 3
+    zynd_mf_pipeline_max_skip_steps: int = 20
     zynd_mf_scheme_staging_ingest_cron: str = "0 20 * * *"
     zynd_mf_scheme_staging_validate_cron: str = "2 20 * * *"
     zynd_mf_scheme_staging_promote_cron: str = "5 20 * * *"
     zynd_mf_nav_ingestion_enabled: bool = True
     zynd_mf_nav_cron: str = "0 21 * * *"
-    zynd_mf_amfi_nav_url: str = "https://www.amfiindia.com/spages/NAVAll.txt"
+    zynd_mf_amfi_nav_url: str = "https://portal.amfiindia.com/spages/NAVAll.txt"
     zynd_mf_fetch_timeout_seconds: int = 60
     zynd_mf_nav_batch_size: int = 500
     zynd_mf_nav_write_chunk_size: int = 50
@@ -363,6 +374,9 @@ class Settings(BaseSettings):
     zynd_mf_invest_cache_search_ttl_seconds: int = 300
     zynd_mf_invest_cache_config_ttl_seconds: int = 900
     zynd_mf_invest_cache_calc_ttl_seconds: int = 86400
+
+    admin_search_cache_enabled: bool = True
+    admin_search_cache_ttl_seconds: int = 60
     zynd_mf_portfolio_cache_ttl_seconds: int = 300
     zynd_mf_amfi_scheme_master_enabled: bool = True
     zynd_mf_amfi_scheme_master_cron: str = "1 21 * * *"
@@ -384,13 +398,19 @@ class Settings(BaseSettings):
     zynd_mf_mandate_sync_interval_seconds: int = 300
     zynd_mf_order_status_sync_enabled: bool = True
     zynd_mf_order_payment_gateway: str = "ondc"
+    zynd_mf_fp_user_ip_fallback: str = ""
     zynd_mf_cart_max_items: int = 10
     zynd_mf_sip_enabled: bool = True
     zynd_mf_mandate_provider: str = "CYBRILLAPOA"
     zynd_mf_sip_min_mandate_limit_inr: int = 1_000
+    zynd_mf_mandate_tier1_limit_inr: int = 15_000
+    zynd_mf_mandate_tier2_threshold_inr: int = 15_000
+    zynd_mf_mandate_tier2_limit_inr: int = 50_000
+    zynd_mf_mandate_tier3_threshold_inr: int = 50_000
+    zynd_mf_mandate_tier3_limit_inr: int = 100_000
     zynd_mf_sip_default_monthly_installments: int = 12
     zynd_mf_sip_default_daily_installments: int = 30
-    zynd_mf_sip_max_installments: int = 60
+    zynd_mf_sip_max_installments: int = 999
     zynd_mf_mandate_limit_multiplier: int = 2
     zynd_mf_payment_expiry_minutes: int = 1440
     zynd_mf_stuck_transaction_minutes: int = 60
@@ -400,6 +420,7 @@ class Settings(BaseSettings):
     zynd_mf_payment_postback_url: str = ""
     zynd_mf_payment_postback_path: str = "/dashboard/mutual-funds/orders/payment-return"
     zynd_mf_sip_mandate_postback_path: str = "/dashboard/mutual-funds/sip/mandate-return"
+    zynd_mf_sip_first_installment_postback_path: str = "/dashboard/mutual-funds/sip/first-installment-return"
     zynd_investor_provision_enabled: bool = True
     zynd_investor_provision_batch_size: int = 10
     zynd_mf_cas_enabled: bool = False
@@ -430,11 +451,26 @@ class Settings(BaseSettings):
             return self.zynd_mf_payment_postback_url.rstrip("/")
         return f"{self.frontend_url.rstrip('/')}{self.zynd_mf_payment_postback_path}"
 
+    def resolved_mf_payment_postback_url_for_order(self, order_id: str) -> str:
+        base = self.resolved_mf_payment_postback_url
+        joiner = "&" if "?" in base else "?"
+        return f"{base}{joiner}order_id={order_id}"
+
+    def resolved_mf_payment_postback_url_for_checkout(self, checkout_id: str) -> str:
+        base = self.resolved_mf_payment_postback_url
+        joiner = "&" if "?" in base else "?"
+        return f"{base}{joiner}checkout_id={checkout_id}"
+
     @property
     def resolved_mf_sip_mandate_postback_url(self) -> str:
         if self.zynd_mf_payment_postback_url.strip():
             return self.zynd_mf_payment_postback_url.rstrip("/")
         return f"{self.frontend_url.rstrip('/')}{self.zynd_mf_sip_mandate_postback_path}"
+
+    def resolved_mf_sip_first_installment_postback_url_for_plan(self, plan_id: str) -> str:
+        base = f"{self.frontend_url.rstrip('/')}{self.zynd_mf_sip_first_installment_postback_path}"
+        joiner = "&" if "?" in base else "?"
+        return f"{base}{joiner}plan_id={plan_id}"
 
     @property
     def resolved_fp_webhook_verify_enabled(self) -> bool:
@@ -547,6 +583,21 @@ class Settings(BaseSettings):
             return self
 
         object.__setattr__(self, "document_scan_dispatch_mode", "sync")
+        return self
+
+    @model_validator(mode="after")
+    def default_clamav_fail_open_for_development(self) -> "Settings":
+        import os
+
+        if self.app_env != "development" or not self.clamav_enabled:
+            return self
+
+        # Local dev often runs ClamAV with a smaller StreamMaxLength than production.
+        # Allow uploads when the scanner is misconfigured unless explicitly fail-closed.
+        if "CLAMAV_FAIL_OPEN" in os.environ:
+            return self
+
+        object.__setattr__(self, "clamav_fail_open", True)
         return self
 
     @model_validator(mode="after")

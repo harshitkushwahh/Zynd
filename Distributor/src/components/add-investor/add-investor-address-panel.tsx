@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { CheckCircle2, Home, Mail } from "lucide-react";
 
@@ -19,15 +19,14 @@ import type {
   AddInvestorAddressDraft,
   AddInvestorAddressFields,
 } from "@/lib/add-investor/add-investor-journey";
+import { ADD_INVESTOR_COUNTRY_OPTIONS, getAddInvestorCountryLabel } from "@/lib/add-investor/add-investor-journey";
+import { ADD_INVESTOR_INDIAN_STATES } from "@/lib/add-investor/add-investor-address-options";
 import {
-  ADD_INVESTOR_COUNTRY_OPTIONS,
-  getAddInvestorCountryLabel,
-} from "@/lib/add-investor/add-investor-journey";
-import {
-  ADD_INVESTOR_INDIAN_STATES,
-  resolveAddInvestorCityOptions,
+  lookupAddInvestorEnumLabel,
   resolveAddInvestorStateOption,
-} from "@/lib/add-investor/add-investor-address-options";
+  type AddInvestorKycMasterData,
+} from "@/lib/add-investor/add-investor-kyc-master-data";
+import { fetchDistributorKycPincode } from "@/lib/distributor-kyc-master-data-api";
 import { cn } from "@/lib/utils";
 
 type AddressTab = "permanent" | "correspondence";
@@ -46,13 +45,21 @@ type AddInvestorAddressPanelProps = {
   onAddressChange: (address: AddInvestorAddressDraft) => void;
   permanentReadOnly?: boolean;
   prefilledFromDigilocker?: boolean;
+  addressMasterData?: Pick<AddInvestorKycMasterData, "states" | "countries"> | null;
 };
 
-function normalizeCountryValue(country: string): string {
-  const option = ADD_INVESTOR_COUNTRY_OPTIONS.find(
+function normalizeCountryValue(
+  country: string,
+  countryOptions: ReadonlyArray<{ value: string; label: string }>,
+): string {
+  const option = countryOptions.find(
     (item) => item.value === country || item.label === country,
   );
-  return option?.value ?? country;
+  if (option) return option.value;
+  const legacy = ADD_INVESTOR_COUNTRY_OPTIONS.find(
+    (item) => item.value === country || item.label === country,
+  );
+  return legacy?.label ?? country;
 }
 
 function formatAddressLine(fields: AddInvestorAddressFields): string {
@@ -99,8 +106,15 @@ export function AddInvestorAddressPanel({
   onAddressChange,
   permanentReadOnly = false,
   prefilledFromDigilocker = false,
+  addressMasterData,
 }: AddInvestorAddressPanelProps) {
   const [activeTab, setActiveTab] = useState<AddressTab>("permanent");
+  const pincodeEnrichedRef = useRef(false);
+
+  const stateOptions = addressMasterData?.states ?? [...ADD_INVESTOR_INDIAN_STATES];
+  const countryOptions =
+    addressMasterData?.countries ??
+    ADD_INVESTOR_COUNTRY_OPTIONS.map((item) => ({ label: item.label, value: item.label }));
 
   const updateFields = (type: AddressTab, patch: Partial<AddInvestorAddressFields>) => {
     const nextFields = {
@@ -133,21 +147,43 @@ export function AddInvestorAddressPanel({
   const activeFields = activeTab === "permanent" ? address.permanent : address.correspondence;
   const fieldsReadOnly = activeTab === "permanent" && permanentReadOnly;
   const correspondenceTabDisabled = address.correspondenceSame;
-  const countryValue = normalizeCountryValue(activeFields.country) || "india";
-  const stateValue = resolveAddInvestorStateOption(activeFields.state);
-  const cityOptions = resolveAddInvestorCityOptions(stateValue || activeFields.state, activeFields.city);
-  const trimmedCity = activeFields.city.trim();
-  const cityValue = trimmedCity && cityOptions.includes(trimmedCity) ? trimmedCity : "";
+  const countryValue = normalizeCountryValue(activeFields.country, countryOptions) || "India";
+  const stateValue = resolveAddInvestorStateOption(activeFields.state, stateOptions);
+
+  const applyPincodeLookup = async (pincode: string, type: AddressTab) => {
+    if (pincode.length !== 6) return;
+    try {
+      const result = await fetchDistributorKycPincode(pincode);
+      const nextFields = {
+        ...(type === "permanent" ? address.permanent : address.correspondence),
+        city: result.city || activeFields.city,
+        state: resolveAddInvestorStateOption(result.state_name || activeFields.state, stateOptions),
+        country: lookupAddInvestorEnumLabel("India", countryOptions) || "India",
+      };
+      onAddressChange({
+        ...address,
+        [type]: nextFields,
+        ...(type === "permanent" && address.correspondenceSame
+          ? { correspondence: nextFields }
+          : {}),
+      });
+    } catch {
+      // User can still enter city/state manually.
+    }
+  };
+
+  useEffect(() => {
+    if (!prefilledFromDigilocker || pincodeEnrichedRef.current) return;
+    const pincode = address.permanent.pincode ?? "";
+    if (pincode.length !== 6) return;
+    pincodeEnrichedRef.current = true;
+    void applyPincodeLookup(pincode, "permanent");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- enrich once from DigiLocker pincode
+  }, [address.permanent.pincode, prefilledFromDigilocker]);
 
   const handleStateChange = (value: string | null) => {
     if (!value) return;
-    const nextState = value ?? "";
-    const nextCities = resolveAddInvestorCityOptions(nextState, "");
-    const keepsCity = nextCities.includes(activeFields.city.trim());
-    updateFields(activeTab, {
-      state: nextState,
-      ...(keepsCity ? {} : { city: "" }),
-    });
+    updateFields(activeTab, { state: value ?? "" });
   };
 
   return (
@@ -234,6 +270,11 @@ export function AddInvestorAddressPanel({
                       pincode: event.target.value.replace(/\D/g, "").slice(0, 6),
                     })
                   }
+                  onBlur={() => {
+                    if (activeFields.pincode.length === 6) {
+                      void applyPincodeLookup(activeFields.pincode, activeTab);
+                    }
+                  }}
                 />
               </Field>
             </div>
@@ -250,7 +291,7 @@ export function AddInvestorAddressPanel({
                     <SelectValue placeholder="Select state" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ADD_INVESTOR_INDIAN_STATES.map((option) => (
+                    {stateOptions.map((option) => (
                       <SelectItem key={option} value={option}>
                         {option}
                       </SelectItem>
@@ -260,35 +301,26 @@ export function AddInvestorAddressPanel({
               </Field>
               <Field>
                 <FieldLabel htmlFor={`addr-${activeTab}-city`}>City</FieldLabel>
-                <Select
-                  value={cityValue}
-                  onValueChange={(value) => updateFields(activeTab, { city: value ?? "" })}
-                  disabled={fieldsReadOnly || (!stateValue && cityOptions.length === 0)}
-                >
-                  <SelectTrigger id={`addr-${activeTab}-city`} className="add-investor-address-panel__select">
-                    <SelectValue placeholder={stateValue ? "Select city" : "Select state first"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cityOptions.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  id={`addr-${activeTab}-city`}
+                  value={activeFields.city}
+                  readOnly={fieldsReadOnly}
+                  onChange={(event) => updateFields(activeTab, { city: event.target.value })}
+                  placeholder="Enter city"
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor={`addr-${activeTab}-country`}>Country</FieldLabel>
                 <Select
                   value={countryValue}
-                  onValueChange={(value) => updateFields(activeTab, { country: value ?? "india" })}
+                  onValueChange={(value) => updateFields(activeTab, { country: value ?? "India" })}
                   disabled={fieldsReadOnly}
                 >
                   <SelectTrigger id={`addr-${activeTab}-country`} className="add-investor-address-panel__select">
                     <SelectValue placeholder="Select country" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ADD_INVESTOR_COUNTRY_OPTIONS.map((option) => (
+                    {countryOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>

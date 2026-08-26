@@ -60,18 +60,18 @@ export function ClientProfileHeroOAuthIcons({
   return (
     <div className={cn("distributor-profile-hero-card__oauth-stack", className)}>
       <OAuthProviderIcon
-        provider="google"
-        label={copy.google}
-        connected={connectedAccounts.google.connected}
-        emailMasked={connectedAccounts.google.emailMasked}
-        connectedLabel={copy.connected}
-        notConnectedLabel={copy.notConnected}
-      />
-      <OAuthProviderIcon
         provider="apple"
         label={copy.apple}
         connected={connectedAccounts.apple.connected}
         emailMasked={connectedAccounts.apple.emailMasked}
+        connectedLabel={copy.connected}
+        notConnectedLabel={copy.notConnected}
+      />
+      <OAuthProviderIcon
+        provider="google"
+        label={copy.google}
+        connected={connectedAccounts.google.connected}
+        emailMasked={connectedAccounts.google.emailMasked}
         connectedLabel={copy.connected}
         notConnectedLabel={copy.notConnected}
       />

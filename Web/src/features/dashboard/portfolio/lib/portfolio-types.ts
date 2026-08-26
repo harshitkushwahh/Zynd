@@ -2,6 +2,8 @@ export type PortfolioHoldingItem = {
   id: string;
   fundName: string;
   amcName: string;
+  amcLogoUrl: string | null;
+  isin?: string | null;
   currentValueInr: number;
   investedInr: number;
   returnPct: number;

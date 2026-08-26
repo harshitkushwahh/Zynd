@@ -8,9 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.audit_service import write_audit
+from app.application.auth.auth_client_policy import AuthClientKind
 from app.application.auth.errors import AuthError
 from app.application.auth.login_security_service import evaluate_login_velocity
 from app.application.auth.mfa_service import user_has_mfa
+from app.application.auth.pin_service import clear_pin_unlock, user_has_pin
 from app.application.auth.security_alerts_service import _device_label
 from app.application.auth.session_service import enforce_session_cap
 from app.application.messaging.auth_events import schedule_login_succeeded
@@ -150,9 +152,11 @@ async def complete_authenticated_login(
     device, is_new_device = await get_or_create_device(
         db, user=user, fingerprint=device_fingerprint, user_agent=user_agent
     )
-    access_token, refresh_token, _ = await create_authenticated_session(
+    access_token, refresh_token, session = await create_authenticated_session(
         db, user=user, device=device, settings=settings, ip=ip
     )
+    if user_has_pin(user):
+        await clear_pin_unlock(user.id)
     metadata: dict[str, Any] = {}
     if provider:
         metadata["provider"] = provider
@@ -200,6 +204,7 @@ async def complete_authenticated_login(
         "user": user,
         "access_token": access_token,
         "refresh_token": refresh_token,
+        "session_id": session.id,
         "new_device": is_new_device,
         "velocity_flagged": velocity_flagged,
     }
@@ -211,7 +216,7 @@ async def maybe_mfa_pending_login(
     device_fingerprint: str,
     user_agent: str | None,
     provider: str | None = None,
-    admin_client: bool = False,
+    auth_client: AuthClientKind = "web",
 ) -> dict[str, Any] | None:
     if not user_has_mfa(user):
         return None
@@ -226,7 +231,7 @@ async def maybe_mfa_pending_login(
             "device_fingerprint": device_fingerprint,
             "user_agent": user_agent,
             "provider": provider,
-            "admin_client": admin_client,
+            "auth_client": auth_client,
         },
         settings.mfa_pending_ttl_seconds,
     )

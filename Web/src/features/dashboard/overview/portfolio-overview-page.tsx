@@ -16,6 +16,7 @@ import { OverviewSipsCard } from "@/features/dashboard/overview/components/overv
 import { OverviewWelcomeHeader } from "@/features/dashboard/overview/components/overview-welcome-header";
 import { useOverviewDashboardData } from "@/features/dashboard/overview/hooks/use-overview-dashboard-data";
 import { useAuth } from "@/contexts/auth-context";
+import { useResolvedGreetingName } from "@/shared/hooks/use-resolved-display-name";
 
 function OverviewContentFade({ children }: { children: ReactNode }) {
   return <div className="animate-in fade-in duration-300 ease-out">{children}</div>;
@@ -23,6 +24,7 @@ function OverviewContentFade({ children }: { children: ReactNode }) {
 
 export function PortfolioOverviewPage() {
   const { user } = useAuth();
+  const greetingName = useResolvedGreetingName();
   const { ready } = useOverviewDashboardData();
 
   if (!user) {
@@ -38,22 +40,22 @@ export function PortfolioOverviewPage() {
         <OverviewPageSkeleton />
       ) : (
         <OverviewContentFade>
-          <OverviewWelcomeHeader name={user.first_name ?? "there"} />
-          <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-4">
+          <OverviewWelcomeHeader name={greetingName} />
+          <div className="mb-6 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-4">
             <OverviewProfileCard className="shrink-0" />
             <OverviewPortfolioFlowCard className="min-w-0 flex-1 lg:min-w-[27rem]" />
             <OverviewHoldingsCard className="min-w-0 lg:w-[17rem] lg:shrink-0 xl:w-[18rem]" />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,1.15fr)] xl:items-stretch">
-            <div className="grid grid-cols-[minmax(9rem,10.5rem)_minmax(0,1fr)] gap-3 sm:gap-4">
+            <div className="grid h-full min-h-[9.5rem] grid-cols-[minmax(9rem,10.5rem)_minmax(0,1fr)] items-stretch gap-3 sm:gap-4">
               <OverviewRiskCard />
               <OverviewSipsCard />
             </div>
 
-            <OverviewGoalsCard className="min-w-0" />
+            <OverviewGoalsCard className="min-w-0 self-stretch" />
 
-            <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] lg:items-stretch xl:col-span-2">
+            <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] lg:items-stretch xl:col-span-2 xl:min-w-0">
               <OverviewFamilyCircles />
               <OverviewRecentTransactions className="min-w-0" />
             </div>

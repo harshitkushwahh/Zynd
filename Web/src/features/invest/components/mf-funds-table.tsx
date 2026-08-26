@@ -1,11 +1,12 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { SortDescriptor } from "react-aria-components";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ChevronSelectorVertical } from "@untitledui/icons";
-import { Loader2, SearchX } from "lucide-react";
+import { GripVertical, Loader2, SearchX } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { Table, TableCard } from "@/components/core/table";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
@@ -13,11 +14,22 @@ import {
   dedupeInvestFunds,
   displayCategoryLabel,
   MF_FUNDS_TABLE_DEFAULT_SORT,
+  pinScreenerSelectedFundTableRows,
   sortFundTableRows,
 } from "@/features/invest/lib/mf-fund-ranking";
 import { formatSignedReturn, resolveAmcLogoUrl } from "@/features/invest/lib/mf-format";
+import {
+  beginMfFundScreenerDrag,
+  endMfFundScreenerDrag,
+  MF_FUND_SCREENER_DRAG_MIME,
+  serializeMfFundScreenerDragPayload,
+  setMfFundScreenerDragPreview,
+} from "@/features/invest/lib/mf-fund-screener-drag";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
+import { screenerQueueRejectMessage } from "@/features/invest/lib/mf-screener-queue-messages";
+import { useMfFundScreenerSelectionOptional } from "@/features/invest/contexts/mf-fund-screener-selection-context";
 import { copy } from "@/shared/config/copy";
+import { getRandomFinanceQuote } from "@/lib/finance-quotes";
 import { cn } from "@/lib/utils";
 
 type MfFundsTableRow = InvestFundSummary & {
@@ -42,16 +54,82 @@ type MfFundsTableProps = {
   sortDescriptor?: SortDescriptor;
   onSortChange?: (sort: SortDescriptor) => void;
   serverSorted?: boolean;
+  draggableRows?: boolean;
+  screenerSelectionEnabled?: boolean;
+  compact?: boolean;
+  hideCategoryColumn?: boolean;
 };
 
-const TABLE_LAYOUT_CLASS = "w-full min-w-[680px] table-fixed border-collapse border-spacing-0";
-const COL_NAME = "w-[44%]";
-const COL_CATEGORY = "w-[14%]";
-const COL_RETURN = "w-[14%] text-right";
-const HEADER_SURFACE_CLASS = "bg-card/95 supports-[backdrop-filter]:bg-card/80";
-const HEADER_ROW_CLASS = "sticky top-0 z-10 bg-muted/25 [&>th]:border-b [&>th]:border-border";
+type FundsTableLayout = {
+  tableClass: string;
+  colSelect: string;
+  colName: string;
+  colCategory: string;
+  colReturn: string;
+  headerCellClass: string;
+  selectHeaderCellClass: string;
+  selectBodyCellClass: string;
+  nameHeaderCellClass: string;
+  nameBodyCellClass: string;
+  returnHeaderCellClass: string;
+  bodyCellClass: string;
+  returnBodyCellClass: string;
+  hideCategoryColumn: boolean;
+  fundLogoSizeClass: string;
+};
+
+function resolveFundsTableLayout(options: {
+  compact?: boolean;
+  hideCategoryColumn?: boolean;
+}): FundsTableLayout {
+  const hideCategoryColumn = options.hideCategoryColumn ?? false;
+
+  if (options.compact) {
+    return {
+      tableClass: "w-full table-fixed border-collapse border-spacing-0",
+      colSelect: "w-[2rem]",
+      colName: hideCategoryColumn ? "w-[58%]" : "w-[42%]",
+      colCategory: hideCategoryColumn ? "w-0" : "w-[16%]",
+      colReturn: "w-[14%]",
+      headerCellClass: "px-2.5 py-3 text-left",
+      selectHeaderCellClass: "py-3 pl-1 pr-0 text-center",
+      selectBodyCellClass: "py-2.5 pl-1 pr-0 text-compact text-foreground",
+      nameHeaderCellClass: "py-3 pl-2 pr-2.5 text-left",
+      nameBodyCellClass: "py-2.5 pl-2 pr-2.5 text-compact text-foreground",
+      returnHeaderCellClass: "px-1.5 py-3 text-right",
+      bodyCellClass: "px-2.5 py-2.5 text-compact text-foreground",
+      returnBodyCellClass:
+        "px-1.5 py-2.5 text-caption text-foreground text-right tabular-nums whitespace-nowrap",
+      hideCategoryColumn,
+      fundLogoSizeClass: "size-7",
+    };
+  }
+
+  return {
+    tableClass: "w-full min-w-[720px] table-fixed border-collapse border-spacing-0",
+    colSelect: "w-[2.25rem]",
+    colName: "w-[50%]",
+    colCategory: "w-[10%]",
+    colReturn: "w-[5.75rem]",
+    headerCellClass: "px-4 py-4 md:px-5 text-left",
+    selectHeaderCellClass: "py-4 pl-1 pr-0 text-center",
+    selectBodyCellClass: "py-3 pl-1 pr-0 text-compact text-foreground",
+    nameHeaderCellClass: "py-4 pl-2 pr-4 text-left md:pr-5",
+    nameBodyCellClass: "py-3 pl-2 pr-4 text-compact text-foreground md:pr-5",
+    returnHeaderCellClass: "px-2 py-4 md:px-3 text-right",
+    bodyCellClass: "px-4 py-3 md:px-5 text-compact text-foreground",
+    returnBodyCellClass: "px-2 py-3 md:px-3 text-compact text-foreground text-right tabular-nums whitespace-nowrap",
+    hideCategoryColumn,
+    fundLogoSizeClass: "size-8",
+  };
+}
+
+const HEADER_SURFACE_CLASS =
+  "bg-card/95 backdrop-blur-[var(--blur-sm)] supports-[backdrop-filter]:bg-card/80";
+const HEADER_ROW_CLASS =
+  "sticky top-0 z-10 bg-transparent [&>th]:border-b [&>th]:border-border";
 const HEADER_CELL_CLASS = "px-4 py-4 md:px-5 text-left";
-const BODY_CELL_CLASS = "px-4 py-3 md:px-5 text-compact text-foreground";
+const RETURN_HEADER_CELL_CLASS = "px-2 py-4 md:px-3 text-right";
 const VIRTUAL_ROW_HEIGHT = 60;
 const VIRTUAL_OVERSCAN = 12;
 
@@ -68,11 +146,17 @@ function cycleSortDescriptor(
   return { column, direction: "ascending" };
 }
 
-const FundNameCell = memo(function FundNameCell({ fund }: { fund: InvestFundSummary }) {
+const FundNameCell = memo(function FundNameCell({
+  fund,
+  logoSizeClass = "size-8",
+}: {
+  fund: InvestFundSummary;
+  logoSizeClass?: string;
+}) {
   const logoUrl = resolveAmcLogoUrl(fund.amc_logo_url, fund.amc_slug);
 
   return (
-    <div className="flex min-w-0 items-start gap-3">
+    <div className="flex min-w-0 items-start gap-2.5">
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -80,19 +164,41 @@ const FundNameCell = memo(function FundNameCell({ fund }: { fund: InvestFundSumm
           alt=""
           loading="lazy"
           decoding="async"
-          className="mt-0.5 size-8 shrink-0 rounded-[var(--radius-control)] border border-border bg-background object-contain"
+          className={cn(
+            "mt-0.5 shrink-0 rounded-[var(--radius-control)] border border-border bg-background object-contain",
+            logoSizeClass,
+          )}
         />
       ) : (
-        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-[10px] font-semibold text-muted-foreground">
+        <div
+          className={cn(
+            "mt-0.5 flex shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-[10px] font-semibold text-muted-foreground",
+            logoSizeClass,
+          )}
+        >
           {fund.amc_name.slice(0, 2).toUpperCase()}
         </div>
       )}
-      <span className="font-medium leading-snug break-words whitespace-normal text-foreground">
+      <span className="min-w-0 font-medium leading-snug break-words whitespace-normal text-foreground">
         {fund.name}
       </span>
     </div>
   );
 });
+
+function MfFundsTableListEnd({ className }: { className?: string }) {
+  const [quote] = useState(() => getRandomFinanceQuote());
+
+  return (
+    <div className={cn(className)} aria-live="polite">
+      <p className="mx-auto max-w-2xl text-compact italic leading-relaxed text-muted-foreground/85">
+        {copy.mutualFunds.listEnd}
+        <span aria-hidden="true"> · </span>
+        <span>{quote}</span>
+      </p>
+    </div>
+  );
+}
 
 function MfFundsTableEmptyState({ title, description }: { title: string; description?: string }) {
   return (
@@ -110,13 +216,16 @@ function MfFundsTableEmptyState({ title, description }: { title: string; descrip
 
 const ReturnCell = memo(function ReturnCell({ value }: { value: number | null | undefined }) {
   const formatted = formatSignedReturn(value);
+  const isEmpty = value == null;
+
   return (
     <span
       className={cn(
-        "tabular-nums",
-        formatted.tone === "positive" && "text-success",
-        formatted.tone === "negative" && "text-destructive",
-        formatted.tone === "muted" && "text-muted-foreground",
+        isEmpty && "text-[11px] font-medium uppercase tracking-wide text-muted-foreground/40",
+        !isEmpty && "tabular-nums",
+        !isEmpty && formatted.tone === "positive" && "text-success",
+        !isEmpty && formatted.tone === "negative" && "text-destructive",
+        !isEmpty && formatted.tone === "muted" && "text-muted-foreground",
       )}
     >
       {formatted.text}
@@ -127,6 +236,11 @@ const ReturnCell = memo(function ReturnCell({ value }: { value: number | null | 
 type FundTableDataRowProps = {
   fund: MfFundsTableRow;
   selected: boolean;
+  layout: FundsTableLayout;
+  draggable?: boolean;
+  screenerSelectionEnabled?: boolean;
+  selectionChecked?: boolean;
+  onToggleSelection?: () => void;
   onNavigate: () => void;
   onDoubleClick?: () => void;
 };
@@ -134,38 +248,138 @@ type FundTableDataRowProps = {
 const FundTableDataRow = memo(function FundTableDataRow({
   fund,
   selected,
+  layout,
+  draggable = false,
+  screenerSelectionEnabled = false,
+  selectionChecked = false,
+  onToggleSelection,
   onNavigate,
   onDoubleClick,
 }: FundTableDataRowProps) {
+  const dragStartedRef = useRef(false);
+
+  function handleDragStart(event: React.DragEvent<HTMLTableCellElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest('input[type="checkbox"]')) {
+      event.preventDefault();
+      return;
+    }
+
+    dragStartedRef.current = true;
+    beginMfFundScreenerDrag(serializeMfFundScreenerDragPayload(fund));
+    event.dataTransfer.effectAllowed = "copy";
+    const payload = JSON.stringify(serializeMfFundScreenerDragPayload(fund));
+    event.dataTransfer.setData(MF_FUND_SCREENER_DRAG_MIME, payload);
+    event.dataTransfer.setData("application/json", payload);
+    setMfFundScreenerDragPreview(event, fund);
+  }
+
+  function handleDragEnd() {
+    endMfFundScreenerDrag();
+    window.setTimeout(() => {
+      dragStartedRef.current = false;
+    }, 0);
+  }
+
+  function handleClick(event: React.MouseEvent<HTMLTableRowElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest('input[type="checkbox"]')) return;
+    if (dragStartedRef.current) {
+      dragStartedRef.current = false;
+      return;
+    }
+    onNavigate();
+  }
+
+  const dragProps = draggable
+    ? {
+        draggable: true as const,
+        onDragStart: handleDragStart,
+        onDragEnd: handleDragEnd,
+      }
+    : {};
+
   return (
     <tr
       className={cn(
-        "cursor-pointer transition-colors hover:bg-muted/20",
-        selected && "bg-muted/50",
+        "group/row cursor-pointer transition-colors hover:bg-muted/20",
+        draggable && "[&_td]:cursor-grab [&_td]:active:cursor-grabbing",
+        (selected || selectionChecked) && "bg-muted/50",
       )}
-      onClick={onNavigate}
+      onClick={handleClick}
       onDoubleClick={onDoubleClick}
     >
-      <td className={cn("min-h-14 border-b border-border/70 align-top", COL_NAME, BODY_CELL_CLASS)}>
-        <FundNameCell fund={fund} />
-      </td>
+      {screenerSelectionEnabled ? (
+        <td
+          {...dragProps}
+          className={cn(
+            "min-h-14 border-b border-border/70 align-middle",
+            layout.colSelect,
+            layout.selectBodyCellClass,
+          )}
+        >
+          <div className="flex items-center justify-start gap-0">
+            <span
+              className={cn(
+                "pointer-events-none flex size-5 shrink-0 items-center justify-center text-muted-foreground/70",
+                "opacity-0 transition-opacity group-hover/row:opacity-100",
+              )}
+              aria-hidden
+            >
+              <GripVertical className="size-3" strokeWidth={2.25} />
+            </span>
+            <input
+              type="checkbox"
+              checked={selectionChecked}
+              aria-label={`Select ${fund.name}`}
+              onChange={() => onToggleSelection?.()}
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              draggable={false}
+              className="size-3 shrink-0 rounded border-input accent-primary"
+            />
+          </div>
+        </td>
+      ) : null}
       <td
+        {...dragProps}
         className={cn(
-          "min-h-14 border-b border-border/70 align-top truncate text-caption text-muted-foreground",
-          COL_CATEGORY,
-          BODY_CELL_CLASS,
+          "min-h-14 border-b border-border/70 align-top",
+          layout.colName,
+          screenerSelectionEnabled ? layout.nameBodyCellClass : layout.bodyCellClass,
         )}
-        title={displayCategoryLabel(fund)}
       >
-        {displayCategoryLabel(fund)}
+        <FundNameCell fund={fund} logoSizeClass={layout.fundLogoSizeClass} />
       </td>
-      <td className={cn("min-h-14 border-b border-border/70 align-top text-right", COL_RETURN, BODY_CELL_CLASS)}>
+      {!layout.hideCategoryColumn ? (
+        <td
+          {...dragProps}
+          className={cn(
+            "min-h-14 border-b border-border/70 align-top truncate text-caption text-muted-foreground",
+            layout.colCategory,
+            layout.bodyCellClass,
+          )}
+          title={displayCategoryLabel(fund)}
+        >
+          {displayCategoryLabel(fund)}
+        </td>
+      ) : null}
+      <td
+        {...dragProps}
+        className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
+      >
         <ReturnCell value={fund.returns.return_1y} />
       </td>
-      <td className={cn("min-h-14 border-b border-border/70 align-top text-right", COL_RETURN, BODY_CELL_CLASS)}>
+      <td
+        {...dragProps}
+        className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
+      >
         <ReturnCell value={fund.returns.return_3y} />
       </td>
-      <td className={cn("min-h-14 border-b border-border/70 align-top text-right", COL_RETURN, BODY_CELL_CLASS)}>
+      <td
+        {...dragProps}
+        className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
+      >
         <ReturnCell value={fund.returns.return_5y} />
       </td>
     </tr>
@@ -179,6 +393,8 @@ function VirtualSortHead({
   onSortChange,
   className,
   children,
+  align = "left",
+  cellClassName,
 }: {
   id: SortDescriptor["column"];
   label?: string;
@@ -186,16 +402,29 @@ function VirtualSortHead({
   onSortChange: (sort: SortDescriptor) => void;
   className?: string;
   children?: ReactNode;
+  align?: "left" | "right";
+  cellClassName?: string;
 }) {
   const sorted = sortDescriptor.column === id;
   const direction = sorted ? sortDescriptor.direction : undefined;
 
   return (
-    <th scope="col" className={cn(HEADER_CELL_CLASS, HEADER_SURFACE_CLASS, className)}>
+    <th
+      scope="col"
+      className={cn(
+        cellClassName ??
+          (align === "right" ? RETURN_HEADER_CELL_CLASS : HEADER_CELL_CLASS),
+        HEADER_SURFACE_CLASS,
+        className,
+      )}
+    >
       <button
         type="button"
         onClick={() => onSortChange(cycleSortDescriptor(sortDescriptor, id))}
-        className="inline-flex w-full items-center gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className={cn(
+          "inline-flex w-full items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+          align === "right" ? "justify-end text-right" : "text-left",
+        )}
       >
         {children ?? (
           <span className="text-caption font-semibold tracking-wide text-foreground">{label}</span>
@@ -244,20 +473,55 @@ export function MfFundsTable({
   sortDescriptor: sortDescriptorProp,
   onSortChange,
   serverSorted = false,
+  draggableRows = false,
+  screenerSelectionEnabled = false,
+  compact = false,
+  hideCategoryColumn = false,
 }: MfFundsTableProps) {
   const router = useRouter();
+  const screenerSelection = useMfFundScreenerSelectionOptional();
   const [internalSort, setInternalSort] = useState<SortDescriptor>(MF_FUNDS_TABLE_DEFAULT_SORT);
   const sortDescriptor = sortDescriptorProp ?? internalSort;
   const handleSortChange = onSortChange ?? setInternalSort;
+  const layout = useMemo(
+    () => resolveFundsTableLayout({ compact, hideCategoryColumn }),
+    [compact, hideCategoryColumn],
+  );
 
   const rows = useMemo<MfFundsTableRow[]>(
     () => dedupeInvestFunds(funds).map((fund) => ({ ...fund, tableId: fund.product_id })),
     [funds],
   );
 
-  const sortedRows = useMemo(
-    () => (serverSorted ? rows : sortFundTableRows(rows, sortDescriptor)),
-    [rows, serverSorted, sortDescriptor],
+  const showScreenerSelection = screenerSelectionEnabled && screenerSelection != null;
+  const columnCount =
+    (showScreenerSelection ? 1 : 0) + (layout.hideCategoryColumn ? 4 : 5);
+  const selectedProductIds = useMemo(
+    () => screenerSelection?.selectedFunds.map((fund) => fund.product_id) ?? [],
+    [screenerSelection?.selectedFunds],
+  );
+
+  const sortedRows = useMemo(() => {
+    const sorted = serverSorted ? rows : sortFundTableRows(rows, sortDescriptor);
+    if (!showScreenerSelection || selectedProductIds.length === 0) return sorted;
+    return pinScreenerSelectedFundTableRows(sorted, selectedProductIds);
+  }, [rows, selectedProductIds, serverSorted, showScreenerSelection, sortDescriptor]);
+
+  const handleToggleScreenerSelection = useCallback(
+    (fund: MfFundsTableRow) => {
+      if (!screenerSelection) return;
+      const wasSelected = screenerSelection.isSelected(fund.product_id);
+      const result = screenerSelection.toggleFund(fund);
+      if (result === "full" && !wasSelected) {
+        toast.error(
+          screenerQueueRejectMessage(
+            screenerSelection.selectionCount,
+            screenerSelection.maxSelectableFunds,
+          ),
+        );
+      }
+    },
+    [screenerSelection],
   );
 
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
@@ -304,15 +568,12 @@ export function MfFundsTable({
       ) : null}
 
       {!loadingMore && sortedRows.length > 0 && !hasMore ? (
-        <div
+        <MfFundsTableListEnd
           className={cn(
-            TABLE_LAYOUT_CLASS,
-            "border-t border-border py-4 text-center text-caption text-muted-foreground",
+            layout.tableClass,
+            "border-t border-border px-4 py-6 text-center sm:px-5",
           )}
-          aria-live="polite"
-        >
-          {copy.mutualFunds.listEnd}
-        </div>
+        />
       ) : null}
 
       {loadingMore ? <LoadingMoreIndicator /> : null}
@@ -349,20 +610,43 @@ export function MfFundsTable({
           <div
             ref={scrollRef}
             className={cn(
-              "h-full min-h-0 overflow-auto overscroll-y-contain overscroll-x-auto",
+              "h-full min-h-0 overflow-auto overscroll-y-contain",
+              compact ? "overflow-x-hidden" : "overscroll-x-auto",
               refetching && "opacity-60",
             )}
           >
             {virtualized ? (
               <>
-                <table className={TABLE_LAYOUT_CLASS} aria-label={copy.mutualFunds.allFundsTitle}>
+                <table className={layout.tableClass} aria-label={copy.mutualFunds.allFundsTitle}>
+                  <colgroup>
+                    {showScreenerSelection ? <col className={layout.colSelect} /> : null}
+                    <col className={layout.colName} />
+                    {!layout.hideCategoryColumn ? <col className={layout.colCategory} /> : null}
+                    <col className={layout.colReturn} />
+                    <col className={layout.colReturn} />
+                    <col className={layout.colReturn} />
+                  </colgroup>
                   <thead className={HEADER_ROW_CLASS}>
                     <tr>
+                      {showScreenerSelection ? (
+                        <th
+                          scope="col"
+                          className={cn(
+                            layout.selectHeaderCellClass,
+                            HEADER_SURFACE_CLASS,
+                            layout.colSelect,
+                          )}
+                          aria-label={copy.mutualFunds.screenerSelectColumnLabel}
+                        />
+                      ) : null}
                       <VirtualSortHead
                         id="name"
                         sortDescriptor={sortDescriptor}
                         onSortChange={handleSortChange}
-                        className={COL_NAME}
+                        className={layout.colName}
+                        cellClassName={
+                          showScreenerSelection ? layout.nameHeaderCellClass : layout.headerCellClass
+                        }
                       >
                         <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
                           <span className="text-compact font-semibold tracking-tight text-foreground">
@@ -373,40 +657,49 @@ export function MfFundsTable({
                           </span>
                         </span>
                       </VirtualSortHead>
-                      <VirtualSortHead
-                        id="category"
-                        label={copy.mutualFunds.tableCategory}
-                        sortDescriptor={sortDescriptor}
-                        onSortChange={handleSortChange}
-                        className={COL_CATEGORY}
-                      />
+                      {!layout.hideCategoryColumn ? (
+                        <VirtualSortHead
+                          id="category"
+                          label={copy.mutualFunds.tableCategory}
+                          sortDescriptor={sortDescriptor}
+                          onSortChange={handleSortChange}
+                          className={layout.colCategory}
+                          cellClassName={layout.headerCellClass}
+                        />
+                      ) : null}
                       <VirtualSortHead
                         id="return_1y"
                         label={copy.mutualFunds.tableReturn1y}
                         sortDescriptor={sortDescriptor}
                         onSortChange={handleSortChange}
-                        className={COL_RETURN}
+                        className={layout.colReturn}
+                        cellClassName={layout.returnHeaderCellClass}
+                        align="right"
                       />
                       <VirtualSortHead
                         id="return_3y"
                         label={copy.mutualFunds.tableReturn3y}
                         sortDescriptor={sortDescriptor}
                         onSortChange={handleSortChange}
-                        className={COL_RETURN}
+                        className={layout.colReturn}
+                        cellClassName={layout.returnHeaderCellClass}
+                        align="right"
                       />
                       <VirtualSortHead
                         id="return_5y"
                         label={copy.mutualFunds.tableReturn5y}
                         sortDescriptor={sortDescriptor}
                         onSortChange={handleSortChange}
-                        className={COL_RETURN}
+                        className={layout.colReturn}
+                        cellClassName={layout.returnHeaderCellClass}
+                        align="right"
                       />
                     </tr>
                   </thead>
                   <tbody>
                     {paddingTop > 0 ? (
                       <tr aria-hidden="true">
-                        <td colSpan={5} style={{ height: paddingTop, padding: 0, border: 0 }} />
+                        <td colSpan={columnCount} style={{ height: paddingTop, padding: 0, border: 0 }} />
                       </tr>
                     ) : null}
                     {virtualItems.map((virtualRow) => {
@@ -417,7 +710,20 @@ export function MfFundsTable({
                         <FundTableDataRow
                           key={fund.tableId}
                           fund={fund}
+                          layout={layout}
                           selected={selectedProductId === fund.product_id}
+                          draggable={draggableRows}
+                          screenerSelectionEnabled={showScreenerSelection}
+                          selectionChecked={
+                            showScreenerSelection
+                              ? screenerSelection.isSelected(fund.product_id)
+                              : false
+                          }
+                          onToggleSelection={
+                            showScreenerSelection
+                              ? () => handleToggleScreenerSelection(fund)
+                              : undefined
+                          }
                           onNavigate={() => navigateToFund(fund)}
                           onDoubleClick={
                             onRowDoubleClick ? () => onRowDoubleClick(fund) : undefined
@@ -427,7 +733,7 @@ export function MfFundsTable({
                     })}
                     {paddingBottom > 0 ? (
                       <tr aria-hidden="true">
-                        <td colSpan={5} style={{ height: paddingBottom, padding: 0, border: 0 }} />
+                        <td colSpan={columnCount} style={{ height: paddingBottom, padding: 0, border: 0 }} />
                       </tr>
                     ) : null}
                   </tbody>
@@ -440,7 +746,7 @@ export function MfFundsTable({
                 <Table
                   aria-label={copy.mutualFunds.allFundsTitle}
                   size="sm"
-                  className={TABLE_LAYOUT_CLASS}
+                  className={layout.tableClass}
                   sortDescriptor={sortDescriptor}
                   onSortChange={handleSortChange}
                 >
@@ -450,8 +756,8 @@ export function MfFundsTable({
                       isRowHeader
                       allowsSorting
                       className={cn(
-                        COL_NAME,
-                        HEADER_CELL_CLASS,
+                        layout.colName,
+                        showScreenerSelection ? layout.nameHeaderCellClass : layout.headerCellClass,
                         HEADER_SURFACE_CLASS,
                         "[&>div>span]:inline-flex [&>div>span]:flex-wrap [&>div>span]:items-baseline [&>div>span]:gap-x-1.5",
                       )}
@@ -463,29 +769,54 @@ export function MfFundsTable({
                         ({totalCount} results)
                       </span>
                     </Table.Head>
-                    <Table.Head
-                      id="category"
-                      label={copy.mutualFunds.tableCategory}
-                      allowsSorting
-                      className={cn(COL_CATEGORY, HEADER_CELL_CLASS, " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground", HEADER_SURFACE_CLASS)}
-                    />
+                    {!layout.hideCategoryColumn ? (
+                      <Table.Head
+                        id="category"
+                        label={copy.mutualFunds.tableCategory}
+                        allowsSorting
+                        className={cn(
+                          layout.colCategory,
+                          layout.headerCellClass,
+                          " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground",
+                          HEADER_SURFACE_CLASS,
+                        )}
+                      />
+                    ) : null}
                     <Table.Head
                       id="return_1y"
                       label={copy.mutualFunds.tableReturn1y}
                       allowsSorting
-                      className={cn(COL_RETURN, HEADER_CELL_CLASS, " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground", HEADER_SURFACE_CLASS, "[&>div]:w-full [&>div]:justify-end")}
+                      className={cn(
+                        layout.colReturn,
+                        layout.returnHeaderCellClass,
+                        " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground",
+                        HEADER_SURFACE_CLASS,
+                        "[&>div]:w-full [&>div]:justify-end",
+                      )}
                     />
                     <Table.Head
                       id="return_3y"
                       label={copy.mutualFunds.tableReturn3y}
                       allowsSorting
-                      className={cn(COL_RETURN, HEADER_CELL_CLASS, " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground", HEADER_SURFACE_CLASS, "[&>div]:w-full [&>div]:justify-end")}
+                      className={cn(
+                        layout.colReturn,
+                        layout.returnHeaderCellClass,
+                        " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground",
+                        HEADER_SURFACE_CLASS,
+                        "[&>div]:w-full [&>div]:justify-end",
+                      )}
                     />
                     <Table.Head
                       id="return_5y"
                       label={copy.mutualFunds.tableReturn5y}
                       allowsSorting
-                      className={cn(COL_RETURN, HEADER_CELL_CLASS, " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground", HEADER_SURFACE_CLASS, "[&>div]:w-full [&>div]:justify-end")}
+                      className={cn(
+                        layout.colReturn,
+                        layout.returnHeaderCellClass,
+                        " [&>div>span]:text-compact [&>div>span]:font-semibold [&>div>span]:tracking-wide [&>div>span]:text-foreground",
+                        HEADER_SURFACE_CLASS,
+                        "[&>div]:w-full [&>div]:justify-end",
+                      )}
                     />
                   </Table.Header>
 
@@ -505,26 +836,28 @@ export function MfFundsTable({
                             }
                           }}
                         >
-                          <Table.Cell className={cn("align-top", COL_NAME, BODY_CELL_CLASS)}>
-                            <FundNameCell fund={fund} />
+                          <Table.Cell className={cn("align-top", layout.colName, layout.bodyCellClass)}>
+                            <FundNameCell fund={fund} logoSizeClass={layout.fundLogoSizeClass} />
                           </Table.Cell>
-                          <Table.Cell
-                            className={cn(
-                              "align-top truncate text-caption text-muted-foreground",
-                              COL_CATEGORY,
-                              BODY_CELL_CLASS,
-                            )}
-                            title={displayCategoryLabel(fund)}
-                          >
-                            {displayCategoryLabel(fund)}
-                          </Table.Cell>
-                          <Table.Cell className={cn("align-top text-right", COL_RETURN, BODY_CELL_CLASS)}>
+                          {!layout.hideCategoryColumn ? (
+                            <Table.Cell
+                              className={cn(
+                                "align-top truncate text-caption text-muted-foreground",
+                                layout.colCategory,
+                                layout.bodyCellClass,
+                              )}
+                              title={displayCategoryLabel(fund)}
+                            >
+                              {displayCategoryLabel(fund)}
+                            </Table.Cell>
+                          ) : null}
+                          <Table.Cell className={cn("align-top", layout.colReturn, layout.returnBodyCellClass)}>
                             <ReturnCell value={fund.returns.return_1y} />
                           </Table.Cell>
-                          <Table.Cell className={cn("align-top text-right", COL_RETURN, BODY_CELL_CLASS)}>
+                          <Table.Cell className={cn("align-top", layout.colReturn, layout.returnBodyCellClass)}>
                             <ReturnCell value={fund.returns.return_3y} />
                           </Table.Cell>
-                          <Table.Cell className={cn("align-top text-right", COL_RETURN, BODY_CELL_CLASS)}>
+                          <Table.Cell className={cn("align-top", layout.colReturn, layout.returnBodyCellClass)}>
                             <ReturnCell value={fund.returns.return_5y} />
                           </Table.Cell>
                         </Table.Row>

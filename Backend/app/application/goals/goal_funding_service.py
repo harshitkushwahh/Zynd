@@ -8,7 +8,11 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.family_groups.display import get_active_membership, require_group_member
+from app.application.family_groups.display import (
+    get_active_membership,
+    require_group_member,
+    resolve_family_group_avatar_url,
+)
 from app.application.goals.errors import GoalError
 from app.application.goals.family_goal_service import _refresh_goal_current_amount
 from app.application.goals.permissions import can_contribute_to_family_goal
@@ -103,7 +107,14 @@ async def list_linkable_family_goals(db: AsyncSession, *, user_id: UUID) -> list
     )
 
     items: list[dict[str, Any]] = []
+    avatar_cache: dict[str, str | None] = {}
     for goal, group, membership in result.all():
+        group_id = str(group.id)
+        if group_id not in avatar_cache:
+            avatar_cache[group_id] = await resolve_family_group_avatar_url(
+                db,
+                avatar_document_id=group.avatar_document_id,
+            )
         items.append(
             {
                 "goal_id": str(goal.id),
@@ -114,8 +125,9 @@ async def list_linkable_family_goals(db: AsyncSession, *, user_id: UUID) -> list
                 )
                 if goal.target_amount_inr > 0
                 else 0.0,
-                "group_id": str(group.id),
+                "group_id": group_id,
                 "group_title": group.title,
+                "group_avatar_url": avatar_cache[group_id],
                 "my_role": membership.role.value,
                 "can_create_goals": membership.role == FamilyGroupMemberRole.head,
             }

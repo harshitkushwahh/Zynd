@@ -126,13 +126,16 @@ class ProviderLogRepository:
             return []
 
         query = (
-            select(ProviderApiLog, User.email.label("user_email"))
+            select(ProviderApiLog, User.email.label("user_email"), User.client_id.label("client_id"))
             .outerjoin(User, User.id == ProviderApiLog.user_id)
             .where(ProviderApiLog.id.in_(ids))
             .order_by(ProviderApiLog.created_at.desc(), ProviderApiLog.id.desc())
         )
         result = await self._session.execute(query)
-        return [self._serialize_row(row, user_email) for row, user_email in result.all()]
+        return [
+            self._serialize_row(row, user_email, client_id)
+            for row, user_email, client_id in result.all()
+        ]
 
     async def export_logs(
         self,
@@ -155,11 +158,16 @@ class ProviderLogRepository:
         )
 
     @staticmethod
-    def _serialize_row(row: ProviderApiLog, user_email: str | None) -> dict[str, Any]:
+    def _serialize_row(
+        row: ProviderApiLog,
+        user_email: str | None,
+        client_id: str | None = None,
+    ) -> dict[str, Any]:
         return {
             "id": row.id,
             "source": row.source.value,
             "user_id": row.user_id,
+            "client_id": client_id or "",
             "user_email": user_email,
             "action": row.action,
             "method": row.method,

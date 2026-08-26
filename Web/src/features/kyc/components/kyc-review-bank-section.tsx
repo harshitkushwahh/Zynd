@@ -1,8 +1,11 @@
 "use client";
 
-import { Building2, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
+
+import { BankLogo } from "@/components/banking/bank-logo";
 
 import type { KycJourneyDraft } from "@/features/kyc/lib/kyc-journey-draft";
+import { resolveAccountNumberDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -26,12 +29,8 @@ function BankReviewField({ label, value, mono }: { label: string; value: string;
   );
 }
 
-function maskAccountNumber(accountNumber: string) {
-  if (accountNumber.length <= 4) return accountNumber;
-  return `•••• •••• ${accountNumber.slice(-4)}`;
-}
-
 export function KycReviewBankSection({ bank }: KycReviewBankSectionProps) {
+  const accountDisplay = resolveAccountNumberDisplay(bank) ?? "—";
   return (
     <div
       className={cn(
@@ -59,14 +58,12 @@ export function KycReviewBankSection({ bank }: KycReviewBankSectionProps) {
             </p>
           </div>
 
-          <div
-            className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-full",
-              "bg-primary/[0.08] text-primary ring-1 ring-inset ring-primary/20",
-            )}
-          >
-            <Building2 className="size-4" strokeWidth={2} />
-          </div>
+          <BankLogo
+            bankName={bank.accountDetails.bankName}
+            ifscCode={bank.ifscCode}
+            size="sm"
+            fallbackClassName="bg-primary/[0.08] text-primary ring-primary/20"
+          />
         </div>
 
         <div className="rounded-[var(--radius-card)] border border-primary/15 bg-primary/[0.04] px-3 py-3">
@@ -74,7 +71,7 @@ export function KycReviewBankSection({ bank }: KycReviewBankSectionProps) {
             {copy.kyc.bank.fields.accountNumber}
           </p>
           <p className="mt-1 text-center font-mono text-h4 font-semibold tracking-[0.14em] text-foreground">
-            {maskAccountNumber(bank.accountNumber)}
+            {accountDisplay}
           </p>
           <p className="mt-1 text-center text-[11px] text-muted-foreground">
             {bank.accountDetails.bankName} · {bank.accountType}

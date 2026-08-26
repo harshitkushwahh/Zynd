@@ -1,0 +1,379 @@
+/* From Uiverse.io by dexter-st */
+
+.btn-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-wrapper .btn {
+  --border-radius: 18px;
+  --padding: 3px;
+  --transition: 0.4s;
+  --button-color: var(--zynd-purple-dark);
+  --highlight-color-hue: 262deg;
+
+  position: relative;
+  user-select: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5em 0.4em 0.5em 0.75em;
+  min-height: 2.125rem;
+  font-family: "Poppins", "Inter", "Segoe UI", sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  background: var(--gradient-purple);
+  background-color: var(--button-color);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 22%),
+    inset 0 2px 2px rgb(255 255 255 / 16%),
+    inset 0 4px 4px rgb(255 255 255 / 10%),
+    inset 0 8px 8px rgb(167 139 250 / 12%),
+    0 -1px 1px rgb(91 33 182 / 18%),
+    0 -4px 4px rgb(91 33 182 / 22%),
+    0 -8px 8px rgb(91 33 182 / 26%);
+  border: solid 1px color-mix(in srgb, var(--zynd-purple) 42%, white);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition:
+    box-shadow var(--transition),
+    border var(--transition),
+    background-color var(--transition),
+    background var(--transition);
+}
+
+.dark .btn-wrapper .btn {
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 18%),
+    inset 0 2px 2px rgb(255 255 255 / 12%),
+    inset 0 4px 4px rgb(196 181 253 / 10%),
+    inset 0 8px 8px rgb(124 58 237 / 14%),
+    0 -1px 1px rgb(46 16 101 / 35%),
+    0 -4px 4px rgb(46 16 101 / 40%),
+    0 -8px 8px rgb(46 16 101 / 45%);
+  border: solid 1px color-mix(in srgb, var(--zynd-purple) 38%, white);
+}
+
+.btn-wrapper .btn::before {
+  content: "";
+  position: absolute;
+  top: calc(0px - var(--padding));
+  left: calc(0px - var(--padding));
+  width: calc(100% + var(--padding) * 2);
+  height: calc(100% + var(--padding) * 2);
+  border-radius: calc(var(--border-radius) + var(--padding));
+  pointer-events: none;
+  background-image: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--zynd-purple-dark) 35%, transparent),
+    color-mix(in srgb, var(--zynd-purple-dark) 70%, transparent)
+  );
+  z-index: -1;
+  transition:
+    box-shadow var(--transition),
+    filter var(--transition);
+  box-shadow:
+    0 -8px 8px -6px #0000 inset,
+    0 -16px 16px -8px #00000000 inset,
+    1px 1px 1px #fff2,
+    2px 2px 2px #fff1,
+    -1px -1px 1px #0002,
+    -2px -2px 2px #0001;
+}
+
+.btn-wrapper .btn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: linear-gradient(
+    0deg,
+    #fff,
+    hsl(var(--highlight-color-hue), 100%, 70%),
+    hsla(var(--highlight-color-hue), 100%, 70%, 50%),
+    8%,
+    transparent
+  );
+  background-position: 0 0;
+  opacity: 0;
+  transition:
+    opacity var(--transition),
+    filter var(--transition);
+}
+
+.btn-wrapper .btn-letter {
+  position: relative;
+  display: inline-block;
+  color: #fff;
+  transition:
+    color var(--transition),
+    text-shadow var(--transition),
+    opacity var(--transition),
+    filter var(--transition);
+}
+
+.btn-wrapper .btn-svg {
+  flex-grow: 1;
+  height: 1.125rem;
+  margin-right: 0.35rem;
+  fill: color-mix(in srgb, var(--zynd-purple) 18%, white);
+  animation: zynd-recommend-funds-sparkle-blink 3.5s ease-in-out infinite;
+  transition:
+    fill var(--transition),
+    opacity var(--transition);
+}
+
+.btn-wrapper .txt-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 8.25em;
+}
+
+.btn-wrapper .txt-1,
+.btn-wrapper .txt-2 {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.btn-wrapper .btn-letter-space {
+  display: inline-block;
+  width: 0.3em;
+}
+
+.btn-wrapper .txt-1 {
+  animation: zynd-recommend-funds-appear 1s ease-in-out forwards;
+}
+
+.btn-wrapper .txt-2 {
+  opacity: 0;
+}
+
+.btn-wrapper .btn:focus-visible .txt-1 {
+  animation: zynd-recommend-funds-opacity 0.3s ease-in-out forwards;
+  animation-delay: 1s;
+}
+
+.btn-wrapper .btn:focus-visible .txt-2 {
+  animation: zynd-recommend-funds-opacity 0.3s ease-in-out reverse forwards;
+  animation-delay: 1s;
+}
+
+.btn-wrapper .btn:focus-visible .btn-svg {
+  animation-duration: 3.5s;
+}
+
+.btn-wrapper .btn:focus-visible::before {
+  box-shadow:
+    0 -8px 12px -6px #fff3 inset,
+    0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 20%) inset,
+    1px 1px 1px #fff3,
+    2px 2px 2px #fff1,
+    -1px -1px 1px #0002,
+    -2px -2px 2px #0001;
+}
+
+.btn-wrapper .btn:focus-visible::after {
+  opacity: 0.6;
+  mask-image: linear-gradient(0deg, #fff, transparent);
+  filter: brightness(100%);
+}
+
+.btn-wrapper .btn-letter:nth-child(1),
+.btn-wrapper .btn:hover .btn-letter:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.btn-wrapper .btn-letter:nth-child(2),
+.btn-wrapper .btn:hover .btn-letter:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.btn-wrapper .btn-letter:nth-child(3),
+.btn-wrapper .btn:hover .btn-letter:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+.btn-wrapper .btn-letter:nth-child(4),
+.btn-wrapper .btn:hover .btn-letter:nth-child(4) {
+  animation-delay: 0.24s;
+}
+
+.btn-wrapper .btn-letter:nth-child(5),
+.btn-wrapper .btn:hover .btn-letter:nth-child(5) {
+  animation-delay: 0.32s;
+}
+
+.btn-wrapper .btn-letter:nth-child(6),
+.btn-wrapper .btn:hover .btn-letter:nth-child(6) {
+  animation-delay: 0.4s;
+}
+
+.btn-wrapper .btn-letter:nth-child(7),
+.btn-wrapper .btn:hover .btn-letter:nth-child(7) {
+  animation-delay: 0.48s;
+}
+
+.btn-wrapper .btn-letter:nth-child(8),
+.btn-wrapper .btn:hover .btn-letter:nth-child(8) {
+  animation-delay: 0.56s;
+}
+
+.btn-wrapper .btn-letter:nth-child(9),
+.btn-wrapper .btn:hover .btn-letter:nth-child(9) {
+  animation-delay: 0.64s;
+}
+
+.btn-wrapper .btn-letter:nth-child(10),
+.btn-wrapper .btn:hover .btn-letter:nth-child(10) {
+  animation-delay: 0.72s;
+}
+
+.btn-wrapper .btn-letter:nth-child(11),
+.btn-wrapper .btn:hover .btn-letter:nth-child(11) {
+  animation-delay: 0.8s;
+}
+
+.btn-wrapper .btn-letter:nth-child(12),
+.btn-wrapper .btn:hover .btn-letter:nth-child(12) {
+  animation-delay: 0.88s;
+}
+
+.btn-wrapper .btn-letter:nth-child(13),
+.btn-wrapper .btn:hover .btn-letter:nth-child(13) {
+  animation-delay: 0.96s;
+}
+
+.btn-wrapper .btn:active {
+  border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 70%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--zynd-purple) 72%, black) 0%,
+    color-mix(in srgb, var(--zynd-purple-dark) 88%, black) 100%
+  );
+}
+
+.btn-wrapper .btn:active::before {
+  box-shadow:
+    0 -8px 12px -6px #fffa inset,
+    0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 80%) inset,
+    1px 1px 1px #fff4,
+    2px 2px 2px #fff2,
+    -1px -1px 1px #0002,
+    -2px -2px 2px #0001;
+}
+
+.btn-wrapper .btn:active::after {
+  opacity: 1;
+  mask-image: linear-gradient(0deg, #fff, transparent);
+  filter: brightness(200%);
+}
+
+.btn-wrapper .btn:active .btn-letter {
+  text-shadow: 0 0 1px hsla(var(--highlight-color-hue), 100%, 90%, 90%);
+  animation: none;
+}
+
+.btn-wrapper .btn:hover {
+  border: solid 1px hsla(var(--highlight-color-hue), 100%, 80%, 40%);
+}
+
+.btn-wrapper .btn:hover .btn-letter {
+  animation: zynd-recommend-funds-letter-glow 2s ease-in-out infinite;
+  will-change: filter, text-shadow;
+}
+
+.btn-wrapper .btn:hover .btn-svg {
+  fill: #fff;
+}
+
+.btn-wrapper .btn:hover::before {
+  box-shadow:
+    0 -8px 8px -6px rgb(255 255 255 / 70%) inset,
+    0 -16px 16px -8px hsla(var(--highlight-color-hue), 100%, 70%, 18%) inset,
+    1px 1px 1px #fff2,
+    2px 2px 2px #fff1,
+    -1px -1px 1px #0002,
+    -2px -2px 2px #0001;
+}
+
+.btn-wrapper .btn:hover::after {
+  opacity: 0.55;
+  mask-image: linear-gradient(0deg, #fff, transparent);
+}
+
+.btn-wrapper .btn:not(:hover) .btn-letter {
+  filter: none;
+  text-shadow: none;
+}
+
+.btn-wrapper .btn[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+@keyframes zynd-recommend-funds-letter-glow {
+  0%,
+  100% {
+    filter: blur(0);
+    text-shadow: 0 0 0 transparent;
+  }
+
+  50% {
+    filter: blur(0.45px);
+    text-shadow:
+      0 0 3px hsl(var(--highlight-color-hue), 100%, 78%),
+      0 0 6px hsla(var(--highlight-color-hue), 100%, 70%, 35%);
+  }
+}
+
+@keyframes zynd-recommend-funds-sparkle-blink {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes zynd-recommend-funds-appear {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes zynd-recommend-funds-opacity {
+  0% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-wrapper .btn-letter,
+  .btn-wrapper .btn-svg,
+  .btn-wrapper .txt-1,
+  .btn-wrapper .txt-2 {
+    animation: none !important;
+  }
+
+  .btn-wrapper .txt-2 {
+    opacity: 0 !important;
+  }
+
+  .btn-wrapper .txt-1 {
+    opacity: 1 !important;
+  }
+}

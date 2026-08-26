@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.mf_mandate_guard import SIP_MANDATE_BLOCKING_STATUSES
 from app.application.investor.investor_bank_account_resolver import resolve_payment_bank_account
+from app.application.investor.investor_provision_service import sync_unsynced_investor_children
 from app.application.mf.mf_fp_state import map_fp_mandate_status
 from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
@@ -23,7 +24,7 @@ from app.infrastructure.mf.fp_mandate_client import (
     get_mandate,
 )
 from app.infrastructure.mf.fp_oms_client import invalidate_mf_token
-from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus, MfSipPlan
+from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus, MfSipPlan, MfSipPlanStatus
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,22 @@ def _fp_cancel_error_is_benign(message: str) -> bool:
     if "operation not allowed" in normalized and "cybrillapoa" in normalized:
         return True
     return False
+
+
+def _format_fp_mandate_cancel_error(exc: FpClientError) -> tuple[str, str]:
+    message = exc.message.strip()
+    lowered = message.lower()
+    if "server_error" in lowered or "billdesk" in lowered or message.startswith("{"):
+        return (
+            "fp_mandate_cancel_failed",
+            "We couldn't cancel this mandate with the payment provider right now. Try again in a few minutes.",
+        )
+    if len(message) > 240:
+        return (
+            "fp_mandate_cancel_failed",
+            "We couldn't cancel this mandate with the payment provider right now. Try again in a few minutes.",
+        )
+    return ("fp_mandate_cancel_failed", message or "Mandate cancellation failed. Please try again.")
 
 
 def _apply_mandate_fp_status(
@@ -170,14 +187,18 @@ async def reconcile_bank_mandates_from_fp(
     return updated
 
 
-def serialize_mandate(mandate: MfMandate) -> dict:
-    return {
+def serialize_mandate(
+    mandate: MfMandate,
+    *,
+    bank_account=None,
+    expose_mandate_limit: bool = False,
+) -> dict:
+    payload = {
         "mandate_id": str(mandate.id),
         "status": mandate.status.value,
         "fp_mandate_id": mandate.fp_mandate_id,
         "bank_account_old_id": mandate.bank_account_old_id,
         "mandate_type": mandate.mandate_type,
-        "mandate_limit": mandate.mandate_limit,
         "fp_mandate_status": mandate.fp_mandate_status,
         "auth_url": mandate.auth_token_url,
         "next_action": _derive_mandate_next_action(
@@ -188,23 +209,67 @@ def serialize_mandate(mandate: MfMandate) -> dict:
         "failure_reason": mandate.failure_reason,
         "created_at": mandate.created_at.isoformat() if mandate.created_at else None,
         "approved_at": mandate.approved_at.isoformat() if mandate.approved_at else None,
+        "investor_bank_account_id": (
+            str(mandate.investor_bank_account_id) if mandate.investor_bank_account_id else None
+        ),
+        "bank_name": None,
+        "bank_account_masked": None,
+        "bank_ifsc_code": None,
     }
+    if expose_mandate_limit:
+        payload["mandate_limit"] = mandate.mandate_limit
+    if bank_account is not None:
+        payload["bank_name"] = bank_account.bank_name
+        payload["bank_account_masked"] = f"•••• {bank_account.account_number_last4}"
+        payload["bank_ifsc_code"] = bank_account.ifsc_code
+    return payload
+
+
+def compute_mandate_limit_inr(amount_inr: Decimal) -> int:
+    """Pick the NPCI mandate ceiling from the investor's SIP amount tier."""
+    settings = get_settings()
+    amount = int(amount_inr)
+    if amount >= settings.zynd_mf_mandate_tier3_threshold_inr:
+        return settings.zynd_mf_mandate_tier3_limit_inr
+    if amount >= settings.zynd_mf_mandate_tier2_threshold_inr:
+        return settings.zynd_mf_mandate_tier2_limit_inr
+    return settings.zynd_mf_mandate_tier1_limit_inr
 
 
 def _compute_mandate_limit(amount_inr: Decimal) -> int:
-    """Size the mandate to roughly cover the SIP amount, not the NPCI UPI Autopay ceiling.
-
-    Showing a small SIP investor a ₹1,00,000 authorization is alarming and unnecessary —
-    the limit only needs enough headroom for the current installment plus modest top-ups.
-    """
-    settings = get_settings()
-    base = max(int(amount_inr) * settings.zynd_mf_mandate_limit_multiplier, settings.zynd_mf_sip_min_mandate_limit_inr)
-    return min(base, 100_000)
+    return compute_mandate_limit_inr(amount_inr)
 
 
 def _normalize_mandate_type(mandate_type: str) -> str:
     normalized = (mandate_type or "upi").strip().lower()
     return "NACH" if normalized == "nach" else "UPI"
+
+
+async def find_reusable_mandate(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    bank_account_old_id: int,
+    required_limit: int,
+    mandate_type: str,
+) -> MfMandate | None:
+    """Return an approved mandate on this bank with enough headroom for the SIP tier."""
+    mandates = list(
+        (
+            await session.execute(
+                select(MfMandate)
+                .where(
+                    MfMandate.user_id == user_id,
+                    MfMandate.bank_account_old_id == bank_account_old_id,
+                    MfMandate.status == MfMandateStatus.approved,
+                    MfMandate.mandate_type == mandate_type,
+                    MfMandate.mandate_limit >= required_limit,
+                )
+                .order_by(MfMandate.mandate_limit.desc(), MfMandate.approved_at.desc())
+            )
+        ).scalars()
+    )
+    return mandates[0] if mandates else None
 
 
 async def find_approved_mandate(
@@ -246,12 +311,14 @@ async def create_mandate_for_user(
     required_limit = _compute_mandate_limit(amount)
     normalized_type = _normalize_mandate_type(mandate_type)
 
-    approved = await find_approved_mandate(
+    approved = await find_reusable_mandate(
         session,
         user_id=user_id,
         bank_account_old_id=int(bank.external_old_id),
+        required_limit=required_limit,
+        mandate_type=normalized_type,
     )
-    if approved and approved.mandate_type == normalized_type and approved.mandate_limit >= required_limit:
+    if approved:
         return approved
 
     mandate = MfMandate(
@@ -332,15 +399,35 @@ async def cancel_user_mandate(session: AsyncSession, mandate: MfMandate) -> MfMa
                 mandate.fp_mandate_status = mandate.fp_mandate_status or "CANCELLED"
                 await session.flush()
                 return mandate
+            failure_code, failure_reason = _format_fp_mandate_cancel_error(exc)
             raise MfOrderError(
-                code=exc.code,
-                message=exc.message,
-                status_code=exc.status_code,
+                code=failure_code,
+                message=failure_reason,
+                status_code=502 if exc.status_code >= 500 else 400,
             ) from exc
 
     mandate.status = MfMandateStatus.cancelled
     await session.flush()
     return mandate
+
+
+async def _fail_linked_pending_sip_plans(session: AsyncSession, mandate: MfMandate) -> None:
+    plans = list(
+        (
+            await session.execute(
+                select(MfSipPlan).where(
+                    MfSipPlan.mf_mandate_id == mandate.id,
+                    MfSipPlan.status == MfSipPlanStatus.pending,
+                )
+            )
+        ).scalars()
+    )
+    for plan in plans:
+        plan.status = MfSipPlanStatus.failed
+        plan.failure_code = mandate.failure_code or "mandate_failed"
+        plan.failure_reason = mandate.failure_reason or "Mandate setup failed"
+    if plans:
+        await session.flush()
 
 
 async def maybe_release_mandate_after_sip_change(
@@ -360,13 +447,31 @@ async def maybe_release_mandate_after_sip_change(
     )
     if has_blocking_sip:
         return
-    await cancel_user_mandate(session, mandate)
+    try:
+        await cancel_user_mandate(session, mandate)
+    except MfOrderError as exc:
+        await refresh_mandate_status_from_fp(session, mandate, force=True)
+        if mandate.status == MfMandateStatus.cancelled:
+            return
+        logger.warning(
+            "Mandate release after SIP change failed mandate=%s: %s",
+            mandate.id,
+            exc.message,
+        )
 
 
 async def submit_pending_mandate(session: AsyncSession, mandate: MfMandate) -> bool:
     if mandate.status != MfMandateStatus.pending or mandate.fp_mandate_id is not None:
         return False
     if should_skip_retry(mandate.metadata_):
+        return False
+
+    contacts_ready = await sync_unsynced_investor_children(session, user_id=mandate.user_id)
+    if not contacts_ready:
+        logger.info(
+            "Deferring mandate create mandate=%s — Finprim contact objects not synced yet",
+            mandate.id,
+        )
         return False
 
     try:
@@ -383,11 +488,17 @@ async def submit_pending_mandate(session: AsyncSession, mandate: MfMandate) -> b
                 error_code="fp_mandate_create_failed",
                 error_message=str(exc),
             )
+            if terminal:
+                mandate.status = MfMandateStatus.failed
+                mandate.failure_code = "fp_mandate_create_failed"
+                mandate.failure_reason = str(exc)
+                await _fail_linked_pending_sip_plans(session, mandate)
             await session.flush()
-            return not terminal
+            return True
         mandate.status = MfMandateStatus.failed
         mandate.failure_code = "fp_mandate_create_failed"
         mandate.failure_reason = str(exc)
+        await _fail_linked_pending_sip_plans(session, mandate)
         await session.flush()
         return True
 

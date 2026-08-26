@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 
 import { LoadErrorCard } from "@/components/ui/load-error-card";
+import { PortfolioRedeemUnitsSkeleton } from "@/features/dashboard/portfolio/components/portfolio-redeem-units-skeleton";
 import { Table, TableCard } from "@/components/core/table";
 import {
   PORTFOLIO_REDEEM_JOURNEY_DIALOG_CLOSE_MS,
@@ -11,6 +11,7 @@ import {
 } from "@/features/dashboard/portfolio/components/portfolio-redeem-units-journey-dialog";
 import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
 import { usePortfolioRedeemUnitsQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
+import { usePortfolioUninvestedEmpty } from "@/features/dashboard/portfolio/hooks/use-portfolio-uninvested-empty";
 import { getPortfolioTabMeta } from "@/features/dashboard/portfolio/lib/portfolio-page-tab-meta";
 import type { PortfolioRedeemUnitsRow } from "@/features/dashboard/portfolio/lib/portfolio-redeem-mapper";
 import { portfolioHoldingAmcInitials } from "@/features/dashboard/portfolio/lib/portfolio-types";
@@ -35,7 +36,8 @@ const RIGHT_HEAD_CLASS = "text-right [&>div]:ml-auto [&>div]:justify-end";
 export function PortfolioRedeemUnitsPanel() {
   const portfolioCopy = copy.dashboard.portfolio;
   const redeemTabMeta = getPortfolioTabMeta("redeem-units");
-  const { rows, showSkeleton, errorMessage, isFetching, refetch } = usePortfolioRedeemUnitsQuery();
+  const uninvested = usePortfolioUninvestedEmpty();
+  const { rows, showSkeleton, hasResolved, errorMessage, isFetching, refetch } = usePortfolioRedeemUnitsQuery();
   const [journeyOpen, setJourneyOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<PortfolioRedeemUnitsRow | null>(null);
 
@@ -54,15 +56,29 @@ export function PortfolioRedeemUnitsPanel() {
     setJourneyOpen(true);
   }
 
-  if (showSkeleton) {
+  if (!uninvested.hasResolved && showSkeleton) {
+    return <PortfolioRedeemUnitsSkeleton />;
+  }
+
+  if (!uninvested.hasInvestments && uninvested.hasResolved) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center text-muted-foreground">
-        <Loader2 className="size-6 animate-spin" aria-hidden />
-      </div>
+      <PortfolioTabEmptyState
+        icon={redeemTabMeta.icon}
+        title={portfolioCopy.redeemUnitsEmpty}
+        description={
+          uninvested.isProcessing
+            ? portfolioCopy.redeemUnitsPendingAllotmentDescription
+            : portfolioCopy.redeemUnitsEmptyDescription
+        }
+      />
     );
   }
 
-  if (errorMessage) {
+  if (uninvested.hasInvestments && !hasResolved && showSkeleton) {
+    return <PortfolioRedeemUnitsSkeleton />;
+  }
+
+  if (uninvested.hasInvestments && hasResolved && errorMessage) {
     return (
       <LoadErrorCard
         icon={redeemTabMeta.icon}
@@ -75,7 +91,7 @@ export function PortfolioRedeemUnitsPanel() {
     );
   }
 
-  if (rows.length === 0) {
+  if (uninvested.hasInvestments && hasResolved && rows.length === 0) {
     return (
       <PortfolioTabEmptyState
         icon={redeemTabMeta.icon}

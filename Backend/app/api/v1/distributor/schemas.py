@@ -55,7 +55,9 @@ class DistributorBranchResponse(BaseModel):
 class DistributorConsoleContextResponse(BaseModel):
     persona: str
     client_id: str
+    phone_masked: str = ""
     branch: DistributorBranchResponse | None = None
+    branch_assigned: bool = False
 
 
 class DistributorPartnerListResponse(BaseModel):
@@ -216,6 +218,9 @@ class DistributorClientListItemResponse(BaseModel):
     investor_type: str
     aum: float | None = None
     created_at: datetime | None = None
+    mitra_client_id: str | None = None
+    in_distributor_book: bool = True
+    service_model: str = "diy"
 
 
 class DistributorClientListResponse(BaseModel):
@@ -294,3 +299,65 @@ class DistributorClientDetailResponse(BaseModel):
     referrals: DistributorClientReferralsResponse
     sessions: list[DistributorClientSessionResponse] = Field(default_factory=list)
     created_at: datetime | None = None
+    book_link: dict[str, Any] | None = None
+
+
+class ClientOnboardingStartRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+
+
+class ClientOnboardingStartResponse(BaseModel):
+    onboarding_token: str
+    retry_after_seconds: int
+    expires_in: int
+
+
+class ClientOnboardingMobileOtpRequest(BaseModel):
+    onboarding_token: str = Field(min_length=16, max_length=256)
+    mobile: str = Field(min_length=10, max_length=15)
+
+
+class ClientOnboardingSubmitResponse(BaseModel):
+    client_user_id: UUID
+    client_id: str
+    mitra_client_id: str
+    email: str
+    mobile: str
+
+
+class ClientOnboardingDraftResponse(BaseModel):
+    email: str | None = None
+    email_verified: bool = False
+    mobile: str | None = None
+    mobile_verified: bool = False
+    ready_to_create: bool = False
+
+
+class ClientOnboardingContactUpdateRequest(BaseModel):
+    onboarding_token: str = Field(min_length=16, max_length=256)
+    email: str | None = Field(default=None, min_length=5, max_length=254)
+    mobile: str | None = Field(default=None, min_length=10, max_length=15)
+
+
+class ClientOnboardingContactUpdateResponse(OtpSendResponse):
+    email: str | None = None
+    email_verified: bool = False
+    mobile: str | None = None
+    mobile_verified: bool = False
+    ready_to_create: bool = False
+
+
+class DistributorComplianceQueueItemResponse(BaseModel):
+    id: str
+    client_id: str
+    client_code: str
+    client_label: str
+    issue_type: str
+    stage: str
+    severity: str
+    days_open: int
+    updated_at: datetime | None = None
+
+
+class DistributorComplianceQueueResponse(BaseModel):
+    items: list[DistributorComplianceQueueItemResponse]

@@ -82,7 +82,7 @@ export function SendAdminInvitationDialog({
       }
     >
       <div className="space-y-4">
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
         <div className="space-y-2">
           <Label htmlFor="invite-email">Work email</Label>

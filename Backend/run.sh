@@ -206,8 +206,9 @@ if [ "${ZYND_MF_WORKER_AUTOSTART:-true}" = "true" ]; then
     done
   fi
   rm -f .mf_transaction_worker.lock
-  echo "Starting MF order worker in background..."
-  .venv/bin/python -m app.jobs.run_mf_transaction_workers --orders &
+  mkdir -p logs
+  echo "Starting MF order worker in background (logs: logs/mf-worker.log)..."
+  .venv/bin/python -m app.jobs.run_mf_transaction_workers --orders >> logs/mf-worker.log 2>&1 &
 fi
 
 if lsof -ti :"${API_PORT}" >/dev/null 2>&1; then

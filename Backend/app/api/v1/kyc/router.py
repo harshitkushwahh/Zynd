@@ -15,6 +15,8 @@ from app.api.v1.kyc.schemas import (
     KycBankProofUploadResponse,
     KycBankVerifyRequest,
     KycBankVerifyResponse,
+    build_kyc_bank_verify_response,
+    build_kyc_bank_preverify_status_response,
     KycBootstrapResponse,
     KycCountryItem,
     KycDigilockerStartResponse,
@@ -52,6 +54,7 @@ from app.application.kyc.journey_gate_service import (
     require_pan_verified,
     require_phase1_complete,
 )
+from app.application.kyc.bootstrap_redaction import redact_pan_draft
 from app.application.kyc.journey_state_service import (
     find_journey_by_identity_document,
     get_or_create_journey,
@@ -70,12 +73,13 @@ from app.application.kyc.kyc_form_service import (
 from app.application.kyc.master_data import master_data_enums
 from app.application.kyc.nominee_master_data import nominee_master_data_enums
 from app.application.kyc.pan_verification_service import confirm_pan_names, verify_pan
+from app.application.kyc.user_name_sync_service import sync_user_name_from_verified_kyc
 from app.application.investor.investor_nominee_sync_service import sync_nominees_from_kyc_draft
 from app.application.kyc.readiness_check_service import check_kra_readiness_status
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.infrastructure.kyc.fp_clients import ensure_kyc_tokens, list_countries, list_states, lookup_pincode
-from app.infrastructure.persistence.models import User
+from app.infrastructure.persistence.models import KycOverallStatus, User
 
 router = APIRouter(prefix="/kyc", tags=["kyc"])
 
@@ -107,6 +111,14 @@ async def get_kyc_journey_bootstrap(
     eligibility = kyc_eligibility_status(current_user)
     journey = await get_or_create_journey(db, current_user.id) if eligibility["eligible"] else None
     status = await get_or_create_status(db, current_user.id) if eligibility["eligible"] else None
+    if (
+        journey
+        and status
+        and status.overall_status == KycOverallStatus.completed
+        and not (current_user.first_name or "").strip()
+    ):
+        await sync_user_name_from_verified_kyc(db, user=current_user, journey=journey)
+        await db.flush()
     payload = journey_to_bootstrap_dict(journey, status)
     step_statuses = payload.get("stepStatuses")
     return KycBootstrapResponse(
@@ -168,7 +180,7 @@ async def post_kyc_pan_verify(
 
     return KycPanVerifyResponse(
         success=True,
-        pan_draft=result.get("panDraft"),
+        pan_draft=redact_pan_draft(result.get("panDraft")),
         kyc_already_registered=result.get("kycAlreadyRegistered"),
         readiness=KycReadinessInfo(**result["readiness"]) if result.get("readiness") else None,
         requires_digilocker=result.get("requiresDigilocker"),
@@ -204,7 +216,7 @@ async def post_kyc_pan_confirm_names(
 
     return KycPanConfirmNamesResponse(
         success=True,
-        pan_draft=result.get("panDraft"),
+        pan_draft=redact_pan_draft(result.get("panDraft")),
     )
 
 
@@ -412,19 +424,7 @@ async def post_kyc_bank_verify_hybrid(
     except KycError as exc:
         raise _handle_kyc_error(exc) from exc
     await db.commit()
-    return KycBankVerifyResponse(
-        success=bool(result.get("success")),
-        account_holder_name=result.get("accountHolderName"),
-        bank_name=result.get("bankName"),
-        branch=result.get("branch"),
-        pan_verified=bool(result.get("panVerified")),
-        bank_verified=bool(result.get("bankVerified")),
-        readiness_verified=bool(result.get("readinessVerified")),
-        requires_manual_verification=bool(result.get("requiresManualVerification")),
-        requires_proof_upload=bool(result.get("requiresProofUpload")),
-        preverify_id=result.get("preverifyId"),
-        failure=KycBankFailure(**result["failure"]) if result.get("failure") else None,
-    )
+    return build_kyc_bank_verify_response(result)
 
 
 @router.post("/bank/upload-proof", response_model=KycBankProofUploadResponse)
@@ -480,12 +480,7 @@ async def get_kyc_bank_preverify_status(
         result = await get_bank_preverify_status(db, user_id=current_user.id, preverify_id=preverify_id)
     except KycError as exc:
         raise _handle_kyc_error(exc) from exc
-    return KycBankPreverifyStatusResponse(
-        status=result.get("status"),
-        bank_verified=bool(result.get("bankVerified")),
-        code=result.get("code"),
-        reason=result.get("reason"),
-    )
+    return build_kyc_bank_preverify_status_response(result)
 
 
 def _form_response(result: dict[str, object]) -> KycFormSubmitResponse:

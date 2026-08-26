@@ -1,31 +1,78 @@
-const PIN_UNLOCK_KEY = "zynd:distributor:pin-unlocked-at";
+const PIN_UNLOCK_KEY_PREFIX = "zynd:distributor:pin-unlocked-at";
 const PIN_IDLE_MS = 60 * 60 * 1000;
 
-export function markPinUnlocked(expiresInSeconds = PIN_IDLE_MS / 1000) {
+function pinUnlockKey(userId: string) {
+  return `${PIN_UNLOCK_KEY_PREFIX}:${userId}`;
+}
+
+function readExpiry(userId: string): number | null {
+  if (typeof window === "undefined" || !userId) return null;
+
+  const storages = [window.localStorage, window.sessionStorage];
+  for (const storage of storages) {
+    const raw = storage.getItem(pinUnlockKey(userId));
+    if (!raw) continue;
+    const expiresAt = Number(raw);
+    if (Number.isFinite(expiresAt)) {
+      return expiresAt;
+    }
+  }
+
+  return null;
+}
+
+function writeExpiry(userId: string, expiresAt: number) {
+  if (typeof window === "undefined" || !userId) return;
+  const value = String(expiresAt);
+  window.localStorage.setItem(pinUnlockKey(userId), value);
+  window.sessionStorage.setItem(pinUnlockKey(userId), value);
+}
+
+function removeExpiry(userId: string) {
+  if (typeof window === "undefined" || !userId) return;
+  window.localStorage.removeItem(pinUnlockKey(userId));
+  window.sessionStorage.removeItem(pinUnlockKey(userId));
+}
+
+export function markPinUnlocked(userId: string, expiresInSeconds = PIN_IDLE_MS / 1000) {
+  if (typeof window === "undefined" || !userId) return;
+  writeExpiry(userId, Date.now() + expiresInSeconds * 1000);
+}
+
+export function clearPinUnlock(userId?: string) {
   if (typeof window === "undefined") return;
-  const expiresAt = Date.now() + expiresInSeconds * 1000;
-  window.sessionStorage.setItem(PIN_UNLOCK_KEY, String(expiresAt));
+  if (userId) {
+    removeExpiry(userId);
+    return;
+  }
+
+  const keysToRemove: string[] = [];
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(`${PIN_UNLOCK_KEY_PREFIX}:`)) {
+        keysToRemove.push(key);
+      }
+    }
+  }
+  keysToRemove.forEach((key) => {
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  });
 }
 
-export function clearPinUnlock() {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.removeItem(PIN_UNLOCK_KEY);
+export function isPinUnlockedLocally(userId?: string | null): boolean {
+  if (!userId) return false;
+  const expiresAt = readExpiry(userId);
+  return expiresAt !== null && Date.now() < expiresAt;
 }
 
-export function isPinUnlockedLocally(): boolean {
-  if (typeof window === "undefined") return false;
-  const raw = window.sessionStorage.getItem(PIN_UNLOCK_KEY);
-  if (!raw) return false;
-  const expiresAt = Number(raw);
-  return Number.isFinite(expiresAt) && Date.now() < expiresAt;
+export function touchPinUnlockActivity(userId: string) {
+  if (!isPinUnlockedLocally(userId)) return;
+  markPinUnlocked(userId);
 }
 
-export function touchPinUnlockActivity() {
-  if (!isPinUnlockedLocally()) return;
-  markPinUnlocked();
-}
-
-export function shouldRequirePinUnlock(pinEnrolled: boolean): boolean {
-  if (!pinEnrolled) return false;
-  return !isPinUnlockedLocally();
+export function shouldRequirePinUnlock(pinEnrolled: boolean, userId?: string | null): boolean {
+  if (!pinEnrolled || !userId) return false;
+  return !isPinUnlockedLocally(userId);
 }

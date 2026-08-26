@@ -29,7 +29,10 @@ function isPanDraftVerified(
   initiallyVerified: boolean,
 ) {
   if (initiallyVerified) return true;
-  return Boolean(draft?.panNumber && hasPanNameFields(draft.firstName, draft.lastName));
+  return Boolean(
+    (draft?.panNumber || draft?.panMasked) &&
+      hasPanNameFields(draft?.firstName ?? "", draft?.lastName ?? ""),
+  );
 }
 
 type KycPanStepProps = {
@@ -224,6 +227,7 @@ export function KycPanStep({
 
       onSubmit({
         ...confirmResult.pan_draft,
+        panNumber,
         requiresDigilocker: Boolean(digilockerRequired),
         kycAlreadyRegistered: Boolean(kycAlreadyRegistered),
       });

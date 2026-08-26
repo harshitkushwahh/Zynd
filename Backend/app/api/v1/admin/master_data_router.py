@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.v1.auth.deps import require_any_permission
-from app.application.admin.admin_master_data_service import lookup_admin_pincode
+from app.application.admin.admin_master_data_service import list_admin_states, lookup_admin_pincode
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.models import User
 
@@ -28,6 +28,19 @@ class AdminPincodeResponse(BaseModel):
     state_name: str
     state_code: str
     country_ansi_code: str
+
+
+class AdminStateResponse(BaseModel):
+    state_name: str
+    state_code: str
+
+
+@router.get("/states", response_model=list[AdminStateResponse])
+async def list_admin_states_route(
+    _: Annotated[User, Depends(ADMIN_MASTER_DATA_READ)],
+) -> list[AdminStateResponse]:
+    items = await list_admin_states()
+    return [AdminStateResponse(**item) for item in items]
 
 
 @router.get("/pincode/{pincode}", response_model=AdminPincodeResponse)

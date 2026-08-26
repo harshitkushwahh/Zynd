@@ -30,7 +30,7 @@ export function DistributorHeadManagerLeavePanel({
   });
 
   return (
-    <Card className="h-full overflow-hidden">
+    <Card className="h-full overflow-hidden border border-border/80 ring-0">
       <CardHeader className="border-b border-border/60 pb-4">
         <div className="flex items-start justify-between gap-2">
           <div>

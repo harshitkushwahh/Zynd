@@ -1,20 +1,11 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { LineChart } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { FieldMessage } from "@/components/ui/ui-message";
-import {
-  fetchInvestConfig,
-  fetchInvestFundDetail,
-  fetchInvestFundNavs,
-  fetchInvestReturnCalculator,
-  type InvestConfig,
-  type InvestFundDetail,
-  type InvestFundNavHistory,
-  type InvestReturnCalculator,
-} from "@/features/invest/api/invest-api";
+import { LoadErrorCard } from "@/components/ui/load-error-card";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { MfFundDetailHeader } from "@/features/invest/components/mf-fund-detail-header";
 import { MfFundCalculatorCard } from "@/features/invest/components/mf-fund-calculator-card";
@@ -29,6 +20,16 @@ import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-paym
 import { MF_PAGE_SECTION_CLASS, MF_FUND_DETAIL_RADIUS_CLASS, MF_INVEST_SIDEBAR_STICKY_CLASS, MF_INVEST_SIDEBAR_WIDTH_CLASS } from "@/features/invest/lib/mf-ui";
 import { mfFundHref, isFundUuid } from "@/features/invest/lib/mf-fund-url";
 import type { MfNavRange } from "@/features/invest/lib/mf-nav-history";
+import {
+  fetchInvestConfig,
+  fetchInvestFundDetail,
+  fetchInvestFundNavs,
+  fetchInvestReturnCalculator,
+  type InvestConfig,
+  type InvestFundDetail,
+  type InvestFundNavHistory,
+  type InvestReturnCalculator,
+} from "@/features/invest/api/invest-api";
 import { useAuth } from "@/contexts/auth-context";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,13 @@ type MfFundDetailViewProps = {
 
 const NAV_HISTORY_LIMIT = 2000;
 
+function resolveFundDetailError(message: string | null | undefined) {
+  if (!message || message === "Request failed") {
+    return copy.mutualFunds.fundDetailLoadError;
+  }
+  return message;
+}
+
 export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailViewProps) {
   const router = useRouter();
   const { user } = useAuth();
@@ -50,6 +58,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
   const [chartRange, setChartRange] = useState<MfNavRange>("1y");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +83,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
       })
       .catch((err: Error) => {
         if (!cancelled) {
-          setError(err.message || copy.mutualFunds.fundUnavailable);
+          setError(err.message || copy.mutualFunds.fundDetailLoadError);
         }
       })
       .finally(() => {
@@ -84,7 +93,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     return () => {
       cancelled = true;
     };
-  }, [fundSlug]);
+  }, [fundSlug, reloadKey]);
 
   useEffect(() => {
     if (!fund?.slug) return;
@@ -109,11 +118,16 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     return (
       <div className={MF_PAGE_SECTION_CLASS}>
         {renderBreadcrumb?.(null)}
-        <Card className={cn("border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
-          <CardContent className="space-y-4 p-6">
-            <FieldMessage variant="error" message={error ?? copy.mutualFunds.fundUnavailable} />
-          </CardContent>
-        </Card>
+        <DashboardContentFade>
+          <LoadErrorCard
+            icon={LineChart}
+            title={copy.mutualFunds.fundDetailLoadFailedTitle}
+            description={resolveFundDetailError(error ?? copy.mutualFunds.fundUnavailable)}
+            retryLabel={copy.mutualFunds.retry}
+            retryLoading={loading}
+            onRetry={() => setReloadKey((current) => current + 1)}
+          />
+        </DashboardContentFade>
       </div>
     );
   }
@@ -128,13 +142,13 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
       minSipAmountInr={fund.min_sip_amount_inr}
       preview={false}
       canInvest={canInvest}
-      sipEnabled={config?.sip_enabled ?? false}
+      sipEnabled={(config?.sip_enabled ?? false) && fund.sip_allowed === true}
       className={cn(MF_FUND_DETAIL_RADIUS_CLASS, "w-full")}
     />
   );
 
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6">
+    <DashboardContentFade className="w-full min-w-0 max-w-full space-y-6">
       {renderBreadcrumb?.(fund.name)}
 
       {user && !user.fund_movement_eligible ? <FundEligibilityBanner /> : null}
@@ -158,6 +172,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
             returns={fund.returns}
             selectedRange={chartRange}
             onRangeSelect={setChartRange}
+            navPoints={navHistory?.points}
           />
 
           {fund.investment_details ? (
@@ -185,6 +200,6 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
           {investCard}
         </aside>
       </div>
-    </div>
+    </DashboardContentFade>
   );
 }

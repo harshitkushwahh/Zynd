@@ -5,6 +5,7 @@ import { useCallback } from "react";
 
 import { FieldMessage } from "@/components/ui/ui-message";
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import {
   type InvestFundSummary,
   type InvestHomeResponse,
@@ -82,17 +83,19 @@ export function MutualFundsCatalogPanel() {
       <MfBreadcrumb />
       <FundEligibilityBanner />
 
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        <div className="min-w-0 flex-1">
-          {errorMessage && !homeData ? (
-            <FieldMessage variant="error" message={errorMessage} />
-          ) : homeData ? (
-            <BrowseHome data={homeData} error={errorMessage} onSelectFund={openFund} />
-          ) : null}
-        </div>
+      <DashboardContentFade>
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+          <div className="min-w-0 flex-1">
+            {errorMessage && !homeData ? (
+              <FieldMessage variant="error" message={errorMessage} />
+            ) : homeData ? (
+              <BrowseHome data={homeData} error={errorMessage} onSelectFund={openFund} />
+            ) : null}
+          </div>
 
-        <MfDashboardSidebar />
-      </div>
+          <MfDashboardSidebar />
+        </div>
+      </DashboardContentFade>
     </div>
   );
 }

@@ -60,11 +60,7 @@ export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
     <AdminSectionPageShell
       breadcrumbSegments={[{ label: "Platform" }, { label: "Family Groups" }]}
       title="Family Groups"
-      headerAside={
-        <div className="admin-page-icon-tile shrink-0">
-          <UsersRound className="size-5" />
-        </div>
-      }
+      icon={UsersRound}
     >
       <Tabs value={activeTabId} onValueChange={handleTabChange} className="gap-4">
         <AdminTabList>

@@ -283,7 +283,7 @@ export function RiskProfileAssessmentDetailDialog({
       {loading ? (
         <AdminDetailDialogSkeleton />
       ) : error ? (
-        <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
       ) : detail ? (
         <AssessmentDetailBody detail={detail} user={user ?? null} />
       ) : null}

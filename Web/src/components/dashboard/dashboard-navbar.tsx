@@ -8,6 +8,7 @@ import {
   Search,
   ShoppingCart,
 } from "lucide-react";
+import { RecommendFundsNavbarButton } from "@/components/dashboard/recommend-funds-navbar-button";
 import { DashboardActivePageCard } from "@/components/dashboard/dashboard-active-page-card";
 import { DashboardSearchDialog } from "@/components/dashboard/dashboard-search-dialog";
 import { NotificationPopover } from "@/components/dashboard/notifications/notification-popover";
@@ -181,6 +182,8 @@ export function DashboardNavbar() {
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
+        <RecommendFundsNavbarButton />
+
         <Tooltip>
           <TooltipTrigger
             render={
@@ -218,12 +221,15 @@ export function DashboardNavbar() {
             aria-current={pathname.startsWith("/dashboard/mutual-funds/cart") ? "page" : undefined}
             className={cn(
               DASHBOARD_NAV_ITEM_CLASS,
-              "relative px-2.5 outline-none transition-colors",
+              "zynd-navbar-cart-link relative px-2.5 outline-none transition-colors",
               "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
             )}
             aria-label="Cart"
           >
-            <ShoppingCart className="size-4 shrink-0" strokeWidth={2.25} />
+            <ShoppingCart
+              className="zynd-screener-dock-cart-icon size-4 shrink-0"
+              strokeWidth={2.25}
+            />
             <span className="text-[13px] font-medium leading-none">Cart</span>
             {cartItemCount > 0 ? (
               <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
@@ -249,20 +255,18 @@ export function DashboardNavbar() {
           </NavIconLink>
         </div>
 
-        <div className={DASHBOARD_NAV_CLUSTER_CLASS}>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span className="inline-flex h-10 items-center">
-                  <ThemeToggle theme={theme} onThemeChange={setTheme} />
-                </span>
-              }
-            />
-            <TooltipContent side="bottom">
-              {theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="inline-flex shrink-0 items-center">
+                <ThemeToggle theme={theme} onThemeChange={setTheme} />
+              </span>
+            }
+          />
+          <TooltipContent side="bottom">
+            {theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          </TooltipContent>
+        </Tooltip>
       </div>
       </header>
         <div aria-hidden className={cn(DASHBOARD_NAVBAR_FADE_CLASS, DASHBOARD_NAVBAR_FADE_HEIGHT)} />

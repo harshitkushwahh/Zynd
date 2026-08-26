@@ -1,14 +1,19 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useId, useMemo } from "react";
+import { useEffect, useId, useMemo } from "react";
 
 import {
+  coercePortfolioFlowRange,
   filterPortfolioFlowByRange,
   OVERVIEW_PORTFOLIO_FLOW_RANGE_OPTIONS,
   portfolioFlowYDomain,
+  resolveEnabledPortfolioFlowRanges,
+  resolvePortfolioFlowChartTone,
+  resolvePortfolioFlowPointTone,
   type OverviewPortfolioFlowPoint,
   type OverviewPortfolioFlowRange,
+  type PortfolioFlowChartTone,
 } from "@/features/dashboard/overview/lib/overview-portfolio-flow-series";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
@@ -35,7 +40,7 @@ function PortfolioFlowTooltipRow({
   label,
   value,
 }: {
-  tone: "value" | "invested";
+  tone: PortfolioFlowChartTone | "muted";
   label: string;
   value: string;
 }) {
@@ -45,7 +50,9 @@ function PortfolioFlowTooltipRow({
         <span
           className={cn(
             "size-1.5 shrink-0 rounded-full",
-            tone === "value" ? "bg-[var(--zynd-emerald)]" : "bg-[var(--zynd-blue)]",
+            tone === "profit" && "bg-[var(--zynd-emerald)]",
+            tone === "loss" && "bg-destructive",
+            tone === "muted" && "bg-muted-foreground",
           )}
           aria-hidden="true"
         />
@@ -77,12 +84,12 @@ function PortfolioFlowTooltip({ active, payload, label }: PortfolioFlowTooltipPr
 
       <div className={cn("space-y-0.5", label && "mt-1")}>
         <PortfolioFlowTooltipRow
-          tone="value"
+          tone={resolvePortfolioFlowPointTone(point)}
           label={overview.portfolioCurrentValue}
           value={formatInr(point.value)}
         />
         <PortfolioFlowTooltipRow
-          tone="invested"
+          tone="muted"
           label={overview.portfolioInvested}
           value={formatInr(point.invested)}
         />
@@ -113,31 +120,41 @@ function renderPortfolioFlowTooltip(props: unknown) {
 
 function PortfolioFlowRangeTabs({
   value,
+  enabledRanges,
   onChange,
 }: {
   value: OverviewPortfolioFlowRange;
+  enabledRanges: ReadonlySet<OverviewPortfolioFlowRange>;
   onChange: (value: OverviewPortfolioFlowRange) => void;
 }) {
+  const overview = copy.dashboard.overview;
+
   return (
     <div
       role="tablist"
-      aria-label={copy.dashboard.overview.portfolioChartRangeLabel}
+      aria-label={overview.portfolioChartRangeLabel}
       className="flex flex-wrap justify-center gap-0.5 px-2 pb-2 pt-1"
     >
       {OVERVIEW_PORTFOLIO_FLOW_RANGE_OPTIONS.map((option) => {
         const active = value === option.id;
+        const enabled = enabledRanges.has(option.id);
         return (
           <button
             key={option.id}
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => onChange(option.id)}
+            aria-disabled={!enabled}
+            disabled={!enabled}
+            title={!enabled ? overview.portfolioChartRangeUnavailable : undefined}
+            onClick={() => {
+              if (enabled) onChange(option.id);
+            }}
             className={cn(
-              "min-w-[2.15rem] rounded-full px-2 py-1 text-[10px] font-medium transition-all duration-200 ease-out sm:min-w-[2.35rem] sm:px-2.5 sm:text-[11px]",
-              active
-                ? "bg-foreground text-background shadow-sm"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              "min-w-[2.15rem] rounded-full px-2 py-1 text-[10px] font-medium transition-colors duration-200 ease-out sm:min-w-[2.35rem] sm:px-2.5 sm:text-[11px]",
+              active && enabled && "bg-foreground text-background shadow-sm",
+              !active && enabled && "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              !enabled && "cursor-not-allowed text-muted-foreground/35",
             )}
           >
             {option.label}
@@ -163,24 +180,36 @@ const PortfolioFlowRecharts = dynamic(
 );
 
 export function OverviewPortfolioFlowChart({
-  points,
+  series,
   range,
   onRangeChange,
 }: {
-  points: OverviewPortfolioFlowPoint[];
+  series: OverviewPortfolioFlowPoint[];
   range: OverviewPortfolioFlowRange;
   onRangeChange: (range: OverviewPortfolioFlowRange) => void;
 }) {
   const valueGradientId = useId().replace(/:/g, "");
-  const yDomain = useMemo(() => portfolioFlowYDomain(points), [points]);
+  const enabledRanges = useMemo(
+    () => new Set(resolveEnabledPortfolioFlowRanges(series)),
+    [series],
+  );
+  const chartPoints = useMemo(() => filterPortfolioFlowByRange(series, range), [range, series]);
+  const yDomain = useMemo(() => portfolioFlowYDomain(chartPoints), [chartPoints]);
+  const chartTone = useMemo(() => resolvePortfolioFlowChartTone(chartPoints), [chartPoints]);
   const baseValue = yDomain[0];
+
+  useEffect(() => {
+    const nextRange = coercePortfolioFlowRange(range, series);
+    if (nextRange !== range) onRangeChange(nextRange);
+  }, [onRangeChange, range, series]);
 
   return (
     <div className="w-full min-w-0">
-      <div className="h-[6.75rem] w-full transition-opacity duration-300 ease-out [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible">
+      <div className="h-[6.75rem] w-full transition-opacity duration-300 ease-out outline-none [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible [&_.recharts-surface]:outline-none [&_.recharts-surface:focus]:outline-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper:focus]:outline-none">
         <PortfolioFlowRecharts
-          points={points}
+          points={chartPoints}
           valueGradientId={valueGradientId}
+          tone={chartTone}
           yDomain={yDomain}
           baseValue={baseValue}
           renderTooltip={renderPortfolioFlowTooltip}
@@ -192,7 +221,11 @@ export function OverviewPortfolioFlowChart({
         />
       </div>
 
-      <PortfolioFlowRangeTabs value={range} onChange={onRangeChange} />
+      <PortfolioFlowRangeTabs
+        value={range}
+        enabledRanges={enabledRanges}
+        onChange={onRangeChange}
+      />
     </div>
   );
 }

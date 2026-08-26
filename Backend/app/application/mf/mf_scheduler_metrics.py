@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_metrics_service import collect_catalog_prometheus_stats
 from app.application.mf.ingestion_run_service import list_recent_runs
+from app.application.mf.mf_pipeline_store import get_pipeline_run_metrics
 from app.infrastructure.persistence.mf_models import IngestionRunLog, IngestionRunStatus
 
 
@@ -20,7 +21,8 @@ def _duration_seconds(run: IngestionRunLog) -> float | None:
 async def get_mf_prometheus_metrics(session: AsyncSession, *, limit: int = 200) -> str:
     runs = await list_recent_runs(session, limit=limit)
     catalog_stats = await collect_catalog_prometheus_stats(session)
-    return render_prometheus_metrics(runs, catalog_stats)
+    pipeline_stats = await get_pipeline_run_metrics(session)
+    return render_prometheus_metrics(runs, catalog_stats, pipeline_stats)
 
 
 def render_catalog_prometheus_metrics(stats: dict[str, float | int]) -> str:
@@ -78,9 +80,28 @@ def render_catalog_prometheus_metrics(stats: dict[str, float | int]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_pipeline_prometheus_metrics(stats: dict[str, float | int | str | None]) -> str:
+    lines = [
+        "# HELP zynd_mf_pipeline_last_success_timestamp_seconds Unix timestamp of the last successful MF pipeline run.",
+        "# TYPE zynd_mf_pipeline_last_success_timestamp_seconds gauge",
+        "# HELP zynd_mf_pipeline_last_success_duration_seconds Duration of the last successful MF pipeline run.",
+        "# TYPE zynd_mf_pipeline_last_success_duration_seconds gauge",
+        "# HELP zynd_mf_pipeline_last_failure_timestamp_seconds Unix timestamp of the last failed/paused MF pipeline run.",
+        "# TYPE zynd_mf_pipeline_last_failure_timestamp_seconds gauge",
+        "# HELP zynd_mf_pipeline_running_count Number of MF pipeline runs currently marked running.",
+        "# TYPE zynd_mf_pipeline_running_count gauge",
+    ]
+    lines.append(f"zynd_mf_pipeline_last_success_timestamp_seconds {stats['last_success_timestamp']}")
+    lines.append(f"zynd_mf_pipeline_last_success_duration_seconds {stats['last_success_duration_seconds']}")
+    lines.append(f"zynd_mf_pipeline_last_failure_timestamp_seconds {stats['last_failure_timestamp']}")
+    lines.append(f"zynd_mf_pipeline_running_count {stats['running_count']}")
+    return "\n".join(lines) + "\n"
+
+
 def render_prometheus_metrics(
     runs: list[IngestionRunLog],
     catalog_stats: dict[str, float | int] | None = None,
+    pipeline_stats: dict[str, float | int | str | None] | None = None,
 ) -> str:
     lines = [
         "# HELP zynd_mf_job_last_run_timestamp_seconds Unix timestamp of the last finished MF job run.",
@@ -116,5 +137,8 @@ def render_prometheus_metrics(
 
     if catalog_stats:
         lines.append(render_catalog_prometheus_metrics(catalog_stats).strip())
+
+    if pipeline_stats:
+        lines.append(render_pipeline_prometheus_metrics(pipeline_stats).strip())
 
     return "\n".join(lines) + "\n"

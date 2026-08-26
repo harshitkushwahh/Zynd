@@ -12,6 +12,20 @@ def test_parse_amfi_nav_line_valid() -> None:
     assert parsed["nav_value"] == parsed["nav_value"].__class__("245.1234")
 
 
+def test_parse_amfi_nav_line_plan_option_columns() -> None:
+    line = (
+        "119551;INF209KA12Z1;INF209KA13Z9;Aditya Birla Sun Life Banking & PSU Debt Fund;"
+        "Direct Plan;IDCW-Re-investment;106.8821;21-Aug-2026"
+    )
+    parsed = parse_amfi_nav_line(line)
+    assert parsed is not None
+    assert parsed["scheme_code"] == "119551"
+    assert parsed["isin_growth"] == "INF209KA12Z1"
+    assert parsed["scheme_name"] == "Aditya Birla Sun Life Banking & PSU Debt Fund"
+    assert parsed["nav_value"] == parsed["nav_value"].__class__("106.8821")
+    assert parsed["nav_date_raw"] == "21-Aug-2026"
+
+
 def test_parse_amfi_nav_line_skips_header() -> None:
     assert parse_amfi_nav_line("Open Ended Schemes (Equity Scheme)") is None
 

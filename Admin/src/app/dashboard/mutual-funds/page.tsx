@@ -26,6 +26,7 @@ import { CategoryCurationDialog } from "@/components/mf/category-curation-panel"
 import { ContentRulesPanel } from "@/components/mf/content-rules-panel";
 import { FundContentPanel } from "@/components/mf/fund-content-panel";
 import { MfOperationsPanel } from "@/components/mf/mf-operations-panel";
+import { MfPipelineAutoPanel } from "@/components/mf/mf-pipeline-auto-panel";
 import { lifecycleTone, MfStatusChip } from "@/components/mf/mf-status-chip";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
@@ -291,7 +292,7 @@ function FundDetailDrawer({
           {loading ? (
             <AdminFormSkeleton rows={6} />
           ) : error ? (
-            <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+            <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
           ) : detail ? (
             <div className="space-y-6">
               <div className="flex flex-wrap gap-2">
@@ -473,6 +474,7 @@ export default function MutualFundsAdminPage() {
   const canManageAmcs = hasPermission("mf.amcs.manage");
   const canReadJobs = hasPermission("mf.jobs.read");
   const canRunJobs = hasPermission("mf.jobs.run");
+  const canRunPipeline = hasPermission("mf.pipeline.run");
 
   const defaultTab: TabKey = canReadCatalog ? "overview" : "operations";
   const [tab, setTab] = useState<TabKey>(defaultTab);
@@ -750,7 +752,7 @@ export default function MutualFundsAdminPage() {
   return (
     <>
       {!hasAnyMfAccess ? (
-        <AdminFeedbackMessage variant="warning">
+        <AdminFeedbackMessage variant="warning" dismissible={false}>
           You do not have permission to view mutual fund administration.
         </AdminFeedbackMessage>
       ) : (
@@ -771,12 +773,12 @@ export default function MutualFundsAdminPage() {
 
             <div className="min-w-0">
               {error ? (
-                <AdminFeedbackMessage variant="destructive" className="mb-4">
+                <AdminFeedbackMessage variant="destructive" className="mb-4" onDismiss={() => setError("")}>
                   {error}
                 </AdminFeedbackMessage>
               ) : null}
               {message ? (
-                <AdminFeedbackMessage variant="success" className="mb-4">
+                <AdminFeedbackMessage variant="success" className="mb-4" onDismiss={() => setMessage("")}>
                   {message}
                 </AdminFeedbackMessage>
               ) : null}
@@ -795,6 +797,14 @@ export default function MutualFundsAdminPage() {
                       />
                     ))}
                   </AdminMetricCardsGrid>
+
+                  {canRunJobs ? (
+                    <MfPipelineAutoPanel
+                      canRun={canRunPipeline}
+                      onCompleted={() => void loadData()}
+                      onOpenStagingTab={() => setTab("staging")}
+                    />
+                  ) : null}
 
                   <div className="space-y-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -153,6 +153,7 @@ export type LinkableFamilyGoal = {
   progress_pct: number;
   group_id: string;
   group_title: string;
+  group_avatar_url?: string | null;
   my_role: string;
   can_create_goals: boolean;
 };

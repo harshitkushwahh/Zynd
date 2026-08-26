@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   IndianRupee,
-  Loader2,
   Network,
   Plus,
-  TrendingUp,
   Users2,
 } from "lucide-react";
 
 import { DistributorHeadAddBranchDialog } from "@/components/distributor-head/distributor-head-add-branch-dialog";
+import { DistributorHeadBranchActions } from "@/components/distributor-head/distributor-head-branch-actions";
 import { DistributorHeadHierarchyChart } from "@/components/distributor-head/distributor-head-hierarchy-chart";
 import { DistributorHeadStateTotalsCard } from "@/components/distributor-head/distributor-head-state-totals-card";
 import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
@@ -19,8 +19,13 @@ import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
+import {
+  DistributorHeadOverviewSkeleton,
+  DistributorHeadSalesPanelSkeleton,
+} from "@/components/ui/admin-skeletons";
 import {
   AdminDataTable,
   AdminTableBody,
@@ -28,10 +33,12 @@ import {
   AdminTableHeadCell,
   AdminTableHeader,
   AdminTableRow,
+  AdminTableSkeletonRows,
   AdminTableStateRow,
 } from "@/components/ui/admin-table";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
+  DISTRIBUTOR_HEAD_BRANCHES_APPROVE_PERMISSION,
   DISTRIBUTOR_HEAD_BRANCHES_MANAGE_PERMISSION,
 } from "@/lib/admin-distributor-head-navigation";
 import {
@@ -39,25 +46,45 @@ import {
   fetchAdminHierarchyManagers,
   fetchAdminHierarchyOverview,
   fetchAdminHierarchyPartners,
+  fetchAdminHierarchyStateHeads,
   type AdminHierarchyBranch,
+  type AdminHierarchyBranchDetail,
+  type AdminHierarchyBranchStatus,
   type AdminHierarchyManager,
   type AdminHierarchyOverview,
   type AdminHierarchyPartner,
+  type AdminHierarchyStateHead,
 } from "@/lib/admin-distributor-hierarchy-api";
-import { DUMMY_SALES_ROWS } from "@/lib/dummy/distributor-head-data";
+import { distributorHeadBranchHref } from "@/lib/admin-distributor-head-branch-navigation";
+import { formatBranchManagerCell } from "@/lib/distributor-branch-manager";
 import { matchesHierarchyBranchSearch } from "@/lib/admin-distributor-hierarchy-mappers";
 import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
+import type { MitraHierarchyPersona } from "@/lib/admin-mitra-roles";
 import {
   formatDistributorHeadCount,
   formatDistributorHeadInr,
 } from "@/lib/distributor-head-format";
 import { getErrorMessage, isIgnorableListLoadError } from "@/lib/errors";
 
-export function DistributorHeadOverviewPanel() {
+function branchStatusVariant(status: AdminHierarchyBranchStatus): StatusBadgeVariant {
+  if (status === "active") return "success";
+  if (status === "pending_approval") return "warning";
+  if (status === "rejected") return "destructive";
+  return "neutral";
+}
+
+export function DistributorHeadOverviewPanel({
+  persona,
+}: {
+  persona?: MitraHierarchyPersona | null;
+}) {
   const { displayName, user } = useAdminAuth();
+  const isStateHeadPersona = persona === "state_head";
+  const isSuperHeadPersona = persona === "super_head";
   const [overview, setOverview] = useState<AdminHierarchyOverview | null>(null);
   const [managers, setManagers] = useState<AdminHierarchyManager[]>([]);
   const [partners, setPartners] = useState<AdminHierarchyPartner[]>([]);
+  const [stateHeads, setStateHeads] = useState<AdminHierarchyStateHead[]>([]);
   const [branches, setBranches] = useState<AdminHierarchyBranch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -66,20 +93,28 @@ export function DistributorHeadOverviewPanel() {
     setLoading(true);
     setError("");
     try {
-      const [overviewResult, managersResult, partnersResult, branchesResult] =
+      const [overviewResult, managersResult, partnersResult, branchesResult, stateHeadsResult] =
         await Promise.allSettled([
           fetchAdminHierarchyOverview(),
           fetchAdminHierarchyManagers(),
           fetchAdminHierarchyPartners(),
           fetchAdminHierarchyBranches(),
+          fetchAdminHierarchyStateHeads(),
         ]);
 
       setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
       setManagers(managersResult.status === "fulfilled" ? managersResult.value : []);
       setPartners(partnersResult.status === "fulfilled" ? partnersResult.value : []);
       setBranches(branchesResult.status === "fulfilled" ? branchesResult.value : []);
+      setStateHeads(stateHeadsResult.status === "fulfilled" ? stateHeadsResult.value : []);
 
-      const failures = [overviewResult, managersResult, partnersResult, branchesResult].filter(
+      const failures = [
+        overviewResult,
+        managersResult,
+        partnersResult,
+        branchesResult,
+        stateHeadsResult,
+      ].filter(
         (result): result is PromiseRejectedResult => result.status === "rejected",
       );
       const blockingFailures = failures.filter(
@@ -103,35 +138,36 @@ export function DistributorHeadOverviewPanel() {
   }, [load]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-48 items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden />
-        <span className="sr-only">Loading overview</span>
-      </div>
-    );
+    return <DistributorHeadOverviewSkeleton />;
   }
 
   const overviewData = overview ?? {
     state_code: "MH",
     state_name: "Maharashtra",
+    state_assigned: true,
     manager_count: managers.length,
     partner_count: partners.length,
     active_partner_count: partners.filter((row) => row.status === "Active").length,
     branch_count: branches.length,
     pending_review_count: 0,
+    pending_branch_count: 0,
     sales_mtd_inr: 0,
   };
 
   return (
     <div className="min-w-0 w-full max-w-full space-y-6">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <AdminMetricCardsGrid>
         <AdminMetricCard
           icon={Users2}
           label={MITRA_HIERARCHY_COPY.branchManagers}
           value={String(overviewData.manager_count)}
-          hint={`Reporting to this ${MITRA_HIERARCHY_COPY.stateHead.toLowerCase()}`}
+          hint={
+            isStateHeadPersona
+              ? `Reporting to this ${MITRA_HIERARCHY_COPY.stateHead.toLowerCase()}`
+              : "Across your Mitra network scope"
+          }
           tone="info"
         />
         <AdminMetricCard
@@ -158,14 +194,23 @@ export function DistributorHeadOverviewPanel() {
         <Card className="distributor-head-overview-card min-w-0 border border-border shadow-none ring-0 lg:col-span-2">
           <CardHeader className="border-b border-border/60 px-4 pb-3 pt-4 sm:px-5">
             <CardTitle className="text-base font-semibold">{MITRA_HIERARCHY_COPY.hierarchyJourneyTitle}</CardTitle>
+            {isSuperHeadPersona ? (
+              <p className="text-compact text-muted-foreground">
+                {MITRA_HIERARCHY_COPY.hierarchyJourneySuperHeadHint}
+              </p>
+            ) : null}
           </CardHeader>
-          <CardContent className="px-4 pb-4 pt-4 sm:px-5">
+          <CardContent className="px-4 pb-4 pt-3 sm:px-5">
             <DistributorHeadHierarchyChart
               overview={overviewData}
               managers={managers}
               partners={partners}
-              stateHeadName={displayName || undefined}
-              stateHeadEmail={user?.email}
+              stateHeads={stateHeads}
+              persona={persona}
+              superHeadName={isSuperHeadPersona ? displayName || undefined : undefined}
+              superHeadEmail={isSuperHeadPersona ? user?.email : undefined}
+              stateHeadName={isStateHeadPersona ? displayName || undefined : undefined}
+              stateHeadEmail={isStateHeadPersona ? user?.email : undefined}
             />
           </CardContent>
         </Card>
@@ -179,8 +224,10 @@ export function DistributorHeadOverviewPanel() {
 }
 
 export function DistributorHeadBranchesPanel() {
-  const { hasPermission } = useAdminAuth();
+  const router = useRouter();
+  const { hasPermission, user } = useAdminAuth();
   const canManageBranches = hasPermission(DISTRIBUTOR_HEAD_BRANCHES_MANAGE_PERMISSION);
+  const canApproveBranches = hasPermission(DISTRIBUTOR_HEAD_BRANCHES_APPROVE_PERMISSION);
   const [items, setItems] = useState<AdminHierarchyBranch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -216,14 +263,21 @@ export function DistributorHeadBranchesPanel() {
     ? "No branches match your search."
     : "No branches in this state.";
 
+  const handleBranchUpdated = (row: AdminHierarchyBranch, next: AdminHierarchyBranchDetail) => {
+    setItems((current) =>
+      current.map((item) => (item.id === row.id ? { ...item, ...next } : item)),
+    );
+    void load();
+  };
+
   return (
     <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <AdminSearchInput
           containerClassName="max-w-sm"
-          placeholder="Search branches by name, city, or manager"
+          placeholder="Search branches by name, code, city, or manager"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -239,34 +293,64 @@ export function DistributorHeadBranchesPanel() {
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Branch</AdminTableHeadCell>
+            <AdminTableHeadCell>Code</AdminTableHeadCell>
+            <AdminTableHeadCell>Status</AdminTableHeadCell>
             <AdminTableHeadCell>City</AdminTableHeadCell>
             <AdminTableHeadCell>{MITRA_HIERARCHY_COPY.branchManager}</AdminTableHeadCell>
             <AdminTableHeadCell>{MITRA_HIERARCHY_COPY.zyndMitras}</AdminTableHeadCell>
             <AdminTableHeadCell>Active clients</AdminTableHeadCell>
             <AdminTableHeadCell>AUM</AdminTableHeadCell>
             <AdminTableHeadCell>Sales MTD</AdminTableHeadCell>
+            {canApproveBranches || canManageBranches ? <AdminTableHeadCell>Actions</AdminTableHeadCell> : null}
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
           {loading ? (
-            <AdminTableStateRow colSpan={7}>
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="size-4 animate-spin" />
-                Loading branches…
-              </span>
-            </AdminTableStateRow>
+            <AdminTableSkeletonRows
+              columns={canApproveBranches || canManageBranches ? 10 : 9}
+              rows={6}
+            />
           ) : filtered.length === 0 ? (
-            <AdminTableStateRow colSpan={7}>{emptyMessage}</AdminTableStateRow>
+            <AdminTableStateRow colSpan={canApproveBranches || canManageBranches ? 10 : 9}>{emptyMessage}</AdminTableStateRow>
           ) : (
             filtered.map((row) => (
-              <AdminTableRow key={row.id}>
+              <AdminTableRow
+                key={row.id}
+                className="cursor-pointer"
+                onClick={() => router.push(distributorHeadBranchHref(row.id))}
+              >
                 <AdminTableCell className="font-medium">{row.name}</AdminTableCell>
+                <AdminTableCell className="font-mono text-xs">{row.branch_code ?? row.id.toUpperCase()}</AdminTableCell>
+                <AdminTableCell>
+                  <StatusBadge variant={branchStatusVariant(row.status)}>{row.status_label}</StatusBadge>
+                </AdminTableCell>
                 <AdminTableCell>{row.city || "—"}</AdminTableCell>
-                <AdminTableCell>{row.manager_name}</AdminTableCell>
+                <AdminTableCell
+                  className={
+                    row.manager_unavailable
+                      ? "text-muted-foreground line-through decoration-muted-foreground/50"
+                      : undefined
+                  }
+                >
+                  {formatBranchManagerCell(row)}
+                </AdminTableCell>
                 <AdminTableCell>{row.partner_count}</AdminTableCell>
                 <AdminTableCell>{formatDistributorHeadCount(row.active_clients)}</AdminTableCell>
                 <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.aum_inr)}</AdminTableCell>
                 <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.sales_mtd_inr)}</AdminTableCell>
+                {canApproveBranches || canManageBranches ? (
+                  <AdminTableCell onClick={(event) => event.stopPropagation()}>
+                    <DistributorHeadBranchActions
+                      branch={row as AdminHierarchyBranchDetail}
+                      canApprove={canApproveBranches}
+                      canManage={canManageBranches}
+                      currentUserId={user?.id}
+                      compact
+                      onUpdated={(next) => handleBranchUpdated(row, next)}
+                      onAssigned={() => void load()}
+                    />
+                  </AdminTableCell>
+                ) : null}
               </AdminTableRow>
             ))
           )}
@@ -284,7 +368,6 @@ export function DistributorHeadBranchesPanel() {
 
 export function DistributorHeadSalesPanel() {
   const [managers, setManagers] = useState<AdminHierarchyManager[]>([]);
-  const [overview, setOverview] = useState<AdminHierarchyOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -292,15 +375,10 @@ export function DistributorHeadSalesPanel() {
     setLoading(true);
     setError("");
     try {
-      const [nextManagers, nextOverview] = await Promise.all([
-        fetchAdminHierarchyManagers(),
-        fetchAdminHierarchyOverview(),
-      ]);
+      const nextManagers = await fetchAdminHierarchyManagers();
       setManagers(nextManagers);
-      setOverview(nextOverview);
     } catch (err) {
       setManagers([]);
-      setOverview(null);
       if (!isIgnorableListLoadError(err)) {
         setError(getErrorMessage(err, "Could not load sales summary."));
       }
@@ -319,62 +397,12 @@ export function DistributorHeadSalesPanel() {
   );
 
   if (loading) {
-    return (
-      <div className="flex min-h-48 items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden />
-        <span className="sr-only">Loading sales</span>
-      </div>
-    );
+    return <DistributorHeadSalesPanelSkeleton />;
   }
 
   return (
     <div className="space-y-6">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-
-      <AdminMetricCardsGrid>
-        <AdminMetricCard
-          icon={TrendingUp}
-          label="State sales MTD"
-          value={formatDistributorHeadInr(overview?.sales_mtd_inr ?? managerSalesTotal)}
-          tone="success"
-        />
-        <AdminMetricCard
-          icon={IndianRupee}
-          label="SIP share (Jul MTD)"
-          value="—"
-          tone="info"
-        />
-      </AdminMetricCardsGrid>
-
-      <div className="space-y-4">
-        <AdminSectionTitle description="Monthly lumpsum and SIP inflow across the state network.">
-          Sales by period
-        </AdminSectionTitle>
-        <AdminDataTable>
-          <AdminTableHeader>
-            <tr>
-              <AdminTableHeadCell>Period</AdminTableHeadCell>
-              <AdminTableHeadCell>Lumpsum</AdminTableHeadCell>
-              <AdminTableHeadCell>SIP</AdminTableHeadCell>
-              <AdminTableHeadCell>Total</AdminTableHeadCell>
-              <AdminTableHeadCell>Transactions</AdminTableHeadCell>
-            </tr>
-          </AdminTableHeader>
-          <AdminTableBody>
-            {DUMMY_SALES_ROWS.map((row) => (
-              <AdminTableRow key={row.id}>
-                <AdminTableCell className="font-medium">{row.periodLabel}</AdminTableCell>
-                <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.lumpsumInr)}</AdminTableCell>
-                <AdminTableCell className="tabular-nums">{formatDistributorHeadInr(row.sipInr)}</AdminTableCell>
-                <AdminTableCell className="tabular-nums font-medium">
-                  {formatDistributorHeadInr(row.totalInr)}
-                </AdminTableCell>
-                <AdminTableCell>{formatDistributorHeadCount(row.transactionCount)}</AdminTableCell>
-              </AdminTableRow>
-            ))}
-          </AdminTableBody>
-        </AdminDataTable>
-      </div>
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <div className="space-y-4">
         <AdminSectionTitle description={`Compare ${MITRA_HIERARCHY_COPY.branchManager.toLowerCase()} contribution to state MTD sales.`}>

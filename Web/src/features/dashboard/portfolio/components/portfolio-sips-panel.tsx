@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
 import { getPortfolioTabMeta } from "@/features/dashboard/portfolio/lib/portfolio-page-tab-meta";
@@ -27,7 +28,7 @@ const SIPS_PAGE_SIZE = 25;
 
 export function PortfolioSipsPanel() {
   const queryClient = useQueryClient();
-  const { plans, showSkeleton, errorMessage, isPending, isFetching, refetch } = useMfSipPlansQuery();
+  const { plans, showSkeleton, hasResolved, errorMessage, isPending, isFetching, refetch } = useMfSipPlansQuery();
   const [filters, setFilters] = useState<MfSipFilters>(EMPTY_MF_SIP_FILTERS);
   const [visibleCount, setVisibleCount] = useState(SIPS_PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -89,74 +90,78 @@ export function PortfolioSipsPanel() {
     return () => window.clearTimeout(timer);
   }, [detailOpen]);
 
-  const showTable = !showSkeleton && !errorMessage && filteredPlans.length > 0;
-  const showEmpty = !showSkeleton && !errorMessage && plans.length === 0;
+  const showTable = hasResolved && !errorMessage && filteredPlans.length > 0;
+  const showEmpty = hasResolved && !errorMessage && plans.length === 0;
   const showFilteredEmpty =
-    !showSkeleton && !errorMessage && plans.length > 0 && filteredPlans.length === 0;
+    hasResolved && !errorMessage && plans.length > 0 && filteredPlans.length === 0;
   const sipsTabMeta = getPortfolioTabMeta("sips");
 
   return (
     <>
-      {showSkeleton ? <MfMySipsPageSkeleton /> : null}
+      {!hasResolved && showSkeleton ? <MfMySipsPageSkeleton /> : null}
 
-      {!showSkeleton && errorMessage ? (
-        <LoadErrorCard
-          title={copy.mySips.loadFailedTitle}
-          description={errorMessage}
-          retryLabel={copy.dashboard.portfolio.retry}
-          retryLoading={isFetching}
-          onRetry={() => void refetch()}
-        />
-      ) : null}
+      {hasResolved ? (
+        <DashboardContentFade>
+          {errorMessage ? (
+            <LoadErrorCard
+              title={copy.mySips.loadFailedTitle}
+              description={errorMessage}
+              retryLabel={copy.dashboard.portfolio.retry}
+              retryLoading={isFetching}
+              onRetry={() => void refetch()}
+            />
+          ) : null}
 
-      {showEmpty ? (
-        <PortfolioTabEmptyState
-          icon={sipsTabMeta.icon}
-          title={copy.mySips.empty}
-          description={copy.mySips.description}
-        />
-      ) : null}
-
-      {showFilteredEmpty ? (
-        <>
-          <MfMySipsFilterBar filters={filters} onChange={setFilters} />
-          <div className="mt-6">
+          {!errorMessage && showEmpty ? (
             <PortfolioTabEmptyState
               icon={sipsTabMeta.icon}
-              title={copy.mySips.emptyFiltered}
+              title={copy.mySips.empty}
               description={copy.mySips.description}
             />
-          </div>
-        </>
-      ) : null}
+          ) : null}
 
-      {showTable ? (
-        <>
-          <MfMySipsFilterBar filters={filters} onChange={setFilters} />
+          {!errorMessage && showFilteredEmpty ? (
+            <>
+              <MfMySipsFilterBar filters={filters} onChange={setFilters} />
+              <div className="mt-6">
+                <PortfolioTabEmptyState
+                  icon={sipsTabMeta.icon}
+                  title={copy.mySips.emptyFiltered}
+                  description={copy.mySips.description}
+                />
+              </div>
+            </>
+          ) : null}
 
-          <div className="relative mt-6 min-w-0">
-            <div
-              className={cn(
-                "relative rounded-[var(--radius-card)] border border-border bg-card",
-                MF_TRANSACTIONS_TABLE_FRAME_CLASS,
-              )}
-            >
-              <MfMySipsTable
-                plans={visiblePlans}
-                totalCount={filteredPlans.length}
-                loadingMore={loadingMore}
-                hasMore={hasMore}
-                ariaLabel={copy.mySips.title}
-                scrollContainerRef={scrollContainerRef}
-                loadMoreRef={loadMoreRef}
-                onPlanClick={(plan: MfSipPlan) => {
-                  setSelectedPlanId(plan.plan_id);
-                  setDetailOpen(true);
-                }}
-              />
-            </div>
-          </div>
-        </>
+          {!errorMessage && showTable ? (
+            <>
+              <MfMySipsFilterBar filters={filters} onChange={setFilters} />
+
+              <div className="relative mt-6 min-w-0">
+                <div
+                  className={cn(
+                    "relative rounded-[var(--radius-card)] border border-border bg-card",
+                    MF_TRANSACTIONS_TABLE_FRAME_CLASS,
+                  )}
+                >
+                  <MfMySipsTable
+                    plans={visiblePlans}
+                    totalCount={filteredPlans.length}
+                    loadingMore={loadingMore}
+                    hasMore={hasMore}
+                    ariaLabel={copy.mySips.title}
+                    scrollContainerRef={scrollContainerRef}
+                    loadMoreRef={loadMoreRef}
+                    onPlanClick={(plan: MfSipPlan) => {
+                      setSelectedPlanId(plan.plan_id);
+                      setDetailOpen(true);
+                    }}
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DashboardContentFade>
       ) : null}
 
       {detailOpen && selectedPlanId ? (

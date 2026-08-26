@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Check } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,9 +35,9 @@ export function AddInvestorSuccessDialog({
           <span className="quick-txn-success-dialog__icon" aria-hidden>
             <Check className="size-7" strokeWidth={2.75} />
           </span>
-          <DialogTitle className="quick-txn-success-dialog__title">Investor onboarded</DialogTitle>
+          <DialogTitle className="quick-txn-success-dialog__title">Investor profile submitted</DialogTitle>
           <DialogDescription className="quick-txn-success-dialog__desc">
-            {state.clientCode} has been added to your client book and successfully onboarded to Zynd.
+            {state.investorName} has been added to your client book with the details below.
           </DialogDescription>
         </div>
         <div className="quick-txn-success-dialog__body">
@@ -68,16 +68,12 @@ export function AddInvestorSuccessDialog({
             </div>
             <div className="quick-txn-success-dialog__row">
               <dt>Status</dt>
-              <dd>Added to your book · Onboarded</dd>
+              <dd>Added to your book · KYC details captured</dd>
             </div>
           </dl>
-          <p className="quick-txn-success-dialog__demo">
-            <Ban className="quick-txn-success-dialog__demo-icon size-3.5" strokeWidth={2.25} aria-hidden />
-            Demo environment — no real investor account was created.
-          </p>
           <div className="quick-txn-success-dialog__actions">
             <Button type="button" className="w-full" size="lg" onClick={onDone}>
-              Done
+              View clients
             </Button>
           </div>
         </div>

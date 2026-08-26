@@ -6,8 +6,6 @@ import type {
   DistributorOrder,
   DistributorSystematicPlan,
 } from "@/lib/distributor-types";
-import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
-import { distributorClientDetailTabHref } from "@/lib/distributor-client-routes";
 
 export function buildClientGoalsForInvestor(_investor: DistributorInvestor): DistributorClientGoal[] {
   return [];
@@ -42,12 +40,4 @@ export function getFamilyGroupFromProfile(
   groupId: string,
 ): DistributorClientFamilyGroup | null {
   return profile.familyGroups.find((group) => group.id === groupId) ?? null;
-}
-
-export function distributorClientFamilyGroupHref(
-  listOrigin: DistributorClientListOrigin,
-  clientId: string,
-  groupId: string,
-): string {
-  return `${distributorClientDetailTabHref(listOrigin, clientId, "family")}/${groupId}`;
 }

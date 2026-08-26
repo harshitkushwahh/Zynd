@@ -5,15 +5,16 @@ import { useState } from "react";
 import {
   Banknote,
   CalendarClock,
+  CircleHelp,
   Info,
   LineChart,
-  Loader2,
   Repeat2,
   Shuffle,
   TrendingUp,
 } from "lucide-react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,19 +23,29 @@ import { Table, TableCard } from "@/components/core/table";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
 import type { MfRedeemProceedPayload } from "@/features/invest/components/mf-invest-payment-card-redeem";
 import type { MfPaymentCardVariant } from "@/features/invest/components/mf-invest-payment-card";
+import { MF_INVEST_PAYMENT_CARD_CLASS } from "@/features/invest/lib/mf-ui";
+import { TabPanel } from "@/shared/ui/tab-panel";
 import { PortfolioRedeemConsentDialog } from "@/features/dashboard/portfolio/components/portfolio-redeem-consent-dialog";
+import { PortfolioHoldingDetailSkeleton } from "@/features/dashboard/portfolio/components/portfolio-holding-detail-skeleton";
+import { PortfolioUpcomingHoldingDetailPage } from "@/features/dashboard/portfolio/components/portfolio-upcoming-holding-detail-page";
 import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
 import { usePortfolioHoldingDetailQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
 import {
   createMfRedemption,
   type MfRedemptionOrder,
 } from "@/features/dashboard/portfolio/lib/portfolio-api";
+import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import {
-  decodePortfolioHoldingId,
+  parsePortfolioHoldingRouteParam,
+  portfolioHoldingDetailHref,
   type PortfolioHoldingDetail,
   type PortfolioHoldingTransaction,
 } from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
-import { portfolioHoldingAmcInitials } from "@/features/dashboard/portfolio/lib/portfolio-types";
+import {
+  formatHoldingSipPoolSummary,
+  poolSipsForHolding,
+} from "@/features/dashboard/portfolio/lib/portfolio-holding-sip";
+import { useMfSipPlansQuery } from "@/features/invest/hooks/use-mf-sip-plans-query";
 import {
   MF_INVEST_SIDEBAR_STICKY_CLASS,
   MF_INVEST_SIDEBAR_WIDTH_CLASS,
@@ -94,6 +105,30 @@ function MetricCell({
   );
 }
 
+function HoldingModeBadge({ mode }: { mode: PortfolioHoldingDetail["holdingMode"] }) {
+  const portfolioCopy = copy.dashboard.portfolio;
+  const label =
+    mode === "Demat" ? portfolioCopy.holdingModeDemat : portfolioCopy.holdingModePhysical;
+  const tooltip =
+    mode === "Demat"
+      ? portfolioCopy.holdingModeDematTooltip
+      : portfolioCopy.holdingModePhysicalTooltip;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<Badge variant="secondary" className="cursor-help gap-1" />}
+      >
+        {label}
+        <CircleHelp className="size-3 opacity-70" strokeWidth={2.25} aria-hidden />
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-xs text-pretty">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function HoldingOverviewCard({
   holding,
   showDayChange,
@@ -119,9 +154,12 @@ function HoldingOverviewCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-[11px] font-semibold text-muted-foreground">
-            {portfolioHoldingAmcInitials(holding.amcName)}
-          </div>
+          <MfFundAmcAvatar
+            amcLogoUrl={holding.amcLogoUrl}
+            amcName={holding.amcName}
+            size="md"
+            className="size-10 shrink-0 rounded-[var(--radius-control)]"
+          />
           <div className="min-w-0">
             <h1 className="text-body font-semibold leading-snug text-foreground">{holding.fundName}</h1>
             <p className="mt-1 text-caption text-muted-foreground">{investedMonthsLabel}</p>
@@ -132,7 +170,7 @@ function HoldingOverviewCard({
           <span>
             {portfolioCopy.holdingFolioLabel}: {holding.folioNumber}
           </span>
-          <Badge variant="secondary">{holding.holdingMode}</Badge>
+          <HoldingModeBadge mode={holding.holdingMode} />
         </div>
       </div>
 
@@ -177,12 +215,139 @@ function HoldingOverviewCard({
         </p>
         <p className="text-compact text-muted-foreground">
           {portfolioCopy.holdingNominee}{" "}
-          <span className="border-b border-dotted border-muted-foreground/60 font-medium text-foreground">
-            {holding.nomineeName ?? "—"}
+          <span
+            className={cn(
+              "font-medium",
+              holding.nomineeName?.trim() ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {holding.nomineeName?.trim() || portfolioCopy.holdingNomineeEmpty}
           </span>
         </p>
       </div>
     </section>
+  );
+}
+
+function HoldingSipSummaryCard({ holding }: { holding: PortfolioHoldingDetail }) {
+  const { plans } = useMfSipPlansQuery();
+  const portfolioCopy = copy.dashboard.portfolio;
+  const pool = poolSipsForHolding({ fundName: holding.fundName, isin: holding.isin }, plans);
+
+  if (!pool) return null;
+
+  const { monthly, nextDate } = formatHoldingSipPoolSummary(pool);
+  const planCountLabel =
+    pool.activePlanCount > 1
+      ? portfolioCopy.holdingSipPlanCount.replace("{count}", String(pool.activePlanCount))
+      : null;
+
+  return (
+    <section
+      className={cn(
+        ZYND_3XL_RADIUS_CLASS,
+        "border border-border/60 bg-card p-4 shadow-zynd-low sm:p-5",
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted">
+            <CalendarClock className="size-4 text-muted-foreground" strokeWidth={2.25} aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-compact font-semibold text-foreground">{portfolioCopy.holdingSipSummaryLabel}</h2>
+            {planCountLabel ? (
+              <p className="mt-1 text-caption text-muted-foreground">{planCountLabel}</p>
+            ) : null}
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-compact font-semibold tabular-nums text-foreground">
+            {portfolioCopy.holdingSipMonthlyTotal.replace("{amount}", monthly)}
+          </p>
+          {nextDate ? (
+            <p className="mt-1 text-caption text-muted-foreground">
+              {portfolioCopy.holdingSipNextDebit.replace("{date}", nextDate)}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PortfolioHoldingPaymentCard({
+  holding,
+  paymentMode,
+  onRedeemProceed,
+  onSwitchToInvest,
+}: {
+  holding: PortfolioHoldingDetail;
+  paymentMode: MfPaymentCardVariant;
+  onRedeemProceed: (payload: MfRedeemProceedPayload) => void | Promise<void>;
+  onSwitchToInvest: () => void;
+}) {
+  const previewBankLabel = holding.redeemBankLabel ?? undefined;
+  const panelClassName =
+    "h-full min-h-[34rem] w-full border-0 bg-transparent shadow-none rounded-none";
+  const shellClassName = cn(
+    MF_INVEST_PAYMENT_CARD_CLASS,
+    ZYND_3XL_RADIUS_CLASS,
+    "relative w-full min-h-[34rem] overflow-hidden",
+  );
+  const redeemableValueInr =
+    holding.redeemableUnits > 0 && holding.currentNav > 0
+      ? Math.round(holding.redeemableUnits * holding.currentNav * 100) / 100
+      : holding.currentValueInr;
+
+  return (
+    <div className={shellClassName}>
+      <TabPanel
+        active={paymentMode === "invest"}
+        fade
+        keepMounted
+        className="duration-150 ease-in-out"
+      >
+        <MfInvestPaymentCard
+          variant="invest"
+          sticky={false}
+          showFundName={false}
+          fundName={holding.fundName}
+          previewBankLabel={previewBankLabel}
+          previewBankName={holding.redeemBankName}
+          previewBankIfsc={holding.redeemBankIfsc}
+          defaultMode="sip"
+          preview
+          sipEnabled
+          relaxedAmountSpacing
+          className={panelClassName}
+        />
+      </TabPanel>
+
+      <TabPanel
+        active={paymentMode === "redeem"}
+        fade
+        keepMounted
+        className="duration-150 ease-in-out"
+      >
+        <MfInvestPaymentCard
+          variant="redeem"
+          sticky={false}
+          fundName={holding.fundName}
+          previewBankLabel={previewBankLabel}
+          previewBankName={holding.redeemBankName}
+          previewBankIfsc={holding.redeemBankIfsc}
+          redeemableValueInr={redeemableValueInr}
+          redeemableUnits={holding.redeemableUnits}
+          currentNav={holding.currentNav}
+          preview={false}
+          canRedeem={holding.redeemableUnits > 0}
+          onRedeemProceed={onRedeemProceed}
+          onRedeemBack={onSwitchToInvest}
+          className={panelClassName}
+        />
+      </TabPanel>
+    </div>
   );
 }
 
@@ -388,8 +553,17 @@ function HoldingTransactionsTable({ transactions }: { transactions: PortfolioHol
 }
 
 export function PortfolioHoldingDetailPage({ holdingId }: PortfolioHoldingDetailPageProps) {
+  const route = parsePortfolioHoldingRouteParam(holdingId);
+  if (route.kind === "upcoming") {
+    return <PortfolioUpcomingHoldingDetailPage slug={route.slug} />;
+  }
+
+  return <PortfolioHoldingDetailPageContent holdingId={route.holdingId} />;
+}
+
+function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string }) {
   const searchParams = useSearchParams();
-  const decodedHoldingId = decodePortfolioHoldingId(holdingId);
+  const decodedHoldingId = holdingId;
   const {
     holding,
     showDayChange,
@@ -424,25 +598,22 @@ export function PortfolioHoldingDetailPage({ holdingId }: PortfolioHoldingDetail
   }
 
   if (showSkeleton) {
-    return (
-      <div className={cn(MF_PAGE_SECTION_CLASS, "flex min-h-[320px] items-center justify-center pb-8")}>
-        <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden />
-        <span className="sr-only">{portfolioCopy.holdingDetailLoading}</span>
-      </div>
-    );
+    return <PortfolioHoldingDetailSkeleton />;
   }
 
   if (errorMessage) {
     return (
       <div className={cn(MF_PAGE_SECTION_CLASS, "pb-8")}>
-        <LoadErrorCard
-          icon={LineChart}
-          title={portfolioCopy.holdingDetailLoadFailed}
-          description={errorMessage}
-          retryLabel={portfolioCopy.retry}
-          retryLoading={isFetching}
-          onRetry={() => void refetch()}
-        />
+        <DashboardContentFade>
+          <LoadErrorCard
+            icon={LineChart}
+            title={portfolioCopy.holdingDetailLoadFailed}
+            description={errorMessage}
+            retryLabel={portfolioCopy.retry}
+            retryLoading={isFetching}
+            onRetry={() => void refetch()}
+          />
+        </DashboardContentFade>
       </div>
     );
   }
@@ -451,45 +622,17 @@ export function PortfolioHoldingDetailPage({ holdingId }: PortfolioHoldingDetail
     notFound();
   }
 
-  const paymentCardClassName = cn(ZYND_3XL_RADIUS_CLASS, "w-full min-h-[34rem]");
-  const previewBankLabel = holding.redeemBankLabel ?? undefined;
-
-  const paymentCard =
-    paymentMode === "invest" ? (
-      <MfInvestPaymentCard
-        variant="invest"
-        sticky={false}
-        showFundName={false}
-        fundName={holding.fundName}
-        previewBankLabel={previewBankLabel}
-        defaultMode="sip"
-        preview
-        sipEnabled
-        className={paymentCardClassName}
-      />
-    ) : (
-      <MfInvestPaymentCard
-        variant="redeem"
-        sticky={false}
-        fundName={holding.fundName}
-        previewBankLabel={previewBankLabel}
-        redeemableValueInr={
-          holding.redeemableUnits > 0 && holding.currentNav > 0
-            ? Math.round(holding.redeemableUnits * holding.currentNav * 100) / 100
-            : holding.currentValueInr
-        }
-        redeemableUnits={holding.redeemableUnits}
-        currentNav={holding.currentNav}
-        preview={false}
-        canRedeem={holding.redeemableUnits > 0}
-        onRedeemProceed={handleRedeemProceed}
-        onRedeemBack={() => setPaymentMode("invest")}
-        className={paymentCardClassName}
-      />
-    );
+  const paymentCard = (
+    <PortfolioHoldingPaymentCard
+      holding={holding}
+      paymentMode={paymentMode}
+      onRedeemProceed={handleRedeemProceed}
+      onSwitchToInvest={() => setPaymentMode("invest")}
+    />
+  );
 
   return (
-    <div className={cn(MF_PAGE_SECTION_CLASS, "pb-8")}>
+    <DashboardContentFade className={cn(MF_PAGE_SECTION_CLASS, "pb-8")}>
       <DashboardBreadcrumb
         items={[
           { label: portfolioCopy.pageTitle, href: "/dashboard/portfolio" },
@@ -500,6 +643,7 @@ export function PortfolioHoldingDetailPage({ holdingId }: PortfolioHoldingDetail
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1 space-y-4">
           <HoldingOverviewCard holding={holding} showDayChange={showDayChange} />
+          <HoldingSipSummaryCard holding={holding} />
           <div className="lg:hidden">{paymentCard}</div>
           <HoldingQuickActions
             paymentMode={paymentMode}
@@ -519,6 +663,6 @@ export function PortfolioHoldingDetailPage({ holdingId }: PortfolioHoldingDetail
         order={pendingRedemption}
         onOpenChange={setConsentOpen}
       />
-    </div>
+    </DashboardContentFade>
   );
 }

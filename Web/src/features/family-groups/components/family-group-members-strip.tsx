@@ -1,26 +1,28 @@
 "use client";
 
-import { Crown, LogOut, Plus, Settings2, UsersRound } from "lucide-react";
+import Link from "next/link";
+import { Crown, LogOut, Plus, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { FamilyGroupMemberPreview } from "@/features/family-groups/api/family-groups-api";
+import type { FamilyGroupSummary } from "@/features/family-groups/api/family-groups-api";
+import { buildFamilyGroupDetailHref } from "@/features/family-groups/lib/family-group-navigation";
 import {
-  FAMILY_GROUP_CARD_RADIUS_CLASS,
+  FAMILY_GROUP_DASHBOARD_PANEL_CLASS,
   familyMemberInitials,
 } from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type FamilyGroupMembersStripProps = {
+  group: FamilyGroupSummary;
+  groups: FamilyGroupSummary[];
   members: FamilyGroupMemberPreview[];
   currentUserId?: string | null;
   canInvite: boolean;
   inviteDisabled?: boolean;
   onInvite: () => void;
-  onManageMembers: () => void;
-  onViewGroup: () => void;
-  isHead?: boolean;
   memberCount: number;
   pendingInvites?: number;
   memberLimit: number;
@@ -126,14 +128,13 @@ function InviteChip({
 }
 
 export function FamilyGroupMembersStrip({
+  group,
+  groups,
   members,
   currentUserId,
   canInvite,
   inviteDisabled,
   onInvite,
-  onManageMembers,
-  onViewGroup,
-  isHead = false,
   memberCount,
   pendingInvites = 0,
   memberLimit,
@@ -143,11 +144,7 @@ export function FamilyGroupMembersStrip({
 }: FamilyGroupMembersStripProps) {
   return (
     <section
-      className={cn(
-        FAMILY_GROUP_CARD_RADIUS_CLASS,
-        "flex items-center gap-3 border border-border bg-card px-3 py-2.5 shadow-zynd-low",
-        className,
-      )}
+      className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "flex items-center gap-3 p-3 sm:p-4", className)}
     >
       <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
         {memberCount}/{memberLimit}
@@ -172,27 +169,15 @@ export function FamilyGroupMembersStrip({
 
       <div className="flex shrink-0 items-center gap-1.5">
         <Button
-          type="button"
           variant="outline"
           size="sm"
           className="h-8 gap-1.5 px-2.5"
-          onClick={onViewGroup}
+          nativeButton={false}
+          render={<Link href={buildFamilyGroupDetailHref(group, groups)} />}
         >
           <UsersRound className="size-3.5" strokeWidth={2} />
           <span className="hidden sm:inline">{copy.familyGroups.dashboard.viewGroupAction}</span>
         </Button>
-        {isHead ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 px-2.5"
-            onClick={onManageMembers}
-          >
-            <Settings2 className="size-3.5" strokeWidth={2} />
-            <span className="hidden sm:inline">{copy.familyGroups.dashboard.manageMembersAction}</span>
-          </Button>
-        ) : null}
         {canLeave && onLeave ? (
           <Button
             type="button"

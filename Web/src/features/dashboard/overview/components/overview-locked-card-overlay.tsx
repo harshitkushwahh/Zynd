@@ -2,12 +2,11 @@
 
 import { Lock } from "lucide-react";
 
-import { PAGE_HEADER_ICON_CLASS } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 
 type OverviewLockedCardOverlayProps = {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   compact?: boolean;
   stacked?: boolean;
   className?: string;
@@ -42,16 +41,16 @@ export function OverviewLockedCardOverlay({
       >
         {stacked ? (
           <>
-            <Lock
-              className={cn("size-5 shrink-0", PAGE_HEADER_ICON_CLASS)}
-              strokeWidth={2.25}
-              aria-hidden
-            />
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Lock className="size-4" strokeWidth={2.25} aria-hidden />
+            </div>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold leading-none text-foreground">{title}</p>
-              <p className="mt-1 line-clamp-3 text-[10px] leading-snug text-muted-foreground">
-                {subtitle}
-              </p>
+              {subtitle ? (
+                <p className="mt-1 line-clamp-3 text-[10px] leading-snug text-muted-foreground">
+                  {subtitle}
+                </p>
+              ) : null}
             </div>
           </>
         ) : (
@@ -73,16 +72,18 @@ export function OverviewLockedCardOverlay({
               >
                 {title}
               </p>
-              <p
-                className={cn(
-                  "text-muted-foreground",
-                  compact
-                    ? "mt-0.5 line-clamp-2 text-[10px] leading-snug"
-                    : "mt-0.5 text-caption leading-relaxed",
-                )}
-              >
-                {subtitle}
-              </p>
+              {subtitle ? (
+                <p
+                  className={cn(
+                    "text-muted-foreground",
+                    compact
+                      ? "mt-0.5 line-clamp-2 text-[10px] leading-snug"
+                      : "mt-0.5 text-caption leading-relaxed",
+                  )}
+                >
+                  {subtitle}
+                </p>
+              ) : null}
             </div>
           </>
         )}

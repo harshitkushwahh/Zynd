@@ -43,6 +43,13 @@ from app.api.v1.admin.schemas import (
     MfIngestionRunResponse,
     MfJobListResponse,
     MfJobResponse,
+    MfPipelineRunGetResponse,
+    MfPipelinePreviewResponse,
+    MfPipelineRunResponse,
+    MfPipelineStartRequest,
+    MfPipelineStartResponse,
+    MfPipelineRetryStepRequest,
+    MfPipelineClearStuckResponse,
     MfStagingBatchListResponse,
     MfStagingBatchResponse,
     MfStagingRejectRequest,
@@ -118,6 +125,17 @@ from app.application.mf.mf_admin_service import (
     list_mf_ingestion_runs,
     list_mf_jobs_with_status,
     trigger_mf_job,
+)
+from app.application.mf.mf_pipeline_preview_service import preview_mf_pipeline
+from app.application.mf.mf_pipeline_orchestrator_service import (
+    approve_mf_pipeline_staging,
+    cancel_mf_pipeline_run,
+    clear_stuck_ingestion_runs,
+    get_active_mf_pipeline_run,
+    get_mf_pipeline_run,
+    resume_mf_pipeline_run,
+    retry_mf_pipeline_step,
+    start_mf_pipeline_run,
 )
 from app.application.mf.mf_scheduler_metrics import get_mf_prometheus_metrics
 from app.core.config import get_settings
@@ -762,6 +780,135 @@ async def list_mf_jobs(
     return MfJobListResponse(jobs=[MfJobResponse(**job) for job in jobs])
 
 
+def _serialize_pipeline_run(run) -> MfPipelineRunResponse:
+    payload = run.to_dict()
+    return MfPipelineRunResponse(**payload)
+
+
+@router.get("/pipeline/preview", response_model=MfPipelinePreviewResponse)
+async def preview_mf_pipeline_admin(
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+    mode: str = Query(default="full"),
+    skip_steps: str | None = Query(default=None, description="Comma-separated pipeline step keys to skip"),
+) -> MfPipelinePreviewResponse:
+    skip_list = [item.strip() for item in (skip_steps or "").split(",") if item.strip()]
+    try:
+        preview = await preview_mf_pipeline(mode, skip_steps=skip_list)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return MfPipelinePreviewResponse(**preview)
+
+
+@router.post("/pipeline/run", response_model=MfPipelineStartResponse)
+async def start_mf_pipeline_admin(
+    body: MfPipelineStartRequest,
+    admin: Annotated[User, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineStartResponse:
+    settings = get_settings()
+    if settings.app_env == "production" and not body.confirm_production:
+        raise HTTPException(
+            status_code=400,
+            detail="Production pipeline runs require confirm_production=true",
+        )
+    try:
+        run = await start_mf_pipeline_run(
+            mode=body.mode,
+            triggered_by="ADMIN",
+            actor_user_id=str(admin.id),
+            skip_steps=body.skip_steps,
+            auto_resume=body.auto_resume,
+        )
+    except RuntimeError as exc:
+        status_code = 403 if "IST" in str(exc) else 409
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return MfPipelineStartResponse(run=_serialize_pipeline_run(run))
+
+
+@router.get("/pipeline/runs/active", response_model=MfPipelineRunGetResponse)
+async def get_active_mf_pipeline_admin(
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+) -> MfPipelineRunGetResponse:
+    run = await get_active_mf_pipeline_run()
+    if not run:
+        raise HTTPException(status_code=404, detail="No active MF pipeline run")
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.get("/pipeline/runs/{run_id}", response_model=MfPipelineRunGetResponse)
+async def get_mf_pipeline_run_admin(
+    run_id: str,
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+) -> MfPipelineRunGetResponse:
+    run = await get_mf_pipeline_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="MF pipeline run not found")
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.post("/pipeline/runs/{run_id}/cancel", response_model=MfPipelineRunGetResponse)
+async def cancel_mf_pipeline_run_admin(
+    run_id: str,
+    admin: Annotated[User, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    run = await cancel_mf_pipeline_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="MF pipeline run not found")
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.post("/pipeline/runs/{run_id}/resume", response_model=MfPipelineRunGetResponse)
+async def resume_mf_pipeline_admin(
+    run_id: str,
+    _: Annotated[object, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    try:
+        run = await resume_mf_pipeline_run(run_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.post("/pipeline/runs/{run_id}/retry-step", response_model=MfPipelineRunGetResponse)
+async def retry_mf_pipeline_step_admin(
+    run_id: str,
+    body: MfPipelineRetryStepRequest,
+    _: Annotated[object, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    try:
+        run = await retry_mf_pipeline_step(run_id, body.step_key)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.post("/pipeline/clear-stuck", response_model=MfPipelineClearStuckResponse)
+async def clear_stuck_mf_pipeline_admin(
+    _: Annotated[object, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineClearStuckResponse:
+    cleaned = await clear_stuck_ingestion_runs()
+    return MfPipelineClearStuckResponse(cleaned=cleaned)
+
+
+@router.post("/pipeline/runs/{run_id}/approve-staging", response_model=MfPipelineRunGetResponse)
+async def approve_mf_pipeline_staging_admin(
+    run_id: str,
+    admin: Annotated[User, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    try:
+        run = await approve_mf_pipeline_staging(run_id, admin_user_id=admin.id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
 @router.post("/jobs/{job_name}/run", response_model=MfRunJobResponse)
 async def run_mf_job_admin(
     job_name: str,
@@ -788,7 +935,8 @@ async def run_mf_job_admin(
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return MfRunJobResponse(job=job_name, result=result, **result)
+    payload = {key: value for key, value in result.items() if key != "job"}
+    return MfRunJobResponse(job=job_name, result=result, **payload)
 
 
 @router.get("/staging/batches", response_model=MfStagingBatchListResponse)
@@ -892,7 +1040,8 @@ async def promote_mf_staging_batch(
     except Exception as exc:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return MfRunJobResponse(job="cybrilla-scheme-promote", result=result, **result)
+    payload = {key: value for key, value in result.items() if key != "job"}
+    return MfRunJobResponse(job="cybrilla-scheme-promote", result=result, **payload)
 
 
 @router.get("/ingestion-runs", response_model=MfIngestionRunListResponse)

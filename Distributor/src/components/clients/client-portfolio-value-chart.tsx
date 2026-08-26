@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import {
-  getPortfolioChartSeries,
+  filterPortfolioChartByPeriod,
   PORTFOLIO_CHART_PERIODS,
   portfolioChartPeriodSelectLabel,
   type PortfolioChartPeriod,
@@ -84,9 +84,7 @@ function yDomain(points: PortfolioChartPoint[]): [number, number] {
 }
 
 type ClientPortfolioValueChartProps = {
-  clientId: string;
-  currentValue: number;
-  investedAmount: number;
+  series?: PortfolioChartPoint[];
   className?: string;
   hideToolbar?: boolean;
   period?: PortfolioChartPeriod;
@@ -181,9 +179,7 @@ export function ClientPortfolioChartToolbar({
 }
 
 export function ClientPortfolioValueChart({
-  clientId,
-  currentValue,
-  investedAmount,
+  series: seriesProp = [],
   className,
   hideToolbar = false,
   period: periodProp,
@@ -200,14 +196,12 @@ export function ClientPortfolioValueChart({
   const [plotLayout, setPlotLayout] = useState({ width: 0, height: 0 });
   const valueGradientId = useId().replace(/:/g, "");
   const investedGradientId = `${valueGradientId}-invested`;
-  const chartAnchor = currentValue ?? 0;
-  const chartInvested =
-    investedAmount > 0 ? investedAmount : Math.round(chartAnchor * 0.82);
 
   const series = useMemo(
-    () => getPortfolioChartSeries(clientId, chartAnchor, period, chartInvested),
-    [chartAnchor, chartInvested, clientId, period, refreshKey],
+    () => filterPortfolioChartByPeriod(seriesProp, period),
+    [period, refreshKey, seriesProp],
   );
+  const hasChartData = series.length >= 2;
 
   const domain = useMemo(() => yDomain(series), [series]);
   const plotScrollRef = useRef<HTMLDivElement>(null);
@@ -257,6 +251,22 @@ export function ClientPortfolioValueChart({
     }
     setRefreshKeyInternal((key) => key + 1);
   }, [onRefreshProp]);
+
+  if (!hasChartData) {
+    return (
+      <article
+        className={cn(
+          "distributor-client-portfolio-chart distributor-client-portfolio-chart--empty",
+          className,
+        )}
+        aria-label={copy.chartTitle}
+      >
+        <div className="distributor-client-portfolio-chart__plot-body">
+          <p className="distributor-client-portfolio-chart__empty">{copy.chartEmpty}</p>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article

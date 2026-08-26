@@ -1,6 +1,8 @@
 "use client";
 
-import { Fingerprint, LockKeyhole } from "lucide-react";
+import Image from "next/image";
+import { Fingerprint, Loader2, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DistributorPinInput } from "@/components/auth/distributor-pin-input";
@@ -8,29 +10,89 @@ import { DistributorZyndPinForgotDialog } from "@/components/auth/distributor-zy
 import { DistributorProfileAvatar } from "@/components/ui/distributor-profile-avatar";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import { useDistributorZyndPin } from "@/contexts/distributor-zynd-pin-context";
+import { fetchDistributorBackendUser } from "@/lib/distributor-auth-api";
 import { fetchPinBiometricStatus } from "@/lib/distributor-pin-api";
 import { isPlatformBiometricAvailable } from "@/lib/distributor-pin-biometric";
 import {
   clearLocalPinBiometricCredentialId,
   getLocalPinBiometricCredentialId,
 } from "@/lib/distributor-pin-biometric-storage";
+import { ZYND_DISTRIBUTOR_LOGO_HORIZONTAL_SRC } from "@/lib/distributor-brand-assets";
+import { maskEmail } from "@/lib/mask-email";
 import { cn } from "@/lib/utils";
 
 type UnlockMode = "biometric" | "pin";
 
+function PinLockFooterActions({
+  onForgotPin,
+  onSignOut,
+  signingOut,
+  verifyLoading,
+}: {
+  onForgotPin: () => void;
+  onSignOut: () => void;
+  signingOut: boolean;
+  verifyLoading?: boolean;
+}) {
+  return (
+    <div className="relative z-10 flex items-center justify-between gap-3 pt-1">
+      <button
+        type="button"
+        className="cursor-pointer text-caption text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={signingOut}
+        onClick={onForgotPin}
+      >
+        Forgot PIN?
+      </button>
+      <button
+        type="button"
+        className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius-control)] text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label={signingOut ? "Signing out" : "Sign out"}
+        disabled={signingOut || verifyLoading}
+        onClick={onSignOut}
+      >
+        {signingOut ? (
+          <Loader2 className="size-4 animate-spin" strokeWidth={2.25} aria-hidden />
+        ) : (
+          <LogOut className="size-4" strokeWidth={2.25} aria-hidden />
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function DistributorZyndPinLockScreen() {
-  const { displayName, user } = useDistributorAuth();
+  const router = useRouter();
+  const { displayName, user, signOut, refreshUser } = useDistributorAuth();
   const { unlock, unlockWithBiometric, unlockError, clearUnlockError } = useDistributorZyndPin();
+  const [liveEmail, setLiveEmail] = useState<string | null>(null);
   const [mode, setMode] = useState<UnlockMode>("pin");
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricReady, setBiometricReady] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const submittingRef = useRef(false);
   const biometricAttemptedRef = useRef(false);
 
   const localCredentialId = user?.id ? getLocalPinBiometricCredentialId(user.id) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        await refreshUser();
+        const me = await fetchDistributorBackendUser();
+        if (!cancelled) setLiveEmail(me.email);
+      } catch {
+        if (!cancelled) setLiveEmail(user?.email ?? null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshUser, user?.email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,26 +174,44 @@ export function DistributorZyndPinLockScreen() {
     void submitPin(pin);
   }, [mode, pin, submitPin]);
 
+  const handleSignOut = () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    void signOut().finally(() => {
+      setSigningOut(false);
+      router.replace("/");
+    });
+  };
+
   return (
     <>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-6 backdrop-blur-sm">
-        <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-card p-6">
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/95 p-6 backdrop-blur-sm">
+        <div className="w-full max-w-sm">
+          <div className="distributor-pin-lock-screen__brand">
+            <Image
+              src={ZYND_DISTRIBUTOR_LOGO_HORIZONTAL_SRC}
+              alt="Zynd Distributor"
+              width={220}
+              height={48}
+              className="distributor-login-page__logo distributor-login-page__logo--horizontal"
+              priority
+            />
+          </div>
+
+          <div className="rounded-[var(--radius-card)] border border-border bg-card p-6">
           <div className="mb-5 flex flex-col items-center text-center">
             <DistributorProfileAvatar
               name={displayName}
               imageSrc={user?.avatarUrl}
-              size="lg"
-              className="mb-3"
+              size="xl"
+              className="mb-4"
             />
-            <div className="mb-3 flex size-12 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
-              <LockKeyhole className="size-5" />
-            </div>
-            <h1 className="text-h4 font-semibold text-foreground">Enter your Zynd PIN</h1>
-            <p className="mt-1 text-caption text-muted-foreground">
-              {displayName
-                ? `Unlock the Zynd Mitra console, ${displayName}.`
-                : "Unlock the Zynd Mitra console."}
-            </p>
+            <h1 className="text-compact font-semibold text-foreground">Enter your Zynd PIN</h1>
+            {liveEmail || user?.email ? (
+              <p className="mt-1 text-caption text-muted-foreground">
+                {maskEmail(liveEmail ?? user?.email ?? "")}
+              </p>
+            ) : null}
           </div>
 
           {mode === "biometric" ? (
@@ -165,25 +245,25 @@ export function DistributorZyndPinLockScreen() {
                 <p className="text-center text-caption text-destructive">{unlockError}</p>
               ) : null}
 
-              <div className="flex flex-col items-center gap-3 pt-1">
-                <button
-                  type="button"
-                  className="text-caption text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={() => {
-                    clearUnlockError();
-                    setMode("pin");
-                  }}
-                >
-                  Use PIN instead
-                </button>
-                <button
-                  type="button"
-                  className="text-caption text-muted-foreground transition-colors hover:text-foreground"
-                  disabled={biometricLoading}
-                  onClick={() => setForgotOpen(true)}
-                >
-                  Forgot PIN?
-                </button>
+              <div className="space-y-3 pt-1">
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    className="text-caption text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => {
+                      clearUnlockError();
+                      setMode("pin");
+                    }}
+                  >
+                    Use PIN instead
+                  </button>
+                </div>
+                <PinLockFooterActions
+                  verifyLoading={biometricLoading}
+                  signingOut={signingOut}
+                  onForgotPin={() => setForgotOpen(true)}
+                  onSignOut={handleSignOut}
+                />
               </div>
             </div>
           ) : (
@@ -213,33 +293,34 @@ export function DistributorZyndPinLockScreen() {
                 <p className="text-center text-caption text-destructive">{unlockError}</p>
               ) : null}
 
-              <div className="flex flex-col items-center gap-3 pt-1">
+              <div className="space-y-3 pt-1">
                 {biometricReady ? (
-                  <button
-                    type="button"
-                    className="text-caption text-muted-foreground transition-colors hover:text-foreground"
-                    disabled={loading}
-                    onClick={() => {
-                      clearUnlockError();
-                      setPin("");
-                      setMode("biometric");
-                      biometricAttemptedRef.current = false;
-                    }}
-                  >
-                    Unlock with biometrics
-                  </button>
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      className="text-caption text-muted-foreground transition-colors hover:text-foreground"
+                      disabled={loading}
+                      onClick={() => {
+                        clearUnlockError();
+                        setPin("");
+                        setMode("biometric");
+                        biometricAttemptedRef.current = false;
+                      }}
+                    >
+                      Unlock with biometrics
+                    </button>
+                  </div>
                 ) : null}
-                <button
-                  type="button"
-                  className="text-caption text-muted-foreground transition-colors hover:text-foreground"
-                  disabled={loading}
-                  onClick={() => setForgotOpen(true)}
-                >
-                  Forgot PIN?
-                </button>
+                <PinLockFooterActions
+                  verifyLoading={loading}
+                  signingOut={signingOut}
+                  onForgotPin={() => setForgotOpen(true)}
+                  onSignOut={handleSignOut}
+                />
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
 

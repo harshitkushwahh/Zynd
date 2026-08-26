@@ -3,13 +3,13 @@
 import { KeyRound, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 
-import { AuthenticatorVerifyDialog } from "@/features/account/mfa";
-import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
+import { ChangePasswordVerifyDialog } from "@/components/dashboard/settings/change-password-dialog";
 import { PasswordCriteriaList } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
+import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { ApiError } from "@/lib/api-client";
 import { changePassword } from "@/lib/auth-api";
 import { isPasswordValid } from "@/lib/password-criteria";
@@ -31,22 +31,23 @@ export function ChangePasswordSettingsPanel({
 }: ChangePasswordSettingsPanelProps) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [verifyOpen, setVerifyOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [authError, setAuthError] = useState("");
+  const [error, setError] = useState("");
+  const [verifyError, setVerifyError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const resetForm = () => {
     setCurrentPassword("");
     setNewPassword("");
+    setError("");
+    setVerifyError("");
   };
 
   const submitPasswordChange = async (verification?: StepUpVerification) => {
     setLoading(true);
     setError("");
-    setAuthError("");
-    setSuccess("");
+    setVerifyError("");
 
     try {
       await changePassword({
@@ -56,13 +57,13 @@ export function ChangePasswordSettingsPanel({
         smsOtp: verification?.smsOtp,
       });
       resetForm();
+      setVerifyOpen(false);
       setSuccess(copy.settings.changePasswordSuccess);
-      setAuthDialogOpen(false);
       await onSessionsRefresh();
     } catch (err) {
       const message = getErrorMessage(err, copy.settings.changePasswordFailed);
-      if (authDialogOpen) {
-        setAuthError(message);
+      if (verifyOpen) {
+        setVerifyError(message);
       } else {
         setError(message);
       }
@@ -73,8 +74,6 @@ export function ChangePasswordSettingsPanel({
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    setError("");
-    setSuccess("");
 
     if (!isPasswordValid(newPassword)) {
       setError(copy.settings.changePasswordWeakError);
@@ -82,14 +81,15 @@ export function ChangePasswordSettingsPanel({
     }
 
     if (mfaEnabled) {
-      setAuthDialogOpen(true);
+      setError("");
+      setVerifyOpen(true);
       return;
     }
 
     void submitPasswordChange();
   };
 
-  const handleStepUpVerify = (verification: StepUpVerification) => {
+  const handleVerifySubmit = (verification: StepUpVerification) => {
     void submitPasswordChange(verification);
   };
 
@@ -99,41 +99,43 @@ export function ChangePasswordSettingsPanel({
   return (
     <>
       <div className="space-y-6">
+        {success ? <UiMessage variant="success" message={success} className="mt-0" /> : null}
+
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4 rounded-[var(--radius-card)] border border-border bg-card p-4 sm:p-5">
             <div className="space-y-2">
-              <Label htmlFor="settings-current-password">
+              <Label htmlFor="settings-change-password-current">
                 {copy.settings.changePasswordCurrentLabel}
               </Label>
               <PasswordInput
-                id="settings-current-password"
+                id="settings-change-password-current"
                 icon={KeyRound}
                 placeholder={copy.settings.changePasswordCurrentPlaceholder}
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
                 autoComplete="current-password"
+                disabled={loading}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="settings-new-password">
+              <Label htmlFor="settings-change-password-new">
                 {copy.settings.changePasswordNewLabel}
               </Label>
               <PasswordInput
-                id="settings-new-password"
+                id="settings-change-password-new"
                 icon={LockKeyhole}
                 placeholder={copy.settings.changePasswordNewPlaceholder}
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 autoComplete="new-password"
+                disabled={loading}
               />
+              {newPassword ? <PasswordCriteriaList password={newPassword} /> : null}
             </div>
-
-            {newPassword ? <PasswordCriteriaList password={newPassword} /> : null}
           </div>
 
           <FieldMessage message={error} />
-          {success ? <UiMessage variant="success" message={success} className="mt-0" /> : null}
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <UiMessage
@@ -143,7 +145,7 @@ export function ChangePasswordSettingsPanel({
             />
             <Button type="submit" disabled={!canSubmit} className="w-full shrink-0 sm:w-auto">
               <KeyRound className="size-3.5" />
-              {loading && !authDialogOpen
+              {loading && !verifyOpen
                 ? copy.settings.changePasswordSubmitting
                 : copy.settings.changePasswordSubmit}
             </Button>
@@ -151,15 +153,13 @@ export function ChangePasswordSettingsPanel({
         </form>
       </div>
 
-      <AuthenticatorVerifyDialog
-        open={authDialogOpen}
-        onOpenChange={setAuthDialogOpen}
-        title={copy.settings.changePasswordMfaTitle}
-        description={copy.settings.changePasswordMfaDescription}
-        submitLabel={copy.settings.changePasswordSubmit}
+      <ChangePasswordVerifyDialog
+        open={verifyOpen}
+        onOpenChange={setVerifyOpen}
         loading={loading}
-        error={authError}
-        onSubmit={handleStepUpVerify}
+        error={verifyError}
+        onErrorChange={setVerifyError}
+        onSubmit={handleVerifySubmit}
       />
     </>
   );

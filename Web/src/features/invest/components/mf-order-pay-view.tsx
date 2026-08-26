@@ -4,14 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import {
-  abandonMfOrderPayment,
   fetchMfOrder,
   type MfOrder,
+  type MfPaymentReconcileOutcome,
 } from "@/features/invest/api/invest-api";
-import { MfPayoutBankSummary } from "@/features/invest/components/mf-bank-account-picker";
-import { MfPaymentJourneyDialog, MfPaymentCheckoutDetailsSkeleton, MfPaymentStatusBadges } from "@/features/invest/components/payment-dialog";
+import { MfPaymentJourneyDialog } from "@/features/invest/components/payment-dialog";
 import type { MfPaymentJourneyPhase } from "@/features/invest/components/payment-dialog/mf-payment-dialog-assets";
-import { formatInr } from "@/features/invest/lib/mf-format";
+import {
+  isMfPaymentReconcileTerminal,
+  pickOrderFromPaymentStatus,
+  reconcileMfOrderPayment,
+} from "@/features/invest/lib/mf-lumpsum-payment-reconcile";
+import { resolvePaymentTerminalLines } from "@/features/invest/lib/mf-payment-terminal-lines";
+import {
+  MF_PAYMENT_POLL_MS,
+  MF_PAYMENT_RETURN_FAST_ATTEMPTS,
+} from "@/features/invest/lib/mf-payment-poll";
 import {
   clearLastMfPaymentSession,
   clearMfPaymentRedirect,
@@ -20,7 +28,6 @@ import {
   wasMfPaymentRedirected,
 } from "@/features/invest/lib/mf-payment-session";
 import { copy } from "@/shared/config/copy";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useInvestCacheInvalidation } from "@/features/invest/hooks/use-invest-cache-invalidation";
 
 type MfOrderPayViewProps = {
@@ -29,22 +36,23 @@ type MfOrderPayViewProps = {
 };
 
 const TERMINAL_STATUSES = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
-const POLL_MS = 2000;
-const RETURN_POLL_ATTEMPTS = 15;
 
 function resolveOrderPayPhase(args: {
   loading: boolean;
   order: MfOrder | null;
   error: string | null;
-  abandonChecked: boolean;
   returnedFromPayment: boolean;
+  returnConfirming: boolean;
+  paymentOutcome: MfPaymentReconcileOutcome | null;
 }): MfPaymentJourneyPhase {
-  const { loading, order, error, abandonChecked, returnedFromPayment } = args;
+  const { loading, order, error, returnedFromPayment, returnConfirming, paymentOutcome } = args;
 
-  if (!abandonChecked && returnedFromPayment) return "waiting";
-  if ((loading && !order) || !abandonChecked) return "processing";
+  if (returnConfirming || (returnedFromPayment && loading && !order)) return "waiting";
+  if (loading && !order) return "processing";
   if (error || !order) return "error";
-  if (order.status === "SUCCEEDED") return "success";
+  if (paymentOutcome === "success" || order.status === "SUCCEEDED") return "success";
+  if (paymentOutcome === "failed") return "error";
+  if (paymentOutcome === "pending" || paymentOutcome === "unclear") return "waiting";
   if (order.status === "FAILED" || order.status === "CANCELLED") return "error";
   return "waiting";
 }
@@ -55,9 +63,20 @@ function resolveOrderPayMessage(args: {
   error: string | null;
   redirecting: boolean;
   returnedFromPayment: boolean;
-  abandonChecked: boolean;
+  returnConfirming: boolean;
+  longRunning: boolean;
+  paymentOutcome: MfPaymentReconcileOutcome | null;
 }): string {
-  const { phase, order, error, redirecting, returnedFromPayment, abandonChecked } = args;
+  const {
+    phase,
+    order,
+    error,
+    redirecting,
+    returnedFromPayment,
+    returnConfirming,
+    longRunning,
+    paymentOutcome,
+  } = args;
 
   if (phase === "processing") return copy.mutualFunds.orderPayProcessing;
   if (phase === "error") {
@@ -66,7 +85,12 @@ function resolveOrderPayMessage(args: {
   }
   if (phase === "success") return copy.mutualFunds.orderPaySuccess;
   if (redirecting) return copy.mutualFunds.orderPayRedirecting;
-  if (returnedFromPayment && !abandonChecked) return copy.mutualFunds.orderPayReturnConfirming;
+  if (returnConfirming || (returnedFromPayment && phase === "waiting")) {
+    if (paymentOutcome === "unclear") return copy.mutualFunds.orderPayReturnUnclear;
+    return longRunning
+      ? copy.mutualFunds.orderPayReturnStillProcessing
+      : copy.mutualFunds.orderPayReturnConfirming;
+  }
   if (order?.next_action === "wait_review" || order?.fp_state === "under_review") {
     return copy.mutualFunds.orderPayUnderReview;
   }
@@ -76,22 +100,43 @@ function resolveOrderPayMessage(args: {
   return copy.mutualFunds.orderPayPolling;
 }
 
+async function syncOrderPaymentReturn(orderId: string) {
+  try {
+    return await reconcileMfOrderPayment(orderId);
+  } catch {
+    const order = await fetchMfOrder(orderId);
+    return { outcome: "pending" as const, order };
+  }
+}
+
 export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   const router = useRouter();
   const [order, setOrder] = useState<MfOrder | null>(null);
+  const [paymentOutcome, setPaymentOutcome] = useState<MfPaymentReconcileOutcome | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
-  const [abandonChecked, setAbandonChecked] = useState(() => !wasMfPaymentRedirected(orderId));
+  const [returnConfirming, setReturnConfirming] = useState(false);
+  const [longRunning, setLongRunning] = useState(false);
   const [returnRetryToken, setReturnRetryToken] = useState(0);
   const redirectedRef = useRef(false);
-  const abandonedRef = useRef(false);
+  const pollAttemptsRef = useRef(0);
+  const reconcilePollingRef = useRef(wasMfPaymentRedirected(orderId));
   const returnedFromPayment = wasMfPaymentRedirected(orderId);
 
   useInvestCacheInvalidation(`order-${orderId}`, order?.status === "SUCCEEDED");
 
   const loadOrder = useCallback(async () => {
     try {
+      if (reconcilePollingRef.current) {
+        const status = await reconcileMfOrderPayment(orderId);
+        setPaymentOutcome(status.outcome);
+        const next = pickOrderFromPaymentStatus(status);
+        if (next) setOrder(next);
+        setError(null);
+        return next;
+      }
+
       const next = await fetchMfOrder(orderId);
       setOrder(next);
       setError(null);
@@ -107,9 +152,7 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   useEffect(() => {
     function handlePageShow() {
       if (!wasMfPaymentRedirected(orderId)) return;
-      abandonedRef.current = false;
       setRedirecting(false);
-      setAbandonChecked(false);
       setReturnRetryToken((token) => token + 1);
     }
 
@@ -118,41 +161,67 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   }, [orderId]);
 
   useEffect(() => {
-    if (abandonedRef.current || !wasMfPaymentRedirected(orderId)) {
-      setAbandonChecked(true);
+    if (!wasMfPaymentRedirected(orderId)) {
+      void loadOrder();
       return;
     }
-    abandonedRef.current = true;
+
+    let cancelled = false;
+    reconcilePollingRef.current = true;
+    setReturnConfirming(true);
+    setLongRunning(false);
+    pollAttemptsRef.current = 0;
+
     void (async () => {
-      try {
-        const next = await abandonMfOrderPayment(orderId);
-        setOrder(next);
-        setError(null);
-        clearMfPaymentRedirect(orderId);
-      } catch {
-        const next = await loadOrder();
-        if (next && !TERMINAL_STATUSES.has(next.status)) {
-          setError(copy.mutualFunds.orderPayAbandoned);
-        }
-      } finally {
-        setLoading(false);
-        setAbandonChecked(true);
-        clearMfPaymentRedirect(orderId);
-      }
+      const status = await syncOrderPaymentReturn(orderId);
+      if (cancelled) return;
+      setPaymentOutcome(status.outcome);
+      const next = pickOrderFromPaymentStatus(status);
+      if (next) setOrder(next);
+      clearMfPaymentRedirect(orderId);
+      setReturnConfirming(false);
+      setLoading(false);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [loadOrder, orderId, returnRetryToken]);
 
   useEffect(() => {
-    if (!abandonChecked) return;
-
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const poll = async () => {
+      if (returnConfirming) {
+        timer = setTimeout(() => void poll(), MF_PAYMENT_POLL_MS);
+        return;
+      }
+
+      pollAttemptsRef.current += 1;
+      if (pollAttemptsRef.current > MF_PAYMENT_RETURN_FAST_ATTEMPTS) {
+        setLongRunning(true);
+      }
+
+      if (reconcilePollingRef.current) {
+        try {
+          const status = await reconcileMfOrderPayment(orderId);
+          if (cancelled) return;
+          setPaymentOutcome(status.outcome);
+          const next = pickOrderFromPaymentStatus(status);
+          if (next) setOrder(next);
+          if (isMfPaymentReconcileTerminal(status.outcome)) return;
+          timer = setTimeout(() => void poll(), MF_PAYMENT_POLL_MS);
+          return;
+        } catch {
+          // Fall through to plain order fetch.
+        }
+      }
+
       const next = await loadOrder();
       if (cancelled || !next) return;
       if (!TERMINAL_STATUSES.has(next.status)) {
-        timer = setTimeout(() => void poll(), POLL_MS);
+        timer = setTimeout(() => void poll(), MF_PAYMENT_POLL_MS);
       }
     };
 
@@ -161,7 +230,7 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [abandonChecked, loadOrder]);
+  }, [loadOrder, orderId, returnConfirming, returnRetryToken]);
 
   useEffect(() => {
     if (!order?.payment_url || order.next_action !== "pay_upi") return;
@@ -178,8 +247,9 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
     loading,
     order,
     error,
-    abandonChecked,
     returnedFromPayment,
+    returnConfirming,
+    paymentOutcome,
   });
   const message = resolveOrderPayMessage({
     phase,
@@ -187,29 +257,20 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
     error,
     redirecting,
     returnedFromPayment,
-    abandonChecked,
+    returnConfirming,
+    longRunning,
+    paymentOutcome,
   });
-  const showOrderDetails = phase === "processing" || phase === "waiting";
-  const statusDetail =
-    order && showOrderDetails && abandonChecked ? (
-      <MfPaymentStatusBadges status={order.status} fpState={order.fp_state} />
-    ) : undefined;
-
-  const subtitle =
-    showOrderDetails
-      ? order
-        ? (
-            <span className="block w-full text-pretty text-center">
-              <span className="block font-medium text-foreground">
-                {order.product_name ?? copy.mutualFunds.unknownFund}
-              </span>
-              <span className="mt-0.5 block text-caption text-muted-foreground">
-                {formatInr(order.amount_inr)}
-              </span>
-            </span>
-          )
-        : <Skeleton className="mx-auto h-9 w-52 max-w-full" aria-hidden="true" />
-      : undefined;
+  const terminalLines = resolvePaymentTerminalLines({
+    phase,
+    abandonChecked: true,
+    redirecting,
+    returnedFromPayment,
+    nextAction: order?.next_action,
+    fpState: order?.fp_state,
+    status: order?.status,
+  });
+  const isInProgress = phase === "processing" || phase === "waiting";
 
   const title =
     phase === "error"
@@ -226,43 +287,25 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
     router.push("/dashboard/mutual-funds");
   }
 
-  function handleSecondaryAction() {
-    if (onClose) {
-      onClose();
-      return;
-    }
-    router.push("/dashboard/mutual-funds");
-  }
-
   return (
     <MfPaymentJourneyDialog
       phase={phase}
+      layout={isInProgress ? "terminal" : "default"}
       title={title}
-      subtitle={subtitle}
       message={message}
-      statusDetail={statusDetail}
+      terminalLines={terminalLines}
       onDismiss={dismissPaymentDialog}
       primaryLabel={
-        phase === "success" || phase === "error" ? copy.mutualFunds.backToBrowse : undefined
+        phase === "success" || phase === "error" || longRunning
+          ? copy.mutualFunds.backToBrowse
+          : undefined
       }
       onPrimaryAction={
-        phase === "success" || phase === "error" ? dismissPaymentDialog : undefined
+        phase === "success" || phase === "error" || longRunning
+          ? dismissPaymentDialog
+          : undefined
       }
-      secondaryLabel={showOrderDetails && order ? copy.mutualFunds.orderPayBackToFund : undefined}
-      onSecondaryAction={showOrderDetails && order ? handleSecondaryAction : undefined}
-    >
-      {showOrderDetails ? (
-        order ? (
-          <MfPayoutBankSummary
-            masked={order.payout_bank_account_masked}
-            ifsc={order.payout_bank_ifsc_code}
-            bankName={order.payout_bank_name}
-          />
-        ) : (
-          <MfPaymentCheckoutDetailsSkeleton orderLines={0} />
-        )
-      ) : null}
-    </MfPaymentJourneyDialog>
+    />
   );
 }
 
@@ -270,9 +313,11 @@ export function MfOrderPaymentReturnView() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [order, setOrder] = useState<MfOrder | null>(null);
+  const [paymentOutcome, setPaymentOutcome] = useState<MfPaymentReconcileOutcome | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const resolvedRef = useRef(false);
+  const [longRunning, setLongRunning] = useState(false);
+  const pollAttemptsRef = useRef(0);
 
   const orderId =
     searchParams.get("order_id") ??
@@ -285,78 +330,95 @@ export function MfOrderPaymentReturnView() {
   );
 
   useEffect(() => {
-    if (!orderId || resolvedRef.current) return;
-    resolvedRef.current = true;
+    if (!orderId) {
+      setLoading(false);
+      setError(copy.mutualFunds.orderPayReturnUnknown);
+      return;
+    }
 
     let cancelled = false;
-    let attempts = 0;
+    pollAttemptsRef.current = 0;
+    setLongRunning(false);
 
-    const resolve = async () => {
+    const poll = async () => {
       try {
-        const next = await fetchMfOrder(orderId);
+        const status = await reconcileMfOrderPayment(orderId);
+        const next = pickOrderFromPaymentStatus(status);
         if (cancelled) return;
-        setOrder(next);
 
-        if (next.status === "SUCCEEDED") {
+        pollAttemptsRef.current += 1;
+        if (pollAttemptsRef.current > MF_PAYMENT_RETURN_FAST_ATTEMPTS) {
+          setLongRunning(true);
+        }
+
+        setPaymentOutcome(status.outcome);
+        if (next) setOrder(next);
+        setError(null);
+
+        if (status.outcome === "success" || next?.status === "SUCCEEDED") {
           clearLastMfPaymentSession();
           setLoading(false);
           return;
         }
 
-        if (TERMINAL_STATUSES.has(next.status)) {
+        if (isMfPaymentReconcileTerminal(status.outcome)) {
           setLoading(false);
           return;
         }
 
-        attempts += 1;
-        if (attempts < RETURN_POLL_ATTEMPTS) {
-          setTimeout(() => void resolve(), POLL_MS);
+        if (next && TERMINAL_STATUSES.has(next.status) && status.outcome === "failed") {
+          setLoading(false);
           return;
         }
 
-        const abandoned = await abandonMfOrderPayment(orderId);
-        if (!cancelled) {
-          setOrder(abandoned);
-          clearLastMfPaymentSession();
-        }
+        setTimeout(() => void poll(), MF_PAYMENT_POLL_MS);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : copy.mutualFunds.ordersLoadError);
-        }
-      } finally {
-        if (!cancelled) {
           setLoading(false);
         }
       }
     };
 
-    void resolve();
+    void poll();
     return () => {
       cancelled = true;
     };
   }, [orderId]);
 
-  const phase: MfPaymentJourneyPhase = loading
-    ? "waiting"
-    : error
-      ? "error"
-      : order?.status === "SUCCEEDED"
-        ? "success"
-        : order?.status === "FAILED" || order?.status === "CANCELLED"
-          ? "error"
-          : !order
+  const phase: MfPaymentJourneyPhase = !orderId
+    ? "error"
+    : loading && !longRunning
+      ? "waiting"
+      : error
+        ? "error"
+        : paymentOutcome === "success" || order?.status === "SUCCEEDED"
+          ? "success"
+          : paymentOutcome === "failed"
             ? "error"
-            : "waiting";
+            : paymentOutcome === "pending" || paymentOutcome === "unclear"
+              ? "waiting"
+              : order?.status === "FAILED" || order?.status === "CANCELLED"
+                ? "error"
+                : !order
+                  ? "error"
+                  : "waiting";
 
-  const message = loading
-    ? copy.mutualFunds.orderPayReturnConfirming
-    : phase === "success"
-      ? copy.mutualFunds.orderPaySuccess
-      : phase === "error"
-        ? order?.failure_code === "payment_abandoned"
-          ? copy.mutualFunds.orderPayAbandoned
-          : error ?? order?.failure_reason ?? copy.mutualFunds.orderPayReturnUnknown
-        : copy.mutualFunds.orderPayReturnDescription;
+  const message = !orderId
+    ? copy.mutualFunds.orderPayReturnUnknown
+    : loading && !longRunning
+      ? copy.mutualFunds.orderPayReturnConfirming
+      : phase === "success"
+        ? copy.mutualFunds.orderPaySuccess
+        : phase === "error"
+          ? order?.failure_code === "payment_abandoned"
+            ? copy.mutualFunds.orderPayAbandoned
+            : error ?? order?.failure_reason ?? copy.mutualFunds.orderPayReturnUnknown
+          : paymentOutcome === "unclear"
+            ? copy.mutualFunds.orderPayReturnUnclear
+            : longRunning
+              ? copy.mutualFunds.orderPayReturnStillProcessing
+              : copy.mutualFunds.orderPayReturnDescription;
 
   const title =
     phase === "error"
@@ -372,10 +434,26 @@ export function MfOrderPaymentReturnView() {
   return (
     <MfPaymentJourneyDialog
       phase={phase}
+      layout={phase === "waiting" ? "terminal" : "default"}
       title={title}
       message={message}
-      primaryLabel={copy.mutualFunds.backToBrowse}
-      onPrimaryAction={dismissReturnDialog}
+      terminalLines={resolvePaymentTerminalLines({
+        phase,
+        abandonChecked: true,
+        redirecting: false,
+        returnedFromPayment: true,
+        status: order?.status,
+      })}
+      primaryLabel={
+        phase === "success" || phase === "error" || longRunning
+          ? copy.mutualFunds.backToBrowse
+          : undefined
+      }
+      onPrimaryAction={
+        phase === "success" || phase === "error" || longRunning
+          ? dismissReturnDialog
+          : undefined
+      }
       onDismiss={dismissReturnDialog}
     />
   );

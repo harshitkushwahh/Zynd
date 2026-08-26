@@ -5,6 +5,7 @@ import uuid
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.investor.investor_bank_account_resolver import (
@@ -13,6 +14,7 @@ from app.application.investor.investor_bank_account_resolver import (
 )
 from app.application.mf.catalog_governance_service import is_product_investable
 from app.application.mf.catalog_lifecycle_service import is_catalog_eligible
+from app.application.mf.invest_fund_slug import fund_public_slug
 from app.application.goals.errors import GoalError
 from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
@@ -20,7 +22,7 @@ from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.core.config import get_settings
 from app.infrastructure.persistence.investor_models import InvestorProfileStatus, InvestorProvisionTrigger
-from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product, ProductLifecycleStatus
+from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product, ProductDisplayContent, ProductLifecycleStatus
 from app.infrastructure.persistence.mf_transaction_models import (
     MfCheckout,
     MfCheckoutStatus,
@@ -43,14 +45,24 @@ TERMINAL_STATUSES = {
 
 
 async def get_or_create_mf_investment_account(session: AsyncSession, *, user_id: uuid.UUID) -> MfInvestmentAccount:
-    existing = await session.scalar(
+    account = await session.scalar(
         select(MfInvestmentAccount).where(MfInvestmentAccount.user_id == user_id)
     )
-    if existing:
-        return existing
-    account = MfInvestmentAccount(user_id=user_id, status=MfInvestmentAccountStatus.pending)
-    session.add(account)
+    if account:
+        return account
+
+    await session.execute(
+        pg_insert(MfInvestmentAccount)
+        .values(user_id=user_id, status=MfInvestmentAccountStatus.pending)
+        .on_conflict_do_nothing(index_elements=["user_id"])
+    )
     await session.flush()
+
+    account = await session.scalar(
+        select(MfInvestmentAccount).where(MfInvestmentAccount.user_id == user_id)
+    )
+    if account is None:
+        raise RuntimeError(f"MF investment account missing after upsert for user {user_id}")
     return account
 
 
@@ -216,7 +228,8 @@ async def get_user_order_journey(
         ).scalars()
     )
     product = await session.get(Product, order.product_id)
-    amc_names, amc_logos = await load_order_fund_metadata(session, [order])
+    amc_names, amc_logos, amc_slugs = await load_order_fund_metadata(session, [order])
+    product_slugs = await load_order_product_slugs(session, [order], product_names={order.product_id: product.name if product else None})
     checkout = await session.get(MfCheckout, order.checkout_id) if order.checkout_id else None
 
     return {
@@ -226,6 +239,8 @@ async def get_user_order_journey(
             checkout=checkout,
             amc_name=amc_names.get(order.fund_id),
             amc_logo_url=amc_logos.get(order.fund_id),
+            amc_slug=amc_slugs.get(order.fund_id),
+            product_slug=product_slugs.get(order.product_id),
         ),
         "events": [
             {
@@ -279,10 +294,10 @@ def _derive_next_action(*, status: str, payment_url: str | None) -> str:
 async def load_order_fund_metadata(
     session: AsyncSession,
     orders: list[MfOrder],
-) -> tuple[dict[int, str], dict[int, str | None]]:
+) -> tuple[dict[int, str], dict[int, str | None], dict[int, str]]:
     fund_ids = {order.fund_id for order in orders}
     if not fund_ids:
-        return {}, {}
+        return {}, {}, {}
 
     settings = get_settings()
     result = await session.execute(
@@ -292,10 +307,37 @@ async def load_order_fund_metadata(
     )
     amc_names: dict[int, str] = {}
     amc_logos: dict[int, str | None] = {}
+    amc_slugs: dict[int, str] = {}
     for fund_id, name, logo_url, slug in result:
         amc_names[fund_id] = name
         amc_logos[fund_id] = resolve_amc_logo_url(logo_url, slug, settings)
-    return amc_names, amc_logos
+        amc_slugs[fund_id] = slug
+    return amc_names, amc_logos, amc_slugs
+
+
+async def load_order_product_slugs(
+    session: AsyncSession,
+    orders: list[MfOrder],
+    *,
+    product_names: dict[uuid.UUID, str | None] | None = None,
+) -> dict[uuid.UUID, str]:
+    product_ids = {order.product_id for order in orders}
+    if not product_ids:
+        return {}
+
+    rows = (
+        await session.execute(
+            select(Product.id, Product.name, ProductDisplayContent.seo_slug)
+            .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
+            .where(Product.id.in_(product_ids))
+        )
+    ).all()
+    slugs: dict[uuid.UUID, str] = {}
+    for product_id, name, seo_slug in rows:
+        resolved_name = (product_names or {}).get(product_id) or name
+        if resolved_name:
+            slugs[product_id] = fund_public_slug(name=resolved_name, seo_slug=seo_slug)
+    return slugs
 
 
 def serialize_order(
@@ -305,6 +347,8 @@ def serialize_order(
     checkout: MfCheckout | None = None,
     amc_name: str | None = None,
     amc_logo_url: str | None = None,
+    amc_slug: str | None = None,
+    product_slug: str | None = None,
 ) -> dict:
     payment_url = checkout.token_url if checkout else None
     metadata = checkout.metadata_ if checkout and isinstance(checkout.metadata_, dict) else {}
@@ -313,7 +357,9 @@ def serialize_order(
         "checkout_id": str(order.checkout_id) if order.checkout_id else None,
         "product_id": str(order.product_id),
         "product_name": product_name,
+        "product_slug": product_slug,
         "amc_name": amc_name,
+        "amc_slug": amc_slug,
         "amc_logo_url": amc_logo_url,
         "order_type": order.order_type.value,
         "amount_inr": float(order.amount_inr),

@@ -6,11 +6,12 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import type { CalculatorChartSeriesPoint } from "@/features/invest/lib/mf-lumpsum-calculator";
 import { MF_CALC_GAIN_TEXT_CLASS, MF_CALC_ICON_BADGE_CLASS } from "@/features/invest/lib/mf-calculator-ui";
@@ -95,7 +96,7 @@ export function MfCalculatorProjectionChart({
       className="h-[320px] w-full min-w-0 [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible"
       aria-hidden={!interactive}
     >
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
+      <RechartsMeasuredContainer className="h-full w-full" width="100%" height={CHART_HEIGHT} minWidth={0}>
         <AreaChart data={[...series]} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradientInvestedId} x1="0" y1="0" x2="0" y2="1">
@@ -155,7 +156,7 @@ export function MfCalculatorProjectionChart({
             isAnimationActive={interactive}
           />
         </AreaChart>
-      </ResponsiveContainer>
+      </RechartsMeasuredContainer>
     </div>
   );
 }

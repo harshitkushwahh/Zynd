@@ -26,7 +26,7 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfWebhookProcessingStatus,
 )
 from app.infrastructure.persistence.models import User
-from app.infrastructure.persistence.referral_models import ReferralInvestmentProduct
+from app.infrastructure.persistence.referral_models import ReferralInvestmentMode, ReferralInvestmentProduct
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,7 @@ async def _apply_purchase_state_to_order(
                 user=user,
                 product=ReferralInvestmentProduct.mutual_fund,
                 amount_inr=int(order.amount_inr),
+                investment_mode=ReferralInvestmentMode.lumpsum,
             )
     elif mapped.value == "FAILED":
         order.failure_code = order.failure_code or "fp_terminal_failed"

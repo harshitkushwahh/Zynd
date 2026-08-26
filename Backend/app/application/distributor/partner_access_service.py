@@ -119,6 +119,30 @@ async def distributor_partner_may_request_password_reset(
     }
 
 
+async def assert_distributor_partner_may_request_password_reset(
+    db: AsyncSession,
+    *,
+    user: User,
+) -> None:
+    partner = await get_distributor_partner_for_user(db, user.id)
+    if partner is None:
+        return
+
+    if partner.status == DistributorPartnerStatus.pending_ho_review:
+        raise AuthError(
+            "Your Zynd Mitra application is pending HO review. "
+            "You will receive an email to set your password once it is approved.",
+            "distributor_partner_pending_review",
+            403,
+        )
+    if partner.status == DistributorPartnerStatus.rejected:
+        raise AuthError(
+            "Your Zynd Mitra application was not approved.",
+            "distributor_partner_rejected",
+            403,
+        )
+
+
 async def assert_distributor_partner_may_sign_in(
     db: AsyncSession,
     *,

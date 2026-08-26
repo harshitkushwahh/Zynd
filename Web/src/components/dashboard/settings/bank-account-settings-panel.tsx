@@ -3,26 +3,29 @@
 import { useState } from "react";
 import { Building2, Plus } from "lucide-react";
 
-import { SettingsAddBankAccountForm } from "@/components/dashboard/settings/settings-add-bank-account-form";
 import { SettingsBankAccountCard } from "@/components/dashboard/settings/settings-bank-account-card";
+import { BankAccountsPanelSkeleton } from "@/components/dashboard/settings/settings-skeleton";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import { SETTINGS_NAV } from "@/components/dashboard/settings/settings-sidebar";
 import { Button } from "@/components/ui/button";
 import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import { useKycOptional } from "@/contexts/kyc-context";
+import { useAddBankAccountDialog } from "@/contexts/add-bank-account-dialog-context";
 import { useInvestorBankAccounts } from "@/features/invest/hooks/use-investor-bank-accounts";
-import { setPrimaryInvestorBankAccount, disableInvestorBankAccount } from "@/features/invest/lib/investor-bank-accounts-api";
+import {
+  setPrimaryInvestorBankAccount,
+  disableInvestorBankAccount,
+  MAX_BANK_ACCOUNTS,
+} from "@/features/invest/lib/investor-bank-accounts-api";
 import { copy } from "@/shared/config/copy";
-
-const MAX_BANK_ACCOUNTS = 5;
 
 export function BankAccountSettingsPanel() {
   const sectionMeta = SETTINGS_NAV.find((item) => item.id === "bank-account")!;
   const kyc = useKycOptional();
+  const addBankAccountDialog = useAddBankAccountDialog();
   const kycVerified = kyc?.overallStatus === "completed";
   const { accounts, loading, error, reloadAccounts } = useInvestorBankAccounts(kycVerified);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
@@ -30,9 +33,17 @@ export function BankAccountSettingsPanel() {
 
   const canAddMore = accounts.length < MAX_BANK_ACCOUNTS;
 
+  const openAddBankAccountDialog = () => {
+    addBankAccountDialog.open({
+      onSuccess: () => {
+        void handleAddSuccess();
+      },
+    });
+  };
+
   const headerActions =
-    kycVerified && !loading && !error && accounts.length > 0 && canAddMore && !showAddForm ? (
-      <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
+    kycVerified && !loading && !error && accounts.length > 0 && canAddMore ? (
+      <Button type="button" size="sm" variant="outline" onClick={openAddBankAccountDialog}>
         <Plus className="mr-1.5 size-4" />
         {copy.settings.bankAccounts.addBankAccount}
       </Button>
@@ -47,7 +58,12 @@ export function BankAccountSettingsPanel() {
       setActionMessage(copy.settings.bankAccounts.setPrimarySuccess);
       await reloadAccounts();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : copy.settings.bankAccounts.setPrimaryFailed);
+      const message = err instanceof Error ? err.message : copy.settings.bankAccounts.setPrimaryFailed;
+      if (message.toLowerCase().includes("sip") || message.toLowerCase().includes("mandate")) {
+        setActionError(copy.settings.bankAccounts.setPrimaryMandateBlocked);
+      } else {
+        setActionError(message);
+      }
     } finally {
       setSettingPrimaryId(null);
     }
@@ -65,7 +81,7 @@ export function BankAccountSettingsPanel() {
       const message = err instanceof Error ? err.message : copy.settings.bankAccounts.removeFailed;
       if (message.includes("primary")) {
         setActionError(copy.settings.bankAccounts.removePrimaryBlocked);
-      } else if (message.includes("mandate")) {
+      } else if (message.toLowerCase().includes("sip") || message.toLowerCase().includes("mandate")) {
         setActionError(copy.settings.bankAccounts.removeMandateBlocked);
       } else {
         setActionError(message);
@@ -76,7 +92,6 @@ export function BankAccountSettingsPanel() {
   };
 
   const handleAddSuccess = async () => {
-    setShowAddForm(false);
     setActionError("");
     setActionMessage(copy.settings.bankAccounts.addSuccess);
     await reloadAccounts();
@@ -94,7 +109,7 @@ export function BankAccountSettingsPanel() {
         </p>
       </div>
       {kycVerified ? (
-        <Button type="button" size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
+        <Button type="button" size="sm" variant="outline" onClick={openAddBankAccountDialog}>
           {copy.settings.bankAccounts.addBankAccount}
         </Button>
       ) : kyc?.kycAllowed ? (
@@ -118,7 +133,7 @@ export function BankAccountSettingsPanel() {
       }
     >
       {loading ? (
-        <p className="text-caption text-muted-foreground">{copy.settings.bankAccounts.loading}</p>
+        <BankAccountsPanelSkeleton />
       ) : error ? (
         <div className="space-y-4">
           <FieldMessage message={error} />
@@ -143,11 +158,6 @@ export function BankAccountSettingsPanel() {
             {copy.kyc.menuLabel}
           </Button>
         </div>
-      ) : showAddForm && accounts.length === 0 ? (
-        <SettingsAddBankAccountForm
-          onSuccess={() => void handleAddSuccess()}
-          onCancel={() => setShowAddForm(false)}
-        />
       ) : accounts.length === 0 ? (
         renderEmptyState()
       ) : (
@@ -172,16 +182,6 @@ export function BankAccountSettingsPanel() {
 
           {!canAddMore ? (
             <p className="text-caption text-muted-foreground">{copy.settings.bankAccounts.maxReached}</p>
-          ) : null}
-
-          {showAddForm ? (
-            <SettingsAddBankAccountForm
-              onSuccess={() => void handleAddSuccess()}
-              onCancel={() => {
-                setShowAddForm(false);
-                setActionError("");
-              }}
-            />
           ) : null}
         </div>
       )}

@@ -76,7 +76,7 @@ export function UserFamilyGroupsDetailSection({
   }
 
   if (error) {
-    return <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>;
+    return <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>;
   }
 
   if (!payload || (!hasCreated && !hasMemberships)) {

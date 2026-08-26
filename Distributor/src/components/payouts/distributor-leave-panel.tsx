@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, CalendarDays, Palmtree, Plus, Stethoscope, Sun } from "lucide-react";
 
@@ -14,6 +14,7 @@ import {
   type DistributorLeaveRequest,
   type DistributorLeaveType,
 } from "@/lib/distributor-job-dashboard-data";
+import { fetchDistributorLeaveRequests } from "@/lib/distributor-work-api";
 import { formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -180,9 +181,19 @@ export function DistributorLeavePanel({
   variant = "default",
 }: DistributorLeavePanelProps) {
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [requests, setRequests] = useState<DistributorLeaveRequest[]>(DUMMY_DISTRIBUTOR_LEAVE_REQUESTS);
   const balances = DUMMY_DISTRIBUTOR_LEAVE_BALANCES;
-  const requests = DUMMY_DISTRIBUTOR_LEAVE_REQUESTS;
   const isSidebar = variant === "sidebar";
+
+  const reloadRequests = () => {
+    void fetchDistributorLeaveRequests()
+      .then(setRequests)
+      .catch(() => setRequests([]));
+  };
+
+  useEffect(() => {
+    reloadRequests();
+  }, []);
 
   const pendingCount = useMemo(
     () => requests.filter((request) => request.status === "Pending").length,
@@ -286,6 +297,7 @@ export function DistributorLeavePanel({
         open={leaveDialogOpen}
         onOpenChange={setLeaveDialogOpen}
         balances={balances}
+        onSubmitted={reloadRequests}
       />
     </>
   );

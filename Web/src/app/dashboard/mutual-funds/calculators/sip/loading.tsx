@@ -1,5 +1,5 @@
-import { MfSipCalculatorPageSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
+import { DashboardQueryRouteLoading } from "@/components/dashboard/dashboard-query-route-loading";
 
 export default function MutualFundsSipCalculatorLoading() {
-  return <MfSipCalculatorPageSkeleton />;
+  return <DashboardQueryRouteLoading />;
 }

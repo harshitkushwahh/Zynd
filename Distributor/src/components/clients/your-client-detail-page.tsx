@@ -1,11 +1,14 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { notFound, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, PieChart } from "lucide-react";
+import { PieChart } from "lucide-react";
 
+import { ClientDetailNotFoundView } from "@/components/clients/client-detail-not-found-view";
 import { ClientDetailPageSkeleton } from "@/components/clients/client-detail-page-skeleton";
 import { ClientDetailTabsShell } from "@/components/clients/client-detail-tabs-shell";
+import type { ClientDetailTabId } from "@/components/clients/client-detail-tab-ids";
+import { parseClientDetailTabId } from "@/components/clients/client-detail-tab-ids";
 import { useClientPageReveal } from "@/components/clients/use-client-page-reveal";
 import { ClientDocumentsTabPanel } from "@/components/clients/client-documents-tab-panel";
 import { ClientProfileHeroCard } from "@/components/clients/client-profile-hero-card";
@@ -19,10 +22,18 @@ import { ClientPortfolioHoldingsList } from "@/components/clients/client-portfol
 import { ClientRiskProfileCard } from "@/components/clients/client-risk-profile-card";
 import { ClientRiskProfileTab } from "@/components/clients/client-risk-profile-tab";
 import { ClientSipsTransactionsTabPanel } from "@/components/clients/client-sips-transactions-tab-panel";
-import { Button } from "@/components/ui/button";
+import { DistributorPageBackButton } from "@/components/dashboard/distributor-page-back-button";
+import { useDistributorPageChrome } from "@/components/dashboard/distributor-page-chrome-context";
 import { fetchDistributorClientDetail } from "@/lib/distributor-clients-api";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
+import {
+  getClientDetailErrorMessage,
+  isClientNotFoundError,
+} from "@/lib/distributor-client-errors";
+import {
+  distributorClientListHref,
+  type DistributorClientListOrigin,
+} from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import type {
   DistributorClientProfile,
@@ -40,32 +51,47 @@ type ClientProfileState = DistributorClientProfile & {
   systematicPlans?: DistributorSystematicPlan[];
 };
 
+type ClientDetailLoadState = "loading" | "ready" | "not_found" | "error";
+
 export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailPageProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { setHideBreadcrumb } = useDistributorPageChrome();
   const [profile, setProfile] = useState<ClientProfileState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadState, setLoadState] = useState<ClientDetailLoadState>("loading");
+  const [errorMessage, setErrorMessage] = useState("");
   const copy = DISTRIBUTOR_CLIENT_COPY;
+  const listHref = distributorClientListHref(listOrigin);
+  const tabFromUrl = parseClientDetailTabId(searchParams.get("tab"));
+  const initialTab: ClientDetailTabId = tabFromUrl ?? "portfolio";
   const { showSkeleton } = useClientPageReveal({
-    ready: !loading && profile !== null,
+    ready: loadState === "ready" && profile !== null,
     resetKey: clientId,
   });
 
   useEffect(() => {
-    setLoading(true);
+    setLoadState("loading");
     setProfile(null);
+    setErrorMessage("");
 
     let cancelled = false;
     void fetchDistributorClientDetail(clientId)
       .then((payload) => {
-        if (!cancelled) setProfile(payload);
+        if (!cancelled) {
+          setProfile(payload);
+          setLoadState("ready");
+        }
       })
-      .catch(() => {
-        if (!cancelled) setProfile(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setProfile(null);
+        if (isClientNotFoundError(error)) {
+          setLoadState("not_found");
+          return;
+        }
+        setLoadState("error");
+        setErrorMessage(getClientDetailErrorMessage(error));
       });
 
     return () => {
@@ -76,7 +102,13 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
   useEffect(() => {
     if (!searchParams.get("tab")) return;
     router.replace(pathname, { scroll: false });
-  }, [clientId, pathname, router, searchParams]);
+  }, [clientId, initialTab, pathname, router, searchParams]);
+
+  useEffect(() => {
+    const hideChrome = loadState === "not_found" || loadState === "error";
+    setHideBreadcrumb(hideChrome);
+    return () => setHideBreadcrumb(false);
+  }, [loadState, setHideBreadcrumb]);
 
   const portfolioHoldings = useMemo(() => profile?.holdings ?? [], [profile]);
 
@@ -90,20 +122,25 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
     return { current, invested, returns: current - invested, redeemable };
   }, [portfolioHoldings]);
 
-  if (loading || (profile && showSkeleton)) {
+  if (loadState === "loading" || (profile && showSkeleton)) {
     return <ClientDetailPageSkeleton />;
   }
 
-  if (!profile) {
+  if (loadState === "not_found") {
+    notFound();
+  }
+
+  if (loadState === "error") {
     return (
-      <div className="space-y-4">
-        <Button type="button" variant="ghost" size="sm" className="gap-2" onClick={() => router.back()}>
-          <ArrowLeft className="size-4" />
-          Back
-        </Button>
-        <p className="text-compact text-muted-foreground">{copy.clientNotFound}</p>
+      <div className={`${DISTRIBUTOR_PAGE_STACK_CLASS} space-y-3`}>
+        <DistributorPageBackButton href={listHref} />
+        <p className="text-compact text-muted-foreground">{errorMessage}</p>
       </div>
     );
+  }
+
+  if (!profile) {
+    return <ClientDetailNotFoundView backHref={listHref} />;
   }
 
   const { investor } = profile;
@@ -113,7 +150,6 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
       <>
         <ClientPersonalInfoPanel profile={profile} />
         <ClientPortfolioOverview
-          clientId={clientId}
           profile={{ ...profile, holdings: portfolioHoldings }}
           totals={portfolioTotals}
         />
@@ -160,8 +196,8 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
       <h1 className="sr-only">{profile.displayName}</h1>
 
       <ClientDetailTabsShell
-        key={clientId}
-        defaultTab="portfolio"
+        key={`${clientId}:${initialTab}`}
+        defaultTab={initialTab}
         panels={tabPanels}
         aside={
           <>

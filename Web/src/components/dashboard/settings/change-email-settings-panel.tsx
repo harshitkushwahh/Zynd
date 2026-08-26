@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { AuthenticatorVerifyDialog } from "@/features/account/mfa";
+import { ChangeEmailVerifyDialog } from "@/components/dashboard/settings/change-email-verify-dialog";
 import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { SettingsDetailSection } from "@/components/dashboard/settings/settings-detail-row";
 import { OtpInput } from "@/components/auth/auth-shared";
@@ -320,14 +320,12 @@ export function ChangeEmailSettingsPanel({
         )}
       </div>
 
-      <AuthenticatorVerifyDialog
+      <ChangeEmailVerifyDialog
         open={authDialogOpen}
         onOpenChange={setAuthDialogOpen}
-        title={copy.settings.changeEmailMfaTitle}
-        description={copy.settings.changeEmailMfaDescription}
-        submitLabel={copy.settings.changeEmailSubmit}
         loading={loading}
         error={authError}
+        onErrorChange={setAuthError}
         onSubmit={handleStepUpVerify}
       />
     </>

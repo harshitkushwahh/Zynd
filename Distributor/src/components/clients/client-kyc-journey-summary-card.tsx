@@ -1,10 +1,11 @@
 "use client";
 
-import { BadgeCheck, CalendarDays, ClipboardCheck } from "lucide-react";
+import { BadgeCheck, CalendarDays, CheckCircle2, ClipboardCheck } from "lucide-react";
 
 import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import {
+  isKycJourneyComplete,
   kycStepIcon,
   resolveKycLastActiveStep,
 } from "@/lib/distributor-client-kyc-steps";
@@ -34,6 +35,35 @@ function lastStepStatusHint(
   return copy.stepPending;
 }
 
+function formatJourneyStepMetric(
+  journeyComplete: boolean,
+  lastStep: DistributorClientKycStep | null,
+  copy: (typeof DISTRIBUTOR_CLIENT_COPY)["kyc"],
+): { label: string; value: string } {
+  if (!lastStep) {
+    return {
+      value: copy.journeyLastStepUnknown,
+      label: copy.journeyLastStepLabel,
+    };
+  }
+
+  if (journeyComplete) {
+    return {
+      value: lastStep.label,
+      label: `${copy.journeyLastStepLabel} · ${copy.stepCompleted}`,
+    };
+  }
+
+  const status = lastStepStatusHint(lastStep, copy);
+  return {
+    value: lastStep.label,
+    label:
+      status === copy.stepPending
+        ? copy.journeyLastStepLabel
+        : `${copy.journeyLastStepLabel} · ${status}`,
+  };
+}
+
 export function ClientKycJourneySummaryCard({
   steps,
   kycInitiatedAt,
@@ -41,8 +71,14 @@ export function ClientKycJourneySummaryCard({
   className,
 }: ClientKycJourneySummaryCardProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.kyc;
+  const journeyComplete = isKycJourneyComplete(steps);
   const lastStep = resolveKycLastActiveStep(steps);
-  const LastStepIcon = lastStep ? kycStepIcon(lastStep.id) : ClipboardCheck;
+  const { label: statusLabel, value: statusValue } = formatJourneyStepMetric(
+    journeyComplete,
+    lastStep,
+    copy,
+  );
+  const statusIcon = journeyComplete ? CheckCircle2 : lastStep ? kycStepIcon(lastStep.id) : ClipboardCheck;
 
   return (
     <div
@@ -56,11 +92,10 @@ export function ClientKycJourneySummaryCard({
       <DistributorMetricCard
         className={DISTRIBUTOR_METRIC_TILE_CELL_CLASS}
         variant="tile"
-        tileTone="accent"
-        icon={LastStepIcon}
-        label={copy.journeyLastStepLabel}
-        value={lastStep?.label ?? copy.journeyLastStepUnknown}
-        hint={lastStep ? lastStepStatusHint(lastStep, copy) : copy.stepPending}
+        tileTone={journeyComplete ? "success" : "default"}
+        icon={statusIcon}
+        label={statusLabel}
+        value={statusValue}
         showTileAction={false}
       />
       <DistributorMetricCard
@@ -78,9 +113,8 @@ export function ClientKycJourneySummaryCard({
         className={DISTRIBUTOR_METRIC_TILE_CELL_CLASS}
         variant="tile"
         icon={BadgeCheck}
-        label={copy.journeyKraComplianceLabel}
-        value={kycCompliant ? copy.journeyKraCompliant : copy.journeyKraNonCompliant}
-        hint={kycCompliant ? copy.badgeKraCompliant : copy.badgeNewToKyc}
+        label={copy.journeyKraStatusLabel}
+        value={kycCompliant ? copy.journeyKraRegisteredValue : copy.journeyKraNotRegisteredValue}
         showTileAction={false}
       />
     </div>

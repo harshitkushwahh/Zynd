@@ -53,6 +53,10 @@ export function ClientGoalsListCard({ goals, className }: ClientGoalsListCardPro
           {goals.map((goal) => {
             const Icon = resolveGoalCategoryIcon(goal);
             const categoryLabel = resolveGoalCategoryLabel(goal);
+            const scopeLabel =
+              goal.scope === "family" && goal.familyGroupName
+                ? `${categoryLabel} · ${goal.familyGroupName}`
+                : categoryLabel;
             const invested = isGoalInvested(goal);
             const progressPct = Math.min(100, Math.max(0, goal.progressPct));
 
@@ -86,7 +90,7 @@ export function ClientGoalsListCard({ goals, className }: ClientGoalsListCardPro
 
                   <div className="distributor-client-goals-tile__badges">
                     <StatusBadge variant="neutral">
-                      {categoryLabel}
+                      {scopeLabel}
                     </StatusBadge>
                     <StatusBadge
                       variant={invested ? "success" : "neutral"}

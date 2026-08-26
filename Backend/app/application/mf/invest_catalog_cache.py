@@ -78,6 +78,21 @@ async def invalidate_invest_catalog_cache(*, settings: Settings | None = None) -
     return str(generation)
 
 
+async def invalidate_invest_fund_detail_cache(
+    product_id: str,
+    *,
+    settings: Settings | None = None,
+) -> None:
+    """Drop cached fund detail so sip_allowed and related flags refresh immediately."""
+    if not _cache_enabled(settings):
+        return
+    settings = settings or get_settings()
+    key = await build_invest_cache_key("fund", product_id, settings=settings)
+    client = await get_redis(settings.redis_cache_db, settings)
+    await client.delete(key)
+    logger.info("Invest fund detail cache invalidated (product_id=%s)", product_id)
+
+
 async def get_invest_cache_stats(*, settings: Settings | None = None) -> dict[str, int]:
     settings = settings or get_settings()
     if not _cache_enabled(settings):

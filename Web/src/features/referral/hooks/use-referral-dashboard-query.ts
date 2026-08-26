@@ -7,10 +7,12 @@ import {
   fetchReferralList,
   fetchReferralMe,
 } from "@/features/referral/api/referral-api";
+import { keepPreviousQueryData } from "@/lib/query-utils";
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
 
 const LEADERBOARD_PERIOD = "this_month" as const;
+const REFERRAL_QUERY_STALE_MS = 30_000;
 
 export function useReferralDashboardQuery() {
   const [meQuery, listQuery, leaderboardQuery] = useQueries({
@@ -18,14 +20,20 @@ export function useReferralDashboardQuery() {
       {
         queryKey: queryKeys.referral.me(),
         queryFn: fetchReferralMe,
+        staleTime: REFERRAL_QUERY_STALE_MS,
+        placeholderData: keepPreviousQueryData,
       },
       {
         queryKey: queryKeys.referral.list(),
         queryFn: fetchReferralList,
+        staleTime: REFERRAL_QUERY_STALE_MS,
+        placeholderData: keepPreviousQueryData,
       },
       {
         queryKey: queryKeys.referral.leaderboard(LEADERBOARD_PERIOD),
         queryFn: () => fetchReferralLeaderboard(LEADERBOARD_PERIOD),
+        staleTime: REFERRAL_QUERY_STALE_MS,
+        placeholderData: keepPreviousQueryData,
       },
     ],
   });

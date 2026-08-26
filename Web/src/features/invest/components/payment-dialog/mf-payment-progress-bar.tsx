@@ -8,17 +8,19 @@ type MfPaymentProgressBarProps = {
   active?: boolean;
   className?: string;
   label?: string;
+  variant?: "pulse" | "indeterminate";
 };
 
 export function MfPaymentProgressBar({
   active = true,
   className,
   label = "Processing",
+  variant = "pulse",
 }: MfPaymentProgressBarProps) {
   const [progress, setProgress] = useState(12);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || variant !== "pulse") return;
 
     let direction = 1;
     let value = 12;
@@ -30,7 +32,22 @@ export function MfPaymentProgressBar({
     }, 90);
 
     return () => window.clearInterval(timer);
-  }, [active]);
+  }, [active, variant]);
+
+  if (variant === "indeterminate") {
+    return (
+      <div className={cn("w-full", className)}>
+        <div
+          className="relative h-1 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-label={label}
+          aria-busy="true"
+        >
+          <div className="absolute inset-y-0 w-2/5 animate-[mf-payment-indeterminate_1.1s_ease-in-out_infinite] rounded-full bg-primary" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("w-full space-y-2", className)}>

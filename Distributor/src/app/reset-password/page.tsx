@@ -1,18 +1,68 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
+import { DistributorAuthShellThemeToggle } from "@/components/auth/distributor-auth-shell-theme-toggle";
 import { DistributorGlobalLoading } from "@/components/auth/distributor-global-loading";
+import { DistributorLoginVisualPanel } from "@/components/auth/distributor-login-visual-panel";
+import { PasswordCriteriaList } from "@/components/auth/password-criteria-list";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api-client";
+import {
+  ZYND_DISTRIBUTOR_LOGIN_VISUAL_GRADIENT,
+  ZYND_DISTRIBUTOR_LOGO_HORIZONTAL_SRC,
+} from "@/lib/distributor-brand-assets";
 import { resetDistributorPassword } from "@/lib/distributor-password-api";
+import { isPasswordValid } from "@/lib/password-criteria";
+import { cn } from "@/lib/utils";
 
-function isPasswordValid(password: string) {
-  return password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
+function ResetPasswordShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="distributor-login-page">
+      <DistributorAuthShellThemeToggle />
+      <div className="distributor-login-page__visual" aria-hidden>
+        <DistributorLoginVisualPanel gradient={ZYND_DISTRIBUTOR_LOGIN_VISUAL_GRADIENT} />
+      </div>
+
+      <div className="distributor-login-page__form">
+        <div className="distributor-login-page__form-body">
+          <div className="distributor-login-page__form-inner">
+            <div className="distributor-login-page__brand">
+              <Image
+                src={ZYND_DISTRIBUTOR_LOGO_HORIZONTAL_SRC}
+                alt="Zynd Distributor"
+                width={220}
+                height={48}
+                className="distributor-login-page__logo distributor-login-page__logo--horizontal"
+                priority
+              />
+            </div>
+
+            <div className="distributor-invite-onboarding-intro">
+              <h1 className="distributor-invite-onboarding-title">{title}</h1>
+              <p className="distributor-invite-onboarding-subtitle">{subtitle}</p>
+            </div>
+
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ResetPasswordForm() {
@@ -21,12 +71,18 @@ function ResetPasswordForm() {
   const token = searchParams.get("token") ?? "";
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const [backupCode, setBackupCode] = useState("");
   const [requiresMfa, setRequiresMfa] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
+  const confirmMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmit = isPasswordValid(password) && passwordsMatch && !isSubmitting;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -35,10 +91,10 @@ function ResetPasswordForm() {
       return;
     }
     if (!isPasswordValid(password)) {
-      setError("Use at least 8 characters with letters and numbers.");
+      setError("Use a stronger password that meets all requirements below.");
       return;
     }
-    if (password !== confirmPassword) {
+    if (!passwordsMatch) {
       setError("Passwords do not match.");
       return;
     }
@@ -71,81 +127,125 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="mx-auto max-w-md px-6 py-16 text-center">
-        <h1 className="text-title font-semibold text-foreground">Invalid reset link</h1>
-        <p className="mt-2 text-compact text-muted-foreground">
-          Open the link from your email again or request a new reset link from the sign-in page.
-        </p>
-        <DistributorActionButton
-          type="button"
-          variant="primary"
-          className="mt-6"
-          onClick={() => router.push("/")}
-        >
-          Back to sign in
-        </DistributorActionButton>
-      </div>
+      <ResetPasswordShell
+        title="Invalid reset link"
+        subtitle="Open the link from your email again or request a new reset link from the sign-in page."
+      >
+        <div className="distributor-login-page__fields">
+          <DistributorActionButton
+            type="button"
+            variant="primary"
+            className="distributor-login-page__submit w-full"
+            onClick={() => router.push("/")}
+          >
+            Back to sign in
+          </DistributorActionButton>
+        </div>
+      </ResetPasswordShell>
     );
   }
 
   if (done) {
     return (
-      <div className="mx-auto max-w-md px-6 py-16 text-center">
-        <h1 className="text-title font-semibold text-foreground">Password updated</h1>
-        <p className="mt-2 text-compact text-muted-foreground">
-          Your password has been changed. Sign in with your new password.
-        </p>
-        <DistributorActionButton
-          type="button"
-          variant="primary"
-          className="mt-6"
-          onClick={() => router.push("/")}
-        >
-          Back to sign in
-        </DistributorActionButton>
-      </div>
+      <ResetPasswordShell
+        title="Password updated"
+        subtitle="Your password has been changed. Sign in with your new password."
+      >
+        <div className="distributor-login-page__fields">
+          <DistributorFeedbackMessage variant="success">
+            All other sessions were signed out for your security.
+          </DistributorFeedbackMessage>
+          <DistributorActionButton
+            type="button"
+            variant="primary"
+            className="distributor-login-page__submit w-full"
+            onClick={() => router.push("/")}
+          >
+            Back to sign in
+          </DistributorActionButton>
+        </div>
+      </ResetPasswordShell>
     );
   }
 
   return (
-    <div className="mx-auto max-w-md px-6 py-16">
-      <h1 className="text-title font-semibold text-foreground">Reset password</h1>
-      <p className="mt-2 text-compact text-muted-foreground">
-        Choose a new password for your Zynd Mitra console account.
-      </p>
-      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+    <ResetPasswordShell
+      title="Reset password"
+      subtitle="Choose a new password for your Zynd Mitra console account."
+    >
+      <form onSubmit={handleSubmit} className="distributor-login-page__fields">
         <div className="space-y-1">
           <Label htmlFor="reset-password" className="text-caption text-muted-foreground">
             New password
           </Label>
-          <Input
-            id="reset-password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              if (error) setError("");
-            }}
-            className="auth-input-underline"
-          />
+          <div className="relative">
+            <Input
+              id="reset-password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (error) setError("");
+              }}
+              className="auth-input-underline distributor-login-page__input pr-10"
+            />
+            <button
+              type="button"
+              className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setShowPassword((current) => !current)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="size-4" strokeWidth={2.25} />
+              ) : (
+                <Eye className="size-4" strokeWidth={2.25} />
+              )}
+            </button>
+          </div>
+          <PasswordCriteriaList password={password} />
         </div>
+
         <div className="space-y-1">
           <Label htmlFor="reset-confirm-password" className="text-caption text-muted-foreground">
             Confirm password
           </Label>
-          <Input
-            id="reset-confirm-password"
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(event) => {
-              setConfirmPassword(event.target.value);
-              if (error) setError("");
-            }}
-            className="auth-input-underline"
-          />
+          <div className="relative">
+            <Input
+              id="reset-confirm-password"
+              type={showConfirmPassword ? "text" : "password"}
+              autoComplete="new-password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value);
+                if (error) setError("");
+              }}
+              aria-invalid={confirmMismatch}
+              className={cn(
+                "auth-input-underline distributor-login-page__input pr-10",
+                confirmMismatch && "border-destructive",
+              )}
+            />
+            <button
+              type="button"
+              className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setShowConfirmPassword((current) => !current)}
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            >
+              {showConfirmPassword ? (
+                <EyeOff className="size-4" strokeWidth={2.25} />
+              ) : (
+                <Eye className="size-4" strokeWidth={2.25} />
+              )}
+            </button>
+          </div>
+          {confirmMismatch ? (
+            <p className="text-caption text-destructive">Passwords do not match.</p>
+          ) : null}
         </div>
+
         {requiresMfa ? (
           <div className="space-y-3">
             <div className="space-y-1">
@@ -158,7 +258,7 @@ function ResetPasswordForm() {
                 inputMode="numeric"
                 value={totpCode}
                 onChange={(event) => setTotpCode(event.target.value)}
-                className="auth-input-underline"
+                className="auth-input-underline distributor-login-page__input"
               />
             </div>
             <div className="space-y-1">
@@ -170,26 +270,28 @@ function ResetPasswordForm() {
                 type="text"
                 value={backupCode}
                 onChange={(event) => setBackupCode(event.target.value)}
-                className="auth-input-underline"
+                className="auth-input-underline distributor-login-page__input"
               />
             </div>
           </div>
         ) : null}
+
         {error ? (
           <DistributorFeedbackMessage variant="error" onDismiss={() => setError("")}>
             {error}
           </DistributorFeedbackMessage>
         ) : null}
+
         <DistributorActionButton
           type="submit"
           variant="primary"
-          disabled={!isPasswordValid(password) || isSubmitting}
-          className="w-full"
+          disabled={!canSubmit}
+          className="distributor-login-page__submit w-full"
         >
           {isSubmitting ? "Updating…" : "Update password"}
         </DistributorActionButton>
       </form>
-    </div>
+    </ResetPasswordShell>
   );
 }
 

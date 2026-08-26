@@ -19,7 +19,7 @@ export function AdminAccessOverviewSettingsPanel() {
   return (
     <div className="space-y-3">
       {errorMessage ? (
-        <AdminFeedbackMessage variant="destructive">{errorMessage}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setErrorMessage("")}>{errorMessage}</AdminFeedbackMessage>
       ) : null}
       <AccessOverviewPanel roles={roles} permissionCatalog={permissionCatalog} />
     </div>

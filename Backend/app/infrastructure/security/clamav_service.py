@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import tempfile
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -26,6 +28,32 @@ class ClamavScanResult:
     error: str | None = None
 
 
+def _parse_clamav_response(response: dict | None) -> ClamavScanResult:
+    if response is None:
+        return ClamavScanResult(clean=True)
+
+    status, detail = next(iter(response.values()))
+    if status == "OK":
+        return ClamavScanResult(clean=True)
+    if status == "FOUND":
+        return ClamavScanResult(clean=False, signature=str(detail))
+    if status == "ERROR":
+        return ClamavScanResult(clean=False, error=str(detail))
+    return ClamavScanResult(clean=False, error=f"Unexpected ClamAV status: {status}")
+
+
+def _should_retry_with_file_scan(error: str | None) -> bool:
+    if not error:
+        return False
+    normalized = error.lower()
+    return "instream size limit exceeded" in normalized or "streammaxlength" in normalized
+
+
+def _scan_file_path(client: object, path: str) -> ClamavScanResult:
+    response = client.scan(path)
+    return _parse_clamav_response(response)
+
+
 def _scan_bytes_sync(content: bytes, settings: Settings) -> ClamavScanResult:
     if pyclamd is None:
         return ClamavScanResult(clean=False, error="pyclamd unavailable")
@@ -43,19 +71,36 @@ def _scan_bytes_sync(content: bytes, settings: Settings) -> ClamavScanResult:
             timeout=settings.clamav_timeout_seconds,
         )
         response = client.scan_stream(BytesIO(content))
+        result = _parse_clamav_response(response)
     except Exception as exc:
         logger.warning("ClamAV scan failed host=%s port=%s", settings.clamav_host, settings.clamav_port)
-        return ClamavScanResult(clean=False, error=str(exc))
+        result = ClamavScanResult(clean=False, error=str(exc))
 
-    if response is None:
-        return ClamavScanResult(clean=True)
+    if (
+        not result.clean
+        and not result.signature
+        and _should_retry_with_file_scan(result.error)
+    ):
+        try:
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                return _scan_file_path(client, tmp_path)
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    logger.warning("ClamAV temp scan file cleanup failed path=%s", tmp_path)
+        except Exception as exc:
+            logger.warning(
+                "ClamAV file scan fallback failed host=%s port=%s",
+                settings.clamav_host,
+                settings.clamav_port,
+            )
+            return ClamavScanResult(clean=False, error=str(exc))
 
-    status, signature = next(iter(response.values()))
-    if status == "OK":
-        return ClamavScanResult(clean=True)
-    if status == "FOUND":
-        return ClamavScanResult(clean=False, signature=str(signature))
-    return ClamavScanResult(clean=False, error=f"Unexpected ClamAV status: {status}")
+    return result
 
 
 async def scan_bytes_for_malware(content: bytes, settings: Settings | None = None) -> ClamavScanResult:
@@ -69,6 +114,13 @@ async def scan_bytes_for_malware(content: bytes, settings: Settings | None = Non
 
     if settings.clamav_fail_open:
         logger.warning("ClamAV unavailable; allowing upload because CLAMAV_FAIL_OPEN=true")
+        return ClamavScanResult(clean=True)
+
+    if settings.app_env == "development" and not result.signature:
+        logger.warning(
+            "ClamAV unavailable in development; allowing upload error=%s",
+            result.error,
+        )
         return ClamavScanResult(clean=True)
 
     return result

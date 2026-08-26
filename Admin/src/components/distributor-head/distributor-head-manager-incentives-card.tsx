@@ -84,7 +84,7 @@ export function DistributorHeadManagerIncentivesCard({
 
   if (!incentive) {
     return (
-      <Card className="h-full">
+      <Card className="h-full border border-border/80 ring-0">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
             <Gift className="size-4 text-primary" />
@@ -100,7 +100,7 @@ export function DistributorHeadManagerIncentivesCard({
 
   return (
     <>
-      <Card className="h-full overflow-hidden">
+      <Card className="h-full overflow-hidden border border-border/80 ring-0">
         <CardHeader className="border-b border-border/60 pb-4">
           <div className="flex items-start justify-between gap-2">
             <div>

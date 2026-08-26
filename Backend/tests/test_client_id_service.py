@@ -3,9 +3,11 @@ from __future__ import annotations
 import pytest
 
 from app.application.documents.client_id_service import (
+    assign_client_id,
     build_client_id_candidate,
     build_zynd_persona_client_id,
     build_zynd_persona_initials,
+    is_placeholder_client_id,
     is_zynd_persona_client_id,
     with_collision_suffix,
     ZYND_PERSONA_MANAGER,
@@ -54,6 +56,29 @@ def test_build_zynd_persona_client_id() -> None:
         role_code=ZYND_PERSONA_MANAGER,
         series=2,
     ) == "ZYND-MG-NP002"
+
+
+def test_is_placeholder_client_id() -> None:
+    assert is_placeholder_client_id("test-abc123@zynd")
+    assert not is_placeholder_client_id("harshitkushwah084646473737@zynd")
+    assert not is_placeholder_client_id("ZYND-M-HK001")
+
+
+async def test_assign_client_id_replaces_placeholder(db_session) -> None:
+    from app.infrastructure.persistence.models import User, UserRole, UserStatus
+
+    user = User(
+        email="investor@example.com",
+        phone="9876543210",
+        role=UserRole.user,
+        status=UserStatus.active,
+        client_id="test-deadbeef@zynd",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    assigned = await assign_client_id(db_session, user)
+    assert assigned == "investor9876543210@zynd"
+    assert user.client_id == "investor9876543210@zynd"
 
 
 def test_is_zynd_persona_client_id() -> None:

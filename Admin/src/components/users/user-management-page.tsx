@@ -2,19 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ClipboardList,
-  ShieldAlert,
-  Trash2,
-  Users,
-} from "lucide-react";
+import { ShieldCheck, TrendingUp, UserX, Users } from "lucide-react";
 
-import { AdminKycReviewPanel } from "@/components/admin-kyc-review-panel";
 import { AdminAccessOverviewSettingsPanel } from "@/components/settings/admin-access-overview-settings-panel";
 import { AdminActionTypesSettingsPanel } from "@/components/settings/admin-action-types-settings-panel";
 import { AdminPermissionsSettingsPanel } from "@/components/settings/admin-permissions-settings-panel";
 import { AdminRolesSettingsPanel } from "@/components/settings/admin-roles-settings-panel";
-import { UserCompliancePanel } from "@/components/users/user-compliance-panel";
+import { AdminTeamWorkspacePanel } from "@/components/users/admin-team-workspace-panel";
 import { UsersDirectoryPanel } from "@/components/users/users-directory-panel";
 import { AdminPageHeader } from "@/components/dashboard/admin-page-header";
 import {
@@ -30,28 +24,24 @@ import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { useAdminUserManagementMetricsQuery } from "@/hooks/use-admin-user-management-metrics-query";
 import {
   resolveUserManagementTab,
+  teamWorkspaceSubTabHref,
   userManagementTabHref,
   USER_MANAGEMENT_TABS,
+  type TeamWorkspaceSubTabKey,
   type UserManagementTabKey,
 } from "@/lib/admin-user-management-navigation";
 
 type UserManagementPageProps = {
   tabSlug?: string;
+  teamSubTab?: TeamWorkspaceSubTabKey;
 };
 
-export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
+export function UserManagementPage({ tabSlug, teamSubTab = "members" }: UserManagementPageProps) {
   const router = useRouter();
   const { hasPermission } = useAdminAuth();
   const canReadUsers = hasPermission("users.read");
-  const canReadReviews = hasPermission("security_reviews.read");
-  const canResolveReviews = hasPermission("security_reviews.resolve");
-  const canExecuteDeletions = hasPermission("deletion.execute");
-  const canApproveActions = hasPermission("admin_actions.approve");
-  const canReadDocuments = hasPermission("documents.read");
   const canManageRbac = hasPermission("rbac.manage");
-  const showComplianceMetrics =
-    canReadReviews || canExecuteDeletions || canApproveActions;
-  const showPageMetrics = canReadUsers || showComplianceMetrics;
+  const showPageMetrics = canReadUsers;
 
   const activeTab = resolveUserManagementTab(tabSlug, hasPermission);
   const [activeTabKey, setActiveTabKey] = useState<UserManagementTabKey>(
@@ -64,20 +54,17 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
   const metricsParams = useMemo(
     () => ({
       canReadUsers,
-      canReadReviews,
-      canExecuteDeletions,
-      canApproveActions,
     }),
-    [canApproveActions, canExecuteDeletions, canReadReviews, canReadUsers],
+    [canReadUsers],
   );
   const { data: metrics, isLoading: metricsLoading } =
     useAdminUserManagementMetricsQuery(metricsParams);
   const showMetricsSkeleton = metricsLoading && !metrics;
 
   const registeredUsers = metrics?.registeredUsers ?? 0;
-  const openReviews = metrics?.openReviews ?? 0;
-  const pendingDeletions = metrics?.pendingDeletions ?? 0;
-  const pendingActions = metrics?.pendingActions ?? 0;
+  const kycCompliant = metrics?.kycCompliant ?? 0;
+  const suspendedAccounts = metrics?.suspendedAccounts ?? 0;
+  const activeInvestors = metrics?.activeInvestors ?? 0;
 
   const visibleTabs = USER_MANAGEMENT_TABS.filter((tab) => {
     if (!tab.permissions?.length) return true;
@@ -111,6 +98,10 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
 
   const keepTabMounted = (key: UserManagementTabKey) => mountedTabKeys.has(key);
 
+  const handleTeamSubTabChange = (subTab: TeamWorkspaceSubTabKey) => {
+    router.push(teamWorkspaceSubTabHref(subTab));
+  };
+
   return (
     <div className="admin-section-page-shell">
       <AdminSectionBreadcrumb segments={userManagementBreadcrumbSegments()} />
@@ -119,46 +110,39 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
 
       <div className="admin-section-page-shell__content">
       {showPageMetrics ? (
-        <AdminMetricCardsGrid>
-          {canReadUsers ? (
-            <AdminMetricCard
-              label="Registered users"
-              value={registeredUsers}
-              icon={Users}
-              loading={showMetricsSkeleton}
-            />
-          ) : null}
-          {canReadReviews ? (
-            <AdminMetricCard
-              label="Open security reviews"
-              value={openReviews}
-              icon={ShieldAlert}
-              tone="warning"
-              loading={showMetricsSkeleton}
-            />
-          ) : null}
-          {canExecuteDeletions ? (
-            <AdminMetricCard
-              label="Pending deletions"
-              value={pendingDeletions}
-              icon={Trash2}
-              tone="info"
-              loading={showMetricsSkeleton}
-            />
-          ) : null}
-          {canApproveActions ? (
-            <AdminMetricCard
-              label="Pending approvals"
-              value={pendingActions}
-              icon={ClipboardList}
-              loading={showMetricsSkeleton}
-            />
-          ) : null}
+        <AdminMetricCardsGrid columns="four">
+          <AdminMetricCard
+            label="Registered users"
+            value={registeredUsers}
+            icon={Users}
+            loading={showMetricsSkeleton}
+          />
+          <AdminMetricCard
+            label="KYC compliant"
+            value={kycCompliant}
+            icon={ShieldCheck}
+            tone="success"
+            loading={showMetricsSkeleton}
+          />
+          <AdminMetricCard
+            label="Suspended accounts"
+            value={suspendedAccounts}
+            icon={UserX}
+            tone={suspendedAccounts > 0 ? "warning" : "muted"}
+            loading={showMetricsSkeleton}
+          />
+          <AdminMetricCard
+            label="Active investors"
+            value={activeInvestors}
+            icon={TrendingUp}
+            tone="info"
+            loading={showMetricsSkeleton}
+          />
         </AdminMetricCardsGrid>
       ) : null}
 
       {!activeTab || visibleTabs.length === 0 ? (
-        <AdminFeedbackMessage variant="warning">
+        <AdminFeedbackMessage variant="warning" dismissible={false}>
           You do not have permission to view user management.
         </AdminFeedbackMessage>
       ) : (
@@ -186,28 +170,14 @@ export function UserManagementPage({ tabSlug }: UserManagementPageProps) {
               </TabsContent>
             ) : null}
 
-            {showComplianceMetrics ? (
-              <TabsContent value="compliance" className="mt-0" keepMounted={keepTabMounted("compliance")}>
-                <UserCompliancePanel
-                  canReadReviews={canReadReviews}
-                  canResolveReviews={canResolveReviews}
-                  canExecuteDeletions={canExecuteDeletions}
-                  canApproveActions={canApproveActions}
-                />
-              </TabsContent>
-            ) : null}
-
-            {canReadDocuments ? (
-              <TabsContent value="kyc" className="mt-0" keepMounted={keepTabMounted("kyc")}>
-                <AdminKycReviewPanel
-                  hasDownload={hasPermission("documents.download")}
-                  hasVerify={hasPermission("documents.verify")}
-                />
-              </TabsContent>
-            ) : null}
-
             {canManageRbac ? (
               <>
+                <TabsContent value="team" className="mt-0" keepMounted={keepTabMounted("team")}>
+                  <AdminTeamWorkspacePanel
+                    activeSubTab={teamSubTab}
+                    onSubTabChange={handleTeamSubTabChange}
+                  />
+                </TabsContent>
                 <TabsContent value="roles" className="mt-0" keepMounted={keepTabMounted("roles")}>
                   <AdminRolesSettingsPanel />
                 </TabsContent>

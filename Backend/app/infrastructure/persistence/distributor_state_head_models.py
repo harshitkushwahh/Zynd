@@ -20,6 +20,7 @@ class DistributorStateHead(Base):
     )
     state_code: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
     state_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", server_default="active")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -31,3 +32,7 @@ class DistributorStateHead(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+STATE_HEAD_STATUS_ACTIVE = "active"
+STATE_HEAD_STATUS_PAUSED = "paused"

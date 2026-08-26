@@ -4,7 +4,9 @@ import type { KycNomineeRecord } from "@/features/kyc/lib/kyc-nominee";
 import type { KycPersonalInfoValue } from "@/features/kyc/lib/kyc-personal-info";
 
 export type KycPanDraft = {
-  panNumber: string;
+  panNumber?: string;
+  panMasked?: string;
+  panLast4?: string;
   firstName: string;
   lastName: string;
   middleName: string;

@@ -121,14 +121,15 @@ async def verify_partner_onboarding_bank(
         code = str((outcome.failure or {}).get("code") or "bank_verification_failed")
         raise PartnerOnboardingError(reason, code, 400)
 
+    display_holder = outcome.kyckart_holder_name or outcome.pan_holder_name
     bank_payload = {
-        "account_holder_name": outcome.display_holder_name,
+        "account_holder_name": display_holder,
         "account_number": account_no,
         "account_type": outcome.account_type_label,
         "ifsc": outcome.ifsc_code,
         "bank_name": outcome.bank_name,
         "branch_name": (outcome.branch or "").strip() or None,
-        "verified_holder_name": outcome.display_holder_name,
+        "verified_holder_name": display_holder,
         "poa_preverify_id": outcome.preverify_id or None,
         "verification_mode": "auto",
     }
@@ -141,7 +142,7 @@ async def verify_partner_onboarding_bank(
     )
     return {
         "verified": True,
-        "verified_holder_name": outcome.display_holder_name,
+        "verified_holder_name": display_holder,
         "bank_name": outcome.bank_name,
         "branch_name": outcome.branch or "",
         "account_type": outcome.account_type_label,

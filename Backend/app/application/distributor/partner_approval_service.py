@@ -11,6 +11,7 @@ from app.application.distributor.partner_onboarding_notifications import send_pa
 from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
 from app.application.shared.datetime_utils import utcnow
 from app.application.distributor.distributor_branch_service import get_distributor_branch_by_id
+from app.application.mf.product_content_service import resolve_zynd_distributor_arn
 from app.infrastructure.persistence.distributor_partner_models import DistributorPartner, DistributorPartnerStatus
 from app.infrastructure.persistence.models import AuditEventType, AuditLog, User
 
@@ -137,13 +138,18 @@ async def approve_distributor_partner(
     *,
     reviewer: User,
     partner_id: UUID,
-    arn: str,
     euin: str | None,
     ip: str | None,
 ) -> dict[str, Any]:
-    normalized_arn = arn.strip().upper()
+    normalized_arn = (await resolve_zynd_distributor_arn(db)).strip().upper()
+    if not normalized_arn:
+        raise PartnerApprovalError(
+            "Set the Zynd distributor ARN under Zynd Integrations before approving applications.",
+            "distributor_arn_not_configured",
+            503,
+        )
     if not _ARN_PATTERN.fullmatch(normalized_arn):
-        raise PartnerApprovalError("Enter a valid ARN.", "invalid_arn", 400)
+        raise PartnerApprovalError("Configured Zynd distributor ARN is invalid.", "invalid_arn", 500)
 
     result = await db.execute(
         select(DistributorPartner, User)
@@ -161,15 +167,6 @@ async def approve_distributor_partner(
             "invalid_partner_status",
             400,
         )
-
-    existing = await db.execute(
-        select(DistributorPartner).where(
-            DistributorPartner.arn == normalized_arn,
-            DistributorPartner.id != partner.id,
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise PartnerApprovalError("This ARN is already assigned.", "arn_already_assigned", 409)
 
     now = utcnow()
     partner.arn = normalized_arn

@@ -198,6 +198,11 @@ class ForgotPasswordRequest(BaseModel):
     client: Optional[str] = None
 
 
+class ForgotPasswordResponse(BaseModel):
+    ok: bool = True
+    dev_reset_url: str | None = None
+
+
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
@@ -230,6 +235,7 @@ class UserResponse(BaseModel):
     deletion_scheduled_at: Optional[datetime] = None
     client_id: str
     created_at: datetime
+    profile_image_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -279,6 +285,7 @@ class MfaEnrollStartResponse(BaseModel):
     qr_uri: str
     manual_secret: str
     expires_in: int
+    qr_png_base64: str
 
 
 class MfaResetStartResponse(BaseModel):
@@ -286,6 +293,7 @@ class MfaResetStartResponse(BaseModel):
     qr_uri: str
     manual_secret: str
     expires_in: int
+    qr_png_base64: str
 
 
 class MfaEnrollConfirmResponse(BaseModel):
@@ -350,6 +358,25 @@ class PinVerifyResponse(BaseModel):
 
 class PinResetConfirmRequest(BaseModel):
     otp: str = Field(min_length=6, max_length=6)
+    pin: str = Field(min_length=4, max_length=4, pattern=r"^\d{4}$")
+    confirm_pin: str = Field(min_length=4, max_length=4, pattern=r"^\d{4}$")
+
+
+class PinResetLinkSendResponse(BaseModel):
+    ok: bool = True
+    masked_email: str
+    email_delivered: bool = True
+    dev_reset_url: str | None = None
+
+
+class PinResetLinkValidateResponse(BaseModel):
+    ok: bool = True
+
+
+class PinResetLinkConfirmRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    current_password: str = Field(min_length=8, max_length=128)
+    totp_code: str = Field(min_length=6, max_length=6)
     pin: str = Field(min_length=4, max_length=4, pattern=r"^\d{4}$")
     confirm_pin: str = Field(min_length=4, max_length=4, pattern=r"^\d{4}$")
 
@@ -469,6 +496,7 @@ class AdminInviteValidateResponse(BaseModel):
     role_name: Optional[str] = None
     inviter_name: Optional[str] = None
     expires_at: datetime
+    target_console: Literal["admin", "distributor"]
 
 
 class AdminInviteAcceptRequest(BaseModel):
@@ -476,6 +504,30 @@ class AdminInviteAcceptRequest(BaseModel):
     first_name: str = Field(min_length=1, max_length=50)
     last_name: Optional[str] = Field(default=None, max_length=50)
     password: str = Field(min_length=8, max_length=128)
+    device_fingerprint: str = Field(default="admin-console", min_length=4, max_length=128)
+
+
+class AdminInviteOnboardingStartedResponse(BaseModel):
+    next: Literal["onboarding"] = "onboarding"
+    onboarding_token: str
+    expires_in: int
+
+
+class AdminInviteOnboardingMfaStartRequest(BaseModel):
+    onboarding_token: str = Field(min_length=16, max_length=256)
+
+
+class AdminInviteOnboardingMfaConfirmRequest(BaseModel):
+    onboarding_token: str = Field(min_length=16, max_length=256)
+    enroll_token: str = Field(min_length=16, max_length=256)
+    totp_code: str = Field(min_length=6, max_length=6)
+
+
+class AdminInviteOnboardingCompleteRequest(BaseModel):
+    onboarding_token: str = Field(min_length=16, max_length=256)
+    pin: str = Field(min_length=4, max_length=4)
+    confirm_pin: str = Field(min_length=4, max_length=4)
+    totp_code: str = Field(min_length=6, max_length=6)
     device_fingerprint: str = Field(default="admin-console", min_length=4, max_length=128)
 
 

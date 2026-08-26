@@ -12,6 +12,11 @@ import {
   Users,
 } from "lucide-react";
 
+import {
+  areAddInvestorNomineesValid,
+  type AddInvestorNomineeRecord,
+} from "@/lib/add-investor/add-investor-nominee";
+
 export type AddInvestorStepId =
   | "onboarding"
   | "pan"
@@ -38,7 +43,7 @@ export type AddInvestorJourneyStep = {
 const ONBOARDING_STEP: AddInvestorJourneyStep = {
   id: "onboarding",
   label: "Onboarding",
-  description: "Email, mobile & MFA",
+  description: "Email, mobile & account",
   icon: ShieldCheck,
   phase: "onboarding",
 };
@@ -210,17 +215,16 @@ export function isAddInvestorBankDraftValid(bank: AddInvestorBankDraft): boolean
     Boolean(bank.accountType) &&
     bank.accountHolderName.trim().length >= 3 &&
     bank.bankName.trim().length >= 2 &&
-    bank.branchName.trim().length >= 2 &&
     account.length >= 9 &&
     isValidAddInvestorIfsc(bank.ifsc)
   );
 }
 
 export const ADD_INVESTOR_BANK_ACCOUNT_TYPE_OPTIONS = [
-  { value: "savings", label: "Savings" },
-  { value: "current", label: "Current" },
-  { value: "nre", label: "NRE" },
-  { value: "nro", label: "NRO" },
+  { value: "Savings", label: "Savings" },
+  { value: "Current", label: "Current" },
+  { value: "NRE", label: "NRE" },
+  { value: "NRO", label: "NRO" },
 ] as const;
 
 export type AddInvestorPanName = {
@@ -228,7 +232,17 @@ export type AddInvestorPanName = {
   lastName: string;
   dateOfBirth: string;
   panCategory: string;
+  /** True when the PAN registry returned a single-word name (no surname). */
+  singleNameOnly?: boolean;
 };
+
+export function isAddInvestorPanNameValid(panName: AddInvestorPanName | null | undefined): boolean {
+  const first = panName?.firstName.trim() ?? "";
+  if (first.length < 2) return false;
+  const last = panName?.lastName.trim() ?? "";
+  if (last.length >= 2) return true;
+  return last.length === 0 && Boolean(panName?.singleNameOnly);
+}
 
 export type AddInvestorReadiness = {
   code: string;
@@ -243,7 +257,7 @@ export function emptyAddressFields(): AddInvestorAddressFields {
     city: "",
     state: "",
     pincode: "",
-    country: "india",
+    country: "India",
   };
 }
 
@@ -280,7 +294,7 @@ export function emptyPersonalDraft(): AddInvestorPersonalDraft {
     maritalStatus: "",
     occupation: "",
     incomeSlab: "",
-    pepExposed: "no",
+    pepExposed: "not_applicable",
     placeOfBirth: "",
     countryOfOrigin: "",
   };
@@ -329,6 +343,51 @@ export function emptyBankDraft(): AddInvestorBankDraft {
 
 export function isValidSixDigitOtp(value: string): boolean {
   return /^\d{6}$/.test(value.trim());
+}
+
+export function isAddInvestorComplianceComplete(input: {
+  requiresDigilocker: boolean;
+  panVerified: boolean;
+  panName: AddInvestorPanName | null;
+  digilockerDone: boolean;
+  signatureUploaded: boolean;
+  address: AddInvestorAddressDraft;
+  personal: AddInvestorPersonalDraft;
+  nominees: AddInvestorNomineeRecord[];
+  nomineeSubWizardActive: boolean;
+  bank: AddInvestorBankDraft;
+  esignDone: boolean;
+}): boolean {
+  if (
+    !input.panVerified ||
+    !isAddInvestorPanNameValid(input.panName)
+  ) {
+    return false;
+  }
+  if (input.requiresDigilocker) {
+    if (!input.digilockerDone || !input.signatureUploaded || !input.esignDone) {
+      return false;
+    }
+  }
+  if (!isAddInvestorAddressFieldsValid(input.address.permanent)) {
+    return false;
+  }
+  if (
+    !input.address.correspondenceSame &&
+    !isAddInvestorAddressFieldsValid(input.address.correspondence)
+  ) {
+    return false;
+  }
+  if (!isAddInvestorPersonalDraftValid(input.personal)) {
+    return false;
+  }
+  if (!areAddInvestorNomineesValid(input.nominees) || input.nomineeSubWizardActive) {
+    return false;
+  }
+  if (!isAddInvestorBankDraftValid(input.bank)) {
+    return false;
+  }
+  return true;
 }
 
 export const ADD_INVESTOR_COUNTRY_OPTIONS = [

@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Building2, ChevronRight, Info, Loader2, Settings } from "lucide-react";
+import { ArrowLeft, ChevronRight, Info, Loader2, Settings } from "lucide-react";
+
+import { BankLogo } from "@/components/banking/bank-logo";
+import {
+  formatBankAccountPickerLabel,
+  resolveBankAccountDisplayName,
+} from "@/shared/lib/bank-account-display";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +37,8 @@ export type MfRedeemProceedPayload = {
 export type MfRedeemPaymentCardProps = {
   fundName?: string | null;
   previewBankLabel?: string;
+  previewBankName?: string | null;
+  previewBankIfsc?: string | null;
   preview?: boolean;
   canRedeem?: boolean;
   redeemableValueInr: number;
@@ -315,17 +323,37 @@ function RedeemExitLoadDetail({
 function RedeemBankRow({
   label,
   expectedTransferBy,
+  bankName,
+  ifscCode,
 }: {
   label: string;
   expectedTransferBy: string;
+  bankName?: string | null;
+  ifscCode?: string | null;
 }) {
+  const resolvedBankName = resolveBankAccountDisplayName({
+    bankName,
+    ifscCode,
+    accountLabel: label,
+  });
+  const displayLabel = formatBankAccountPickerLabel({
+    bankName: resolvedBankName,
+    ifscCode,
+    accountLabel: label,
+    unknownBankLabel: copy.mutualFunds.bankPickerUnknownBank,
+  });
+
   return (
     <div className="flex w-full items-center gap-3 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 px-3.5 py-2.5">
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success/15 text-success ring-1 ring-success/25">
-        <Building2 className="size-4" aria-hidden="true" />
-      </div>
+      <BankLogo
+        bankName={resolvedBankName}
+        ifscCode={ifscCode}
+        accountLabel={label}
+        size="md"
+        fallbackClassName="bg-success/15 text-success ring-success/25"
+      />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-compact font-medium text-foreground">{label}</p>
+        <p className="truncate text-compact font-medium text-foreground">{displayLabel}</p>
         <p className="mt-0.5 truncate text-caption text-muted-foreground">
           {copy.mutualFunds.paymentCardRedeemExpectedTransfer.replace("{date}", expectedTransferBy)}
         </p>
@@ -337,6 +365,8 @@ function RedeemBankRow({
 export function MfRedeemPaymentCardContent({
   fundName,
   previewBankLabel,
+  previewBankName,
+  previewBankIfsc,
   preview = true,
   canRedeem = false,
   redeemableValueInr,
@@ -479,26 +509,6 @@ export function MfRedeemPaymentCardContent({
             <p className="line-clamp-2 text-compact font-semibold leading-snug text-foreground">
               {copy.mutualFunds.paymentCardRedeemTitle} {title}
             </p>
-            <div className="mt-1 flex items-center gap-1.5 text-caption text-muted-foreground">
-              <span>
-                {copy.mutualFunds.paymentCardRedeemAvailable.replace(
-                  "{amount}",
-                  formatInr(maxAmount),
-                )}
-              </span>
-              <Tooltip>
-                <TooltipTrigger
-                  type="button"
-                  className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                  aria-label={copy.mutualFunds.paymentCardRedeemAvailableTooltip}
-                >
-                  <Info className="size-3.5" strokeWidth={2.25} aria-hidden />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-[15rem] text-pretty">
-                  {copy.mutualFunds.paymentCardRedeemAvailableTooltip}
-                </TooltipContent>
-              </Tooltip>
-            </div>
           </div>
 
           <DropdownMenu>
@@ -530,16 +540,45 @@ export function MfRedeemPaymentCardContent({
 
       <div className="flex flex-1 flex-col justify-between gap-8 px-4 pt-6 pb-7">
         <div className="space-y-5">
-          <RedeemValueInput
-            mode={inputMode}
-            amount={amount}
-            units={units}
-            maxAmount={maxAmount}
-            maxUnits={maxUnits}
-            onAmountChange={handleAmountChange}
-            onUnitsChange={handleUnitsChange}
-            error={fieldError}
-          />
+          <div className="space-y-2">
+            <RedeemValueInput
+              mode={inputMode}
+              amount={amount}
+              units={units}
+              maxAmount={maxAmount}
+              maxUnits={maxUnits}
+              onAmountChange={handleAmountChange}
+              onUnitsChange={handleUnitsChange}
+              error={fieldError}
+            />
+
+            <div className="flex justify-center">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Badge
+                      variant="secondary"
+                      className="cursor-help gap-1 px-2.5 py-1 text-caption font-medium tabular-nums"
+                    />
+                  }
+                >
+                  {inputMode === "amount"
+                    ? copy.mutualFunds.paymentCardRedeemAvailable.replace(
+                        "{amount}",
+                        formatInr(maxAmount),
+                      )
+                    : copy.mutualFunds.paymentCardRedeemUnitsAvailable.replace(
+                        "{units}",
+                        formatRedeemUnitDigits(maxUnits),
+                      )}
+                  <Info className="size-3 opacity-70" aria-hidden />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[15rem] text-pretty">
+                  {copy.mutualFunds.paymentCardRedeemAvailableTooltip}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
 
           <label className="flex cursor-pointer items-center justify-center gap-2.5">
             <input
@@ -569,7 +608,12 @@ export function MfRedeemPaymentCardContent({
             <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-foreground" />
           </button>
 
-          <RedeemBankRow label={bankLabel} expectedTransferBy={transferBy} />
+          <RedeemBankRow
+            label={bankLabel}
+            expectedTransferBy={transferBy}
+            bankName={previewBankName}
+            ifscCode={previewBankIfsc}
+          />
 
           {actionError ? <FieldMessage variant="error" message={actionError} /> : null}
 

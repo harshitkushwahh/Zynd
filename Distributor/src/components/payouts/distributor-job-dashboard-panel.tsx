@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SortDescriptor } from "react-aria-components";
+import { LogIn, LogOut } from "lucide-react";
 
 import { Table, useDistributorTablePagination } from "@/components/application/table";
 import { useDistributorScopePageReveal } from "@/components/dashboard/use-distributor-scope-page-reveal";
@@ -11,11 +12,18 @@ import { DistributorPayrollBreakdownCard } from "@/components/payouts/distributo
 import { DistributorJobSectionMetrics } from "@/components/payouts/distributor-job-section-metrics";
 import { DistributorWorkAttendanceCard } from "@/components/payouts/distributor-work-attendance-card";
 import { DistributorLeavePanel } from "@/components/payouts/distributor-leave-panel";
+import { DistributorWorkSignInDialog } from "@/components/payouts/distributor-work-sign-in-dialog";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
 import { DistributorTableCardShell } from "@/components/dashboard/distributor-table-card-shell";
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
+import { DistributorActionButton } from "@/components/ui/distributor-action-button";
+import {
+  DistributorWorkSessionProvider,
+  formatWorkElapsedDuration,
+  useDistributorWorkSession,
+} from "@/contexts/distributor-work-session-context";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
 import {
   DUMMY_DISTRIBUTOR_PAYOUTS,
@@ -23,6 +31,12 @@ import {
   type DistributorPayoutStatus,
 } from "@/lib/distributor-payouts-data";
 import { CURRENT_PAYROLL_ID } from "@/lib/distributor-job-dashboard-data";
+import type {
+  DistributorJobCompensation,
+  DistributorJobPerformanceCalc,
+  DistributorPayrollPromotion,
+} from "@/lib/distributor-job-dashboard-data";
+import { fetchDistributorPayrollDashboard } from "@/lib/distributor-work-api";
 import { DISTRIBUTOR_PAGE_STACK_CLASS, DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
@@ -51,12 +65,18 @@ function formatInr(amount: number): string {
 
 type DistributorJobDashboardPanelProps = DistributorPageConfig;
 
-export function DistributorJobDashboardPanel({ title }: DistributorJobDashboardPanelProps) {
+function DistributorJobDashboardPanelContent({ title }: DistributorJobDashboardPanelProps) {
   const { showSkeleton } = useDistributorScopePageReveal();
+  const { activeSession, isHydrated, isBusy, signIn, signOut, elapsedMs, refreshSession } =
+    useDistributorWorkSession();
+  const [signInDialogOpen, setSignInDialogOpen] = useState(false);
+  const [selectedPeriodId, setSelectedPeriodId] = useState(CURRENT_PAYROLL_ID);
+  const [compensation, setCompensation] = useState<DistributorJobCompensation | null>(null);
+  const [performance, setPerformance] = useState<DistributorJobPerformanceCalc | null>(null);
+  const [promotion, setPromotion] = useState<DistributorPayrollPromotion | null>(null);
   const commissionRows = DUMMY_DISTRIBUTOR_PAYOUTS;
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPeriodId, setSelectedPeriodId] = useState(CURRENT_PAYROLL_ID);
   const [commissionStatusFilter, setCommissionStatusFilter] = useState<DistributorPayoutStatus | "all">("all");
   const [commissionSort, setCommissionSort] = useState<SortDescriptor>({
     column: "settlementDate",
@@ -86,6 +106,30 @@ export function DistributorJobDashboardPanel({ title }: DistributorJobDashboardP
     pagination: commissionPagination,
     setPage: setCommissionPage,
   } = useDistributorTablePagination(sortedCommission);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDistributorPayrollDashboard(selectedPeriodId || undefined)
+      .then((dashboard) => {
+        if (cancelled) return;
+        setCompensation(dashboard.compensation);
+        setPerformance(dashboard.performance);
+        setPromotion(dashboard.promotion);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCompensation(null);
+        setPerformance(null);
+        setPromotion(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPeriodId]);
+
+  const handleSignOut = () => {
+    void signOut().then(() => refreshSession());
+  };
 
   const toolbar = (
     <DistributorTableToolbar
@@ -188,24 +232,64 @@ export function DistributorJobDashboardPanel({ title }: DistributorJobDashboardP
       )}
     >
       <DistributorPageHeader title={title} description="">
-        <DistributorJobPeriodSelect
-          value={selectedPeriodId}
-          onValueChange={(value) => {
-            if (value) setSelectedPeriodId(value);
-          }}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {isHydrated ? (
+            activeSession ? (
+              <>
+                <span className="distributor-job-dashboard__session-pill tabular-nums" role="status">
+                  Signed in · {formatWorkElapsedDuration(elapsedMs)}
+                </span>
+                <DistributorActionButton
+                  type="button"
+                  variant="outline"
+                  onClick={handleSignOut}
+                  disabled={isBusy}
+                >
+                  <LogOut className="size-3.5" aria-hidden />
+                  Sign out
+                </DistributorActionButton>
+              </>
+            ) : (
+              <DistributorActionButton
+                type="button"
+                variant="primary"
+                onClick={() => setSignInDialogOpen(true)}
+                disabled={isBusy}
+              >
+                <LogIn className="size-3.5" aria-hidden />
+                Sign in
+              </DistributorActionButton>
+            )
+          ) : null}
+          <DistributorJobPeriodSelect
+            value={selectedPeriodId}
+            onValueChange={(value) => {
+              if (value) setSelectedPeriodId(value);
+            }}
+          />
+        </div>
       </DistributorPageHeader>
 
-      <DistributorJobSectionMetrics />
+      <DistributorWorkSignInDialog
+        open={signInDialogOpen}
+        onOpenChange={setSignInDialogOpen}
+        onSignIn={signIn}
+      />
+
+      <DistributorJobSectionMetrics compensation={compensation ?? undefined} />
 
       <div className="distributor-job-dashboard__widget-row" aria-label="Payroll and attendance widgets">
         <DistributorPayrollBreakdownCard
           variant="dashboard"
           className="distributor-job-dashboard-widget"
+          compensation={compensation ?? undefined}
+          performance={performance ?? undefined}
+          promotion={promotion}
         />
         <DistributorWorkAttendanceCard
           variant="sidebar"
           className="distributor-job-dashboard-widget"
+          refreshKey={activeSession?.id ?? "none"}
         />
         <DistributorLeavePanel variant="sidebar" className="distributor-job-dashboard-widget" />
       </div>
@@ -220,5 +304,13 @@ export function DistributorJobDashboardPanel({ title }: DistributorJobDashboardP
         {commissionTable}
       </DistributorTableCardShell>
     </div>
+  );
+}
+
+export function DistributorJobDashboardPanel(props: DistributorJobDashboardPanelProps) {
+  return (
+    <DistributorWorkSessionProvider>
+      <DistributorJobDashboardPanelContent {...props} />
+    </DistributorWorkSessionProvider>
   );
 }

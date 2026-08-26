@@ -1,4 +1,6 @@
 const REDIRECT_KEY_PREFIX = "mf-payment-redirected-";
+const SIP_MANDATE_REDIRECT_PREFIX = "mf-sip-mandate-redirected-";
+const SIP_FIRST_INSTALLMENT_REDIRECT_PREFIX = "mf-sip-first-installment-redirected-";
 const LAST_ORDER_KEY = "mf-payment-last-order-id";
 const LAST_CHECKOUT_KEY = "mf-payment-last-checkout-id";
 const LAST_PLAN_KEY = "mf-payment-last-plan-id";
@@ -29,6 +31,84 @@ export function wasMfPaymentRedirected(id: string) {
 export function clearMfPaymentRedirect(id: string) {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(`${REDIRECT_KEY_PREFIX}${id}`);
+}
+
+export function markMfSipMandateRedirect(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(`${SIP_MANDATE_REDIRECT_PREFIX}${planId}`, Date.now().toString());
+  sessionStorage.setItem(LAST_PLAN_KEY, planId);
+  markMfPaymentRedirect({ planId });
+}
+
+export function wasMfSipMandateRedirected(planId: string) {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(`${SIP_MANDATE_REDIRECT_PREFIX}${planId}`) !== null;
+}
+
+export function clearMfSipMandateRedirect(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(`${SIP_MANDATE_REDIRECT_PREFIX}${planId}`);
+  clearMfPaymentRedirect(planId);
+}
+
+export function markMfSipFirstInstallmentRedirect(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(`${SIP_FIRST_INSTALLMENT_REDIRECT_PREFIX}${planId}`, Date.now().toString());
+  sessionStorage.setItem(LAST_PLAN_KEY, planId);
+}
+
+export function wasMfSipFirstInstallmentRedirected(planId: string) {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(`${SIP_FIRST_INSTALLMENT_REDIRECT_PREFIX}${planId}`) !== null;
+}
+
+export function clearMfSipFirstInstallmentRedirect(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(`${SIP_FIRST_INSTALLMENT_REDIRECT_PREFIX}${planId}`);
+}
+
+export function clearMfSipPaymentSession(planId: string) {
+  clearMfSipMandateRedirect(planId);
+  clearMfSipFirstInstallmentRedirect(planId);
+  clearMfSipFirstInstallmentAutoStarted(planId);
+  clearMfPaymentRedirect(planId);
+  markMfSipPaymentDismissed(planId);
+  if (typeof window !== "undefined" && getLastMfPaymentPlanId() === planId) {
+    sessionStorage.removeItem(LAST_PLAN_KEY);
+  }
+}
+
+const SIP_FIRST_INSTALLMENT_AUTO_PREFIX = "mf-sip-first-installment-auto-";
+const SIP_PAYMENT_DISMISSED_PREFIX = "mf-sip-payment-dismissed-";
+
+export function markMfSipPaymentDismissed(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(`${SIP_PAYMENT_DISMISSED_PREFIX}${planId}`, "1");
+}
+
+export function wasMfSipPaymentDismissed(planId: string) {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(`${SIP_PAYMENT_DISMISSED_PREFIX}${planId}`) === "1";
+}
+
+export function clearMfSipPaymentDismissed(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(`${SIP_PAYMENT_DISMISSED_PREFIX}${planId}`);
+}
+
+export function clearMfSipFirstInstallmentAutoStarted(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(`${SIP_FIRST_INSTALLMENT_AUTO_PREFIX}${planId}`);
+}
+
+export function markMfSipFirstInstallmentAutoStarted(planId: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(`${SIP_FIRST_INSTALLMENT_AUTO_PREFIX}${planId}`, "1");
+}
+
+export function wasMfSipFirstInstallmentAutoStarted(planId: string) {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(`${SIP_FIRST_INSTALLMENT_AUTO_PREFIX}${planId}`) === "1";
 }
 
 export function getLastMfPaymentOrderId() {
@@ -63,6 +143,24 @@ export function getMfSipCartCheckoutPlanIds() {
   } catch {
     return [];
   }
+}
+
+export function removeMfSipCartCheckoutPlan(planId: string) {
+  const remaining = getMfSipCartCheckoutPlanIds().filter((id) => id !== planId);
+  if (remaining.length === 0) {
+    clearMfSipCartCheckoutPlans();
+    return;
+  }
+  markMfSipCartCheckoutPlans(remaining);
+}
+
+export function getNextMfSipCartCheckoutPlanId(afterPlanId?: string | null) {
+  const planIds = getMfSipCartCheckoutPlanIds();
+  if (planIds.length === 0) return null;
+  if (!afterPlanId) return planIds[0] ?? null;
+  const index = planIds.indexOf(afterPlanId);
+  if (index === -1) return planIds[0] ?? null;
+  return planIds[index + 1] ?? null;
 }
 
 export function clearMfSipCartCheckoutPlans() {

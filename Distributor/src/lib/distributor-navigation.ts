@@ -3,7 +3,6 @@ import {
   BarChart3,
   Bell,
   CalendarClock,
-  ClipboardCheck,
   FileSpreadsheet,
   FolderKanban,
   Layers3,
@@ -85,14 +84,6 @@ export const DISTRIBUTOR_PAYOUTS_ROUTE: DistributorNavItem = {
   description: "Salary, incentives, work time, and leave",
 };
 
-export const DISTRIBUTOR_COMPLIANCE_ROUTE: DistributorNavItem = {
-  id: "compliance",
-  label: "Compliance",
-  href: "/dashboard/compliance",
-  icon: ClipboardCheck,
-  description: ZYND_MITRA_COPY.complianceQueueDesc,
-};
-
 export const DISTRIBUTOR_LEADS_ROUTE: DistributorNavItem = {
   id: "leads",
   label: "Leads",
@@ -114,7 +105,6 @@ export const DISTRIBUTOR_WORKSPACE_ROUTES: DistributorNavItem[] = [
   DISTRIBUTOR_YOUR_CLIENTS_ROUTE,
   DISTRIBUTOR_YOUR_OPERATIONS_ROUTE,
   DISTRIBUTOR_PAYOUTS_ROUTE,
-  DISTRIBUTOR_COMPLIANCE_ROUTE,
   DISTRIBUTOR_LEADS_ROUTE,
   DISTRIBUTOR_REPORTS_ROUTE,
 ];
@@ -376,10 +366,6 @@ export function getDistributorBreadcrumbSegments(
 
   if (pathname.startsWith("/dashboard/payouts")) {
     return [{ label: "My work" }];
-  }
-
-  if (pathname.startsWith("/dashboard/compliance")) {
-    return [{ label: "Compliance" }];
   }
 
   if (pathname.startsWith("/dashboard/leads")) {

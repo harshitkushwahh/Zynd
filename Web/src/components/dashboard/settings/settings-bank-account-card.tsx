@@ -1,12 +1,15 @@
 "use client";
 
-import { Building2, Star, Trash2 } from "lucide-react";
+import { Loader2, Star, Trash2 } from "lucide-react";
+
+import { BankLogo } from "@/components/banking/bank-logo";
 
 import { Button } from "@/components/ui/button";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   formatInvestorBankAccountType,
+  isInvestorBankAccountPaymentReady,
   isInvestorBankAccountVerified,
   type InvestorBankAccount,
 } from "@/features/invest/lib/investor-bank-accounts-api";
@@ -25,8 +28,12 @@ function verificationBadges(account: InvestorBankAccount) {
   const badges = [];
   if (account.is_primary) {
     badges.push(
-      <StatusBadge key="primary" variant="info" className="h-5 px-2 text-[10px]">
-        <Star className="mr-1 size-3" />
+      <StatusBadge
+        key="primary"
+        variant="info"
+        icon={Star}
+        className="min-w-[5.75rem] justify-center px-3.5"
+      >
         {copy.settings.bankAccounts.primaryBadge}
       </StatusBadge>,
     );
@@ -56,6 +63,13 @@ function verificationBadges(account: InvestorBankAccount) {
       </StatusBadge>,
     );
   }
+  if (isInvestorBankAccountPaymentReady(account)) {
+    badges.push(
+      <StatusBadge key="payment-ready" variant="success" className="h-5 px-2 text-[10px]">
+        {copy.settings.bankAccounts.paymentReadyBadge}
+      </StatusBadge>,
+    );
+  }
   return badges;
 }
 
@@ -66,8 +80,12 @@ export function SettingsBankAccountCard({
   onSetPrimary,
   onRemove,
 }: SettingsBankAccountCardProps) {
-  const canSetPrimary = isInvestorBankAccountVerified(account) && !account.is_primary;
+  const activeSipCount = account.active_sip_count ?? 0;
+  const canSetPrimary =
+    isInvestorBankAccountVerified(account) && !account.is_primary && !account.blocks_primary_switch;
   const canRemove = !account.is_primary && onRemove;
+
+  const showActions = (canSetPrimary && onSetPrimary) || canRemove;
 
   return (
     <article
@@ -79,15 +97,19 @@ export function SettingsBankAccountCard({
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          <Building2 className="size-4" strokeWidth={2} />
-        </div>
+        <BankLogo bankName={account.bank_name} ifscCode={account.ifsc_code} size="md" />
 
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-body font-semibold text-foreground">{account.account_number_masked}</p>
             {verificationBadges(account)}
           </div>
+
+          {activeSipCount > 0 ? (
+            <p className="text-caption text-muted-foreground">
+              {copy.settings.bankAccounts.activeSipsSubtitle(activeSipCount)}
+            </p>
+          ) : null}
 
           <dl className="grid gap-2 text-caption sm:grid-cols-2">
             <div>
@@ -115,33 +137,45 @@ export function SettingsBankAccountCard({
           {account.failure?.reason ? (
             <FieldMessage message={account.failure.reason} className="mt-0" />
           ) : null}
-
-          {canSetPrimary && onSetPrimary ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={settingPrimary || removing}
-              onClick={() => onSetPrimary(account.id)}
-            >
-              {settingPrimary ? copy.settings.working : copy.settings.bankAccounts.setPrimary}
-            </Button>
-          ) : null}
-
-          {canRemove ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={removing || settingPrimary}
-              onClick={() => onRemove(account.id)}
-            >
-              <Trash2 className="mr-1.5 size-3.5" />
-              {removing ? copy.settings.working : copy.settings.bankAccounts.removeBankAccount}
-            </Button>
-          ) : null}
         </div>
+
+        {showActions ? (
+          <div className="flex shrink-0 items-center gap-1.5">
+            {canSetPrimary && onSetPrimary ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                disabled={settingPrimary || removing}
+                aria-label={copy.settings.bankAccounts.setPrimary}
+                onClick={() => onSetPrimary(account.id)}
+              >
+                {settingPrimary ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Star className="size-3.5" aria-hidden />
+                )}
+              </Button>
+            ) : null}
+            {canRemove ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={removing || settingPrimary}
+                aria-label={copy.settings.bankAccounts.removeBankAccount}
+                onClick={() => onRemove(account.id)}
+              >
+                {removing ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 className="size-3.5" aria-hidden />
+                )}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </article>
   );

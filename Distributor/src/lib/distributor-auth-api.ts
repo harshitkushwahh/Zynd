@@ -1,4 +1,4 @@
-import { apiRequest, refreshSession, setAccessToken } from "@/lib/api-client";
+import { apiRequest, refreshSession, setAccessToken, isAuthFailure } from "@/lib/api-client";
 import {
   mapPersonaToSessionRole,
   resolveDistributorConsolePersona,
@@ -9,7 +9,11 @@ import {
   fetchDistributorConsoleContext,
   type DistributorConsoleContext,
 } from "@/lib/distributor-partners-api";
+import { readPersistedDistributorSession, clearPersistedDistributorSession } from "@/lib/distributor-session-storage";
+import { resolveDistributorAssetUrl } from "@/lib/distributor-asset-url";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
+
+export const DISTRIBUTOR_DEVICE_FINGERPRINT = "distributor-console";
 
 export type DistributorBackendUser = {
   id: string;
@@ -21,6 +25,7 @@ export type DistributorBackendUser = {
   mfa_enrolled: boolean;
   pin_enrolled: boolean;
   created_at: string;
+  profile_image_url?: string | null;
 };
 
 type AuthSuccessResponse = {
@@ -114,9 +119,11 @@ export function toDistributorSessionUser(
     mfaEnrolled: apiUser.mfa_enrolled,
     joinedAt: apiUser.created_at,
     zyndClientId: context?.client_id ?? apiUser.client_id,
+    phoneMasked: context?.phone_masked ?? "",
     branchId: context?.branch?.id,
     branchName: context?.branch?.name,
     branchCode: context?.branch?.id,
+    avatarUrl: resolveDistributorAssetUrl(apiUser.profile_image_url),
   };
 }
 
@@ -161,7 +168,7 @@ export async function distributorLogin(
     body: JSON.stringify({
       email,
       password,
-      device_fingerprint: "admin-console",
+      device_fingerprint: DISTRIBUTOR_DEVICE_FINGERPRINT,
     }),
   });
 
@@ -234,27 +241,74 @@ export async function bootstrapDistributorSession() {
       permissions: [] as string[],
       roleKeys: [] as string[],
       reason: result.reason,
+      tokenRefreshed: false,
     };
   }
 
+  const cachedUser = readPersistedDistributorSession();
+
   try {
     const me = await apiRequest<DistributorBackendUser>("/auth/me");
-    const session = await completeAuthenticatedSession(me);
-    return {
-      sessionUser: session.sessionUser,
-      permissions: session.permissions,
-      roleKeys: session.roleKeys,
-      reason: null,
-    };
-  } catch {
-    setAccessToken(null);
+    if (cachedUser && cachedUser.id !== me.id) {
+      clearPersistedDistributorSession();
+    }
+
+    try {
+      const session = await completeAuthenticatedSession(me);
+      return {
+        sessionUser: session.sessionUser,
+        permissions: session.permissions,
+        roleKeys: session.roleKeys,
+        reason: null,
+        tokenRefreshed: true,
+      };
+    } catch (enrichError) {
+      if (isAuthFailure(enrichError)) {
+        throw enrichError;
+      }
+
+      if (cachedUser?.id === me.id) {
+        return {
+          sessionUser: {
+            ...cachedUser,
+            email: me.email,
+            pinEnrolled: me.pin_enrolled,
+            mfaEnrolled: me.mfa_enrolled,
+            avatarUrl: resolveDistributorAssetUrl(me.profile_image_url) ?? cachedUser.avatarUrl ?? null,
+          },
+          permissions: [],
+          roleKeys: [],
+          reason: null,
+          tokenRefreshed: true,
+        };
+      }
+
+      throw enrichError;
+    }
+  } catch (error) {
+    if (isAuthFailure(error)) {
+      setAccessToken(null);
+      return {
+        sessionUser: null,
+        permissions: [],
+        roleKeys: [],
+        reason: "expired" as const,
+        tokenRefreshed: false,
+      };
+    }
+
     return {
       sessionUser: null,
       permissions: [],
       roleKeys: [],
-      reason: "expired" as const,
+      reason: "network" as const,
+      tokenRefreshed: true,
     };
   }
+}
+
+export async function fetchDistributorBackendUser() {
+  return apiRequest<DistributorBackendUser>("/auth/me");
 }
 
 export async function distributorLogout() {

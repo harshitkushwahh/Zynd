@@ -23,7 +23,7 @@ export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
   }
 
   if (error) {
-    return <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>;
+    return <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>;
   }
 
   if (!data || data.notFound || !data.profile) {

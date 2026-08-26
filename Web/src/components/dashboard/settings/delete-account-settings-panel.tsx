@@ -9,10 +9,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import {
-  AuthenticatorVerifyDialog,
-  PasswordVerifyDialog,
-} from "@/features/account/mfa";
+import { DeleteAccountRequestDialog } from "@/components/dashboard/settings/delete-account-request-dialog";
 import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -99,26 +96,20 @@ export function DeleteAccountSettingsPanel({
   const [loading, setLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-  const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [pendingPassword, setPendingPassword] = useState("");
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [requestError, setRequestError] = useState("");
 
   const resetDialogs = () => {
-    setPendingPassword("");
-    setPasswordError("");
-    setAuthError("");
+    setRequestError("");
   };
 
   const submitDeletion = async (
     currentPassword: string,
-    verification?: StepUpVerification
+    verification?: StepUpVerification,
   ) => {
     setLoading(true);
     setError("");
-    setPasswordError("");
-    setAuthError("");
+    setRequestError("");
     setSuccess("");
 
     try {
@@ -128,44 +119,24 @@ export function DeleteAccountSettingsPanel({
         smsOtp: verification?.smsOtp,
       });
       resetDialogs();
-      setPasswordDialogOpen(false);
-      setAuthDialogOpen(false);
+      setRequestDialogOpen(false);
       setSuccess(
         result.deletion_scheduled_at
           ? copy.account.deletionScheduledSuccess(
-              formatScheduledDeletion(result.deletion_scheduled_at)
+              formatScheduledDeletion(result.deletion_scheduled_at),
             )
-          : copy.account.deletionScheduledSuccessGeneric
+          : copy.account.deletionScheduledSuccessGeneric,
       );
       await onUserRefresh();
     } catch (err) {
-      const message = getErrorMessage(err, copy.account.deletionCouldNotRequest);
-      if (authDialogOpen) {
-        setAuthError(message);
-      } else if (passwordDialogOpen) {
-        setPasswordError(message);
-      } else {
-        setError(message);
-      }
+      setRequestError(getErrorMessage(err, copy.account.deletionCouldNotRequest));
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePasswordVerify = (password: string) => {
-    setPendingPassword(password);
-
-    if (mfaEnabled) {
-      setPasswordDialogOpen(false);
-      setAuthDialogOpen(true);
-      return;
-    }
-
-    void submitDeletion(password);
-  };
-
-  const handleStepUpVerify = (verification: StepUpVerification) => {
-    void submitDeletion(pendingPassword, verification);
+  const handleDeletionSubmit = (password: string, verification?: StepUpVerification) => {
+    void submitDeletion(password, verification);
   };
 
   const handleCancelDeletion = async () => {
@@ -282,7 +253,7 @@ export function DeleteAccountSettingsPanel({
                   className="w-full shrink-0 lg:w-auto"
                   onClick={() => {
                     resetDialogs();
-                    setPasswordDialogOpen(true);
+                    setRequestDialogOpen(true);
                   }}
                 >
                   <Trash2 className="size-3.5" />
@@ -297,40 +268,14 @@ export function DeleteAccountSettingsPanel({
         )}
       </div>
 
-      <PasswordVerifyDialog
-        open={passwordDialogOpen}
-        onOpenChange={(open) => {
-          setPasswordDialogOpen(open);
-          if (!open) {
-            setPasswordError("");
-            if (!authDialogOpen) {
-              setPendingPassword("");
-            }
-          }
-        }}
-        title={copy.settings.confirmAccountDeletionTitle}
-        description={copy.account.deletionPasswordPrompt()}
-        submitLabel={mfaEnabled ? "Continue" : copy.settings.requestDeletion}
-        loading={loading && !authDialogOpen}
-        error={passwordError}
-        onSubmit={handlePasswordVerify}
-      />
-
-      <AuthenticatorVerifyDialog
-        open={authDialogOpen}
-        onOpenChange={(open) => {
-          setAuthDialogOpen(open);
-          if (!open) {
-            setAuthError("");
-            setPendingPassword("");
-          }
-        }}
-        title={copy.settings.confirmAccountDeletionTitle}
-        description={copy.settings.confirmAccountDeletionMfaDescription}
-        submitLabel={copy.settings.requestDeletion}
+      <DeleteAccountRequestDialog
+        open={requestDialogOpen}
+        onOpenChange={setRequestDialogOpen}
+        mfaEnabled={mfaEnabled}
         loading={loading}
-        error={authError}
-        onSubmit={handleStepUpVerify}
+        error={requestError}
+        onErrorChange={setRequestError}
+        onSubmit={handleDeletionSubmit}
       />
     </>
   );

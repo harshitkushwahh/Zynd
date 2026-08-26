@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowUp } from "lucide-react";
 
+import { OverviewPortfolioFlowChart } from "@/features/dashboard/overview/components/overview-portfolio-flow-chart";
 import {
-  filterPortfolioFlowByRange,
-  OVERVIEW_PORTFOLIO_FLOW_RANGE_OPTIONS,
   type OverviewPortfolioFlowPoint,
   type OverviewPortfolioFlowRange,
 } from "@/features/dashboard/overview/lib/overview-portfolio-flow-series";
@@ -20,100 +19,6 @@ function toneClass(tone: "positive" | "negative" | "muted") {
     tone === "positive" && "text-success",
     tone === "negative" && "text-destructive",
     tone === "muted" && "text-muted-foreground",
-  );
-}
-
-function PortfolioSparkline({ points }: { points: OverviewPortfolioFlowPoint[] }) {
-  const { linePath, areaPath } = useMemo(() => {
-    if (points.length < 2) {
-      return { linePath: "", areaPath: "" };
-    }
-
-    const width = 320;
-    const height = 108;
-    const padX = 8;
-    const padY = 10;
-    const values = points.map((point) => point.value);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = Math.max(max - min, 1);
-
-    const coords = points.map((point, index) => {
-      const x = padX + (index / (points.length - 1)) * (width - padX * 2);
-      const y = padY + (1 - (point.value - min) / span) * (height - padY * 2);
-      return { x, y };
-    });
-
-    const linePath = coords.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
-    const areaPath = `${linePath} L ${coords[coords.length - 1]!.x} ${height} L ${coords[0]!.x} ${height} Z`;
-
-    return { linePath, areaPath };
-  }, [points]);
-
-  if (!linePath) {
-    return <div className="h-[6.75rem] w-full rounded-[var(--radius-control)] bg-muted/30" aria-hidden />;
-  }
-
-  return (
-    <svg
-      viewBox="0 0 320 108"
-      preserveAspectRatio="none"
-      className="h-[6.75rem] w-full overflow-visible"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="portfolio-sparkline-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--zynd-emerald)" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="var(--zynd-emerald)" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill="url(#portfolio-sparkline-fill)" />
-      <path
-        d={linePath}
-        fill="none"
-        stroke="var(--zynd-emerald)"
-        strokeWidth="2.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PortfolioRangeTabs({
-  value,
-  onChange,
-}: {
-  value: OverviewPortfolioFlowRange;
-  onChange: (value: OverviewPortfolioFlowRange) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label={copy.dashboard.overview.portfolioChartRangeLabel}
-      className="flex flex-wrap justify-center gap-0.5 px-2 pb-2 pt-1"
-    >
-      {OVERVIEW_PORTFOLIO_FLOW_RANGE_OPTIONS.map((option) => {
-        const active = value === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(option.id)}
-            className={cn(
-              "min-w-[2.15rem] rounded-full px-2 py-1 text-[10px] font-medium transition-all duration-200 ease-out sm:min-w-[2.35rem] sm:px-2.5 sm:text-[11px]",
-              active
-                ? "bg-foreground text-background shadow-sm"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -134,7 +39,6 @@ export function PortfolioSummaryCard({
   const totalReturn = formatSignedReturn(data.totalReturnPct);
   const dayChange = formatSignedReturn(data.dayChangePct);
   const [range, setRange] = useState<OverviewPortfolioFlowRange>("1y");
-  const chartPoints = useMemo(() => filterPortfolioFlowByRange(series, range), [range, series]);
 
   return (
     <section
@@ -181,8 +85,11 @@ export function PortfolioSummaryCard({
       </div>
 
       <div className="mt-auto px-1 pt-3 sm:px-2">
-        <PortfolioSparkline points={chartPoints} />
-        <PortfolioRangeTabs value={range} onChange={setRange} />
+        <OverviewPortfolioFlowChart
+          series={[...series]}
+          range={range}
+          onRangeChange={setRange}
+        />
       </div>
     </section>
   );

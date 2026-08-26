@@ -78,8 +78,8 @@ export function MfComplianceDetailsCard({ compliance }: MfComplianceDetailsCardP
       <Accordion className="w-full">
         <AccordionItem value="compliance" className="border-b-0">
           <AccordionTrigger className="rounded-none px-4 py-4 hover:bg-muted/20">
-            <div className="sip-icon-badge flex size-9 shrink-0 items-center justify-center rounded-full">
-              <Scale className="size-4" strokeWidth={2.25} />
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+              <Scale className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
             </div>
             <div className="min-w-0 flex-1 text-left">
               <p className="font-medium text-foreground">{copy.mutualFunds.complianceDetailsTitle}</p>

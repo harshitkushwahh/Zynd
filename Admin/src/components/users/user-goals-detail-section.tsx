@@ -65,7 +65,7 @@ export function UserGoalsDetailSection({ userRef }: UserGoalsDetailSectionProps)
   }
 
   if (error) {
-    return <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>;
+    return <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>;
   }
 
   if (goals.length === 0) {

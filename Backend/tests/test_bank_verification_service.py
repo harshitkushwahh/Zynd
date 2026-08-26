@@ -17,21 +17,21 @@ def test_holder_name_from_pan_draft() -> None:
     )
 
 
-def test_resolve_bank_holder_names_prefers_kyckart_for_display_only() -> None:
+def test_resolve_bank_holder_names_returns_kyckart_for_display_only() -> None:
     pan_draft = {"fullName": "RAHUL KUMAR SHARMA"}
-    pan_name, display_name = _resolve_bank_holder_names(
+    pan_name, kyckart_name = _resolve_bank_holder_names(
         pan_draft,
         kyckart_holder_name="RAHUL SHARMA",
     )
     assert pan_name == "RAHUL KUMAR SHARMA"
-    assert display_name == "RAHUL SHARMA"
+    assert kyckart_name == "RAHUL SHARMA"
 
 
-def test_resolve_bank_holder_names_falls_back_to_pan_for_display() -> None:
+def test_resolve_bank_holder_names_leaves_kyckart_empty_when_unavailable() -> None:
     pan_draft = {"fullName": "RAHUL KUMAR SHARMA"}
-    pan_name, display_name = _resolve_bank_holder_names(pan_draft)
+    pan_name, kyckart_name = _resolve_bank_holder_names(pan_draft)
     assert pan_name == "RAHUL KUMAR SHARMA"
-    assert display_name == "RAHUL KUMAR SHARMA"
+    assert kyckart_name == ""
 
 
 def test_extract_readiness_verified_from_poa_readiness() -> None:

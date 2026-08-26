@@ -75,6 +75,28 @@ describe("buildOverviewKycProfileProgress", () => {
       }),
     );
     expect(progress.progressFraction).toBe(1);
+    expect(progress.progressPercent).toBe(100);
     expect(progress.tone).toBe("success");
+    expect(progress.tooltipVariant).toBe("verified");
+  });
+
+  it("marks not-started journeys as pending", () => {
+    const progress = buildOverviewKycProfileProgress(
+      bootstrap({
+        step_statuses: {
+          pan: "pending",
+          digilocker: "pending",
+          address: "pending",
+          personal: "pending",
+          nominee: "pending",
+          bank: "pending",
+          signature: "pending",
+          review: "pending",
+          overall: "none",
+        },
+      }),
+    );
+    expect(progress.tooltipVariant).toBe("not_started");
+    expect(progress.progressPercent).toBe(0);
   });
 });

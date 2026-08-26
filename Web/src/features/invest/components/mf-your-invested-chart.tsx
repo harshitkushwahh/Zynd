@@ -1,7 +1,9 @@
 "use client";
 
 import { useId, useMemo } from "react";
-import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, XAxis, YAxis } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import type { MfInvestedDayPoint } from "@/features/invest/lib/mf-dashboard-sidebar-data";
 
@@ -40,7 +42,7 @@ export function MfYourInvestedChart({ points, tone, className }: MfYourInvestedC
 
   return (
     <div className={className} style={{ height: CHART_HEIGHT }}>
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
+      <RechartsMeasuredContainer className="h-full w-full" width="100%" height={CHART_HEIGHT} minWidth={0}>
         <AreaChart data={points} margin={{ top: 6, right: 0, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -65,7 +67,7 @@ export function MfYourInvestedChart({ points, tone, className }: MfYourInvestedC
             animationEasing="ease-out"
           />
         </AreaChart>
-      </ResponsiveContainer>
+      </RechartsMeasuredContainer>
     </div>
   );
 }

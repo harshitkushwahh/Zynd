@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.mf.ondc_sip_eligibility import passes_ondc_sip_gateway_rules
 from app.application.mf.scheme_row_normalizer import to_decimal, unwrap_cybrilla_scheme_payload
+from app.infrastructure.persistence.mf_models import MutualFund
 
 SIP_FREQUENCY_ORDER = ("monthly", "quarterly", "weekly", "daily")
 TRANSACTION_TYPE_FIELDS = (
@@ -137,3 +139,25 @@ def serialize_investment_constraints_for_api(payload: dict[str, Any] | None) -> 
     if not payload:
         return None
     return payload
+
+
+def fund_allows_sip(fund: MutualFund, *, payment_gateway: str | None = None) -> bool:
+    """Whether SIP can be offered for this fund on the configured order/payment network."""
+    if fund.min_sip_amount is not None:
+        return passes_ondc_sip_gateway_rules(fund, payment_gateway=payment_gateway)
+
+    constraints = fund.investment_constraints
+    if not isinstance(constraints, dict):
+        return passes_ondc_sip_gateway_rules(fund, payment_gateway=payment_gateway)
+
+    transaction_types = constraints.get("transaction_types")
+    if isinstance(transaction_types, list) and transaction_types and "sip" not in transaction_types:
+        return False
+
+    sip_options = constraints.get("sip_options")
+    if isinstance(sip_options, list) and not sip_options:
+        has_sip_type = isinstance(transaction_types, list) and "sip" in transaction_types
+        if not has_sip_type:
+            return False
+
+    return passes_ondc_sip_gateway_rules(fund, payment_gateway=payment_gateway)

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, Lock, Sparkles, Trash2 } from "lucide-react";
+import { Lock, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -100,10 +100,9 @@ export function RiskProfileHeroCard({ className }: { className?: string }) {
                     size="sm"
                     nativeButton={false}
                     render={<Link href={RISK_PROFILE_ASSESSMENT_HREF} />}
-                    className="gap-2 bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                    className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
                   >
                     {actionLabel}
-                    <ArrowRight className="size-4" />
                   </Button>
                   {assessmentInProgress && assessmentDraftProgress ? (
                     <RiskAssessmentCircleProgress

@@ -19,8 +19,8 @@ export function MfFundCalculatorCard({ fund, initialCalculator }: MfFundCalculat
     <Card className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
       <CardHeader className="border-b border-border/60 bg-muted/10">
         <div className="flex items-start gap-3">
-          <div className="sip-icon-badge mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full">
-            <Calculator className="size-4" strokeWidth={2.25} />
+          <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+            <Calculator className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
           </div>
           <div className="min-w-0">
             <CardTitle>{copy.mutualFunds.fundCalculatorTitle}</CardTitle>

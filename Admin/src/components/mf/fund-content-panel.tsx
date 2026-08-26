@@ -102,8 +102,8 @@ export function FundContentPanel({
         <CardDescription>Marketing copy and SEO fields merged into the public invest API.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-        {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+        {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
         {(
           [
             ["tagline", "Tagline", "Short pitch shown on fund cards"],

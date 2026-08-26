@@ -2,6 +2,7 @@
 
 import { ArrowLeftRight, IndianRupee, Users } from "lucide-react";
 
+import { DistributorHeadBranchContributionsDonut } from "@/components/distributor-head/distributor-head-branch-contributions-donut";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AdminHierarchyBranch,
@@ -48,31 +49,29 @@ export function DistributorHeadStateTotalsCard({
           </div>
         </div>
 
-        <div className="grid gap-2">
-          <div className="distributor-head-state-totals__row">
-            <div className="distributor-head-state-totals__row-icon distributor-head-state-totals__row-icon--info">
+        <div className="distributor-head-state-totals__stat-grid">
+          <div className="distributor-head-state-totals__stat-card">
+            <div className="distributor-head-state-totals__stat-icon distributor-head-state-totals__stat-icon--info">
               <Users className="size-4" strokeWidth={2} />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-caption text-muted-foreground">Clients (active)</p>
-              <p className="text-base font-semibold tabular-nums text-foreground">
-                {formatDistributorHeadCount(activeClients)}
-              </p>
-            </div>
+            <p className="text-caption text-muted-foreground">Clients (active)</p>
+            <p className="text-lg font-semibold tabular-nums text-foreground">
+              {formatDistributorHeadCount(activeClients)}
+            </p>
           </div>
 
-          <div className="distributor-head-state-totals__row">
-            <div className="distributor-head-state-totals__row-icon distributor-head-state-totals__row-icon--success">
+          <div className="distributor-head-state-totals__stat-card">
+            <div className="distributor-head-state-totals__stat-icon distributor-head-state-totals__stat-icon--success">
               <ArrowLeftRight className="size-4" strokeWidth={2} />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-caption text-muted-foreground">Pending HO review</p>
-              <p className="text-base font-semibold tabular-nums text-foreground">
-                {formatDistributorHeadCount(pendingReview)}
-              </p>
-            </div>
+            <p className="text-caption text-muted-foreground">Pending HO review</p>
+            <p className="text-lg font-semibold tabular-nums text-foreground">
+              {formatDistributorHeadCount(pendingReview)}
+            </p>
           </div>
         </div>
+
+        <DistributorHeadBranchContributionsDonut branches={branches} totalAum={bookAum} />
       </CardContent>
     </Card>
   );

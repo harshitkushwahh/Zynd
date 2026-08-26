@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.audit_service import write_audit
 from app.application.auth.auth_session_context import complete_authenticated_login
+from app.application.auth.auth_client_policy import AuthClientKind, auth_client_from_pending_payload
 from app.application.auth.errors import AuthError
 from app.application.auth.second_factor_verification_service import verify_second_factor
 from app.application.auth.user_service import get_user_by_id
@@ -152,7 +153,7 @@ async def maybe_sms_otp_pending_login(
     *,
     device_fingerprint: str,
     user_agent: str | None,
-    admin_client: bool = False,
+    auth_client: AuthClientKind = "web",
     ip: str | None = None,
 ) -> dict[str, Any] | None:
     policy = await get_second_factor_policy(db)
@@ -170,7 +171,7 @@ async def maybe_sms_otp_pending_login(
             "user_id": str(user.id),
             "device_fingerprint": device_fingerprint,
             "user_agent": user_agent,
-            "admin_client": admin_client,
+            "auth_client": auth_client,
         },
         settings.mfa_pending_ttl_seconds,
     )
@@ -302,5 +303,5 @@ async def verify_sms_login(
     )
     return login_result | {
         "device_fingerprint": payload["device_fingerprint"],
-        "admin_client": bool(payload.get("admin_client")),
+        "auth_client": auth_client_from_pending_payload(payload),
     }

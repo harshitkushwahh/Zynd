@@ -10,13 +10,13 @@ const alertVariants = cva(
       variant: {
         default: "border-border bg-card text-card-foreground",
         destructive:
-          "border-destructive/30 bg-destructive/10 text-destructive *:data-[slot=alert-description]:text-destructive/90",
+          "border-destructive/30 bg-destructive/10 text-destructive *:data-[slot=alert-description]:text-destructive/90 dark:border-destructive/55 dark:bg-destructive/22 dark:text-red-300 dark:*:data-[slot=alert-description]:text-red-200/95",
         success:
-          "border-success/30 bg-success/10 text-success *:data-[slot=alert-description]:text-success/90",
+          "border-success/30 bg-success/10 text-success *:data-[slot=alert-description]:text-success/90 dark:border-success/55 dark:bg-success/22 dark:text-emerald-300 dark:*:data-[slot=alert-description]:text-emerald-200/95",
         warning:
-          "border-warning/30 bg-warning/10 text-warning *:data-[slot=alert-description]:text-warning/90",
+          "border-warning/30 bg-warning/10 text-warning *:data-[slot=alert-description]:text-warning/90 dark:border-warning/55 dark:bg-warning/22 dark:text-amber-300 dark:*:data-[slot=alert-description]:text-amber-100/95",
         info:
-          "border-info/30 bg-info/10 text-info *:data-[slot=alert-description]:text-info/90",
+          "border-info/30 bg-info/10 text-info *:data-[slot=alert-description]:text-info/90 dark:border-info/55 dark:bg-info/22 dark:text-sky-300 dark:*:data-[slot=alert-description]:text-sky-100/95",
       },
     },
     defaultVariants: {

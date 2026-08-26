@@ -18,14 +18,24 @@ const AUTH_PATHS_SKIP_SESSION_REFRESH = [
   "/auth/password/forgot",
   "/auth/password/reset",
   "/auth/oauth/",
+  "/auth/pin/",
 ] as const;
+
+const SESSION_REFRESH_ERROR_CODES = new Set([
+  "session_expired",
+  "session_compromised",
+  "unauthorized",
+]);
 
 function applyClientHeaders(headers: Headers) {
   if (headers.has("X-Zynd-Client")) {
     return;
   }
-  if (getClientKind() === "admin") {
+  const kind = getClientKind();
+  if (kind === "admin") {
     headers.set("X-Zynd-Client", "admin");
+  } else if (kind === "distributor") {
+    headers.set("X-Zynd-Client", "distributor");
   }
 }
 
@@ -35,6 +45,10 @@ function shouldRefreshSessionOn401(path: string): boolean {
   }
 
   return !AUTH_PATHS_SKIP_SESSION_REFRESH.some((prefix) => path.startsWith(prefix));
+}
+
+function shouldRetryAfterSessionRefresh(error: ApiError): boolean {
+  return SESSION_REFRESH_ERROR_CODES.has(error.code);
 }
 
 export type SessionRefreshResult =
@@ -127,10 +141,14 @@ export async function apiRequest<T>(
     });
 
     if (response.status === 401 && retry && shouldRefreshSessionOn401(path)) {
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        return apiRequest<T>(path, options, false);
+      const authError = await parseApiError(response.clone());
+      if (shouldRetryAfterSessionRefresh(authError)) {
+        const newToken = await refreshAccessToken();
+        if (newToken) {
+          return apiRequest<T>(path, options, false);
+        }
       }
+      throw authError;
     }
 
     if (!response.ok) {

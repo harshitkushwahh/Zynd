@@ -13,8 +13,6 @@ import {
 import { GOAL_DIALOG_SHELL_CLASS } from "@/features/goals/components/goal-dialog-layout";
 import { defaultTargetDate } from "@/features/goals/lib/goal-calculator";
 import { getGoalFormConfig } from "@/features/goals/lib/goal-form-config";
-import { goalTemplateIconThemeFor } from "@/features/goals/lib/goal-template-meta";
-import { getGoalTemplateIcon } from "@/features/goals/lib/goal-template-ui";
 import { prefetchGoalTemplateIllustration } from "@/features/goals/lib/prefetch-goal-template-illustrations";
 import { copy } from "@/shared/config/copy";
 
@@ -44,22 +42,14 @@ export function GoalTemplateJourneyDialog({
 
   if (!template) return null;
 
-  const Icon = getGoalTemplateIcon(template.icon_key);
   const formConfig = getGoalFormConfig(template.slug);
-  const theme = goalTemplateIconThemeFor(template.slug);
 
   return (
     <BrandDialog
       open={open}
       onOpenChange={onOpenChange}
       title={template.name}
-      description={template.description ?? copy.goals.calculatorDescription}
-      icon={Icon}
       maxWidth="xl"
-      headerDensity="compact"
-      headerVariant="light"
-      closeTone="default"
-      iconClassName={theme.headerIconClass}
       className={GOAL_DIALOG_SHELL_CLASS}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -78,7 +68,7 @@ export function GoalTemplateJourneyDialog({
           saveTemplateError={error}
         />
 
-        <BrandDialogFooter className="shrink-0 bg-background px-5 py-4 sm:px-6">
+        <BrandDialogFooter className="shrink-0 px-5 py-4 sm:px-6">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>

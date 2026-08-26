@@ -22,7 +22,6 @@ type PortfolioTotals = {
 };
 
 type ClientPortfolioOverviewProps = {
-  clientId: string;
   profile: DistributorClientProfile;
   totals: PortfolioTotals;
 };
@@ -74,7 +73,6 @@ function PortfolioMetricCard({
 }
 
 export function ClientPortfolioOverview({
-  clientId,
   profile,
   totals,
 }: ClientPortfolioOverviewProps) {
@@ -127,9 +125,7 @@ export function ClientPortfolioOverview({
         />
       </div>
       <ClientPortfolioValueChart
-        clientId={clientId}
-        currentValue={totals.current}
-        investedAmount={totals.invested}
+        series={profile.portfolioGrowth}
         className="distributor-client-portfolio-overview__chart"
       />
     </div>

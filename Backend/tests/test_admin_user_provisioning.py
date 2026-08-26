@@ -33,16 +33,16 @@ async def test_create_admin_user_assigns_team_roles(db_session: AsyncSession) ->
         first_name="Ops",
         last_name="Lead",
         password="password123",
-        role_keys=["support_agent"],
+        role_keys=["mitra_manager"],
         ip="127.0.0.1",
     )
 
     assert summary["role"] == UserRole.admin.value
-    assert summary["roles"] == ["support_agent"]
+    assert summary["roles"] == ["mitra_manager"]
     assert summary["display_name"] == "Ops Lead"
 
     role_keys = await list_user_role_keys(db_session, summary["user_id"])
-    assert role_keys == ["support_agent"]
+    assert role_keys == ["mitra_manager"]
 
 
 @pytest.mark.asyncio
@@ -72,7 +72,7 @@ async def test_create_admin_user_rejects_customer_email(db_session: AsyncSession
             first_name="Ops",
             last_name=None,
             password="password123",
-            role_keys=["support_agent"],
+            role_keys=["mitra_manager"],
         )
 
 
@@ -115,9 +115,9 @@ async def test_set_admin_user_roles_replaces_assignments(db_session: AsyncSessio
     roles = await set_admin_user_roles(
         db_session,
         user_id=admin.id,
-        role_keys=["support_agent", "compliance_officer"],
+        role_keys=["mitra_manager", "mitra_state_head"],
     )
-    assert sorted(roles) == ["compliance_officer", "support_agent"]
+    assert sorted(roles) == ["mitra_manager", "mitra_state_head"]
 
     roles = await set_admin_user_roles(
         db_session,
@@ -125,3 +125,31 @@ async def test_set_admin_user_roles_replaces_assignments(db_session: AsyncSessio
         role_keys=["super_admin"],
     )
     assert roles == ["super_admin"]
+
+
+@pytest.mark.asyncio
+async def test_list_users_puts_deleted_users_last(db_session: AsyncSession) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    active_user = User(
+        email=f"active-{uuid4()}@example.com",
+        password_hash="hash",
+        role=UserRole.user,
+        status=UserStatus.active,
+        created_at=now - timedelta(days=2),
+    )
+    deleted_user = User(
+        email=f"deleted-{uuid4()}@example.com",
+        password_hash="hash",
+        role=UserRole.admin,
+        status=UserStatus.deleted,
+        created_at=now,
+    )
+    db_session.add_all([active_user, deleted_user])
+    await db_session.flush()
+
+    users = await list_users(db_session, limit=100)
+    user_ids = [item["user_id"] for item in users]
+
+    assert user_ids.index(active_user.id) < user_ids.index(deleted_user.id)

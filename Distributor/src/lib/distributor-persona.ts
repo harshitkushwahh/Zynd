@@ -5,6 +5,19 @@ export function isBranchManager(user: Pick<DistributorSessionUser, "role"> | nul
   return user.role === "branch_manager" || user.role === "relationship_manager";
 }
 
+export function managerHasAssignedBranch(
+  user: Pick<DistributorSessionUser, "role" | "branchId"> | null | undefined,
+): boolean {
+  if (!user || !isBranchManager(user)) return true;
+  return Boolean(user.branchId?.trim());
+}
+
+export function canManageBranchBook(
+  user: Pick<DistributorSessionUser, "role" | "branchId"> | null | undefined,
+): boolean {
+  return managerHasAssignedBranch(user);
+}
+
 export function getManagerBranchLabel(user: Pick<DistributorSessionUser, "branchName"> | null | undefined): string {
   return user?.branchName?.trim() || "Your branch";
 }

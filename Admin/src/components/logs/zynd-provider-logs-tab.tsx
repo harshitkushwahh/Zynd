@@ -170,28 +170,28 @@ export function ZyndProviderLogsTab({ source, canRead, active }: ZyndProviderLog
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <AdminSearchInput
-          containerClassName="min-w-0 max-w-sm sm:w-56"
+          containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
           placeholder="Search user, client ID, action, path, or error"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
           <Input
             type="datetime-local"
-            className="w-full sm:w-auto"
+            className="w-auto shrink-0"
             value={fromValue}
             onChange={(event) => setFromValue(event.target.value)}
             aria-label="From date"
           />
           <Input
             type="datetime-local"
-            className="w-full sm:w-auto"
+            className="w-auto shrink-0"
             value={toValue}
             onChange={(event) => setToValue(event.target.value)}
             aria-label="To date"
           />
           <Select value={resultFilter} onValueChange={(value) => setResultFilter(value ?? ALL)}>
-            <SelectTrigger size="sm" className="min-w-select-md">
+            <SelectTrigger size="sm" className="min-w-select-md w-auto shrink-0">
               <SelectValue placeholder="All results" />
             </SelectTrigger>
             <SelectContent>
@@ -200,13 +200,14 @@ export function ZyndProviderLogsTab({ source, canRead, active }: ZyndProviderLog
               <SelectItem value="failed">Failed only</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => void handleExport()}>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={() => void handleExport()}>
             <Download className="size-3.5" />
             Export CSV
           </Button>
           <Button
             variant="outline"
             size="sm"
+            className="shrink-0"
             disabled={loading}
             onClick={() => void loadLogs({ reset: true })}
           >
@@ -222,7 +223,7 @@ export function ZyndProviderLogsTab({ source, canRead, active }: ZyndProviderLog
         </div>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
       {polling ? (
         <p className="text-caption text-muted-foreground">Checking for new log entries…</p>
       ) : null}
@@ -268,9 +269,9 @@ export function ZyndProviderLogsTab({ source, canRead, active }: ZyndProviderLog
                 </AdminTableCell>
                 <AdminTableCell>
                   <p className="font-medium text-foreground">{log.user_email ?? "System"}</p>
-                  {log.user_id ? (
+                  {log.client_id || log.user_id ? (
                     <p className="mt-0.5 font-mono text-caption text-muted-foreground">
-                      {log.user_id}
+                      {log.client_id ?? log.user_id}
                     </p>
                   ) : null}
                 </AdminTableCell>

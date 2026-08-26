@@ -10,6 +10,7 @@ import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
 import { AdminDetailDialogSkeleton } from "@/components/ui/admin-skeletons";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { pickUserRef } from "@/lib/admin-user-ref";
 import { getErrorMessage } from "@/lib/errors";
 import { formatTimestampDetail } from "@/lib/format-date";
 import { resolveRiskTierBadgeVariant } from "@/lib/risk-tier-admin-ui";
@@ -172,7 +173,7 @@ export function RiskProfileUserReportsDialog({
     setLoading(true);
     setError("");
 
-    void fetchUserRiskProfileAssessments(user.user_id)
+    void fetchUserRiskProfileAssessments(pickUserRef(user))
       .then((result) => {
         if (!cancelled) setItems(result.items);
       })
@@ -205,7 +206,7 @@ export function RiskProfileUserReportsDialog({
         {loading ? (
           <AdminDetailDialogSkeleton />
         ) : error ? (
-          <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+          <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
         ) : (
           <div className="space-y-5">
             <UserReportsSummary user={user} items={items} />
@@ -242,7 +243,7 @@ export function RiskProfileUserReportsDialog({
       <RiskProfileAssessmentDetailDialog
         open={Boolean(selectedAssessmentId)}
         user={user}
-        userId={user.user_id}
+        userId={pickUserRef(user)}
         assessmentId={selectedAssessmentId}
         onClose={() => setSelectedAssessmentId(null)}
       />

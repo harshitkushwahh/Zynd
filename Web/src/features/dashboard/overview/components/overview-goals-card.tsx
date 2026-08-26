@@ -18,7 +18,7 @@ import {
 } from "@/features/goals/components/goal-progress-card";
 import {
   OVERVIEW_CARD_RADIUS_CLASS,
-  OVERVIEW_COMPACT_CARD_HEIGHT_CLASS,
+  OVERVIEW_COMPACT_CARD_STRETCH_CLASS,
   OVERVIEW_TILE_RADIUS_CLASS,
 } from "@/features/dashboard/overview/lib/overview-card-styles";
 import { useMyGoalsQuery } from "@/features/goals/hooks/use-my-goals-query";
@@ -69,19 +69,22 @@ export function OverviewGoalsCard({ className }: OverviewGoalsCardProps) {
   const remainingCount = Math.max(goals.length - previewGoals.length, 0);
   const isLocked = !loading && !error && previewGoals.length === 0;
 
-  return (
-    <section
-      className={cn(
-        OVERVIEW_CARD_RADIUS_CLASS,
-        OVERVIEW_COMPACT_CARD_HEIGHT_CLASS,
-        "relative flex min-w-0 flex-col overflow-hidden border border-border/60 bg-card p-3.5 shadow-zynd-low",
-        className,
-      )}
-    >
+  const cardClassName = cn(
+    OVERVIEW_CARD_RADIUS_CLASS,
+    OVERVIEW_COMPACT_CARD_STRETCH_CLASS,
+    "relative flex min-w-0 flex-col overflow-hidden border border-border/60 bg-card p-3.5 shadow-zynd-low",
+    isLocked &&
+      "group transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-zynd-mid",
+    className,
+  );
+
+  const cardContent = (
+    <>
       <OverviewCompactCardHeader
         title={overview.goalsTitle}
-        href={GOALS_HREF}
+        href={isLocked ? undefined : GOALS_HREF}
         ariaLabel={overview.goalsViewAll}
+        groupHover={isLocked}
       />
 
       {isLocked ? (
@@ -130,6 +133,25 @@ export function OverviewGoalsCard({ className }: OverviewGoalsCardProps) {
           ) : null}
         </div>
       )}
+    </>
+  );
+
+  if (isLocked) {
+    return (
+      <section className={cardClassName}>
+        <Link
+          href={GOALS_HREF}
+          className="absolute inset-0 z-20 rounded-[inherit]"
+          aria-label={`${overview.goalsTitle}. ${overview.goalsEmpty}`}
+        />
+        {cardContent}
+      </section>
+    );
+  }
+
+  return (
+    <section className={cardClassName}>
+      {cardContent}
     </section>
   );
 }
@@ -139,7 +161,7 @@ export function OverviewGoalsCardSkeleton({ className }: { className?: string })
     <section
       className={cn(
         OVERVIEW_CARD_RADIUS_CLASS,
-        OVERVIEW_COMPACT_CARD_HEIGHT_CLASS,
+        OVERVIEW_COMPACT_CARD_STRETCH_CLASS,
         "flex min-w-0 flex-col overflow-hidden border border-border/60 bg-card p-3.5 shadow-zynd-low",
         className,
       )}

@@ -5,7 +5,7 @@ export const OVERVIEW_BRAND_CARD_STYLES: Record<
   { card: string; title: string; muted: string; label: string; avatar: string; negative: string }
 > = {
   emerald: {
-    card: "bg-[var(--zynd-emerald)]",
+    card: "bg-[var(--zynd-emerald-dark)]",
     title: "text-[var(--zynd-white)]",
     muted: "text-[var(--zynd-white)]/70",
     label: "text-[var(--zynd-white)]/55",

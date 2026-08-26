@@ -10,6 +10,7 @@ import { useReferralDashboardQuery } from "@/features/referral/hooks/use-referra
 import { buildReferralShareUrl } from "@/features/referral/lib/referral-storage";
 import { sumEarningsThisMonth, summarizeReferralList } from "@/features/referral/lib/referral-display";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import {
   REFERRAL_LEFT_COLUMN_CLASS,
@@ -55,7 +56,7 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
 
   if (error || !resolvedData) {
     return (
-      <>
+      <DashboardContentFade>
         <ReferralBreadcrumb />
         <LoadErrorCard
           title={copy.referral.loadFailedTitle}
@@ -65,14 +66,14 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
           onRetry={() => void refetch()}
           icon={ReferralRouteIcon}
         />
-      </>
+      </DashboardContentFade>
     );
   }
 
   const earningsSummary = summarizeReferralList(referrals);
 
   return (
-    <>
+    <DashboardContentFade>
       <ReferralBreadcrumb />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-stretch">
         <div className={REFERRAL_LEFT_COLUMN_CLASS}>
@@ -95,6 +96,6 @@ export function ReferralDashboardPanel({ initialData = null }: ReferralDashboard
           <ReferralYourReferralsCard referrals={referrals} className="min-h-0 flex-1" />
         </div>
       </div>
-    </>
+    </DashboardContentFade>
   );
 }

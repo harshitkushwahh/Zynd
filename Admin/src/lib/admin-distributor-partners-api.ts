@@ -31,12 +31,12 @@ export async function fetchDistributorPartner(partnerId: string) {
   );
 }
 
-export async function approveDistributorPartner(partnerId: string, payload: { arn: string; euin?: string }) {
+export async function approveDistributorPartner(partnerId: string, payload?: { euin?: string }) {
   return apiRequest<{ partner_id: string; status: string; arn: string; euin: string | null }>(
     `/admin/distributor-partners/${partnerId}/approve`,
     {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload ?? {}),
     },
   );
 }

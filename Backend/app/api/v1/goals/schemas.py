@@ -183,6 +183,7 @@ class LinkableFamilyGoalItemResponse(BaseModel):
     progress_pct: float
     group_id: UUID
     group_title: str
+    group_avatar_url: Optional[str] = None
     my_role: str
     can_create_goals: bool
 

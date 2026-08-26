@@ -3,6 +3,7 @@
 import { CheckCircle2 } from "lucide-react";
 
 import type { KycPanDraft } from "@/features/kyc/lib/kyc-journey-draft";
+import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ function PanReviewField({ label, value }: { label: string; value: string }) {
 
 export function KycReviewPanSection({ pan }: KycReviewPanSectionProps) {
   const fullName = [pan.firstName, pan.middleName, pan.lastName].filter(Boolean).join(" ");
+  const panDisplay = resolvePanDisplay(pan) ?? "—";
 
   return (
     <div
@@ -74,7 +76,7 @@ export function KycReviewPanSection({ pan }: KycReviewPanSectionProps) {
             {copy.kyc.pan.numberLabel}
           </p>
           <p className="mt-1 text-center font-mono text-h4 font-semibold uppercase tracking-[0.22em] text-foreground">
-            {pan.panNumber}
+            {panDisplay}
           </p>
         </div>
 

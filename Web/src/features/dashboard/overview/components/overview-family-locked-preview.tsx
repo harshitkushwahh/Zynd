@@ -95,15 +95,6 @@ export function OverviewFamilyLockedPreview() {
         </span>
       </div>
 
-      <div className="mt-1.5 flex items-center gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {overview.familyInvestedLabel}
-        </p>
-        <p className="text-caption font-semibold tabular-nums text-foreground">
-          {formatInrOverview(preview.investedInr)}
-        </p>
-      </div>
-
       <div className="mt-4 rounded-[1.25rem] bg-muted/80 p-3.5 sm:p-4">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {overview.familyPopoverMembers}

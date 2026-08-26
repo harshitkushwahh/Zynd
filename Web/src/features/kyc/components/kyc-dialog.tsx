@@ -85,6 +85,7 @@ import {
   type KycJourneyDraft,
   type KycSignatureDraft,
 } from "@/features/kyc/lib/kyc-journey-draft";
+import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import {
   getKycJourneySteps,
   requiresFullKycSubmission,
@@ -174,6 +175,8 @@ function mapBankDraft(raw: Record<string, unknown> | null | undefined) {
   if (!raw) return undefined;
   const form: KycBankFormValue = {
     accountNumber: String(raw.accountNumber ?? ""),
+    accountNumberMasked: String(raw.accountNumberMasked ?? ""),
+    accountNumberLast4: String(raw.accountNumberLast4 ?? ""),
     accountType: String(raw.accountType ?? ""),
     ifscCode: String(raw.ifscCode ?? ""),
   };
@@ -310,7 +313,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         return;
       }
       if (result.next_action === "completed") {
-        markKycVerified(journeyDraft.pan?.panNumber ?? bootstrap?.pan_draft?.panNumber);
+        markKycVerified(
+          resolvePanDisplay(journeyDraft.pan ?? bootstrap?.pan_draft ?? null) ?? undefined,
+        );
         setSubmittedOutcomeShown(false);
         setKraVerifiedOutcomeShown(true);
         setSubmitError(null);
@@ -336,7 +341,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         await processSubmissionResult(continued);
       }
     },
-    [markKycSubmitted, markKycVerified, bootstrap?.pan_draft?.panNumber, journeyDraft.pan?.panNumber, openDigilockerRedirectDialog],
+    [markKycSubmitted, markKycVerified, bootstrap?.pan_draft, journeyDraft.pan, openDigilockerRedirectDialog],
   );
 
   const applyBootstrap = useCallback(
@@ -434,7 +439,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       applyBootstrap(payload);
       await refreshFromBootstrap();
       if (result.kra_verified) {
-        markKycVerified(bootstrap?.pan_draft?.panNumber);
+        markKycVerified(resolvePanDisplay(bootstrap?.pan_draft ?? null) ?? undefined);
         setSubmittedOutcomeShown(false);
         setKraVerifiedOutcomeShown(true);
         setKraCheckMessage(null);
@@ -449,7 +454,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   }, [
     applyBootstrap,
     applyReadinessCheck,
-    bootstrap?.pan_draft?.panNumber,
+    bootstrap?.pan_draft,
     markKycVerified,
     refreshFromBootstrap,
   ]);
@@ -1007,7 +1012,11 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const isOutcomeView = showVerifiedOutcome || showSubmittedOutcome;
   const panVerified =
     bootstrap?.pan_verification_status === "verified" ||
-    Boolean(journeyDraft.pan?.panNumber && journeyDraft.pan?.firstName && journeyDraft.pan?.lastName);
+    Boolean(
+      (journeyDraft.pan?.panNumber || journeyDraft.pan?.panMasked) &&
+        journeyDraft.pan?.firstName &&
+        journeyDraft.pan?.lastName,
+    );
   const digilockerBlocked = shouldBlockAddressStep(bootstrap);
   const digilockerAlertVisible = useMemo(
     () => shouldShowDigilockerFailureAlert(bootstrap, showDigilockerFailureCard),
@@ -1033,7 +1042,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   );
   const journeyStepIds = useMemo(() => new Set(journeySteps.map((step) => step.id)), [journeySteps]);
   const submittedPan =
-    bootstrap?.pan_draft?.panNumber ?? journeyDraft.pan?.panNumber ?? record?.panNumber;
+    resolvePanDisplay(bootstrap?.pan_draft ?? journeyDraft.pan ?? null) ?? record?.panMasked;
   const stepFormMeta = getKycStepFormMeta(activeStepId);
   const entryGateFormMeta = {
     ...getKycStepFormMeta(),
@@ -1397,7 +1406,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             {journeySaveError ? (
               <FieldMessage message={journeySaveError} className="mb-3 mt-0 shrink-0" />
             ) : null}
-            <div className="flex flex-col">{renderJourneyStep()}</div>
+            <div className="flex min-h-0 flex-1 flex-col">{renderJourneyStep()}</div>
           </KycDialogBody>
         </KycDialogLayout>
       )}

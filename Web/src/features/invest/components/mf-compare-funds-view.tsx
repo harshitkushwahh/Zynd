@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUpRight, GitCompare, LineChart, TableProperties } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { Card, CardContent } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
@@ -505,11 +506,12 @@ export function MfCompareFundsView() {
   const excludeIds = selectedIds;
 
   return (
-    <MfToolsPageShell
-      trail={[{ label: copy.mutualFunds.compareTitle }]}
-      title={copy.mutualFunds.compareTitle}
-      icon={MF_TOOL_ICONS.compare}
-    >
+    <DashboardContentFade>
+      <MfToolsPageShell
+        trail={[{ label: copy.mutualFunds.compareTitle }]}
+        title={copy.mutualFunds.compareTitle}
+        icon={MF_TOOL_ICONS.compare}
+      >
       <div className="space-y-6">
         <div className="space-y-4">
           <Card className={MF_CALC_CARD_CLASS}>
@@ -534,15 +536,15 @@ export function MfCompareFundsView() {
                 activeSlot={activeSlot}
                 onActiveSlotChange={setActiveSlot}
               />
+
+              <CompareFundSlotSearch
+                activeSlot={activeSlot}
+                slots={slots}
+                onSlotsChange={setSlots}
+                excludeProductIds={excludeIds}
+              />
             </CardContent>
           </Card>
-
-          <CompareFundSlotSearch
-            activeSlot={activeSlot}
-            slots={slots}
-            onSlotsChange={setSlots}
-            excludeProductIds={excludeIds}
-          />
         </div>
 
         {error ? <FieldMessage variant="error" message={error} /> : null}
@@ -607,5 +609,6 @@ export function MfCompareFundsView() {
         ) : null}
       </div>
     </MfToolsPageShell>
+    </DashboardContentFade>
   );
 }

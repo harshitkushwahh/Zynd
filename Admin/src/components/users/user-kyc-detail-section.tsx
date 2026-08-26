@@ -40,7 +40,7 @@ export function UserKycDetailSection({
 
   return (
     <div className="space-y-5">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <AdminUserKycOverviewMetrics kyc={kyc} />
 

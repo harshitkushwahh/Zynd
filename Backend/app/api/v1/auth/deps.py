@@ -8,11 +8,15 @@ from fastapi import Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.admin.rbac_service import ensure_rbac_seed, get_user_permission_keys, list_user_role_keys
 from app.application.auth.fund_movement_policy_service import evaluate_fund_eligibility
 from app.application.auth.auth_client_policy import (
+    AuthClientKind,
     is_admin_auth_header,
-    is_admin_device_fingerprint as policy_is_admin_device_fingerprint,
-    resolve_admin_client,
+    is_distributor_auth_header,
+    refresh_cookie_name_for_client,
+    resolve_auth_client_kind,
+    validate_user_role_for_client,
 )
 from app.application.auth.errors import AuthError
 from app.application.auth.user_service import get_user_by_id
@@ -28,44 +32,48 @@ def is_admin_auth_client(request: Request) -> bool:
     return is_admin_auth_header(request.headers.get("x-zynd-client"))
 
 
-def is_admin_device_fingerprint(fingerprint: str | None) -> bool:
-    return policy_is_admin_device_fingerprint(fingerprint)
+def is_distributor_auth_client(request: Request) -> bool:
+    return is_distributor_auth_header(request.headers.get("x-zynd-client"))
 
 
-def resolve_auth_client_from_request(request: Request, device_fingerprint: str | None) -> bool:
+def resolve_auth_client_from_request(request: Request, device_fingerprint: str | None) -> AuthClientKind:
     try:
-        return resolve_admin_client(
-            header_admin=is_admin_auth_client(request),
-            fingerprint_admin=is_admin_device_fingerprint(device_fingerprint),
+        return resolve_auth_client_kind(
+            header=request.headers.get("x-zynd-client"),
+            fingerprint=device_fingerprint,
         )
     except AuthError:
         raise
 
 
-def get_refresh_token_from_request(request: Request) -> tuple[str | None, bool]:
+def get_refresh_token_from_request(request: Request) -> tuple[str | None, AuthClientKind | None]:
     settings = get_settings()
+
+    if is_distributor_auth_client(request):
+        token = request.cookies.get(settings.refresh_cookie_name_distributor)
+        if token:
+            return token, "distributor"
+        return None, None
+
     if is_admin_auth_client(request):
-        return request.cookies.get(settings.refresh_cookie_name_admin), True
-    return request.cookies.get(settings.refresh_cookie_name), False
+        token = request.cookies.get(settings.refresh_cookie_name_admin)
+        if token:
+            return token, "admin"
+        return None, None
+
+    admin_token = request.cookies.get(settings.refresh_cookie_name_admin)
+    if admin_token:
+        return admin_token, "admin"
+    web_token = request.cookies.get(settings.refresh_cookie_name)
+    if web_token:
+        return web_token, "web"
+    return None, None
 
 
-def get_client_ip(request: Request) -> Optional[str]:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        host = request.client.host
-        if host in {"::1", "0:0:0:0:0:0:0:1"}:
-            return "127.0.0.1"
-        return host
-    return None
-
-
-def set_refresh_cookie(response, refresh_token: str, *, admin: bool = False) -> None:
+def set_refresh_cookie(response, refresh_token: str, *, client: AuthClientKind) -> None:
     settings = get_settings()
-    cookie_name = settings.refresh_cookie_name_admin if admin else settings.refresh_cookie_name
     response.set_cookie(
-        key=cookie_name,
+        key=refresh_cookie_name_for_client(client),
         value=refresh_token,
         httponly=True,
         secure=settings.refresh_cookie_secure,
@@ -75,10 +83,27 @@ def set_refresh_cookie(response, refresh_token: str, *, admin: bool = False) -> 
     )
 
 
-def clear_refresh_cookie(response, *, admin: bool = False) -> None:
-    settings = get_settings()
-    cookie_name = settings.refresh_cookie_name_admin if admin else settings.refresh_cookie_name
-    response.delete_cookie(key=cookie_name, path="/api/v1/auth")
+def clear_refresh_cookie(response, *, client: AuthClientKind) -> None:
+    response.delete_cookie(key=refresh_cookie_name_for_client(client), path="/api/v1/auth")
+
+
+def get_client_ip(request: Request) -> Optional[str]:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return None
+
+
+async def validate_user_for_auth_client(
+    db: AsyncSession,
+    user: User,
+    *,
+    client: AuthClientKind,
+) -> None:
+    role_keys = await list_user_role_keys(db, user.id)
+    validate_user_role_for_client(user, client=client, role_keys=role_keys)
 
 
 async def get_current_user(
@@ -131,13 +156,19 @@ async def require_admin_user(
             status_code=403,
             detail={"code": "admin_required", "message": "Admin access required."},
         )
-    from app.application.admin.rbac_service import ensure_rbac_seed, get_user_permission_keys
-
     await ensure_rbac_seed(db)
     if not await get_user_permission_keys(db, current_user.id):
         raise HTTPException(
             status_code=403,
             detail={"code": "admin_unassigned", "message": "Admin user has no assigned roles."},
+        )
+    if current_user.status == UserStatus.deletion_pending:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "admin_deletion_pending",
+                "message": "This admin account is scheduled for deletion. Contact another super admin.",
+            },
         )
     return current_user
 

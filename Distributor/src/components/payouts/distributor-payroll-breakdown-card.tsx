@@ -5,11 +5,19 @@ import Link from "next/link";
 import { ArrowRight, ArrowUpRight, Info, Layers, Plus, Target, TrendingUp } from "lucide-react";
 import { RadialBar, RadialBarChart, ResponsiveContainer } from "recharts";
 
+import type {
+  DistributorJobCompensation,
+  DistributorJobPerformanceCalc,
+  DistributorPayrollPromotion,
+} from "@/lib/distributor-job-dashboard-data";
 import {
   DUMMY_DISTRIBUTOR_JOB_COMPENSATION,
   DUMMY_DISTRIBUTOR_JOB_PERFORMANCE,
   DUMMY_DISTRIBUTOR_PAYROLL_PROMOTION,
   getSalaryPaymentStatusLabel,
+  hasPayrollPromotion,
+  hasPerformanceIncentivePlan,
+  shouldShowPayrollWaitingBadge,
 } from "@/lib/distributor-job-dashboard-data";
 import { formatAum, formatPortfolioMetricAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -82,6 +90,27 @@ function buildIncentiveChips(perf: PerformanceIncentiveData): IncentiveChipConfi
   ];
 }
 
+function PerformanceIncentiveEmptyState({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "distributor-compensation-breakdown-card__incentive-empty",
+        compact && "distributor-compensation-breakdown-card__incentive-empty--compact",
+      )}
+    >
+      <Target className="size-4 text-muted-foreground/70" strokeWidth={1.75} aria-hidden />
+      <div>
+        <p className="distributor-compensation-breakdown-card__incentive-empty-title">
+          No incentive plan for this period
+        </p>
+        <p className="distributor-compensation-breakdown-card__incentive-empty-description">
+          Targets and slabs appear once your branch assigns a sales incentive plan.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function PerformanceIncentivePanel({
   perf,
   variant = "default",
@@ -90,6 +119,7 @@ function PerformanceIncentivePanel({
   variant?: "default" | "dashboard";
 }) {
   const isDashboard = variant === "dashboard";
+  const hasPlan = hasPerformanceIncentivePlan(perf);
   const chips = useMemo(() => buildIncentiveChips(perf), [perf]);
   const [activeChipId, setActiveChipId] = useState<IncentiveChipId>("achieved");
   const activeChip = chips.find((chip) => chip.id === activeChipId) ?? chips[1];
@@ -97,6 +127,10 @@ function PerformanceIncentivePanel({
     () => [{ name: activeChip.id, value: activeChip.ringPct }],
     [activeChip.id, activeChip.ringPct],
   );
+
+  if (!hasPlan) {
+    return <PerformanceIncentiveEmptyState compact={isDashboard} />;
+  }
 
   return (
     <div
@@ -324,6 +358,9 @@ type DistributorPayrollBreakdownCardProps = {
   className?: string;
   showHistoryLink?: boolean;
   variant?: "default" | "dashboard";
+  compensation?: DistributorJobCompensation;
+  performance?: DistributorJobPerformanceCalc;
+  promotion?: DistributorPayrollPromotion | null;
 };
 
 function paymentStatusVariant(
@@ -343,10 +380,15 @@ export function DistributorPayrollBreakdownCard({
   className,
   showHistoryLink = true,
   variant = "default",
+  compensation,
+  performance,
+  promotion,
 }: DistributorPayrollBreakdownCardProps) {
-  const comp = DUMMY_DISTRIBUTOR_JOB_COMPENSATION;
-  const perf = DUMMY_DISTRIBUTOR_JOB_PERFORMANCE;
-  const promotion = DUMMY_DISTRIBUTOR_PAYROLL_PROMOTION;
+  const comp = compensation ?? DUMMY_DISTRIBUTOR_JOB_COMPENSATION;
+  const perf = performance ?? DUMMY_DISTRIBUTOR_JOB_PERFORMANCE;
+  const promotionData = promotion ?? DUMMY_DISTRIBUTOR_PAYROLL_PROMOTION;
+  const showPromotion = promotionData ? hasPayrollPromotion(promotionData) : false;
+  const showWaitingBadge = shouldShowPayrollWaitingBadge(comp);
   const isDashboard = variant === "dashboard";
   const cardClassName = cn(
     "distributor-compensation-breakdown-card",
@@ -370,9 +412,11 @@ export function DistributorPayrollBreakdownCard({
           )}
         </div>
         <div className="distributor-compensation-breakdown-card__head-actions">
-          <StatusBadge variant={paymentStatusVariant(comp.paymentStatus)}>
-            {getSalaryPaymentStatusLabel(comp.paymentStatus)}
-          </StatusBadge>
+          {showWaitingBadge ? (
+            <StatusBadge variant={paymentStatusVariant(comp.paymentStatus)}>
+              {getSalaryPaymentStatusLabel(comp.paymentStatus)}
+            </StatusBadge>
+          ) : null}
           {showHistoryLink && isDashboard ? (
             <span className="distributor-job-sidebar-card__action" aria-hidden>
               <ArrowUpRight className="size-3.5" strokeWidth={2.25} />
@@ -382,13 +426,19 @@ export function DistributorPayrollBreakdownCard({
       </div>
 
       {isDashboard ? (
-        <div className="distributor-compensation-breakdown-card__widget-content distributor-compensation-breakdown-card__widget-content--split">
-          <PayrollPromotionStrip promotion={promotion} compact panel />
+        <div
+          className={cn(
+            "distributor-compensation-breakdown-card__widget-content distributor-compensation-breakdown-card__widget-content--split",
+            !showPromotion &&
+              "distributor-compensation-breakdown-card__widget-content--incentive-only",
+          )}
+        >
+          {showPromotion ? <PayrollPromotionStrip promotion={promotionData} compact panel /> : null}
           <PerformanceIncentivePanel perf={perf} variant="dashboard" />
         </div>
       ) : (
         <>
-          <PayrollPromotionStrip promotion={promotion} />
+          {showPromotion ? <PayrollPromotionStrip promotion={promotionData} /> : null}
           <PerformanceIncentivePanel perf={perf} />
         </>
       )}

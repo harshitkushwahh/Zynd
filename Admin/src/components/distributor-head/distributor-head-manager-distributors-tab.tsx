@@ -75,9 +75,9 @@ export function DistributorHeadManagerDistributorsTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <AdminSearchInput
-          containerClassName="max-w-sm"
+          containerClassName="w-full max-w-sm sm:min-w-[14rem]"
           placeholder="Search by name, ARN, or branch"
           value={search}
           onChange={(event) => {
@@ -93,7 +93,9 @@ export function DistributorHeadManagerDistributorsTab({
           }}
           options={STATUS_FILTER_OPTIONS}
           placeholder="Status"
-          className="min-w-select-sm"
+          className="min-w-select-sm shrink-0 self-end sm:self-auto"
+          triggerClassName="w-auto"
+          aria-label={`Filter ${MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()} by status`}
         />
       </div>
 
@@ -142,7 +144,7 @@ export function DistributorHeadManagerDistributorsTab({
                 <AdminTableCell>
                   <div className="flex items-center gap-3">
                     <Avatar size="sm">
-                      <AvatarFallback className="bg-primary/10 text-caption font-medium text-primary">
+                      <AvatarFallback className="text-caption font-medium">
                         {initialsFromName(row.name)}
                       </AvatarFallback>
                     </Avatar>

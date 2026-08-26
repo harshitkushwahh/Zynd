@@ -21,13 +21,20 @@ import {
   mapRedeemUnitsItemToRow,
   mapRedemptionJourneyToPortfolioView,
 } from "@/features/dashboard/portfolio/lib/portfolio-redeem-mapper";
+import { keepPreviousQueryData } from "@/lib/query-utils";
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
+import { portfolioQueryLoadState } from "@/features/dashboard/portfolio/lib/portfolio-query-load-state";
+
+const PORTFOLIO_QUERY_STALE_MS = 30_000;
 
 export function usePortfolioSummaryQuery() {
   const query = useQuery({
     queryKey: queryKeys.portfolio.summary(),
     queryFn: fetchPortfolioSummary,
+    staleTime: PORTFOLIO_QUERY_STALE_MS,
+    placeholderData: keepPreviousQueryData,
+    refetchOnMount: (query) => query.state.data === undefined,
   });
 
   const summary = query.data;
@@ -42,13 +49,16 @@ export function usePortfolioSummaryQuery() {
         ? copy.dashboard.overview.holdingsLoadError
         : null;
 
+  const loadState = portfolioQueryLoadState(query);
+
   return {
     ...query,
     summary,
     preview,
     flowSeries,
     showDayChange,
-    showSkeleton: query.isPending && !query.data && !query.error,
+    showSkeleton: loadState.showSkeleton,
+    hasResolved: loadState.hasResolved,
     errorMessage,
   };
 }
@@ -57,6 +67,9 @@ export function usePortfolioHoldingsQuery() {
   const query = useQuery({
     queryKey: queryKeys.portfolio.holdings(),
     queryFn: fetchPortfolioHoldings,
+    staleTime: PORTFOLIO_QUERY_STALE_MS,
+    placeholderData: keepPreviousQueryData,
+    refetchOnMount: (query) => query.state.data === undefined,
   });
 
   const holdings = (query.data?.holdings ?? []).map(mapPortfolioHoldingToItem);
@@ -70,12 +83,15 @@ export function usePortfolioHoldingsQuery() {
         ? copy.dashboard.overview.holdingsLoadError
         : null;
 
+  const loadState = portfolioQueryLoadState(query);
+
   return {
     ...query,
     holdings,
     status,
     hasPendingOrders,
-    showSkeleton: query.isPending && !query.data && !query.error,
+    showSkeleton: loadState.showSkeleton,
+    hasResolved: loadState.hasResolved,
     errorMessage,
   };
 }
@@ -85,6 +101,8 @@ export function usePortfolioHoldingDetailQuery(holdingId: string) {
     queryKey: queryKeys.portfolio.holdingDetail(holdingId),
     queryFn: () => fetchPortfolioHoldingDetail(holdingId),
     enabled: Boolean(holdingId),
+    staleTime: PORTFOLIO_QUERY_STALE_MS,
+    placeholderData: keepPreviousQueryData,
   });
 
   const holding = query.data?.holding ? mapPortfolioHoldingDetail(query.data.holding) : null;
@@ -97,12 +115,15 @@ export function usePortfolioHoldingDetailQuery(holdingId: string) {
         ? copy.dashboard.portfolio.holdingDetailLoadFailed
         : null;
 
+  const loadState = portfolioQueryLoadState(query);
+
   return {
     ...query,
     holding,
     status: query.data?.status ?? null,
     showDayChange,
-    showSkeleton: query.isPending && !query.data && !query.error,
+    showSkeleton: loadState.showSkeleton,
+    hasResolved: loadState.hasResolved,
     errorMessage,
   };
 }
@@ -111,6 +132,9 @@ export function usePortfolioRedeemUnitsQuery() {
   const query = useQuery({
     queryKey: queryKeys.portfolio.redeemUnits(),
     queryFn: fetchPortfolioRedeemUnits,
+    staleTime: PORTFOLIO_QUERY_STALE_MS,
+    placeholderData: keepPreviousQueryData,
+    refetchOnMount: (query) => query.state.data === undefined,
   });
 
   const rows = (query.data?.items ?? []).map(mapRedeemUnitsItemToRow);
@@ -121,11 +145,14 @@ export function usePortfolioRedeemUnitsQuery() {
         ? copy.dashboard.overview.holdingsLoadError
         : null;
 
+  const loadState = portfolioQueryLoadState(query);
+
   return {
     ...query,
     rows,
     status: query.data?.status ?? null,
-    showSkeleton: query.isPending && !query.data && !query.error,
+    showSkeleton: loadState.showSkeleton,
+    hasResolved: loadState.hasResolved,
     errorMessage,
   };
 }

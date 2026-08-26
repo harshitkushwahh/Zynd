@@ -6,12 +6,14 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.fund_movement_policy_service import evaluate_fund_eligibility
+from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
 from app.infrastructure.persistence.models import User
 from app.infrastructure.persistence.repositories.user_repository import SqlAlchemyUserRepository
 
 
 async def user_to_public_dict(db: AsyncSession, user: User) -> dict[str, Any]:
     eligibility = await evaluate_fund_eligibility(db, user)
+    profile_images = await resolve_profile_image_urls_by_user_id(db, [user.id])
     return {
         "id": user.id,
         "email": user.email,
@@ -25,13 +27,14 @@ async def user_to_public_dict(db: AsyncSession, user: User) -> dict[str, Any]:
         "phone_verified_at": user.phone_verified_at,
         "mfa_enrolled": user.mfa_enrolled_at is not None,
         "mfa_enrolled_at": user.mfa_enrolled_at,
-        "pin_enrolled": user.pin_hash is not None,
+        "pin_enrolled": bool(user.pin_hash and user.pin_hash.strip()),
         "pin_set_at": user.pin_set_at,
         "fund_movement_eligible": eligibility["eligible"],
         "account_status": user.status.value,
         "deletion_scheduled_at": user.deletion_scheduled_at,
         "client_id": user.client_id,
         "created_at": user.created_at,
+        "profile_image_url": profile_images.get(user.id),
     }
 
 

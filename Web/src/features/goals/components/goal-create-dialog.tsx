@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PenLine, Pencil, Target } from "lucide-react";
+import { PenLine } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -196,10 +196,7 @@ export function GoalCreateDialog({
       open={open}
       onOpenChange={handleOpenChange}
       title={isEditMode ? copy.goals.editTitle : copy.goals.createTitle}
-      description={isEditMode ? copy.goals.editDescription : copy.goals.createDescription}
-      icon={isEditMode ? Pencil : Target}
       maxWidth="lg"
-      headerDensity="compact"
       className={cn(GOAL_DIALOG_SHELL_CLASS, "max-w-xl")}
     >
       <GoalDialogBody>

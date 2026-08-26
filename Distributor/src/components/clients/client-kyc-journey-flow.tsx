@@ -91,17 +91,14 @@ function stepStatusLabel(
   return copy.stepPending;
 }
 
-type KycInvestorPathBadge = "kra" | "new";
-
-const KYC_PATH_BADGE_STEP_IDS = new Set(["digilocker", "signature", "esign"]);
+type KycInvestorPathBadge = "new";
 
 function stepInvestorPathBadge(
   step: DistributorClientKycStep,
   kycCompliant: boolean,
 ): KycInvestorPathBadge | null {
-  if (!KYC_PATH_BADGE_STEP_IDS.has(step.id)) return null;
-  if (step.id === "digilocker") return kycCompliant ? "kra" : "new";
-  if (kycCompliant) return "kra";
+  if (kycCompliant) return null;
+  if (step.id === "digilocker") return "new";
   return null;
 }
 
@@ -117,18 +114,11 @@ function stepRequirementHint(
 }
 
 function KycInvestorPathBadgePill({
-  variant,
   copy,
 }: {
-  variant: KycInvestorPathBadge;
   copy: (typeof DISTRIBUTOR_CLIENT_COPY)["kyc"];
 }) {
-  const label = variant === "kra" ? copy.badgeKraCompliant : copy.badgeNewToKyc;
-  return (
-    <StatusBadge variant={variant === "kra" ? "success" : "info"}>
-      {label}
-    </StatusBadge>
-  );
+  return <StatusBadge variant="info">{copy.badgeNewToKyc}</StatusBadge>;
 }
 
 function KycStepNodeComponent(props: NodeProps) {
@@ -172,7 +162,7 @@ function KycStepNodeComponent(props: NodeProps) {
           {stepStatusLabel(step, copy)}
         </p>
         {investorPathBadge ? (
-          <KycInvestorPathBadgePill variant={investorPathBadge} copy={copy} />
+          <KycInvestorPathBadgePill copy={copy} />
         ) : requirementHint ? (
           <StatusBadge variant="neutral">{requirementHint}</StatusBadge>
         ) : null}

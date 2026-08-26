@@ -60,6 +60,48 @@ export async function verifyZyndPin(pin: string) {
   });
 }
 
+export async function fetchPinUnlockStatus() {
+  return apiRequest<PinVerifyResponse>("/auth/pin/unlock-status");
+}
+
+export type PinResetLinkSendResponse = {
+  ok: boolean;
+  masked_email: string;
+  email_delivered: boolean;
+  dev_reset_url?: string | null;
+};
+
+export async function sendZyndPinResetLink() {
+  return apiRequest<PinResetLinkSendResponse>("/auth/pin/forgot/send-link", {
+    method: "POST",
+  });
+}
+
+export async function validateZyndPinResetLink(token: string) {
+  return apiRequest<{ ok: boolean }>(
+    `/auth/pin/forgot/validate?token=${encodeURIComponent(token)}`,
+  );
+}
+
+export async function resetZyndPinWithLink(payload: {
+  token: string;
+  currentPassword: string;
+  totpCode: string;
+  pin: string;
+  confirmPin: string;
+}) {
+  return apiRequest<PinOkResponse>("/auth/pin/forgot/reset-link", {
+    method: "POST",
+    body: JSON.stringify({
+      token: payload.token,
+      current_password: payload.currentPassword,
+      totp_code: payload.totpCode,
+      pin: payload.pin,
+      confirm_pin: payload.confirmPin,
+    }),
+  });
+}
+
 export async function sendZyndPinResetOtp() {
   return apiRequest<OtpSendResponse>("/auth/pin/forgot/send-otp", {
     method: "POST",
