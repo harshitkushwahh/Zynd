@@ -28,18 +28,18 @@ import { Card } from "@/components/ui/card";
 import { DistributorChartTooltip } from "@/components/ui/distributor-chart-tooltip";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
-import type { BranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
+import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
 import {
   getBranchComplianceExceptionsForDistributor,
   getBranchDistributorReportTemplates,
   getBranchKycPendingForDistributor,
   getBranchReportRollupForDistributor,
   getBranchReportTrendForDistributor,
-} from "@/lib/dummy/branch-distributor-ops-data";
+} from "@/lib/distributor-branch-distributor-ops-data";
 import type {
   BranchComplianceException,
   BranchKycPendingRow,
-} from "@/lib/dummy/branch-reports";
+} from "@/lib/distributor-branch-reports-data";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";
@@ -93,13 +93,14 @@ export function BranchDistributorReportsPanel({
   profile,
   className,
 }: BranchDistributorReportsPanelProps) {
-  const rollup = useMemo(
-    () => getBranchReportRollupForDistributor(profile.id),
-    [profile.id],
+  const rollupRows = useMemo(
+    () => getBranchReportRollupForDistributor(profile, "mtd"),
+    [profile],
   );
+  const rollup = rollupRows[0];
   const trend = useMemo(
-    () => getBranchReportTrendForDistributor(profile.id),
-    [profile.id],
+    () => getBranchReportTrendForDistributor(profile),
+    [profile],
   );
   const kycRows = useMemo(
     () => getBranchKycPendingForDistributor(profile),
@@ -110,8 +111,8 @@ export function BranchDistributorReportsPanel({
     [profile],
   );
   const reportTemplates = useMemo(
-    () => getBranchDistributorReportTemplates(profile.id),
-    [profile.id],
+    () => getBranchDistributorReportTemplates(profile),
+    [profile],
   );
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -323,9 +324,6 @@ export function BranchDistributorReportsPanel({
 
       <section className="distributor-report-export-library !mt-0">
         <h2 className="distributor-report-export-library__title">Download reports</h2>
-        <p className="text-caption text-muted-foreground">
-          Export packs scoped to {profile.name}&apos;s book for branch review or HO submission.
-        </p>
         <ul className="distributor-report-export-library__grid" aria-label="Downloadable reports">
           {reportTemplates.map((template) => (
             <li key={template.id}>

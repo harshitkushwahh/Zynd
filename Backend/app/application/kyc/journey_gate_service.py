@@ -41,8 +41,55 @@ def is_rekyc_modification(journey: KycJourneyState | None) -> bool:
     return is_rekyc_readiness_code(journey.readiness_code)
 
 
+FRESH_KYC_FORM_READINESS_CODES = frozenset({"kyc_unavailable"})
+
+
+def resolve_kyc_form_type(journey: KycJourneyState | None) -> str:
+    """Map KRA readiness to Cybrilla kyc_form type (fresh vs modify).
+
+    Cybrilla allows:
+    - fresh when KRA status is unavailable
+    - modify when KRA status is validated, verified/registered, or onhold
+    """
+    if journey is None:
+        return "fresh"
+    if journey.kyc_already_registered:
+        return "modify"
+    code = str(journey.readiness_code or "").lower()
+    if code in FRESH_KYC_FORM_READINESS_CODES:
+        return "fresh"
+    if is_rekyc_readiness_code(code):
+        return "modify"
+    return "fresh"
+
+
+def requires_digilocker_for_readiness(
+    *,
+    kyc_already_registered: bool,
+    readiness_code: str | None,
+) -> bool:
+    """Whether the pre-form DigiLocker step is required (Aadhaar address + father's name)."""
+    if kyc_already_registered:
+        return False
+    code = str(readiness_code or "").lower()
+    if code == "kyc_incomplete":
+        return True
+    if is_rekyc_readiness_code(readiness_code):
+        return False
+    return True
+
+
+def requires_digilocker(journey: KycJourneyState | None) -> bool:
+    if journey is None:
+        return True
+    return requires_digilocker_for_readiness(
+        kyc_already_registered=bool(journey.kyc_already_registered),
+        readiness_code=journey.readiness_code,
+    )
+
+
 def require_digilocker_or_kra_skip(journey: KycJourneyState) -> None:
-    if journey.kyc_already_registered or is_rekyc_modification(journey):
+    if not requires_digilocker(journey):
         return
     if journey.external_kyc_status != "returned_success":
         raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)

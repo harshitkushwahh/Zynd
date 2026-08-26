@@ -2,7 +2,7 @@
 
 Wipes the PostgreSQL `public` schema completely, re-applies all Alembic migrations, and seeds development data (same as API startup):
 
-- Dev admin: `admin@zynd.com` / `12345678`
+- Dev admin: `admin@zynd.com` / `Zynd@1234`
 - RBAC roles and permissions (super_admin assigned to all admin users)
 - Security config defaults
 - Retention policy schedule

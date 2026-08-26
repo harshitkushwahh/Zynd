@@ -8,8 +8,13 @@ import { KycReviewAccordion } from "@/features/kyc/components/kyc-review-accordi
 import { KycReviewBankSection } from "@/features/kyc/components/kyc-review-bank-section";
 import { KycReviewNomineeEmpty } from "@/features/kyc/components/kyc-review-nominee-empty";
 import { KycReviewPanSection } from "@/features/kyc/components/kyc-review-pan-section";
+import { KycSignaturePreview } from "@/features/kyc/components/kyc-signature-preview";
 import type { KycJourneyDraft } from "@/features/kyc/lib/kyc-journey-draft";
 import type { KycNomineeRecord } from "@/features/kyc/lib/kyc-nominee";
+import {
+  resolveAccountNumberLast4,
+  resolvePanDisplay,
+} from "@/features/kyc/lib/kyc-sensitive-display";
 import {
   KYC_GENDER_OPTIONS,
   KYC_INCOME_SLAB_OPTIONS,
@@ -76,7 +81,7 @@ export function KycReviewStep({
   const signature = draft.signature;
 
   const panSummary = pan
-    ? `${pan.panNumber} · ${[pan.firstName, pan.middleName, pan.lastName].filter(Boolean).join(" ")}`
+    ? `${resolvePanDisplay(pan) ?? "—"} · ${[pan.firstName, pan.middleName, pan.lastName].filter(Boolean).join(" ")}`
     : undefined;
 
   const panAccordionBadge = pan ? (
@@ -99,7 +104,7 @@ export function KycReviewStep({
       : undefined;
 
   const bankSummary = bank
-    ? `${bank.accountDetails.bankName} · ••••${bank.accountNumber.slice(-4)}`
+    ? `${bank.accountDetails.bankName} · ••••${resolveAccountNumberLast4(bank) ?? "----"}`
     : undefined;
 
   const bankAccordionBadge = bank ? (
@@ -115,7 +120,7 @@ export function KycReviewStep({
     : undefined;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex flex-col gap-4">
       {familyGroupRepromptNominee ? (
         <div className="shrink-0 rounded-[var(--radius-card)] border border-primary/20 bg-primary/5 px-3 py-3">
           <div className="flex items-start gap-3">
@@ -147,7 +152,7 @@ export function KycReviewStep({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:thin]">
+      <div className="space-y-2 pr-0.5">
         <KycReviewAccordion
           title={copy.kyc.review.sections.pan}
           summary={panSummary}
@@ -264,14 +269,7 @@ export function KycReviewStep({
                   }
                 />
                 <div className="py-2">
-                  <div className="overflow-hidden rounded-[var(--radius-card)] border border-border/80 bg-white p-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={signature.dataUrl}
-                      alt={copy.kyc.signature.previewAlt}
-                      className="mx-auto max-h-28 w-full object-contain"
-                    />
-                  </div>
+                  <KycSignaturePreview signature={signature} />
                 </div>
               </>
             ) : null}

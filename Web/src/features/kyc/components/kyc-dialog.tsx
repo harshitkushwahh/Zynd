@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -34,6 +34,8 @@ import {
 import { KycPersonalInfoStep } from "@/features/kyc/components/kyc-personal-info-step";
 import { KycReviewStep } from "@/features/kyc/components/kyc-review-step";
 import { KycSignatureStep } from "@/features/kyc/components/kyc-signature-step";
+import { KycDigilockerDialog } from "@/features/kyc/components/kyc-digilocker-dialog";
+import { KycDigilockerFailureDialog } from "@/features/kyc/components/kyc-digilocker-failure-dialog";
 import { KycEsignDialog } from "@/features/kyc/components/kyc-esign-dialog";
 import { KycLocationRequiredDialog } from "@/features/kyc/components/kyc-location-required-dialog";
 import { KycPanReadinessBadge } from "@/features/kyc/components/kyc-pan-readiness-badge";
@@ -45,10 +47,10 @@ import {
   fetchKycBootstrap,
   fetchKycFormStatus,
   fetchKycCountries,
-  fetchKycIdentityDocument,
   fetchKycMasterDataEnums,
   fetchKycNomineeEnums,
   fetchKycStates,
+  saveKycGeolocation,
   saveKycJourneyState,
   startKycDigilocker,
   submitKycForm,
@@ -66,7 +68,11 @@ import {
 } from "@/features/kyc/lib/kyc-bank";
 import type { KycNomineeRecord } from "@/features/kyc/lib/kyc-nominee";
 import {
+  capReachableStepIndex,
+  digilockerFailureDescription,
   readinessFromBootstrap,
+  shouldBlockAddressStep,
+  shouldShowDigilockerFailureAlert,
   type KycReadinessInfo,
 } from "@/features/kyc/lib/kyc-pan-readiness";
 import {
@@ -79,16 +85,26 @@ import {
   type KycJourneyDraft,
   type KycSignatureDraft,
 } from "@/features/kyc/lib/kyc-journey-draft";
+import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import {
   getKycJourneySteps,
   requiresFullKycSubmission,
+  type KycJourneyStepId,
 } from "@/features/kyc/lib/kyc-journey";
 import {
   createEmptyAddressForm,
   type KycAddressFormValue,
 } from "@/features/kyc/lib/kyc-address";
 import type { KycPersonalInfoValue } from "@/features/kyc/lib/kyc-personal-info";
-import { createEmptyPersonalInfo } from "@/features/kyc/lib/kyc-personal-info";
+import {
+  clearDigilockerReturnHandled,
+  processDigilockerReturnFromUrl,
+  type DigilockerReturnResult,
+} from "@/features/kyc/lib/kyc-digilocker-return";
+import {
+  isDigilockerAddressPrefillIncomplete,
+  isDigilockerFathersNameMissing,
+} from "@/features/kyc/lib/kyc-digilocker-prefill";
 import { copy } from "@/shared/config/copy";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -99,6 +115,40 @@ type KycDialogProps = {
 };
 
 const KYC_DIALOG_CLOSE_RESET_MS = 220;
+
+function geolocationFromBootstrap(
+  draft: KycBootstrapResponse["geolocation_draft"],
+): KycGeolocationResult | null {
+  if (!draft) return null;
+  const { latitude, longitude, accuracyMeters } = draft;
+  if (typeof latitude !== "number" || typeof longitude !== "number") return null;
+  return {
+    latitude,
+    longitude,
+    accuracy: typeof accuracyMeters === "number" ? accuracyMeters : 0,
+  };
+}
+
+function KycJourneyStepPanel({
+  stepId,
+  activeStepId,
+  children,
+}: {
+  stepId: KycJourneyStepId;
+  activeStepId: KycJourneyStepId | undefined;
+  children: ReactNode;
+}) {
+  const isActive = activeStepId === stepId;
+  return (
+    <div
+      className={cn("flex min-h-0 flex-1 flex-col", !isActive && "hidden")}
+      aria-hidden={!isActive}
+      hidden={!isActive}
+    >
+      {children}
+    </div>
+  );
+}
 
 function mapContactDraft(raw: Record<string, unknown> | null | undefined): KycAddressFormValue | undefined {
   if (!raw) return undefined;
@@ -125,6 +175,8 @@ function mapBankDraft(raw: Record<string, unknown> | null | undefined) {
   if (!raw) return undefined;
   const form: KycBankFormValue = {
     accountNumber: String(raw.accountNumber ?? ""),
+    accountNumberMasked: String(raw.accountNumberMasked ?? ""),
+    accountNumberLast4: String(raw.accountNumberLast4 ?? ""),
     accountType: String(raw.accountType ?? ""),
     ifscCode: String(raw.ifscCode ?? ""),
   };
@@ -182,7 +234,10 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const [saving, setSaving] = useState(false);
   const [blockDialog, setBlockDialog] = useState<{ title: string; description: string } | null>(null);
   const [nomineeEnums, setNomineeEnums] = useState<KycNomineeEnums | null>(null);
-  const [digilockerInfoOpen, setDigilockerInfoOpen] = useState(false);
+  const [digilockerRedirectOpen, setDigilockerRedirectOpen] = useState(false);
+  const [showDigilockerFailureCard, setShowDigilockerFailureCard] = useState(false);
+  const [digilockerFailureDialogOpen, setDigilockerFailureDialogOpen] = useState(false);
+  const [digilockerRetrying, setDigilockerRetrying] = useState(false);
   const [esignDialogOpen, setEsignDialogOpen] = useState(false);
   const [pendingEsignUrl, setPendingEsignUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -197,6 +252,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [cachedCoords, setCachedCoords] = useState<KycGeolocationResult | null>(null);
   const [familyPromptQueue, setFamilyPromptQueue] = useState<KycNomineeRecord[]>([]);
   const [familyPromptOpen, setFamilyPromptOpen] = useState(false);
   const [familyPromptNominee, setFamilyPromptNominee] = useState<KycNomineeRecord | null>(null);
@@ -206,11 +262,43 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   );
   const [reviewFamilyRepromptChecked, setReviewFamilyRepromptChecked] = useState(false);
   const [familyReviewDialogOpen, setFamilyReviewDialogOpen] = useState(false);
+  const pendingDigilockerUrlRef = useRef<string | null>(null);
+
+  const openDigilockerRedirectDialog = useCallback((redirectUrl: string) => {
+    pendingDigilockerUrlRef.current = redirectUrl;
+    setDigilockerRedirectOpen(true);
+  }, []);
+
+  const beginDigilockerRedirect = useCallback(async () => {
+    clearDigilockerReturnHandled();
+    const { redirect_url: redirectUrl } = await startKycDigilocker();
+    openDigilockerRedirectDialog(redirectUrl);
+  }, [openDigilockerRedirectDialog]);
+
+  const handleDigilockerRetry = useCallback(async () => {
+    setDigilockerRetrying(true);
+    try {
+      setDigilockerFailureDialogOpen(false);
+      setShowDigilockerFailureCard(false);
+      await beginDigilockerRedirect();
+    } finally {
+      setDigilockerRetrying(false);
+    }
+  }, [beginDigilockerRedirect]);
+
+  const completeDigilockerRedirect = useCallback(() => {
+    setDigilockerRedirectOpen(false);
+    const redirectUrl = pendingDigilockerUrlRef.current;
+    pendingDigilockerUrlRef.current = null;
+    if (redirectUrl) {
+      window.location.assign(redirectUrl);
+    }
+  }, []);
 
   const processSubmissionResult = useCallback(
     async (result: KycFormActionResponse) => {
       if (result.next_action === "proof_redirect" && result.redirect_url) {
-        window.location.assign(result.redirect_url);
+        openDigilockerRedirectDialog(result.redirect_url);
         return;
       }
       if (result.next_action === "esign_redirect" && result.redirect_url) {
@@ -225,7 +313,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         return;
       }
       if (result.next_action === "completed") {
-        markKycVerified(journeyDraft.pan?.panNumber ?? bootstrap?.pan_draft?.panNumber);
+        markKycVerified(
+          resolvePanDisplay(journeyDraft.pan ?? bootstrap?.pan_draft ?? null) ?? undefined,
+        );
         setSubmittedOutcomeShown(false);
         setKraVerifiedOutcomeShown(true);
         setSubmitError(null);
@@ -251,40 +341,93 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         await processSubmissionResult(continued);
       }
     },
-    [markKycSubmitted, markKycVerified, bootstrap?.pan_draft?.panNumber, journeyDraft.pan?.panNumber],
+    [markKycSubmitted, markKycVerified, bootstrap?.pan_draft, journeyDraft.pan, openDigilockerRedirectDialog],
   );
 
-  const applyBootstrap = useCallback((payload: KycBootstrapResponse) => {
-    setBootstrap(payload);
-    const fullKycRequired = requiresFullKycSubmission({
-      kyc_already_registered: payload.kyc_already_registered,
-      readiness_code: payload.readiness_code,
-    });
-    const steps = getKycJourneySteps(fullKycRequired);
-    const stepIndex = Math.min(payload.active_step_index ?? 0, steps.length - 1);
-    setActiveStepIndex(stepIndex);
-    setMaxReachableStepIndex(stepIndex);
-    const signatureDraft = payload.signature_draft as KycSignatureDraft | null | undefined;
-    setJourneyDraft({
-      pan: payload.pan_draft ?? undefined,
-      address: mapContactDraft(payload.contact_draft),
-      personalInfo: mapPersonalDraft(payload.personal_draft) as KycPersonalInfoValue | undefined,
-      nominees: mapNomineeDraft(payload.nominee_draft),
-      bank: (() => {
-        const mapped = mapBankDraft(payload.bank_draft);
-        if (!mapped?.form || !mapped.accountDetails) return undefined;
-        return { ...mapped.form, accountDetails: mapped.accountDetails };
-      })(),
-      signature: signatureDraft ?? undefined,
-    });
-    setSubmittedOutcomeShown(payload.step_statuses?.overall === "submitted");
-    setKraVerifiedOutcomeShown(payload.step_statuses?.overall === "completed");
-    setKraCheckMessage(null);
-    setPanReadiness(readinessFromBootstrap(payload));
-    setPrefilledFromDigilocker(
-      Boolean(payload.contact_draft && !payload.kyc_already_registered && payload.external_kyc_status === "returned_success"),
-    );
-  }, []);
+  const applyBootstrap = useCallback(
+    (payload: KycBootstrapResponse, digilockerReturn: DigilockerReturnResult = { kind: "none" }) => {
+      let mergedPayload = payload;
+
+      if (digilockerReturn.kind === "failed") {
+        mergedPayload = {
+          ...payload,
+          external_kyc_status: "returned_failed",
+          digilocker_failure_reason:
+            digilockerReturn.reason ??
+            payload.digilocker_failure_reason ??
+            copy.kyc.digilocker.failedDescription,
+        };
+      } else if (digilockerReturn.kind === "success") {
+        mergedPayload = {
+          ...payload,
+          external_kyc_status: "returned_success",
+          digilocker_failure_reason: null,
+          contact_draft: digilockerReturn.contactDraft ?? payload.contact_draft,
+          personal_draft: digilockerReturn.personalDraft ?? payload.personal_draft,
+        };
+      }
+
+      setBootstrap(mergedPayload);
+      const fullKycRequired = requiresFullKycSubmission({
+        kyc_already_registered: mergedPayload.kyc_already_registered,
+        readiness_code: mergedPayload.readiness_code,
+      });
+      const steps = getKycJourneySteps(fullKycRequired);
+      const stepIndex = Math.min(mergedPayload.active_step_index ?? 0, steps.length - 1);
+      const reachableIndex = capReachableStepIndex(stepIndex, steps, mergedPayload);
+      const panStepIndex = steps.findIndex((step) => step.id === "pan-card");
+      const addressStepIndex = steps.findIndex((step) => step.id === "address");
+      const showFailureAlert = shouldShowDigilockerFailureAlert(
+        mergedPayload,
+        digilockerReturn.kind === "failed",
+      );
+
+      if (digilockerReturn.kind === "success" && addressStepIndex >= 0) {
+        setActiveStepIndex(addressStepIndex);
+        setMaxReachableStepIndex(Math.max(reachableIndex, addressStepIndex));
+      } else if (showFailureAlert && panStepIndex >= 0) {
+        setActiveStepIndex(panStepIndex);
+        setMaxReachableStepIndex(Math.min(reachableIndex, panStepIndex));
+      } else {
+        setActiveStepIndex(Math.min(stepIndex, reachableIndex));
+        setMaxReachableStepIndex(reachableIndex);
+      }
+
+      const signatureDraft = mergedPayload.signature_draft as KycSignatureDraft | null | undefined;
+      const mappedAddress = mapContactDraft(mergedPayload.contact_draft);
+      const mappedPersonal = mapPersonalDraft(mergedPayload.personal_draft) as KycPersonalInfoValue | undefined;
+
+      setJourneyDraft({
+        pan: mergedPayload.pan_draft ?? undefined,
+        address: mappedAddress,
+        personalInfo: mappedPersonal,
+        nominees: mapNomineeDraft(mergedPayload.nominee_draft),
+        bank: (() => {
+          const mapped = mapBankDraft(mergedPayload.bank_draft);
+          if (!mapped?.form || !mapped.accountDetails) return undefined;
+          return { ...mapped.form, accountDetails: mapped.accountDetails };
+        })(),
+        signature: signatureDraft ?? undefined,
+      });
+      setCachedCoords(geolocationFromBootstrap(mergedPayload.geolocation_draft));
+      setSubmittedOutcomeShown(mergedPayload.step_statuses?.overall === "submitted");
+      setKraVerifiedOutcomeShown(mergedPayload.step_statuses?.overall === "completed");
+      setKraCheckMessage(null);
+      setPanReadiness(readinessFromBootstrap(mergedPayload));
+      setPrefilledFromDigilocker(
+        Boolean(
+          mergedPayload.contact_draft &&
+            !mergedPayload.kyc_already_registered &&
+            mergedPayload.external_kyc_status === "returned_success",
+        ),
+      );
+      setShowDigilockerFailureCard(showFailureAlert);
+      if (digilockerReturn.kind === "failed") {
+        setDigilockerFailureDialogOpen(true);
+      }
+    },
+    [],
+  );
 
   const handleCheckKraStatus = useCallback(async () => {
     setCheckingKraStatus(true);
@@ -296,7 +439,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       applyBootstrap(payload);
       await refreshFromBootstrap();
       if (result.kra_verified) {
-        markKycVerified(bootstrap?.pan_draft?.panNumber);
+        markKycVerified(resolvePanDisplay(bootstrap?.pan_draft ?? null) ?? undefined);
         setSubmittedOutcomeShown(false);
         setKraVerifiedOutcomeShown(true);
         setKraCheckMessage(null);
@@ -311,7 +454,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   }, [
     applyBootstrap,
     applyReadinessCheck,
-    bootstrap?.pan_draft?.panNumber,
+    bootstrap?.pan_draft,
     markKycVerified,
     refreshFromBootstrap,
   ]);
@@ -321,8 +464,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     setBootstrapError(null);
     try {
       await ensureKycToken();
+      const digilockerReturn = await processDigilockerReturnFromUrl();
       const payload = await fetchKycBootstrap();
-      applyBootstrap(payload);
+      applyBootstrap(payload, digilockerReturn);
 
       const [statesResult, countriesResult, enumsResult] = await Promise.allSettled([
         fetchKycStates(),
@@ -350,15 +494,14 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       } else {
         throw enumsResult.reason;
       }
-      if (
-        payload.step_statuses?.overall === "phase1_complete" ||
-        payload.step_statuses?.overall === "phase2_complete" ||
-        payload.last_completed_step === "personal" ||
-        payload.last_completed_step === "nominee" ||
-        payload.last_completed_step === "bank"
-      ) {
-        const nomineeData = await fetchKycNomineeEnums();
-        setNomineeEnums(nomineeData);
+
+      if (payload.personal_draft) {
+        try {
+          const nomineeData = await fetchKycNomineeEnums();
+          setNomineeEnums(nomineeData);
+        } catch {
+          // Nominee enum prefetch is optional during bootstrap.
+        }
       }
     } catch (error) {
       setBootstrapError(getKycBootstrapErrorMessage(error));
@@ -388,6 +531,10 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       setCheckingKraStatus(false);
       setSubmitError(null);
       setPanReadiness(null);
+      setCachedCoords(null);
+      setShowDigilockerFailureCard(false);
+      setDigilockerFailureDialogOpen(false);
+      setDigilockerRetrying(false);
       setNomineeEnums(null);
       setEsignDialogOpen(false);
       setPendingEsignUrl(null);
@@ -425,6 +572,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     (info: {
       kycAlreadyRegistered: boolean;
       readiness?: { status?: string; code?: string; reason?: string } | null;
+      panVerified?: boolean;
     }) => {
       setBootstrap((current) => {
         if (!current) return current;
@@ -433,6 +581,8 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
           kyc_already_registered: info.kycAlreadyRegistered,
           readiness_code: info.readiness?.code ?? current.readiness_code,
           readiness_reason: info.readiness?.reason ?? current.readiness_reason,
+          pan_verification_status:
+            info.panVerified === true ? "verified" : current.pan_verification_status,
         };
       });
     },
@@ -462,10 +612,25 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const handleStepSelect = useCallback(
     (index: number) => {
       if (index > maxReachableStepIndex) return;
+      const targetStepId = journeySteps[index]?.id;
+      const panStepIndex = journeySteps.findIndex((step) => step.id === "pan-card");
+      if (
+        targetStepId === "address" &&
+        bootstrap &&
+        shouldBlockAddressStep(bootstrap)
+      ) {
+        if (panStepIndex >= 0) {
+          setActiveStepIndex(panStepIndex);
+        }
+        setShowDigilockerFailureCard(true);
+        setDigilockerFailureDialogOpen(true);
+        setJourneySaveError(null);
+        return;
+      }
       setActiveStepIndex((current) => (index === current ? current : index));
       setJourneySaveError(null);
     },
-    [maxReachableStepIndex],
+    [bootstrap, journeySteps, maxReachableStepIndex],
   );
 
   const advanceFamilyPromptQueue = useCallback(() => {
@@ -544,6 +709,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     middleName: string;
     dateOfBirth?: string;
     panCategory?: string;
+    fullName?: string;
     requiresDigilocker: boolean;
     kycAlreadyRegistered: boolean;
   }) => {
@@ -565,12 +731,18 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       });
       syncKycRegistrationFromPan({
         kycAlreadyRegistered: details.kycAlreadyRegistered,
-        readiness: panReadiness,
+        readiness: panReadiness
+          ? {
+              status: panReadiness.status,
+              code: panReadiness.code ?? undefined,
+              reason: panReadiness.reason ?? undefined,
+            }
+          : undefined,
       });
 
       if (details.requiresDigilocker) {
-        const { redirect_url: redirectUrl } = await startKycDigilocker();
-        window.location.assign(redirectUrl);
+        setShowDigilockerFailureCard(false);
+        await beginDigilockerRedirect();
         return;
       }
 
@@ -580,56 +752,6 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       setSaving(false);
     }
   };
-
-  const resumeDigilockerReturn = useCallback(async () => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("kyc_digilocker_return") !== "1") return;
-
-    const documentId = params.get("identity_document");
-    const fetchStatus = params.get("status");
-    params.delete("kyc_digilocker_return");
-    params.delete("identity_document");
-    params.delete("status");
-    params.delete("digilocker_error");
-    const nextQuery = params.toString();
-    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
-    window.history.replaceState({}, "", nextUrl);
-
-    if (!documentId || fetchStatus !== "successful") {
-      setDigilockerInfoOpen(true);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const result = await fetchKycIdentityDocument(documentId);
-      if (!result.success) {
-        setDigilockerInfoOpen(true);
-        return;
-      }
-      const address = mapContactDraft(result.contact_draft ?? null);
-      if (address) {
-        updateDraft({
-          address,
-          personalInfo: {
-            ...createEmptyPersonalInfo(),
-            ...(mapPersonalDraft(result.personal_draft) as Partial<KycPersonalInfoValue>),
-          },
-        });
-        setPrefilledFromDigilocker(true);
-      }
-      setActiveStepIndex(1);
-      setMaxReachableStepIndex((prev) => Math.max(prev, 1));
-    } finally {
-      setSaving(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    void resumeDigilockerReturn();
-  }, [open, resumeDigilockerReturn, digilockerResumeToken]);
 
   const handleAddressSubmit = async (value: KycAddressFormValue) => {
     setSaving(true);
@@ -763,6 +885,8 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   };
 
   const submitKycWithLocation = async (coords: KycGeolocationResult) => {
+    setCachedCoords(coords);
+    await saveKycGeolocation(coords);
     const result = await submitKycForm({
       latitude: coords.latitude,
       longitude: coords.longitude,
@@ -815,7 +939,32 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       return;
     }
 
-    setLocationDialogOpen(true);
+    if (cachedCoords) {
+      setSubmitting(true);
+      try {
+        await submitKycWithLocation(cachedCoords);
+      } catch (error) {
+        if (error instanceof ApiError && error.code.startsWith("location_")) {
+          setLocationError(error.message);
+          setLocationDialogOpen(true);
+        } else {
+          setSubmitError(error instanceof Error ? error.message : copy.kyc.submitFailedTitle);
+        }
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const coords = await requestKycGeolocation();
+      await submitKycWithLocation(coords);
+    } catch {
+      setLocationDialogOpen(true);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const resumeSubmissionReturn = useCallback(async () => {
@@ -861,9 +1010,39 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const showSubmittedOutcome =
     submittedOutcomeShown || (open && overallStatus === "submitted" && status !== "complete");
   const isOutcomeView = showVerifiedOutcome || showSubmittedOutcome;
-  const panVerified = bootstrap?.pan_verification_status === "verified";
+  const panVerified =
+    bootstrap?.pan_verification_status === "verified" ||
+    Boolean(
+      (journeyDraft.pan?.panNumber || journeyDraft.pan?.panMasked) &&
+        journeyDraft.pan?.firstName &&
+        journeyDraft.pan?.lastName,
+    );
+  const digilockerBlocked = shouldBlockAddressStep(bootstrap);
+  const digilockerAlertVisible = useMemo(
+    () => shouldShowDigilockerFailureAlert(bootstrap, showDigilockerFailureCard),
+    [bootstrap, showDigilockerFailureCard],
+  );
+  const digilockerAlertDescription =
+    digilockerFailureDescription(bootstrap) ?? copy.kyc.digilocker.failedDescription;
+  const currentAddressDraft =
+    journeyDraft.address ?? mapContactDraft(bootstrap?.contact_draft) ?? undefined;
+  const currentPersonalDraft =
+    journeyDraft.personalInfo ?? mapPersonalDraft(bootstrap?.personal_draft) ?? undefined;
+  const digilockerPrefillIncomplete = useMemo(
+    () => prefilledFromDigilocker && isDigilockerAddressPrefillIncomplete(currentAddressDraft),
+    [currentAddressDraft, prefilledFromDigilocker],
+  );
+  const digilockerFathersNameIncomplete = useMemo(
+    () => prefilledFromDigilocker && isDigilockerFathersNameMissing(currentPersonalDraft),
+    [currentPersonalDraft, prefilledFromDigilocker],
+  );
+  const fathersNameFromDigilocker = useMemo(
+    () => prefilledFromDigilocker && Boolean(currentPersonalDraft?.fathersName?.trim()),
+    [currentPersonalDraft?.fathersName, prefilledFromDigilocker],
+  );
+  const journeyStepIds = useMemo(() => new Set(journeySteps.map((step) => step.id)), [journeySteps]);
   const submittedPan =
-    bootstrap?.pan_draft?.panNumber ?? journeyDraft.pan?.panNumber ?? record?.panNumber;
+    resolvePanDisplay(bootstrap?.pan_draft ?? journeyDraft.pan ?? null) ?? record?.panMasked;
   const stepFormMeta = getKycStepFormMeta(activeStepId);
   const entryGateFormMeta = {
     ...getKycStepFormMeta(),
@@ -959,152 +1138,189 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       );
     }
 
-    switch (activeStepId) {
-      case "pan-card":
-        return (
-          <KycPanStep
-            initialDraft={journeyDraft.pan ?? bootstrap?.pan_draft ?? null}
-            initiallyVerified={panVerified}
-            initialKycAlreadyRegistered={bootstrap?.kyc_already_registered ?? null}
-            onBlocked={handlePanBlocked}
-            onPanVerified={({ kycAlreadyRegistered, readiness }) => {
-              setPanReadiness(readiness ?? null);
-              syncKycRegistrationFromPan({
-                kycAlreadyRegistered,
-                readiness,
-              });
-            }}
-            onPanReset={() => setPanReadiness(null)}
-            onSubmit={handlePanSubmit}
-            disabled={saving}
-          />
-        );
-      case "address":
-        return (
-          <KycAddressStep
-            initialValue={journeyDraft.address ?? mapContactDraft(bootstrap?.contact_draft) ?? createEmptyAddressForm()}
-            stateOptions={stateOptions}
-            prefilledFromDigilocker={prefilledFromDigilocker}
-            saving={saving}
-            onSubmit={handleAddressSubmit}
-          />
-        );
-      case "personal-info":
-        return (
-          <KycPersonalInfoStep
-            initialValue={journeyDraft.personalInfo ?? mapPersonalDraft(bootstrap?.personal_draft)}
-            enumOptions={enumOptions}
-            nationalityOptions={nationalityOptions}
-            saving={saving}
-            onSubmit={handlePersonalSubmit}
-          />
-        );
-      case "nominee":
-        return (
-          <KycNomineeStep
-            initialNominees={journeyDraft.nominees ?? mapNomineeDraft(bootstrap?.nominee_draft)}
-            relationshipOptions={nomineeEnums?.relationships}
-            sourceOfWealthOptions={nomineeEnums?.source_of_wealth}
-            documentTypeOptions={nomineeEnums?.document_types}
-            saving={saving}
-            onSubmit={handleNomineeSubmit}
-          />
-        );
-      case "bank": {
-        const mappedBank = mapBankDraft(bootstrap?.bank_draft);
-        const manualRequired = bootstrap?.bank_verification_status === "manual_required";
-        return (
-          <KycBankStep
-            initialValue={journeyDraft.bank ?? mappedBank?.form ?? createEmptyBankForm()}
-            initialAccountDetails={journeyDraft.bank?.accountDetails ?? mappedBank?.accountDetails ?? null}
-            initialProofUploaded={Boolean(bootstrap?.poa_bank_proof_file_id)}
-            readiness={panReadiness}
-            initialVerification={
-              bootstrap?.bank_verification_status === "verified"
-                ? {
-                    panVerified: true,
-                    bankVerified: true,
-                    readinessVerified: mappedBank?.readinessVerified ?? false,
-                    bankName: String(bootstrap?.bank_draft?.bankName ?? journeyDraft.bank?.accountDetails.bankName ?? ""),
-                    branch: String(bootstrap?.bank_draft?.branch ?? journeyDraft.bank?.accountDetails.branch ?? ""),
-                  }
-                : manualRequired
-                  ? {
-                      panVerified: true,
-                      bankVerified: false,
-                      readinessVerified: mappedBank?.readinessVerified ?? false,
-                      bankName: String(bootstrap?.bank_draft?.bankName ?? ""),
-                      branch: String(bootstrap?.bank_draft?.branch ?? ""),
-                      requiresManualVerification: true,
-                      requiresProofUpload: true,
-                      failureReason: bootstrap?.bank_verification_failure?.reason,
-                    }
-                  : null
+    const mappedBank = mapBankDraft(bootstrap?.bank_draft);
+    const manualRequired = bootstrap?.bank_verification_status === "manual_required";
+    const bankInitialVerification =
+      bootstrap?.bank_verification_status === "verified"
+        ? {
+            panVerified: true,
+            bankVerified: true,
+            readinessVerified: mappedBank?.readinessVerified ?? false,
+            bankName: String(
+              bootstrap?.bank_draft?.bankName ?? journeyDraft.bank?.accountDetails.bankName ?? "",
+            ),
+            branch: String(bootstrap?.bank_draft?.branch ?? journeyDraft.bank?.accountDetails.branch ?? ""),
+          }
+        : manualRequired
+          ? {
+              panVerified: true,
+              bankVerified: false,
+              readinessVerified: mappedBank?.readinessVerified ?? false,
+              bankName: String(bootstrap?.bank_draft?.bankName ?? ""),
+              branch: String(bootstrap?.bank_draft?.branch ?? ""),
+              requiresManualVerification: true,
+              requiresProofUpload: true,
+              failureReason: bootstrap?.bank_verification_failure?.reason,
             }
-            saving={saving}
-            onSubmit={handleBankSubmit}
-          />
-        );
-      }
-      case "signature":
-        return (
-          <KycSignatureStep
-            onSubmit={handleSignatureSubmit}
-          />
-        );
-      case "review":
-        return (
-          <div className="flex min-h-0 flex-1 flex-col">
-            {submitError ? (
-              <FieldMessage message={submitError} className="mb-3 mt-0 shrink-0" />
-            ) : null}
-            <KycReviewStep
-              draft={journeyDraft}
-              requiresFullKyc={requiresFullKyc}
-              onSubmit={() => void handleReviewSubmit()}
-              onAddNominee={() =>
-                setActiveStepIndex(journeySteps.findIndex((step) => step.id === "nominee"))
-              }
-              familyGroupRepromptNominee={reviewFamilyRepromptNominee}
-              onFamilyGroupRepromptInvite={() => {
-                if (!reviewFamilyRepromptNominee) return;
-                setFamilyPromptNominee(reviewFamilyRepromptNominee);
-                setFamilyReviewDialogOpen(true);
-              }}
-              onFamilyGroupRepromptDismiss={() => {
-                if (!reviewFamilyRepromptNominee) {
-                  setReviewFamilyRepromptNominee(null);
-                  return;
-                }
-                void addNomineeToFamilyGroup({
-                  nominee_email: reviewFamilyRepromptNominee.contact.email.trim(),
-                  nominee_name: reviewFamilyRepromptNominee.core.fullName.trim(),
-                  relationship: reviewFamilyRepromptNominee.core.relationship,
-                  kyc_nominee_id: reviewFamilyRepromptNominee.id,
-                  action: "skip",
-                }).finally(() => {
-                  setReviewFamilyRepromptNominee(null);
+          : null;
+
+    return (
+      <>
+        {journeyStepIds.has("pan-card") ? (
+          <KycJourneyStepPanel stepId="pan-card" activeStepId={activeStepId}>
+            <KycPanStep
+              initialDraft={journeyDraft.pan ?? bootstrap?.pan_draft ?? null}
+              initiallyVerified={panVerified}
+              initialKycAlreadyRegistered={bootstrap?.kyc_already_registered ?? null}
+              initialReadinessCode={panReadiness?.code ?? bootstrap?.readiness_code ?? null}
+              onBlocked={handlePanBlocked}
+              onPanVerified={({ kycAlreadyRegistered, readiness }) => {
+                setPanReadiness(readiness ?? null);
+                syncKycRegistrationFromPan({
+                  kycAlreadyRegistered,
+                  readiness,
+                  panVerified: true,
                 });
               }}
+              onPanReset={() => setPanReadiness(null)}
+              onSubmit={handlePanSubmit}
+              disabled={saving}
             />
-            {submitting ? (
-              <p className="mt-3 shrink-0 text-center text-compact text-muted-foreground">
-                {copy.kyc.review.submitting}
-              </p>
-            ) : null}
-          </div>
-        );
-      default:
-        return null;
-    }
+          </KycJourneyStepPanel>
+        ) : null}
+
+        {journeyStepIds.has("address") ? (
+          <KycJourneyStepPanel stepId="address" activeStepId={activeStepId}>
+            <KycAddressStep
+              initialValue={
+                journeyDraft.address ?? mapContactDraft(bootstrap?.contact_draft) ?? createEmptyAddressForm()
+              }
+              stateOptions={stateOptions}
+              prefilledFromDigilocker={prefilledFromDigilocker}
+              digilockerFieldsLocked={prefilledFromDigilocker}
+              digilockerPrefillIncomplete={digilockerPrefillIncomplete}
+              digilockerBlocked={digilockerBlocked}
+              digilockerFailureReason={digilockerAlertVisible ? digilockerAlertDescription : null}
+              onRetryDigilocker={() => {
+                setDigilockerFailureDialogOpen(true);
+              }}
+              retryingDigilocker={digilockerRetrying}
+              saving={saving}
+              onSubmit={handleAddressSubmit}
+            />
+          </KycJourneyStepPanel>
+        ) : null}
+
+        {journeyStepIds.has("personal-info") ? (
+          <KycJourneyStepPanel stepId="personal-info" activeStepId={activeStepId}>
+            <KycPersonalInfoStep
+              initialValue={journeyDraft.personalInfo ?? mapPersonalDraft(bootstrap?.personal_draft)}
+              enumOptions={enumOptions}
+              nationalityOptions={nationalityOptions}
+              fathersNameFromDigilocker={fathersNameFromDigilocker}
+              digilockerFathersNameIncomplete={digilockerFathersNameIncomplete}
+              onRetryDigilocker={() => {
+                setDigilockerFailureDialogOpen(true);
+              }}
+              retryingDigilocker={digilockerRetrying}
+              saving={saving}
+              onSubmit={handlePersonalSubmit}
+            />
+          </KycJourneyStepPanel>
+        ) : null}
+
+        {journeyStepIds.has("nominee") ? (
+          <KycJourneyStepPanel stepId="nominee" activeStepId={activeStepId}>
+            <KycNomineeStep
+              initialNominees={journeyDraft.nominees ?? mapNomineeDraft(bootstrap?.nominee_draft)}
+              relationshipOptions={nomineeEnums?.relationships}
+              sourceOfWealthOptions={nomineeEnums?.source_of_wealth}
+              documentTypeOptions={nomineeEnums?.document_types}
+              saving={saving}
+              onSubmit={handleNomineeSubmit}
+            />
+          </KycJourneyStepPanel>
+        ) : null}
+
+        {journeyStepIds.has("bank") ? (
+          <KycJourneyStepPanel stepId="bank" activeStepId={activeStepId}>
+            <KycBankStep
+              initialValue={journeyDraft.bank ?? mappedBank?.form ?? createEmptyBankForm()}
+              initialAccountDetails={journeyDraft.bank?.accountDetails ?? mappedBank?.accountDetails ?? null}
+              initialProofUploaded={Boolean(bootstrap?.poa_bank_proof_file_id)}
+              readiness={panReadiness}
+              initialVerification={bankInitialVerification}
+              saving={saving}
+              onSubmit={handleBankSubmit}
+            />
+          </KycJourneyStepPanel>
+        ) : null}
+
+        {journeyStepIds.has("signature") ? (
+          <KycJourneyStepPanel stepId="signature" activeStepId={activeStepId}>
+            <KycSignatureStep
+              initialValue={
+                journeyDraft.signature ??
+                (bootstrap?.signature_draft as KycSignatureDraft | null | undefined)
+              }
+              onSubmit={handleSignatureSubmit}
+            />
+          </KycJourneyStepPanel>
+        ) : null}
+
+        {journeyStepIds.has("review") ? (
+          <KycJourneyStepPanel stepId="review" activeStepId={activeStepId}>
+            <div className="flex min-h-0 flex-1 flex-col">
+              {submitError ? (
+                <FieldMessage message={submitError} className="mb-3 mt-0 shrink-0" />
+              ) : null}
+              <KycReviewStep
+                draft={journeyDraft}
+                requiresFullKyc={requiresFullKyc}
+                onSubmit={() => void handleReviewSubmit()}
+                onAddNominee={() =>
+                  setActiveStepIndex(journeySteps.findIndex((step) => step.id === "nominee"))
+                }
+                familyGroupRepromptNominee={reviewFamilyRepromptNominee}
+                onFamilyGroupRepromptInvite={() => {
+                  if (!reviewFamilyRepromptNominee) return;
+                  setFamilyPromptNominee(reviewFamilyRepromptNominee);
+                  setFamilyReviewDialogOpen(true);
+                }}
+                onFamilyGroupRepromptDismiss={() => {
+                  if (!reviewFamilyRepromptNominee) {
+                    setReviewFamilyRepromptNominee(null);
+                    return;
+                  }
+                  void addNomineeToFamilyGroup({
+                    nominee_email: reviewFamilyRepromptNominee.contact.email.trim(),
+                    nominee_name: reviewFamilyRepromptNominee.core.fullName.trim(),
+                    relationship: reviewFamilyRepromptNominee.core.relationship,
+                    kyc_nominee_id: reviewFamilyRepromptNominee.id,
+                    action: "skip",
+                  }).finally(() => {
+                    setReviewFamilyRepromptNominee(null);
+                  });
+                }}
+              />
+              {submitting ? (
+                <p className="mt-3 shrink-0 text-center text-compact text-muted-foreground">
+                  {copy.kyc.review.submitting}
+                </p>
+              ) : null}
+            </div>
+          </KycJourneyStepPanel>
+        ) : null}
+      </>
+    );
   };
 
   const outcomeDialogClassName = cn(
-    "kyc-dialog-root kyc-dialog-root--outcome kyc-dialog-surface flex w-full max-w-sm flex-col items-center overflow-hidden p-0 shadow-zynd-high ring-1 ring-border transition-none sm:max-w-sm",
+    "kyc-dialog-root kyc-dialog-root--outcome kyc-dialog-surface kyc-subdialog-surface flex w-full max-w-sm flex-col items-center overflow-hidden rounded-3xl p-0 shadow-zynd-high ring-1 ring-border transition-none sm:max-w-sm",
   );
 
   const journeyDialogClassName = cn(
-    "kyc-dialog-root kyc-dialog-surface kyc-dialog-surface--journey flex w-full max-w-[1024px] flex-col overflow-hidden p-0 shadow-zynd-high ring-0 transition-none sm:max-w-[1024px]",
+    "kyc-dialog-root kyc-dialog-surface kyc-dialog-surface--journey kyc-subdialog-surface flex w-full max-w-[1024px] flex-col overflow-hidden rounded-3xl p-0 shadow-zynd-high ring-0 transition-none sm:max-w-[1024px]",
   );
 
   const renderOutcomeContent = () => (
@@ -1159,7 +1375,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             hideTitle
             hideBottomBorder
           />
-          <KycDialogBody variant="default">
+          <KycDialogBody variant="default" showSecurityFooter>
             <KycFormHeader meta={entryGateFormMeta} />
             <KycEntryGate reasons={kycBlockReasons} onReady={() => openDialog()} />
           </KycDialogBody>
@@ -1182,7 +1398,10 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             showClose={false}
             hideTitle
           />
-          <KycDialogBody variant={activeStepId === "review" ? "review" : "default"}>
+          <KycDialogBody
+            variant={activeStepId === "review" ? "review" : "default"}
+            showSecurityFooter
+          >
             {renderJourneyFormHeader()}
             {journeySaveError ? (
               <FieldMessage message={journeySaveError} className="mb-3 mt-0 shrink-0" />
@@ -1217,6 +1436,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         description={copy.kyc.exitConfirm.description}
         confirmLabel={copy.kyc.exitConfirm.confirm}
         cancelLabel={copy.kyc.exitConfirm.cancel}
+        contentClassName="kyc-subdialog-surface rounded-3xl"
         onConfirm={() => {
           setExitConfirmOpen(false);
           onOpenChange(false);
@@ -1232,21 +1452,22 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         description={blockDialog?.description ?? ""}
       />
 
-      <ConfirmDialog
-        open={digilockerInfoOpen}
-        onOpenChange={setDigilockerInfoOpen}
-        variant="warning"
-        title={copy.kyc.digilocker.failedTitle}
-        description={copy.kyc.digilocker.failedDescription}
-        confirmLabel={copy.kyc.digilocker.retry}
-        cancelLabel={copy.kyc.digilocker.cancel}
-        onConfirm={() => {
-          setDigilockerInfoOpen(false);
-          void (async () => {
-            const { redirect_url: redirectUrl } = await startKycDigilocker();
-            window.location.assign(redirectUrl);
-          })();
+      <KycDigilockerDialog
+        open={digilockerRedirectOpen}
+        onOpenChange={(next) => {
+          setDigilockerRedirectOpen(next);
+          if (!next) {
+            pendingDigilockerUrlRef.current = null;
+          }
         }}
+        onComplete={completeDigilockerRedirect}
+      />
+
+      <KycDigilockerFailureDialog
+        open={digilockerFailureDialogOpen}
+        description={digilockerAlertDescription}
+        onRetry={() => void handleDigilockerRetry()}
+        retrying={digilockerRetrying}
       />
 
       <KycLocationRequiredDialog

@@ -38,8 +38,8 @@ import { Input } from "@/components/ui/input";
 import { amountInWordsInr } from "@/lib/amount-in-words";
 import { useDistributorNotifications } from "@/contexts/distributor-notifications-context";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
-import { DUMMY_INVESTORS, searchInvestors } from "@/lib/dummy/investors";
-import { DUMMY_SCHEMES, getDistributorSchemeById, searchSchemes, type DistributorScheme } from "@/lib/dummy/schemes";
+import { DUMMY_INVESTORS, searchInvestors } from "@/lib/distributor-investor-utils";
+import { DUMMY_SCHEMES, getDistributorSchemeById, searchSchemes, type DistributorScheme } from "@/lib/distributor-schemes-data";
 import {
   DISTRIBUTOR_PAGE_STACK_CLASS,
   DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,

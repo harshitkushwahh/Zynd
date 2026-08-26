@@ -133,7 +133,7 @@ export function AdminUserFamilyGroupDetailPage({
   }
 
   if (error && !payload) {
-    return <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>;
+    return <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>;
   }
 
   if (!payload) {
@@ -171,7 +171,7 @@ export function AdminUserFamilyGroupDetailPage({
         ) : null}
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <Card className="admin-user-family-group-detail__hero ring-0 bg-card p-4 shadow-sm sm:p-5">
         <div className="admin-user-family-group-detail__hero-main">

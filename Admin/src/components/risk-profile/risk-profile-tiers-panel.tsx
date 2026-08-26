@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Gauge } from "lucide-react";
 
@@ -29,7 +29,17 @@ import { resolveRiskTierBadgeVariant } from "@/lib/risk-tier-admin-ui";
 import { RISK_TIERS_QUERY_KEY, useRiskTiersQuery } from "@/hooks/use-risk-profile-queries";
 import { updateRiskTier, type RiskTier } from "@/lib/risk-profile-admin-api";
 
-export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
+export function RiskProfileTiersPanel({
+  canManage,
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+}: {
+  canManage: boolean;
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { data: tiers = [], isPending, isFetching, error: queryError } = useRiskTiersQuery();
   const [error, setError] = useState("");
@@ -40,7 +50,9 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
   const [minScore, setMinScore] = useState("");
   const [maxScore, setMaxScore] = useState("");
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [internalSearch, setInternalSearch] = useState("");
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
@@ -56,6 +68,10 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
     () => paginateItems(filteredTiers, page, pageSize),
     [filteredTiers, page, pageSize],
   );
+
+  useEffect(() => {
+    setPage(0);
+  }, [search]);
 
   const showSkeleton = isPending && tiers.length === 0;
   const loadError = queryError ? getErrorMessage(queryError, "Could not load tiers.") : "";
@@ -95,20 +111,22 @@ export function RiskProfileTiersPanel({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-4">
-      <AdminSearchInput
-        containerClassName="max-w-sm"
-        placeholder="Search tiers"
-        value={search}
-        onChange={(event) => {
-          setSearch(event.target.value);
-          setPage(0);
-        }}
-      />
+      {showToolbar ? (
+        <AdminSearchInput
+          containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+          placeholder="Search tiers"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(0);
+          }}
+        />
+      ) : null}
 
       {error || loadError ? (
-        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
       ) : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
         minWidth="lg"

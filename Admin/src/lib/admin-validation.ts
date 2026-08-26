@@ -1,4 +1,5 @@
 import { INPUT_RULES } from "@/lib/input-rules";
+import { isPasswordValid } from "@/lib/password-criteria";
 
 export function isValidEmail(email: string): boolean {
   const trimmed = email.trim();
@@ -16,8 +17,5 @@ export function isValidOtp(code: string): boolean {
 }
 
 export function isValidPassword(password: string): boolean {
-  return (
-    password.length >= INPUT_RULES.password.minLength &&
-    password.length <= INPUT_RULES.password.maxLength
-  );
+  return isPasswordValid(password);
 }

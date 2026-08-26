@@ -6,6 +6,7 @@ export type ZyndLogItem = {
   id: string;
   source: ZyndLogSource;
   user_id: string | null;
+  client_id: string | null;
   user_email: string | null;
   action: string;
   method: string;

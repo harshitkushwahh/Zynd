@@ -1,4 +1,11 @@
 import { apiRequest } from "@/lib/api-client";
+import { pickUserRef, userRefToPath } from "@/lib/admin-user-ref";
+
+function riskProfileUserPath(userRef: string) {
+  return encodeURIComponent(
+    userRefToPath(pickUserRef({ client_id: userRef, user_id: userRef })),
+  );
+}
 
 export type RiskCategory = {
   id: string;
@@ -137,15 +144,15 @@ export type UserRiskProfileAssessmentDetail = {
   };
 };
 
-export async function fetchUserRiskProfileAssessments(userId: string) {
+export async function fetchUserRiskProfileAssessments(userRef: string) {
   return apiRequest<{ items: UserRiskProfileAssessmentItem[]; limit: number; offset: number }>(
-    `/admin/risk-profile/users/${userId}/assessments`,
+    `/admin/risk-profile/users/${riskProfileUserPath(userRef)}/assessments`,
   );
 }
 
-export async function fetchUserRiskProfileAssessmentDetail(userId: string, assessmentId: string) {
+export async function fetchUserRiskProfileAssessmentDetail(userRef: string, assessmentId: string) {
   return apiRequest<UserRiskProfileAssessmentDetail>(
-    `/admin/risk-profile/users/${userId}/assessments/${assessmentId}`,
+    `/admin/risk-profile/users/${riskProfileUserPath(userRef)}/assessments/${assessmentId}`,
   );
 }
 
@@ -349,18 +356,18 @@ export type RiskAuditLogItem = {
   created_at: string;
 };
 
-export async function fetchUserRiskProfile(userId: string) {
-  return apiRequest<UserRiskProfileDetail>(`/admin/risk-profile/users/${userId}`);
+export async function fetchUserRiskProfile(userRef: string) {
+  return apiRequest<UserRiskProfileDetail>(`/admin/risk-profile/users/${riskProfileUserPath(userRef)}`);
 }
 
 export async function fetchRiskAuditLogs(params?: {
-  user_id?: string;
+  user_ref?: string;
   event_type?: string;
   limit?: number;
   offset?: number;
 }) {
   const search = new URLSearchParams();
-  if (params?.user_id) search.set("user_id", params.user_id);
+  if (params?.user_ref) search.set("user_ref", params.user_ref);
   if (params?.event_type) search.set("event_type", params.event_type);
   if (params?.limit != null) search.set("limit", String(params.limit));
   if (params?.offset != null) search.set("offset", String(params.offset));
@@ -421,8 +428,10 @@ export type RiskProfileUnlockJourney = {
   steps: RiskProfileUnlockJourneyStep[];
 };
 
-export async function fetchRiskProfileUnlockJourney(userId: string) {
-  return apiRequest<RiskProfileUnlockJourney>(`/admin/risk-profile/users/${userId}/unlock-journey`);
+export async function fetchRiskProfileUnlockJourney(userRef: string) {
+  return apiRequest<RiskProfileUnlockJourney>(
+    `/admin/risk-profile/users/${riskProfileUserPath(userRef)}/unlock-journey`,
+  );
 }
 
 export async function fetchLockedRiskProfiles(params?: { limit?: number; offset?: number }) {
@@ -435,13 +444,16 @@ export async function fetchLockedRiskProfiles(params?: { limit?: number; offset?
   );
 }
 
-export async function requestRiskProfileUnlock(userId: string) {
-  return apiRequest<{ expires_in: number }>(`/admin/risk-profile/users/${userId}/unlock/request`, {
-    method: "POST",
-  });
+export async function requestRiskProfileUnlock(userRef: string) {
+  return apiRequest<{ expires_in: number }>(
+    `/admin/risk-profile/users/${riskProfileUserPath(userRef)}/unlock/request`,
+    {
+      method: "POST",
+    },
+  );
 }
 
-export async function confirmRiskProfileUnlock(userId: string, body: { otp_code: string }) {
+export async function confirmRiskProfileUnlock(userRef: string, body: { otp_code: string }) {
   return apiRequest<{
     completed_count: number;
     granted_attempts: number;
@@ -449,7 +461,7 @@ export async function confirmRiskProfileUnlock(userId: string, body: { otp_code:
     is_locked: boolean;
     locked_at: string | null;
     updated_at: string | null;
-  }>(`/admin/risk-profile/users/${userId}/unlock/confirm`, {
+  }>(`/admin/risk-profile/users/${riskProfileUserPath(userRef)}/unlock/confirm`, {
     method: "POST",
     body: JSON.stringify(body),
   });

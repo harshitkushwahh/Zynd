@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, Crown, Trash2, UsersRound, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";

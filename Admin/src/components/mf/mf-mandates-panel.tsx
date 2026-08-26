@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const MANDATE_STATUS_OPTIONS: AdminSelectOption[] = [
+export const MANDATE_STATUS_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "PENDING", label: "Pending" },
   { value: "AUTH_PENDING", label: "Auth pending" },
@@ -71,10 +71,22 @@ export function MfMandatesPanel({
   canRead,
   canManage,
   showSummaryCards = true,
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  statusFilter: statusFilterProp,
+  onStatusFilterChange,
+  refreshKey,
 }: {
   canRead: boolean;
   canManage: boolean;
   showSummaryCards?: boolean;
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  statusFilter?: string;
+  onStatusFilterChange?: (value: string) => void;
+  refreshKey?: number;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -84,8 +96,12 @@ export function MfMandatesPanel({
     active_mandates: 0,
     auth_pending_mandates: 0,
   });
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalStatusFilter, setInternalStatusFilter] = useState(ALL);
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const statusFilter = onStatusFilterChange ? (statusFilterProp ?? ALL) : internalStatusFilter;
+  const setStatusFilter = onStatusFilterChange ?? setInternalStatusFilter;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [selectedMandateId, setSelectedMandateId] = useState<string | null>(null);
@@ -111,6 +127,11 @@ export function MfMandatesPanel({
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (refreshKey == null || refreshKey === 0) return;
+    void loadData();
+  }, [loadData, refreshKey]);
 
   useEffect(() => {
     setPage(0);
@@ -175,33 +196,36 @@ export function MfMandatesPanel({
         </AdminMetricCardsGrid>
       ) : null}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search by customer or mandate ID"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminSelect
-            value={statusFilter}
-            onValueChange={(value) => setStatusFilter(value)}
-            options={MANDATE_STATUS_OPTIONS}
-            placeholder="Status"
-            className="min-w-select-sm"
+      {showToolbar ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder="Search by customer or mandate ID"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => void loadData()}
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <AdminSelect
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value)}
+              options={MANDATE_STATUS_OPTIONS}
+              placeholder="Status"
+              className="min-w-select-sm"
+              triggerClassName="w-auto"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => void loadData()}
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
         minWidth="7xl"

@@ -147,9 +147,9 @@ function InvestmentTabToolbar({
   filterAriaLabel: string;
 }) {
   return (
-    <div className="admin-user-family-group-detail__table-toolbar">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <AdminSearchInput
-        containerClassName="admin-user-family-group-detail__table-search"
+        containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
         placeholder={searchPlaceholder}
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
@@ -159,7 +159,8 @@ function InvestmentTabToolbar({
         onValueChange={onFilterChange}
         options={filterOptions}
         aria-label={filterAriaLabel}
-        triggerClassName="admin-user-family-group-detail__table-filter"
+        className="min-w-select-sm sm:ml-auto"
+        triggerClassName="w-auto"
       />
     </div>
   );

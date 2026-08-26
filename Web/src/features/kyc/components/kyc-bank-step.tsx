@@ -239,6 +239,7 @@ export function KycBankStep({
           isComplete={isComplete}
           accountDetails={accountDetails}
           verification={verification}
+          ifscCode={form.ifscCode}
           readiness={readiness}
           onEdit={handleEditBankDetails}
         />

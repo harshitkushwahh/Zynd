@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import {
   MF_CALC_GAIN_DOT_CLASS,
   MF_CALC_GAIN_TEXT_CLASS,
   MF_CALC_INVESTED_DOT_CLASS,
 } from "@/features/invest/lib/mf-calculator-ui";
-import { formatInr } from "@/features/invest/lib/mf-format";
+import { formatInr, formatReturn } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +25,7 @@ type LumpsumCorpusDonutProps = {
   invested: number;
   projectedValue: number;
   horizonLabel?: string;
+  returnPct?: number | null;
   showLegend?: boolean;
   className?: string;
 };
@@ -49,6 +52,7 @@ export function LumpsumCorpusDonut({
   invested,
   projectedValue,
   horizonLabel,
+  returnPct = null,
   showLegend = true,
   className,
 }: LumpsumCorpusDonutProps) {
@@ -76,7 +80,7 @@ export function LumpsumCorpusDonut({
   return (
     <div className={cn("flex flex-col items-center", className)}>
       <div className="relative mx-auto size-[11.5rem] sm:size-[12.5rem]">
-        <ResponsiveContainer width="100%" height="100%">
+        <RechartsMeasuredContainer width="100%" height="100%" minWidth={0}>
           <PieChart>
             <Pie
               data={chartData}
@@ -96,7 +100,7 @@ export function LumpsumCorpusDonut({
             </Pie>
             <Tooltip content={(props) => <DonutTooltip {...(props as DonutTooltipProps)} />} />
           </PieChart>
-        </ResponsiveContainer>
+        </RechartsMeasuredContainer>
 
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
           {horizonLabel ? (
@@ -104,10 +108,15 @@ export function LumpsumCorpusDonut({
               {horizonLabel}
             </p>
           ) : null}
-          <p className="text-body font-semibold tabular-nums tracking-tight text-foreground">
-            {formatInr(projectedValue)}
+          <p
+            className={cn(
+              "text-body font-semibold tabular-nums tracking-tight",
+              returnPct != null && returnPct > 0 ? MF_CALC_GAIN_TEXT_CLASS : "text-foreground",
+            )}
+          >
+            {returnPct != null ? formatReturn(returnPct) : "—"}
           </p>
-          <p className="text-[11px] text-muted-foreground">{copy.mutualFunds.lumpsumChartValue}</p>
+          <p className="text-[11px] text-muted-foreground">{copy.mutualFunds.lumpsumChartTitle}</p>
         </div>
       </div>
 

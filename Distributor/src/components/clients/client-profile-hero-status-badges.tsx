@@ -4,7 +4,7 @@ import { Shield, ShieldOff } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientProfile } from "@/lib/dummy/types";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
 import {
   complianceStatusVariant,
   investmentStatusVariant,

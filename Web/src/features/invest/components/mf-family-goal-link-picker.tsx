@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Loader2, Lock, Plus, Target, Users } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Loader2, Lock, Plus, Target, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,9 @@ import {
   fetchLinkableFamilyGoals,
   type LinkableFamilyGoal,
 } from "@/features/goals/api/goals-api";
+import {
+  fetchFamilyGroups,
+} from "@/features/family-groups/api/family-groups-api";
 import { buildFamilyGroupHref } from "@/features/family-groups/lib/family-group-navigation";
 import { familyMemberInitials } from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
@@ -38,19 +41,41 @@ function goalLabel(goal: LinkableFamilyGoal) {
 
 function FamilyGroupCircle({
   label,
+  avatarUrl,
   className,
 }: {
   label: string;
+  avatarUrl?: string | null;
   className?: string;
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showAvatar = Boolean(avatarUrl) && !imageFailed;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [avatarUrl]);
+
   return (
     <div
       className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary ring-1 ring-primary/15",
+        "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-inset ring-border/80",
+        showAvatar ? "bg-muted/50" : "bg-primary/10 text-[10px] font-semibold text-primary ring-primary/15",
         className,
       )}
     >
-      {label ? familyMemberInitials(label) : <Users className="size-3.5" />}
+      {showAvatar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={avatarUrl!}
+          alt=""
+          className="size-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      ) : label ? (
+        familyMemberInitials(label)
+      ) : (
+        <Users className="size-3.5" />
+      )}
     </div>
   );
 }
@@ -95,9 +120,10 @@ function FamilyGoalLinkLockedEmpty({ className }: { className?: string }) {
           </p>
           <Link
             href="/dashboard/family"
-            className="shrink-0 text-[11px] font-medium whitespace-nowrap text-primary hover:underline"
+            aria-label={copy.goals.linkableFamilyGoalsBrowseGroups}
+            className="inline-flex shrink-0 items-center justify-center rounded-full p-1 text-primary transition-colors hover:bg-primary/10"
           >
-            {copy.goals.linkableFamilyGoalsBrowseGroups}
+            <ArrowUpRight className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
           </Link>
         </div>
       </div>
@@ -123,9 +149,23 @@ export function MfFamilyGoalLinkPicker({
       setLoading(true);
       setError("");
       try {
-        const response = await fetchLinkableFamilyGoals();
+        const [linkableResponse, familyGroupsResponse] = await Promise.all([
+          fetchLinkableFamilyGoals(),
+          fetchFamilyGroups(),
+        ]);
         if (cancelled) return;
-        setItems(response.items);
+
+        const avatarByGroupId = new Map(
+          familyGroupsResponse.items.map((group) => [group.id, group.avatar_url ?? null]),
+        );
+
+        setItems(
+          linkableResponse.items.map((item) => ({
+            ...item,
+            group_avatar_url:
+              item.group_avatar_url ?? avatarByGroupId.get(item.group_id) ?? null,
+          })),
+        );
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : copy.goals.linkableFamilyGoalsError);
@@ -153,8 +193,8 @@ export function MfFamilyGoalLinkPicker({
     }
   }, [items, onSelect, selectedGoalId]);
 
-  const createGroupId = useMemo(
-    () => items.find((item) => item.can_create_goals)?.group_id ?? null,
+  const createGroup = useMemo(
+    () => items.find((item) => item.can_create_goals) ?? null,
     [items],
   );
 
@@ -190,12 +230,7 @@ export function MfFamilyGoalLinkPicker({
   }
 
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <p className="text-caption font-medium text-muted-foreground">
-        {copy.goals.linkableFamilyGoalsLabel}
-      </p>
-
-      <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} className={className}>
         <PopoverTrigger
           disabled={disabled}
           render={
@@ -208,7 +243,10 @@ export function MfFamilyGoalLinkPicker({
           }
         >
           {selectedGoal ? (
-            <FamilyGroupCircle label={selectedGoal.group_title} />
+            <FamilyGroupCircle
+              label={selectedGoal.group_title}
+              avatarUrl={selectedGoal.group_avatar_url}
+            />
           ) : (
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted/40 text-muted-foreground ring-1 ring-border">
               <Target className="size-3.5" aria-hidden />
@@ -264,7 +302,10 @@ export function MfFamilyGoalLinkPicker({
                   isSelected ? "bg-primary/10 text-foreground" : "hover:bg-muted/60",
                 )}
               >
-                <FamilyGroupCircle label={goal.group_title} />
+                <FamilyGroupCircle
+                  label={goal.group_title}
+                  avatarUrl={goal.group_avatar_url}
+                />
                 <span className="min-w-0 flex-1 truncate text-compact font-medium">
                   {goalLabel(goal)}
                 </span>
@@ -272,19 +313,22 @@ export function MfFamilyGoalLinkPicker({
             );
           })}
 
-          {createGroupId ? (
-            <div className="border-t border-border/70 px-2.5 py-2">
+          {createGroup ? (
+            <div className="border-t border-border p-2">
               <Link
-                href={buildFamilyGroupHref(createGroupId)}
-                className="text-caption font-medium text-primary hover:underline"
+                href={buildFamilyGroupHref({
+                  id: createGroup.group_id,
+                  title: createGroup.group_title,
+                })}
+                className="flex w-full items-center gap-2 rounded-[var(--radius-control)] px-3 py-2.5 text-left text-compact font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={() => setOpen(false)}
               >
+                <Plus className="size-4 shrink-0" aria-hidden />
                 {copy.goals.linkableFamilyGoalsCreateHint}
               </Link>
             </div>
           ) : null}
         </PopoverContent>
       </Popover>
-    </div>
   );
 }

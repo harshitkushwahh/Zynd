@@ -216,10 +216,7 @@ export function GoalsArchivedDialog({
         open={open}
         onOpenChange={onOpenChange}
         title={copy.goals.archivedTitle}
-        description={copy.goals.archivedDescription}
-        icon={Archive}
         maxWidth="md"
-        headerDensity="compact"
         className="max-w-md"
       >
         <div className="max-h-[min(18rem,50vh)] overflow-y-auto px-4 py-3 [scrollbar-width:thin]">

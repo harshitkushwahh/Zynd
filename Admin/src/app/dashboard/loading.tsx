@@ -1,5 +1,5 @@
-import { AdminGlobalLoading } from "@/components/auth/admin-global-loading";
+import { AdminPageSkeleton } from "@/components/ui/admin-skeletons";
 
 export default function DashboardLoading() {
-  return <AdminGlobalLoading />;
+  return <AdminPageSkeleton withToolbar withMetrics />;
 }

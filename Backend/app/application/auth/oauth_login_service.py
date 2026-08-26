@@ -11,7 +11,8 @@ from app.application.auth.auth_session_context import (
     complete_authenticated_login,
     maybe_mfa_pending_login,
 )
-from app.application.auth.auth_client_policy import validate_user_role_for_client
+from app.application.auth.auth_client_policy import AuthClientKind, validate_user_role_for_client
+from app.application.admin.rbac_service import list_user_role_keys
 from app.application.auth.errors import AuthError
 from app.application.auth.oauth_service import require_oauth_state
 from app.application.documents.client_id_service import assign_client_id
@@ -33,7 +34,7 @@ async def _process_oauth_login(
     device_fingerprint: str,
     user_agent: str | None,
     ip: str | None,
-    admin_client: bool = False,
+    auth_client: AuthClientKind = "web",
     settings: Settings | None = None,
     first_name: str | None = None,
     last_name: str | None = None,
@@ -101,14 +102,15 @@ async def _process_oauth_login(
             400,
         )
 
-    validate_user_role_for_client(user, admin_client=admin_client)
+    role_keys = await list_user_role_keys(db, user.id)
+    validate_user_role_for_client(user, client=auth_client, role_keys=role_keys)
 
     pending = await maybe_mfa_pending_login(
         user,
         device_fingerprint=device_fingerprint,
         user_agent=user_agent,
         provider=provider.value,
-        admin_client=admin_client,
+        auth_client=auth_client,
     )
     if pending:
         from app.application.auth.login_sms_service import enrich_mfa_login_pending
@@ -137,7 +139,7 @@ async def login_with_google(
     ip: str | None,
     oauth_state: str | None = None,
     referral_code: str | None = None,
-    admin_client: bool = False,
+    auth_client: AuthClientKind = "web",
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
@@ -168,7 +170,7 @@ async def login_with_google(
         ip=ip,
         settings=settings,
         referral_code=referral_code,
-        admin_client=admin_client,
+        auth_client=auth_client,
     )
 
 
@@ -184,7 +186,7 @@ async def login_with_apple(
     first_name: str | None = None,
     last_name: str | None = None,
     referral_code: str | None = None,
-    admin_client: bool = False,
+    auth_client: AuthClientKind = "web",
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
@@ -219,5 +221,5 @@ async def login_with_apple(
         first_name=first_name,
         last_name=last_name,
         referral_code=referral_code,
-        admin_client=admin_client,
+        auth_client=auth_client,
     )

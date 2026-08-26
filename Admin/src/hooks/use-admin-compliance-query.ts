@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchAdminActions,
   fetchPendingDeletions,
+  fetchPendingKycReviewCount,
   fetchSecurityReviews,
   type AdminActionItem,
   type PendingDeletionItem,
@@ -15,6 +16,7 @@ type AdminComplianceQueryParams = {
   canReadReviews: boolean;
   canExecuteDeletions: boolean;
   canApproveActions: boolean;
+  canReadDocuments: boolean;
 };
 
 export function adminComplianceQueryKey(params: AdminComplianceQueryParams) {
@@ -24,6 +26,7 @@ export function adminComplianceQueryKey(params: AdminComplianceQueryParams) {
       reviews: params.canReadReviews,
       deletions: params.canExecuteDeletions,
       actions: params.canApproveActions,
+      kyc: params.canReadDocuments,
     },
   ] as const;
 }
@@ -32,6 +35,7 @@ export type AdminComplianceData = {
   reviews: SecurityReviewItem[];
   deletions: PendingDeletionItem[];
   pendingActions: AdminActionItem[];
+  pendingKycReviews: number;
 };
 
 export function useAdminComplianceQuery(params: AdminComplianceQueryParams) {
@@ -42,6 +46,7 @@ export function useAdminComplianceQuery(params: AdminComplianceQueryParams) {
       let reviews: SecurityReviewItem[] = [];
       let deletions: PendingDeletionItem[] = [];
       let pendingActions: AdminActionItem[] = [];
+      let pendingKycReviews = 0;
 
       if (params.canReadReviews) {
         tasks.push(fetchSecurityReviews("open").then((items) => {
@@ -58,11 +63,19 @@ export function useAdminComplianceQuery(params: AdminComplianceQueryParams) {
           pendingActions = items;
         }));
       }
+      if (params.canReadDocuments) {
+        tasks.push(fetchPendingKycReviewCount().then((payload) => {
+          pendingKycReviews = payload.count;
+        }));
+      }
 
       await Promise.all(tasks);
-      return { reviews, deletions, pendingActions };
+      return { reviews, deletions, pendingActions, pendingKycReviews };
     },
     enabled:
-      params.canReadReviews || params.canExecuteDeletions || params.canApproveActions,
+      params.canReadReviews ||
+      params.canExecuteDeletions ||
+      params.canApproveActions ||
+      params.canReadDocuments,
   });
 }

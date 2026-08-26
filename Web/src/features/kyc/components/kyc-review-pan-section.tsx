@@ -3,6 +3,7 @@
 import { CheckCircle2 } from "lucide-react";
 
 import type { KycPanDraft } from "@/features/kyc/lib/kyc-journey-draft";
+import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -14,13 +15,23 @@ const fieldShellClassName =
   "flex h-9 w-full min-w-0 items-center rounded-[var(--radius-control)] border border-border/60 bg-muted/35 px-2.5 text-caption font-semibold tracking-tight text-foreground";
 
 function PanReviewField({ label, value }: { label: string; value: string }) {
+  const trimmed = value?.trim() ?? "";
+  const isEmpty = !trimmed;
+
   return (
     <div className="min-w-0 space-y-1">
       <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
         {label}
       </p>
       <div className={fieldShellClassName}>
-        <span className="truncate">{value || "—"}</span>
+        <span
+          className={cn(
+            "truncate",
+            isEmpty && "font-normal text-muted-foreground",
+          )}
+        >
+          {isEmpty ? copy.kyc.review.naLabel : trimmed}
+        </span>
       </div>
     </div>
   );
@@ -28,6 +39,7 @@ function PanReviewField({ label, value }: { label: string; value: string }) {
 
 export function KycReviewPanSection({ pan }: KycReviewPanSectionProps) {
   const fullName = [pan.firstName, pan.middleName, pan.lastName].filter(Boolean).join(" ");
+  const panDisplay = resolvePanDisplay(pan) ?? "—";
 
   return (
     <div
@@ -64,7 +76,7 @@ export function KycReviewPanSection({ pan }: KycReviewPanSectionProps) {
             {copy.kyc.pan.numberLabel}
           </p>
           <p className="mt-1 text-center font-mono text-h4 font-semibold uppercase tracking-[0.22em] text-foreground">
-            {pan.panNumber}
+            {panDisplay}
           </p>
         </div>
 

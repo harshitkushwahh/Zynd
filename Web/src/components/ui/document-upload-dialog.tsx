@@ -11,6 +11,7 @@ import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Slider } from "@/components/ui/slider";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { cropImageToFile } from "@/features/documents/lib/crop-image";
+import { useResetWhenDialogOpens } from "@/hooks/use-reset-when-dialog-opens";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +51,8 @@ export type DocumentUploadDialogProps = {
   cropShape?: DocumentUploadCropShape;
   applyCropLabel?: string;
   croppingLabel?: string;
+  hideCancel?: boolean;
+  hideFooterOnEmpty?: boolean;
 };
 
 function previewRadiusClass(shape: DocumentUploadPreviewShape) {
@@ -83,6 +86,8 @@ export function DocumentUploadDialog({
   cropShape = "rect",
   applyCropLabel = copy.uploadDialog.applyCrop,
   croppingLabel = copy.uploadDialog.cropping,
+  hideCancel = false,
+  hideFooterOnEmpty = false,
 }: DocumentUploadDialogProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -118,7 +123,7 @@ export function DocumentUploadDialog({
     }
   };
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     revokePreview();
     revokeCropSource();
     setView("empty");
@@ -134,7 +139,9 @@ export function DocumentUploadDialog({
     setUploading(false);
     setCropping(false);
     setDragOver(false);
-  };
+  }, []);
+
+  useResetWhenDialogOpens(open, resetState);
 
   useEffect(() => {
     return () => {
@@ -144,9 +151,6 @@ export function DocumentUploadDialog({
   }, []);
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      resetState();
-    }
     onOpenChange(next);
   };
 
@@ -319,14 +323,13 @@ export function DocumentUploadDialog({
         ? uploadingLabel
         : submitLabel;
 
+  const showFooter = !(hideFooterOnEmpty && view === "empty");
+
   return (
     <BrandDialog
       open={open}
       onOpenChange={handleOpenChange}
       title={title}
-      description={description}
-      icon={Icon}
-      headerReserveCloseSpace
     >
       <div className="min-w-0 space-y-4 overflow-hidden p-6">
         <input
@@ -470,32 +473,36 @@ export function DocumentUploadDialog({
 
         {error ? <FieldMessage message={error} className="mt-0" /> : null}
 
-        <BrandDialogFooter className="-mx-6 -mb-6">
-          <Button
-            type="button"
-            variant="outline"
-            className="sm:min-w-[7rem]"
-            disabled={isBusy}
-            onClick={() => handleOpenChange(false)}
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            className="sm:min-w-[7rem]"
-            disabled={primaryDisabled}
-            onClick={() => void (view === "crop" ? handleApplyCrop() : handleUpload())}
-          >
-            {uploading || cropping ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                {primaryLabel}
-              </>
-            ) : (
-              primaryLabel
-            )}
-          </Button>
-        </BrandDialogFooter>
+        {showFooter ? (
+          <BrandDialogFooter className={cn("-mx-6 -mb-6", hideCancel && "sm:justify-end")}>
+            {!hideCancel ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="sm:min-w-[7rem]"
+                disabled={isBusy}
+                onClick={() => handleOpenChange(false)}
+              >
+                {cancelLabel}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              className="sm:min-w-[7rem]"
+              disabled={primaryDisabled}
+              onClick={() => void (view === "crop" ? handleApplyCrop() : handleUpload())}
+            >
+              {uploading || cropping ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {primaryLabel}
+                </>
+              ) : (
+                primaryLabel
+              )}
+            </Button>
+          </BrandDialogFooter>
+        ) : null}
       </div>
     </BrandDialog>
   );

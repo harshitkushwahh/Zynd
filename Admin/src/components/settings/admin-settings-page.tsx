@@ -11,11 +11,9 @@ import { AdminSettingsSidebar } from "@/components/settings/admin-settings-sideb
 import { AdminChangeEmailSettingsPanel } from "@/components/settings/admin-change-email-settings-panel";
 import { AdminChangePasswordSettingsPanel } from "@/components/settings/admin-change-password-settings-panel";
 import { AdminDevicesSettingsPanel } from "@/components/settings/admin-devices-settings-panel";
-import { AdminInvitationsSettingsPanel } from "@/components/settings/admin-invitations-settings-panel";
 import { AdminMfaSettingsPanel } from "@/components/settings/admin-mfa-settings-panel";
 import { AdminPreferencesSettingsPanel } from "@/components/settings/admin-preferences-settings-panel";
 import { AdminProfileSettingsPanel } from "@/components/settings/admin-profile-settings-panel";
-import { AdminTeamSettingsPanel } from "@/components/settings/admin-team-settings-panel";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { fetchAdminSessions } from "@/lib/admin-account-api";
@@ -51,9 +49,14 @@ export function AdminSettingsPage({ sectionSlug }: AdminSettingsPageProps) {
       sectionSlug === "roles" ||
       sectionSlug === "permissions" ||
       sectionSlug === "action-types" ||
-      sectionSlug === "access-overview"
+      sectionSlug === "access-overview" ||
+      sectionSlug === "team"
     ) {
       router.replace(`/dashboard/users/${sectionSlug}`);
+      return;
+    }
+    if (sectionSlug === "invitations") {
+      router.replace("/dashboard/users/team/invitations");
       return;
     }
     if (!sectionSlug) {
@@ -93,10 +96,6 @@ export function AdminSettingsPage({ sectionSlug }: AdminSettingsPageProps) {
         return <AdminMfaSettingsPanel />;
       case "devices":
         return <AdminDevicesSettingsPanel />;
-      case "team":
-        return <AdminTeamSettingsPanel />;
-      case "invitations":
-        return <AdminInvitationsSettingsPanel />;
       case "preferences":
         return <AdminPreferencesSettingsPanel />;
       default:
@@ -111,9 +110,9 @@ export function AdminSettingsPage({ sectionSlug }: AdminSettingsPageProps) {
       icon={Settings}
     >
       {!user ? (
-        <AdminFeedbackMessage variant="warning">Sign in to manage settings.</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="warning" dismissible={false}>Sign in to manage settings.</AdminFeedbackMessage>
       ) : !activeSection ? (
-        <AdminFeedbackMessage variant="warning">
+        <AdminFeedbackMessage variant="warning" dismissible={false}>
           You do not have permission to view any settings sections.
         </AdminFeedbackMessage>
       ) : (

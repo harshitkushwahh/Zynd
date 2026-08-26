@@ -1,5 +1,5 @@
-import { MfLumpsumCalculatorPageSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
+import { DashboardQueryRouteLoading } from "@/components/dashboard/dashboard-query-route-loading";
 
 export default function MutualFundsLumpsumCalculatorLoading() {
-  return <MfLumpsumCalculatorPageSkeleton />;
+  return <DashboardQueryRouteLoading />;
 }

@@ -239,6 +239,38 @@ def _fund_list_base_query():
     )
 
 
+async def _load_latest_nav_snapshots(
+    session: AsyncSession,
+    fund_ids: list[int],
+) -> dict[int, tuple[Decimal | None, date | None, int]]:
+    if not fund_ids:
+        return {}
+
+    latest_rows = (
+        await session.execute(
+            select(SchemeNav.fund_id, SchemeNav.nav_value, SchemeNav.nav_date)
+            .where(SchemeNav.fund_id.in_(fund_ids))
+            .distinct(SchemeNav.fund_id)
+            .order_by(SchemeNav.fund_id, desc(SchemeNav.nav_date))
+        )
+    ).all()
+    count_rows = (
+        await session.execute(
+            select(SchemeNav.fund_id, func.count())
+            .where(SchemeNav.fund_id.in_(fund_ids))
+            .group_by(SchemeNav.fund_id)
+        )
+    ).all()
+
+    nav_counts = {fund_id: int(count or 0) for fund_id, count in count_rows}
+    snapshots: dict[int, tuple[Decimal | None, date | None, int]] = {
+        fund_id: (None, None, nav_counts.get(fund_id, 0)) for fund_id in fund_ids
+    }
+    for fund_id, nav_value, nav_date in latest_rows:
+        snapshots[fund_id] = (nav_value, nav_date, nav_counts.get(fund_id, 0))
+    return snapshots
+
+
 async def list_funds_admin(
     session: AsyncSession,
     *,
@@ -297,10 +329,12 @@ async def list_funds_admin(
     ).all()
 
     settings = get_settings()
+    nav_snapshots = await _load_latest_nav_snapshots(session, fund_ids)
     items_by_id: dict[int, dict] = {}
     for fund, product, amc, category_slug_val, category_name, return_3y, rank_position in rows:
         if fund.id in items_by_id:
             continue
+        latest_nav, latest_nav_date, nav_row_count = nav_snapshots.get(fund.id, (None, None, 0))
         items_by_id[fund.id] = _serialize_fund_row(
             fund,
             product,
@@ -310,6 +344,9 @@ async def list_funds_admin(
             return_3y=return_3y,
             rank_position=rank_position,
             settings=settings,
+            latest_nav=latest_nav,
+            latest_nav_date=latest_nav_date,
+            nav_row_count=nav_row_count,
         )
 
     items = [items_by_id[fund_id] for fund_id in fund_ids if fund_id in items_by_id]

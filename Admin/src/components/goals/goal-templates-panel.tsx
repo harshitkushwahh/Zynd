@@ -107,8 +107,16 @@ export function GoalTemplatesPanel() {
         icon={Target}
       />
 
-      {error ? <AdminFeedbackMessage tone="error" message={error} /> : null}
-      {success ? <AdminFeedbackMessage tone="success" message={success} /> : null}
+      {error ? (
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>
+          {error}
+        </AdminFeedbackMessage>
+      ) : null}
+      {success ? (
+        <AdminFeedbackMessage variant="success" onDismiss={() => setSuccess("")}>
+          {success}
+        </AdminFeedbackMessage>
+      ) : null}
 
       <AdminDataTable>
         <AdminTableHeader>

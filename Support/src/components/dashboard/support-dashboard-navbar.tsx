@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSupportAuth } from "@/contexts/support-auth-context";
 import { useTheme } from "@/contexts/theme-context";
 import { getSupportActiveRoute } from "@/lib/support-navigation";

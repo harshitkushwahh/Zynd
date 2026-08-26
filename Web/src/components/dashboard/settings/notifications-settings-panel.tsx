@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
+import { NotificationsPanelSkeleton } from "@/components/dashboard/settings/settings-skeleton";
 import { Button } from "@/components/ui/button";
 import { UiMessage } from "@/components/ui/ui-message";
 import { Switch } from "@/components/ui/switch";
@@ -51,39 +51,16 @@ const CATEGORY_LABELS: Record<
   },
 };
 
-function PreferencesTableSkeleton() {
-  return (
-    <div className={cn("overflow-hidden border border-border", NOTIFICATION_SURFACE_RADIUS_CLASS)}>
-      <div className="grid grid-cols-[1fr_5.5rem_5.5rem] gap-3 border-b border-border bg-muted/30 px-4 py-3 sm:grid-cols-[1fr_6rem_6rem] sm:px-5">
-        <Skeleton className="h-3 w-24" />
-        <Skeleton className="h-3 w-10 justify-self-center" />
-        <Skeleton className="h-3 w-12 justify-self-center" />
-      </div>
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div
-          key={index}
-          className="grid grid-cols-[1fr_5.5rem_5.5rem] items-center gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 sm:grid-cols-[1fr_6rem_6rem] sm:px-5"
-        >
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-full max-w-sm" />
-          </div>
-          <Skeleton className="size-5 justify-self-center rounded-full" />
-          <Skeleton className="size-5 justify-self-center rounded-full" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function NotificationsSettingsPanel() {
   const [preferences, setPreferences] = useState<NotificationPreference[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingCategory, setSavingCategory] = useState<NotificationCategory | null>(null);
 
-  const loadPreferences = useCallback(async () => {
-    setLoading(true);
+  const loadPreferences = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const response = await fetchNotificationPreferences();
@@ -130,7 +107,7 @@ export function NotificationsSettingsPanel() {
   };
 
   if (loading) {
-    return <PreferencesTableSkeleton />;
+    return <NotificationsPanelSkeleton />;
   }
 
   return (

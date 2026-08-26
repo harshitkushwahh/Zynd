@@ -21,7 +21,7 @@ import { Card } from "@/components/ui/card";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import {
   DUMMY_DISTRIBUTOR_TXN_MIX,
-} from "@/lib/dummy/branch-team-performance";
+} from "@/lib/distributor-branch-team-performance-data";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { cn } from "@/lib/utils";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";

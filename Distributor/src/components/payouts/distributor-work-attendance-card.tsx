@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useMemo } from "react";
-import { ArrowUpRight, Building2, Home, MapPin } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { ArrowUpRight, Building2, Clock3, Home, MapPin } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -14,13 +14,18 @@ import {
   XAxis,
 } from "recharts";
 
+import { fetchDistributorWorkAttendance } from "@/lib/distributor-work-api";
 import {
   DUMMY_DISTRIBUTOR_JOB_COMPENSATION,
-  DUMMY_DISTRIBUTOR_WORK_ATTENDANCE,
   getDistributorWorkAttendanceChartData,
   getDistributorWorkAttendanceSummary,
   type DistributorWorkAttendanceChartPoint,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
+import { DEFAULT_DISTRIBUTOR_WORK_ATTENDANCE_CONFIG } from "@/lib/distributor-work-attendance-config";
+import {
+  formatWorkElapsedDuration,
+  useDistributorWorkSession,
+} from "@/contexts/distributor-work-session-context";
 import { cn } from "@/lib/utils";
 
 const ATTENDANCE_DETAIL_HREF = "/dashboard/payouts/attendance";
@@ -51,6 +56,7 @@ function renderAttendanceChartTooltip(props: unknown) {
 type DistributorWorkAttendanceCardProps = {
   className?: string;
   variant?: "default" | "sidebar";
+  refreshKey?: string;
 };
 
 function WorkAttendanceSidebarCard({
@@ -58,11 +64,15 @@ function WorkAttendanceSidebarCard({
   summary,
   chartData,
   periodLabel,
+  activeSessionLabel,
+  activeElapsedLabel,
 }: {
   className?: string;
   summary: ReturnType<typeof getDistributorWorkAttendanceSummary>;
   chartData: ReturnType<typeof getDistributorWorkAttendanceChartData>;
   periodLabel: string;
+  activeSessionLabel: string | null;
+  activeElapsedLabel: string | null;
 }) {
   const lineStroke = "color-mix(in srgb, var(--primary) 82%, #3d6b5e)";
 
@@ -89,9 +99,25 @@ function WorkAttendanceSidebarCard({
       </div>
 
       <div className="distributor-job-sidebar-card__hero tabular-nums">
-        <span className="distributor-job-sidebar-card__hero-value">{summary.totalHours}h</span>
-        <span className="distributor-job-sidebar-card__hero-meta">{summary.weightedHours}h weighted</span>
+        {activeSessionLabel ? (
+          <>
+            <span className="distributor-job-sidebar-card__hero-value">{activeElapsedLabel}</span>
+            <span className="distributor-job-sidebar-card__hero-meta">{activeSessionLabel}</span>
+          </>
+        ) : (
+          <>
+            <span className="distributor-job-sidebar-card__hero-value">{summary.totalHours}h</span>
+            <span className="distributor-job-sidebar-card__hero-meta">{summary.weightedHours}h weighted</span>
+          </>
+        )}
       </div>
+
+      {activeSessionLabel ? (
+        <div className="distributor-job-sidebar-card__live-status" role="status">
+          <Clock3 className="size-3.5" strokeWidth={2.25} aria-hidden />
+          <span>Active session · sign out when your shift ends</span>
+        </div>
+      ) : null}
 
       <div className="distributor-job-sidebar-card__body">
         <div className="distributor-job-sidebar-card__chart" role="img" aria-hidden>
@@ -128,12 +154,42 @@ function WorkAttendanceSidebarCard({
 export function DistributorWorkAttendanceCard({
   className,
   variant = "default",
+  refreshKey,
 }: DistributorWorkAttendanceCardProps) {
   const gradientId = useId().replace(/:/g, "");
-  const rows = DUMMY_DISTRIBUTOR_WORK_ATTENDANCE;
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchDistributorWorkAttendance>>>([]);
   const summary = useMemo(() => getDistributorWorkAttendanceSummary(rows), [rows]);
   const chartData = useMemo(() => getDistributorWorkAttendanceChartData(rows), [rows]);
-  const periodLabel = DUMMY_DISTRIBUTOR_JOB_COMPENSATION.periodLabel;
+  const periodLabel = DUMMY_DISTRIBUTOR_JOB_COMPENSATION.periodLabel || "This month";
+  const { activeSession, elapsedMs } = useDistributorWorkSession();
+
+  useEffect(() => {
+    let cancelled = false;
+    const month = new Date().toISOString().slice(0, 7);
+    void fetchDistributorWorkAttendance(month)
+      .then((items) => {
+        if (!cancelled) setRows(items);
+      })
+      .catch(() => {
+        if (!cancelled) setRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
+  const activeSessionLabel = useMemo(() => {
+    if (!activeSession) return null;
+    const site = DEFAULT_DISTRIBUTOR_WORK_ATTENDANCE_CONFIG.workSites.find(
+      (item) => item.id === activeSession.workSiteId,
+    );
+    const mode = DEFAULT_DISTRIBUTOR_WORK_ATTENDANCE_CONFIG.workModes.find(
+      (item) => item.id === activeSession.workModeId,
+    );
+    return [site?.label, mode?.label].filter(Boolean).join(" · ");
+  }, [activeSession]);
+
+  const activeElapsedLabel = activeSession ? formatWorkElapsedDuration(elapsedMs) : null;
 
   if (variant === "sidebar") {
     return (
@@ -142,6 +198,8 @@ export function DistributorWorkAttendanceCard({
         summary={summary}
         chartData={chartData}
         periodLabel={periodLabel}
+        activeSessionLabel={activeSessionLabel}
+        activeElapsedLabel={activeElapsedLabel}
       />
     );
   }

@@ -2,7 +2,7 @@
 
 import { DistributorReportTemplateCard } from "@/components/reports/distributor-report-template-card";
 import { DistributorReportsInsightPanel } from "@/components/reports/distributor-reports-insight-panel";
-import { DUMMY_DISTRIBUTOR_REPORT_TEMPLATES } from "@/lib/dummy/distributor-reports";
+import { DUMMY_DISTRIBUTOR_REPORT_TEMPLATES } from "@/lib/distributor-reports-data";
 
 export function DistributorReportExportLibrary() {
   return (

@@ -24,7 +24,7 @@ export function formatProfileMenuShortcut(def: ProfileMenuShortcutDef) {
   const shift = def.shift ? (mac ? "⇧" : "Shift+") : "";
   const key = def.key === "," ? "," : def.key.toUpperCase();
 
-  return mac ? `${mod}${shift}${key}` : `${mod}${shift}${key}`;
+  return `${mod}${shift}${key}`;
 }
 
 export function isTypingShortcutTarget(target: EventTarget | null) {

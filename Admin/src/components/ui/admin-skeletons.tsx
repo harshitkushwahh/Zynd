@@ -241,3 +241,33 @@ export function AdminTabsSkeleton({ count = 3 }: { count?: number }) {
     </div>
   );
 }
+
+export function DistributorHeadOverviewSkeleton() {
+  return (
+    <div className="min-w-0 w-full max-w-full space-y-6">
+      <AdminMetricCardsSkeleton count={4} />
+      <div className="distributor-head-overview-grid grid min-w-0 items-start gap-4 lg:grid-cols-3">
+        <div className="distributor-head-overview-card min-w-0 space-y-3 rounded-card border border-border p-4 sm:p-5 lg:col-span-2">
+          <Skeleton className="h-5 w-48 max-w-full" />
+          <Skeleton className="h-3 w-full max-w-md" />
+          <Skeleton className="h-[280px] w-full rounded-card" />
+        </div>
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-1">
+          <AdminCardSkeleton lines={2} />
+          <Skeleton className="aspect-square w-full rounded-card" />
+          <Skeleton className="aspect-square w-full rounded-card" />
+          <Skeleton className="h-44 w-full rounded-card" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DistributorHeadSalesPanelSkeleton() {
+  return (
+    <div className="space-y-4">
+      <AdminToolbarSkeleton actions={0} />
+      <AdminTableSkeleton columns={4} rows={5} />
+    </div>
+  );
+}

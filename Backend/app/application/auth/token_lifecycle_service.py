@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import json
+import logging
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.application.distributor.partner_access_service import (
+    assert_distributor_partner_may_set_password,
+    assert_distributor_partner_may_request_password_reset,
+    origin_suggests_distributor_console,
+    resolve_auth_client_hint,
+    resolve_password_reset_target,
+    user_is_distributor_console_account,
+)
 
 from app.application.auth.audit_service import write_audit
 from app.application.auth.auth_session_context import create_authenticated_session
@@ -12,6 +23,7 @@ from app.application.auth.errors import AuthError
 from app.application.auth.mfa_service import user_has_mfa
 from app.application.auth.refresh_token_service import handle_refresh_token_reuse
 from app.application.auth.session_service import revoke_all_sessions
+from app.application.auth.pin_service import clear_pin_unlock
 from app.application.notifications.notification_service import schedule_user_notification
 from app.application.notifications.types import NotificationType
 from app.application.ports.email_gateway import send_security_email
@@ -22,16 +34,21 @@ from app.infrastructure.persistence.models import AuditEventType, Device, Sessio
 from app.infrastructure.persistence.password_reset_token_store import (
     consume_reset_token,
     create_reset_token,
+    get_active_password_reset_token,
 )
+from app.infrastructure.notifications.email_service import smtp_configured
 from app.infrastructure.security.hibp_service import (
     HibpUnavailableError,
     PasswordPwnedError,
     ensure_password_not_pwned,
 )
+from app.infrastructure.security.password_policy import PasswordStrengthError, validate_password_strength
 from app.infrastructure.security.passwords import hash_password
 from app.infrastructure.security.rate_limit import check_rate_limit
 from app.infrastructure.security.tokens import hash_token
 from app.infrastructure.security.turnstile import verify_turnstile
+
+logger = logging.getLogger(__name__)
 
 REFRESH_GRACE_SECONDS = 60
 
@@ -137,6 +154,7 @@ async def logout(db: AsyncSession, *, refresh_token: str, ip: str | None) -> Non
     if not session:
         return
     session.revoked_at = utcnow()
+    await clear_pin_unlock(session.user_id)
     await write_audit(
         db,
         event_type=AuditEventType.logout,
@@ -159,27 +177,77 @@ async def forgot_password(
     email: str,
     turnstile_token: str | None,
     ip: str | None,
-) -> dict[str, bool]:
+    client: str | None = None,
+    origin: str | None = None,
+    referer: str | None = None,
+    header_client: str | None = None,
+) -> dict[str, Any]:
     if not await check_rate_limit(f"forgot:{ip or email}", 5, 3600):
         raise AuthError("Too many reset requests. Try again later.", "rate_limited", 429)
-    if not await verify_turnstile(turnstile_token, ip):
+
+    settings = get_settings()
+    turnstile_required = not (settings.debug and settings.app_env == "development")
+    if turnstile_required and not await verify_turnstile(turnstile_token, ip):
         raise AuthError("Bot verification failed.", "turnstile_failed", 403)
 
     normalized = email.lower().strip()
     result = await db.execute(select(User).where(User.email == normalized))
     user = result.scalar_one_or_none()
+
+    client_hint = resolve_auth_client_hint(body_client=client, header_client=header_client)
+    is_distributor_request = (
+        client_hint == "distributor"
+        or origin_suggests_distributor_console(origin, referer)
+    )
+    if is_distributor_request:
+        if user is None or not await user_is_distributor_console_account(db, user.id):
+            raise AuthError(
+                "No Zynd Mitra account was found for this email address.",
+                "distributor_account_not_found",
+                404,
+            )
+
     if user:
-        token = await create_reset_token(str(user.id))
-        settings = get_settings()
-        reset_url = f"{settings.frontend_url}/reset-password?token={token}"
-        await send_security_email(
-            to_email=user.email,
-            subject="Reset your ZYND password",
-            body=(
-                "We received a request to reset your ZYND password.\n\n"
+        await assert_distributor_partner_may_request_password_reset(db, user=user)
+
+        active_token = await get_active_password_reset_token(str(user.id))
+        if active_token:
+            token = active_token
+        else:
+            token = await create_reset_token(str(user.id))
+        reset_base, product_label = await resolve_password_reset_target(
+            db,
+            settings,
+            user=user,
+            client=client_hint,
+            origin=origin,
+            referer=referer,
+        )
+        reset_url = f"{reset_base}/reset-password?token={token}"
+        if settings.debug and not smtp_configured():
+            message = f"[DEV PASSWORD RESET] to={user.email} url={reset_url}"
+            logger.info(message)
+            print(message, flush=True)
+        is_first_password = not user.password_hash
+        if is_first_password:
+            subject = f"Set your {product_label} password"
+            body = (
+                f"Your {product_label} account is ready.\n\n"
+                f"Set your password using the link below (valid for a short time):\n"
+                f"{reset_url}\n\n"
+                "If you did not expect this email, you can ignore it."
+            )
+        else:
+            subject = f"Reset your {product_label} password"
+            body = (
+                f"We received a request to reset your {product_label} password.\n\n"
                 f"Reset link (valid for a short time):\n{reset_url}\n\n"
                 "If you did not request this, you can ignore this email."
-            ),
+            )
+        await send_security_email(
+            to_email=user.email,
+            subject=subject,
+            body=body,
         )
         await write_audit(
             db,
@@ -187,6 +255,18 @@ async def forgot_password(
             user_id=user.id,
             ip=ip,
         )
+        result: dict[str, Any] = {"ok": True}
+        if settings.debug and not smtp_configured():
+            result["dev_reset_url"] = reset_url
+        return result
+
+    if settings.debug and not smtp_configured():
+        hint = (
+            f"[DEV PASSWORD RESET] No account found for {normalized!r} — "
+            "link not generated (complete signup or use a registered email)."
+        )
+        logger.info(hint)
+        print(hint, flush=True)
     return {"ok": True}
 
 
@@ -206,6 +286,8 @@ async def reset_password(
     user = result.scalar_one_or_none()
     if not user:
         raise AuthError("User not found.", "user_not_found", 404)
+
+    await assert_distributor_partner_may_set_password(db, user=user)
 
     if user_has_mfa(user):
         from app.application.auth.mfa_service import verify_user_backup_code, verify_user_totp
@@ -234,6 +316,11 @@ async def reset_password(
             raise AuthError("Invalid verification code.", "invalid_mfa_code", 401)
 
     try:
+        validate_password_strength(new_password)
+    except PasswordStrengthError as exc:
+        raise AuthError(str(exc), "invalid_password", 400) from exc
+
+    try:
         await ensure_password_not_pwned(new_password)
     except PasswordPwnedError as exc:
         raise AuthError(str(exc), "password_pwned", 400) from exc
@@ -247,6 +334,9 @@ async def reset_password(
     user.locked_until = None
     await revoke_all_sessions(db, user_id=user.id, ip=ip, reason="password_reset")
     await write_audit(db, event_type=AuditEventType.password_changed, user_id=user.id, ip=ip)
+    from app.application.distributor.partner_approval_service import activate_distributor_partner_after_password_set
+
+    await activate_distributor_partner_after_password_set(db, user_id=user.id)
     schedule_user_notification(
         user_id=user.id,
         user_email=user.email,

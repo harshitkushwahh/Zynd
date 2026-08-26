@@ -1,29 +1,47 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Fingerprint, Loader2, Mail, Pencil, Phone, QrCode } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, Mail, Pencil, Phone } from "lucide-react";
 
 import { useWizardKeyboardNavigation } from "@/hooks/use-wizard-keyboard-navigation";
 
+import { AddInvestorOnboardingDraftDialog } from "@/components/add-investor/add-investor-onboarding-draft-dialog";
 import { AddInvestorOtpField } from "@/components/add-investor/add-investor-otp-field";
 import { AddInvestorWizardPanelShell } from "@/components/add-investor/add-investor-wizard-panel-shell";
 import { AddInvestorWizardProgress } from "@/components/add-investor/add-investor-wizard-progress";
 import { AddInvestorWizardStepFooter } from "@/components/add-investor/add-investor-wizard-step-footer";
 import { Button } from "@/components/ui/button";
-import { FieldLabel } from "@/components/ui/field";
+import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { ADD_INVESTOR_DEMO_OTP } from "@/lib/add-investor/add-investor-journey";
-import { delay } from "@/lib/add-investor/add-investor-demo";
+import { isValidSixDigitOtp } from "@/lib/add-investor/add-investor-journey";
 import {
   getContactOnboardingProgressIndex,
-  INVESTOR_ONBOARDING_PROGRESS_STEPS,
-} from "@/lib/add-investor/add-investor-onboarding-progress";
-
-type OnboardingPhase = "email" | "mobile" | "mfa";
-type ContactScreen = "input" | "otp";
+  resolveClientOnboardingResume,
+  type ClientOnboardingContactScreen,
+  type ClientOnboardingResumePhase,
+} from "@/lib/add-investor/add-investor-onboarding-hydrate";
+import {
+  clearStoredClientOnboardingToken,
+  readStoredClientOnboardingToken,
+  writeStoredClientOnboardingToken,
+} from "@/lib/add-investor/add-investor-onboarding-storage";
+import { resolveInvestorClientCodeDisplay } from "@/lib/add-investor/add-investor-client-code";
+import { INVESTOR_ONBOARDING_PROGRESS_STEPS } from "@/lib/add-investor/add-investor-onboarding-progress";
+import { ApiError } from "@/lib/api-client";
+import {
+  discardClientOnboardingDraft,
+  fetchClientOnboardingDraft,
+  resendClientOnboardingEmailOtp,
+  resendClientOnboardingMobileOtp,
+  startClientOnboarding,
+  submitClientOnboarding,
+  updateClientOnboardingContact,
+  verifyClientOnboardingEmail,
+  verifyClientOnboardingMobile,
+  type ClientOnboardingDraftSnapshot,
+  type ClientOnboardingSubmitResponse,
+} from "@/lib/distributor-client-onboarding-api";
 
 type AddInvestorOnboardingPanelProps = {
   email: string;
@@ -36,12 +54,28 @@ type AddInvestorOnboardingPanelProps = {
   mobileOtp: string;
   onMobileOtpChange: (value: string) => void;
   mobileValid: boolean;
-  mfaBound: boolean;
-  onMfaBoundChange: (value: boolean) => void;
-  mfaCode: string;
-  onMfaCodeChange: (value: string) => void;
+  onboardingComplete: boolean;
+  createdClientId?: string;
+  onAccountCreated: (result: ClientOnboardingSubmitResponse) => void;
   onFinished: () => void;
 };
+
+type DraftDialogMode = "resume" | "change-email" | "change-mobile";
+
+const EMPTY_DRAFT: ClientOnboardingDraftSnapshot = {
+  email: null,
+  email_verified: false,
+  mobile: null,
+  mobile_verified: false,
+  ready_to_create: false,
+};
+
+function readApiError(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    return error.message || fallback;
+  }
+  return fallback;
+}
 
 export function AddInvestorOnboardingPanel({
   email,
@@ -54,20 +88,90 @@ export function AddInvestorOnboardingPanel({
   mobileOtp,
   onMobileOtpChange,
   mobileValid,
-  mfaBound,
-  onMfaBoundChange,
-  mfaCode,
-  onMfaCodeChange,
+  onboardingComplete,
+  createdClientId,
+  onAccountCreated,
   onFinished,
 }: AddInvestorOnboardingPanelProps) {
-  const [phase, setPhase] = useState<OnboardingPhase>("email");
-  const [contactScreen, setContactScreen] = useState<ContactScreen>("input");
+  const [phase, setPhase] = useState<ClientOnboardingResumePhase>("email");
+  const [contactScreen, setContactScreen] = useState<ClientOnboardingContactScreen>("input");
+  const [draft, setDraft] = useState<ClientOnboardingDraftSnapshot>(EMPTY_DRAFT);
+  const [onboardingToken, setOnboardingToken] = useState<string | null>(null);
+  const [submitResult, setSubmitResult] = useState<ClientOnboardingSubmitResponse | null>(null);
+  const [hydrating, setHydrating] = useState(true);
   const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
+  const [draftDialogMode, setDraftDialogMode] = useState<DraftDialogMode>("resume");
+  const [pendingDraft, setPendingDraft] = useState<ClientOnboardingDraftSnapshot | null>(null);
 
-  const progressIndex = getContactOnboardingProgressIndex(phase, contactScreen);
-  const emailVerified = emailOtp === ADD_INVESTOR_DEMO_OTP;
-  const mobileVerified = mobileOtp === ADD_INVESTOR_DEMO_OTP;
-  const mfaComplete = mfaBound && mfaCode.length === 6;
+  const persistToken = useCallback((token: string | null) => {
+    setOnboardingToken(token);
+    writeStoredClientOnboardingToken(token);
+  }, []);
+
+  const applyDraftSnapshot = useCallback(
+    (snapshot: ClientOnboardingDraftSnapshot, token: string) => {
+      setDraft(snapshot);
+      persistToken(token);
+      if (snapshot.email) onEmailChange(snapshot.email);
+      if (snapshot.mobile) onMobileChange(snapshot.mobile);
+      onEmailOtpChange("");
+      onMobileOtpChange("");
+
+      const resume = resolveClientOnboardingResume(snapshot, onboardingComplete);
+      setPhase(resume.phase);
+      if (resume.phase === "email" && snapshot.email_verified) {
+        setContactScreen("verified");
+      } else if (resume.phase === "mobile" && snapshot.mobile_verified) {
+        setContactScreen("verified");
+      } else {
+        setContactScreen(resume.contactScreen);
+      }
+    },
+    [onEmailChange, onEmailOtpChange, onMobileChange, onMobileOtpChange, onboardingComplete, persistToken],
+  );
+
+  useEffect(() => {
+    if (onboardingComplete) {
+      setPhase("account");
+      setHydrating(false);
+      return;
+    }
+
+    let cancelled = false;
+    const storedToken = readStoredClientOnboardingToken();
+    if (!storedToken) {
+      setHydrating(false);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const snapshot = await fetchClientOnboardingDraft(storedToken);
+        if (cancelled) return;
+        setPendingDraft(snapshot);
+        setDraftDialogMode("resume");
+        setDraftDialogOpen(true);
+      } catch {
+        if (!cancelled) {
+          clearStoredClientOnboardingToken();
+        }
+      } finally {
+        if (!cancelled) {
+          setHydrating(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onboardingComplete]);
+
+  const progressIndex = getContactOnboardingProgressIndex(phase, contactScreen, draft);
 
   const destination = useMemo(() => {
     if (phase === "email") return email;
@@ -75,86 +179,301 @@ export function AddInvestorOnboardingPanel({
     return "";
   }, [email, mobile, phase]);
 
-  const handleSendOtp = async () => {
-    const valid = phase === "email" ? emailValid : mobileValid;
-    if (!valid) return;
-    setSendingOtp(true);
-    await delay(500);
-    setSendingOtp(false);
-    setContactScreen("otp");
-    if (phase === "email") onEmailOtpChange("");
-    if (phase === "mobile") onMobileOtpChange("");
+  const displayedClientId = resolveInvestorClientCodeDisplay(
+    submitResult?.client_id ?? createdClientId,
+    email,
+    mobile,
+  );
+
+  const applyContactUpdate = (snapshot: ClientOnboardingDraftSnapshot) => {
+    setDraft(snapshot);
+    if (snapshot.email) onEmailChange(snapshot.email);
+    if (snapshot.mobile) onMobileChange(snapshot.mobile);
   };
 
-  const handleEditDestination = () => {
+  const handleSendOtp = async () => {
+    const valid = phase === "email" ? emailValid : mobileValid;
+    if (!valid || sendingOtp) return;
+    setError("");
+    setSendingOtp(true);
+    try {
+      if (phase === "email") {
+        if (!onboardingToken) {
+          const result = await startClientOnboarding(email.trim());
+          persistToken(result.onboarding_token);
+          setDraft({
+            email: email.trim().toLowerCase(),
+            email_verified: false,
+            mobile: null,
+            mobile_verified: false,
+            ready_to_create: false,
+          });
+        } else {
+          const normalizedEmail = email.trim().toLowerCase();
+          const draftEmail = (draft.email ?? "").toLowerCase();
+          if (normalizedEmail !== draftEmail) {
+            const result = await updateClientOnboardingContact(onboardingToken, { email: normalizedEmail });
+            applyContactUpdate(result);
+          } else if (!draft.email_verified) {
+            await resendClientOnboardingEmailOtp(onboardingToken);
+          } else {
+            setContactScreen("verified");
+            setSendingOtp(false);
+            return;
+          }
+        }
+        onEmailOtpChange("");
+        setContactScreen("otp");
+      } else {
+        if (!onboardingToken) {
+          setError("Start with email verification first.");
+          return;
+        }
+        const normalizedMobile = mobile.replace(/\D/g, "").slice(-10);
+        if (normalizedMobile !== (draft.mobile ?? "")) {
+          const result = await updateClientOnboardingContact(onboardingToken, { mobile: normalizedMobile });
+          applyContactUpdate(result);
+        } else if (!draft.mobile_verified) {
+          await resendClientOnboardingMobileOtp(onboardingToken);
+        } else {
+          setContactScreen("verified");
+          setSendingOtp(false);
+          return;
+        }
+        onMobileOtpChange("");
+        setContactScreen("otp");
+      }
+    } catch (nextError) {
+      setError(readApiError(nextError, "Could not send verification code."));
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!onboardingToken || sendingOtp) return;
+    setError("");
+    setSendingOtp(true);
+    try {
+      if (phase === "email") {
+        await resendClientOnboardingEmailOtp(onboardingToken);
+        onEmailOtpChange("");
+      } else {
+        await resendClientOnboardingMobileOtp(onboardingToken);
+        onMobileOtpChange("");
+      }
+    } catch (nextError) {
+      setError(readApiError(nextError, "Could not resend verification code."));
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const verifyContactAndAdvance = async () => {
+    const otp = phase === "email" ? emailOtp : mobileOtp;
+    if (!isValidSixDigitOtp(otp) || verifying) return;
+    if (!onboardingToken) {
+      setError("Onboarding session expired. Start again from email.");
+      return;
+    }
+    setError("");
+    setVerifying(true);
+    try {
+      if (phase === "email") {
+        await verifyClientOnboardingEmail(onboardingToken, emailOtp);
+        const snapshot = await fetchClientOnboardingDraft(onboardingToken);
+        applyDraftSnapshot(snapshot, onboardingToken);
+        setPhase("mobile");
+        setContactScreen("input");
+      } else {
+        await verifyClientOnboardingMobile(onboardingToken, mobileOtp);
+        const snapshot = await fetchClientOnboardingDraft(onboardingToken);
+        applyDraftSnapshot(snapshot, onboardingToken);
+        setPhase("account");
+        setContactScreen("input");
+      }
+    } catch (nextError) {
+      setError(readApiError(nextError, "Invalid or expired verification code."));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const createAccount = async () => {
+    if (submitting || onboardingComplete) return;
+    if (!onboardingToken) {
+      setError("Onboarding session expired. Start again from email.");
+      return;
+    }
+    if (!draft.ready_to_create) {
+      setError("Verify both email and mobile before creating the investor account.");
+      return;
+    }
+    setError("");
+    setSubmitting(true);
+    try {
+      const result = await submitClientOnboarding(onboardingToken);
+      setSubmitResult(result);
+      clearStoredClientOnboardingToken();
+      onAccountCreated(result);
+    } catch (nextError) {
+      setError(readApiError(nextError, "Could not create investor account."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const requestContactChange = (mode: Extract<DraftDialogMode, "change-email" | "change-mobile">) => {
+    setDraftDialogMode(mode);
+    setDraftDialogOpen(true);
+  };
+
+  const confirmContactChange = () => {
+    setDraftDialogOpen(false);
+    if (draftDialogMode === "change-email") {
+      setPhase("email");
+      setContactScreen("input");
+      onEmailOtpChange("");
+      return;
+    }
+    if (draftDialogMode === "change-mobile") {
+      setPhase("mobile");
+      setContactScreen("input");
+      onMobileOtpChange("");
+    }
+  };
+
+  const continueResumeDraft = () => {
+    if (!pendingDraft || !readStoredClientOnboardingToken()) {
+      setDraftDialogOpen(false);
+      return;
+    }
+    const token = readStoredClientOnboardingToken()!;
+    applyDraftSnapshot(pendingDraft, token);
+    setPendingDraft(null);
+    setDraftDialogOpen(false);
+  };
+
+  const discardResumeDraft = async () => {
+    const token = readStoredClientOnboardingToken();
+    if (token) {
+      try {
+        await discardClientOnboardingDraft(token);
+      } catch {
+        // Local discard still proceeds if server draft is already gone.
+      }
+    }
+    clearStoredClientOnboardingToken();
+    setPendingDraft(null);
+    setDraft(EMPTY_DRAFT);
+    persistToken(null);
+    setPhase("email");
     setContactScreen("input");
-    if (phase === "email") onEmailOtpChange("");
-    if (phase === "mobile") onMobileOtpChange("");
+    onEmailChange("");
+    onMobileChange("");
+    onEmailOtpChange("");
+    onMobileOtpChange("");
+    setDraftDialogOpen(false);
   };
 
   const goToPrevious = () => {
-    if (phase === "mfa") {
+    if (phase === "account") {
       setPhase("mobile");
-      setContactScreen("otp");
+      setContactScreen(draft.mobile_verified ? "verified" : draft.mobile ? "otp" : "input");
+      setError("");
       return;
     }
-    if (phase === "mobile" && contactScreen === "otp") {
-      setContactScreen("input");
-      onMobileOtpChange("");
-      return;
-    }
-    if (phase === "mobile" && contactScreen === "input") {
+    if (phase === "mobile") {
+      if (contactScreen === "otp") {
+        setContactScreen(draft.mobile_verified ? "verified" : "input");
+        onMobileOtpChange("");
+        setError("");
+        return;
+      }
       setPhase("email");
-      setContactScreen("otp");
+      setContactScreen(draft.email_verified ? "verified" : "input");
+      setError("");
       return;
     }
     if (phase === "email" && contactScreen === "otp") {
-      setContactScreen("input");
+      setContactScreen(draft.email_verified ? "verified" : "input");
       onEmailOtpChange("");
+      setError("");
     }
   };
 
   const goToNext = () => {
-    if (phase === "email" && contactScreen === "input") {
-      void handleSendOtp();
+    if (phase === "email") {
+      if (contactScreen === "verified") {
+        setPhase("mobile");
+        setContactScreen("input");
+        return;
+      }
+      if (contactScreen === "input") {
+        void handleSendOtp();
+        return;
+      }
+      void verifyContactAndAdvance();
       return;
     }
-    if (phase === "email" && contactScreen === "otp" && emailVerified) {
-      setPhase("mobile");
-      setContactScreen("input");
+    if (phase === "mobile") {
+      if (contactScreen === "verified") {
+        setPhase("account");
+        return;
+      }
+      if (contactScreen === "input") {
+        void handleSendOtp();
+        return;
+      }
+      void verifyContactAndAdvance();
       return;
     }
-    if (phase === "mobile" && contactScreen === "input") {
-      void handleSendOtp();
-      return;
-    }
-    if (phase === "mobile" && contactScreen === "otp" && mobileVerified) {
-      setPhase("mfa");
-      return;
-    }
-    if (phase === "mfa" && mfaComplete) {
-      onFinished();
+    if (phase === "account") {
+      if (onboardingComplete || submitResult) {
+        onFinished();
+        return;
+      }
+      void createAccount();
     }
   };
 
   const canGoBack =
     (phase === "email" && contactScreen === "otp") ||
-    phase === "mobile" ||
-    phase === "mfa";
+    (phase === "mobile" && contactScreen !== "input") ||
+    (phase === "mobile" && contactScreen === "input" && draft.email_verified) ||
+    phase === "account";
 
   const primaryDisabled = (() => {
-    if (phase === "email" && contactScreen === "input") return !emailValid || sendingOtp;
-    if (phase === "email" && contactScreen === "otp") return !emailVerified;
-    if (phase === "mobile" && contactScreen === "input") return !mobileValid || sendingOtp;
-    if (phase === "mobile" && contactScreen === "otp") return !mobileVerified;
-    if (phase === "mfa") return !mfaComplete;
+    if (hydrating) return true;
+    if (phase === "email") {
+      if (contactScreen === "verified") return false;
+      if (contactScreen === "input") return !emailValid || sendingOtp;
+      return !isValidSixDigitOtp(emailOtp) || verifying;
+    }
+    if (phase === "mobile") {
+      if (contactScreen === "verified") return false;
+      if (contactScreen === "input") return !mobileValid || sendingOtp;
+      return !isValidSixDigitOtp(mobileOtp) || verifying;
+    }
+    if (phase === "account") return submitting || (!onboardingComplete && !draft.ready_to_create && !submitResult);
     return true;
   })();
 
   const primaryLabel = (() => {
-    if (phase === "email" && contactScreen === "input") return sendingOtp ? "Sending…" : "Send code";
-    if (phase === "mobile" && contactScreen === "input") return sendingOtp ? "Sending…" : "Send code";
-    if (phase === "mfa") return "Complete onboarding";
+    if (phase === "email") {
+      if (contactScreen === "verified") return "Continue to mobile";
+      if (contactScreen === "input") return sendingOtp ? "Sending…" : "Send code";
+      return verifying ? "Verifying…" : "Continue";
+    }
+    if (phase === "mobile") {
+      if (contactScreen === "verified") return "Continue to account";
+      if (contactScreen === "input") return sendingOtp ? "Sending…" : "Send code";
+      return verifying ? "Verifying…" : "Continue";
+    }
+    if (phase === "account") {
+      if (onboardingComplete || submitResult) return "Continue to KYC";
+      return submitting ? "Creating account…" : "Create investor account";
+    }
     return "Continue";
   })();
 
@@ -165,39 +484,92 @@ export function AddInvestorOnboardingPanel({
     canBack: canGoBack,
   });
 
-  const PhaseIcon =
-    phase === "mfa" ? Fingerprint : phase === "email" ? Mail : Phone;
+  const PhaseIcon: LucideIcon = phase === "account" ? KeyRound : phase === "email" ? Mail : Phone;
+
+  if (hydrating) {
+    return (
+      <AddInvestorWizardPanelShell title="Onboarding" className="add-investor-wizard-panel--onboarding">
+        <div className="add-investor-onboarding-wizard__center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden />
+          <p className="text-sm text-muted-foreground">Checking for saved draft…</p>
+        </div>
+      </AddInvestorWizardPanelShell>
+    );
+  }
 
   return (
-    <AddInvestorWizardPanelShell
-      title="Onboarding"
-      className="add-investor-wizard-panel--onboarding"
-      progress={
-        <AddInvestorWizardProgress
-          steps={INVESTOR_ONBOARDING_PROGRESS_STEPS}
-          activeIndex={progressIndex}
-          equalWidth
-        />
-      }
-      footer={
-        <AddInvestorWizardStepFooter
-          onBack={goToPrevious}
-          onContinue={goToNext}
-          canBack={canGoBack}
-          continueDisabled={primaryDisabled}
-          continueLabel={
-            sendingOtp && contactScreen === "input" ? (
-              <>
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-                Sending…
-              </>
-            ) : (
-              primaryLabel
-            )
-          }
-        />
-      }
-    >
+    <>
+      <AddInvestorWizardPanelShell
+        title="Onboarding"
+        className="add-investor-wizard-panel--onboarding"
+        progress={
+          <AddInvestorWizardProgress
+            steps={INVESTOR_ONBOARDING_PROGRESS_STEPS}
+            activeIndex={progressIndex}
+            equalWidth
+          />
+        }
+        footer={
+          <AddInvestorWizardStepFooter
+            onBack={goToPrevious}
+            onContinue={goToNext}
+            canBack={canGoBack}
+            continueDisabled={primaryDisabled}
+            continueLabel={
+              sendingOtp && contactScreen === "input" ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Sending…
+                </>
+              ) : verifying && contactScreen === "otp" ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Verifying…
+                </>
+              ) : submitting && phase === "account" ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Creating account…
+                </>
+              ) : (
+                primaryLabel
+              )
+            }
+          />
+        }
+      >
+        {(phase === "email" || phase === "mobile") && contactScreen === "verified" ? (
+          <div className="add-investor-onboarding-wizard__center">
+            <span className="add-investor-onboarding-wizard__hero-icon" aria-hidden>
+              <CheckCircle2 className="size-6 text-emerald-600" strokeWidth={2.25} />
+            </span>
+            <h3 className="add-investor-onboarding-wizard__title">
+              {phase === "email" ? "Email verified" : "Mobile verified"}
+            </h3>
+            <p className="add-investor-onboarding-wizard__desc">
+              {phase === "email"
+                ? "This email is saved in your draft. You can continue to mobile or choose a different email."
+                : "This mobile number is saved in your draft. Continue to account setup or choose a different number."}
+            </p>
+            <div className="add-investor-onboarding-wizard__destination">
+              <div className="min-w-0 flex-1 text-left">
+                <p className="add-investor-onboarding-wizard__destination-label">Verified</p>
+                <p className="add-investor-onboarding-wizard__destination-value">{destination}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className="shrink-0"
+                aria-label={phase === "email" ? "Change email" : "Change mobile number"}
+                onClick={() => requestContactChange(phase === "email" ? "change-email" : "change-mobile")}
+              >
+                <Pencil className="size-3.5" strokeWidth={2.25} aria-hidden />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {(phase === "email" || phase === "mobile") && contactScreen === "input" ? (
           <div className="add-investor-onboarding-wizard__center">
             <span className="add-investor-onboarding-wizard__hero-icon" aria-hidden>
@@ -237,6 +609,15 @@ export function AddInvestorOnboardingPanel({
                 />
               )}
             </div>
+            {error ? (
+              <DistributorFeedbackMessage
+                variant="error"
+                className="add-distributor-wizard-feedback"
+                onDismiss={() => setError("")}
+              >
+                {error}
+              </DistributorFeedbackMessage>
+            ) : null}
           </div>
         ) : null}
 
@@ -247,7 +628,9 @@ export function AddInvestorOnboardingPanel({
             </span>
             <h3 className="add-investor-onboarding-wizard__title">Enter verification code</h3>
             <p className="add-investor-onboarding-wizard__desc">
-              {phase === "email" ? "Check the investor inbox for the 6-digit code." : "Enter the SMS code sent to the mobile number."}
+              {phase === "email"
+                ? "Check the investor inbox for the 6-digit code."
+                : "Enter the SMS code sent to the mobile number."}
             </p>
             <div className="add-investor-onboarding-wizard__destination">
               <div className="min-w-0 flex-1 text-left">
@@ -260,7 +643,7 @@ export function AddInvestorOnboardingPanel({
                 size="icon-sm"
                 className="shrink-0"
                 aria-label={phase === "email" ? "Edit email" : "Edit mobile number"}
-                onClick={handleEditDestination}
+                onClick={() => requestContactChange(phase === "email" ? "change-email" : "change-mobile")}
               >
                 <Pencil className="size-3.5" strokeWidth={2.25} aria-hidden />
               </Button>
@@ -272,67 +655,81 @@ export function AddInvestorOnboardingPanel({
                 onChange={phase === "email" ? onEmailOtpChange : onMobileOtpChange}
                 autoFocus
               />
-              <p className="add-investor-onboarding-wizard__hint">
-                Demo code:{" "}
-                <span className="font-mono font-medium text-foreground">{ADD_INVESTOR_DEMO_OTP}</span>
-              </p>
               <Button
                 type="button"
                 variant="link"
                 className="h-auto px-0 text-caption"
-                disabled={sendingOtp || (phase === "email" ? !emailValid : !mobileValid)}
-                onClick={() => void handleSendOtp()}
+                disabled={sendingOtp || !onboardingToken}
+                onClick={() => void handleResendOtp()}
               >
                 Resend code
               </Button>
             </div>
+            {error ? (
+              <DistributorFeedbackMessage
+                variant="error"
+                className="add-distributor-wizard-feedback"
+                onDismiss={() => setError("")}
+              >
+                {error}
+              </DistributorFeedbackMessage>
+            ) : null}
           </div>
         ) : null}
 
-        {phase === "mfa" ? (
-          <div className="add-investor-onboarding-wizard__mfa">
-            <div className="add-investor-onboarding-wizard__center add-investor-onboarding-wizard__center--mfa">
-              <span className="add-investor-onboarding-wizard__hero-icon" aria-hidden>
-                <Fingerprint className="size-6" strokeWidth={2.25} />
-              </span>
-              <h3 className="add-investor-onboarding-wizard__title">Enable authenticator</h3>
-              <p className="add-investor-onboarding-wizard__desc">
-                Scan the QR code in the investor authenticator app, then enter a 6-digit code to finish onboarding.
-              </p>
-            </div>
-            <div className="add-investor-onboarding-wizard__mfa-grid">
-              <div className="add-investor-onboarding-wizard__mfa-setup">
-                <div className="add-investor-onboarding-wizard__mfa-qr" aria-hidden>
-                  <QrCode className="size-16 text-muted-foreground/70" strokeWidth={1.25} />
-                </div>
-                <div className="add-investor-onboarding-wizard__mfa-secret">
-                  <p className="add-investor-onboarding-wizard__mfa-secret-label">Demo secret</p>
-                  <p className="add-investor-onboarding-wizard__mfa-secret-value">ZYND-DIST-DEMO-MFA-KEY</p>
-                  <div className="add-investor-onboarding-wizard__mfa-bound">
-                    <Switch
-                      id="add-investor-mfa-bound"
-                      checked={mfaBound}
-                      onCheckedChange={onMfaBoundChange}
-                    />
-                    <Label htmlFor="add-investor-mfa-bound" className="text-caption">
-                      Investor added this account to their authenticator
-                    </Label>
-                  </div>
+        {phase === "account" ? (
+          <div className="add-investor-onboarding-wizard__center add-investor-onboarding-wizard__center--mfa">
+            <span className="add-investor-onboarding-wizard__hero-icon" aria-hidden>
+              {submitResult || onboardingComplete ? (
+                <CheckCircle2 className="size-6 text-emerald-600" strokeWidth={2.25} />
+              ) : (
+                <KeyRound className="size-6" strokeWidth={2.25} />
+              )}
+            </span>
+            <h3 className="add-investor-onboarding-wizard__title">
+              {submitResult || onboardingComplete ? "Investor account created" : "Create investor account"}
+            </h3>
+            <p className="add-investor-onboarding-wizard__desc">
+              {submitResult || onboardingComplete
+                ? "Email and mobile are verified. We emailed the investor a password setup link for their first Zynd sign-in."
+                : "Both email and mobile must be verified before the investor is created and added to your book."}
+            </p>
+            {submitResult || (onboardingComplete && displayedClientId !== "—") ? (
+              <div className="add-investor-onboarding-wizard__destination">
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="add-investor-onboarding-wizard__destination-label">Investor code</p>
+                  <p className="add-investor-onboarding-wizard__destination-value">
+                    {displayedClientId}
+                  </p>
                 </div>
               </div>
-              <div className="add-investor-onboarding-wizard__mfa-otp">
-                <FieldLabel>Authenticator code</FieldLabel>
-                <AddInvestorOtpField
-                  id="add-investor-mfa-otp"
-                  value={mfaCode}
-                  onChange={onMfaCodeChange}
-                  disabled={!mfaBound}
-                  autoFocus={mfaBound}
-                />
-              </div>
-            </div>
+            ) : null}
+            {error ? (
+              <DistributorFeedbackMessage
+                variant="error"
+                className="add-distributor-wizard-feedback"
+                onDismiss={() => setError("")}
+              >
+                {error}
+              </DistributorFeedbackMessage>
+            ) : null}
           </div>
         ) : null}
-    </AddInvestorWizardPanelShell>
+      </AddInvestorWizardPanelShell>
+
+      <AddInvestorOnboardingDraftDialog
+        open={draftDialogOpen}
+        mode={draftDialogMode}
+        email={pendingDraft?.email ?? draft.email ?? email}
+        mobile={pendingDraft?.mobile ?? draft.mobile ?? mobile}
+        onOpenChange={setDraftDialogOpen}
+        onConfirm={
+          draftDialogMode === "resume"
+            ? continueResumeDraft
+            : confirmContactChange
+        }
+        onDiscard={draftDialogMode === "resume" ? () => void discardResumeDraft() : undefined}
+      />
+    </>
   );
 }

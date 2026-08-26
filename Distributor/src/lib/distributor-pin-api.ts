@@ -1,0 +1,179 @@
+import { apiRequest } from "@/lib/api-client";
+
+export type PinVerifyResponse = {
+  unlocked: boolean;
+  expires_in: number;
+};
+
+export type PinOkResponse = {
+  ok: boolean;
+  pin_enrolled: boolean;
+};
+
+type OtpSendResponse = {
+  ok: boolean;
+  retry_after_seconds: number;
+  expires_in: number;
+};
+
+export type PinBiometricCredential = {
+  id: string;
+  credential_id: string;
+  device_name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+};
+
+export type PinBiometricStatusResponse = {
+  enrolled: boolean;
+  credentials: PinBiometricCredential[];
+};
+
+export type PinBiometricRegisterVerifyResponse = {
+  ok: boolean;
+  credential_id: string;
+  id: string;
+  device_name: string | null;
+};
+
+export async function setupZyndPin(payload: {
+  currentPassword: string;
+  totpCode: string;
+  pin: string;
+  confirmPin: string;
+}) {
+  return apiRequest<PinOkResponse>("/auth/pin/setup", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: payload.currentPassword,
+      totp_code: payload.totpCode,
+      pin: payload.pin,
+      confirm_pin: payload.confirmPin,
+    }),
+  });
+}
+
+export async function verifyZyndPin(pin: string) {
+  return apiRequest<PinVerifyResponse>("/auth/pin/verify", {
+    method: "POST",
+    body: JSON.stringify({ pin }),
+  });
+}
+
+export async function fetchPinUnlockStatus() {
+  return apiRequest<PinVerifyResponse>("/auth/pin/unlock-status");
+}
+
+export type PinResetLinkSendResponse = {
+  ok: boolean;
+  masked_email: string;
+  email_delivered: boolean;
+  dev_reset_url?: string | null;
+};
+
+export async function sendZyndPinResetLink() {
+  return apiRequest<PinResetLinkSendResponse>("/auth/pin/forgot/send-link", {
+    method: "POST",
+  });
+}
+
+export async function validateZyndPinResetLink(token: string) {
+  return apiRequest<{ ok: boolean }>(
+    `/auth/pin/forgot/validate?token=${encodeURIComponent(token)}`,
+  );
+}
+
+export async function resetZyndPinWithLink(payload: {
+  token: string;
+  currentPassword: string;
+  totpCode: string;
+  pin: string;
+  confirmPin: string;
+}) {
+  return apiRequest<PinOkResponse>("/auth/pin/forgot/reset-link", {
+    method: "POST",
+    body: JSON.stringify({
+      token: payload.token,
+      current_password: payload.currentPassword,
+      totp_code: payload.totpCode,
+      pin: payload.pin,
+      confirm_pin: payload.confirmPin,
+    }),
+  });
+}
+
+export async function sendZyndPinResetOtp() {
+  return apiRequest<OtpSendResponse>("/auth/pin/forgot/send-otp", {
+    method: "POST",
+  });
+}
+
+export async function resetZyndPinWithOtp(payload: {
+  otp: string;
+  pin: string;
+  confirmPin: string;
+}) {
+  return apiRequest<PinOkResponse>("/auth/pin/forgot/reset", {
+    method: "POST",
+    body: JSON.stringify({
+      otp: payload.otp,
+      pin: payload.pin,
+      confirm_pin: payload.confirmPin,
+    }),
+  });
+}
+
+export async function fetchPinBiometricStatus() {
+  return apiRequest<PinBiometricStatusResponse>("/auth/pin/biometric/status");
+}
+
+export async function fetchPinBiometricRegisterOptions() {
+  return apiRequest<{ challenge_token: string; options: PublicKeyCredentialCreationOptionsJSON }>(
+    "/auth/pin/biometric/register/options",
+    { method: "POST" },
+  );
+}
+
+export async function verifyPinBiometricRegister(payload: {
+  challengeToken: string;
+  credential: RegistrationResponseJSON;
+  deviceName?: string;
+}) {
+  return apiRequest<PinBiometricRegisterVerifyResponse>("/auth/pin/biometric/register/verify", {
+    method: "POST",
+    body: JSON.stringify({
+      challenge_token: payload.challengeToken,
+      credential: payload.credential,
+      device_name: payload.deviceName,
+    }),
+  });
+}
+
+export async function fetchPinBiometricUnlockOptions(credentialId?: string) {
+  return apiRequest<{ challenge_token: string; options: PublicKeyCredentialRequestOptionsJSON }>(
+    "/auth/pin/biometric/unlock/options",
+    {
+      method: "POST",
+      body: JSON.stringify({ credential_id: credentialId ?? null }),
+    },
+  );
+}
+
+export async function verifyPinBiometricUnlock(payload: {
+  challengeToken: string;
+  credential: AuthenticationResponseJSON;
+}) {
+  return apiRequest<PinVerifyResponse>("/auth/pin/biometric/unlock/verify", {
+    method: "POST",
+    body: JSON.stringify({
+      challenge_token: payload.challengeToken,
+      credential: payload.credential,
+    }),
+  });
+}
+
+export async function deletePinBiometricCredential(credentialRecordId: string) {
+  return apiRequest<{ ok: boolean }>(`/auth/pin/biometric/credentials/${credentialRecordId}`, {
+    method: "DELETE",
+  });
+}

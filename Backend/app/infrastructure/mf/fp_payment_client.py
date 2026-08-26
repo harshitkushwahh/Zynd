@@ -20,6 +20,21 @@ def _extract_payment_id(payload: dict[str, Any]) -> int | None:
         return None
 
 
+def extract_payment_status(payload: dict[str, Any]) -> str | None:
+    status = payload.get("status")
+    if status is not None:
+        return str(status)
+    data = payload.get("data")
+    if isinstance(data, dict) and data.get("status") is not None:
+        return str(data["status"])
+    return None
+
+
+def is_payment_success_status(status: str | None) -> bool:
+    normalized = (status or "").strip().upper()
+    return normalized in {"SUCCESS", "SUCCEEDED", "COMPLETED", "APPROVED"}
+
+
 def extract_payment_token_url(payload: dict[str, Any]) -> str | None:
     token_url = payload.get("token_url")
     if token_url:

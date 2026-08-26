@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMountedTabs } from "@/hooks/use-mounted-tabs";
 import { useOrdersSummaryQuery } from "@/hooks/use-orders-summary-query";
@@ -11,6 +11,7 @@ import {
   CalendarClock,
   CheckCircle2,
   LoaderCircle,
+  RefreshCw,
   ShoppingBag,
   Webhook,
   type LucideIcon,
@@ -18,17 +19,30 @@ import {
 
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { AdminTabComingSoon } from "@/components/dashboard/admin-tab-coming-soon";
-import { MfTransactionOrdersPanel } from "@/components/mf/mf-transaction-orders-panel";
-import { MfTransactionSipPlansPanel } from "@/components/mf/mf-transaction-sip-plans-panel";
+import { AdminTabDisabled } from "@/components/dashboard/admin-tab-disabled";
+import {
+  MfTransactionOrdersPanel,
+  ORDER_SORT_OPTIONS,
+  ORDER_STATUS_OPTIONS,
+  type OrderSortKey,
+} from "@/components/mf/mf-transaction-orders-panel";
+import {
+  MfTransactionSipPlansPanel,
+  SIP_STATUS_OPTIONS,
+} from "@/components/mf/mf-transaction-sip-plans-panel";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard, type AdminMetricCardTone } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect } from "@/components/ui/admin-select";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { cn } from "@/lib/utils";
 import {
   getTransactionSection,
+  isSectionTabEnabled,
   resolveSectionTab,
   sectionTabHref,
 } from "@/lib/admin-transaction-sections";
@@ -36,6 +50,8 @@ import {
 type OrdersSectionPageProps = {
   tabSlug?: string;
 };
+
+const ALL = "all";
 
 type SummaryMetric = {
   key: string;
@@ -266,6 +282,11 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
     resolvedTab?.slug ?? "purchases",
     resolvedTab?.slug,
   );
+  const [listSearch, setListSearch] = useState("");
+  const [purchaseStatusFilter, setPurchaseStatusFilter] = useState(ALL);
+  const [purchaseSort, setPurchaseSort] = useState<OrderSortKey>("recent");
+  const [sipStatusFilter, setSipStatusFilter] = useState(ALL);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (tabSlug === "ops-thresholds") {
@@ -292,7 +313,7 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
       icon={ShoppingBag}
     >
       {!canRead ? (
-        <AdminFeedbackMessage variant="warning">
+        <AdminFeedbackMessage variant="warning" dismissible={false}>
           You do not have permission to view orders.
         </AdminFeedbackMessage>
       ) : (
@@ -308,24 +329,105 @@ export function OrdersSectionPage({ tabSlug }: OrdersSectionPageProps) {
               {section.tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
-                  <AdminTabTrigger key={tab.slug} value={tab.slug} className="gap-2">
-                    <Icon className="size-4" />
+                  <AdminTabTrigger
+                    key={tab.slug}
+                    value={tab.slug}
+                    className="gap-2"
+                    disabled={!isSectionTabEnabled(tab)}
+                  >
+                    <Icon className="size-4 shrink-0" />
                     {tab.label}
                   </AdminTabTrigger>
                 );
               })}
             </AdminTabList>
 
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <AdminSearchInput
+                containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+                placeholder="Search by fund, customer, or ID"
+                value={listSearch}
+                onChange={(event) => setListSearch(event.target.value)}
+              />
+
+              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+                {activeTabSlug === "purchases" ? (
+                  <>
+                    <AdminSelect
+                      value={purchaseSort}
+                      onValueChange={(value) => setPurchaseSort(value as OrderSortKey)}
+                      options={ORDER_SORT_OPTIONS}
+                      placeholder="Sort"
+                      className="min-w-select-sm shrink-0"
+                      triggerClassName="w-auto"
+                    />
+                    <AdminSelect
+                      value={purchaseStatusFilter}
+                      onValueChange={setPurchaseStatusFilter}
+                      options={ORDER_STATUS_OPTIONS}
+                      placeholder="Status"
+                      className="min-w-select-sm shrink-0"
+                      triggerClassName="w-auto"
+                    />
+                  </>
+                ) : null}
+
+                {activeTabSlug === "sip-installments" ? (
+                  <AdminSelect
+                    value={sipStatusFilter}
+                    onValueChange={setSipStatusFilter}
+                    options={SIP_STATUS_OPTIONS}
+                    placeholder="Status"
+                    className="min-w-select-sm shrink-0"
+                    triggerClassName="w-auto"
+                  />
+                ) : null}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setRefreshKey((value) => value + 1)}
+                >
+                  <RefreshCw className="size-3.5" />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
             {section.tabs.map((tab) => (
               <TabsContent
                 key={tab.slug}
                 value={tab.slug}
                 keepMounted={keepMounted(tab.slug)}
+                className="mt-0"
               >
-                {tab.slug === "purchases" ? (
-                  <MfTransactionOrdersPanel canRead={canRead} canManage={canManage} />
+                {!isSectionTabEnabled(tab) ? (
+                  <AdminTabDisabled label={tab.label} description={tab.description} />
+                ) : tab.slug === "purchases" ? (
+                  <MfTransactionOrdersPanel
+                    canRead={canRead}
+                    canManage={canManage}
+                    showToolbar={false}
+                    search={listSearch}
+                    onSearchChange={setListSearch}
+                    orderStatusFilter={purchaseStatusFilter}
+                    onOrderStatusFilterChange={setPurchaseStatusFilter}
+                    orderSort={purchaseSort}
+                    onOrderSortChange={setPurchaseSort}
+                    refreshKey={refreshKey}
+                  />
                 ) : tab.slug === "sip-installments" ? (
-                  <MfTransactionSipPlansPanel canRead={canRead} canManage={canManage} />
+                  <MfTransactionSipPlansPanel
+                    canRead={canRead}
+                    canManage={canManage}
+                    showToolbar={false}
+                    search={listSearch}
+                    onSearchChange={setListSearch}
+                    statusFilter={sipStatusFilter}
+                    onStatusFilterChange={setSipStatusFilter}
+                    refreshKey={refreshKey}
+                  />
                 ) : (
                   <AdminTabComingSoon label={tab.label} description={tab.description} />
                 )}

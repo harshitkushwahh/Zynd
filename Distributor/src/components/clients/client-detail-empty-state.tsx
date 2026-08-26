@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { Inbox } from "lucide-react";
 
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type ClientDetailEmptyStateProps = {
@@ -15,17 +16,22 @@ export function ClientDetailEmptyState({
   className,
 }: ClientDetailEmptyStateProps) {
   return (
-    <div
+    <Card
       className={cn(
-        "flex flex-col items-center justify-center gap-2.5 px-4 py-10 text-center",
+        "distributor-client-family-groups-empty-card border-border bg-card shadow-sm",
         className,
       )}
     >
-      <div className="flex size-11 items-center justify-center rounded-full bg-muted/60">
-        <Icon className="size-5 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+      <div className="distributor-client-family-groups-empty-card__body">
+        <span
+          className="distributor-client-family-groups-empty-card__icon flex size-11 items-center justify-center rounded-full bg-muted/60 text-muted-foreground"
+          aria-hidden
+        >
+          <Icon className="size-5" strokeWidth={1.75} />
+        </span>
+        <p className="distributor-client-family-groups-empty-card__message">{message}</p>
       </div>
-      <p className="max-w-sm text-caption leading-snug text-muted-foreground">{message}</p>
-    </div>
+    </Card>
   );
 }
 

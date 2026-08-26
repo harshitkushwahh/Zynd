@@ -7,7 +7,7 @@ import {
   DistributorOptionBoxTrigger,
   DistributorOptionBoxValue,
 } from "@/components/ui/distributor-option-box";
-import { CURRENT_PAYROLL_ID, DUMMY_DISTRIBUTOR_SALARY_SLIPS } from "@/lib/dummy/distributor-job-dashboard";
+import { CURRENT_PAYROLL_ID, DUMMY_DISTRIBUTOR_SALARY_SLIPS } from "@/lib/distributor-job-dashboard-data";
 
 const JOB_PERIOD_OPTIONS = DUMMY_DISTRIBUTOR_SALARY_SLIPS.map((row) => ({
   value: row.payrollId,
@@ -16,7 +16,7 @@ const JOB_PERIOD_OPTIONS = DUMMY_DISTRIBUTOR_SALARY_SLIPS.map((row) => ({
 
 type DistributorJobPeriodSelectProps = {
   value?: string;
-  onValueChange?: (value: string) => void;
+  onValueChange?: (value: string | null) => void;
 };
 
 export function DistributorJobPeriodSelect({

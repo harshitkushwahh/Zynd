@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ArrowUpRight } from "lucide-react";
 
 import { AdminSidebarBrand } from "@/components/dashboard/admin-sidebar-brand";
@@ -25,11 +26,13 @@ import {
   isAdminChildNavActive,
   isAdminDropdownActive,
   isAdminRouteActive,
+  resolveAdminNavRouteLabel,
   type AdminNavChildItem,
   type AdminNavDropdown,
   type AdminNavGroup,
   type AdminNavRoute,
 } from "@/lib/admin-navigation";
+import { prefetchAdminNavRoute } from "@/lib/admin-nav-prefetch";
 import { cn } from "@/lib/utils";
 
 const FOOTER_ROUTE_IDS = new Set(["settings"]);
@@ -42,28 +45,50 @@ function filterGroupRoutes(group: AdminNavGroup): AdminNavGroup {
   };
 }
 
-function AdminSidebarNavItem({ route, active }: { route: AdminNavRoute; active: boolean }) {
+function AdminSidebarNavItem({
+  route,
+  active,
+  label,
+  onPrefetch,
+}: {
+  route: AdminNavRoute;
+  active: boolean;
+  label: string;
+  onPrefetch?: (routeId: string) => void;
+}) {
   const Icon = route.icon;
   const linkProps = route.external
     ? { target: "_blank" as const, rel: "noopener noreferrer" }
     : {};
+  const handleExternalClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!route.external || event.button !== 0) return;
+    event.preventDefault();
+    window.open(route.href, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
         isActive={active}
-        tooltip={route.label}
+        tooltip={label}
         className={cn("admin-sidebar-menu-button", active && "admin-sidebar-menu-button--active")}
+        onMouseEnter={() => onPrefetch?.(route.id)}
+        onFocus={() => onPrefetch?.(route.id)}
         render={
           route.external ? (
-            <a href={route.href} {...linkProps} aria-current={active ? "page" : undefined} />
+            <a
+              href={route.href}
+              {...linkProps}
+              onClick={handleExternalClick}
+              aria-current={active ? "page" : undefined}
+            />
           ) : (
             <Link href={route.href} aria-current={active ? "page" : undefined} />
           )
         }
       >
         <Icon />
-        <span>{route.label}</span>
+        <span>{label}</span>
         {route.showTrailingArrow ? (
           <ArrowUpRight className="ml-auto size-3.5 shrink-0 text-sidebar-foreground/50" />
         ) : null}
@@ -72,7 +97,15 @@ function AdminSidebarNavItem({ route, active }: { route: AdminNavRoute; active: 
   );
 }
 
-function AdminSidebarChildItem({ item, active }: { item: AdminNavChildItem; active: boolean }) {
+function AdminSidebarChildItem({
+  item,
+  active,
+  onPrefetch,
+}: {
+  item: AdminNavChildItem;
+  active: boolean;
+  onPrefetch?: (routeId: string) => void;
+}) {
   const Icon = item.icon;
 
   if (item.disabled) {
@@ -101,6 +134,8 @@ function AdminSidebarChildItem({ item, active }: { item: AdminNavChildItem; acti
           "admin-sidebar-menu-button admin-sidebar-menu-button--child h-8 pl-7",
           active && "admin-sidebar-menu-button--active",
         )}
+        onMouseEnter={() => onPrefetch?.(item.id)}
+        onFocus={() => onPrefetch?.(item.id)}
         render={<Link href={item.href} aria-current={active ? "page" : undefined} />}
       >
         <Icon className="size-3.5" />
@@ -113,9 +148,11 @@ function AdminSidebarChildItem({ item, active }: { item: AdminNavChildItem; acti
 function AdminSidebarDropdown({
   dropdown,
   pathname,
+  onPrefetch,
 }: {
   dropdown: AdminNavDropdown;
   pathname: string;
+  onPrefetch?: (routeId: string) => void;
 }) {
   const sectionActive = isAdminDropdownActive(pathname, dropdown);
   const [open, setOpen] = useState(sectionActive);
@@ -153,6 +190,7 @@ function AdminSidebarDropdown({
               key={child.id}
               item={child}
               active={isAdminChildNavActive(pathname, child.href)}
+              onPrefetch={onPrefetch}
             />
           ))}
         </SidebarMenu>
@@ -171,13 +209,29 @@ function AdminSidebarSectionLabel({ label }: { label: string }) {
 
 export function AdminDashboardSidebar() {
   const pathname = usePathname();
-  const { hasPermission } = useAdminAuth();
+  const queryClient = useQueryClient();
+  const { hasPermission, hasRole, roleKeys } = useAdminAuth();
   const { overview, groups } = getAdminSidebarNav(hasPermission);
   const visibleGroups = groups.map(filterGroupRoutes).filter(
     (group) =>
       group.routes.length > 0 ||
       (group.dropdowns?.length ?? 0) > 0 ||
       (group.trailingRoutes?.length ?? 0) > 0,
+  );
+
+  const prefetchAuth = useMemo(
+    () => ({
+      hasPermission,
+      hasRole,
+    }),
+    [hasPermission, hasRole],
+  );
+
+  const handlePrefetch = useCallback(
+    (routeId: string) => {
+      void prefetchAdminNavRoute(queryClient, routeId, prefetchAuth);
+    },
+    [prefetchAuth, queryClient],
   );
 
   return (
@@ -195,6 +249,8 @@ export function AdminDashboardSidebar() {
                 <AdminSidebarNavItem
                   route={overview}
                   active={isAdminRouteActive(pathname, overview)}
+                  label={resolveAdminNavRouteLabel(overview, roleKeys)}
+                  onPrefetch={handlePrefetch}
                 />
               </SidebarMenu>
             </SidebarGroupContent>
@@ -211,6 +267,8 @@ export function AdminDashboardSidebar() {
                     key={route.id}
                     route={route}
                     active={isAdminRouteActive(pathname, route)}
+                    label={resolveAdminNavRouteLabel(route, roleKeys)}
+                    onPrefetch={handlePrefetch}
                   />
                 ))}
                 {group.dropdowns?.map((dropdown) => (
@@ -218,6 +276,7 @@ export function AdminDashboardSidebar() {
                     key={dropdown.id}
                     dropdown={dropdown}
                     pathname={pathname}
+                    onPrefetch={handlePrefetch}
                   />
                 ))}
                 {group.trailingRoutes?.map((route) => (
@@ -225,6 +284,8 @@ export function AdminDashboardSidebar() {
                     key={route.id}
                     route={route}
                     active={isAdminRouteActive(pathname, route)}
+                    label={resolveAdminNavRouteLabel(route, roleKeys)}
+                    onPrefetch={handlePrefetch}
                   />
                 ))}
               </SidebarMenu>
@@ -244,7 +305,7 @@ export function AdminDashboardSidebar() {
 
 export function AdminDashboardMobileNav() {
   const pathname = usePathname();
-  const { hasPermission } = useAdminAuth();
+  const { hasPermission, roleKeys } = useAdminAuth();
   const { overview, groups } = getAdminSidebarNav(hasPermission);
   const routes: AdminNavRoute[] = [
     ...(overview ? [overview] : []),
@@ -268,6 +329,7 @@ export function AdminDashboardMobileNav() {
     <nav className="flex items-center justify-around border-t border-border bg-card/95 px-2 py-2 backdrop-blur-sm md:hidden">
       {routes.slice(0, 5).map((route) => {
         const Icon = route.icon;
+        const label = resolveAdminNavRouteLabel(route, roleKeys);
         const active =
           pathname === route.href ||
           pathname.startsWith(`${route.href}/`) ||
@@ -287,7 +349,7 @@ export function AdminDashboardMobileNav() {
               )}
             >
               <Icon className="size-4" />
-              <span>{route.label.split(" ")[0]}</span>
+              <span>{label.split(" ")[0]}</span>
             </a>
           ) : (
             <Link
@@ -302,7 +364,7 @@ export function AdminDashboardMobileNav() {
               )}
             >
               <Icon className="size-4" />
-              <span>{route.label.split(" ")[0]}</span>
+              <span>{label.split(" ")[0]}</span>
             </Link>
           )
         );

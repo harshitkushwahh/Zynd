@@ -125,6 +125,55 @@ async def get_compliance_settings_admin(session: AsyncSession) -> dict:
     }
 
 
+async def resolve_zynd_distributor_arn(session: AsyncSession) -> str:
+    settings = get_settings()
+    row = await session.get(MfComplianceSettings, _COMPLIANCE_ROW_ID)
+    if row and (row.distributor_arn or "").strip():
+        return row.distributor_arn.strip()
+    return settings.zynd_distributor_arn.strip()
+
+
+async def resolve_zynd_distributor_euin(session: AsyncSession) -> str:
+    settings = get_settings()
+    row = await session.get(MfComplianceSettings, _COMPLIANCE_ROW_ID)
+    if row and (row.distributor_euin or "").strip():
+        return row.distributor_euin.strip()
+    return settings.zynd_distributor_euin.strip()
+
+
+async def get_zynd_company_settings_admin(session: AsyncSession) -> dict:
+    payload = await get_compliance_settings_admin(session)
+    return {
+        "distributor_arn": payload["distributor_arn"],
+        "distributor_euin": payload["distributor_euin"],
+        "updated_at": payload["updated_at"],
+        "source": {
+            "distributor_arn": payload["source"]["distributor_arn"],
+            "distributor_euin": payload["source"]["distributor_euin"],
+        },
+    }
+
+
+async def update_zynd_company_settings_admin(
+    session: AsyncSession,
+    *,
+    admin_user_id: UUID,
+    distributor_arn: str | None = None,
+    distributor_euin: str | None = None,
+    clear_distributor_arn: bool = False,
+    clear_distributor_euin: bool = False,
+) -> dict:
+    await update_compliance_settings_admin(
+        session,
+        admin_user_id=admin_user_id,
+        distributor_arn=distributor_arn,
+        distributor_euin=distributor_euin,
+        clear_distributor_arn=clear_distributor_arn,
+        clear_distributor_euin=clear_distributor_euin,
+    )
+    return await get_zynd_company_settings_admin(session)
+
+
 async def get_compliance_settings_public(session: AsyncSession) -> dict:
     settings = get_settings()
     row = await session.get(MfComplianceSettings, _COMPLIANCE_ROW_ID)

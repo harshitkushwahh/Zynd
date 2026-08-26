@@ -1,14 +1,17 @@
 import { apiRequest } from "@/lib/api-client";
-import { buildClientDocumentsForInvestor } from "@/lib/client-documents";
-import { buildKycAuditLogForClient } from "@/lib/client-kyc-audit-log";
-import { applyKycStepApplicability } from "@/lib/distributor-client-kyc-steps";
-import { DISTRIBUTOR_KYC_STEPS } from "@/lib/distributor-client-copy";
+import {
+  ADD_INVESTOR_BANK_ACCOUNT_TYPE_OPTIONS,
+  lookupAddInvestorEnumLabel,
+} from "@/lib/add-investor/add-investor-kyc-master-data";
+import { buildClientDocumentsForInvestor, type ApiKycDocument } from "@/lib/client-documents";
+import { mapKycAuditLogFromApi, type ApiKycAuditEntry } from "@/lib/client-kyc-audit-log";
+import { buildDistributorKycSteps } from "@/lib/distributor-client-kyc-steps";
+import { resolveDistributorAssetUrl } from "@/lib/distributor-asset-url";
 import type {
   DistributorClientFamilyGroup,
   DistributorClientFamilyMember,
   DistributorClientGoal,
   DistributorClientHolding,
-  DistributorClientKycStep,
   DistributorClientPersonalInfo,
   DistributorClientProfile,
   DistributorClientReferralSummary,
@@ -22,7 +25,7 @@ import type {
   InvestorType,
   OrderStatus,
   SystematicPlanStatus,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 type ApiClientListItem = {
   user_id: string;
@@ -40,6 +43,9 @@ type ApiClientListItem = {
   investor_type: string;
   aum: number | null;
   created_at: string | null;
+  mitra_client_id?: string | null;
+  in_distributor_book?: boolean;
+  service_model?: "pm" | "diy";
 };
 
 type ApiClientDetail = {
@@ -60,8 +66,12 @@ type ApiClientDetail = {
   profile_image_url: string | null;
   kyc_overall_status: string;
   kyc: {
+    overall_status?: string | null;
     step_statuses?: Record<string, string>;
     incomplete_steps?: Array<{ key: string; label: string; status?: string }>;
+    kyc_already_registered?: boolean;
+    documents?: ApiKycDocument[];
+    audit_log?: ApiKycAuditEntry[];
     address?: {
       permanent?: Record<string, unknown>;
       correspondence?: Record<string, unknown>;
@@ -78,6 +88,7 @@ type ApiClientDetail = {
     purchases?: Array<Record<string, unknown>>;
     sip_plans?: Array<Record<string, unknown>>;
     holdings?: Array<Record<string, unknown>>;
+    growth?: Array<Record<string, unknown>>;
   } | null;
   goals: Array<Record<string, unknown>>;
   family_groups: ApiFamilyGroup[];
@@ -156,7 +167,8 @@ export function mapApiClientListItem(row: ApiClientListItem): DistributorInvesto
     investorType: mapInvestorType(row.investor_type),
     aum: row.aum,
     createdAt: row.created_at ?? new Date().toISOString(),
-    inDistributorBook: true,
+    inDistributorBook: row.in_distributor_book ?? true,
+    serviceModel: row.service_model === "pm" ? "pm" : "diy",
   };
 }
 
@@ -175,29 +187,6 @@ function mapSipStatus(raw: string): SystematicPlanStatus {
   return "Cancelled";
 }
 
-function buildKycSteps(
-  kyc: ApiClientDetail["kyc"],
-  kycCompliant: boolean,
-): DistributorClientKycStep[] {
-  const stepStatuses = kyc?.step_statuses ?? {};
-  const incomplete = new Map(
-    (kyc?.incomplete_steps ?? []).map((step) => [step.key, step.status ?? "pending"])
-  );
-
-  const steps = DISTRIBUTOR_KYC_STEPS.map(({ id, label }) => {
-    const statusRaw = incomplete.get(id) ?? stepStatuses[id] ?? "pending";
-    if (statusRaw === "completed" || statusRaw === "verified") {
-      return { id, label, status: "completed" as const };
-    }
-    if (statusRaw === "failed") {
-      return { id, label, status: "failed" as const };
-    }
-    return { id, label, status: "pending" as const };
-  });
-
-  return applyKycStepApplicability(steps, kycCompliant);
-}
-
 function mapBankAccounts(rows: Array<Record<string, unknown>> | undefined) {
   if (!rows?.length) return [];
   return rows.map((row, index) => ({
@@ -205,10 +194,82 @@ function mapBankAccounts(rows: Array<Record<string, unknown>> | undefined) {
     bankName: String(row.bank_name ?? "Bank"),
     accountNumberMasked: String(row.account_number_masked ?? "••••"),
     ifscCode: String(row.ifsc_code ?? "—"),
-    accountType: row.account_type ? String(row.account_type) : undefined,
+    accountType: row.account_type
+      ? lookupAddInvestorEnumLabel(String(row.account_type), ADD_INVESTOR_BANK_ACCOUNT_TYPE_OPTIONS)
+      : undefined,
     isPrimary: Boolean(row.is_primary),
     verificationStatus: String(row.verification_status ?? "unknown"),
   }));
+}
+
+function normalizeAddressLabel(raw: string): string {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "residential" || normalized === "correspondence") {
+    return "Correspondence";
+  }
+  if (normalized === "permanent") return "Permanent";
+  return raw.trim() || "Address";
+}
+
+const CLIENT_ADDRESS_LABEL_ORDER: Record<string, number> = {
+  Permanent: 0,
+  Correspondence: 1,
+};
+
+function sortClientAddresses(
+  addresses: DistributorClientPersonalInfo["addresses"],
+): DistributorClientPersonalInfo["addresses"] {
+  return [...addresses].sort((left, right) => {
+    const leftOrder = CLIENT_ADDRESS_LABEL_ORDER[left.label] ?? 99;
+    const rightOrder = CLIENT_ADDRESS_LABEL_ORDER[right.label] ?? 99;
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+    if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function addressLocationKey(
+  address: Pick<
+    DistributorClientPersonalInfo["addresses"][number],
+    "city" | "state" | "postalCode" | "country"
+  >,
+): string {
+  return [address.city, address.state, address.postalCode, address.country]
+    .map((part) => (part ?? "").trim().toLowerCase())
+    .filter(Boolean)
+    .join("|");
+}
+
+function dedupeClientAddresses(
+  addresses: DistributorClientPersonalInfo["addresses"],
+): DistributorClientPersonalInfo["addresses"] {
+  const deduped: DistributorClientPersonalInfo["addresses"] = [];
+
+  for (const address of addresses) {
+    const locationKey = addressLocationKey(address);
+    if (!locationKey) {
+      deduped.push(address);
+      continue;
+    }
+
+    const duplicateIndex = deduped.findIndex(
+      (existing) => addressLocationKey(existing) === locationKey,
+    );
+    if (duplicateIndex < 0) {
+      deduped.push(address);
+      continue;
+    }
+
+    const existing = deduped[duplicateIndex];
+    const keepCurrent =
+      (address.isPrimary && !existing.isPrimary) ||
+      (address.label === "Permanent" && existing.label !== "Permanent");
+    if (keepCurrent) {
+      deduped[duplicateIndex] = address;
+    }
+  }
+
+  return deduped;
 }
 
 function mapAddressesFromKyc(kyc: ApiClientDetail["kyc"]): DistributorClientPersonalInfo["addresses"] {
@@ -236,21 +297,21 @@ function mapAddressesFromKyc(kyc: ApiClientDetail["kyc"]): DistributorClientPers
             : null,
       city: block.city != null ? String(block.city) : null,
       state: block.state != null ? String(block.state) : null,
-      postalCode: block.pincode != null ? String(block.pincode) : null,
+      postalCode:
+        block.pincode != null
+          ? String(block.pincode)
+          : block.postal_code != null
+            ? String(block.postal_code)
+            : null,
       country: block.country != null ? String(block.country) : null,
       isPrimary: label === "Permanent",
     });
   };
 
-  pushBlock("Permanent", kyc.address?.permanent, "permanent");
-  if (!kyc.address?.same_as_permanent) {
-    pushBlock("Correspondence", kyc.address?.correspondence, "correspondence");
-  }
-
   for (const [index, row] of (kyc.investor_addresses ?? []).entries()) {
     items.push({
       id: String(row.id ?? `addr-${index}`),
-      label: String(row.nature ?? "Address"),
+      label: normalizeAddressLabel(String(row.nature ?? "Address")),
       line1:
         row.line1 != null
           ? String(row.line1)
@@ -271,7 +332,26 @@ function mapAddressesFromKyc(kyc: ApiClientDetail["kyc"]): DistributorClientPers
     });
   }
 
-  return items;
+  if (items.length === 0) {
+    pushBlock("Permanent", kyc.address?.permanent, "permanent");
+    if (!kyc.address?.same_as_permanent) {
+      pushBlock("Correspondence", kyc.address?.correspondence, "correspondence");
+    }
+  } else {
+    const permanentBlock = kyc.address?.permanent;
+    const correspondenceBlock = kyc.address?.correspondence;
+    const hasPermanent = items.some((row) => row.label === "Permanent");
+    const hasCorrespondence = items.some((row) => row.label === "Correspondence");
+
+    if (!hasPermanent && permanentBlock) {
+      pushBlock("Permanent", permanentBlock, "permanent");
+    }
+    if (!hasCorrespondence && !kyc.address?.same_as_permanent && correspondenceBlock) {
+      pushBlock("Correspondence", correspondenceBlock, "correspondence");
+    }
+  }
+
+  return sortClientAddresses(dedupeClientAddresses(items));
 }
 
 function mapConnectedAccounts(
@@ -297,6 +377,18 @@ function mapPersonalInfo(payload: ApiClientDetail): DistributorClientPersonalInf
     addresses: mapAddressesFromKyc(payload.kyc),
     connectedAccounts: mapConnectedAccounts(payload.connected_accounts),
   };
+}
+
+function mapPortfolioGrowth(
+  rows: Array<Record<string, unknown>> | undefined,
+): import("@/lib/distributor-types").DistributorClientPortfolioGrowthPoint[] {
+  if (!rows?.length) return [];
+  return rows.map((row) => ({
+    label: String(row.label ?? ""),
+    value: Number(row.value ?? 0),
+    invested: Number(row.invested ?? row.value ?? 0),
+    date: row.date != null ? String(row.date) : undefined,
+  }));
 }
 
 function mapHoldings(rows: Array<Record<string, unknown>> | undefined): DistributorClientHolding[] {
@@ -331,18 +423,65 @@ function mapHoldings(rows: Array<Record<string, unknown>> | undefined): Distribu
   });
 }
 
+function mapGoalPriority(priority: unknown): DistributorClientGoal["priority"] {
+  const value = Number(priority);
+  if (!Number.isFinite(value)) return undefined;
+  if (value <= 2) return "high";
+  if (value === 3) return "medium";
+  return "low";
+}
+
+function mapGoalTypeFromRow(row: Record<string, unknown>): DistributorClientGoal["goalType"] {
+  const template = row.template;
+  if (!template || typeof template !== "object") return undefined;
+  const slug = String((template as Record<string, unknown>).slug ?? "");
+  const valid = new Set(["home", "education", "car", "wedding", "retirement", "custom"]);
+  return valid.has(slug) ? (slug as DistributorClientGoal["goalType"]) : undefined;
+}
+
+function normalizeGoalStatus(status: unknown): DistributorClientGoal["status"] {
+  const value = String(status ?? "active");
+  if (value === "active" || value === "draft" || value === "achieved" || value === "paused") {
+    return value;
+  }
+  return "active";
+}
+
 function mapGoals(rows: Array<Record<string, unknown>>): DistributorClientGoal[] {
-  return rows.map((row) => ({
-    id: String(row.id),
-    title: String(row.title ?? "Goal"),
-    category: row.category != null ? String(row.category) : undefined,
-    targetAmount: Number(row.target_amount_inr ?? 0),
-    currentAmount: Number(row.current_amount_inr ?? 0),
-    progressPct: Number(row.progress_pct ?? 0),
-    status: (row.status as DistributorClientGoal["status"]) ?? "active",
-    targetDate: String(row.target_date ?? ""),
-    scope: row.family_group_id ? "family" : "personal",
-  }));
+  return rows.map((row) => {
+    const targetAmount = Number(row.target_amount_inr ?? 0);
+    const currentAmount = Number(
+      row.effective_current_amount_inr ?? row.current_amount_inr ?? 0,
+    );
+    const progressPct = Number(
+      row.effective_progress_pct ??
+        row.progress_pct ??
+        (targetAmount > 0 ? Math.round((currentAmount / targetAmount) * 100) : 0),
+    );
+    const template = row.template;
+    const category =
+      row.tag != null
+        ? String(row.tag)
+        : template && typeof template === "object"
+          ? String((template as Record<string, unknown>).name ?? "")
+          : undefined;
+
+    return {
+      id: String(row.id),
+      title: String(row.title ?? "Goal"),
+      category: category || undefined,
+      goalType: mapGoalTypeFromRow(row),
+      priority: mapGoalPriority(row.priority),
+      targetAmount,
+      currentAmount,
+      progressPct,
+      status: normalizeGoalStatus(row.status),
+      targetDate: String(row.target_date ?? ""),
+      scope: row.family_group_id || row.scope === "family" ? "family" : "personal",
+      familyGroupName:
+        row.family_group_name != null ? String(row.family_group_name) : undefined,
+    };
+  });
 }
 
 function mapFamilyMembers(rows: ApiFamilyGroupMember[]): DistributorClientFamilyMember[] {
@@ -351,7 +490,7 @@ function mapFamilyMembers(rows: ApiFamilyGroupMember[]): DistributorClientFamily
     displayName: row.display_name ?? "Member",
     role: row.role === "head" ? "head" : "member",
     emailMasked: row.email_masked ?? undefined,
-    profileImageUrl: row.profile_image_url,
+    profileImageUrl: resolveDistributorAssetUrl(row.profile_image_url),
     badgeLabel: row.badge_label,
   }));
 }
@@ -440,10 +579,21 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
   systematicPlans: DistributorSystematicPlan[];
 } {
   const investor = mapApiClientListItem(payload.summary);
-  const kycSteps = buildKycSteps(payload.kyc, payload.summary.kyc_compliant);
+  const kycCompliant = payload.summary.kyc_compliant;
+  const kycSteps = buildDistributorKycSteps({
+    stepStatuses: payload.kyc?.step_statuses,
+    incompleteSteps: payload.kyc?.incomplete_steps,
+    kycCompliant,
+    kycAlreadyRegistered: payload.kyc?.kyc_already_registered === true,
+  });
   const kycInitiatedAt = payload.summary.created_at ?? new Date().toISOString();
-  const kycAuditLog = buildKycAuditLogForClient(investor, kycSteps, kycInitiatedAt);
-  const clientDocuments = buildClientDocumentsForInvestor(investor, kycSteps);
+  const kycAuditLog = mapKycAuditLogFromApi(payload.kyc?.audit_log);
+  const clientDocuments = buildClientDocumentsForInvestor(
+    investor,
+    kycSteps,
+    payload.kyc?.documents,
+    kycCompliant,
+  );
   const investments = payload.investments ?? undefined;
 
   return {
@@ -452,7 +602,7 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
     emailDisplay: payload.email_display,
     contactEmail: payload.email_display,
     contactPhone: payload.phone_masked ?? "Phone not on file",
-    profileImageUrl: payload.profile_image_url,
+    profileImageUrl: resolveDistributorAssetUrl(payload.profile_image_url),
     riskProfileLabel: payload.risk_profile_label,
     riskProfile: payload.risk_profile?.score
       ? {
@@ -470,6 +620,7 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
     kycAuditLog,
     clientDocuments,
     holdings: mapHoldings(investments?.holdings),
+    portfolioGrowth: mapPortfolioGrowth(investments?.growth),
     goals: mapGoals(payload.goals ?? []),
     familyGroups: mapFamilyGroups(payload.family_groups ?? []),
     referrals: mapReferrals(payload.referrals),
@@ -480,10 +631,15 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
   };
 }
 
-export async function fetchDistributorClients(params?: { email?: string; limit?: number }) {
+export async function fetchDistributorClients(params?: {
+  email?: string;
+  limit?: number;
+  scope?: "book" | "platform";
+}) {
   const search = new URLSearchParams();
   if (params?.email) search.set("email", params.email);
   if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.scope) search.set("scope", params.scope);
   const query = search.toString();
   const path = query ? `/distributor/clients?${query}` : "/distributor/clients";
   const response = await apiRequest<{ items: ApiClientListItem[] }>(path);

@@ -61,9 +61,9 @@ export function DistributorHeadManagerActivityTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <AdminSearchInput
-          containerClassName="max-w-sm"
+          containerClassName="w-full max-w-sm sm:min-w-[14rem]"
           placeholder="Search events, actors, or summaries"
           value={search}
           onChange={(event) => {
@@ -79,7 +79,9 @@ export function DistributorHeadManagerActivityTab({
           }}
           options={ACTOR_FILTER_OPTIONS}
           placeholder="Actor"
-          className="min-w-select-sm"
+          className="min-w-select-sm shrink-0 self-end sm:self-auto"
+          triggerClassName="w-auto"
+          aria-label="Filter activity by actor"
         />
       </div>
 

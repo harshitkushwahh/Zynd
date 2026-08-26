@@ -10,9 +10,7 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import { DistributorInsightCardHeader } from "@/components/ui/distributor-insight-card-header";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { summarizeClientGoals, type ClientGoalsSummary } from "@/lib/client-goals-summary";
-import type { DistributorClientProfile } from "@/lib/dummy/types";
-import { buildClientGoalsForInvestor } from "@/lib/dummy/client-profile";
-import { env } from "@/lib/env";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
 import { formatAum } from "@/lib/format";
 
 const RING_TRACK = "color-mix(in srgb, var(--border) 65%, var(--card))";
@@ -21,11 +19,6 @@ const RING_FILL = "var(--primary)";
 type ClientGoalsTabPanelProps = {
   profile: DistributorClientProfile;
 };
-
-function resolveGoalsForPanel(profile: DistributorClientProfile) {
-  if (env.useBackendClients) return profile.goals;
-  return buildClientGoalsForInvestor(profile.investor);
-}
 
 function ClientGoalsGraphCard({ summary }: { summary: ClientGoalsSummary }) {
   const copy = DISTRIBUTOR_CLIENT_COPY.goals;
@@ -96,7 +89,7 @@ function ClientGoalsGraphCard({ summary }: { summary: ClientGoalsSummary }) {
 
 export function ClientGoalsTabPanel({ profile }: ClientGoalsTabPanelProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.goals;
-  const goals = useMemo(() => resolveGoalsForPanel(profile), [profile]);
+  const goals = useMemo(() => profile.goals ?? [], [profile.goals]);
 
   if (goals.length === 0) {
     return <ClientDetailEmptyState message={copy.empty} icon={Goal} />;

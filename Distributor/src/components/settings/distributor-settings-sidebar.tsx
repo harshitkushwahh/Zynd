@@ -23,8 +23,9 @@ export function DistributorSettingsSidebar() {
   if (!user) return null;
 
   const handleSignOut = () => {
-    signOut();
-    router.replace("/");
+    void signOut().finally(() => {
+      router.replace("/");
+    });
   };
 
   return (

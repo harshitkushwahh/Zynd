@@ -12,6 +12,7 @@ import type {
   DistributorHeadLeaveApplication,
   DistributorHeadManagerIncentive,
 } from "@/lib/dummy/distributor-head-data";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { formatDistributorHeadCount, formatDistributorHeadInr } from "@/lib/distributor-head-format";
 
 type DistributorHeadManagerOverviewPanelProps = {
@@ -27,7 +28,7 @@ export function DistributorHeadManagerOverviewPanel({
 }: DistributorHeadManagerOverviewPanelProps) {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-5">
+      <div className="grid min-w-0 gap-4 overflow-visible px-0.5 lg:grid-cols-5">
         <div className="lg:col-span-2">
           <DistributorHeadManagerIncentivesCard incentive={incentive} />
         </div>
@@ -52,7 +53,7 @@ export function DistributorHeadManagerOverviewPanel({
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <Badge variant="outline" className="tabular-nums font-normal">
-                    {branch.distributorCount} distributors
+                    {branch.distributorCount} {MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()}
                   </Badge>
                   <Badge variant="outline" className="tabular-nums font-normal">
                     {formatDistributorHeadCount(branch.activeClients)} clients

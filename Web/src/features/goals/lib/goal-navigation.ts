@@ -10,7 +10,10 @@ export function goalSummarySliceHref(slice: GoalSummaryChartSlice) {
     return goalDetailHref(slice.personalGoal.id);
   }
   if (slice.kind === "family" && slice.familyGoal) {
-    return buildFamilyGroupHref(slice.familyGoal.family_group_id);
+    return buildFamilyGroupHref({
+      id: slice.familyGoal.family_group_id,
+      title: slice.familyGoal.groupTitle,
+    });
   }
   return null;
 }

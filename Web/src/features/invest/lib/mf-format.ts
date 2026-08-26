@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { copy } from "@/shared/config/copy";
 
 const INVEST_ASSETS_PREFIX = "/invest/assets/";
 
@@ -41,7 +42,9 @@ export function formatReturn(value: number | null | undefined) {
 }
 
 export function formatSignedReturn(value: number | null | undefined) {
-  if (value == null) return { text: "—", tone: "muted" as const };
+  if (value == null) {
+    return { text: copy.mutualFunds.noReturnData, tone: "muted" as const };
+  }
   const prefix = value > 0 ? "+" : "";
   return {
     text: `${prefix}${value.toFixed(2)}%`,
@@ -111,6 +114,24 @@ export function formatDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+export function isSipNextInstallmentNoData(plan: {
+  status?: string | null;
+  next_installment_date?: string | null;
+}) {
+  const status = (plan.status ?? "").trim().toUpperCase();
+  return status === "FAILED" && !plan.next_installment_date;
+}
+
+export function formatSipNextInstallmentDate(plan: {
+  status?: string | null;
+  next_installment_date?: string | null;
+}) {
+  if (isSipNextInstallmentNoData(plan)) {
+    return copy.mySips.nextInstallmentNoData;
+  }
+  return formatDate(plan.next_installment_date);
+}
+
 export function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("en-IN", {
@@ -141,4 +162,37 @@ export function healthBadgeLabel(flag: string) {
     default:
       return flag.replaceAll("_", " ");
   }
+}
+
+type SipScheduleFields = {
+  frequency?: string | null;
+  installment_day?: number | null;
+  number_of_installments?: number | null;
+};
+
+export function formatSipFrequencyLabel(frequency: string | null | undefined) {
+  const normalized = (frequency ?? "").trim().toLowerCase();
+  if (normalized === "daily") return copy.mySips.frequencyDaily;
+  return copy.mySips.frequencyMonthly;
+}
+
+export function formatSipInstallmentDay(day: number | null | undefined) {
+  if (!day) return "—";
+  return copy.mySips.installmentDay.replace("{day}", String(day));
+}
+
+export function formatSipInstallmentCount(count: number | null | undefined) {
+  if (!count) return "—";
+  return copy.mySips.installmentCount.replace("{count}", String(count));
+}
+
+export function formatSipScheduleSummary(plan: SipScheduleFields) {
+  const parts: string[] = [formatSipFrequencyLabel(plan.frequency)];
+  if ((plan.frequency ?? "").trim().toLowerCase() !== "daily" && plan.installment_day) {
+    parts.push(formatSipInstallmentDay(plan.installment_day));
+  }
+  if (plan.number_of_installments) {
+    parts.push(formatSipInstallmentCount(plan.number_of_installments));
+  }
+  return parts.join(" · ");
 }

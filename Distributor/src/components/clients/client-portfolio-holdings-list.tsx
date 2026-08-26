@@ -15,7 +15,7 @@ import type { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { DISTRIBUTOR_CLIENT_COPY as CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
-import type { DistributorClientHolding } from "@/lib/dummy/types";
+import type { DistributorClientHolding } from "@/lib/distributor-types";
 import {
   formatAum,
   formatDistributorNav,

@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SortDescriptor } from "react-aria-components";
-import { Loader2 } from "lucide-react";
 
-import { PageTitle } from "@/components/ui/page-title";
+import { PageHeader } from "@/components/ui/page-header";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import {
@@ -14,8 +13,12 @@ import {
   type InvestFundSummary,
 } from "@/features/invest/api/invest-api";
 import { MfBreadcrumb } from "@/features/invest/components/mf-breadcrumb";
+import { MfFundScreenerDock } from "@/features/invest/components/mf-fund-screener-dock";
 import { MfFundsFilterBar } from "@/features/invest/components/mf-funds-filter-bar";
 import { MfFundsTable } from "@/features/invest/components/mf-funds-table";
+import { MfFundsTableSkeleton } from "@/features/invest/components/mf-funds-table-skeleton";
+import { MfFundScreenerSelectionProvider } from "@/features/invest/contexts/mf-fund-screener-selection-context";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import {
   EMPTY_MF_FUND_FILTERS,
   applyMfFundFilters,
@@ -32,7 +35,9 @@ import {
   usesServerFundTableSort,
 } from "@/features/invest/lib/mf-fund-ranking";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
+import { MF_TOOL_ICONS } from "@/features/invest/lib/mf-dashboard-sidebar-data";
 import { copy } from "@/shared/config/copy";
+import { cn } from "@/lib/utils";
 
 type MfAllFundsPageProps = {
   initialCategorySlug?: string | null;
@@ -230,7 +235,8 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
   }, [funds.length, hasMore, initialLoading, tryScheduleLoadMore]);
 
   return (
-    <div className={MF_PAGE_SECTION_CLASS}>
+    <MfFundScreenerSelectionProvider>
+      <div className={MF_PAGE_SECTION_CLASS}>
       <MfBreadcrumb
         trail={[
           {
@@ -241,9 +247,11 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
 
       <FundEligibilityBanner />
 
-      <div className="mb-6">
-        <PageTitle>{copy.mutualFunds.allFundsTitle}</PageTitle>
-      </div>
+      <PageHeader
+        icon={MF_TOOL_ICONS.screener}
+        title={copy.mutualFunds.toolFundScreener}
+        className="mb-6"
+      />
 
       <MfFundsFilterBar
         filters={filters}
@@ -255,34 +263,45 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
       {error ? <FieldMessage variant="error" message={error} className="mt-4" /> : null}
 
       <div className="relative mt-6 min-w-0">
-        <div className="relative flex h-[min(32rem,calc(100vh-14rem))] flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
+        <div
+          className={cn(
+            "relative flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card",
+            initialLoading || filteredFunds.length > 0
+              ? "h-[min(32rem,calc(100vh-14rem))]"
+              : "h-auto",
+          )}
+        >
           {initialLoading ? (
-            <div className="flex h-full min-h-[280px] items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 size-5 animate-spin" />
-              {copy.mutualFunds.loadingFunds}
-            </div>
+            <MfFundsTableSkeleton />
           ) : (
-            <MfFundsTable
-              funds={filteredFunds}
-              totalCount={tableTotalCount}
-              refetching={refetching}
-              loadingMore={loadingMore}
-              hasMore={hasMore}
-              virtualized
-              serverSorted={serverSorted}
-              sortDescriptor={sortDescriptor}
-              onSortChange={setSortDescriptor}
-              scrollContainerRef={scrollContainerRef}
-              loadMoreRef={loadMoreRef}
-              emptyDescription={
-                hasClientOnlyMfFundFilters(filters) && funds.length > 0
-                  ? copy.mutualFunds.allFundsEmptyFiltered
-                  : copy.mutualFunds.allFundsEmptyDescription
-              }
-            />
+            <DashboardContentFade className="h-full min-h-0">
+              <MfFundsTable
+                funds={filteredFunds}
+                totalCount={tableTotalCount}
+                refetching={refetching}
+                loadingMore={loadingMore}
+                hasMore={hasMore}
+                virtualized
+                draggableRows
+                screenerSelectionEnabled
+                serverSorted={serverSorted}
+                sortDescriptor={sortDescriptor}
+                onSortChange={setSortDescriptor}
+                scrollContainerRef={scrollContainerRef}
+                loadMoreRef={loadMoreRef}
+                emptyDescription={
+                  hasClientOnlyMfFundFilters(filters) && funds.length > 0
+                    ? copy.mutualFunds.allFundsEmptyFiltered
+                    : copy.mutualFunds.allFundsEmptyDescription
+                }
+              />
+            </DashboardContentFade>
           )}
         </div>
       </div>
-    </div>
+
+      <MfFundScreenerDock />
+      </div>
+    </MfFundScreenerSelectionProvider>
   );
 }

@@ -58,19 +58,16 @@ function profilesMetricTone(kyc: AdminUserKycDetail): AdminMetricCardTone {
   return "muted";
 }
 
-function AdminUserKycProfileIdCopy({
-  label,
+function AdminUserKycProfileIdInlineCopy({
+  prefix,
   value,
 }: {
-  label: string;
-  value: string | null | undefined;
+  prefix: string;
+  value: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const displayValue = value?.trim() || "Not provisioned";
-  const canCopy = Boolean(value?.trim());
 
   const onCopy = useCallback(async () => {
-    if (!value?.trim()) return;
     try {
       await navigator.clipboard.writeText(value.trim());
       setCopied(true);
@@ -80,32 +77,53 @@ function AdminUserKycProfileIdCopy({
     }
   }, [value]);
 
-  if (!canCopy) {
-    return (
-      <div className="admin-user-kyc-overview__profile-row">
-        <span className="admin-user-kyc-overview__profile-label">{label}</span>
-        <span className="admin-user-kyc-overview__profile-empty">{displayValue}</span>
-      </div>
-    );
+  return (
+    <button
+      type="button"
+      className="admin-user-kyc-overview__profile-copy admin-user-kyc-overview__profile-copy--inline"
+      onClick={() => void onCopy()}
+      aria-label={copied ? `${prefix} ID copied` : `Copy ${prefix} ID ${value}`}
+    >
+      <span className="admin-user-kyc-overview__profile-copy-prefix">{prefix}</span>
+      <span className="font-mono">{value}</span>
+      {copied ? (
+        <Check className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
+      ) : (
+        <Copy className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
+      )}
+    </button>
+  );
+}
+
+function formatProfileSummary(kyc: AdminUserKycDetail) {
+  const investorText = kyc.investor_profile_id?.trim()
+    ? shortProfileStatus(kyc.investor_profile_status)
+    : "Not provisioned";
+  const mfText = kyc.mf_investment_profile_id?.trim()
+    ? shortProfileStatus(kyc.mf_investment_profile_status)
+    : "Not provisioned";
+
+  return `Investor ${investorText} · MF ${mfText}`;
+}
+
+function renderProfilesHint(kyc: AdminUserKycDetail) {
+  const investorId = kyc.investor_profile_id?.trim() ?? "";
+  const mfId = kyc.mf_investment_profile_id?.trim() ?? "";
+
+  if (!investorId && !mfId) {
+    return "Cybrilla external IDs";
   }
 
   return (
-    <div className="admin-user-kyc-overview__profile-row">
-      <span className="admin-user-kyc-overview__profile-label">{label}</span>
-      <button
-        type="button"
-        className="admin-user-kyc-overview__profile-copy"
-        onClick={() => void onCopy()}
-        aria-label={copied ? `${label} copied` : `Copy ${label} ${displayValue}`}
-      >
-        <span className="font-mono">{displayValue}</span>
-        {copied ? (
-          <Check className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
-        ) : (
-          <Copy className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
-        )}
-      </button>
-    </div>
+    <span className="admin-user-kyc-overview__profile-ids-hint">
+      {investorId ? <AdminUserKycProfileIdInlineCopy prefix="Investor" value={investorId} /> : null}
+      {investorId && mfId ? (
+        <span className="admin-user-kyc-overview__profile-ids-separator" aria-hidden>
+          ·
+        </span>
+      ) : null}
+      {mfId ? <AdminUserKycProfileIdInlineCopy prefix="MF" value={mfId} /> : null}
+    </span>
   );
 }
 
@@ -118,14 +136,8 @@ export function AdminUserKycOverviewMetrics({ kyc, className }: AdminUserKycOver
     ? formatTimestampDetail(kycInitiatedAt).split(",")[0]
     : "Not started";
 
-  const profilesHint = [
-    kyc.investor_profile_id ? `Investor ${shortProfileStatus(kyc.investor_profile_status)}` : null,
-    kyc.mf_investment_profile_id
-      ? `MF ${shortProfileStatus(kyc.mf_investment_profile_status)}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const profilesValue = formatProfileSummary(kyc);
+  const profilesHint = renderProfilesHint(kyc);
 
   return (
     <AdminMetricCardsGrid columns="four" className={cn("admin-user-kyc-overview", className)}>
@@ -153,16 +165,8 @@ export function AdminUserKycOverviewMetrics({ kyc, className }: AdminUserKycOver
       <AdminMetricCard
         icon={UserRound}
         label="Profiles"
-        value={
-          <div className="admin-user-kyc-overview__profiles">
-            <AdminUserKycProfileIdCopy label="Investor profile" value={kyc.investor_profile_id} />
-            <AdminUserKycProfileIdCopy
-              label="MF investment profile"
-              value={kyc.mf_investment_profile_id}
-            />
-          </div>
-        }
-        hint={profilesHint || "Cybrilla external IDs"}
+        value={profilesValue}
+        hint={profilesHint}
         tone={profilesMetricTone(kyc)}
       />
     </AdminMetricCardsGrid>

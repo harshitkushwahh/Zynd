@@ -13,7 +13,12 @@ import { DistributorTableSearchCard } from "@/components/dashboard/distributor-t
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { buildClientDocumentsForInvestor } from "@/lib/client-documents";
+import {
+  buildClientDocumentsForInvestor,
+  documentFileLabel,
+  documentIdentifierLabel,
+  documentUploadedLabel,
+} from "@/lib/client-documents";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
@@ -22,7 +27,7 @@ import type {
   DistributorClientDocument,
   DistributorClientDocumentStatus,
   DistributorClientProfile,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import { env } from "@/lib/env";
 import { formatDistributorDate } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
@@ -58,7 +63,12 @@ function resolveDocuments(profile: DistributorClientProfile): DistributorClientD
   } else if (profile.clientDocuments.length > 0) {
     docs = profile.clientDocuments;
   } else {
-    docs = buildClientDocumentsForInvestor(profile.investor, profile.kycSteps);
+    docs = buildClientDocumentsForInvestor(
+      profile.investor,
+      profile.kycSteps,
+      undefined,
+      profile.investor.complianceStatus === "Compliant",
+    );
   }
   return docs.filter((doc) => !HIDDEN_DOCUMENT_CATEGORIES.has(doc.category));
 }
@@ -197,13 +207,13 @@ export function ClientDocumentsTabPanel({ profile }: ClientDocumentsTabPanelProp
                 </div>
               </Table.Cell>
               <Table.Cell className="font-mono text-caption text-muted-foreground">
-                {doc.identifierMasked ?? copy.identifierNone}
+                {documentIdentifierLabel(doc, copy)}
               </Table.Cell>
               <Table.Cell className="max-w-[14rem] truncate text-muted-foreground">
-                {doc.fileName ?? copy.fileNone}
+                {documentFileLabel(doc, copy)}
               </Table.Cell>
               <Table.Cell className="whitespace-nowrap tabular-nums text-muted-foreground">
-                {doc.uploadedAt ? formatDistributorDate(doc.uploadedAt) : copy.dateNone}
+                {documentUploadedLabel(doc, copy, formatDistributorDate)}
               </Table.Cell>
               <Table.Cell>
                 <StatusBadge variant={statusVariant(doc.status)}>

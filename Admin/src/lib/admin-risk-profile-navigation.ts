@@ -1,7 +1,7 @@
-import { FileSpreadsheet, FolderTree, Layers3, Lock, MessageSquareText, ScrollText, Users } from "lucide-react";
+import { FileSpreadsheet, FolderTree, Layers3, Lock, MessageSquareText, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type RiskProfileTabId = "categories" | "questions" | "templates" | "tiers" | "users" | "locked" | "audit";
+export type RiskProfileTabId = "categories" | "questions" | "templates" | "tiers" | "users" | "locked";
 
 export type RiskProfileTab = {
   id: RiskProfileTabId;
@@ -52,13 +52,6 @@ export const RISK_PROFILE_TABS: RiskProfileTab[] = [
     label: "Tier messages",
     description: "Score bands from 0–1000 and user-facing tier messages.",
     icon: FileSpreadsheet,
-    permissions: ["risk_profile.read"],
-  },
-  {
-    id: "audit",
-    label: "Audit log",
-    description: "Global risk profile configuration and completion events.",
-    icon: ScrollText,
     permissions: ["risk_profile.read"],
   },
 ];

@@ -39,6 +39,7 @@ type SecurityFeatureCardProps = {
   actions?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
+  hideDivider?: boolean;
 };
 
 export function SecurityFeatureCard({
@@ -50,6 +51,7 @@ export function SecurityFeatureCard({
   actions,
   children,
   className,
+  hideDivider = false,
 }: SecurityFeatureCardProps) {
   const styles = TONE_STYLES[tone];
 
@@ -87,7 +89,7 @@ export function SecurityFeatureCard({
       </div>
 
       {children ? (
-        <div className={cn("mt-5 border-t pt-5", styles.divider)}>{children}</div>
+        <div className={cn("mt-5", !hideDivider && ["border-t pt-5", styles.divider])}>{children}</div>
       ) : null}
     </section>
   );

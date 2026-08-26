@@ -43,6 +43,7 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
             "GET /admin/users/{user_id}",
             "GET /admin/users/{user_id}/profile-detail",
             "GET /admin/users/{user_id}/goals",
+            "GET /admin/search",
         ],
         "notes": "List and view user account summaries.",
     },
@@ -128,7 +129,19 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
             "GET /admin/deletions/pending",
             "POST /admin/deletions/run-executor",
         ],
-        "notes": "Pending deletions + maker-checker executor run.",
+        "notes": "Pending customer deletions + maker-checker executor run.",
+    },
+    {
+        "permission": "admin.accounts.manage",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/admin-accounts",
+            "POST /admin/admin-accounts/{user_id}/access-hold",
+            "POST /admin/admin-accounts/{user_id}/restore-access",
+            "POST /admin/admin-accounts/{user_id}/remove",
+            "POST /admin/admin-accounts/{user_id}/cancel-deletion",
+        ],
+        "notes": "Super-admin admin account lifecycle: immediate access hold, restore, remove suspended accounts, and cancel mistaken deletion.",
     },
     {
         "permission": "documents.read",
@@ -175,14 +188,30 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
             "GET /admin/mf/jobs",
             "GET /admin/mf/ingestion-runs",
             "GET /admin/mf/metrics",
+            "GET /admin/mf/pipeline/preview",
+            "GET /admin/mf/pipeline/runs/{run_id}",
+            "GET /admin/mf/pipeline/runs/active",
         ],
-        "notes": "MF scheduler job inventory, run history, and Prometheus metrics.",
+        "notes": "MF scheduler job inventory, run history, metrics, and pipeline status.",
     },
     {
         "permission": "mf.jobs.run",
         "status": "enforced",
         "routes": ["POST /admin/mf/jobs/{job_name}/run"],
         "notes": "Manual MF job trigger (optional force=true skips dependency guard).",
+    },
+    {
+        "permission": "mf.pipeline.run",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/mf/pipeline/run",
+            "POST /admin/mf/pipeline/runs/{run_id}/cancel",
+            "POST /admin/mf/pipeline/runs/{run_id}/resume",
+            "POST /admin/mf/pipeline/runs/{run_id}/retry-step",
+            "POST /admin/mf/pipeline/runs/{run_id}/approve-staging",
+            "POST /admin/mf/pipeline/clear-stuck",
+        ],
+        "notes": "Full MF pipeline bootstrap — start, resume, retry, cancel, and clear stuck runs.",
     },
     {
         "permission": "mf.amcs.read",
@@ -292,14 +321,20 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
     {
         "permission": "mf.integrations.read",
         "status": "enforced",
-        "routes": ["GET /admin/mf/integrations"],
-        "notes": "View MF provider integration status and active test/live profile.",
+        "routes": [
+            "GET /admin/mf/integrations",
+            "GET /admin/mf/integrations/company",
+        ],
+        "notes": "View MF provider integration status and Zynd company distributor identifiers.",
     },
     {
         "permission": "mf.integrations.manage",
         "status": "enforced",
-        "routes": ["PATCH /admin/mf/integrations/{provider}/environment"],
-        "notes": "Switch active MF provider environment without editing .env files.",
+        "routes": [
+            "PATCH /admin/mf/integrations/{provider}/environment",
+            "PATCH /admin/mf/integrations/company",
+        ],
+        "notes": "Switch active MF provider environment and update Zynd company distributor identifiers.",
     },
     {
         "permission": "risk_profile.read",
@@ -399,6 +434,39 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "notes": "Phase 5 admin moderation actions.",
     },
     {
+        "permission": "referrals.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/referrals/metrics",
+            "GET /admin/referrals/scheme",
+            "GET /admin/referrals/referrers",
+            "GET /admin/referrals/attributions",
+            "GET /admin/referrals/leaderboard",
+            "GET /admin/referrals/leaderboard/months",
+            "GET /admin/referrals/leaderboard/config",
+            "GET /admin/referrals/program-settings",
+            "GET /admin/referrals/reward-rules",
+            "GET /admin/referrals/redemptions",
+            "GET /admin/referrals/users/{user_ref}",
+            "GET /admin/search",
+        ],
+        "notes": "Admin referral program visibility, directory, and redemption history.",
+    },
+    {
+        "permission": "referrals.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/referrals/reward-rules",
+            "PATCH /admin/referrals/reward-rules/{rule_id}",
+            "PATCH /admin/referrals/redemptions/{entry_id}",
+            "POST /admin/referrals/redemptions/sync",
+            "PATCH /admin/referrals/leaderboard/config",
+            "POST /admin/referrals/leaderboard/snapshot",
+            "PATCH /admin/referrals/program-settings",
+        ],
+        "notes": "Manage reward categories, sync ledger, and mark redemptions paid.",
+    },
+    {
         "permission": "goals.templates.read",
         "status": "enforced",
         "routes": [
@@ -416,6 +484,28 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "notes": "Update predefined goal template metadata and visibility.",
     },
     {
+        "permission": "distributor.clients.onboard",
+        "status": "enforced",
+        "routes": [
+            "POST /distributor/clients/onboarding/start",
+            "POST /distributor/clients/onboarding/verify-email",
+            "POST /distributor/clients/onboarding/resend-email-otp",
+            "POST /distributor/clients/onboarding/send-mobile-otp",
+            "POST /distributor/clients/onboarding/resend-mobile-otp",
+            "POST /distributor/clients/onboarding/verify-mobile",
+            "POST /distributor/clients/onboarding/submit",
+        ],
+        "notes": "Stage 1 investor account onboarding into the Mitra book.",
+    },
+    {
+        "permission": "distributor.compliance.list",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/compliance/queue",
+        ],
+        "notes": "Compliance queue for book clients needing KYC action.",
+    },
+    {
         "permission": "distributor.clients.list",
         "status": "enforced",
         "routes": [
@@ -430,6 +520,127 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
             "GET /distributor/clients/{client_reference}",
         ],
         "notes": "Distributor console masked client profile aggregate.",
+    },
+    {
+        "permission": "distributor.partners.list",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/partners",
+            "GET /distributor/partners/{reference}",
+        ],
+        "notes": "Branch manager Zynd Mitra directory.",
+    },
+    {
+        "permission": "distributor.partners.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /distributor/partners/onboarding/start",
+            "PATCH /distributor/partners/onboarding/draft",
+            "GET /distributor/partners/onboarding/draft",
+            "POST /distributor/partners/onboarding/submit",
+        ],
+        "notes": "Branch manager Zynd Mitra onboarding wizard.",
+    },
+    {
+        "permission": "distributor.work.manage",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/work/config",
+            "GET /distributor/work/sessions/active",
+            "POST /distributor/work/sessions/sign-in",
+            "POST /distributor/work/sessions/sign-out",
+            "GET /distributor/work/attendance",
+        ],
+        "notes": "Zynd Mitra work sign-in, sign-out, and attendance records.",
+    },
+    {
+        "permission": "distributor.leave.apply",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/work/leave/requests?scope=self",
+            "POST /distributor/work/leave/requests",
+        ],
+        "notes": "Zynd Mitra leave applications.",
+    },
+    {
+        "permission": "distributor.leave.review",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/work/leave/requests?scope=branch",
+            "POST /distributor/work/leave/requests/{request_id}/review",
+        ],
+        "notes": "Branch manager leave review.",
+    },
+    {
+        "permission": "distributor.payroll.read",
+        "status": "enforced",
+        "routes": [
+            "GET /distributor/work/payroll/dashboard",
+            "GET /distributor/work/payroll/periods",
+        ],
+        "notes": "My work payroll, incentives, and promotion visibility.",
+    },
+    {
+        "permission": "admin.distributor_promotions.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/distributor-hierarchy/partners/{partner_user_ref}/promotions",
+        ],
+        "notes": "Mitra state head promotion grants.",
+    },
+    {
+        "permission": "admin.distributor_partners.list",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-partners/pending",
+            "GET /admin/distributor-partners/{partner_id}",
+        ],
+        "notes": "HO review queue for pending Zynd Mitra applications.",
+    },
+    {
+        "permission": "admin.distributor_partners.approve",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/distributor-partners/{partner_id}/approve",
+            "POST /admin/distributor-partners/{partner_id}/reject",
+        ],
+        "notes": "Approve or reject Zynd Mitra HO applications.",
+    },
+    {
+        "permission": "admin.distributor_hierarchy.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/overview",
+            "GET /admin/distributor-hierarchy/partners",
+            "GET /admin/distributor-hierarchy/state-heads",
+        ],
+        "notes": "Read Mitra hierarchy overview and partner directory.",
+    },
+    {
+        "permission": "admin.distributor_branches.list",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/branches",
+        ],
+        "notes": "List branches in admin Mitra hierarchy.",
+    },
+    {
+        "permission": "admin.distributor_branches.manage",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/branch-manager-candidates",
+            "POST /admin/distributor-hierarchy/branches",
+            "POST /admin/distributor-hierarchy/state-heads",
+        ],
+        "notes": "Create distributor branches and Mitra State Head accounts.",
+    },
+    {
+        "permission": "admin.distributor_managers.list",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/distributor-hierarchy/managers",
+        ],
+        "notes": "List branch managers in admin Mitra hierarchy.",
     },
 ]
 

@@ -41,7 +41,9 @@ async def _deliver_twilio(*, to_phone: str, body: str) -> bool:
     if not from_number and not messaging_service_sid:
         logger.error(
             "Twilio SMS requested but neither TWILIO_FROM_NUMBER nor "
-            "TWILIO_MESSAGING_SERVICE_SID is configured."
+            "TWILIO_MESSAGING_SERVICE_SID is configured. "
+            "Set TWILIO_FROM_NUMBER in Backend/.env (quote values starting with +) "
+            "and restart the API."
         )
         return False
 
@@ -49,7 +51,7 @@ async def _deliver_twilio(*, to_phone: str, body: str) -> bool:
     if messaging_service_sid:
         payload["MessagingServiceSid"] = messaging_service_sid
     else:
-        payload["From"] = from_number
+        payload["From"] = _to_e164(from_number)
 
     url = _TWILIO_MESSAGES_URL.format(account_sid=account_sid)
     try:

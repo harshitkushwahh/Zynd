@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.mf.mf_fp_state import map_fp_purchase_state, map_fp_purchase_state_to_checkout
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, get_or_create_mf_investment_account
+from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
 from app.application.referral.referral_investment_service import record_referral_investment_activity
 from app.core.config import get_settings
@@ -28,7 +29,13 @@ from app.infrastructure.mf.fp_oms_client import (
     update_mf_purchase,
     update_mf_purchases_batch,
 )
-from app.infrastructure.mf.fp_payment_client import create_netbanking_payment, extract_payment_token_url, get_payment
+from app.infrastructure.mf.fp_payment_client import (
+    create_netbanking_payment,
+    extract_payment_status,
+    extract_payment_token_url,
+    get_payment,
+    is_payment_success_status,
+)
 from app.infrastructure.persistence.investor_models import (
     InvestorBankAccount,
     InvestorObjectSyncStatus,
@@ -46,7 +53,7 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfOrderStatus,
 )
 from app.infrastructure.persistence.models import User
-from app.infrastructure.persistence.referral_models import ReferralInvestmentProduct
+from app.infrastructure.persistence.referral_models import ReferralInvestmentMode, ReferralInvestmentProduct
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +62,8 @@ _PAYMENT_PIPELINE_STATES = {"pending", "confirmed"}
 
 
 def _purchase_scheme(order: MfOrder, fund: MutualFund | None) -> str | None:
-    scheme = (order.fp_scheme_id or "").strip()
-    if scheme.upper().startswith("INF"):
-        return scheme.upper()
-    if fund and fund.isin_growth:
-        return fund.isin_growth.upper()
-    return scheme or None
+    primary, _fallback = resolve_mf_purchase_scheme(fund, stored_scheme=order.fp_scheme_id)
+    return primary
 
 
 def _order_metadata(order: MfOrder) -> dict[str, Any]:
@@ -242,6 +245,7 @@ async def _apply_fp_state(
                 user=user,
                 product=ReferralInvestmentProduct.mutual_fund,
                 amount_inr=int(order.amount_inr),
+                investment_mode=ReferralInvestmentMode.lumpsum,
             )
         from app.application.goals.goal_funding_service import record_contribution_from_order
 
@@ -522,6 +526,7 @@ async def _create_checkout_payment(session: AsyncSession, order: MfOrder) -> Non
         bank_account_id=int(bank_old_id),
         method=_resolve_payment_method(payment_method),
         provider_name="ONDC" if settings.zynd_mf_order_payment_gateway == "ondc" else "CYBRILLAPOA",
+        payment_postback_url=settings.resolved_mf_payment_postback_url_for_order(str(order.id)),
     )
     payment_id = payment.get("id")
     token_url = payment.get("token_url")
@@ -559,6 +564,7 @@ async def _create_cart_checkout_payment(
         bank_account_id=int(bank_old_id),
         method=_resolve_payment_method(payment_method),
         provider_name="ONDC" if settings.zynd_mf_order_payment_gateway == "ondc" else "CYBRILLAPOA",
+        payment_postback_url=settings.resolved_mf_payment_postback_url_for_checkout(str(checkout.id)),
     )
     payment_id = payment.get("id")
     token_url = payment.get("token_url")
@@ -603,22 +609,45 @@ async def _confirm_purchase(session: AsyncSession, order: MfOrder) -> None:
     await _set_ondc_metadata(session, order, purchase_confirmed=True)
 
 
-async def _refresh_payment_link(session: AsyncSession, order: MfOrder) -> None:
+async def _refresh_payment_link(session: AsyncSession, order: MfOrder) -> bool:
     ondc = _ondc_metadata(order)
     payment_id = ondc.get("fp_payment_id")
     if payment_id is None and order.checkout_id:
         checkout = await session.get(MfCheckout, order.checkout_id)
         payment_id = checkout.fp_payment_id if checkout else None
     if payment_id is None:
-        return
+        return False
 
     payload = await get_payment(int(payment_id))
+    changed = False
     token_url = extract_payment_token_url(payload)
-    await _sync_checkout_payment_url(session, order, token_url=token_url)
+    if await _sync_checkout_payment_url(session, order, token_url=token_url):
+        changed = True
+
+    if is_payment_success_status(extract_payment_status(payload)):
+        ondc = _ondc_metadata(order)
+        fp_state = (order.fp_state or "").lower()
+        if ondc.get("payment_created") and not ondc.get("purchase_confirmed") and fp_state == "pending":
+            await _confirm_purchase(session, order)
+            changed = True
+        if order.fp_purchase_id:
+            purchase_payload = await get_mf_purchase(order.fp_purchase_id)
+            next_fp_state = extract_fp_state(purchase_payload) or order.fp_state
+            if await _apply_fp_state(
+                session,
+                order,
+                fp_state=next_fp_state,
+                source="WORKER",
+                payload={"stage": "payment_success"},
+            ):
+                changed = True
+
     if order.checkout_id and token_url:
         checkout = await session.get(MfCheckout, order.checkout_id)
         if checkout:
             checkout.status = MfCheckoutStatus.submitted
+
+    return changed
 
 
 async def _refresh_cart_payment_link(session: AsyncSession, checkout: MfCheckout) -> None:
@@ -795,8 +824,11 @@ async def advance_ondc_order(session: AsyncSession, order: MfOrder) -> bool:
                     changed = True
 
         if fp_state == "submitted" or order.status == MfOrderStatus.submitted:
-            await _refresh_payment_link(session, order)
-            changed = True
+            ondc = _ondc_metadata(order)
+            if fp_state == "submitted" and ondc.get("purchase_confirmed"):
+                return changed
+            if await _refresh_payment_link(session, order):
+                changed = True
     except FpClientError as exc:
         logger.exception("ONDc advance failed order=%s", order.id)
         if is_transient_error(exc):
@@ -949,6 +981,8 @@ async def advance_ondc_orders(session: AsyncSession, *, batch_size: int = 20) ->
                 checkout = await session.get(MfCheckout, order.checkout_id)
                 if checkout and checkout.checkout_type == MfCheckoutType.cart:
                     continue
+            if order.status == MfOrderStatus.submitted:
+                continue
             if await advance_ondc_order(session, order):
                 advanced += 1
             processed += 1

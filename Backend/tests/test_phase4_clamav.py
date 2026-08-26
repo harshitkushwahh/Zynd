@@ -69,6 +69,7 @@ async def test_scan_allows_clean_file_when_clamav_reports_ok(monkeypatch: pytest
 async def test_scan_fails_closed_when_clamav_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLAMAV_ENABLED", "true")
     monkeypatch.setenv("CLAMAV_FAIL_OPEN", "false")
+    monkeypatch.setenv("APP_ENV", "production")
     from app.core.config import get_settings
 
     get_settings.cache_clear()
@@ -78,6 +79,46 @@ async def test_scan_fails_closed_when_clamav_unavailable(monkeypatch: pytest.Mon
 
     assert result.clean is False
     assert result.error is not None
+
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_scan_retries_with_file_scan_when_instream_limit_hit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLAMAV_ENABLED", "true")
+    monkeypatch.setenv("CLAMAV_FAIL_OPEN", "false")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    mock_client = MagicMock()
+    mock_client.scan_stream.return_value = {"stream": ("ERROR", "INSTREAM size limit exceeded. ERROR")}
+    mock_client.scan.return_value = None
+
+    with patch("app.infrastructure.security.clamav_service.pyclamd.ClamdNetworkSocket", return_value=mock_client):
+        result = await scan_bytes_for_malware(b"clean-file-bytes")
+
+    assert result.clean is True
+    mock_client.scan.assert_called_once()
+
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_scan_allows_upload_in_development_when_scanner_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CLAMAV_ENABLED", "true")
+    monkeypatch.setenv("CLAMAV_FAIL_OPEN", "false")
+    monkeypatch.setenv("APP_ENV", "development")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    with patch("app.infrastructure.security.clamav_service.pyclamd.ClamdNetworkSocket", side_effect=OSError("connection refused")):
+        result = await scan_bytes_for_malware(b"payload")
+
+    assert result.clean is True
 
     get_settings.cache_clear()
 

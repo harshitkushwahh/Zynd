@@ -14,7 +14,7 @@ import { DistributorActionButton } from "@/components/ui/distributor-action-butt
 import { DistributorInfoBadge } from "@/components/ui/distributor-info-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
-import type { BranchScheduledReport } from "@/lib/dummy/branch-reports";
+import type { BranchScheduledReport } from "@/lib/distributor-branch-reports-data";
 import { formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Wallet } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -87,8 +87,6 @@ export function FamilyGroupGoalContributionsDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={goal?.title ?? dashboard.goalsTitle}
-      description={dashboard.goalContributionsDescription}
-      icon={Wallet}
       maxWidth="md"
     >
       <div className="px-6 py-5">

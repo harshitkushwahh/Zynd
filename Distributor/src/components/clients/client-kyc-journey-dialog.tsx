@@ -1,7 +1,7 @@
 "use client";
 
 import { ClientKycJourneyPanel } from "@/components/clients/client-kyc-journey-panel";
-import type { DistributorClientKycAuditEntry, DistributorClientKycStep } from "@/lib/dummy/types";
+import type { DistributorClientKycAuditEntry, DistributorClientKycStep } from "@/lib/distributor-types";
 import {
   Dialog,
   DialogContent,

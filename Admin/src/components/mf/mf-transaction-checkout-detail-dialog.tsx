@@ -12,7 +12,6 @@ import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
 import { AdminDetailDialogSkeleton } from "@/components/ui/admin-skeletons";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { Separator } from "@/components/ui/separator";
-import { ApiError } from "@/lib/api-client";
 import {
   fetchMfTransactionCheckoutDetail,
   type MfTransactionCheckout,
@@ -68,7 +67,7 @@ export function MfTransactionCheckoutDetailDialog({
         {loading ? (
           <AdminDetailDialogSkeleton />
         ) : error ? (
-          <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+          <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
         ) : detail ? (
           <>
             <div className="grid gap-4 sm:grid-cols-2">

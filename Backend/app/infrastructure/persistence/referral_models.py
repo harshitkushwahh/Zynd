@@ -33,6 +33,12 @@ class ReferralInvestmentProduct(str, enum.Enum):
     other = "other"
 
 
+class ReferralInvestmentMode(str, enum.Enum):
+    lumpsum = "lumpsum"
+    sip = "sip"
+    other = "other"
+
+
 class ReferralEngagementMilestone(str, enum.Enum):
     second_investment = "second_investment"
     additional_product = "additional_product"
@@ -134,6 +140,10 @@ class ReferralAttribution(Base):
         nullable=True,
     )
     first_investment_amount_inr: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    first_investment_mode: Mapped[ReferralInvestmentMode | None] = mapped_column(
+        Enum(ReferralInvestmentMode, name="referralinvestmentmode"),
+        nullable=True,
+    )
     qualified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )

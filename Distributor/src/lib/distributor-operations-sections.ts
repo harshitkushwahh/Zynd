@@ -1,14 +1,13 @@
 import type { DistributorNavItem } from "@/lib/distributor-navigation";
 import { getDistributorNavGroup } from "@/lib/distributor-navigation";
-import { parseYourOperationsPathname } from "@/lib/distributor-operations-variants";
+import {
+  DISTRIBUTOR_OPERATIONS_DEFAULT_SECTION,
+  parseYourOperationsPathname,
+  type DistributorOperationsSectionId,
+} from "@/lib/distributor-operations-variants";
 
-export type DistributorOperationsSectionId =
-  | "orders"
-  | "systematic-plans"
-  | "txn-requests"
-  | "transaction-groups";
-
-export const DISTRIBUTOR_OPERATIONS_DEFAULT_SECTION: DistributorOperationsSectionId = "orders";
+export type { DistributorOperationsSectionId } from "@/lib/distributor-operations-variants";
+export { DISTRIBUTOR_OPERATIONS_DEFAULT_SECTION } from "@/lib/distributor-operations-variants";
 
 export {
   distributorOperationsSectionHref,

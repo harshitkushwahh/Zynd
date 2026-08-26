@@ -6,13 +6,9 @@ import { ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
-const TOTAL_MEMBERS = 120;
+const TOTAL_MEMBERS = 0;
 
-const TEAM_SEGMENTS = [
-  { id: "designer", label: "Designer", count: 48, fill: "#9dd4a8" },
-  { id: "developer", label: "Developer", count: 27, fill: "#4a7688" },
-  { id: "pm", label: "Project manager", count: 18, fill: "#d4d4d4" },
-] as const;
+const TEAM_SEGMENTS: ReadonlyArray<{ id: string; label: string; count: number; fill: string }> = [];
 
 const GAUGE_CHART_HEIGHT = 124;
 const GAUGE_OUTER_RADIUS = 88;

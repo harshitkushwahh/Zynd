@@ -12,6 +12,7 @@ export function AdminQueryProvider({ children }: { children: React.ReactNode }) 
         defaultOptions: {
           queries: {
             staleTime: DEFAULT_STALE_TIME_MS,
+            gcTime: DEFAULT_STALE_TIME_MS * 2,
             refetchOnWindowFocus: false,
             retry: 1,
           },

@@ -7,7 +7,7 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import {
   getBranchCommissionTotals,
   type BranchCommissionPeriod,
-} from "@/lib/dummy/branch-commissions";
+} from "@/lib/distributor-branch-commissions-data";
 import {
   DISTRIBUTOR_DIST_MANAGEMENT_HUB_METRICS_CLASS,
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,

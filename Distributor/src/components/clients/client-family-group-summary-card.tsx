@@ -7,7 +7,7 @@ import { FamilyGroupMemberAvatars } from "@/components/clients/family-group-memb
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Card } from "@/components/ui/card";
-import { distributorClientFamilyGroupHref } from "@/lib/dummy/client-profile";
+import { distributorClientFamilyGroupHref } from "@/lib/distributor-client-routes";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import {
@@ -15,7 +15,7 @@ import {
   familyGroupAvatarSrc,
   familyGroupDescription,
 } from "@/lib/distributor-family-group-display";
-import type { DistributorClientFamilyGroup } from "@/lib/dummy/types";
+import type { DistributorClientFamilyGroup } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 type ClientFamilyGroupSummaryCardProps = {

@@ -14,11 +14,11 @@ import { DistributorTableSearchCard } from "@/components/dashboard/distributor-t
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { BranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
+import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
-import type { DistributorSystematicPlan, SystematicPlanStatus } from "@/lib/dummy/types";
+import type { DistributorSystematicPlan, SystematicPlanStatus } from "@/lib/distributor-types";
 import { formatAum, formatDistributorDate } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { planStatusVariant } from "@/lib/status-meta";

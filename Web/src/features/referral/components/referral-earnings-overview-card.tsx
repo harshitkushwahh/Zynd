@@ -5,11 +5,12 @@ import { Lock } from "lucide-react";
 import {
   Area,
   AreaChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import type { ReferralListItem } from "@/features/referral/api/referral-api";
 import {
@@ -113,7 +114,7 @@ function ReferralEarningsChart({
 
   return (
     <div className="size-full [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible">
-      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+      <RechartsMeasuredContainer width="100%" height="100%" minWidth={0}>
         <AreaChart
           data={points}
           margin={{
@@ -170,7 +171,7 @@ function ReferralEarningsChart({
             isAnimationActive={false}
           />
         </AreaChart>
-      </ResponsiveContainer>
+      </RechartsMeasuredContainer>
     </div>
   );
 }

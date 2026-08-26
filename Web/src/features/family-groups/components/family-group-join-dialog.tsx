@@ -121,7 +121,7 @@ export function FamilyGroupJoinDialog({
       clearFamilyInviteToken();
       onOpenChange(false);
       onResolved?.();
-      router.push(buildFamilyGroupHref(joined.id));
+      router.push(buildFamilyGroupHref(joined));
     } catch (acceptError) {
       setError(resolveErrorMessage(acceptError, copy.familyGroups.join.errors.acceptFailed));
     } finally {
@@ -153,8 +153,6 @@ export function FamilyGroupJoinDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.familyGroups.join.title}
-      description={copy.familyGroups.join.description}
-      icon={UsersRound}
       maxWidth="md"
     >
       <div className="space-y-4 px-6 py-5">

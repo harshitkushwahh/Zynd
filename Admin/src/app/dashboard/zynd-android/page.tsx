@@ -1,5 +1,5 @@
-import { AdminComingSoonPage } from "@/components/dashboard/admin-coming-soon-page";
+import { redirect } from "next/navigation";
 
 export default function ZyndAndroidPage() {
-  return <AdminComingSoonPage routeId="zynd-android" />;
+  redirect("/dashboard/zynd-mobile");
 }

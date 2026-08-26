@@ -1,13 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { FileUp } from "lucide-react";
 
 import { AddDistributorDocumentUpload } from "@/components/add-distributor/add-distributor-document-upload";
 import { AddDistributorWizardPanelShell } from "@/components/add-distributor/add-distributor-wizard-panel-shell";
 import { AddInvestorWizardStepFooter } from "@/components/add-investor/add-investor-wizard-step-footer";
+import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
 import type { AddDistributorDocumentDraft } from "@/lib/add-distributor/add-distributor-journey";
+import {
+  clearPartnerOnboardingDocument,
+  uploadPartnerOnboardingDocument,
+} from "@/lib/distributor-partners-api";
+import { ApiError } from "@/lib/api-client";
 
 type AddDistributorDocumentsPanelProps = {
+  onboardingToken: string | null;
   documents: AddDistributorDocumentDraft;
   onDocumentsChange: (patch: Partial<AddDistributorDocumentDraft>) => void;
   onBack: () => void;
@@ -16,7 +24,14 @@ type AddDistributorDocumentsPanelProps = {
   continueDisabled: boolean;
 };
 
+function revokePreviewUrl(url: string | null | undefined) {
+  if (url?.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function AddDistributorDocumentsPanel({
+  onboardingToken,
   documents,
   onDocumentsChange,
   onBack,
@@ -24,6 +39,64 @@ export function AddDistributorDocumentsPanel({
   canBack,
   continueDisabled,
 }: AddDistributorDocumentsPanelProps) {
+  const [uploadingType, setUploadingType] = useState<"pan" | "aadhaar" | null>(null);
+  const [error, setError] = useState("");
+
+  const uploadDocument = async (docType: "pan" | "aadhaar", file: File) => {
+    if (!onboardingToken || uploadingType) return;
+    setError("");
+    setUploadingType(docType);
+
+    const previewUrl = URL.createObjectURL(file);
+    if (docType === "pan") {
+      revokePreviewUrl(documents.panPreviewUrl);
+    } else {
+      revokePreviewUrl(documents.aadhaarPreviewUrl);
+    }
+
+    try {
+      const result = await uploadPartnerOnboardingDocument(onboardingToken, docType, file);
+      if (docType === "pan") {
+        onDocumentsChange({ panFileName: result.file_name, panPreviewUrl: previewUrl });
+      } else {
+        onDocumentsChange({ aadharFileName: result.file_name, aadhaarPreviewUrl: previewUrl });
+      }
+    } catch (nextError) {
+      revokePreviewUrl(previewUrl);
+      setError(nextError instanceof ApiError ? nextError.message : "Could not upload document.");
+    } finally {
+      setUploadingType(null);
+    }
+  };
+
+  const clearDocument = async (docType: "pan" | "aadhaar") => {
+    if (docType === "pan") {
+      revokePreviewUrl(documents.panPreviewUrl);
+    } else {
+      revokePreviewUrl(documents.aadhaarPreviewUrl);
+    }
+
+    if (!onboardingToken) {
+      onDocumentsChange(
+        docType === "pan"
+          ? { panFileName: null, panPreviewUrl: null }
+          : { aadharFileName: null, aadhaarPreviewUrl: null },
+      );
+      return;
+    }
+    setError("");
+    try {
+      await clearPartnerOnboardingDocument(onboardingToken, docType);
+      onDocumentsChange(
+        docType === "pan"
+          ? { panFileName: null, panPreviewUrl: null }
+          : { aadharFileName: null, aadhaarPreviewUrl: null },
+      );
+    } catch (nextError) {
+      setError(nextError instanceof ApiError ? nextError.message : "Could not remove document.");
+    }
+  };
+
   return (
     <AddDistributorWizardPanelShell
       stepId="documents"
@@ -34,7 +107,7 @@ export function AddDistributorDocumentsPanel({
           onBack={onBack}
           onContinue={onContinue}
           canBack={canBack}
-          continueDisabled={continueDisabled}
+          continueDisabled={continueDisabled || Boolean(uploadingType)}
         />
       }
     >
@@ -44,7 +117,7 @@ export function AddDistributorDocumentsPanel({
         </span>
         <h3 className="add-investor-onboarding-wizard__title">KYC documents</h3>
         <p className="add-investor-onboarding-wizard__desc">
-          Upload clear scans or PDFs for compliance review before ARN activation.
+          Upload clear scans or PDFs for HO compliance review before ARN activation.
         </p>
 
         <div className="add-distributor-wizard-step-card add-distributor-documents-panel__card">
@@ -55,7 +128,10 @@ export function AddDistributorDocumentsPanel({
               label="PAN card"
               description="Permanent Account Number proof"
               fileName={documents.panFileName}
-              onFileSelect={(panFileName) => onDocumentsChange({ panFileName })}
+              previewUrl={documents.panPreviewUrl}
+              uploading={uploadingType === "pan"}
+              onFileSelect={(file) => uploadDocument("pan", file)}
+              onClear={() => clearDocument("pan")}
             />
           </div>
           <div className="add-distributor-documents-panel__col">
@@ -65,10 +141,22 @@ export function AddDistributorDocumentsPanel({
               label="Aadhaar card"
               description="Identity & address verification"
               fileName={documents.aadharFileName}
-              onFileSelect={(aadharFileName) => onDocumentsChange({ aadharFileName })}
+              previewUrl={documents.aadhaarPreviewUrl}
+              uploading={uploadingType === "aadhaar"}
+              onFileSelect={(file) => uploadDocument("aadhaar", file)}
+              onClear={() => clearDocument("aadhaar")}
             />
           </div>
         </div>
+        {error ? (
+          <DistributorFeedbackMessage
+            variant="error"
+            className="add-distributor-wizard-feedback"
+            onDismiss={() => setError("")}
+          >
+            {error}
+          </DistributorFeedbackMessage>
+        ) : null}
       </div>
     </AddDistributorWizardPanelShell>
   );

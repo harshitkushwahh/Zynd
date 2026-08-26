@@ -292,3 +292,79 @@ async def _provision_child_objects(
             raise
 
     await session.flush()
+
+
+def profile_has_unsynced_fp_children(profile: InvestorProfile) -> bool:
+    for email_row in profile.email_addresses:
+        if email_row.sync_status != InvestorObjectSyncStatus.active or not email_row.external_email_id:
+            return True
+    for phone_row in profile.phone_numbers:
+        if phone_row.sync_status != InvestorObjectSyncStatus.active or not phone_row.external_phone_id:
+            return True
+    for address_row in profile.addresses:
+        if address_row.nature == "correspondence":
+            continue
+        if address_row.sync_status != InvestorObjectSyncStatus.active or not address_row.external_address_id:
+            return True
+    for bank_row in profile.bank_accounts:
+        if bank_row.sync_status != InvestorObjectSyncStatus.active or not bank_row.external_bank_account_id:
+            return True
+    return False
+
+
+def investor_fp_contacts_ready(profile: InvestorProfile) -> bool:
+    email_ready = any(
+        row.sync_status == InvestorObjectSyncStatus.active and row.external_email_id
+        for row in profile.email_addresses
+    )
+    phone_ready = any(
+        row.sync_status == InvestorObjectSyncStatus.active and row.external_phone_id
+        for row in profile.phone_numbers
+    )
+    return email_ready and phone_ready
+
+
+async def sync_unsynced_investor_children(session: AsyncSession, *, user_id) -> bool:
+    """Push draft investor child objects (email, phone, address, bank) to Finprim."""
+    bundle = await _load_profile_bundle(session, user_id)
+    if not bundle:
+        return False
+    profile, user, journey = bundle
+    if not profile.external_profile_id:
+        return False
+    if not profile_has_unsynced_fp_children(profile):
+        return True
+
+    try:
+        validate_provision_inputs(user=user, journey=journey)
+        validate_provision_drafts(
+            addresses=profile.addresses,
+            bank_accounts=profile.bank_accounts,
+            email_addresses=profile.email_addresses,
+            phone_numbers=profile.phone_numbers,
+        )
+    except InvestorProvisionValidationError as exc:
+        logger.warning(
+            "Cannot sync investor children user=%s: %s",
+            user_id,
+            exc.message,
+        )
+        return False
+
+    try:
+        await _provision_child_objects(
+            session,
+            profile=profile,
+            profile_id=profile.external_profile_id,
+            user=user,
+            journey=journey,
+        )
+    except FpClientError as exc:
+        logger.warning(
+            "Investor child sync failed user=%s code=%s message=%s",
+            user_id,
+            exc.code,
+            exc.message,
+        )
+        return False
+    return investor_fp_contacts_ready(profile)

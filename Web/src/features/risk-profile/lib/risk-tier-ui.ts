@@ -1,4 +1,4 @@
-import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
+import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 
 export type RiskTierId = "secure" | "conservative" | "moderate" | "growth" | "aggressive";
 
@@ -200,12 +200,12 @@ export function resolveTierMessageParts(
 
 
 export const RISK_PROFILE_CARD_CLASS =
-  `overflow-hidden ${ZYND_CARD_RADIUS_CLASS} border border-border bg-card`;
+  `overflow-hidden ${ZYND_3XL_RADIUS_CLASS} border border-border bg-card`;
 
 export const RISK_PROFILE_TOP_ROW_MIN_HEIGHT_CLASS = "min-h-[16rem]";
 
-/** Hero cards use the same card radius as dashboard surfaces. */
-export const RISK_PROFILE_HERO_RADIUS_CLASS = ZYND_CARD_RADIUS_CLASS;
+/** Hero cards — same `--radius-3xl` token as referral promo cards. */
+export const RISK_PROFILE_HERO_RADIUS_CLASS = ZYND_3XL_RADIUS_CLASS;
 
 export const RISK_PROFILE_HERO_GRADIENT_CLASS =
   "bg-[linear-gradient(145deg,var(--zynd-navy)_0%,var(--zynd-blue-dark)_46%,var(--zynd-blue)_100%)]";

@@ -1,5 +1,8 @@
 /** Default Zynd mark when a client has no profile photo. */
-export const ZYND_DISTRIBUTOR_LOGO_SRC = "/zyndd.png";
+export const ZYND_DISTRIBUTOR_LOGO_SRC = "/favicon/favicon.svg";
+
+/** Horizontal Zynd Distributor lockup for auth shells. */
+export const ZYND_DISTRIBUTOR_LOGO_HORIZONTAL_SRC = "/zyndd-h.png";
 
 /** Login left-panel brand gradient (emerald → blue → purple). */
 export const ZYND_DISTRIBUTOR_LOGIN_VISUAL_GRADIENT =

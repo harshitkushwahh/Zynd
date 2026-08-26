@@ -18,6 +18,7 @@ import type {
   DistributorHeadWorkAttendanceRow,
   DistributorHeadWorkHours,
 } from "@/lib/dummy/distributor-head-data";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 
 const TABLE_COLUMNS = 6;
 
@@ -72,7 +73,7 @@ export function DistributorHeadDistributorWorkTab({
         </AdminMetricCardsGrid>
       ) : (
         <p className="text-compact text-muted-foreground">
-          No working-hours summary for this distributor in demo data.
+          No working-hours summary for this {MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} in demo data.
         </p>
       )}
 

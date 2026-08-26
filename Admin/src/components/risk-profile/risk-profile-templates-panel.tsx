@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus, Sparkles } from "lucide-react";
 
@@ -71,6 +71,8 @@ const MODE_FILTER_OPTIONS: AdminSelectOption[] = [
   { value: "manual", label: "Manual" },
   { value: "auto", label: "Auto" },
 ];
+
+export { MODE_FILTER_OPTIONS as RISK_PROFILE_TEMPLATE_MODE_FILTER_OPTIONS };
 
 function templateModeBadge(mode: RiskTemplate["selection_mode"]) {
   return (
@@ -145,7 +147,21 @@ function TemplateRulesEditor({
   );
 }
 
-export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean }) {
+export function RiskProfileTemplatesPanel({
+  canManage,
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  modeFilter: modeFilterProp,
+  onModeFilterChange,
+}: {
+  canManage: boolean;
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  modeFilter?: string;
+  onModeFilterChange?: (value: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { data, isPending, isFetching, error: queryError } = useRiskTemplatesPanelQuery();
   const templates = data?.templates ?? [];
@@ -162,8 +178,12 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
   const [rules, setRules] = useState<RuleDraft[]>([{ category_id: "", question_count: "1" }]);
   const [saving, setSaving] = useState(false);
   const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [modeFilter, setModeFilter] = useState(ALL);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalModeFilter, setInternalModeFilter] = useState(ALL);
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const modeFilter = onModeFilterChange ? (modeFilterProp ?? ALL) : internalModeFilter;
+  const setModeFilter = onModeFilterChange ?? setInternalModeFilter;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
@@ -183,6 +203,10 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
     () => paginateItems(filteredTemplates, page, pageSize),
     [filteredTemplates, page, pageSize],
   );
+
+  useEffect(() => {
+    setPage(0);
+  }, [search, modeFilter]);
 
   const showSkeleton = isPending && !data;
   const loadError = queryError ? getErrorMessage(queryError, "Could not load templates.") : "";
@@ -351,51 +375,60 @@ export function RiskProfileTemplatesPanel({ canManage }: { canManage: boolean })
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search templates"
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setPage(0);
-          }}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminSelect
-            value={modeFilter}
-            onValueChange={(value) => {
-              setModeFilter(value);
+      {showToolbar ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder="Search templates"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
               setPage(0);
             }}
-            options={MODE_FILTER_OPTIONS}
-            placeholder="Mode"
-            className="min-w-select-sm"
           />
-          <Button size="sm" variant="outline" onClick={() => void handleAutoSelect()}>
-            <Sparkles className="size-3.5" />
-            Test auto-select
-          </Button>
-          {canManage ? (
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+            <AdminSelect
+              value={modeFilter}
+              onValueChange={(value) => {
+                setModeFilter(value);
+                setPage(0);
+              }}
+              options={MODE_FILTER_OPTIONS}
+              placeholder="Mode"
+              className="min-w-select-sm shrink-0"
+              triggerClassName="w-auto"
+            />
             <Button
               size="sm"
-              onClick={() => {
-                resetForm();
-                setCreateDialogOpen(true);
-              }}
-              disabled={!categories.length}
+              variant="outline"
+              className="shrink-0"
+              onClick={() => void handleAutoSelect()}
             >
-              <Plus className="size-3.5" />
-              Add template
+              <Sparkles className="size-3.5" />
+              Test auto-select
             </Button>
-          ) : null}
+            {canManage ? (
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  resetForm();
+                  setCreateDialogOpen(true);
+                }}
+                disabled={!categories.length}
+              >
+                <Plus className="size-3.5" />
+                Add template
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {error || loadError ? (
-        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
       ) : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
         minWidth="lg"

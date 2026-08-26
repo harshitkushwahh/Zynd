@@ -5,19 +5,27 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.investor.investor_identity_uniqueness_service import (
+    InvestorIdentityConflictError,
+    assert_bank_not_used_by_other_user,
+)
 from app.application.kyc.bank_verification_core import (
     BankVerificationError,
     extract_bank_account_result,
+    extract_field_result,
     extract_readiness_verified,
+    format_bank_verification_failure,
     holder_name_from_pan_draft,
     is_verified_result,
     map_account_type,
+    poa_field_status,
     resolve_bank_holder_names,
+    resolve_poa_pan_status_for_display,
+    resolve_poa_readiness_status_for_display,
     run_hybrid_bank_verification,
 )
-from app.application.investor.investor_bank_account_service import sync_bank_account_from_kyc_journey
 from app.application.kyc.errors import KycError
-from app.application.kyc.journey_gate_service import require_phase1_complete
+from app.application.kyc.journey_gate_service import require_pan_verified, require_phase1_complete
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.models import KycOverallStatus, KycStepStatus, User
@@ -49,14 +57,28 @@ async def verify_bank_hybrid(
     account_number: str,
     account_type: str,
     ifsc_code: str,
+    skip_phase1_gate: bool = False,
 ) -> dict[str, Any]:
     journey = await get_or_create_journey(db, user.id)
-    require_phase1_complete(journey)
+    if skip_phase1_gate:
+        require_pan_verified(journey)
+    else:
+        require_phase1_complete(journey)
 
     pan_draft = journey.pan_draft_json or {}
     pan_number = str(pan_draft.get("panNumber") or "").strip().upper()
     if not pan_number:
         raise KycError("Complete PAN verification first.", "pan_not_verified", 403)
+
+    try:
+        await assert_bank_not_used_by_other_user(
+            db,
+            account_number=account_number,
+            ifsc_code=ifsc_code,
+            user_id=user.id,
+        )
+    except InvestorIdentityConflictError as exc:
+        raise KycError(exc.message, exc.code, exc.status_code) from exc
 
     try:
         outcome = await run_hybrid_bank_verification(
@@ -66,6 +88,9 @@ async def verify_bank_hybrid(
             account_type=account_type,
             ifsc_code=ifsc_code,
             kyc_already_registered=journey.kyc_already_registered,
+            pan_step_verified=journey.pan_verification_status == "verified",
+            readiness_code=journey.readiness_code,
+            readiness_reason=journey.readiness_reason,
         )
     except BankVerificationError as exc:
         raise _map_bank_verification_error(exc) from exc
@@ -79,12 +104,16 @@ async def verify_bank_hybrid(
         "accountNumber": outcome.account_number,
         "accountType": outcome.account_type_label,
         "ifscCode": outcome.ifsc_code,
-        "accountHolderName": outcome.display_holder_name,
+        "accountHolderName": outcome.kyckart_holder_name or outcome.pan_holder_name,
         "panAccountHolderName": outcome.pan_holder_name,
+        "kyckartAccountHolderName": outcome.kyckart_holder_name,
         "bankName": outcome.bank_name,
         "branch": outcome.branch,
         "poaAccountType": outcome.poa_account_type,
         "readinessVerified": outcome.readiness_verified,
+        "poaPanStatus": outcome.poa_pan_status,
+        "poaBankStatus": outcome.poa_bank_status,
+        "poaReadinessStatus": outcome.poa_readiness_status,
     }
 
     status = await get_or_create_status(db, user.id)
@@ -97,11 +126,12 @@ async def verify_bank_hybrid(
 
     await db.flush()
 
-    await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
-
     return {
         "success": outcome.bank_verified,
-        "accountHolderName": outcome.display_holder_name,
+        "accountHolderName": outcome.kyckart_holder_name or outcome.pan_holder_name,
+        "kyckartAccountHolderName": outcome.kyckart_holder_name,
+        "kyckartLookupError": outcome.kyckart_lookup_error,
+        "panHolderName": outcome.pan_holder_name,
         "bankName": outcome.bank_name,
         "branch": outcome.branch,
         "panVerified": outcome.pan_verified,
@@ -111,6 +141,9 @@ async def verify_bank_hybrid(
         "requiresProofUpload": outcome.requires_proof_upload,
         "preverifyId": outcome.preverify_id,
         "failure": outcome.failure,
+        "poaPanStatus": outcome.poa_pan_status,
+        "poaBankStatus": outcome.poa_bank_status,
+        "poaReadinessStatus": outcome.poa_readiness_status,
     }
 
 
@@ -177,6 +210,16 @@ async def verify_bank_manual(
             403,
         )
 
+    try:
+        await assert_bank_not_used_by_other_user(
+            db,
+            account_number=account_number,
+            ifsc_code=ifsc_code,
+            user_id=user.id,
+        )
+    except InvestorIdentityConflictError as exc:
+        raise KycError(exc.message, exc.code, exc.status_code) from exc
+
     from app.infrastructure.kyc.poa_client import poa_verify_bank_account_manual
 
     try:
@@ -204,11 +247,12 @@ async def verify_bank_manual(
 
     failure: dict[str, Any] | None = None
     if not bank_verified:
-        failure = {
-            "field": "bank_account",
-            "code": bank_result.get("code"),
-            "reason": bank_result.get("reason") or "Manual bank verification failed.",
-        }
+        pan_holder_name = holder_name_from_pan_draft(pan_draft)
+        failure = format_bank_verification_failure(
+            bank_result=bank_result,
+            pan_result=extract_field_result(poa_result, "pan"),
+            pan_verified=is_verified_result(extract_field_result(poa_result, "pan")),
+        )
 
     journey.poa_bank_preverify_id = str(poa_result.get("id") or preverify_id)
     journey.bank_verification_status = "verified" if bank_verified else "failed"
@@ -223,8 +267,6 @@ async def verify_bank_manual(
         status.overall_status = KycOverallStatus.phase2_complete
 
     await db.flush()
-
-    await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
 
     return {
         "success": bank_verified,
@@ -253,9 +295,39 @@ async def get_bank_preverify_status(
     except FpClientError as exc:
         raise KycError(exc.message, exc.code, exc.status_code) from exc
     bank_result = extract_bank_account_result(payload)
+    bank_verified = is_verified_result(bank_result)
+    pan_result = extract_field_result(payload, "pan")
+    readiness_result = extract_field_result(payload, "readiness")
+    pan_step_verified = journey.pan_verification_status == "verified"
+    reason = bank_result.get("reason")
+    code = bank_result.get("code")
+    if not bank_verified:
+        failure = format_bank_verification_failure(
+            bank_result=bank_result,
+            pan_result=pan_result,
+            pan_verified=is_verified_result(pan_result) or pan_step_verified,
+        )
+        reason = failure.get("reason")
+        code = failure.get("code")
     return {
         "status": payload.get("status"),
-        "bankVerified": is_verified_result(bank_result),
-        "code": bank_result.get("code"),
-        "reason": bank_result.get("reason"),
+        "bankVerified": bank_verified,
+        "code": code,
+        "reason": reason,
+        "panVerified": is_verified_result(pan_result) or pan_step_verified,
+        "readinessVerified": extract_readiness_verified(
+            payload,
+            kyc_already_registered=journey.kyc_already_registered,
+        ),
+        "poaPanStatus": resolve_poa_pan_status_for_display(
+            pan_result,
+            pan_step_verified=pan_step_verified,
+        ),
+        "poaBankStatus": poa_field_status(bank_result),
+        "poaReadinessStatus": resolve_poa_readiness_status_for_display(
+            readiness_result,
+            kyc_already_registered=journey.kyc_already_registered,
+            readiness_code=journey.readiness_code,
+            readiness_reason=journey.readiness_reason,
+        ),
     }

@@ -8,7 +8,7 @@ import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { FieldMessage } from "@/components/ui/ui-message";
-import { PageTitle } from "@/components/ui/page-title";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   fetchFamilyGroup,
   revokeFamilyGroupInvite,
@@ -18,7 +18,10 @@ import {
 import { FamilyGroupActivityTable } from "@/features/family-groups/components/family-group-activity-table";
 import { FamilyGroupActivityPageSkeleton } from "@/features/family-groups/components/family-group-activity-page-skeleton";
 import { FamilyGroupSentInvitesTable } from "@/features/family-groups/components/family-group-sent-invites-table";
-import { buildFamilyGroupHref } from "@/features/family-groups/lib/family-group-navigation";
+import { buildFamilyGroupHrefFromList } from "@/features/family-groups/lib/family-group-navigation";
+import { familyGroupSlugForList, resolveFamilyGroupFromRef } from "@/features/family-groups/lib/family-group-slug";
+import { useFamilyGroupsQuery } from "@/features/family-groups/hooks/use-family-groups-query";
+import { FamilyGroupContentFade } from "@/features/family-groups/components/family-group-content-fade";
 import { canViewSentInvites } from "@/features/family-groups/lib/family-permissions";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { useAuth } from "@/contexts/auth-context";
@@ -52,7 +55,7 @@ function ActivityPageTabToggle({
     <div
       role="tablist"
       aria-label={copy.familyGroups.activity.pageTitle}
-      className="grid max-w-xl grid-cols-2 gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
+      className="grid w-[min(100%,20rem)] shrink-0 grid-cols-2 gap-1 rounded-full border border-border/80 bg-muted/20 p-1 sm:w-auto"
     >
       {options.map((option) => {
         const isActive = tab === option.id;
@@ -92,7 +95,13 @@ export function FamilyGroupActivityPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const groupId = searchParams.get("group");
+  const requestedGroupRef = searchParams.get("group");
+  const { data: groupsData } = useFamilyGroupsQuery();
+  const resolvedGroup = useMemo(
+    () => resolveFamilyGroupFromRef(groupsData?.items ?? [], requestedGroupRef),
+    [groupsData?.items, requestedGroupRef],
+  );
+  const groupId = resolvedGroup?.id ?? null;
   const [group, setGroup] = useState<FamilyGroupDetail | null>(null);
   const [tab, setTab] = useState<ActivityPageTab>("activity");
   const [loading, setLoading] = useState(true);
@@ -117,7 +126,9 @@ export function FamilyGroupActivityPage() {
 
   const loadGroup = useCallback(async () => {
     if (!groupId) {
-      router.replace("/dashboard/family");
+      if (!requestedGroupRef) {
+        router.replace("/dashboard/family");
+      }
       return;
     }
 
@@ -133,7 +144,19 @@ export function FamilyGroupActivityPage() {
     } finally {
       setLoading(false);
     }
-  }, [groupId, router]);
+  }, [groupId, requestedGroupRef, router]);
+
+  useEffect(() => {
+    if (!requestedGroupRef) {
+      router.replace("/dashboard/family");
+      return;
+    }
+    if (!groupsData?.items.length || !resolvedGroup) return;
+    const canonicalRef = familyGroupSlugForList(resolvedGroup, groupsData.items);
+    if (requestedGroupRef !== canonicalRef) {
+      router.replace(`/dashboard/family/activity?group=${encodeURIComponent(canonicalRef)}`, { scroll: false });
+    }
+  }, [groupsData?.items, requestedGroupRef, resolvedGroup, router]);
 
   useEffect(() => {
     setTab("activity");
@@ -165,15 +188,6 @@ export function FamilyGroupActivityPage() {
     }
   }
 
-  const pageDescription = useMemo(() => {
-    if (!groupReady) {
-      return copy.familyGroups.activity.pageDescriptionMember;
-    }
-    return canViewInvites
-      ? copy.familyGroups.activity.pageDescriptionHead
-      : copy.familyGroups.activity.pageDescriptionMember;
-  }, [canViewInvites, groupReady]);
-
   return (
     <>
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
@@ -181,30 +195,27 @@ export function FamilyGroupActivityPage() {
           items={[
             { label: familyRoute.label, href: "/dashboard/family" },
             ...(groupReady && group?.title
-              ? [{ label: group.title, href: buildFamilyGroupHref(groupId!) }]
+              ? [{ label: group.title, href: buildFamilyGroupHrefFromList(group, groupsData?.items ?? [group]) }]
               : []),
             { label: copy.familyGroups.activity.pageTitle },
           ]}
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin]">
-          <div className="mb-6 space-y-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-                <Clock3 className="size-4" strokeWidth={2.25} />
-              </div>
-              <div className="min-w-0">
-                <PageTitle>{copy.familyGroups.activity.pageTitle}</PageTitle>
-                <p className="mt-2 max-w-2xl text-compact text-muted-foreground">{pageDescription}</p>
-              </div>
-            </div>
-            {groupReady && canViewInvites ? (
-              <ActivityPageTabToggle
-                tab={tab}
-                onChange={setTab}
-                sentInviteCount={sentInviteCount}
-              />
-            ) : null}
+          <div className="mb-6">
+            <PageHeader
+              icon={Clock3}
+              title={copy.familyGroups.activity.pageTitle}
+              action={
+                groupReady && canViewInvites ? (
+                  <ActivityPageTabToggle
+                    tab={tab}
+                    onChange={setTab}
+                    sentInviteCount={sentInviteCount}
+                  />
+                ) : undefined
+              }
+            />
           </div>
 
           {loading ? (
@@ -217,6 +228,7 @@ export function FamilyGroupActivityPage() {
               onRetry={() => void loadGroup()}
             />
           ) : groupReady && groupId && group ? (
+            <FamilyGroupContentFade>
             <div role="tabpanel">
               {tab === "activity" || !canViewInvites ? <FamilyGroupActivityTable groupId={groupId} /> : null}
               {tab === "invites" && canViewInvites ? (
@@ -229,6 +241,7 @@ export function FamilyGroupActivityPage() {
                 </div>
               ) : null}
             </div>
+            </FamilyGroupContentFade>
           ) : null}
         </div>
       </div>

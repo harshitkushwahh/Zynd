@@ -7,7 +7,7 @@ import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis } from "recharts
 import {
   getDistributorLeadConversionStats,
   type DistributorLeadRow,
-} from "@/lib/dummy/distributor-leads";
+} from "@/lib/distributor-leads-data";
 import { DistributorInsightCardHeader } from "@/components/ui/distributor-insight-card-header";
 import { DistributorGrowthBadge } from "@/components/ui/distributor-growth-badge";
 import { cn } from "@/lib/utils";

@@ -26,7 +26,7 @@ import type {
   DistributorClientFamilyGroup,
   DistributorClientFamilyMember,
   DistributorClientGoal,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 import {
   familyGroupAvatarInitials,
@@ -113,7 +113,6 @@ export function FamilyGroupDashboard({
   );
 
   const portfolioChartControls = usePortfolioValueChartControls();
-  const familyPortfolioChartId = `${clientId}-${group.id}`;
   const groupAvatarSrc = familyGroupAvatarSrc(group);
   const groupDescription = familyGroupDescription(group, copy.familyGroupIdentityDescription);
 
@@ -188,28 +187,31 @@ export function FamilyGroupDashboard({
               <p className="distributor-family-group-dashboard__portfolio-value tabular-nums">
                 {formatPortfolioMetricAmount(portfolio.current)}
               </p>
-              <p className="text-caption text-muted-foreground">{copy.portfolioSectionDescription}</p>
             </div>
 
-            <div className="distributor-family-group-dashboard__portfolio-head-metrics">
-              <div className="distributor-family-group-dashboard__portfolio-stat-cards">
-                <article className="distributor-family-group-dashboard__portfolio-stat-card">
-                  <p className="distributor-insight-card-metric__eyebrow">{portfolioCopy.invested}</p>
-                  <p
-                    className="distributor-insight-card-metric__title tabular-nums"
+            <div className="distributor-family-group-dashboard__portfolio-head-aside">
+              <div className="distributor-family-group-dashboard__portfolio-stat-chips">
+                <article className="distributor-family-group-dashboard__portfolio-stat-chip">
+                  <span className="distributor-family-group-dashboard__portfolio-stat-chip-label">
+                    {portfolioCopy.invested}
+                  </span>
+                  <span
+                    className="distributor-family-group-dashboard__portfolio-stat-chip-value tabular-nums"
                     title={formatAum(portfolio.invested)}
                   >
                     {formatPortfolioMetricAmount(portfolio.invested)}
-                  </p>
+                  </span>
                 </article>
-                <article className="distributor-family-group-dashboard__portfolio-stat-card">
-                  <p className="distributor-insight-card-metric__eyebrow">{portfolioCopy.totalReturns}</p>
-                  <p
-                    className="distributor-insight-card-metric__title tabular-nums"
+                <article className="distributor-family-group-dashboard__portfolio-stat-chip">
+                  <span className="distributor-family-group-dashboard__portfolio-stat-chip-label">
+                    {portfolioCopy.totalReturns}
+                  </span>
+                  <span
+                    className="distributor-family-group-dashboard__portfolio-stat-chip-value tabular-nums"
                     title={formatAum(portfolio.returns)}
                   >
                     {formatPortfolioMetricAmount(portfolio.returns)}
-                  </p>
+                  </span>
                 </article>
               </div>
 
@@ -223,9 +225,7 @@ export function FamilyGroupDashboard({
             </div>
           </div>
           <ClientPortfolioValueChart
-            clientId={familyPortfolioChartId}
-            currentValue={portfolio.current}
-            investedAmount={portfolio.invested}
+            series={[]}
             className="distributor-family-group-dashboard__chart"
             hideToolbar
             period={portfolioChartControls.period}
@@ -306,14 +306,6 @@ function FamilyGroupContributionsCard({
   const ringCenterCaption = focusedMember
     ? (focusedMember.displayName.split(" ")[0] ?? focusedMember.displayName)
     : copy.contributionsRingTotalLabel;
-
-  const memberFillByUserId = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const entry of contributionData) {
-      map[entry.userId] = entry.fill;
-    }
-    return map;
-  }, [contributionData]);
 
   return (
     <Card className="distributor-family-group-dashboard__contributions-card h-full border-border bg-card p-0 shadow-sm">

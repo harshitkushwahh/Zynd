@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Gauge, Lightbulb } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   resolveDisplayScore,
   resolveRiskTierVisual,
   resolveTierMessageParts,
+  RISK_PROFILE_HERO_RADIUS_CLASS,
 } from "@/features/risk-profile/lib/risk-tier-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -56,8 +57,6 @@ export function RiskProfileAssessmentResultDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.riskProfile.assessmentResultTitle}
-      description={copy.riskProfile.assessmentResultDescription}
-      icon={Gauge}
       maxWidth="md"
     >
       <div className="space-y-5 px-6 py-5">
@@ -88,18 +87,15 @@ export function RiskProfileAssessmentResultDialog({
 
         {summary ? (
           <div
-            className="relative overflow-hidden rounded-[var(--radius-card)] border border-border/70 shadow-zynd-low"
+            className={cn(
+              "relative overflow-hidden border border-border/70 shadow-zynd-low",
+              RISK_PROFILE_HERO_RADIUS_CLASS,
+            )}
             style={{
               background: `linear-gradient(145deg, color-mix(in srgb, ${tierVisual.gaugeColor} 11%, var(--card)) 0%, color-mix(in srgb, ${tierVisual.gaugeColor} 4%, var(--muted)) 100%)`,
             }}
           >
-            <div
-              className="absolute inset-y-0 left-0 w-1"
-              style={{ backgroundColor: tierVisual.gaugeColor }}
-              aria-hidden
-            />
-
-            <div className="flex gap-3 px-4 py-4 pl-5">
+            <div className="flex gap-3 px-4 py-4">
               <div
                 className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border/50 bg-background/70 shadow-zynd-low backdrop-blur-[var(--blur-sm)]"
                 style={{

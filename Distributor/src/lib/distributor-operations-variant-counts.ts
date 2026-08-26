@@ -6,7 +6,7 @@ import {
   getScopedTransactionGroups,
   getScopedTxnRequests,
 } from "@/lib/distributor-operations-orders-scope";
-import type { DistributorOrder, DistributorTxnRequest } from "@/lib/dummy/types";
+import type { DistributorOrder, DistributorTxnRequest } from "@/lib/distributor-types";
 import { getDistributorOperationsVariants } from "@/lib/distributor-operations-variants";
 
 function orderChannel(order: DistributorOrder): "one-time" | "sip" | "redemption" {

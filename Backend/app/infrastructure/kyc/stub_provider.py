@@ -19,7 +19,7 @@ def _split_name(full_name: str) -> tuple[str, str]:
     if not parts:
         return "INVESTOR", "USER"
     if len(parts) == 1:
-        return parts[0], parts[0]
+        return parts[0], ""
     return parts[0], parts[-1]
 
 

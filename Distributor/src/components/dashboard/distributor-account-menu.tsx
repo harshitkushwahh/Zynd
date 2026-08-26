@@ -20,7 +20,6 @@ import {
   DISTRIBUTOR_ACCOUNT_MENU_CLASS,
   DISTRIBUTOR_ACCOUNT_MENU_PROFILE_CLASS,
 } from "@/lib/distributor-layout";
-import { getDistributorProfile } from "@/lib/distributor-profile";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 function formatRoleLabel(role: string): string {
@@ -36,14 +35,14 @@ export function DistributorAccountMenu() {
   const router = useRouter();
   const { user, displayName, signOut, branchLabel } = useDistributorAuth();
   const roleLabel = user?.role ? formatRoleLabel(user.role) : ZYND_MITRA_COPY.defaultRoleLabel;
-  const profile = getDistributorProfile(user?.id);
-  const distributorCode = profile.distributorCode.trim();
+  const distributorCode = user?.zyndClientId?.trim() ?? "";
   const branchDisplay = user?.branchName ? formatDistributorBranchName(branchLabel) : null;
   const email = user?.email?.trim() || null;
 
   const handleSignOut = () => {
-    signOut();
-    router.replace("/");
+    void signOut().finally(() => {
+      router.replace("/");
+    });
   };
 
   return (

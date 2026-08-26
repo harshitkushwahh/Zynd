@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.admin.schemas import (
@@ -19,7 +19,8 @@ from app.api.v1.admin.schemas import (
     MfTransactionWebhookListResponse,
     MfTransactionWebhookReplayResponse,
 )
-from app.api.v1.auth.deps import require_permission
+from app.api.v1.auth.deps import get_client_ip, require_permission
+from app.application.admin.admin_module_audit_service import write_admin_module_audit
 from app.application.mf.mf_transaction_ops_service import (
     expire_stale_checkouts,
     get_checkout_admin,
@@ -190,11 +191,20 @@ async def mf_transactions_webhooks(
 @router.post("/orders/{order_id}/sync", response_model=MfTransactionReconcileResponse)
 async def mf_transactions_sync_order(
     order_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("mf.transactions.manage")),
+    admin: User = Depends(require_permission("mf.transactions.manage")),
 ) -> MfTransactionReconcileResponse:
     try:
         payload = await reconcile_order_admin(db, order_id)
+        await write_admin_module_audit(
+            db,
+            actor=admin,
+            module="mf_transactions",
+            kind="mf_order_synced",
+            ip=get_client_ip(request),
+            order_id=str(order_id),
+        )
         await db.commit()
     except ValueError as exc:
         await db.rollback()
@@ -205,11 +215,20 @@ async def mf_transactions_sync_order(
 @router.post("/sip-plans/{plan_id}/sync", response_model=MfTransactionReconcileResponse)
 async def mf_transactions_sync_sip_plan(
     plan_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("mf.transactions.manage")),
+    admin: User = Depends(require_permission("mf.transactions.manage")),
 ) -> MfTransactionReconcileResponse:
     try:
         payload = await reconcile_sip_plan_admin(db, plan_id)
+        await write_admin_module_audit(
+            db,
+            actor=admin,
+            module="mf_transactions",
+            kind="mf_sip_plan_synced",
+            ip=get_client_ip(request),
+            sip_plan_id=str(plan_id),
+        )
         await db.commit()
     except ValueError as exc:
         await db.rollback()
@@ -220,11 +239,20 @@ async def mf_transactions_sync_sip_plan(
 @router.post("/mandates/{mandate_id}/sync", response_model=MfTransactionReconcileResponse)
 async def mf_transactions_sync_mandate(
     mandate_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("mf.transactions.manage")),
+    admin: User = Depends(require_permission("mf.transactions.manage")),
 ) -> MfTransactionReconcileResponse:
     try:
         payload = await reconcile_mandate_admin(db, mandate_id)
+        await write_admin_module_audit(
+            db,
+            actor=admin,
+            module="mf_transactions",
+            kind="mf_mandate_synced",
+            ip=get_client_ip(request),
+            mandate_id=str(mandate_id),
+        )
         await db.commit()
     except ValueError as exc:
         await db.rollback()
@@ -235,11 +263,20 @@ async def mf_transactions_sync_mandate(
 @router.post("/webhooks/{event_id}/replay", response_model=MfTransactionWebhookReplayResponse)
 async def mf_transactions_replay_webhook(
     event_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("mf.transactions.manage")),
+    admin: User = Depends(require_permission("mf.transactions.manage")),
 ) -> MfTransactionWebhookReplayResponse:
     try:
         payload = await replay_webhook_admin(db, event_id)
+        await write_admin_module_audit(
+            db,
+            actor=admin,
+            module="mf_transactions",
+            kind="mf_webhook_replayed",
+            ip=get_client_ip(request),
+            webhook_event_id=event_id,
+        )
         await db.commit()
     except ValueError as exc:
         await db.rollback()
@@ -249,9 +286,18 @@ async def mf_transactions_replay_webhook(
 
 @router.post("/expire-stale", response_model=MfTransactionReplayResponse)
 async def mf_transactions_expire_stale(
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("mf.transactions.manage")),
+    admin: User = Depends(require_permission("mf.transactions.manage")),
 ) -> MfTransactionReplayResponse:
     payload = await expire_stale_checkouts(db)
+    await write_admin_module_audit(
+        db,
+        actor=admin,
+        module="mf_transactions",
+        kind="mf_stale_checkouts_expired",
+        ip=get_client_ip(request),
+        expired_checkouts=payload.get("expired_checkouts", 0),
+    )
     await db.commit()
     return MfTransactionReplayResponse(**payload)

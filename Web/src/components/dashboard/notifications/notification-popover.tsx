@@ -99,15 +99,20 @@ export function NotificationPopover() {
           NOTIFICATION_SURFACE_RADIUS_CLASS,
         )}
       >
-        <PopoverHeader className="gap-1 border-b border-border bg-muted/20 px-4 py-3">
-          <div className="flex items-start justify-between gap-3">
+        <PopoverHeader className="gap-1 border-b border-border bg-muted/20 px-4 pt-4 pb-3">
+          <div
+            className={cn(
+              "flex justify-between gap-3",
+              displayUnreadCount > 0 ? "items-start" : "items-center",
+            )}
+          >
             <div className="min-w-0">
               <PopoverTitle className="text-body font-semibold">Notifications</PopoverTitle>
-              <PopoverDescription className="text-caption text-muted-foreground">
-                {displayUnreadCount > 0
-                  ? `${displayUnreadCount} unread update${displayUnreadCount === 1 ? "" : "s"}`
-                  : "Stay on top of account activity"}
-              </PopoverDescription>
+              {displayUnreadCount > 0 ? (
+                <PopoverDescription className="text-caption text-muted-foreground">
+                  {displayUnreadCount} unread update{displayUnreadCount === 1 ? "" : "s"}
+                </PopoverDescription>
+              ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
               <Button
@@ -126,18 +131,18 @@ export function NotificationPopover() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1.5 px-2 text-caption"
+                  size="icon-sm"
+                  className="size-8 rounded-full"
+                  aria-label="Mark all read"
                   onClick={() => void markAllRead()}
                 >
                   <CheckCheck className="size-3.5" strokeWidth={2.25} />
-                  Mark all read
                 </Button>
               ) : null}
             </div>
           </div>
 
-          <div className={cn("mt-2", NOTIFICATION_FILTER_TAB_TRACK_CLASS)}>
+          <div className={cn("mt-4", NOTIFICATION_FILTER_TAB_TRACK_CLASS)}>
             {(["all", "unread"] as const).map((value) => {
               const active = filter === value;
               const count = value === "unread" ? displayUnreadCount : notifications.length;

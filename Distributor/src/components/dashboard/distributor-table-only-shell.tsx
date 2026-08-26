@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { DistributorTableCardShell, type DistributorTableCardShellProps } from "@/components/dashboard/distributor-table-card-shell";
 
 export type DistributorTableOnlyShellProps = DistributorTableCardShellProps;

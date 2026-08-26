@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -14,11 +14,11 @@ from app.application.referral.referral_notification_service import (
     notify_referrer_signup,
 )
 from app.application.shared.datetime_utils import utcnow
-from app.core.config import get_settings
 from app.infrastructure.persistence.models import User
 from app.infrastructure.persistence.referral_models import (
     REFERRAL_STAGE_ORDER,
     ReferralAttribution,
+    ReferralInvestmentMode,
     ReferralInvestmentProduct,
     ReferralSignupChannel,
     ReferralStage,
@@ -227,9 +227,12 @@ async def advance_referral_first_investment(
     referee: User,
     product: ReferralInvestmentProduct,
     amount_inr: int,
+    investment_mode: ReferralInvestmentMode = ReferralInvestmentMode.other,
 ) -> ReferralAttribution | None:
-    settings = get_settings()
-    if amount_inr < settings.referral_min_first_investment_inr:
+    from app.application.referral.referral_program_service import get_referral_program_settings
+
+    program_settings = await get_referral_program_settings(db)
+    if amount_inr < program_settings.min_first_investment_inr:
         return None
 
     attribution = await get_attribution_for_referee(db, referee_user_id=referee.id)
@@ -244,6 +247,7 @@ async def advance_referral_first_investment(
     attribution.first_investment_at = utcnow()
     attribution.first_investment_product = product
     attribution.first_investment_amount_inr = amount_inr
+    attribution.first_investment_mode = investment_mode
     await db.flush()
 
     referrer = await db.get(User, attribution.referrer_user_id)
@@ -265,7 +269,11 @@ async def advance_referral_qualified(
     referee_user_id: UUID,
     now: datetime | None = None,
 ) -> ReferralAttribution | None:
-    settings = get_settings()
+    from app.application.referral.referral_program_service import (
+        get_referral_program_settings,
+        qualification_due_at_for_attribution,
+    )
+
     now = now or utcnow()
 
     attribution = await get_attribution_for_referee(db, referee_user_id=referee_user_id)
@@ -280,10 +288,9 @@ async def advance_referral_qualified(
     if attribution.first_investment_at is None:
         return None
 
-    hold_deadline = attribution.first_investment_at + timedelta(
-        days=settings.referral_qualification_hold_days
-    )
-    if now < hold_deadline:
+    program_settings = await get_referral_program_settings(db)
+    hold_deadline = qualification_due_at_for_attribution(attribution, program_settings)
+    if hold_deadline is None or now < hold_deadline:
         return None
 
     attribution.current_stage = ReferralStage.qualified
@@ -299,6 +306,9 @@ async def advance_referral_qualified(
             referee=referee,
             attribution=attribution,
         )
+        from app.application.referral.referral_reward_service import accrue_referral_reward_for_attribution
+
+        await accrue_referral_reward_for_attribution(db, attribution=attribution, earned_at=now)
     return attribution
 
 

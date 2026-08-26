@@ -1,14 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays } from "lucide-react";
 
 import { DistributorHeadStatusBadge } from "@/components/distributor-head/distributor-head-badge";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
+import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
+import {
+  AdminDataTable,
+  AdminTableBody,
+  AdminTableCell,
+  AdminTableHeadCell,
+  AdminTableHeader,
+  AdminTableRow,
+  AdminTableStateRow,
+} from "@/components/ui/admin-table";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import type { DistributorHeadLeaveApplication } from "@/lib/dummy/distributor-head-data";
-import { cn } from "@/lib/utils";
 
 function formatLeaveDate(isoDate: string) {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString("en-IN", {
@@ -27,6 +37,23 @@ function formatSubmittedAt(iso: string) {
   });
 }
 
+function matchesLeaveSearch(item: DistributorHeadLeaveApplication, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return [
+    item.applicantName,
+    item.applicantRole,
+    item.branchName,
+    item.city,
+    item.leaveType,
+    item.reason,
+    item.status,
+  ].some((value) => value.toLowerCase().includes(normalized));
+}
+
+const LEAVE_TABLE_COLUMNS = 6;
+
 function LeaveList({
   items,
   emptyMessage,
@@ -40,43 +67,59 @@ function LeaveList({
     return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
   });
 
-  if (sorted.length === 0) {
-    return <p className="text-compact text-muted-foreground">{emptyMessage}</p>;
-  }
-
   return (
-    <ul className="divide-y divide-border">
-      {sorted.map((item) => (
-        <li
-          key={item.id}
-          className={cn("py-3 first:pt-0 last:pb-0", item.status === "Pending" && "bg-warning/5 -mx-4 px-4 rounded-md")}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">{item.applicantName}</p>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                <Badge variant="outline" className="h-5 font-normal text-micro">
-                  {item.applicantRole}
-                </Badge>
-                <Badge variant="outline" className="h-5 font-normal text-micro text-muted-foreground">
-                  {item.branchName}
-                </Badge>
-              </div>
-            </div>
-            <DistributorHeadStatusBadge status={item.status} className="shrink-0" />
-          </div>
-          <p className="mt-2 text-compact font-medium">{item.leaveType}</p>
-          <p className="mt-1 text-caption text-muted-foreground">
-            {formatLeaveDate(item.startDate)} – {formatLeaveDate(item.endDate)} · {item.days}d ·{" "}
-            {item.city}
-          </p>
-          <p className="mt-1 text-caption text-muted-foreground">{item.reason}</p>
-          <p className="mt-1 text-micro text-muted-foreground">
-            Submitted {formatSubmittedAt(item.submittedAt)}
-          </p>
-        </li>
-      ))}
-    </ul>
+    <AdminDataTable minWidth="5xl">
+      <AdminTableHeader>
+        <tr>
+          <AdminTableHeadCell>Applicant</AdminTableHeadCell>
+          <AdminTableHeadCell>Branch</AdminTableHeadCell>
+          <AdminTableHeadCell>Leave</AdminTableHeadCell>
+          <AdminTableHeadCell>Dates</AdminTableHeadCell>
+          <AdminTableHeadCell>Status</AdminTableHeadCell>
+          <AdminTableHeadCell>Submitted</AdminTableHeadCell>
+        </tr>
+      </AdminTableHeader>
+      <AdminTableBody>
+        {sorted.length === 0 ? (
+          <AdminTableStateRow colSpan={LEAVE_TABLE_COLUMNS}>{emptyMessage}</AdminTableStateRow>
+        ) : (
+          sorted.map((item) => (
+            <AdminTableRow key={item.id}>
+              <AdminTableCell>
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground">{item.applicantName}</p>
+                  <p className="text-caption text-muted-foreground">{item.applicantRole}</p>
+                </div>
+              </AdminTableCell>
+              <AdminTableCell>
+                <div className="min-w-0">
+                  <p className="text-foreground">{item.branchName}</p>
+                  <p className="text-caption text-muted-foreground">{item.city}</p>
+                </div>
+              </AdminTableCell>
+              <AdminTableCell className="max-w-xs">
+                <p className="font-medium text-foreground">{item.leaveType}</p>
+                <p className="truncate text-caption text-muted-foreground" title={item.reason}>
+                  {item.reason}
+                </p>
+              </AdminTableCell>
+              <AdminTableCell className="whitespace-nowrap text-muted-foreground">
+                {formatLeaveDate(item.startDate)} – {formatLeaveDate(item.endDate)}
+                <span className="block text-caption">
+                  {item.days} day{item.days === 1 ? "" : "s"}
+                </span>
+              </AdminTableCell>
+              <AdminTableCell>
+                <DistributorHeadStatusBadge status={item.status} />
+              </AdminTableCell>
+              <AdminTableCell className="whitespace-nowrap text-muted-foreground">
+                {formatSubmittedAt(item.submittedAt)}
+              </AdminTableCell>
+            </AdminTableRow>
+          ))
+        )}
+      </AdminTableBody>
+    </AdminDataTable>
   );
 }
 
@@ -87,6 +130,8 @@ const LEAVE_FILTER_OPTIONS: AdminSelectOption[] = [
   { value: "Rejected", label: "Rejected" },
 ];
 
+type LeavePaneKey = "manager" | "team";
+
 export function DistributorHeadManagerLeaveTab({
   managerLeave,
   teamLeave,
@@ -94,78 +139,99 @@ export function DistributorHeadManagerLeaveTab({
   managerLeave: DistributorHeadLeaveApplication[];
   teamLeave: DistributorHeadLeaveApplication[];
 }) {
+  const [activePane, setActivePane] = useState<LeavePaneKey>("manager");
+  const [managerSearch, setManagerSearch] = useState("");
+  const [teamSearch, setTeamSearch] = useState("");
   const [managerFilter, setManagerFilter] = useState("all");
   const [teamFilter, setTeamFilter] = useState("all");
 
   const filteredManagerLeave = useMemo(() => {
-    if (managerFilter === "all") return managerLeave;
-    return managerLeave.filter((row) => row.status === managerFilter);
-  }, [managerFilter, managerLeave]);
+    return managerLeave.filter((row) => {
+      if (managerFilter !== "all" && row.status !== managerFilter) return false;
+      return matchesLeaveSearch(row, managerSearch);
+    });
+  }, [managerFilter, managerLeave, managerSearch]);
 
   const filteredTeamLeave = useMemo(() => {
-    if (teamFilter === "all") return teamLeave;
-    return teamLeave.filter((row) => row.status === teamFilter);
-  }, [teamFilter, teamLeave]);
+    return teamLeave.filter((row) => {
+      if (teamFilter !== "all" && row.status !== teamFilter) return false;
+      return matchesLeaveSearch(row, teamSearch);
+    });
+  }, [teamFilter, teamLeave, teamSearch]);
+
+  const isManagerPane = activePane === "manager";
+  const search = isManagerPane ? managerSearch : teamSearch;
+  const setSearch = isManagerPane ? setManagerSearch : setTeamSearch;
+  const statusFilter = isManagerPane ? managerFilter : teamFilter;
+  const setStatusFilter = isManagerPane ? setManagerFilter : setTeamFilter;
+  const pendingCount = (isManagerPane ? managerLeave : teamLeave).filter(
+    (row) => row.status === "Pending",
+  ).length;
+
+  const managerEmpty =
+    managerSearch.trim() || managerFilter !== "all"
+      ? "No manager leave requests match your search or filters."
+      : "No manager leave requests on record.";
+  const teamEmpty =
+    teamSearch.trim() || teamFilter !== "all"
+      ? "No team leave requests match your search or filters."
+      : `No ${MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()} leave requests for this team.`;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <CalendarDays className="size-4 text-primary" />
-                Manager leave
-              </CardTitle>
-              <p className="mt-1 text-caption text-muted-foreground">
-                Requests routed to the state head for approval
-              </p>
-            </div>
-            <AdminSelect
-              value={managerFilter}
-              onValueChange={setManagerFilter}
-              options={LEAVE_FILTER_OPTIONS}
-              placeholder="Status"
-              className="min-w-select-sm"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <LeaveList
-            items={filteredManagerLeave}
-            emptyMessage="No manager leave requests on record."
-          />
-        </CardContent>
-      </Card>
+    <Tabs
+      value={activePane}
+      onValueChange={(value) => {
+        if (value === "manager" || value === "team") setActivePane(value);
+      }}
+      className="gap-4"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <AdminSearchInput
+          containerClassName="w-full max-w-sm sm:min-w-[14rem]"
+          placeholder="Search by name, branch, or leave type"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
 
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <CalendarDays className="size-4 text-muted-foreground" />
-                Team leave
-              </CardTitle>
-              <p className="mt-1 text-caption text-muted-foreground">
-                Distributor requests approved by this manager
-              </p>
-            </div>
-            <AdminSelect
-              value={teamFilter}
-              onValueChange={setTeamFilter}
-              options={LEAVE_FILTER_OPTIONS}
-              placeholder="Status"
-              className="min-w-select-sm"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <LeaveList
-            items={filteredTeamLeave}
-            emptyMessage="No distributor leave requests for this team."
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <AdminSelect
+            value={statusFilter}
+            onValueChange={setStatusFilter}
+            options={LEAVE_FILTER_OPTIONS}
+            placeholder="Status"
+            className="min-w-select-sm shrink-0 self-end sm:self-auto"
+            triggerClassName="w-auto"
+            aria-label="Filter leave by status"
           />
-        </CardContent>
-      </Card>
-    </div>
+
+          <AdminTabList variant="secondary" className="max-w-full overflow-x-auto">
+            <AdminTabTrigger value="manager" className="gap-2">
+              Manager leave
+              <Badge variant="secondary" className="h-5 px-1.5 tabular-nums font-normal">
+                {managerLeave.length}
+              </Badge>
+            </AdminTabTrigger>
+            <AdminTabTrigger value="team" className="gap-2">
+              Team leave
+              <Badge variant="secondary" className="h-5 px-1.5 tabular-nums font-normal">
+                {teamLeave.length}
+              </Badge>
+            </AdminTabTrigger>
+          </AdminTabList>
+
+          {pendingCount > 0 ? (
+            <Badge className="w-fit shrink-0 tabular-nums">{pendingCount} pending</Badge>
+          ) : null}
+        </div>
+      </div>
+
+      <TabsContent value="manager" keepMounted className="mt-0">
+        <LeaveList items={filteredManagerLeave} emptyMessage={managerEmpty} />
+      </TabsContent>
+
+      <TabsContent value="team" keepMounted className="mt-0">
+        <LeaveList items={filteredTeamLeave} emptyMessage={teamEmpty} />
+      </TabsContent>
+    </Tabs>
   );
 }

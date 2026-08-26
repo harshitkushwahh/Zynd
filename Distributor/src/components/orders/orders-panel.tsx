@@ -18,7 +18,7 @@ import {
 } from "@/lib/distributor-operations-orders-scope";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { DistributorOrder, OrderStatus } from "@/lib/dummy/types";
+import type { DistributorOrder, OrderStatus } from "@/lib/distributor-types";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";

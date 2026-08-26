@@ -56,11 +56,20 @@ def parse_kyckart_pan_payload(payload: dict[str, Any]) -> dict[str, Any]:
     ).strip()
     parts = [part for part in full_name.split() if part]
     first_name = str(data.get("firstName") or data.get("first_name") or (parts[0] if parts else "")).strip()
-    last_name = str(
-        data.get("lastName")
-        or data.get("last_name")
-        or (parts[-1] if len(parts) > 1 else first_name)
-    ).strip()
+    explicit_last = str(data.get("lastName") or data.get("last_name") or "").strip()
+    if explicit_last:
+        last_name = explicit_last
+    elif len(parts) > 1:
+        last_name = parts[-1]
+    else:
+        last_name = ""
+    if (
+        first_name
+        and last_name
+        and first_name.upper() == last_name.upper()
+        and len(parts) <= 1
+    ):
+        last_name = ""
     category_raw = str(data.get("category") or data.get("panCategory") or "individual").lower()
     pan_category = "corporate" if "corp" in category_raw or category_raw in {"c", "firm", "company"} else "individual"
     dob = str(
@@ -71,7 +80,7 @@ def parse_kyckart_pan_payload(payload: dict[str, Any]) -> dict[str, Any]:
         or ""
     ).strip()
 
-    if not full_name and not (first_name and last_name):
+    if not full_name and not first_name:
         raise KyckartError("Could not fetch PAN holder name.", "kyckart_incomplete", 502)
     if not dob:
         raise KyckartError("Could not fetch date of birth for this PAN.", "kyckart_incomplete", 502)

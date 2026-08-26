@@ -67,7 +67,7 @@ export function AdminAccountMenu({ className }: AdminAccountMenuProps) {
             aria-label={`Open account menu for ${displayName}`}
           >
             <Avatar className="admin-account-menu__trigger-avatar size-8">
-              <AvatarFallback className="bg-primary/10 text-primary text-caption">
+              <AvatarFallback className="text-caption">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -77,7 +77,7 @@ export function AdminAccountMenu({ className }: AdminAccountMenuProps) {
       <DropdownMenuContent align="end" sideOffset={8} className={ADMIN_ACCOUNT_MENU_CLASS}>
         <div className={ADMIN_ACCOUNT_MENU_PROFILE_CLASS}>
           <Avatar className="admin-account-menu__avatar size-11">
-            <AvatarFallback className="bg-primary/10 text-primary text-body font-semibold">
+            <AvatarFallback className="text-body font-semibold">
               {initials}
             </AvatarFallback>
           </Avatar>

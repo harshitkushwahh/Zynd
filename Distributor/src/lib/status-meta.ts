@@ -6,7 +6,7 @@ import type {
   OrderStatus,
   SystematicPlanStatus,
   TxnRequestStatus,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 export function onboardingStatusVariant(
   status: InvestorOnboardingStatus,

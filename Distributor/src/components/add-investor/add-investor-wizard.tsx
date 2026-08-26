@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useWizardKeyboardNavigation } from "@/hooks/use-wizard-keyboard-navigation";
@@ -8,6 +8,7 @@ import {
   BadgeCheck,
   Check,
   CheckCircle2,
+  FileClock,
   Home,
   Landmark,
   Loader2,
@@ -41,20 +42,17 @@ import {
 } from "@/components/add-investor/add-investor-review-panel";
 import { AddInvestorSignaturePanel } from "@/components/add-investor/add-investor-signature-panel";
 import { AddInvestorSuccessDialog } from "@/components/add-investor/add-investor-success-dialog";
+import { AddInvestorInProgressDialog } from "@/components/add-investor/add-investor-in-progress-dialog";
 import { AddInvestorWizardSkeleton } from "@/components/add-investor/add-investor-wizard-skeleton";
+import { useAddInvestorKycMasterData } from "@/components/add-investor/use-add-investor-kyc-master-data";
 import { useAddInvestorPageReveal } from "@/components/add-investor/use-add-investor-page-reveal";
 import { useAddInvestorStepSwitch } from "@/components/add-investor/use-add-investor-step-switch";
+import { DistributorManagerBranchRequired } from "@/components/dashboard/distributor-manager-branch-required";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
+import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ADD_INVESTOR_DEMO_OTP,
+  isValidSixDigitOtp,
   ADD_INVESTOR_JOURNEY_PHASE_LABEL,
   addInvestorStepIndex,
   buildAddInvestorJourneySteps,
@@ -64,6 +62,8 @@ import {
   isAddInvestorAddressFieldsValid,
   isAddInvestorBankDraftValid,
   isAddInvestorPersonalDraftValid,
+  isAddInvestorComplianceComplete,
+  isAddInvestorPanNameValid,
   normalizeAddInvestorPersonalDraft,
   type AddInvestorAddressDraft,
   type AddInvestorBankDraft,
@@ -81,12 +81,43 @@ import {
   delay,
   DIGILOCKER_PREFILL_ADDRESS,
   normalizeMobileInput,
-  verifyDemoPan,
 } from "@/lib/add-investor/add-investor-demo";
+import { mapPanVerifyToInvestorReadiness } from "@/lib/add-investor/add-investor-pan-readiness";
 import {
-  createDemoInvestorClientCode,
+  clearStoredAddInvestorComplianceDraft,
+  readStoredAddInvestorComplianceDraft,
+  writeStoredAddInvestorComplianceDraft,
+  type AddInvestorComplianceDraft,
+} from "@/lib/add-investor/add-investor-compliance-storage";
+import { resolveInvestorClientCodeDisplay } from "@/lib/add-investor/add-investor-client-code";
+import { persistAddInvestorKycBeforeSubmit } from "@/lib/add-investor/add-investor-kyc-persist";
+import {
+  AddInvestorKycGeolocationError,
+  requestAddInvestorKycGeolocation,
+} from "@/lib/add-investor/add-investor-kyc-geolocation";
+import {
+  emptyComplianceSnapshot,
+  hydrationFromClientKycBootstrap,
+  hydrationFromComplianceSnapshot,
+  mergeComplianceHydration,
+  resolveResumeStepId,
+  type AddInvestorComplianceHydration,
+} from "@/lib/add-investor/add-investor-kyc-bootstrap";
+import { buildAddInvestorInProgressItems } from "@/lib/add-investor/add-investor-in-progress-items";
+import type { AddInvestorInProgressItem } from "@/lib/add-investor/add-investor-in-progress-items";
+import { clearStoredClientOnboardingToken } from "@/lib/add-investor/add-investor-onboarding-storage";
+import {
   type AddInvestorSuccessState,
 } from "@/lib/add-investor/add-investor-success";
+import { ApiError } from "@/lib/api-client";
+import { fetchDistributorClients } from "@/lib/distributor-clients-api";
+import type { DistributorInvestor } from "@/lib/distributor-types";
+import {
+  confirmClientKycPanNames,
+  fetchClientKycBootstrap,
+  submitClientKyc,
+  verifyClientKycPan,
+} from "@/lib/distributor-client-onboarding-api";
 import type { AddInvestorSignatureTab } from "@/lib/add-investor/add-investor-signature";
 import { YOUR_CLIENTS_LIST_HREF } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
@@ -96,17 +127,32 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+const ADD_INVESTOR_STEP_LABELS: Record<AddInvestorStepId, string> = {
+  onboarding: "Contact verification",
+  pan: "PAN verification",
+  digilocker: "DigiLocker",
+  "signature-upload": "Signature",
+  address: "Address",
+  "personal-info": "Personal info",
+  nominee: "Nominee",
+  bank: "Bank account",
+  esign: "E-sign",
+  review: "Review",
+};
+
 export function AddInvestorWizard() {
   const router = useRouter();
   const { showSkeleton: showPageSkeleton } = useAddInvestorPageReveal();
+  const { masterData: kycMasterData } = useAddInvestorKycMasterData();
   const { stepId, displayStepId, goToStep: switchToStep, isSwitching, showPanelSkeleton } =
     useAddInvestorStepSwitch();
   const [email, setEmail] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
   const [mobile, setMobile] = useState("");
   const [mobileOtp, setMobileOtp] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
-  const [mfaBound, setMfaBound] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [clientUserId, setClientUserId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState("");
   const [pan, setPan] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [panVerified, setPanVerified] = useState(false);
@@ -128,10 +174,45 @@ export function AddInvestorWizard() {
   const [bank, setBank] = useState<AddInvestorBankDraft>(emptyBankDraft());
   const [esignDone, setEsignDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [successState, setSuccessState] = useState<AddInvestorSuccessState | null>(null);
+  const [pendingInvestors, setPendingInvestors] = useState<DistributorInvestor[]>([]);
+  const [localComplianceDraft, setLocalComplianceDraft] = useState<AddInvestorComplianceDraft | null>(null);
+  const [inProgressDialogOpen, setInProgressDialogOpen] = useState(false);
+  const skipCompliancePersistRef = useRef(false);
   const [maxReachedStepIndex, setMaxReachedStepIndex] = useState(0);
 
   const isNewToKyc = requiresDigilocker !== false;
+
+  const complianceComplete = useMemo(
+    () =>
+      isAddInvestorComplianceComplete({
+        requiresDigilocker: isNewToKyc,
+        panVerified,
+        panName,
+        digilockerDone,
+        signatureUploaded,
+        address,
+        personal,
+        nominees,
+        nomineeSubWizardActive,
+        bank,
+        esignDone,
+      }),
+    [
+      address,
+      bank,
+      digilockerDone,
+      esignDone,
+      isNewToKyc,
+      nomineeSubWizardActive,
+      nominees,
+      panName,
+      panVerified,
+      personal,
+      signatureUploaded,
+    ],
+  );
 
   const accountHolderName = useMemo(() => {
     if (!panName) {
@@ -139,6 +220,11 @@ export function AddInvestorWizard() {
     }
     return [panName.firstName, middleName, panName.lastName].filter(Boolean).join(" ");
   }, [middleName, panName]);
+
+  const displayClientId = useMemo(
+    () => resolveInvestorClientCodeDisplay(clientId, email, mobile),
+    [clientId, email, mobile],
+  );
 
   const reviewHero = useMemo(
     () => ({
@@ -156,9 +242,16 @@ export function AddInvestorWizard() {
         title: "Contact & access",
         icon: ShieldCheck,
         items: [
+          ...(displayClientId !== "—"
+            ? [{ label: "Investor code", value: displayClientId }]
+            : []),
           { label: "Email", value: email },
           { label: "Mobile", value: `+91 ${mobile}` },
-          { label: "MFA", value: "Authenticator enrolled", tone: "success" },
+          {
+            label: "MFA",
+            value: "Set up on first Zynd sign-in",
+            tone: "muted" as const,
+          },
         ],
       },
       {
@@ -171,7 +264,7 @@ export function AddInvestorWizard() {
         id: "personal",
         title: "Personal details",
         icon: UserRound,
-        items: formatAddInvestorPersonalReviewItems(personal),
+        items: formatAddInvestorPersonalReviewItems(personal, kycMasterData?.personal),
       },
       {
         id: "nominee",
@@ -228,6 +321,7 @@ export function AddInvestorWizard() {
   }, [
     address,
     bank,
+    displayClientId,
     digilockerDone,
     email,
     esignDone,
@@ -244,6 +338,257 @@ export function AddInvestorWizard() {
     [requiresDigilocker],
   );
 
+  const refreshPendingInvestors = useCallback(async () => {
+    const items = await fetchDistributorClients({ limit: 100 });
+    setPendingInvestors(items.filter((item) => item.onboardingStatus === "Pending"));
+  }, []);
+
+  useEffect(() => {
+    setLocalComplianceDraft(readStoredAddInvestorComplianceDraft());
+    void refreshPendingInvestors();
+  }, [refreshPendingInvestors]);
+
+  useEffect(() => {
+    if (skipCompliancePersistRef.current || !onboardingComplete || !clientUserId) {
+      return;
+    }
+    const draft: AddInvestorComplianceDraft = {
+      clientUserId,
+      clientId: displayClientId !== "—" ? displayClientId : clientId,
+      email,
+      mobile,
+      investorName: accountHolderName || email,
+      stepId,
+      pan,
+      updatedAt: new Date().toISOString(),
+      snapshot: {
+        panVerified,
+        middleName,
+        panName,
+        readiness,
+        requiresDigilocker,
+        digilockerDone,
+        address,
+        addressFromDigilocker,
+        personal,
+        signatureDataUrl,
+        signatureMode,
+        nominees,
+        bank,
+        esignDone,
+        maxReachedStepIndex,
+      },
+    };
+    writeStoredAddInvestorComplianceDraft(draft);
+    setLocalComplianceDraft(draft);
+  }, [
+    accountHolderName,
+    address,
+    addressFromDigilocker,
+    bank,
+    clientId,
+    clientUserId,
+    displayClientId,
+    digilockerDone,
+    email,
+    esignDone,
+    maxReachedStepIndex,
+    middleName,
+    mobile,
+    nominees,
+    onboardingComplete,
+    pan,
+    panName,
+    panVerified,
+    personal,
+    readiness,
+    requiresDigilocker,
+    signatureDataUrl,
+    signatureMode,
+    stepId,
+  ]);
+
+  const inProgressItems = useMemo(
+    () => buildAddInvestorInProgressItems(localComplianceDraft, pendingInvestors, ADD_INVESTOR_STEP_LABELS),
+    [localComplianceDraft, pendingInvestors],
+  );
+
+  const resetCompliancePath = useCallback(() => {
+    setDigilockerDone(false);
+    setSignatureDataUrl("");
+    setSignatureMode(null);
+    setAddress(emptyAddressDraft());
+    setAddressFromDigilocker(false);
+    setPersonal(emptyPersonalDraft());
+    setNominees([]);
+    setBank(emptyBankDraft());
+    setEsignDone(false);
+  }, []);
+
+  const applyComplianceHydration = useCallback((hydration: AddInvestorComplianceHydration) => {
+    if (hydration.pan) {
+      setPan(hydration.pan);
+    }
+    if (hydration.panVerified != null) {
+      setPanVerified(hydration.panVerified);
+    }
+    if (hydration.panName !== undefined) {
+      setPanName(hydration.panName);
+    }
+    if (hydration.middleName !== undefined) {
+      setMiddleName(hydration.middleName);
+    }
+    if (hydration.readiness !== undefined) {
+      setReadiness(hydration.readiness);
+    }
+    if (hydration.requiresDigilocker !== undefined && hydration.requiresDigilocker !== null) {
+      setRequiresDigilocker(hydration.requiresDigilocker);
+    }
+    if (hydration.digilockerDone != null) {
+      setDigilockerDone(hydration.digilockerDone);
+    }
+    if (hydration.address) {
+      setAddress(hydration.address);
+    }
+    if (hydration.addressFromDigilocker != null) {
+      setAddressFromDigilocker(hydration.addressFromDigilocker);
+    }
+    if (hydration.personal) {
+      setPersonal(hydration.personal);
+    }
+    if (hydration.signatureDataUrl !== undefined) {
+      setSignatureDataUrl(hydration.signatureDataUrl);
+    }
+    if (hydration.signatureMode !== undefined) {
+      setSignatureMode(hydration.signatureMode);
+    }
+    if (hydration.nominees) {
+      setNominees(hydration.nominees);
+    }
+    if (hydration.bank) {
+      setBank(hydration.bank);
+    }
+    if (hydration.esignDone != null) {
+      setEsignDone(hydration.esignDone);
+    }
+    if (hydration.maxReachedStepIndex != null) {
+      setMaxReachedStepIndex((prev) => Math.max(prev, hydration.maxReachedStepIndex ?? 0));
+    }
+  }, []);
+
+  const hydrateClientCompliance = useCallback(
+    async (
+      userId: string,
+      draft: AddInvestorComplianceDraft | null | undefined,
+      targetStepId?: AddInvestorStepId,
+    ) => {
+      skipCompliancePersistRef.current = true;
+
+      let hydration: AddInvestorComplianceHydration = {};
+      if (draft?.snapshot) {
+        hydration = mergeComplianceHydration(
+          hydration,
+          hydrationFromComplianceSnapshot(draft.snapshot),
+        );
+      }
+
+      try {
+        const bootstrap = await fetchClientKycBootstrap(userId);
+        hydration = mergeComplianceHydration(hydration, hydrationFromClientKycBootstrap(bootstrap));
+        if (bootstrap.client_id) {
+          setClientId(
+            resolveInvestorClientCodeDisplay(
+              bootstrap.client_id,
+              draft?.email,
+              draft?.mobile,
+            ),
+          );
+        }
+      } catch {
+        // Keep local snapshot when server bootstrap is unavailable.
+      }
+
+      applyComplianceHydration(hydration);
+
+      const resolvedRequiresDigilocker = hydration.requiresDigilocker ?? true;
+      const steps = buildAddInvestorJourneySteps(resolvedRequiresDigilocker);
+      const preferredStep = targetStepId ?? draft?.stepId ?? "pan";
+      const stepToOpen = resolveResumeStepId(steps, preferredStep, hydration);
+      switchToStep(stepToOpen);
+      const idx = addInvestorStepIndex(steps, stepToOpen);
+      if (idx >= 0) {
+        setMaxReachedStepIndex((prev) =>
+          Math.max(prev, hydration.maxReachedStepIndex ?? idx, idx),
+        );
+      }
+
+      window.requestAnimationFrame(() => {
+        skipCompliancePersistRef.current = false;
+      });
+    },
+    [applyComplianceHydration, switchToStep],
+  );
+
+  const resetWizardSession = useCallback(() => {
+    skipCompliancePersistRef.current = true;
+    clearStoredAddInvestorComplianceDraft();
+    clearStoredClientOnboardingToken();
+    setLocalComplianceDraft(null);
+    setOnboardingComplete(false);
+    setClientUserId(null);
+    setClientId("");
+    setEmail("");
+    setEmailOtp("");
+    setMobile("");
+    setMobileOtp("");
+    setPan("");
+    setMiddleName("");
+    setPanVerified(false);
+    setPanName(null);
+    setReadiness(null);
+    setRequiresDigilocker(null);
+    setPanError("");
+    setPanLoading(false);
+    resetCompliancePath();
+    setMaxReachedStepIndex(0);
+    switchToStep("onboarding");
+    setInProgressDialogOpen(false);
+    window.requestAnimationFrame(() => {
+      skipCompliancePersistRef.current = false;
+    });
+  }, [resetCompliancePath, switchToStep]);
+
+  const resumeInProgress = async (item: AddInvestorInProgressItem) => {
+    if (item.draft) {
+      setClientUserId(item.draft.clientUserId);
+      setClientId(
+        resolveInvestorClientCodeDisplay(
+          item.draft.clientId,
+          item.draft.email,
+          item.draft.mobile,
+        ),
+      );
+      setEmail(item.draft.email);
+      setMobile(item.draft.mobile);
+      setOnboardingComplete(true);
+      await hydrateClientCompliance(item.draft.clientUserId, item.draft, item.draft.stepId);
+      return;
+    }
+
+    if (item.investor) {
+      setClientUserId(item.investor.id);
+      setClientId(item.investor.clientCode);
+      setOnboardingComplete(true);
+      await hydrateClientCompliance(item.investor.id, null, "pan");
+    }
+  };
+
+  const discardActiveSession = () => {
+    resetWizardSession();
+  };
+
+  const hasActiveSession = Boolean(localComplianceDraft || (onboardingComplete && clientUserId));
+
   const currentIndex = addInvestorStepIndex(journeySteps, stepId);
   const safeCurrentIndex = Math.max(currentIndex, 0);
   const journeyProgressPct =
@@ -258,12 +603,6 @@ export function AddInvestorWizard() {
     }
   }, [currentIndex, journeySteps, maxReachedStepIndex, switchToStep]);
 
-  useEffect(() => {
-    if (currentIndex >= 0) {
-      setMaxReachedStepIndex((prev) => Math.max(prev, currentIndex));
-    }
-  }, [currentIndex]);
-
   const markStepReached = (index: number) => {
     setMaxReachedStepIndex((prev) => Math.max(prev, index));
   };
@@ -276,6 +615,7 @@ export function AddInvestorWizard() {
   };
 
   const goNext = () => {
+    if (!canContinue) return;
     const idx = addInvestorStepIndex(journeySteps, stepId);
     if (idx >= 0 && idx < journeySteps.length - 1) {
       const nextIdx = idx + 1;
@@ -294,16 +634,9 @@ export function AddInvestorWizard() {
   const canContinue = (() => {
     switch (stepId) {
       case "onboarding":
-        return (
-          isValidEmail(email) &&
-          emailOtp === ADD_INVESTOR_DEMO_OTP &&
-          mobile.length === 10 &&
-          mobileOtp === ADD_INVESTOR_DEMO_OTP &&
-          mfaBound &&
-          mfaCode.length === 6
-        );
+        return onboardingComplete;
       case "pan":
-        return panVerified && Boolean(panName?.firstName.trim()) && Boolean(panName?.lastName.trim());
+        return panVerified && isAddInvestorPanNameValid(panName);
       case "digilocker":
         return digilockerDone;
       case "signature-upload":
@@ -322,7 +655,7 @@ export function AddInvestorWizard() {
       case "esign":
         return esignDone;
       case "review":
-        return true;
+        return complianceComplete && Boolean(clientUserId);
       default:
         return false;
     }
@@ -347,45 +680,116 @@ export function AddInvestorWizard() {
   };
 
   const handleVerifyPan = async () => {
+    if (!clientUserId) {
+      setPanError("Complete investor onboarding before verifying PAN.");
+      return;
+    }
     setPanError("");
     setPanLoading(true);
-    await delay(700);
-    const result = verifyDemoPan(pan);
-    setPanLoading(false);
-    if (!result.ok) {
-      setPanError(result.error);
+    try {
+      const result = await verifyClientKycPan(clientUserId, pan);
+      if (result.blocked) {
+        setPanError(result.message || "This PAN cannot be used for KYC.");
+        setPanVerified(false);
+        setPanName(null);
+        setReadiness(null);
+        return;
+      }
+      if (!result.success || !result.pan_draft) {
+        setPanError(result.failure?.reason || "Could not verify PAN. Check the number and try again.");
+        setPanVerified(false);
+        setPanName(null);
+        setReadiness(null);
+        return;
+      }
+      const draft = result.pan_draft;
+      const fullName = String(draft.fullName ?? "").trim();
+      const firstName = String(draft.firstName ?? "").trim();
+      let lastName = String(draft.lastName ?? "").trim();
+      const singleNameOnly = Boolean(
+        (draft as { singleNameOnly?: boolean }).singleNameOnly
+        ?? (fullName.split(/\s+/).filter(Boolean).length === 1
+          || (firstName && lastName && firstName.toUpperCase() === lastName.toUpperCase())),
+      );
+      if (singleNameOnly) {
+        lastName = "";
+      }
+      setPanName({
+        firstName,
+        lastName,
+        dateOfBirth: draft.dateOfBirth ?? "",
+        panCategory: draft.panCategory ?? "",
+        singleNameOnly,
+      });
+      setMiddleName(draft.middleName ?? "");
+      setReadiness(
+        mapPanVerifyToInvestorReadiness({
+          kycAlreadyRegistered: result.kyc_already_registered,
+          readiness: result.readiness,
+        }),
+      );
+      setRequiresDigilocker(
+        result.requires_digilocker ?? !Boolean(result.kyc_already_registered),
+      );
+      setPanVerified(true);
+      markStepReached(addInvestorStepIndex(journeySteps, "pan"));
+    } catch (error) {
+      setPanError(
+        error instanceof ApiError
+          ? error.message || "Could not verify PAN."
+          : "Could not verify PAN.",
+      );
       setPanVerified(false);
       setPanName(null);
       setReadiness(null);
+    } finally {
+      setPanLoading(false);
+    }
+  };
+
+  const handlePanContinue = async () => {
+    if (!panVerified || !panName || !clientUserId || panLoading) return;
+    if (!isAddInvestorPanNameValid(panName)) {
+      setPanError(
+        panName.singleNameOnly
+          ? "Enter a valid first name from the PAN registry."
+          : "Enter valid first and last names from the PAN registry.",
+      );
       return;
     }
-    setPanName(result.panName);
-    setMiddleName("");
-    setReadiness(result.readiness);
-    setRequiresDigilocker(!result.kycAlreadyRegistered);
-    setPanVerified(true);
-    markStepReached(addInvestorStepIndex(journeySteps, "pan"));
-  };
-
-  const handlePanContinue = () => {
-    if (!panVerified) return;
-    if (!isNewToKyc) {
-      setAddress(emptyAddressDraft());
-      setAddressFromDigilocker(false);
+    setPanError("");
+    setPanLoading(true);
+    try {
+      const confirmResult = await confirmClientKycPanNames(clientUserId, {
+        first_name: panName.firstName.trim(),
+        middle_name: middleName.trim(),
+        last_name: panName.lastName.trim(),
+      });
+      if (confirmResult.blocked) {
+        setPanError(confirmResult.failure?.reason || "Could not confirm PAN name details.");
+        return;
+      }
+      if (!confirmResult.success) {
+        setPanError("Could not confirm PAN name details.");
+        return;
+      }
+      if (confirmResult.requires_digilocker != null) {
+        setRequiresDigilocker(confirmResult.requires_digilocker);
+      }
+      if (!isNewToKyc) {
+        setAddress(emptyAddressDraft());
+        setAddressFromDigilocker(false);
+      }
+      goNext();
+    } catch (error) {
+      setPanError(
+        error instanceof ApiError
+          ? error.message || "Could not confirm PAN name details."
+          : "Could not confirm PAN name details.",
+      );
+    } finally {
+      setPanLoading(false);
     }
-    goNext();
-  };
-
-  const resetCompliancePath = () => {
-    setDigilockerDone(false);
-    setSignatureDataUrl("");
-    setSignatureMode(null);
-    setAddress(emptyAddressDraft());
-    setAddressFromDigilocker(false);
-    setPersonal(emptyPersonalDraft());
-    setNominees([]);
-    setBank(emptyBankDraft());
-    setEsignDone(false);
   };
 
   const handleDigilockerConnect = async () => {
@@ -402,21 +806,70 @@ export function AddInvestorWizard() {
   };
 
   const handleSubmit = async () => {
+    if (!complianceComplete || !clientUserId) {
+      setSubmitError("Complete every compliance step before submitting.");
+      return;
+    }
+    if (!clientId && displayClientId === "—") {
+      setSubmitError("Investor account details are missing. Restart from onboarding.");
+      return;
+    }
+    setSubmitError("");
     setSubmitting(true);
-    await delay(600);
-    setSuccessState({
-      clientCode: createDemoInvestorClientCode(),
-      investorName: accountHolderName || email,
-      email,
-      mobile,
-      pan,
-      kycPath: isNewToKyc ? "New to KYC" : "KRA registered",
-    });
-    setSubmitting(false);
+    try {
+      await persistAddInvestorKycBeforeSubmit({
+        clientUserId,
+        address,
+        personal,
+        nominees,
+        bank,
+        signatureDataUrl,
+        signatureMode,
+        requiresDigilocker: requiresDigilocker ?? true,
+      });
+
+      let submitBody: { latitude?: number; longitude?: number; accuracy_meters?: number } | undefined;
+      if (requiresDigilocker ?? true) {
+        const coords = await requestAddInvestorKycGeolocation();
+        submitBody = {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy_meters: coords.accuracy,
+        };
+      }
+
+      await submitClientKyc(clientUserId, submitBody);
+
+      setSuccessState({
+        clientCode: displayClientId,
+        investorName: accountHolderName || email,
+        email,
+        mobile,
+        pan,
+        kycPath: isNewToKyc ? "New to KYC" : "KRA registered",
+      });
+      clearStoredAddInvestorComplianceDraft();
+      setLocalComplianceDraft(null);
+      await refreshPendingInvestors();
+    } catch (error) {
+      if (error instanceof AddInvestorKycGeolocationError) {
+        setSubmitError(error.message);
+        return;
+      }
+      setSubmitError(
+        error instanceof ApiError
+          ? error.message || "Could not submit KYC. Try again."
+          : "Could not submit KYC. Try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSuccessDone = () => {
     setSuccessState(null);
+    clearStoredAddInvestorComplianceDraft();
+    setLocalComplianceDraft(null);
     router.push(YOUR_CLIENTS_LIST_HREF);
   };
 
@@ -430,17 +883,20 @@ export function AddInvestorWizard() {
 
   const handleKeyboardContinue = () => {
     if (stepId === "review") {
-      void handleSubmit();
+      if (complianceComplete && !submitting && !successState) {
+        void handleSubmit();
+      }
       return;
     }
     if (stepId === "pan") {
       if (panVerified) {
-        handlePanContinue();
+        void handlePanContinue();
       } else if (pan.length === 10 && !panLoading) {
         void handleVerifyPan();
       }
       return;
     }
+    if (!canContinue) return;
     goNext();
   };
 
@@ -450,9 +906,9 @@ export function AddInvestorWizard() {
     onBack: goBack,
     canContinue: (() => {
       if (isSwitching) return false;
-      if (stepId === "review") return !submitting && !successState;
+      if (stepId === "review") return complianceComplete && !submitting && !successState;
       if (stepId === "pan") {
-        return panVerified ? true : pan.length === 10 && !panLoading;
+        return panVerified ? !panLoading : pan.length === 10 && !panLoading;
       }
       return canContinue;
     })(),
@@ -465,8 +921,9 @@ export function AddInvestorWizard() {
         return (
           <AddInvestorWizardStepFooter
             onBack={goBack}
-            onContinue={handlePanContinue}
+            onContinue={() => void handlePanContinue()}
             canBack={safeCurrentIndex > 0}
+            continueDisabled={panLoading}
           />
         );
       }
@@ -505,8 +962,8 @@ export function AddInvestorWizard() {
           onBack={goBack}
           onContinue={() => void handleSubmit()}
           canBack={currentIndex > 0}
-          continueDisabled={submitting || Boolean(successState)}
-          continueLabel={submitting ? "Completing profile…" : "Complete Profile"}
+          continueDisabled={!complianceComplete || submitting || Boolean(successState)}
+          continueLabel={submitting ? "Submitting…" : "Complete profile"}
         />
       );
     }
@@ -525,15 +982,44 @@ export function AddInvestorWizard() {
     return (
       <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
         <DistributorPageHeader title="Add investor" description="" />
-        <AddInvestorWizardSkeleton panelStep={displayStepId} />
+        <DistributorManagerBranchRequired>
+          <AddInvestorWizardSkeleton panelStep={displayStepId} />
+        </DistributorManagerBranchRequired>
       </div>
     );
   }
 
   return (
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
-      <DistributorPageHeader title="Add investor" description="" />
+      <DistributorPageHeader title="Add investor" description="">
+        <DistributorActionButton
+          type="button"
+          variant="outline"
+          onClick={() => setInProgressDialogOpen(true)}
+        >
+          <FileClock className="size-4" aria-hidden />
+          In progress
+          {inProgressItems.length > 0 ? (
+            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
+              {inProgressItems.length}
+            </span>
+          ) : null}
+        </DistributorActionButton>
+      </DistributorPageHeader>
 
+      <AddInvestorInProgressDialog
+        open={inProgressDialogOpen}
+        onOpenChange={setInProgressDialogOpen}
+        items={inProgressItems}
+        activeClientUserId={clientUserId}
+        onResume={(item) => {
+          void resumeInProgress(item).finally(() => setInProgressDialogOpen(false));
+        }}
+        onDiscardActiveSession={discardActiveSession}
+        hasActiveSession={hasActiveSession}
+      />
+
+      <DistributorManagerBranchRequired>
       <div
         className={cn(
           "quick-txn-wizard add-investor-wizard distributor-wizard-page--enter",
@@ -649,10 +1135,23 @@ export function AddInvestorWizard() {
               mobileOtp={mobileOtp}
               onMobileOtpChange={setMobileOtp}
               mobileValid={mobile.length === 10}
-              mfaBound={mfaBound}
-              onMfaBoundChange={setMfaBound}
-              mfaCode={mfaCode}
-              onMfaCodeChange={setMfaCode}
+              onboardingComplete={onboardingComplete}
+              createdClientId={clientId}
+              onAccountCreated={(result) => {
+                setClientUserId(result.client_user_id);
+                setClientId(
+                  resolveInvestorClientCodeDisplay(
+                    result.client_id,
+                    result.email,
+                    result.mobile,
+                  ),
+                );
+                setEmail(result.email);
+                if (result.mobile) {
+                  setMobile(result.mobile.replace(/\D/g, "").slice(-10));
+                }
+                setOnboardingComplete(true);
+              }}
               onFinished={goNext}
             />
           </div>
@@ -734,6 +1233,7 @@ export function AddInvestorWizard() {
                   onAddressChange={setAddress}
                   permanentReadOnly={addressFromDigilocker}
                   prefilledFromDigilocker={addressFromDigilocker}
+                  addressMasterData={kycMasterData}
                 />
               </div>
 
@@ -747,6 +1247,7 @@ export function AddInvestorWizard() {
                 <AddInvestorPersonalInfoPanel
                   personal={normalizeAddInvestorPersonalDraft(personal)}
                   onPersonalChange={updatePersonal}
+                  personalOptions={kycMasterData?.personal}
                 />
               </div>
 
@@ -761,6 +1262,7 @@ export function AddInvestorWizard() {
                   nominees={nominees}
                   onNomineesChange={setNominees}
                   onSubWizardActiveChange={setNomineeSubWizardActive}
+                  nomineeOptions={kycMasterData?.nominee}
                 />
               </div>
 
@@ -775,6 +1277,8 @@ export function AddInvestorWizard() {
                   bank={bank}
                   onBankChange={updateBank}
                   accountHolderName={accountHolderName}
+                  clientUserId={clientUserId}
+                  panVerified={panVerified}
                 />
               </div>
 
@@ -796,6 +1300,20 @@ export function AddInvestorWizard() {
                 aria-hidden={stepId !== "review"}
               >
                 <AddInvestorReviewPanel hero={reviewHero} sections={reviewSections} />
+                {!complianceComplete ? (
+                  <DistributorFeedbackMessage variant="warning" className="add-distributor-wizard-feedback">
+                    Complete every compliance step before submitting this profile.
+                  </DistributorFeedbackMessage>
+                ) : null}
+                {submitError ? (
+                  <DistributorFeedbackMessage
+                    variant="error"
+                    className="add-distributor-wizard-feedback"
+                    onDismiss={() => setSubmitError("")}
+                  >
+                    {submitError}
+                  </DistributorFeedbackMessage>
+                ) : null}
               </div>
             </AddInvestorCompliancePanelShell>
           </div>
@@ -814,6 +1332,7 @@ export function AddInvestorWizard() {
         }}
         onDone={handleSuccessDone}
       />
+      </DistributorManagerBranchRequired>
     </div>
   );
 }

@@ -42,6 +42,7 @@ import { PROFILE_SETTINGS_SECTIONS } from "@/components/dashboard/settings/setti
 import { APP_NAME } from "@/shared/config/brand";
 import { uiClasses } from "@/shared/config/ui-classes";
 import { getUserInitials } from "@/shared/utils/user-display";
+import { useResolvedDisplayName } from "@/shared/hooks/use-resolved-display-name";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -189,7 +190,8 @@ function ProfileAvatar({
 }) {
   const pathname = usePathname();
   const settingsNavigation = useSettingsNavigationOptional();
-  const { user, displayName } = useAuth();
+  const { user } = useAuth();
+  const resolvedDisplayName = useResolvedDisplayName();
   const { profileUrl } = useProfileImage();
   const kyc = useKycOptional();
   const {
@@ -201,8 +203,8 @@ function ProfileAvatar({
     checkKycStatus,
     signOutAndRedirect,
   } = useProfileMenuActions();
-  const initials = getUserInitials(user?.first_name, user?.email);
-  const profileLabel = displayName || user?.email || "Profile";
+  const initials = getUserInitials(resolvedDisplayName.split(/\s+/)[0], user?.email);
+  const profileLabel = resolvedDisplayName || copy.settings.accountFallbackName;
   const kycRingTone = kyc?.showRing && kyc.ringTone ? kyc.ringTone : null;
   const showWatchBadge = Boolean(kycRingTone && kyc?.status !== "complete");
   const showCheckKycStatus = Boolean(kyc?.overallStatus === "submitted" && kyc.kycAllowed);
@@ -274,7 +276,7 @@ function ProfileAvatar({
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-caption font-semibold text-foreground">
-                  {displayName || "Account"}
+                  {resolvedDisplayName || "Account"}
                 </p>
                 {user?.email ? (
                   <p className="truncate text-[11px] leading-tight text-muted-foreground">
@@ -369,14 +371,16 @@ export function DashboardSidebar({ className }: { className?: string }) {
     >
       <div className={cn(DASHBOARD_HEADER_CLASS, "justify-center")}>
         <Link href="/dashboard" className={cn(DASHBOARD_NAV_CLUSTER_CLASS, "w-full justify-center")}>
-          <Image
-            src="/logo.png"
-            alt={APP_NAME}
-            width={40}
-            height={40}
-            className="size-10 shrink-0 rounded-full object-cover"
-            priority
-          />
+          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
+            <Image
+              src="/logo.png"
+              alt={APP_NAME}
+              width={40}
+              height={40}
+              className="size-10 object-cover"
+              priority
+            />
+          </span>
         </Link>
       </div>
 

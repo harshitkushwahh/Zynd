@@ -60,6 +60,28 @@ export function sortFundTableRows<T extends InvestFundSummary>(
   });
 }
 
+/** Keep screener-queued funds visible at the top while preserving order within each group. */
+export function pinScreenerSelectedFundTableRows<T extends InvestFundSummary>(
+  rows: T[],
+  selectedProductIds: readonly string[],
+): T[] {
+  if (selectedProductIds.length === 0) return rows;
+
+  const selectedSet = new Set(selectedProductIds);
+  const rowById = new Map(rows.map((row) => [row.product_id, row]));
+  const pinned: T[] = [];
+
+  for (const productId of selectedProductIds) {
+    const row = rowById.get(productId);
+    if (row) pinned.push(row);
+  }
+
+  if (pinned.length === 0) return rows;
+
+  const rest = rows.filter((row) => !selectedSet.has(row.product_id));
+  return [...pinned, ...rest];
+}
+
 /** Keep the first occurrence when the API returns duplicate product rows. */
 export function dedupeInvestFunds(funds: InvestFundSummary[]): InvestFundSummary[] {
   const seen = new Set<string>();

@@ -24,6 +24,17 @@ export function AdminPinInput({
     if (cleaned && index < 3) inputsRef.current[index + 1]?.focus();
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const form = event.currentTarget.form;
+    if (!form) return;
+    const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]:not([disabled])');
+    if (submitButton) {
+      form.requestSubmit(submitButton);
+    }
+  };
+
   return (
     <div className="flex justify-center gap-2.5">
       {digits.map((digit, index) => (
@@ -42,6 +53,7 @@ export function AdminPinInput({
             error && "border-destructive",
           )}
           onChange={(event) => updateDigit(index, event.target.value)}
+          onKeyDown={handleKeyDown}
         />
       ))}
     </div>

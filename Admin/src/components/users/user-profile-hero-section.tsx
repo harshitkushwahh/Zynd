@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Check, Copy, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Check, Copy, Lock, ShieldCheck } from "lucide-react";
 
 import { AdminGrowthBadge } from "@/components/ui/admin-growth-badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 } from "@/lib/admin-user-kyc-progress";
 import { resolveRiskTierVisual } from "@/lib/risk-profile-gauge-ui";
 import { useAdminUserRiskProfileQuery } from "@/hooks/use-admin-user-risk-profile-query";
+import type { UserRiskProfileDetail } from "@/lib/risk-profile-admin-api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -31,9 +32,59 @@ type UserProfileHeroSectionProps = {
   canReadMf: boolean;
   canReadKyc: boolean;
   canReadRiskProfile: boolean;
+  isPlatformAdmin?: boolean;
+  identityActions?: React.ReactNode;
   onOpenPortfolioTab?: () => void;
   onOpenRiskTab?: () => void;
 };
+
+const USER_PROFILE_HERO_DUMMY_RISK = {
+  tier: "moderate",
+  score: 420,
+  label: "Moderate",
+} as const;
+
+function UserProfileHeroCardLockOverlay() {
+  return (
+    <div className="admin-user-profile-hero__card-lock" aria-hidden>
+      <Lock className="size-4" strokeWidth={2.25} />
+    </div>
+  );
+}
+
+function UserProfileHeroRiskPreview({
+  tier,
+  score,
+  label,
+  muted = false,
+}: {
+  tier: string;
+  score: number;
+  label: string;
+  muted?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "admin-user-profile-hero__risk-card-layout",
+        muted && "admin-user-profile-hero__risk-card-layout--muted",
+      )}
+    >
+      <div className="admin-user-profile-hero__risk-gauge-wrap">
+        <RiskProfileGauge score={score} tier={tier} size="mini" />
+      </div>
+      <div className="admin-user-profile-hero__risk-card-meta">
+        <RiskProfileTierBadge tier={tier} label={label} />
+        <div className="admin-user-profile-hero__risk-score-box">
+          <p className="admin-user-profile-hero__risk-score tabular-nums">
+            <span className="admin-user-profile-hero__risk-score-value">{score}</span>
+            <span className="admin-user-profile-hero__risk-score-denom">/1000</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function formatInr(value: unknown) {
   const amount = typeof value === "number" ? value : Number(value);
@@ -111,30 +162,7 @@ function resolveIdentityDisplayName(
   return summary.display_name;
 }
 
-function formatLastLoginMethod(method: string | null | undefined) {
-  switch (method) {
-    case "sms":
-      return "SMS OTP";
-    case "authenticator":
-      return "Authenticator";
-    case "backup":
-      return "Backup code";
-    case "oauth":
-      return "OAuth";
-    case "password":
-      return "Password";
-    default:
-      return null;
-  }
-}
-
-function formatLastLoginAt(value: string | null | undefined) {
-  if (!value) return null;
-  return new Date(value).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
+function UserProfileHeroClientIdCopy({ clientId }: { clientId: string }) {
   const [copied, setCopied] = useState(false);
 
   const onCopy = useCallback(async () => {
@@ -242,14 +270,17 @@ function UserProfileHeroKycCardShell({
   children,
   headBadge,
   iconTone = "admin-metric-card__icon--muted",
+  locked = false,
 }: {
   children: React.ReactNode;
   headBadge?: React.ReactNode;
   iconTone?: string;
+  locked?: boolean;
 }) {
   return (
     <div className="admin-metric-card-outer admin-user-profile-hero__kyc-card-outer">
-      <Card className="admin-metric-card admin-metric-card--overview h-full ring-0">
+      <Card className="admin-metric-card admin-metric-card--overview relative h-full ring-0">
+        {locked ? <UserProfileHeroCardLockOverlay /> : null}
         <CardContent className="admin-user-profile-hero__kyc-card-body">
           <div className="admin-user-profile-hero__kyc-card-head">
             <div className={cn("admin-metric-card__icon shrink-0", iconTone)}>
@@ -268,9 +299,11 @@ function UserProfileHeroKycCardShell({
 function UserProfileHeroKycCard({
   canReadKyc,
   kyc,
+  locked = false,
 }: {
   canReadKyc: boolean;
   kyc: AdminUserKycDetail | null;
+  locked?: boolean;
 }) {
   if (!canReadKyc) {
     return (
@@ -282,7 +315,7 @@ function UserProfileHeroKycCard({
 
   if (!kyc) {
     return (
-      <UserProfileHeroKycCardShell>
+      <UserProfileHeroKycCardShell locked={locked}>
         <p className="text-compact text-muted-foreground">Unavailable</p>
       </UserProfileHeroKycCardShell>
     );
@@ -292,6 +325,7 @@ function UserProfileHeroKycCard({
 
   return (
     <UserProfileHeroKycCardShell
+      locked={locked}
       iconTone={kycIconToneClass(kyc)}
       headBadge={<StatusBadge variant={complianceBadge.variant}>{complianceBadge.label}</StatusBadge>}
     >
@@ -335,13 +369,16 @@ function UserProfileHeroKycValue({ kyc }: { kyc: AdminUserKycDetail }) {
 function UserProfileHeroRiskCardShell({
   children,
   onOpenRiskTab,
+  locked = false,
 }: {
   children: React.ReactNode;
   onOpenRiskTab?: () => void;
+  locked?: boolean;
 }) {
   return (
     <div className="admin-metric-card-outer admin-user-profile-hero__risk-card-outer">
-      <Card className="admin-metric-card admin-metric-card--overview h-full ring-0">
+      <Card className="admin-metric-card admin-metric-card--overview relative h-full ring-0">
+        {locked ? <UserProfileHeroCardLockOverlay /> : null}
         <CardContent className="admin-user-profile-hero__risk-card-body">
           <div className="admin-user-profile-hero__risk-card-head">
             <p className="admin-metric-card__overview-label">Risk profile</p>
@@ -366,18 +403,18 @@ function UserProfileHeroRiskCardShell({
 }
 
 function UserProfileHeroRiskCard({
-  userId,
+  profile,
+  showSkeleton,
   canReadRiskProfile,
+  locked = false,
   onOpenRiskTab,
 }: {
-  userId: string;
+  profile: UserRiskProfileDetail | null;
+  showSkeleton: boolean;
   canReadRiskProfile: boolean;
+  locked?: boolean;
   onOpenRiskTab?: () => void;
 }) {
-  const { data, isPending } = useAdminUserRiskProfileQuery(canReadRiskProfile ? userId : "");
-  const profile = data?.profile ?? null;
-  const showSkeleton = canReadRiskProfile && isPending && !data;
-
   if (!canReadRiskProfile) {
     return (
       <UserProfileHeroRiskCardShell onOpenRiskTab={onOpenRiskTab}>
@@ -403,9 +440,13 @@ function UserProfileHeroRiskCard({
 
   if (!profile) {
     return (
-      <UserProfileHeroRiskCardShell onOpenRiskTab={onOpenRiskTab}>
-        <p className="text-center text-compact text-muted-foreground">Not assessed</p>
-        <p className="text-center text-caption text-muted-foreground">No completed assessment yet</p>
+      <UserProfileHeroRiskCardShell onOpenRiskTab={onOpenRiskTab} locked={locked}>
+        <UserProfileHeroRiskPreview
+          tier={USER_PROFILE_HERO_DUMMY_RISK.tier}
+          score={USER_PROFILE_HERO_DUMMY_RISK.score}
+          label={USER_PROFILE_HERO_DUMMY_RISK.label}
+          muted
+        />
       </UserProfileHeroRiskCardShell>
     );
   }
@@ -415,20 +456,11 @@ function UserProfileHeroRiskCard({
 
   return (
     <UserProfileHeroRiskCardShell onOpenRiskTab={onOpenRiskTab}>
-      <div className="admin-user-profile-hero__risk-card-layout">
-        <div className="admin-user-profile-hero__risk-gauge-wrap">
-          <RiskProfileGauge score={profile.score} tier={profile.tier} size="mini" />
-        </div>
-        <div className="admin-user-profile-hero__risk-card-meta">
-          <RiskProfileTierBadge tier={profile.tier} label={tierLabel} />
-          <div className="admin-user-profile-hero__risk-score-box">
-            <p className="admin-user-profile-hero__risk-score tabular-nums">
-              <span className="admin-user-profile-hero__risk-score-value">{profile.score}</span>
-              <span className="admin-user-profile-hero__risk-score-denom">/1000</span>
-            </p>
-          </div>
-        </div>
-      </div>
+      <UserProfileHeroRiskPreview
+        tier={profile.tier}
+        score={profile.score}
+        label={tierLabel}
+      />
     </UserProfileHeroRiskCardShell>
   );
 }
@@ -439,6 +471,8 @@ export function UserProfileHeroSection({
   canReadMf,
   canReadKyc,
   canReadRiskProfile,
+  isPlatformAdmin = false,
+  identityActions,
   onOpenPortfolioTab,
   onOpenRiskTab,
 }: UserProfileHeroSectionProps) {
@@ -446,63 +480,70 @@ export function UserProfileHeroSection({
   const kyc = profileDetail?.kyc ?? null;
   const displayName = resolveIdentityDisplayName(summary, profileDetail);
   const formattedPhone = formatIdentityPhone(summary.phone);
+  const { data: riskData, isPending: riskPending } = useAdminUserRiskProfileQuery(
+    !isPlatformAdmin && canReadRiskProfile ? summary.user_id : "",
+  );
+  const riskProfile = riskData?.profile ?? null;
+  const riskShowSkeleton = !isPlatformAdmin && canReadRiskProfile && riskPending && !riskData;
+  const riskLocked = !isPlatformAdmin && canReadRiskProfile && !riskPending && !riskProfile;
 
   return (
-    <section className="admin-user-profile-hero">
+    <section
+      className={cn("admin-user-profile-hero", isPlatformAdmin && "admin-user-profile-hero--platform-admin")}
+    >
       <Card className="admin-user-profile-hero__identity h-full ring-0">
         <CardContent className="admin-user-profile-hero__identity-body">
-          <AdminUserProfileAvatar
-            name={displayName}
-            email={summary.email}
-            imageSrc={summary.profile_image_url}
-            size="lg"
-            className="shrink-0"
-          />
-          <div className="admin-user-profile-hero__identity-details">
-            <div className="admin-user-profile-hero__identity-contact min-w-0">
-              <h1 className="admin-user-profile-hero__identity-name truncate">{displayName}</h1>
-              <p className="admin-user-profile-hero__identity-email truncate">{summary.email}</p>
-              {formattedPhone ? (
-                <p className="admin-user-profile-hero__identity-phone tabular-nums">{formattedPhone}</p>
-              ) : null}
-              <UserProfileHeroClientIdCopy clientId={summary.client_id} />
+          <div className="admin-user-profile-hero__identity-main">
+            <div className="admin-user-profile-hero__identity-avatar">
+              <AdminUserProfileAvatar
+                name={displayName}
+                email={summary.email}
+                imageSrc={summary.profile_image_url}
+                size="lg"
+                className="shrink-0"
+              />
             </div>
-            <div className="admin-user-profile-hero__identity-badges">
-              <PlatformRoleBadge role={summary.role} />
-              <UserStatusBadge status={summary.status} />
-              <MfaStatusBadge enabled={summary.mfa_enrolled} />
-            </div>
-            {summary.last_login_method || summary.pin_enrolled || summary.phone_verified ? (
-              <div className="space-y-1 text-caption text-muted-foreground">
-                {summary.pin_enrolled ? <p>PIN enrolled</p> : <p>PIN not set</p>}
-                {summary.phone_verified ? <p>Phone verified</p> : <p>Phone not verified</p>}
-                {formatLastLoginMethod(summary.last_login_method) ? (
-                  <p>
-                    Last sign-in: {formatLastLoginMethod(summary.last_login_method)}
-                    {formatLastLoginAt(summary.last_login_at)
-                      ? ` · ${formatLastLoginAt(summary.last_login_at)}`
-                      : ""}
-                  </p>
+            <div className="admin-user-profile-hero__identity-details">
+              <div className="admin-user-profile-hero__identity-contact min-w-0">
+                <h1 className="admin-user-profile-hero__identity-name truncate">{displayName}</h1>
+                <p className="admin-user-profile-hero__identity-email truncate">{summary.email}</p>
+                {formattedPhone ? (
+                  <p className="admin-user-profile-hero__identity-phone tabular-nums">{formattedPhone}</p>
                 ) : null}
+                <UserProfileHeroClientIdCopy clientId={summary.client_id} />
               </div>
-            ) : null}
+              <div className="admin-user-profile-hero__identity-badges">
+                <PlatformRoleBadge role={summary.role} />
+                <UserStatusBadge status={summary.status} />
+                <MfaStatusBadge enabled={summary.mfa_enrolled} />
+              </div>
+            </div>
           </div>
+          {identityActions ? (
+            <div className="admin-user-profile-hero__identity-actions">{identityActions}</div>
+          ) : null}
         </CardContent>
       </Card>
 
-      <UserProfileHeroPortfolioCard
-        canReadMf={canReadMf}
-        investments={investments}
-        onOpenPortfolioTab={onOpenPortfolioTab}
-      />
+      {!isPlatformAdmin ? (
+        <>
+          <UserProfileHeroPortfolioCard
+            canReadMf={canReadMf}
+            investments={investments}
+            onOpenPortfolioTab={onOpenPortfolioTab}
+          />
 
-      <UserProfileHeroKycCard canReadKyc={canReadKyc} kyc={kyc} />
+          <UserProfileHeroKycCard canReadKyc={canReadKyc} kyc={kyc} locked={riskLocked} />
 
-      <UserProfileHeroRiskCard
-        userId={summary.user_id}
-        canReadRiskProfile={canReadRiskProfile}
-        onOpenRiskTab={onOpenRiskTab}
-      />
+          <UserProfileHeroRiskCard
+            profile={riskProfile}
+            showSkeleton={riskShowSkeleton}
+            canReadRiskProfile={canReadRiskProfile}
+            locked={riskLocked}
+            onOpenRiskTab={onOpenRiskTab}
+          />
+        </>
+      ) : null}
     </section>
   );
 }

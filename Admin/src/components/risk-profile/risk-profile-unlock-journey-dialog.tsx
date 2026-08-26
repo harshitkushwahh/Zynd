@@ -7,6 +7,7 @@ import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
 import { AdminDetailDialogSkeleton } from "@/components/ui/admin-skeletons";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { pickUserRef } from "@/lib/admin-user-ref";
 import { getErrorMessage } from "@/lib/errors";
 import { formatTimestamp } from "@/lib/format-date";
 import {
@@ -117,7 +118,7 @@ export function RiskProfileUnlockJourneyDialog({
     setLoading(true);
     setError("");
 
-    void fetchRiskProfileUnlockJourney(user.user_id)
+    void fetchRiskProfileUnlockJourney(pickUserRef(user))
       .then((result) => {
         if (!cancelled) setJourney(result);
       })
@@ -149,7 +150,7 @@ export function RiskProfileUnlockJourneyDialog({
       {loading ? (
         <AdminDetailDialogSkeleton />
       ) : error ? (
-        <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
       ) : (
         <div className="space-y-4">
           <div className="rounded-[var(--radius-card)] border border-border bg-card p-4">

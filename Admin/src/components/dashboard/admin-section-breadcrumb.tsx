@@ -11,7 +11,6 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
-import { cn } from "@/lib/utils";
 
 const overviewRoute = ADMIN_NAV_ROUTES.find((route) => route.id === "overview") ?? null;
 

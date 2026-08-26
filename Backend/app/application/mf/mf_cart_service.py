@@ -250,10 +250,12 @@ async def upsert_cart_item(
         ),
         None,
     )
-    if existing is None and len(existing_items) >= settings.zynd_mf_cart_max_items:
+    type_items = [item for item in existing_items if item.investment_type == cart_type]
+    if existing is None and len(type_items) >= settings.zynd_mf_cart_max_items:
+        cart_label = "SIP" if cart_type == MfCartInvestmentType.sip else "One-time"
         raise MfOrderError(
             code="cart_full",
-            message=f"Cart supports at most {settings.zynd_mf_cart_max_items} funds",
+            message=f"{cart_label} cart supports at most {settings.zynd_mf_cart_max_items} funds",
         )
 
     if existing:
@@ -302,11 +304,14 @@ async def bulk_upsert_cart_items(
     existing_lumpsum_ids = {
         item.product_id for item in existing_items if item.investment_type == MfCartInvestmentType.lumpsum
     }
+    lumpsum_items = [
+        item for item in existing_items if item.investment_type == MfCartInvestmentType.lumpsum
+    ]
     new_count = sum(1 for product_id, _ in items if product_id not in existing_lumpsum_ids)
-    if len(existing_items) + new_count > settings.zynd_mf_cart_max_items:
+    if len(lumpsum_items) + new_count > settings.zynd_mf_cart_max_items:
         raise MfOrderError(
             code="cart_full",
-            message=f"Cart supports at most {settings.zynd_mf_cart_max_items} funds",
+            message=f"One-time cart supports at most {settings.zynd_mf_cart_max_items} funds",
         )
 
     for product_id, amount_inr in items:

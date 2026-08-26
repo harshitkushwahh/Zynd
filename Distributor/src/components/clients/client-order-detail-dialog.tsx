@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorOrder } from "@/lib/dummy/types";
+import type { DistributorOrder } from "@/lib/distributor-types";
 import { formatAum, formatDistributorDate, formatDistributorDateTime } from "@/lib/format";
 import {
   DISTRIBUTOR_INSET_SECTION_BODY_CLASS,

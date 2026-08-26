@@ -56,3 +56,32 @@ export function sortMfTransactions(orders: MfOrder[]) {
     return bTime - aTime;
   });
 }
+
+function normalizeOrderStatus(status: string) {
+  return status.trim().toUpperCase();
+}
+
+export function isAwaitingAllotmentOrder(order: MfOrder) {
+  const status = normalizeOrderStatus(order.status);
+  if (status === "SUBMITTED") return true;
+  if (status === "PROCESSING" && order.fp_state?.toLowerCase() === "submitted") return true;
+  return false;
+}
+
+export function isUpcomingHoldingOrder(order: MfOrder) {
+  const orderType = normalizeOrderType(order.order_type);
+  if (orderType === "REDEMPTION") return false;
+
+  const status = normalizeOrderStatus(order.status);
+  if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(status)) return false;
+  if (isAwaitingAllotmentOrder(order)) return true;
+  return ["PENDING", "PROCESSING", "PAYMENT_PENDING"].includes(status);
+}
+
+export function getUpcomingHoldingOrders(orders: MfOrder[]) {
+  return sortMfTransactions(orders.filter(isUpcomingHoldingOrder));
+}
+
+export function sumUpcomingHoldingOrdersInr(orders: MfOrder[]) {
+  return getUpcomingHoldingOrders(orders).reduce((total, order) => total + (order.amount_inr ?? 0), 0);
+}

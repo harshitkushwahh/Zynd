@@ -6,7 +6,7 @@ import { useMemo } from "react";
 
 import { DistributorProfileAvatar } from "@/components/ui/distributor-profile-avatar";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
-import type { DistributorTxnRequest, TxnRequestStatus } from "@/lib/dummy/types";
+import type { DistributorTxnRequest, TxnRequestStatus } from "@/lib/distributor-types";
 import { formatAum, formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

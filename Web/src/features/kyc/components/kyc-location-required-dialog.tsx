@@ -25,7 +25,7 @@ export function KycLocationRequiredDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="z-[60] max-w-sm gap-0 overflow-hidden p-0"
+        className="kyc-subdialog-surface z-[60] max-w-sm gap-0 overflow-hidden rounded-3xl p-0"
         overlayClassName="z-[60]"
         showCloseButton={false}
       >

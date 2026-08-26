@@ -1,18 +1,17 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { FAMILY_GROUP_CARD_RADIUS_CLASS, FAMILY_GROUP_HERO_GRADIENT_CLASS, FAMILY_GROUP_HERO_OVERLAY_CLASS } from "@/features/family-groups/lib/family-group-ui";
-import { RISK_PROFILE_CARD_CLASS } from "@/features/risk-profile/lib/risk-tier-ui";
+import { FAMILY_GROUP_CARD_RADIUS_CLASS, FAMILY_GROUP_DASHBOARD_PANEL_CLASS, FAMILY_GROUP_HERO_GRADIENT_CLASS, FAMILY_GROUP_HERO_OVERLAY_CLASS, FAMILY_GROUP_HERO_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { cn } from "@/lib/utils";
 
 export function FamilyGroupDashboardContentSkeleton() {
   return (
-    <div className="animate-in fade-in duration-200 space-y-5" aria-hidden="true">
+    <div className="space-y-5" aria-hidden="true">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
         <section
           className={cn(
             "relative isolate min-h-[24rem] min-w-0 flex-1 overflow-hidden p-4 shadow-zynd-mid ring-1 ring-inset ring-primary-foreground/10 sm:min-h-[26rem] sm:p-5 lg:p-6",
-            FAMILY_GROUP_CARD_RADIUS_CLASS,
+            FAMILY_GROUP_HERO_RADIUS_CLASS,
             FAMILY_GROUP_HERO_GRADIENT_CLASS,
           )}
         >
@@ -45,20 +44,27 @@ export function FamilyGroupDashboardContentSkeleton() {
 
         <section
           className={cn(
-            RISK_PROFILE_CARD_CLASS,
-            "min-h-[24rem] w-full p-4 shadow-zynd-low sm:min-h-[26rem] sm:p-5 xl:w-[20rem] xl:shrink-0",
+            FAMILY_GROUP_DASHBOARD_PANEL_CLASS,
+            "min-h-[24rem] w-full p-3 sm:min-h-[26rem] sm:p-4 xl:w-[20rem] xl:shrink-0",
           )}
         >
-          <Skeleton className="h-5 w-28" />
-          <div className="mt-5 space-y-3">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-11 w-full rounded-[var(--radius-control)]" />
-            ))}
+          <Skeleton className="h-4 w-28" />
+          <div className="mt-3 space-y-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <Skeleton className="h-[5.5rem] w-full rounded-[var(--radius-control)]" />
+              <Skeleton className="h-[5.5rem] w-full rounded-[var(--radius-control)]" />
+            </div>
+            <Skeleton className="h-[4.75rem] w-full rounded-[var(--radius-control)]" />
+            <Skeleton className="h-px w-full" />
+            <div className="grid grid-cols-2 gap-2">
+              <Skeleton className="h-[5.5rem] w-full rounded-[var(--radius-control)]" />
+              <Skeleton className="h-[5.5rem] w-full rounded-[var(--radius-control)]" />
+            </div>
           </div>
         </section>
       </div>
 
-      <section className={cn(RISK_PROFILE_CARD_CLASS, "flex items-center gap-3 px-3 py-2.5 shadow-zynd-low")}>
+      <section className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "flex items-center gap-3 p-3 sm:p-4")}>
         <Skeleton className="h-5 w-10 shrink-0 rounded-full" />
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           {Array.from({ length: 5 }).map((_, index) => (
@@ -72,19 +78,19 @@ export function FamilyGroupDashboardContentSkeleton() {
       </section>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <section className={cn(RISK_PROFILE_CARD_CLASS, "min-h-[18rem] p-4 shadow-zynd-low sm:p-5")}>
-          <Skeleton className="h-5 w-44" />
-          <Skeleton className="mx-auto mt-8 size-36 rounded-full" />
-          <div className="mx-auto mt-5 flex max-w-xs justify-center gap-2">
+        <section className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "min-h-[18rem] p-3 sm:p-4")}>
+          <Skeleton className="h-4 w-44" />
+          <Skeleton className="mx-auto mt-6 size-36 rounded-full" />
+          <div className="mx-auto mt-4 flex max-w-xs justify-center gap-2">
             <Skeleton className="h-6 w-16 rounded-full" />
             <Skeleton className="h-6 w-20 rounded-full" />
             <Skeleton className="h-6 w-14 rounded-full" />
           </div>
         </section>
 
-        <section className={cn(RISK_PROFILE_CARD_CLASS, "min-h-[18rem] p-4 shadow-zynd-low sm:p-5")}>
-          <Skeleton className="h-5 w-32" />
-          <div className="mt-5 space-y-3">
+        <section className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "min-h-[18rem] p-3 sm:p-4")}>
+          <Skeleton className="h-4 w-32" />
+          <div className="mt-2 space-y-3">
             {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className={cn("h-[4.5rem] w-full", FAMILY_GROUP_CARD_RADIUS_CLASS)} />
             ))}
@@ -93,12 +99,9 @@ export function FamilyGroupDashboardContentSkeleton() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
-        <section className={cn(RISK_PROFILE_CARD_CLASS, "min-h-[14rem] p-4 shadow-zynd-low sm:p-5")}>
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-36" />
-            <Skeleton className="h-4 w-56 max-w-full" />
-          </div>
-          <div className="mt-4 space-y-3">
+        <section className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "min-h-[14rem] p-3 sm:p-4")}>
+          <Skeleton className="h-4 w-36" />
+          <div className="mt-2 space-y-3">
             {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className={cn("h-[4.5rem] w-full", FAMILY_GROUP_CARD_RADIUS_CLASS)} />
             ))}

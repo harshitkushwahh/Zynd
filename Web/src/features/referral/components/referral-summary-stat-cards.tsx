@@ -24,6 +24,7 @@ type SummaryStatCardProps = {
   title: string;
   value: string;
   hint: string;
+  hintTone?: "positive" | "muted";
   icon: LucideIcon;
   tone: "blue" | "emerald" | "indigo";
 };
@@ -58,7 +59,7 @@ function formatConversionRate(successful: number, total: number) {
   return `${Math.round((successful / total) * 100)}%`;
 }
 
-function SummaryStatCard({ title, value, hint, icon: Icon, tone }: SummaryStatCardProps) {
+function SummaryStatCard({ title, value, hint, hintTone = "muted", icon: Icon, tone }: SummaryStatCardProps) {
   return (
     <article
       className={cn(
@@ -78,7 +79,14 @@ function SummaryStatCard({ title, value, hint, icon: Icon, tone }: SummaryStatCa
       <div className="relative z-10 min-w-0 pr-10">
         <p className="text-caption font-medium text-muted-foreground">{title}</p>
         <p className="mt-2 text-h2 font-bold tracking-tight text-foreground">{value}</p>
-        <p className="mt-1 text-caption font-medium text-success">{hint}</p>
+        <p
+          className={cn(
+            "mt-1 text-[10px] leading-snug font-medium [overflow-wrap:anywhere]",
+            hintTone === "positive" ? "text-success" : "text-muted-foreground/80",
+          )}
+        >
+          {hint}
+        </p>
       </div>
     </article>
   );
@@ -110,6 +118,7 @@ export function ReferralSummaryStatCards({
         title={copy.referral.summaryTotalReferrals}
         value={String(stats.signup_count)}
         hint={referralsThisMonthHint}
+        hintTone={referralsThisMonth > 0 ? "positive" : "muted"}
         icon={Users}
         tone="blue"
       />
@@ -117,6 +126,7 @@ export function ReferralSummaryStatCards({
         title={copy.referral.summaryTotalEarnings}
         value={formatInr(totalEarningsInr)}
         hint={earningsThisMonthHint}
+        hintTone={earningsThisMonthInr > 0 ? "positive" : "muted"}
         icon={Wallet}
         tone="emerald"
       />
@@ -124,6 +134,7 @@ export function ReferralSummaryStatCards({
         title={copy.referral.summarySuccessfulReferrals}
         value={String(stats.qualified_count)}
         hint={copy.referral.summaryConversionRate.replace("{rate}", conversionRate)}
+        hintTone={stats.qualified_count > 0 && stats.signup_count > 0 ? "positive" : "muted"}
         icon={CheckCircle2}
         tone="indigo"
       />

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { ArrowUpRight } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -11,16 +10,19 @@ import {
   OverviewLockedCardBackdrop,
   OverviewLockedCardOverlay,
 } from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
 import { OVERVIEW_SIPS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import { type MfSipPlan } from "@/features/invest/api/invest-api";
 import { useMfSipPlansQuery } from "@/features/invest/hooks/use-mf-sip-plans-query";
 import { mfSipPlanStatusVariant } from "@/features/invest/components/mf-sip-plan-status-badge";
 import { formatInr, resolveInvestAssetUrl } from "@/features/invest/lib/mf-format";
+import { portfolioTabHref } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
+import { OVERVIEW_COMPACT_CARD_STRETCH_CLASS } from "@/features/dashboard/overview/lib/overview-card-styles";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_LIMIT = 4;
-const MY_SIPS_HREF = "/dashboard/my-sips";
+const MY_SIPS_HREF = portfolioTabHref("sips");
 
 function isActiveSip(status: string) {
   const normalized = status.trim().toLowerCase();
@@ -34,10 +36,27 @@ function amcInitials(name: string) {
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
 
+function MoreSipsCircle({ count }: { count: number }) {
+  const overview = copy.dashboard.overview;
+
+  return (
+    <div
+      className={cn(
+        "relative z-10 flex size-11 shrink-0 items-center justify-center rounded-full",
+        "border border-border/80 bg-card text-[11px] font-semibold tabular-nums text-foreground",
+        "shadow-zynd-low ring-2 ring-card",
+      )}
+      aria-label={overview.sipsMoreAria.replace("{count}", String(count))}
+    >
+      +{count}
+    </div>
+  );
+}
+
 function SipAmcCircle({ plan }: { plan: MfSipPlan }) {
   const amcName = plan.amc_name ?? copy.mutualFunds.unknownAmc;
   const logoUrl = resolveInvestAssetUrl(plan.amc_logo_url);
-  const statusVariant = mfSipPlanStatusVariant(plan.status);
+  const statusVariant = mfSipPlanStatusVariant(plan);
 
   return (
     <div className="relative z-10 shrink-0 hover:z-30 focus-within:z-30">
@@ -134,10 +153,10 @@ function LockedSipsPreviewContent() {
           <span className="ml-1 text-caption font-medium text-muted-foreground">/mo</span>
         </p>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <StatusBadge variant="success" showIcon={false} className="rounded-full text-[10px] tabular-nums">
+          <StatusBadge variant="success" showIcon={false} className="text-[10px] tabular-nums">
             {overview.sipsActiveCount.replace("{count}", "3")}
           </StatusBadge>
-          <StatusBadge variant="info" showIcon={false} className="rounded-full text-[10px] tabular-nums">
+          <StatusBadge variant="info" showIcon={false} className="text-[10px] tabular-nums">
             {overview.sipsPlansCount.replace("{count}", "3")}
           </StatusBadge>
         </div>
@@ -162,6 +181,8 @@ export function OverviewSipsCard({ className }: OverviewSipsCardProps) {
     return [...active, ...rest].slice(0, PREVIEW_LIMIT);
   }, [plans]);
 
+  const remainingCount = Math.max(plans.length - previewPlans.length, 0);
+
   const activeCount = useMemo(
     () => plans.filter((plan) => isActiveSip(plan.status)).length,
     [plans],
@@ -179,15 +200,13 @@ export function OverviewSipsCard({ className }: OverviewSipsCardProps) {
     <Link
       href={MY_SIPS_HREF}
       className={cn(
-        "group flex min-h-[9.5rem] min-w-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-3.5 shadow-zynd-low",
+        "group flex min-w-0 flex-1 flex-col overflow-visible rounded-[1.75rem] border border-border/60 bg-card p-3.5 shadow-zynd-low",
+        OVERVIEW_COMPACT_CARD_STRETCH_CLASS,
         "transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-zynd-mid",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-caption font-semibold text-foreground">{overview.sipsTitle}</p>
-        <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-      </div>
+      <OverviewCompactCardHeader title={overview.sipsTitle} groupHover />
 
       <div className="mt-3 flex flex-1 flex-col justify-center">
         {loading ? (
@@ -224,12 +243,13 @@ export function OverviewSipsCard({ className }: OverviewSipsCardProps) {
         ) : null}
 
         {!loading && !error && plans.length > 0 ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center pl-0.5">
-              <div className="flex items-center -space-x-2.5">
+          <div className="flex items-center justify-between gap-2 overflow-visible">
+            <div className="relative flex min-w-0 flex-1 items-center overflow-visible pl-0.5">
+              <div className="flex items-center overflow-visible -space-x-2.5">
                 {previewPlans.map((plan) => (
                   <SipAmcCircle key={plan.plan_id} plan={plan} />
                 ))}
+                {remainingCount > 0 ? <MoreSipsCircle count={remainingCount} /> : null}
               </div>
             </div>
 
@@ -266,7 +286,8 @@ export function OverviewSipsCardSkeleton({ className }: { className?: string }) 
   return (
     <div
       className={cn(
-        "flex min-h-[9.5rem] min-w-0 flex-1 flex-col rounded-[1.75rem] border border-border/60 bg-card p-3.5 shadow-zynd-low",
+        "flex min-w-0 flex-1 flex-col rounded-[1.75rem] border border-border/60 bg-card p-3.5 shadow-zynd-low",
+        OVERVIEW_COMPACT_CARD_STRETCH_CLASS,
         className,
       )}
       aria-hidden="true"

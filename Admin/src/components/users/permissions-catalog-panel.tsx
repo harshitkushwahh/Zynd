@@ -37,7 +37,6 @@ import {
   permissionDescription,
   type PermissionRouteEntry,
 } from "@/lib/admin-permissions-meta";
-import { ApiError } from "@/lib/api-client";
 
 type PermissionsCatalogPanelProps = {
   permissionCatalog: AdminPermission[];
@@ -119,7 +118,7 @@ function AddPermissionDialog({
         />
       }
     >
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <div className="space-y-4">
         <div className="space-y-2">
@@ -236,19 +235,20 @@ export function PermissionsCatalogPanel({
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <AdminSearchInput
-            containerClassName="max-w-sm"
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
             placeholder="Search permissions"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <AdminSelect
               value={areaFilter}
               onValueChange={setAreaFilter}
               options={areaOptions}
               placeholder="Area"
               className="min-w-select-sm"
+              triggerClassName="w-auto"
             />
             <AdminSelect
               value={statusFilter}
@@ -256,6 +256,7 @@ export function PermissionsCatalogPanel({
               options={statusOptions}
               placeholder="Status"
               className="min-w-select-sm"
+              triggerClassName="w-auto"
             />
             <Button
               onClick={() => {
@@ -269,7 +270,7 @@ export function PermissionsCatalogPanel({
           </div>
         </div>
 
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
         <AdminDataTable
           minWidth="sm"

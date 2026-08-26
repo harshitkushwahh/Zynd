@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DUMMY_STATE_HEAD, type DistributorHeadDistributor } from "@/lib/dummy/distributor-head-data";
 import type { DistributorBookSummary } from "@/lib/distributor-head-queries";
 import { distributorHeadManagerHref } from "@/lib/distributor-head-queries";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { formatDistributorHeadCount, formatDistributorHeadInr } from "@/lib/distributor-head-format";
 
 function initialsFromName(name: string) {
@@ -40,7 +41,7 @@ export function DistributorHeadDistributorHeroSection({
       <Card className="border-border/80">
         <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:gap-5">
           <Avatar className="size-14 shrink-0 rounded-xl">
-            <AvatarFallback className="rounded-xl bg-primary/10 text-lg font-semibold text-primary">
+            <AvatarFallback className="rounded-xl text-lg font-semibold">
               {initialsFromName(distributor.name)}
             </AvatarFallback>
           </Avatar>
@@ -161,7 +162,7 @@ export function DistributorHeadDistributorReportingLine({
             <div>
               <p className="font-medium text-foreground">{DUMMY_STATE_HEAD.name}</p>
               <p className="text-caption text-muted-foreground">
-                State head · {DUMMY_STATE_HEAD.state}
+                {MITRA_HIERARCHY_COPY.stateHead} · {DUMMY_STATE_HEAD.state}
               </p>
             </div>
           </li>
@@ -175,7 +176,7 @@ export function DistributorHeadDistributorReportingLine({
                 {managerName}
               </Link>
               <p className="text-caption text-muted-foreground">
-                Branch manager · coaches this distributor
+                {MITRA_HIERARCHY_COPY.branchManager} · coaches this {MITRA_HIERARCHY_COPY.zyndMitra.toLowerCase()}
               </p>
             </div>
           </li>
@@ -184,7 +185,7 @@ export function DistributorHeadDistributorReportingLine({
             <div>
               <p className="font-medium text-foreground">{distributor.name}</p>
               <p className="text-caption text-muted-foreground">
-                Distributor · client acquisition & order placement
+                {MITRA_HIERARCHY_COPY.zyndMitra} · client acquisition & order placement
               </p>
             </div>
           </li>

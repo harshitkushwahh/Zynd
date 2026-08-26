@@ -14,7 +14,7 @@ import {
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { DistributorInsightCardHeader } from "@/components/ui/distributor-insight-card-header";
 import { buildRiskAssessmentTrendSeries } from "@/lib/client-risk-trend-series";
-import type { DistributorClientRiskAssessment } from "@/lib/dummy/types";
+import type { DistributorClientRiskAssessment } from "@/lib/distributor-types";
 import { resolveRiskTierVisual } from "@/lib/risk-profile/risk-tier-ui";
 import { cn } from "@/lib/utils";
 

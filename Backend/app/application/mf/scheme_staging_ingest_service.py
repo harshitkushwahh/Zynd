@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,11 +27,14 @@ from app.infrastructure.persistence.mf_models import IngestionRunStatus
 
 logger = logging.getLogger(__name__)
 
+ProgressLogFn = Callable[[str], Awaitable[None]]
+
 
 async def run_cybrilla_scheme_ingest(
     session: AsyncSession,
     *,
     triggered_by: str = "SCHEDULER",
+    progress_log: ProgressLogFn | None = None,
 ) -> dict:
     settings = get_settings()
     if not settings.zynd_mf_scheme_staging_enabled:
@@ -44,6 +48,11 @@ async def run_cybrilla_scheme_ingest(
     batch_uuid = str(run.run_uuid)
     processed = excluded = normalized_count = skipped = 0
     pages = 0
+
+    async def emit_progress(message: str) -> None:
+        print(message, flush=True)
+        if progress_log is not None:
+            await progress_log(message)
 
     try:
         if not settings.resolved_fp_enabled:
@@ -64,10 +73,9 @@ async def run_cybrilla_scheme_ingest(
             if page == 1:
                 total_pages = payload.get("total_pages")
                 total_elements = payload.get("total_elements")
-                print(
+                await emit_progress(
                     f"Cybrilla ingest: fetching schemes "
-                    f"(total_elements={total_elements}, total_pages={total_pages}, batch_size={batch_size})",
-                    flush=True,
+                    f"(total_elements={total_elements}, total_pages={total_pages}, batch_size={batch_size})"
                 )
                 archive_id = await store_raw_ingestion(
                     job_name="cybrilla-scheme-ingest",
@@ -128,10 +136,9 @@ async def run_cybrilla_scheme_ingest(
                 )
 
             await bulk_upsert_staging_rows(batch_uuid, page_rows)
-            print(
+            await emit_progress(
                 f"Cybrilla ingest: page {pages} done "
-                f"(rows={len(page_rows)}, normalized_total={normalized_count}, processed_total={processed})",
-                flush=True,
+                f"(rows={len(page_rows)}, normalized_total={normalized_count}, processed_total={processed})"
             )
             logger.info(
                 "Cybrilla scheme ingest page=%s rows=%s total_processed=%s normalized=%s",

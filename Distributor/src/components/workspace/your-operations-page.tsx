@@ -104,7 +104,7 @@ export function YourOperationsPage({ sectionSlug, variantSlug }: YourOperationsP
     variantSlug,
   ]);
 
-  if (!pageReady) {
+  if (!pageReady || !activeSection || !sectionId || !activeVariant) {
     return (
       <div className={cn(DISTRIBUTOR_PAGE_STACK_CLASS, "distributor-scope-page--skeleton")}>
         <YourOperationsPageSkeleton ariaLabel="Loading operations" />

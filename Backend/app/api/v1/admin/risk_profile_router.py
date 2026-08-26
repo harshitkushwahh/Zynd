@@ -48,6 +48,7 @@ from app.api.v1.admin.risk_profile_schemas import (
     RiskAuditLogItemResponse,
 )
 from app.api.v1.auth.deps import get_client_ip, require_permission
+from app.application.admin.user_admin_service import get_user_by_reference
 from app.application.risk_profile.attempt_service import list_locked_users
 from app.application.risk_profile.audit_service import list_risk_profile_audit_logs
 from app.application.risk_profile.unlock_service import confirm_unlock_otp, request_unlock_otp
@@ -96,6 +97,16 @@ def _handle_risk_profile_error(exc: RiskProfileError) -> HTTPException:
         status_code=exc.status_code,
         detail={"code": exc.code, "message": exc.message},
     )
+
+
+async def _require_user_by_reference(db: AsyncSession, reference: str) -> User:
+    user = await get_user_by_reference(db, reference)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "user_not_found", "message": "User not found."},
+        )
+    return user
 
 
 @router.get("/categories", response_model=RiskCategoryListResponse)
@@ -520,18 +531,17 @@ async def post_risk_template_auto_select(
     )
 
 
-@router.get("/users/{user_id}", response_model=UserRiskProfileDetailResponse)
+@router.get("/users/{user_ref}", response_model=UserRiskProfileDetailResponse)
 async def get_user_risk_profile_detail(
-    user_id: UUID,
+    user_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("risk_profile.users.read"))],
 ) -> UserRiskProfileDetailResponse:
     from app.application.admin.user_admin_service import _display_name
     from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
 
-    target = await db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "User not found."})
+    target = await _require_user_by_reference(db, user_ref)
+    user_id = target.id
     result = await get_user_risk_profile(db, user_id)
     if not result:
         raise HTTPException(
@@ -560,18 +570,16 @@ async def get_user_risk_profile_detail(
     )
 
 
-@router.get("/users/{user_id}/assessments", response_model=UserRiskProfileAssessmentListResponse)
+@router.get("/users/{user_ref}/assessments", response_model=UserRiskProfileAssessmentListResponse)
 async def get_user_risk_profile_assessments(
-    user_id: UUID,
+    user_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("risk_profile.users.read"))],
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> UserRiskProfileAssessmentListResponse:
-    target = await db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "User not found."})
-    result = await list_user_assessments(db, user_id=user_id, limit=limit, offset=offset)
+    target = await _require_user_by_reference(db, user_ref)
+    result = await list_user_assessments(db, user_id=target.id, limit=limit, offset=offset)
     return UserRiskProfileAssessmentListResponse(
         items=[UserRiskProfileAssessmentItemResponse(**item) for item in result["items"]],
         limit=result["limit"],
@@ -579,33 +587,29 @@ async def get_user_risk_profile_assessments(
     )
 
 
-@router.get("/users/{user_id}/assessments/{assessment_id}", response_model=UserRiskProfileAssessmentDetailResponse)
+@router.get("/users/{user_ref}/assessments/{assessment_id}", response_model=UserRiskProfileAssessmentDetailResponse)
 async def get_user_risk_profile_assessment_detail(
-    user_id: UUID,
+    user_ref: str,
     assessment_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("risk_profile.users.read"))],
 ) -> UserRiskProfileAssessmentDetailResponse:
-    target = await db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "User not found."})
+    target = await _require_user_by_reference(db, user_ref)
     try:
-        result = await get_assessment_admin_detail(db, user_id=user_id, assessment_id=assessment_id)
+        result = await get_assessment_admin_detail(db, user_id=target.id, assessment_id=assessment_id)
     except RiskProfileError as exc:
         raise _handle_risk_profile_error(exc) from exc
     return UserRiskProfileAssessmentDetailResponse(**result)
 
 
-@router.get("/users/{user_id}/assessments/{assessment_id}/report/download")
+@router.get("/users/{user_ref}/assessments/{assessment_id}/report/download")
 async def download_user_risk_profile_assessment_report(
-    user_id: UUID,
+    user_ref: str,
     assessment_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("risk_profile.users.read"))],
 ) -> Response:
-    target = await db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "User not found."})
+    target = await _require_user_by_reference(db, user_ref)
     try:
         pdf_bytes, filename, from_cache = await get_or_create_report_pdf(
             db,
@@ -654,16 +658,14 @@ async def get_locked_risk_profile_users(
     )
 
 
-@router.get("/users/{user_id}/unlock-journey", response_model=RiskProfileUnlockJourneyResponse)
+@router.get("/users/{user_ref}/unlock-journey", response_model=RiskProfileUnlockJourneyResponse)
 async def get_risk_profile_unlock_journey(
-    user_id: UUID,
+    user_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("risk_profile.users.read"))],
 ) -> RiskProfileUnlockJourneyResponse:
-    target = await db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "User not found."})
-    result = await get_unlock_journey(db, user_id)
+    target = await _require_user_by_reference(db, user_ref)
+    result = await get_unlock_journey(db, target.id)
     return RiskProfileUnlockJourneyResponse(
         user_id=result["user_id"],
         attempt_state=result["attempt_state"],
@@ -671,16 +673,14 @@ async def get_risk_profile_unlock_journey(
     )
 
 
-@router.post("/users/{user_id}/unlock/request")
+@router.post("/users/{user_ref}/unlock/request")
 async def post_risk_profile_unlock_request(
-    user_id: UUID,
+    user_ref: str,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("risk_profile.users.manage"))],
 ) -> dict[str, int]:
-    target = await db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "User not found."})
+    target = await _require_user_by_reference(db, user_ref)
     try:
         meta = await request_unlock_otp(
             db,
@@ -694,17 +694,15 @@ async def post_risk_profile_unlock_request(
     return meta
 
 
-@router.post("/users/{user_id}/unlock/confirm", response_model=RiskProfileUnlockResponse)
+@router.post("/users/{user_ref}/unlock/confirm", response_model=RiskProfileUnlockResponse)
 async def post_risk_profile_unlock_confirm(
-    user_id: UUID,
+    user_ref: str,
     body: RiskProfileUnlockConfirmRequest,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("risk_profile.users.manage"))],
 ) -> RiskProfileUnlockResponse:
-    target = await db.get(User, user_id)
-    if not target:
-        raise HTTPException(status_code=404, detail={"code": "user_not_found", "message": "User not found."})
+    target = await _require_user_by_reference(db, user_ref)
     try:
         result = await confirm_unlock_otp(
             db,
@@ -725,7 +723,7 @@ async def post_risk_profile_unlock_confirm(
 async def get_risk_profile_audit_logs(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("risk_profile.read"))],
-    user_id: Optional[UUID] = Query(default=None),
+    user_ref: Optional[str] = Query(default=None),
     event_type: Optional[str] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -739,9 +737,13 @@ async def get_risk_profile_audit_logs(
                 status_code=400,
                 detail={"code": "invalid_event_type", "message": "Invalid audit event type."},
             ) from exc
+    resolved_user_id: UUID | None = None
+    if user_ref:
+        target = await _require_user_by_reference(db, user_ref)
+        resolved_user_id = target.id
     items = await list_risk_profile_audit_logs(
         db,
-        user_id=user_id,
+        user_id=resolved_user_id,
         event_type=parsed_event_type,
         limit=limit,
         offset=offset,

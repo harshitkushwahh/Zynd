@@ -6,11 +6,8 @@ import { AddDistributorWizardPanelShell } from "@/components/add-distributor/add
 import { AddInvestorWizardStepFooter } from "@/components/add-investor/add-investor-wizard-step-footer";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  ADD_INVESTOR_DEMO_PAN_DIGILOCKER,
-  ADD_INVESTOR_DEMO_PAN_KRA,
-  normalizePanInput,
-} from "@/lib/add-investor/add-investor-demo";
+import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
+import { normalizePanInput } from "@/lib/add-investor/add-investor-demo";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 type AddDistributorPanPanelProps = {
@@ -84,7 +81,7 @@ export function AddDistributorPanPanel({
                 id="dist-pan"
                 value={pan}
                 onChange={(event) => onPanChange(normalizePanInput(event.target.value))}
-                placeholder={ADD_INVESTOR_DEMO_PAN_KRA}
+                placeholder="ABCDE1234F"
                 autoComplete="off"
                 spellCheck={false}
                 disabled={panLoading || panVerified}
@@ -92,11 +89,11 @@ export function AddDistributorPanPanel({
                 className="font-mono uppercase tracking-wide"
               />
             </Field>
-            <p className="add-distributor-pan-panel__hint">
-              Demo: <span className="font-mono">{ADD_INVESTOR_DEMO_PAN_KRA}</span> or{" "}
-              <span className="font-mono">{ADD_INVESTOR_DEMO_PAN_DIGILOCKER}</span>
-            </p>
-            {panError ? <p className="add-distributor-pan-panel__error">{panError}</p> : null}
+            {panError ? (
+              <DistributorFeedbackMessage variant="error" className="add-distributor-wizard-feedback">
+                {panError}
+              </DistributorFeedbackMessage>
+            ) : null}
             {panVerified ? (
               <div className="add-distributor-pan-panel__verified">
                 <CheckCircle2 className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />

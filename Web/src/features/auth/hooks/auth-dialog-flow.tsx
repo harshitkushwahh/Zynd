@@ -25,7 +25,7 @@ import {
   validateProfile,
 } from "@/lib/auth-validation";
 import { env } from "@/lib/env";
-import { ensureAppleScript, ensureGoogleScript, requestAppleIdToken, requestGoogleIdToken } from "@/lib/oauth-client";
+import { ensureAppleScript, ensureGoogleScript, isOAuthFlowCancelledError, requestAppleIdToken, requestGoogleIdToken } from "@/lib/oauth-client";
 import { isPasswordValid } from "@/lib/password-criteria";
 import {
   forgotPassword,
@@ -781,7 +781,9 @@ function useAuthDialogFlowState(onClose: () => void) {
       const result = await signInWithGoogle(idToken);
       handleAuthFlowResult(result);
     } catch (error) {
-      setEmailError(getAuthErrorMessage(error, "Google Sign-In failed."));
+      if (!isOAuthFlowCancelledError(error)) {
+        setEmailError(getAuthErrorMessage(error, "Google Sign-In failed."));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -801,7 +803,9 @@ function useAuthDialogFlowState(onClose: () => void) {
       const result = await signInWithApple(idToken, profile);
       handleAuthFlowResult(result);
     } catch (error) {
-      setEmailError(getAuthErrorMessage(error, "Apple Sign-In failed."));
+      if (!isOAuthFlowCancelledError(error)) {
+        setEmailError(getAuthErrorMessage(error, "Apple Sign-In failed."));
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -9,7 +9,7 @@ import {
 import type {
   DistributorNotification,
   DistributorNotificationKind,
-} from "@/lib/dummy/notifications";
+} from "@/lib/distributor-notifications-data";
 
 type DistributorNotificationVisual = {
   icon: LucideIcon;

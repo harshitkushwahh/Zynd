@@ -14,6 +14,12 @@ RETURN_PERIODS: dict[str, int] = {
     "return_5y": 365 * 5,
 }
 
+# Multi-year horizons are stored/displayed as annualized CAGR (industry standard).
+RETURN_CAGR_YEARS: dict[str, Decimal] = {
+    "return_3y": Decimal("3"),
+    "return_5y": Decimal("5"),
+}
+
 NAV_LOOKUP_TOLERANCE_DAYS = 7
 
 
@@ -21,6 +27,29 @@ def compute_period_return(current: Decimal, prior: Decimal | None) -> Decimal | 
     if prior is None or prior <= 0:
         return None
     return ((current / prior) - Decimal("1")) * Decimal("100")
+
+
+def compute_cagr_return(current: Decimal, prior: Decimal | None, *, years: Decimal) -> Decimal | None:
+    """Annualized CAGR (% p.a.) over ``years`` from start/end NAV."""
+    if prior is None or prior <= 0 or years <= 0:
+        return None
+    ratio = current / prior
+    if ratio <= 0:
+        return None
+    cagr = (float(ratio) ** (1.0 / float(years)) - 1.0) * 100.0
+    return Decimal(str(round(cagr, 4)))
+
+
+def compute_horizon_return(
+    current: Decimal,
+    prior: Decimal | None,
+    *,
+    field: str,
+) -> Decimal | None:
+    years = RETURN_CAGR_YEARS.get(field)
+    if years is not None:
+        return compute_cagr_return(current, prior, years=years)
+    return compute_period_return(current, prior)
 
 
 def nav_on_or_before_with_date(
@@ -87,6 +116,6 @@ def compute_metrics_for_history(
             metrics[field] = None
             continue
         _, prior_nav = match
-        metrics[field] = compute_period_return(latest_nav, prior_nav)
+        metrics[field] = compute_horizon_return(latest_nav, prior_nav, field=field)
 
     return as_of_date, metrics

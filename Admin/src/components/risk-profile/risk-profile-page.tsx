@@ -1,17 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
-import { Gauge } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Gauge, RefreshCw } from "lucide-react";
 
-import { RiskProfileAuditPanel } from "@/components/risk-profile/risk-profile-audit-panel";
-import { RiskProfileCategoriesPanel } from "@/components/risk-profile/risk-profile-categories-panel";
+import {
+  RiskProfileCategoriesPanel,
+} from "@/components/risk-profile/risk-profile-categories-panel";
 import { RiskProfileLockedPanel } from "@/components/risk-profile/risk-profile-locked-panel";
 import { RiskProfileQuestionsPanel } from "@/components/risk-profile/risk-profile-questions-panel";
-import { RiskProfileTemplatesPanel } from "@/components/risk-profile/risk-profile-templates-panel";
+import {
+  RiskProfileTemplatesPanel,
+} from "@/components/risk-profile/risk-profile-templates-panel";
 import { RiskProfileTiersPanel } from "@/components/risk-profile/risk-profile-tiers-panel";
-import { RiskProfileUsersPanel } from "@/components/risk-profile/risk-profile-users-panel";
+import {
+  RISK_PROFILE_USER_TIER_FILTER_OPTIONS,
+  RiskProfileUsersPanel,
+} from "@/components/risk-profile/risk-profile-users-panel";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
+import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect } from "@/components/ui/admin-select";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useMountedTabs } from "@/hooks/use-mounted-tabs";
@@ -27,6 +36,19 @@ type RiskProfilePageProps = {
   tabSlug?: string;
 };
 
+const ALL = "all";
+
+const PANEL_TOOLBAR_TABS: RiskProfileTabId[] = ["categories", "questions", "templates"];
+
+const SEARCH_PLACEHOLDERS: Record<RiskProfileTabId, string> = {
+  users: "Search by name, email, or ID",
+  locked: "Search by name, email, or ID",
+  categories: "Search categories",
+  questions: "Search questions",
+  templates: "Search templates",
+  tiers: "Search tiers",
+};
+
 export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
   const router = useRouter();
   const { hasPermission } = useAdminAuth();
@@ -34,6 +56,12 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
     resolveRiskProfileTab(tabSlug).id,
     resolveRiskProfileTab(tabSlug).id,
   );
+
+  const [listSearch, setListSearch] = useState("");
+  const [tierFilter, setTierFilter] = useState(ALL);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const showPageToolbar = !PANEL_TOOLBAR_TABS.includes(activeTabId);
 
   const visibleTabs = useMemo(
     () =>
@@ -45,8 +73,8 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
   );
 
   useEffect(() => {
-    if (tabSlug === "bulk") {
-      router.replace("/dashboard/risk-profile/questions");
+    if (tabSlug === "bulk" || tabSlug === "audit") {
+      router.replace("/dashboard/risk-profile");
       return;
     }
 
@@ -72,6 +100,8 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
   const canManageTiers = hasPermission("risk_profile.tiers.manage");
   const canManageLocked = hasPermission("risk_profile.users.manage");
 
+  const showRefresh = activeTabId === "users" || activeTabId === "locked";
+
   return (
     <AdminSectionPageShell
       breadcrumbSegments={[{ label: "Platform" }, { label: "Risk Profile" }]}
@@ -84,33 +114,96 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
             const Icon = tab.icon;
             return (
               <AdminTabTrigger key={tab.id} value={tab.id} className="gap-2">
-                <Icon className="size-4" />
+                <Icon className="size-4 shrink-0" />
                 {tab.label}
               </AdminTabTrigger>
             );
           })}
         </AdminTabList>
 
-        <TabsContent value="categories" keepMounted={keepMounted("categories")}>
-          <RiskProfileCategoriesPanel canManage={canManageCategories} />
+        {showPageToolbar ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <AdminSearchInput
+              containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+              placeholder={SEARCH_PLACEHOLDERS[activeTabId]}
+              value={listSearch}
+              onChange={(event) => setListSearch(event.target.value)}
+            />
+
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+              {activeTabId === "users" ? (
+                <AdminSelect
+                  value={tierFilter}
+                  onValueChange={setTierFilter}
+                  options={RISK_PROFILE_USER_TIER_FILTER_OPTIONS}
+                  placeholder="Tier"
+                  className="min-w-select-sm shrink-0"
+                  triggerClassName="w-auto"
+                />
+              ) : null}
+
+              {showRefresh ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setRefreshKey((value) => value + 1)}
+                >
+                  <RefreshCw className="size-3.5" />
+                  Refresh
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <TabsContent value="categories" keepMounted={keepMounted("categories")} className="mt-0">
+          <RiskProfileCategoriesPanel
+            canManage={canManageCategories}
+            search={listSearch}
+            onSearchChange={setListSearch}
+          />
         </TabsContent>
-        <TabsContent value="questions" keepMounted={keepMounted("questions")}>
-          <RiskProfileQuestionsPanel canManage={canManageQuestions} />
+        <TabsContent value="questions" keepMounted={keepMounted("questions")} className="mt-0">
+          <RiskProfileQuestionsPanel
+            canManage={canManageQuestions}
+            search={listSearch}
+            onSearchChange={setListSearch}
+          />
         </TabsContent>
-        <TabsContent value="templates" keepMounted={keepMounted("templates")}>
-          <RiskProfileTemplatesPanel canManage={canManageTemplates} />
+        <TabsContent value="templates" keepMounted={keepMounted("templates")} className="mt-0">
+          <RiskProfileTemplatesPanel
+            canManage={canManageTemplates}
+            search={listSearch}
+            onSearchChange={setListSearch}
+          />
         </TabsContent>
-        <TabsContent value="tiers" keepMounted={keepMounted("tiers")}>
-          <RiskProfileTiersPanel canManage={canManageTiers} />
+        <TabsContent value="tiers" keepMounted={keepMounted("tiers")} className="mt-0">
+          <RiskProfileTiersPanel
+            canManage={canManageTiers}
+            showToolbar={false}
+            search={listSearch}
+            onSearchChange={setListSearch}
+          />
         </TabsContent>
-        <TabsContent value="users" keepMounted={keepMounted("users")}>
-          <RiskProfileUsersPanel />
+        <TabsContent value="users" keepMounted={keepMounted("users")} className="mt-0">
+          <RiskProfileUsersPanel
+            showToolbar={false}
+            search={listSearch}
+            onSearchChange={setListSearch}
+            tierFilter={tierFilter}
+            onTierFilterChange={setTierFilter}
+            refreshKey={refreshKey}
+          />
         </TabsContent>
-        <TabsContent value="locked" keepMounted={keepMounted("locked")}>
-          <RiskProfileLockedPanel canManage={canManageLocked} />
-        </TabsContent>
-        <TabsContent value="audit" keepMounted={keepMounted("audit")}>
-          <RiskProfileAuditPanel />
+        <TabsContent value="locked" keepMounted={keepMounted("locked")} className="mt-0">
+          <RiskProfileLockedPanel
+            canManage={canManageLocked}
+            showToolbar={false}
+            search={listSearch}
+            onSearchChange={setListSearch}
+            refreshKey={refreshKey}
+          />
         </TabsContent>
       </Tabs>
     </AdminSectionPageShell>

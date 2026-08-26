@@ -13,7 +13,27 @@ function buildSipDays(maxDay: number) {
   return Array.from({ length: maxDay }, (_, index) => index + 1);
 }
 
-function formatSipDay(day: number) {
+function formatOrdinalDay(day: number) {
+  const mod10 = day % 10;
+  const mod100 = day % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
+  if (mod10 === 1) return `${day}st`;
+  if (mod10 === 2) return `${day}nd`;
+  if (mod10 === 3) return `${day}rd`;
+  return `${day}th`;
+}
+
+function formatSipDay(
+  day: number,
+  compact = false,
+  compactDisplay: "labeled" | "day" = "labeled",
+) {
+  if (compact && compactDisplay === "day") {
+    return formatOrdinalDay(day);
+  }
+  if (compact) {
+    return `${copy.mutualFunds.sipDayLabel} · ${formatOrdinalDay(day)}`;
+  }
   return copy.mutualFunds.sipInstallmentDay.replace("{day}", String(day));
 }
 
@@ -61,7 +81,9 @@ type MfSipDayPickerProps = {
   onChange: (day: number) => void;
   disabled?: boolean;
   compact?: boolean;
+  compactDisplay?: "labeled" | "day";
   maxDay?: number;
+  className?: string;
 };
 
 export function MfSipDayPicker({
@@ -69,28 +91,52 @@ export function MfSipDayPicker({
   onChange,
   disabled = false,
   compact = false,
+  compactDisplay = "labeled",
   maxDay = DEFAULT_MAX_SIP_DAY,
+  className,
 }: MfSipDayPickerProps) {
   const [open, setOpen] = useState(false);
   const days = useMemo(() => buildSipDays(maxDay), [maxDay]);
 
   return (
-    <div className="min-w-0">
+    <div className={cn("min-w-0", className)}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           disabled={disabled}
+          aria-label={
+            compact && compactDisplay === "day"
+              ? `${copy.mutualFunds.sipDayLabel}, ${formatOrdinalDay(value)}`
+              : undefined
+          }
           className={cn(
             "flex w-full items-center text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
             compact
-              ? "h-9 gap-2 rounded-[var(--radius-control)] border border-input bg-background px-3 text-compact hover:bg-muted/40"
+              ? cn(
+                  "min-h-10 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 py-2 hover:bg-muted/25 data-popup-open:bg-muted/30",
+                  compactDisplay === "day"
+                    ? "justify-between gap-1.5 px-2.5"
+                    : "gap-1.5 px-2",
+                )
               : "gap-2.5 rounded-[var(--radius-medium)] border border-border bg-background px-3 py-2 hover:bg-muted/20 data-popup-open:bg-muted/20",
           )}
         >
           {compact ? (
-            <>
-              <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate font-medium text-foreground">{formatSipDay(value)}</span>
-            </>
+            compactDisplay === "day" ? (
+              <>
+                <span className="min-w-0 flex-1 truncate text-center text-compact font-medium tabular-nums text-foreground">
+                  {formatOrdinalDay(value)}
+                </span>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              </>
+            ) : (
+              <>
+                <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-compact font-medium text-foreground">
+                  {formatSipDay(value, true, compactDisplay)}
+                </span>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+              </>
+            )
           ) : (
             <>
               <div className="sip-icon-badge flex size-8 shrink-0 items-center justify-center rounded-full">

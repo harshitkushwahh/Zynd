@@ -12,7 +12,7 @@ import {
 import {
   DUMMY_INVESTORS,
   filterDistributorBookInvestors,
-} from "@/lib/dummy/investors";
+} from "@/lib/distributor-investor-utils";
 import { cn } from "@/lib/utils";
 
 const tileClass =

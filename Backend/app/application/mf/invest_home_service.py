@@ -20,6 +20,7 @@ from app.application.mf.product_content_service import (
     resolve_effective_disclaimer,
 )
 from app.application.mf.invest_fund_slug import fund_public_slug
+from app.application.mf.investment_constraints import fund_allows_sip
 from app.application.mf.popular_funds_service import list_popular_invest_funds
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
@@ -563,6 +564,7 @@ def _serialize_fund_summary(
         "sebi_category": fund.sebi_category,
         "min_sip_amount_inr": _decimal(fund.min_sip_amount),
         "min_lumpsum_amount_inr": _decimal(fund.min_lumpsum_amount),
+        "sip_allowed": fund_allows_sip(fund),
         "returns": {
             "return_1d": _decimal(metrics.return_1d if metrics else None),
             "return_1w": _decimal(metrics.return_1w if metrics else None),

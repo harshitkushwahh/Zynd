@@ -38,15 +38,26 @@ def parse_amfi_nav_line(line: str) -> dict | None:
     if not scheme_code.isdigit():
         return None
 
-    # History report (DownloadNAVHistoryReport): code;name;isin;isin_reinv;nav;rep; sale;date
-    if len(parts) >= 8 and _looks_like_nav_date(parts[7]):
+    # Daily NAVAll.txt (plan/option columns): code;isin;isin_reinv;name;plan;option;nav;date
+    if (
+        len(parts) >= 8
+        and parts[1].upper().startswith("INF")
+        and _looks_like_nav_date(parts[7])
+    ):
+        isin_payout = parts[1]
+        isin_reinvest = parts[2]
+        scheme_name = parts[3]
+        nav_raw = parts[6]
+        nav_date_raw = parts[7]
+    # History report (DownloadNAVHistoryReport): code;name;isin;isin_reinv;nav;rep;sale;date
+    elif len(parts) >= 8 and _looks_like_nav_date(parts[7]):
         scheme_name = parts[1]
         isin_payout = parts[2]
         isin_reinvest = parts[3]
         nav_raw = parts[4]
         nav_date_raw = parts[7]
     elif parts[1].upper().startswith("INF"):
-        # Daily NAVAll.txt: code;isin;isin_reinv;name;nav;date
+        # Legacy NAVAll.txt: code;isin;isin_reinv;name;nav;date
         isin_payout, isin_reinvest, scheme_name, nav_raw, nav_date_raw = parts[1:6]
     else:
         return None

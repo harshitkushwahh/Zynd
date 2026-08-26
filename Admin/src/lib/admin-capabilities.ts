@@ -51,7 +51,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
     capabilities: [
       { key: "admin_actions.approve", label: "Approve admin actions", description: "Review maker-checker requests." },
       { key: "retention.read", label: "View retention schedule", description: "See regulatory retention policies." },
-      { key: "deletion.execute", label: "Run deletion executor", description: "Process pending account deletions." },
+      { key: "deletion.execute", label: "Run deletion executor", description: "Process pending customer account deletions." },
+      { key: "admin.accounts.manage", label: "Manage admin accounts", description: "Hold, restore, remove suspended admins, or cancel mistaken deletion for platform admins." },
       { key: "encryption.rotate", label: "Rotate encryption keys", description: "Request MFA key rotation." },
       { key: "transactions.execute", label: "Execute transfers", description: "Initiate money-moving operations." },
     ],
@@ -93,7 +94,8 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
     description: "Catalog, content, jobs, and transaction operations.",
     capabilities: [
       { key: "mf.jobs.read", label: "View ingestion jobs", description: "Monitor MF data pipeline jobs." },
-      { key: "mf.jobs.run", label: "Run ingestion jobs", description: "Trigger MF jobs manually." },
+      { key: "mf.jobs.run", label: "Run ingestion jobs", description: "Trigger individual MF jobs manually." },
+      { key: "mf.pipeline.run", label: "Run MF pipelines", description: "Start, resume, and cancel full bootstrap pipelines." },
       { key: "mf.amcs.read", label: "View AMCs", description: "See AMC empanelment status." },
       { key: "mf.amcs.manage", label: "Manage AMCs", description: "Update AMC empanelment details." },
       { key: "mf.catalog.read", label: "Browse catalog", description: "View funds, categories, and NAV history." },
@@ -103,6 +105,51 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       { key: "mf.catalog.publish", label: "Publish catalog changes", description: "Apply rules and bulk catalog updates." },
       { key: "mf.transactions.read", label: "View MF transactions", description: "See orders, checkouts, SIP, and webhooks." },
       { key: "mf.transactions.manage", label: "Fix MF transactions", description: "Reconcile orders and replay webhooks." },
+      { key: "mf.integrations.read", label: "View MF integrations", description: "See provider integration status." },
+      { key: "mf.integrations.manage", label: "Manage MF integrations", description: "Switch provider test/live environments." },
+    ],
+  },
+  {
+    id: "referrals",
+    label: "Referrals",
+    description: "Referral attributions, rewards scheme, and leaderboard.",
+    capabilities: [
+      { key: "referrals.read", label: "View referrals", description: "Browse referral activity, metrics, and user referral tabs." },
+      { key: "referrals.manage", label: "Manage referrals", description: "Moderate referral codes and program overrides." },
+    ],
+  },
+  {
+    id: "goals",
+    label: "Goal templates",
+    description: "Predefined customer goal templates.",
+    capabilities: [
+      { key: "goals.templates.read", label: "View goal templates", description: "Browse predefined goal templates." },
+      { key: "goals.templates.manage", label: "Manage goal templates", description: "Update goal template metadata." },
+    ],
+  },
+  {
+    id: "mitra-console",
+    label: "Mitra console",
+    description: "Field and branch manager access in the distributor app.",
+    capabilities: [
+      { key: "distributor.clients.list", label: "List clients", description: "Browse masked investor clients." },
+      { key: "distributor.clients.read", label: "View clients", description: "Open masked investor profiles." },
+      { key: "distributor.partners.list", label: "List Mitras", description: "Browse onboarded Zynd Mitras." },
+      { key: "distributor.partners.manage", label: "Manage Mitras", description: "Onboard and manage Zynd Mitras." },
+    ],
+  },
+  {
+    id: "mitra-hierarchy",
+    label: "Mitra hierarchy",
+    description: "Admin hierarchy console for Mitra Super Head and State Head roles.",
+    capabilities: [
+      { key: "admin.distributor_hierarchy.read", label: "View hierarchy", description: "Read branches, managers, and partners." },
+      { key: "admin.distributor_branches.list", label: "List branches", description: "Browse distributor branches." },
+      { key: "admin.distributor_branches.manage", label: "Manage branches", description: "Submit branch opening requests and assign managers." },
+      { key: "admin.distributor_branches.approve", label: "Approve branches", description: "Approve or reject branch opening requests." },
+      { key: "admin.distributor_managers.list", label: "List managers", description: "Browse branch managers." },
+      { key: "admin.distributor_partners.list", label: "Review Mitras", description: "Open pending Zynd Mitra applications." },
+      { key: "admin.distributor_partners.approve", label: "Approve Mitras", description: "Approve or reject Zynd Mitra onboarding." },
     ],
   },
 ];
@@ -112,6 +159,18 @@ for (const group of CAPABILITY_GROUPS) {
   for (const capability of group.capabilities) {
     capabilityLookup.set(capability.key, capability);
   }
+}
+
+export const ALL_CATALOG_CAPABILITY_KEYS = CAPABILITY_GROUPS.flatMap((group) =>
+  group.capabilities.map((capability) => capability.key),
+);
+
+export function getRoleCoveragePercent(permissionKeys: string[]) {
+  const catalog = new Set(ALL_CATALOG_CAPABILITY_KEYS);
+  const matched = permissionKeys.filter((key) => catalog.has(key)).length;
+  const total = ALL_CATALOG_CAPABILITY_KEYS.length;
+  if (total === 0) return 0;
+  return Math.min(100, Math.round((matched / total) * 100));
 }
 
 export function capabilityLabel(key: string) {

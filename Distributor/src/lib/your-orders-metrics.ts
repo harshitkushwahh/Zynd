@@ -1,12 +1,10 @@
-import type { DistributorOrder } from "@/lib/dummy/types";
-import { DUMMY_TRANSACTION_GROUPS } from "@/lib/dummy/transaction-groups";
+import type { DistributorOrder } from "@/lib/distributor-types";
 
 export type YourOrdersMetricStats = {
   total: number;
   open: number;
   completed: number;
   failed: number;
-  /** Demo week-over-week change in percentage points */
   trendVsLastWeek: number;
 };
 
@@ -24,12 +22,33 @@ export type YourOrdersMonthlyVolume = {
   title?: string;
 };
 
-const DEMO_MONTHLY_BASE: Omit<YourOrdersMonthlyBar, "isCurrent">[] = [
-  { month: "Apr", count: 3, amount: 4200 },
-  { month: "May", count: 2, amount: 3100 },
-  { month: "Jun", count: 4, amount: 5800 },
-  { month: "Jul", count: 3, amount: 4900 },
-];
+function buildMonthlyBarsFromOrders(orders: DistributorOrder[]): YourOrdersMonthlyBar[] {
+  const buckets = new Map<string, { count: number; amount: number; sortKey: number }>();
+
+  for (const order of orders) {
+    const created = new Date(order.createdAt);
+    const sortKey = created.getUTCFullYear() * 12 + created.getUTCMonth();
+    const month = created.toLocaleDateString("en-IN", { month: "short", timeZone: "UTC" });
+    const existing = buckets.get(month) ?? { count: 0, amount: 0, sortKey };
+    existing.count += 1;
+    existing.amount += order.amount;
+    buckets.set(month, existing);
+  }
+
+  const now = new Date();
+  const currentSortKey = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  const currentMonth = now.toLocaleDateString("en-IN", { month: "short", timeZone: "UTC" });
+
+  return [...buckets.entries()]
+    .sort(([, a], [, b]) => a.sortKey - b.sortKey)
+    .slice(-6)
+    .map(([month, row]) => ({
+      month,
+      count: row.count,
+      amount: row.amount,
+      isCurrent: row.sortKey === currentSortKey || month === currentMonth,
+    }));
+}
 
 export function getYourOrdersMetricStats(orders: DistributorOrder[]): YourOrdersMetricStats {
   const open = orders.filter((o) => o.status === "Pending" || o.status === "Processing").length;
@@ -41,61 +60,27 @@ export function getYourOrdersMetricStats(orders: DistributorOrder[]): YourOrders
     open,
     completed,
     failed,
-    trendVsLastWeek: 1.8,
+    trendVsLastWeek: 0,
   };
 }
 
 export function getYourOrdersMonthlyVolume(orders: DistributorOrder[]): YourOrdersMonthlyVolume {
-  const now = new Date("2026-07-29T12:00:00.000Z");
-  const currentMonth = now.getUTCMonth();
-  const currentYear = now.getUTCFullYear();
-
-  const currentMonthOrders = orders.filter((order) => {
-    const created = new Date(order.createdAt);
-    return created.getUTCMonth() === currentMonth && created.getUTCFullYear() === currentYear;
-  });
-
-  const currentMonthAmount = currentMonthOrders.reduce((sum, row) => sum + row.amount, 0);
-  const currentMonthCount = currentMonthOrders.length;
-
-  const bars: YourOrdersMonthlyBar[] = [
-    ...DEMO_MONTHLY_BASE.map((row) => ({ ...row, isCurrent: false })),
-    {
-      month: "Aug",
-      count: Math.max(currentMonthCount, 5),
-      amount: Math.max(currentMonthAmount, 7249.94),
-      isCurrent: true,
-    },
-  ];
+  const bars = buildMonthlyBarsFromOrders(orders);
+  const currentBar = bars.find((row) => row.isCurrent);
 
   return {
     title: "Monthly orders",
     bars,
-    currentMonthAmount: bars[bars.length - 1]?.amount ?? currentMonthAmount,
-    currentMonthCount: bars[bars.length - 1]?.count ?? currentMonthCount,
+    currentMonthAmount: currentBar?.amount ?? 0,
+    currentMonthCount: currentBar?.count ?? 0,
   };
 }
 
 export function getTransactionGroupsMonthlyVolume(): YourOrdersMonthlyVolume {
-  const currentAmount = DUMMY_TRANSACTION_GROUPS.reduce((sum, row) => sum + row.totalAmount, 0);
-
-  const bars: YourOrdersMonthlyBar[] = [
-    { month: "Apr", count: 2, amount: 32000, isCurrent: false },
-    { month: "May", count: 3, amount: 41000, isCurrent: false },
-    { month: "Jun", count: 2, amount: 28000, isCurrent: false },
-    { month: "Jul", count: 4, amount: 52000, isCurrent: false },
-    {
-      month: "Aug",
-      count: DUMMY_TRANSACTION_GROUPS.length,
-      amount: Math.max(currentAmount, 50000),
-      isCurrent: true,
-    },
-  ];
-
   return {
     title: "Monthly groups",
-    bars,
-    currentMonthAmount: bars[bars.length - 1]?.amount ?? currentAmount,
-    currentMonthCount: bars[bars.length - 1]?.count ?? DUMMY_TRANSACTION_GROUPS.length,
+    bars: [],
+    currentMonthAmount: 0,
+    currentMonthCount: 0,
   };
 }

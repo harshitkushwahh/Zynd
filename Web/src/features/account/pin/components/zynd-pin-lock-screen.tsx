@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Fingerprint } from "lucide-react";
+import { CircleHelp, Fingerprint } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PinInput } from "@/features/account/pin/components/pin-input";
@@ -13,9 +13,11 @@ import {
   getLocalPinBiometricCredentialId,
 } from "@/features/account/pin/storage/pin-biometric-storage";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PageTitle } from "@/components/ui/page-title";
+import { Button } from "@/components/ui/button";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/auth-context";
+import { useResolvedDisplayName } from "@/shared/hooks/use-resolved-display-name";
 import { useProfileImage } from "@/contexts/profile-image-context";
 import { useZyndPin } from "@/contexts/zynd-pin-context";
 import { appConfig } from "@/shared/config/app-config";
@@ -27,7 +29,8 @@ import { cn } from "@/lib/utils";
 type UnlockMode = "biometric" | "pin";
 
 export function ZyndPinLockScreen() {
-  const { displayName, user } = useAuth();
+  const { user } = useAuth();
+  const resolvedDisplayName = useResolvedDisplayName();
   const { profileUrl } = useProfileImage();
   const { unlock, unlockWithBiometric, unlockError, clearUnlockError } = useZyndPin();
   const [mode, setMode] = useState<UnlockMode>("biometric");
@@ -40,7 +43,7 @@ export function ZyndPinLockScreen() {
   const biometricAttemptedRef = useRef(false);
 
   const localCredentialId = user?.id ? getLocalPinBiometricCredentialId(user.id) : null;
-  const initials = getUserInitials(user?.first_name, user?.email);
+  const initials = getUserInitials(resolvedDisplayName.split(/\s+/)[0], user?.email);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,34 +128,73 @@ export function ZyndPinLockScreen() {
   return (
     <>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6 backdrop-blur-sm">
-        <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-card px-6 py-7">
-          <div className="mb-6 flex flex-col items-center">
+        <div className="relative w-full max-w-sm rounded-[var(--radius-2xl)] border border-border bg-card px-6 py-6">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className={cn(
+                    "absolute right-3 top-3 inline-flex",
+                    (loading || biometricLoading) && "cursor-not-allowed",
+                  )}
+                />
+              }
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                disabled={loading || biometricLoading}
+                aria-label={copy.pin.forgotLink}
+                onClick={() => setForgotOpen(true)}
+              >
+                <CircleHelp className="size-4" strokeWidth={2.25} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">
+              {copy.pin.forgotLink}
+            </TooltipContent>
+          </Tooltip>
+
+          <div className="mb-4 flex flex-col items-center">
             <Image
               src="/hori.png"
               alt={APP_NAME}
-              width={132}
-              height={36}
-              className="h-9 object-contain"
+              width={104}
+              height={28}
+              className="h-7 object-contain dark:hidden"
+              style={{ width: "auto" }}
+              priority
+            />
+            <Image
+              src="/hori-dark.png"
+              alt={APP_NAME}
+              width={104}
+              height={28}
+              className="hidden h-7 object-contain dark:block"
               style={{ width: "auto" }}
               priority
             />
 
-            <PageTitle className="mt-5">{copy.pin.lockTitle}</PageTitle>
+            <p className="mt-3 text-compact font-semibold tracking-tight text-foreground">
+              {copy.pin.lockTitle}
+            </p>
 
-            <div className="mt-4 w-full rounded-[var(--radius-card)] border border-border bg-muted px-4 py-3.5">
+            <div className="mt-3 w-full rounded-[var(--radius-xl)] border border-border bg-muted px-4 py-3">
               <div className="flex items-start gap-3">
                 <Avatar className="size-10 shrink-0">
                   {profileUrl ? (
-                    <AvatarImage src={profileUrl} alt={displayName || "Profile photo"} />
+                    <AvatarImage src={profileUrl} alt={resolvedDisplayName || "Profile photo"} />
                   ) : null}
                   <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 space-y-1 pt-0.5 text-left">
-                  {displayName ? (
+                  {resolvedDisplayName ? (
                     <p className="truncate text-compact font-semibold text-foreground">
-                      Hi, {displayName}.
+                      Hi, {resolvedDisplayName}.
                     </p>
                   ) : (
                     <p className="text-compact font-semibold text-foreground">Welcome back.</p>
@@ -169,7 +211,7 @@ export function ZyndPinLockScreen() {
             <div className="space-y-4">
               <button
                 type="button"
-                className="group flex w-full flex-col items-center rounded-[var(--radius-card)] border border-border bg-muted/40 px-4 py-6 transition-colors hover:bg-muted/60"
+                className="group flex w-full flex-col items-center rounded-[var(--radius-xl)] border border-border bg-muted/40 px-4 py-6 transition-colors hover:bg-muted/60"
                 disabled={biometricLoading}
                 onClick={() => {
                   biometricAttemptedRef.current = false;
@@ -192,7 +234,7 @@ export function ZyndPinLockScreen() {
 
               <FieldMessage message={unlockError} className="text-center" />
 
-              <div className="flex flex-col items-center gap-3 pt-1">
+              <div className="flex flex-col items-center pt-1">
                 <button
                   type="button"
                   className="auth-link"
@@ -202,14 +244,6 @@ export function ZyndPinLockScreen() {
                   }}
                 >
                   {copy.pin.biometricUsePin}
-                </button>
-                <button
-                  type="button"
-                  className="auth-link"
-                  disabled={biometricLoading}
-                  onClick={() => setForgotOpen(true)}
-                >
-                  {copy.pin.forgotLink}
                 </button>
               </div>
             </div>
@@ -238,8 +272,8 @@ export function ZyndPinLockScreen() {
 
               <FieldMessage message={unlockError} className="text-center" />
 
-              <div className="flex flex-col items-center gap-3 pt-1">
-                {biometricReady ? (
+              {biometricReady ? (
+                <div className="flex flex-col items-center pt-1">
                   <button
                     type="button"
                     className="auth-link"
@@ -253,16 +287,8 @@ export function ZyndPinLockScreen() {
                   >
                     {copy.pin.biometricTitle}
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="auth-link"
-                  disabled={loading}
-                  onClick={() => setForgotOpen(true)}
-                >
-                  {copy.pin.forgotLink}
-                </button>
-              </div>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

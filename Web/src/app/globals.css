@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/zynd-brand.css";
+@import "../styles/zynd-theme-switch.css";
 @import "../styles/zynd-ai-bot-button.css";
 @import "../styles/kyc-dialog.css";
 
@@ -25,11 +26,16 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--border);
+    outline-color: color-mix(in srgb, var(--ring) 50%, transparent);
   }
   html,
   body {
-    @apply bg-background font-sans text-foreground;
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  html {
+    font-family: var(--font-sans);
   }
 }
 
@@ -243,6 +249,15 @@
   }
   to {
     background-position: 1.75rem 0;
+  }
+}
+
+@keyframes mf-payment-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
   }
 }
 

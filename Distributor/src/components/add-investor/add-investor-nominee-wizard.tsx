@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { AddInvestorNomineeOptions } from "@/lib/add-investor/add-investor-kyc-master-data";
 import {
   ADD_INVESTOR_NOMINEE_DOCUMENT_TYPES,
   ADD_INVESTOR_NOMINEE_RELATIONSHIPS,
@@ -39,6 +40,7 @@ import { cn } from "@/lib/utils";
 type AddInvestorNomineeWizardProps = {
   existingNominees: AddInvestorNomineeRecord[];
   editingNominee?: AddInvestorNomineeRecord;
+  nomineeOptions?: AddInvestorNomineeOptions;
   onCancel: () => void;
   onSave: (nominee: AddInvestorNomineeRecord) => void;
 };
@@ -191,9 +193,14 @@ function NomineeWizardSteps({
 export function AddInvestorNomineeWizard({
   existingNominees,
   editingNominee,
+  nomineeOptions,
   onCancel,
   onSave,
 }: AddInvestorNomineeWizardProps) {
+  const relationships = nomineeOptions?.relationships ?? ADD_INVESTOR_NOMINEE_RELATIONSHIPS;
+  const sourceOfWealth = nomineeOptions?.sourceOfWealth ?? ADD_INVESTOR_NOMINEE_SOURCE_OF_WEALTH;
+  const documentTypes = nomineeOptions?.documentTypes ?? ADD_INVESTOR_NOMINEE_DOCUMENT_TYPES;
+
   const initialShare = useMemo(() => {
     if (editingNominee) return editingNominee.core.sharePercent;
     const nextCount = existingNominees.length + 1;
@@ -442,7 +449,7 @@ export function AddInvestorNomineeWizard({
                     <SelectValue placeholder="Select relationship" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ADD_INVESTOR_NOMINEE_RELATIONSHIPS.map((option) => (
+                    {relationships.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -463,7 +470,7 @@ export function AddInvestorNomineeWizard({
                     <SelectValue placeholder="Select source of wealth" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ADD_INVESTOR_NOMINEE_SOURCE_OF_WEALTH.map((option) => (
+                    {sourceOfWealth.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -486,7 +493,7 @@ export function AddInvestorNomineeWizard({
                   <SelectValue placeholder="Select relationship" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ADD_INVESTOR_NOMINEE_RELATIONSHIPS.map((option) => (
+                  {relationships.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -542,7 +549,7 @@ export function AddInvestorNomineeWizard({
                   <SelectValue placeholder="Select document" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ADD_INVESTOR_NOMINEE_DOCUMENT_TYPES.map((option) => (
+                  {documentTypes.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -628,7 +635,7 @@ export function AddInvestorNomineeWizard({
                   <SelectValue placeholder="Select document" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ADD_INVESTOR_NOMINEE_DOCUMENT_TYPES.map((option) => (
+                  {documentTypes.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -663,7 +670,7 @@ export function AddInvestorNomineeWizard({
                 <SelectValue placeholder="Select source of wealth" />
               </SelectTrigger>
               <SelectContent>
-                {ADD_INVESTOR_NOMINEE_SOURCE_OF_WEALTH.map((option) => (
+                {sourceOfWealth.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

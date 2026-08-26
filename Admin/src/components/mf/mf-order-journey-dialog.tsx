@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, Copy, Hash, Receipt } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
+import { clientIdToProfilePath } from "@/lib/admin-user-ref";
 import { formatTimestamp } from "@/lib/format-date";
 
 import { AmcLogo } from "@/components/mf/amc-logo";
@@ -111,13 +112,15 @@ export function MfOrderCustomerCell({ order }: { order: MfTransactionOrder }) {
   const profileUrl = resolveAdminAssetUrl(order.user_profile_image_url);
   const email = order.user_email ?? "No email";
   const displayName = order.user_display_name ?? email;
-  const profileHref = order.client_id ? `/dashboard/users/${order.client_id}` : null;
+  const profileHref = order.client_id
+    ? `/dashboard/users/${encodeURIComponent(clientIdToProfilePath(order.client_id))}`
+    : null;
 
   return (
     <div className="flex items-center gap-3">
       <Avatar size="sm">
         {profileUrl ? <AvatarImage src={profileUrl} alt="" /> : null}
-        <AvatarFallback className="bg-primary/10 text-caption font-medium text-primary">
+        <AvatarFallback className="text-caption font-medium">
           {userInitials(email)}
         </AvatarFallback>
       </Avatar>
@@ -286,7 +289,7 @@ export function MfOrderJourneyDialog({
       {loading ? (
         <AdminDetailDialogSkeleton />
       ) : error ? (
-        <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
       ) : order ? (
         <div className="space-y-5">
           <div className="rounded-card border border-border bg-muted/15 p-4">

@@ -3,7 +3,7 @@
 import { ClientKycAuditLogPanel } from "@/components/clients/client-kyc-audit-log-panel";
 import { ClientKycJourneyFlow } from "@/components/clients/client-kyc-journey-flow";
 import { ClientKycJourneySummaryCard } from "@/components/clients/client-kyc-journey-summary-card";
-import type { DistributorClientKycAuditEntry, DistributorClientKycStep } from "@/lib/dummy/types";
+import type { DistributorClientKycAuditEntry, DistributorClientKycStep } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 type ClientKycJourneyPanelProps = {

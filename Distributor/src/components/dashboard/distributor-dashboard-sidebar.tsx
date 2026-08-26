@@ -30,7 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
-import zynddLogo from "../../../public/zyndd.png";
+import zyndFavicon from "../../../public/favicon/favicon-96x96.png";
 
 function DistributorSidebarBrand() {
   return (
@@ -41,7 +41,7 @@ function DistributorSidebarBrand() {
     >
       <span className="distributor-sidebar-brand__logo-wrap">
         <Image
-          src={zynddLogo}
+          src={zyndFavicon}
           alt="ZYND"
           width={32}
           height={32}

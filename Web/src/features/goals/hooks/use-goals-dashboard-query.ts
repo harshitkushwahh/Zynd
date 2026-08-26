@@ -5,8 +5,11 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { fetchFamilyGroups } from "@/features/family-groups/api/family-groups-api";
 import { fetchGoalTemplates, fetchMyGoals } from "@/features/goals/api/goals-api";
 import { buildDashboardFamilyGoals } from "@/features/goals/lib/goal-family-goals";
+import { keepPreviousQueryData } from "@/lib/query-utils";
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
+
+const GOALS_DASHBOARD_STALE_MS = 30_000;
 
 function resolveGoalsError(error: unknown) {
   if (!(error instanceof Error)) return copy.goals.loadError;
@@ -22,10 +25,16 @@ export function useGoalsDashboardQuery() {
       {
         queryKey: queryKeys.goals.me(true),
         queryFn: () => fetchMyGoals(true),
+        staleTime: GOALS_DASHBOARD_STALE_MS,
+        placeholderData: keepPreviousQueryData,
+        refetchOnMount: (query) => query.state.data === undefined,
       },
       {
         queryKey: queryKeys.goals.templates(),
         queryFn: fetchGoalTemplates,
+        staleTime: GOALS_DASHBOARD_STALE_MS,
+        placeholderData: keepPreviousQueryData,
+        refetchOnMount: (query) => query.state.data === undefined,
       },
       {
         queryKey: queryKeys.goals.familyDashboard(),
@@ -36,6 +45,9 @@ export function useGoalsDashboardQuery() {
           });
           return buildDashboardFamilyGoals(groupsResponse.items);
         },
+        staleTime: GOALS_DASHBOARD_STALE_MS,
+        placeholderData: keepPreviousQueryData,
+        refetchOnMount: (query) => query.state.data === undefined,
       },
     ],
   });

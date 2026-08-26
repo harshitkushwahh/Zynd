@@ -1,6 +1,7 @@
 import {
   Crown,
   Gauge,
+  Gift,
   Globe,
   Handshake,
   Layers,
@@ -9,6 +10,7 @@ import {
   ScrollText,
   Settings,
   Shield,
+  ShieldCheck,
   Smartphone,
   Target,
   TrendingUp,
@@ -19,12 +21,24 @@ import {
 import {
   ADMIN_SETTINGS_NAV,
 } from "@/lib/admin-settings-navigation";
+import { FAMILY_GROUPS_TABS } from "@/lib/admin-family-groups-navigation";
+import { RISK_PROFILE_TABS } from "@/lib/admin-risk-profile-navigation";
+import {
+  USER_MANAGEMENT_TABS,
+} from "@/lib/admin-user-management-navigation";
+import { USER_PROFILE_TABS } from "@/lib/admin-user-profile-navigation";
 import {
   ADMIN_TRANSACTION_SECTIONS,
   isSectionTabEnabled,
   sectionTabHref,
   type AdminSectionTab,
 } from "@/lib/admin-transaction-sections";
+import {
+  mitraHierarchyDocumentTitle,
+  resolveMitraConsoleTitle,
+  resolveMitraNavDescription,
+} from "@/lib/admin-mitra-roles";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import {
   getDistributorHeadDistributor,
   getDistributorHeadManager,
@@ -59,8 +73,22 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     label: "Users",
     href: "/dashboard/users",
     icon: Users,
-    description: "People, compliance, KYC review, and access overview",
+    description: "People, roles, permissions, and access overview",
     permissions: ["users.read", "rbac.manage"],
+  },
+  {
+    id: "compliance",
+    label: "Compliance",
+    href: "/dashboard/compliance",
+    icon: ShieldCheck,
+    description: "Security reviews, account deletions, admin actions, and KYC review",
+    permissions: [
+      "security_reviews.read",
+      "deletion.execute",
+      "admin_actions.approve",
+      "documents.read",
+      "admin.accounts.manage",
+    ],
   },
   {
     id: "mutual-funds",
@@ -108,6 +136,14 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     permissions: ["family_groups.read", "family_groups.manage"],
   },
   {
+    id: "referrals",
+    label: "Referrals",
+    href: "/dashboard/referrals",
+    icon: Gift,
+    description: "Referral attributions, reward scheme, and leaderboard",
+    permissions: ["referrals.read", "referrals.manage"],
+  },
+  {
     id: "goals",
     label: "Goals",
     href: "/dashboard/goals",
@@ -124,20 +160,25 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     permissions: ["security.manage"],
   },
   {
-    id: "distributor-accounts",
-    label: "Distributor",
-    href: "/dashboard/distributor-accounts",
+    id: "mitra-console",
+    label: "Mitra console",
+    href: env.distributorUrl || "/dashboard/distributor-accounts",
     icon: Handshake,
-    description: "Distributor onboarding, ARN records, and account management",
+    description: "Branch manager and Zynd Mitra field console",
+    external: true,
     showTrailingArrow: true,
-    comingSoon: true,
+    comingSoon: !env.distributorUrl,
   },
   {
     id: "distributor-head",
-    label: "Distributor Head",
+    label: MITRA_HIERARCHY_COPY.superHead,
     href: "/dashboard/distributor-head",
     icon: Crown,
-    description: "State head view of managers, branches, distributors, and sales",
+    description: MITRA_HIERARCHY_COPY.navDescription,
+    permissions: [
+      "admin.distributor_partners.list",
+      "admin.distributor_hierarchy.read",
+    ],
   },
   {
     id: "zynd-web",
@@ -150,24 +191,13 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     comingSoon: !env.zyndWebUrl,
   },
   {
-    id: "zynd-android",
-    label: "Zynd Android",
-    href: env.zyndAndroidUrl || "/dashboard/zynd-android",
+    id: "zynd-mobile",
+    label: "Zynd Mobile",
+    href: "/dashboard/zynd-mobile",
     icon: Smartphone,
-    description: "Android app listing and release management",
-    external: Boolean(env.zyndAndroidUrl),
+    description: "Android and iOS app store listings with download QR codes",
     showTrailingArrow: true,
-    comingSoon: !env.zyndAndroidUrl,
-  },
-  {
-    id: "zynd-ios",
-    label: "Zynd iOS",
-    href: env.zyndIosUrl || "/dashboard/zynd-ios",
-    icon: Smartphone,
-    description: "iOS app listing and release management",
-    external: Boolean(env.zyndIosUrl),
-    showTrailingArrow: true,
-    comingSoon: !env.zyndIosUrl,
+    comingSoon: false,
   },
   {
     id: "mf-integrations",
@@ -201,6 +231,20 @@ export function isAdminRouteActive(pathname: string, route: AdminNavRoute) {
   return pathname === route.href || pathname.startsWith(`${route.href}/`);
 }
 
+export function resolveAdminNavRouteLabel(route: AdminNavRoute, roleKeys: string[] = []) {
+  if (route.id === "distributor-head") {
+    return resolveMitraConsoleTitle(roleKeys);
+  }
+  return route.label;
+}
+
+export function resolveAdminNavRouteDescription(route: AdminNavRoute, roleKeys: string[] = []) {
+  if (route.id === "distributor-head") {
+    return resolveMitraNavDescription(roleKeys);
+  }
+  return route.description;
+}
+
 export function canAccessAdminRoute(
   route: AdminNavRoute,
   hasPermission: (key: string) => boolean,
@@ -213,11 +257,13 @@ export function getVisibleAdminRoutes(hasPermission: (key: string) => boolean) {
   return ADMIN_NAV_ROUTES.filter((route) => canAccessAdminRoute(route, hasPermission));
 }
 
-const ADMIN_PLATFORM_LEADING_ROUTE_IDS = ["users", "mutual-funds"] as const;
+const ADMIN_PLATFORM_LEADING_ROUTE_IDS = ["users", "compliance", "mutual-funds"] as const;
 
 const ADMIN_PLATFORM_TRAILING_ROUTE_IDS = [
   "bulk-order",
   "risk-profile",
+  "family-groups",
+  "referrals",
   "distributor-head",
   "security-config",
 ] as const;
@@ -231,10 +277,9 @@ const ADMIN_ADMINISTRATOR_ROUTE_IDS = [
 ] as const;
 
 const ADMIN_PRODUCT_ROUTE_IDS = [
-  "distributor-accounts",
+  "mitra-console",
   "zynd-web",
-  "zynd-android",
-  "zynd-ios",
+  "zynd-mobile",
 ] as const;
 
 export type AdminNavChildItem = {
@@ -351,7 +396,7 @@ export function getAdminSidebarNav(hasPermission: (key: string) => boolean) {
   return { overview, groups };
 }
 
-export function getAdminPageTitle(pathname: string) {
+export function getAdminPageTitle(pathname: string, roleKeys: string[] = []) {
   for (const section of Object.values(ADMIN_TRANSACTION_SECTIONS)) {
     if (pathname === section.href || pathname.startsWith(`${section.href}/`)) {
       const slug = pathname.slice(section.href.length).replace(/^\//, "").split("/")[0];
@@ -369,6 +414,59 @@ export function getAdminPageTitle(pathname: string) {
     if (slug === "sip") return "Bulk Order · SIP";
     if (slug === "lumpsum") return "Bulk Order · Lumpsum";
     return "Bulk Order";
+  }
+  if (pathname === "/dashboard/compliance" || pathname.startsWith("/dashboard/compliance/")) {
+    const slug = pathname.replace("/dashboard/compliance", "").replace(/^\//, "").split("/")[0];
+    if (slug === "security-reviews") return "Compliance · Security reviews";
+    if (slug === "account-deletions") return "Compliance · Account deletions";
+    if (slug === "admin-actions") return "Compliance · Admin actions";
+    if (slug === "kyc-review") return "Compliance · KYC review";
+    if (slug === "admin-accounts") return "Compliance · Admin accounts";
+    return "Compliance";
+  }
+  if (pathname === "/dashboard/referrals" || pathname.startsWith("/dashboard/referrals/")) {
+    const parts = pathname.replace("/dashboard/referrals", "").replace(/^\//, "").split("/").filter(Boolean);
+    const slug = parts[0];
+    if (slug === "referrers" && parts[1]) return "Referrals · Referrer";
+    if (slug === "directory") return "Referrals · Attributions";
+    if (slug === "redemptions") return "Referrals · Redemption history";
+    if (slug === "rewards") return "Referrals · Reward categories";
+    if (slug === "leaderboard") return "Referrals · Leaderboard";
+    return "Referrals";
+  }
+  if (pathname === "/dashboard/risk-profile" || pathname.startsWith("/dashboard/risk-profile/")) {
+    const slug = pathname.replace("/dashboard/risk-profile", "").replace(/^\//, "").split("/")[0];
+    const normalizedSlug = slug === "bulk" ? "questions" : slug;
+    const tab = normalizedSlug
+      ? RISK_PROFILE_TABS.find((item) => item.id === normalizedSlug)
+      : RISK_PROFILE_TABS.find((item) => item.id === "users");
+    if (tab) return `Risk profile · ${tab.label}`;
+    return "Risk profile";
+  }
+  if (pathname === "/dashboard/family-groups" || pathname.startsWith("/dashboard/family-groups/")) {
+    const slug = pathname.replace("/dashboard/family-groups", "").replace(/^\//, "").split("/")[0];
+    const tab = slug
+      ? FAMILY_GROUPS_TABS.find((item) => item.id === slug)
+      : FAMILY_GROUPS_TABS.find((item) => item.id === "groups");
+    if (tab) return `Family groups · ${tab.label}`;
+    return "Family groups";
+  }
+  if (pathname === "/dashboard/users" || pathname.startsWith("/dashboard/users/")) {
+    const parts = pathname.replace("/dashboard/users", "").replace(/^\//, "").split("/").filter(Boolean);
+    if (parts.length === 0) {
+      return USER_MANAGEMENT_TABS.find((tab) => tab.key === "people")?.label ?? "Users";
+    }
+    if (parts[0] === "team") {
+      if (parts[1] === "invitations") return "Manage team · Invitations";
+      return "Manage team";
+    }
+    const managementTab = USER_MANAGEMENT_TABS.find((tab) => tab.slug === parts[0]);
+    if (managementTab) return managementTab.label;
+    const profileTab = USER_PROFILE_TABS.find((tab) => tab.slug === parts[1]);
+    if (profileTab) return `User · ${profileTab.label}`;
+    if (parts[1] === "goals" && parts[2]) return "User · Goal";
+    if (parts[1] === "family-group" && parts[2]) return "User · Family group";
+    return "Users";
   }
   if (pathname === "/dashboard/security-config" || pathname.startsWith("/dashboard/security-config/")) {
     const slug = pathname.replace("/dashboard/security-config", "").replace(/^\//, "").split("/")[0];
@@ -391,17 +489,29 @@ export function getAdminPageTitle(pathname: string) {
     const entityId = parts[1];
     if (section === "managers" && entityId) {
       const manager = getDistributorHeadManager(entityId);
-      return manager ? `Distributor Head · ${manager.name}` : "Distributor Head · Manager";
+      return manager
+        ? mitraHierarchyDocumentTitle(roleKeys, manager.name)
+        : mitraHierarchyDocumentTitle(roleKeys, MITRA_HIERARCHY_COPY.branchManager);
     }
     if (section === "distributors" && entityId) {
       const distributor = getDistributorHeadDistributor(entityId);
-      return distributor ? `Distributor Head · ${distributor.name}` : "Distributor Head · Distributor";
+      return distributor
+        ? mitraHierarchyDocumentTitle(roleKeys, distributor.name)
+        : mitraHierarchyDocumentTitle(roleKeys, MITRA_HIERARCHY_COPY.zyndMitra);
     }
-    if (section === "managers") return "Distributor Head · Managers";
-    if (section === "distributors") return "Distributor Head · Distributors";
-    if (section === "branches") return "Distributor Head · Branches";
-    if (section === "sales") return "Distributor Head · Sales";
-    return "Distributor Head";
+    if (section === "queue") return mitraHierarchyDocumentTitle(roleKeys, "Queue");
+    if (section === "state-heads") {
+      return mitraHierarchyDocumentTitle(roleKeys, `${MITRA_HIERARCHY_COPY.stateHead}s`);
+    }
+    if (section === "managers") {
+      return mitraHierarchyDocumentTitle(roleKeys, MITRA_HIERARCHY_COPY.branchManagers);
+    }
+    if (section === "distributors") {
+      return mitraHierarchyDocumentTitle(roleKeys, MITRA_HIERARCHY_COPY.zyndMitras);
+    }
+    if (section === "branches") return mitraHierarchyDocumentTitle(roleKeys, "Branches");
+    if (section === "sales") return mitraHierarchyDocumentTitle(roleKeys, "Sales");
+    return resolveMitraConsoleTitle(roleKeys);
   }
   return route?.label ?? "Admin Console";
 }

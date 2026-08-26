@@ -6,11 +6,11 @@ import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { leaveFamilyGroup } from "@/features/family-groups/api/family-groups-api";
+import type { FamilyGroupSummary } from "@/features/family-groups/api/family-groups-api";
 import { FamilyGroupActivityStrip } from "@/features/family-groups/components/family-group-activity-strip";
 import { FamilyGroupHeroSection } from "@/features/family-groups/components/family-group-hero-section";
 import { FamilyGroupStatsCard } from "@/features/family-groups/components/family-group-stats-card";
 import { FamilyGroupInviteDialog } from "@/features/family-groups/components/family-group-invite-dialog";
-import { FamilyGroupManageMembersDialog } from "@/features/family-groups/components/family-group-manage-members-dialog";
 import { FamilyGroupMembersStrip } from "@/features/family-groups/components/family-group-members-strip";
 import { FamilyGroupHowItWorksCard } from "@/features/family-groups/components/family-group-how-it-works-card";
 import { FamilyGroupGoalsPanel } from "@/features/family-groups/components/family-group-goals-panel";
@@ -19,15 +19,15 @@ import { FamilyGroupDashboardContentSkeleton } from "@/features/family-groups/co
 import { useFamilyGroupQuery } from "@/features/family-groups/hooks/use-family-group-query";
 import {
   canLeaveGroup,
-  leaveGroupBlockedReason,
 } from "@/features/family-groups/lib/family-permissions";
 import { useAuth } from "@/contexts/auth-context";
-import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-group-api-errors";
 import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
 import { copy } from "@/shared/config/copy";
 
 type FamilyGroupDashboardProps = {
   groupId: string;
+  group: FamilyGroupSummary;
+  groups: FamilyGroupSummary[];
   onLoadingChange?: (loading: boolean) => void;
   onMembershipChanged: () => void;
   inviteOpen: boolean;
@@ -36,6 +36,8 @@ type FamilyGroupDashboardProps = {
 
 export function FamilyGroupDashboard({
   groupId,
+  group: selectedGroupSummary,
+  groups,
   onLoadingChange,
   onMembershipChanged,
   inviteOpen,
@@ -44,11 +46,8 @@ export function FamilyGroupDashboard({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { group, showSkeleton, errorMessage, isFetching, refetch } = useFamilyGroupQuery(groupId);
-  const [saveError, setSaveError] = useState("");
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
-  const [membersDialogMode, setMembersDialogMode] = useState<"view" | "manage">("view");
 
   useEffect(() => {
     onLoadingChange?.(showSkeleton);
@@ -63,7 +62,6 @@ export function FamilyGroupDashboard({
   const memberLimit = group?.member_limit ?? 12;
   const reservedSlots = (group?.member_count ?? 0) + (group?.pending_invite_count ?? 0);
   const canLeave = canLeaveGroup(group?.my_role, group?.member_count ?? 0);
-  const leaveBlocked = leaveGroupBlockedReason(group?.my_role, group?.member_count ?? 0);
 
   async function handleLeave() {
     if (!group) return;
@@ -72,15 +70,14 @@ export function FamilyGroupDashboard({
       await leaveFamilyGroup(group.id);
       setLeaveOpen(false);
       onMembershipChanged();
-    } catch (leaveError) {
-      setSaveError(resolveFamilyGroupApiError(leaveError, copy.familyGroups.governance.errors.leaveFailed));
+    } catch {
       setLeaveOpen(false);
     } finally {
       setLeaving(false);
     }
   }
 
-  if (showSkeleton) {
+  if (showSkeleton && !group) {
     return <FamilyGroupDashboardContentSkeleton />;
   }
 
@@ -96,14 +93,13 @@ export function FamilyGroupDashboard({
     );
   }
 
-  if (!group) return null;
-
-  const contentReady = group.id === groupId;
+  if (!group || group.id !== groupId) {
+    return <FamilyGroupDashboardContentSkeleton />;
+  }
 
   return (
     <>
-      {contentReady ? (
-        <div key={groupId} className="animate-in fade-in duration-200 space-y-5">
+      <div className="space-y-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
             <FamilyGroupHeroSection
               members={group.members}
@@ -124,6 +120,8 @@ export function FamilyGroupDashboard({
           </div>
 
           <FamilyGroupMembersStrip
+            group={selectedGroupSummary}
+            groups={groups}
             members={group.members}
             currentUserId={user?.id}
             canInvite={isHead}
@@ -132,15 +130,6 @@ export function FamilyGroupDashboard({
             pendingInvites={group.pending_invite_count ?? 0}
             memberLimit={memberLimit}
             onInvite={() => onInviteOpenChange(true)}
-            onViewGroup={() => {
-              setMembersDialogMode("view");
-              setMembersDialogOpen(true);
-            }}
-            onManageMembers={() => {
-              setMembersDialogMode("manage");
-              setMembersDialogOpen(true);
-            }}
-            isHead={isHead}
             canLeave={canLeave}
             onLeave={() => setLeaveOpen(true)}
           />
@@ -151,31 +140,10 @@ export function FamilyGroupDashboard({
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 xl:items-start">
-            <FamilyGroupActivityStrip groupId={group.id} layout="vertical" className="min-w-0" />
+            <FamilyGroupActivityStrip group={selectedGroupSummary} groups={groups} layout="vertical" className="min-w-0" />
             <FamilyGroupHowItWorksCard />
           </div>
         </div>
-      ) : (
-        <FamilyGroupDashboardContentSkeleton />
-      )}
-
-      <FamilyGroupManageMembersDialog
-        open={membersDialogOpen}
-        onOpenChange={setMembersDialogOpen}
-        group={group}
-        currentUserId={user?.id}
-        reservedSlots={reservedSlots}
-        memberLimit={memberLimit}
-        leaveBlocked={leaveBlocked ? copy.familyGroups.detail.leaveBlockedTransferFirst : null}
-        saveError={saveError}
-        onMemberUpdated={() => {
-          void refreshGroup();
-          onMembershipChanged();
-        }}
-        onMemberError={setSaveError}
-        isHead={isHead}
-        mode={membersDialogMode}
-      />
 
       <FamilyGroupInviteDialog
         open={inviteOpen}

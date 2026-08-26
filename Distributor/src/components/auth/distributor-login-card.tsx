@@ -5,53 +5,81 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
+import { DistributorAuthShellThemeToggle } from "@/components/auth/distributor-auth-shell-theme-toggle";
 import { DistributorLoginVisualPanel } from "@/components/auth/distributor-login-visual-panel";
 import { DistributorGlobalLoading } from "@/components/auth/distributor-global-loading";
-import { AddInvestorOtpField } from "@/components/add-investor/add-investor-otp-field";
+import { OtpInput } from "@/components/auth/otp-input";
+import { TurnstileWidget, isTurnstileRequired } from "@/components/auth/turnstile-widget";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
-import { DISTRIBUTOR_DEMO_AGENTS, findDistributorAgent } from "@/lib/distributor-agents";
+import {
+  isAuthenticatedResponse,
+  isMfaRequiredResponse,
+  isSmsOtpRequiredResponse,
+} from "@/lib/distributor-auth-api";
+import { forgotDistributorPassword } from "@/lib/distributor-password-api";
 import {
   ZYND_DISTRIBUTOR_LOGIN_VISUAL_GRADIENT,
   ZYND_DISTRIBUTOR_LOGO_SRC,
 } from "@/lib/distributor-brand-assets";
-import { ADD_INVESTOR_DEMO_OTP } from "@/lib/add-investor/add-investor-journey";
-import { env } from "@/lib/env";
+import { ApiError } from "@/lib/api-client";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { cn } from "@/lib/utils";
 
-const DISTRIBUTOR_LOGIN_DEMO_OTP = ADD_INVESTOR_DEMO_OTP;
+type LoginStep = "credentials" | "mfa" | "sms-otp" | "forgot-password";
 
-type LoginStep = "credentials" | "otp" | "forgot-password";
+function isValidOtp(value: string) {
+  return /^\d{6}$/.test(value);
+}
 
 export function DistributorLoginCard() {
   const router = useRouter();
-  const { user, loading, signIn } = useDistributorAuth();
+  const { user, loading, signIn, verifyMfa, verifyLoginSms, resendLoginSms } = useDistributorAuth();
   const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
-  const [email, setEmail] = useState(DISTRIBUTOR_DEMO_AGENTS[0]!.email);
-  const [password, setPassword] = useState(DISTRIBUTOR_DEMO_AGENTS[0]!.password);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
+  const [mfaToken, setMfaToken] = useState("");
+  const [loginToken, setLoginToken] = useState("");
+  const [maskedPhone, setMaskedPhone] = useState("");
+  const [smsResendSeconds, setSmsResendSeconds] = useState(0);
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState("");
+  const [otpError, setOtpError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [isSendingResetLink, setIsSendingResetLink] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileError, setTurnstileError] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   useEffect(() => {
-    if (!loading && user) {
+    if (user) {
       router.replace("/dashboard");
     }
-  }, [loading, router, user]);
+  }, [router, user]);
 
-  if (loading || user) {
+  useEffect(() => {
+    if (smsResendSeconds <= 0) return;
+    const timerId = window.setInterval(() => {
+      setSmsResendSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timerId);
+  }, [smsResendSeconds]);
+
+  if (user) {
     return <DistributorGlobalLoading />;
   }
 
-  const handleCredentialsSubmit = (event: React.FormEvent) => {
+  if (loading) {
+    return <DistributorGlobalLoading />;
+  }
+
+  const handleCredentialsSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError("");
 
@@ -60,33 +88,33 @@ export function DistributorLoginCard() {
       return;
     }
 
-    if (!env.useBackendClients && !findDistributorAgent(email, password)) {
-      setFormError("Invalid email or password.");
-      return;
-    }
-
-    setOtp("");
-    setLoginStep("otp");
-  };
-
-  const handleOtpSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setFormError("");
-
-    if (otp.length !== 6) {
-      setFormError("Enter the 6-digit verification code.");
-      return;
-    }
-
-    if (otp !== DISTRIBUTOR_LOGIN_DEMO_OTP) {
-      setFormError("Invalid verification code.");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      await signIn(email, password);
-      router.push("/dashboard");
+      const result = await signIn(email.trim(), password);
+      if (isAuthenticatedResponse(result)) {
+        router.push("/dashboard");
+        return;
+      }
+      if (isMfaRequiredResponse(result)) {
+        setMfaToken(result.mfa_token);
+        setLoginToken("");
+        setMaskedPhone(result.masked_phone ?? "");
+        setOtp("");
+        setOtpError("");
+        setLoginStep("mfa");
+        return;
+      }
+      if (isSmsOtpRequiredResponse(result)) {
+        setLoginToken(result.login_token);
+        setMfaToken("");
+        setMaskedPhone(result.masked_phone);
+        setOtp("");
+        setOtpError("");
+        setSmsResendSeconds(result.retry_after_seconds ?? 30);
+        setLoginStep("sms-otp");
+        return;
+      }
+      setFormError("Unexpected sign-in response. Try again.");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Could not sign in.");
     } finally {
@@ -94,22 +122,87 @@ export function DistributorLoginCard() {
     }
   };
 
+  const handleMfaSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isValidOtp(otp)) {
+      setOtpError("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError("");
+    setOtpError("");
+    try {
+      await verifyMfa(mfaToken, otp);
+      router.push("/dashboard");
+    } catch (error) {
+      setOtpError(error instanceof Error ? error.message : "Invalid authentication code.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSmsOtpSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isValidOtp(otp)) {
+      setOtpError("Enter the 6-digit SMS code.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError("");
+    setOtpError("");
+    try {
+      await verifyLoginSms(loginToken, otp);
+      router.push("/dashboard");
+    } catch (error) {
+      setOtpError(error instanceof Error ? error.message : "Invalid verification code.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResendSms = async () => {
+    if (!loginToken || smsResendSeconds > 0) return;
+    setOtpError("");
+    try {
+      const retryAfter = await resendLoginSms(loginToken);
+      setSmsResendSeconds(retryAfter);
+    } catch (error) {
+      setOtpError(error instanceof Error ? error.message : "Could not resend SMS code.");
+    }
+  };
+
+  const resetTurnstile = () => {
+    setTurnstileToken("");
+    setTurnstileError("");
+    setTurnstileResetKey((value) => value + 1);
+  };
+
   const goBackToCredentials = () => {
     setFormError("");
-    setOtp("");
+    setOtpError("");
     setForgotSent(false);
+    resetTurnstile();
+    setMfaToken("");
+    setLoginToken("");
+    setMaskedPhone("");
+    setOtp("");
     setLoginStep("credentials");
   };
 
   const goToForgotPassword = () => {
     setFormError("");
+    setOtpError("");
     setForgotSent(false);
+    resetTurnstile();
     setLoginStep("forgot-password");
   };
 
   const handleForgotPasswordSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError("");
+    setTurnstileError("");
 
     if (!email.trim()) {
       setFormError("Enter your email address.");
@@ -121,10 +214,23 @@ export function DistributorLoginCard() {
       return;
     }
 
+    if (isTurnstileRequired() && !turnstileToken) {
+      setTurnstileError("Complete the verification check.");
+      return;
+    }
+
     setIsSendingResetLink(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      await forgotDistributorPassword(email.trim(), turnstileToken || null);
       setForgotSent(true);
+      resetTurnstile();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setFormError(error.message);
+      } else {
+        setFormError(error instanceof Error ? error.message : "Could not send reset link.");
+      }
+      resetTurnstile();
     } finally {
       setIsSendingResetLink(false);
     }
@@ -132,6 +238,7 @@ export function DistributorLoginCard() {
 
   return (
     <div className="distributor-login-page">
+      <DistributorAuthShellThemeToggle />
       <div className="distributor-login-page__visual" aria-hidden>
         <DistributorLoginVisualPanel gradient={ZYND_DISTRIBUTOR_LOGIN_VISUAL_GRADIENT} />
       </div>
@@ -139,35 +246,31 @@ export function DistributorLoginCard() {
       <div className="distributor-login-page__form">
         <div className="distributor-login-page__form-body">
           <div className="distributor-login-page__form-inner">
-          <div className="distributor-login-page__brand">
-            <Image
-              src={ZYND_DISTRIBUTOR_LOGO_SRC}
-              alt="ZYND"
-              width={160}
-              height={48}
-              className="distributor-login-page__logo"
-              priority
-            />
-          </div>
+            <div className="distributor-login-page__brand">
+              <Image
+                src={ZYND_DISTRIBUTOR_LOGO_SRC}
+                alt="ZYND"
+                width={160}
+                height={48}
+                className="distributor-login-page__logo"
+                priority
+              />
+            </div>
 
-          <div className="distributor-login-page__steps">
-            <div
-              className={cn(
-                "distributor-login-page__step-panel",
-                loginStep === "credentials" && "distributor-login-page__step-panel--visible",
-              )}
-              aria-hidden={loginStep !== "credentials"}
-            >
-              <div className="distributor-login-page__intro">
-                <h1 className="distributor-login-page__title">Welcome back!</h1>
-                {env.useBackendClients ? (
-                  <p className="distributor-login-page__subtitle">
-                    {ZYND_MITRA_COPY.signInSubtitle}
-                  </p>
-                ) : null}
-              </div>
+            <div className="distributor-login-page__steps">
+              <div
+                className={cn(
+                  "distributor-login-page__step-panel",
+                  loginStep === "credentials" && "distributor-login-page__step-panel--visible",
+                )}
+                aria-hidden={loginStep !== "credentials"}
+              >
+                <div className="distributor-login-page__intro">
+                  <h1 className="distributor-login-page__title">Welcome back!</h1>
+                  <p className="distributor-login-page__subtitle">{ZYND_MITRA_COPY.signInSubtitle}</p>
+                </div>
 
-              <form onSubmit={handleCredentialsSubmit} className="distributor-login-page__fields">
+                <form onSubmit={handleCredentialsSubmit} className="distributor-login-page__fields">
                   <div className="space-y-1">
                     <Label htmlFor="distributor-email" className="text-caption text-muted-foreground">
                       Email
@@ -240,51 +343,6 @@ export function DistributorLoginCard() {
                   </div>
 
                   {formError && loginStep === "credentials" ? (
-                    <DistributorFeedbackMessage
-                      variant="error"
-                      onDismiss={() => setFormError("")}
-                    >
-                      {formError}
-                    </DistributorFeedbackMessage>
-                  ) : null}
-
-                  <DistributorActionButton
-                    type="submit"
-                    variant="primary"
-                    className="distributor-login-page__submit w-full"
-                    tabIndex={loginStep === "credentials" ? 0 : -1}
-                  >
-                    Continue
-                  </DistributorActionButton>
-                </form>
-              </div>
-
-              <div
-                className={cn(
-                  "distributor-login-page__step-panel",
-                  loginStep === "otp" && "distributor-login-page__step-panel--visible",
-                )}
-                aria-hidden={loginStep !== "otp"}
-              >
-                <div className="distributor-login-page__intro">
-                  <h1 className="distributor-login-page__title">Two-factor authentication</h1>
-                  <p className="distributor-login-page__subtitle">
-                    Enter the 6-digit code from your authenticator app.
-                  </p>
-                </div>
-
-                <form onSubmit={handleOtpSubmit} className="distributor-login-page__fields">
-                  <div className="distributor-login-page__otp">
-                    <AddInvestorOtpField
-                      id="distributor-login-otp"
-                      value={otp}
-                      onChange={setOtp}
-                      disabled={isSubmitting || loginStep !== "otp"}
-                      autoFocus={loginStep === "otp"}
-                    />
-                  </div>
-
-                  {formError && loginStep === "otp" ? (
                     <DistributorFeedbackMessage variant="error" onDismiss={() => setFormError("")}>
                       {formError}
                     </DistributorFeedbackMessage>
@@ -295,19 +353,148 @@ export function DistributorLoginCard() {
                     variant="primary"
                     disabled={isSubmitting}
                     className="distributor-login-page__submit w-full"
-                    tabIndex={loginStep === "otp" ? 0 : -1}
+                    tabIndex={loginStep === "credentials" ? 0 : -1}
                   >
-                    {isSubmitting ? "Signing in…" : "Verify and log in"}
+                    {isSubmitting ? "Signing in…" : "Sign in"}
+                  </DistributorActionButton>
+                </form>
+              </div>
+
+              <div
+                className={cn(
+                  "distributor-login-page__step-panel",
+                  loginStep === "mfa" && "distributor-login-page__step-panel--visible",
+                )}
+                aria-hidden={loginStep !== "mfa"}
+              >
+                <div className="distributor-login-page__intro">
+                  <h1 className="distributor-login-page__title">Verify your identity</h1>
+                  <p className="distributor-login-page__subtitle">
+                    Enter the 6-digit code from your authenticator app for{" "}
+                    <span className="font-semibold text-foreground">{email.trim()}</span>.
+                  </p>
+                </div>
+
+                <form onSubmit={handleMfaSubmit} className="distributor-login-page__fields">
+                  <div className="space-y-1">
+                    <Label htmlFor="distributor-otp" className="text-caption text-muted-foreground">
+                      Authentication code
+                    </Label>
+                    <OtpInput
+                      id="distributor-otp"
+                      value={otp}
+                      error={!!otpError}
+                      onChange={(value) => {
+                        setOtp(value);
+                        if (otpError) setOtpError("");
+                      }}
+                    />
+                  </div>
+
+                  {otpError ? (
+                    <DistributorFeedbackMessage variant="error" onDismiss={() => setOtpError("")}>
+                      {otpError}
+                    </DistributorFeedbackMessage>
+                  ) : null}
+
+                  {formError && loginStep === "mfa" ? (
+                    <DistributorFeedbackMessage variant="error" onDismiss={() => setFormError("")}>
+                      {formError}
+                    </DistributorFeedbackMessage>
+                  ) : null}
+
+                  <DistributorActionButton
+                    type="submit"
+                    variant="primary"
+                    disabled={isSubmitting || !isValidOtp(otp)}
+                    className="distributor-login-page__submit w-full"
+                    tabIndex={loginStep === "mfa" ? 0 : -1}
+                  >
+                    {isSubmitting ? "Verifying…" : "Verify & sign in"}
                   </DistributorActionButton>
 
                   <button
                     type="button"
                     className="mx-auto block text-caption text-muted-foreground transition-colors hover:text-foreground"
                     onClick={goBackToCredentials}
-                    tabIndex={loginStep === "otp" ? 0 : -1}
+                    tabIndex={loginStep === "mfa" ? 0 : -1}
                   >
                     Back to sign in
                   </button>
+                </form>
+              </div>
+
+              <div
+                className={cn(
+                  "distributor-login-page__step-panel",
+                  loginStep === "sms-otp" && "distributor-login-page__step-panel--visible",
+                )}
+                aria-hidden={loginStep !== "sms-otp"}
+              >
+                <div className="distributor-login-page__intro">
+                  <h1 className="distributor-login-page__title">Check your phone</h1>
+                  <p className="distributor-login-page__subtitle">
+                    Enter the 6-digit code sent to{" "}
+                    <span className="font-semibold text-foreground">
+                      {maskedPhone || "your verified mobile number"}
+                    </span>
+                    .
+                  </p>
+                </div>
+
+                <form onSubmit={handleSmsOtpSubmit} className="distributor-login-page__fields">
+                  <div className="space-y-1">
+                    <Label htmlFor="distributor-sms-otp" className="text-caption text-muted-foreground">
+                      SMS code
+                    </Label>
+                    <OtpInput
+                      id="distributor-sms-otp"
+                      value={otp}
+                      error={!!otpError}
+                      onChange={(value) => {
+                        setOtp(value);
+                        if (otpError) setOtpError("");
+                      }}
+                    />
+                  </div>
+
+                  {otpError ? (
+                    <DistributorFeedbackMessage variant="error" onDismiss={() => setOtpError("")}>
+                      {otpError}
+                    </DistributorFeedbackMessage>
+                  ) : null}
+
+                  <DistributorActionButton
+                    type="submit"
+                    variant="primary"
+                    disabled={isSubmitting || !isValidOtp(otp)}
+                    className="distributor-login-page__submit w-full"
+                    tabIndex={loginStep === "sms-otp" ? 0 : -1}
+                  >
+                    {isSubmitting ? "Verifying…" : "Verify & sign in"}
+                  </DistributorActionButton>
+
+                  <div className="flex flex-col items-center gap-3">
+                    <button
+                      type="button"
+                      className="text-caption text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                      disabled={smsResendSeconds > 0}
+                      onClick={() => void handleResendSms()}
+                      tabIndex={loginStep === "sms-otp" ? 0 : -1}
+                    >
+                      {smsResendSeconds > 0
+                        ? `Resend code in ${smsResendSeconds}s`
+                        : "Resend code"}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-caption text-muted-foreground transition-colors hover:text-foreground"
+                      onClick={goBackToCredentials}
+                      tabIndex={loginStep === "sms-otp" ? 0 : -1}
+                    >
+                      Back to sign in
+                    </button>
+                  </div>
                 </form>
               </div>
 
@@ -322,20 +509,16 @@ export function DistributorLoginCard() {
                   <h1 className="distributor-login-page__title">Forgot password?</h1>
                   <p className="distributor-login-page__subtitle">
                     {forgotSent
-                      ? "If an account exists for this email, a reset link is on its way."
+                      ? "Check your inbox and follow the link to reset your password."
                       : "Enter your email and we'll send you a link to reset your password."}
                   </p>
                 </div>
 
-                <form
-                  onSubmit={handleForgotPasswordSubmit}
-                  className="distributor-login-page__fields"
-                >
+                <form onSubmit={handleForgotPasswordSubmit} className="distributor-login-page__fields">
                   {forgotSent ? (
                     <DistributorFeedbackMessage variant="success">
-                      Reset link sent to{" "}
-                      <span className="font-semibold">{email.trim()}</span>. Check your inbox and
-                      follow the instructions.
+                      Reset link sent to <span className="font-semibold">{email.trim()}</span>. Check
+                      your inbox and follow the instructions.
                     </DistributorFeedbackMessage>
                   ) : (
                     <div className="space-y-1">
@@ -359,11 +542,30 @@ export function DistributorLoginCard() {
                     </div>
                   )}
 
+                  {!forgotSent && isTurnstileRequired() ? (
+                    <div className="space-y-2">
+                      <TurnstileWidget
+                        resetKey={`forgot-${turnstileResetKey}`}
+                        onVerify={setTurnstileToken}
+                        onExpire={() => setTurnstileToken("")}
+                      />
+                      {turnstileError ? (
+                        <DistributorFeedbackMessage variant="error" onDismiss={() => setTurnstileError("")}>
+                          {turnstileError}
+                        </DistributorFeedbackMessage>
+                      ) : null}
+                    </div>
+                  ) : !forgotSent ? (
+                    <p className="text-caption text-muted-foreground">
+                      Security check is not configured. Add{" "}
+                      <code className="font-mono text-xs">NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> to{" "}
+                      <code className="font-mono text-xs">Distributor/.env</code> (same value as Web) and
+                      restart the dev server.
+                    </p>
+                  ) : null}
+
                   {formError && loginStep === "forgot-password" ? (
-                    <DistributorFeedbackMessage
-                      variant="error"
-                      onDismiss={() => setFormError("")}
-                    >
+                    <DistributorFeedbackMessage variant="error" onDismiss={() => setFormError("")}>
                       {formError}
                     </DistributorFeedbackMessage>
                   ) : null}

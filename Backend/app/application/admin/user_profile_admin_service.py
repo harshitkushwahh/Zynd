@@ -13,7 +13,7 @@ from app.application.admin.kyc_admin_detail_helpers import (
     derive_esign_step_status,
 )
 from app.application.investor.investor_bank_account_service import serialize_bank_account
-from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status, journey_to_bootstrap_dict
+from app.application.kyc.journey_state_service import journey_to_bootstrap_dict
 from app.application.mf.cas_import_service import list_user_external_holdings
 from app.application.mf.mf_cart_service import get_cart_summary
 from app.application.mf.mf_order_service import list_user_orders, load_order_fund_metadata, serialize_order
@@ -116,8 +116,10 @@ def _serialize_pan_draft(pan_draft: dict[str, Any] | None) -> dict[str, Any] | N
     if not full_name:
         parts = [pan_draft.get("firstName"), pan_draft.get("middleName"), pan_draft.get("lastName")]
         full_name = " ".join(part for part in parts if part)
+    pan_number = pan_draft.get("panNumber")
+    pan_last4 = pan_draft.get("panLast4") or _mask_pan_last4(pan_number if isinstance(pan_number, str) else None)
     return {
-        "pan_last4": _mask_pan_last4(pan_draft.get("panNumber")),
+        "pan_last4": pan_last4,
         "full_name": full_name or None,
         "first_name": pan_draft.get("firstName"),
         "last_name": pan_draft.get("lastName"),
@@ -129,8 +131,12 @@ def _serialize_pan_draft(pan_draft: dict[str, Any] | None) -> dict[str, Any] | N
 def _serialize_bank_draft(bank_draft: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(bank_draft, dict):
         return None
+    account_number = bank_draft.get("accountNumber")
+    account_last4 = bank_draft.get("accountNumberLast4") or _mask_account_last4(
+        account_number if isinstance(account_number, str) else None
+    )
     return {
-        "account_number_last4": _mask_account_last4(bank_draft.get("accountNumber")),
+        "account_number_last4": account_last4,
         "ifsc_code": bank_draft.get("ifscCode"),
         "account_type": bank_draft.get("accountType"),
         "account_holder_name": bank_draft.get("accountHolderName"),
@@ -149,6 +155,10 @@ def _serialize_nominee_draft(nominee_draft: Any) -> list[dict[str, Any]]:
             continue
         core = entry.get("core") if isinstance(entry.get("core"), dict) else {}
         identity = entry.get("identity") if isinstance(entry.get("identity"), dict) else {}
+        document_number = identity.get("documentNumber")
+        document_last4 = identity.get("documentNumberLast4") or _mask_document_number(
+            document_number if isinstance(document_number, str) else None
+        )
         nominees.append(
             {
                 "full_name": core.get("fullName"),
@@ -156,7 +166,7 @@ def _serialize_nominee_draft(nominee_draft: Any) -> list[dict[str, Any]]:
                 "share_percent": core.get("sharePercent"),
                 "date_of_birth": core.get("dateOfBirth"),
                 "document_type": identity.get("documentType"),
-                "document_number_last4": _mask_document_number(identity.get("documentNumber")),
+                "document_number_last4": document_last4,
             }
         )
     return nominees
@@ -218,9 +228,6 @@ def _incomplete_steps(step_statuses: dict[str, str] | None, overall_status: str 
 async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     journey = await db.get(KycJourneyState, user_id)
     status = await db.get(UserKycStatus, user_id)
-    if journey is None and status is None:
-        journey = await get_or_create_journey(db, user_id)
-        status = await get_or_create_status(db, user_id)
 
     bootstrap = journey_to_bootstrap_dict(journey, status)
     step_statuses = bootstrap.get("stepStatuses") if isinstance(bootstrap.get("stepStatuses"), dict) else {}
@@ -383,7 +390,7 @@ async def _build_investments_detail(db: AsyncSession, user_id: UUID) -> dict[str
         )
 
     succeeded_orders_raw = await list_user_orders(db, user_id=user_id, limit=100)
-    purchase_amc_names, purchase_amc_logos = await load_order_fund_metadata(db, succeeded_orders_raw)
+    purchase_amc_names, purchase_amc_logos, purchase_amc_slugs = await load_order_fund_metadata(db, succeeded_orders_raw)
     succeeded_product_ids = {order.product_id for order in succeeded_orders_raw if order.status.value == "SUCCEEDED"}
     succeeded_products = {
         row.id: row.name

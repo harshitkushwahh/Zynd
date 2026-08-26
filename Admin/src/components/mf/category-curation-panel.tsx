@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/admin-table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ApiError } from "@/lib/api-client";
 import {
   addMfCategoryFund,
   bulkAddAmcToCategory,
@@ -296,8 +295,8 @@ export function CategoryCurationPanel({
 
   const content = (
     <div className={cn("space-y-4", !embedded && "mt-6")}>
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-        {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+        {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
         <div className="flex flex-wrap gap-2">
           <span className="rounded-[var(--radius-control)] bg-muted px-2 py-1 text-caption">

@@ -91,7 +91,7 @@ export function AmcContentDrawer({
             <CardDescription>Shown on fund detail via invest API merge.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+            {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
             <label className="block space-y-1 text-compact">
               <span className="text-muted-foreground">Marketing name</span>
               <Input value={marketingName} onChange={(e) => setMarketingName(e.target.value)} disabled={!canManage} />

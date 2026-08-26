@@ -12,9 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { fetchDistributorClientRiskAssessmentDetail } from "@/lib/distributor-client-risk-api";
-import { buildDemoRiskAssessmentAnswers } from "@/lib/client-risk-assessments";
-import type { DistributorClientRiskAssessmentAnswer } from "@/lib/dummy/types";
-import { env } from "@/lib/env";
+import type { DistributorClientRiskAssessmentAnswer } from "@/lib/distributor-types";
 import { ApiError } from "@/lib/api-client";
 import {
   DISTRIBUTOR_OVERLAY_BODY_SCROLL_CLASS,
@@ -46,14 +44,6 @@ export function ClientRiskProfileViewAnswersDialog({
     setLoading(true);
     setError("");
     setAnswers([]);
-
-    if (!env.useBackendClients) {
-      setAnswers(buildDemoRiskAssessmentAnswers(assessmentId));
-      setLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
 
     void fetchDistributorClientRiskAssessmentDetail(clientReference, assessmentId)
       .then((result) => {

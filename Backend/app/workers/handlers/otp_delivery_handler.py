@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from app.application.identity.otp_purposes import build_otp_message, get_purpose_definition
+from app.core.config import get_settings
 from app.domain.account.events import OtpRequestedPayload
 from app.domain.shared.event_factory import parse_event_payload
 from app.domain.shared.events import DomainEvent
@@ -41,7 +42,17 @@ async def handle_otp_requested(event: DomainEvent) -> None:
         return
 
     if channel == "sms":
-        await deliver_sms(to_phone=destination, body=body)
+        delivered = await deliver_sms(to_phone=destination, body=body)
+        if not delivered:
+            settings = get_settings()
+            if settings.debug:
+                logger.warning(
+                    "SMS delivery failed for purpose=%s destination=%s — "
+                    "use the [DEV OTP] log line above for local testing, "
+                    "or set DEV_OTP in Backend/.env",
+                    purpose.value,
+                    destination,
+                )
         return
 
     logger.warning("Unsupported OTP channel=%s purpose=%s", channel, purpose.value)

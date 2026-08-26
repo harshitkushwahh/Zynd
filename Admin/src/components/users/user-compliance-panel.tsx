@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ClipboardList,
   ExternalLink,
+  MoreHorizontal,
   RefreshCw,
   Shield,
   Trash2,
@@ -32,24 +33,29 @@ import {
 } from "@/components/ui/admin-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
+import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   approveAdminAction,
   rejectAdminAction,
+  withdrawAdminAction,
   resolveSecurityReview,
   runDeletionExecutor,
-  type AdminActionItem,
-  type PendingDeletionItem,
-  type SecurityReviewItem,
 } from "@/lib/admin-api";
-import { clientIdToProfilePath } from "@/lib/admin-user-ref";
-import { ApiError } from "@/lib/api-client";
+import { pickUserRef, userDashboardProfileHref } from "@/lib/admin-user-ref";
 import { cn } from "@/lib/utils";
 import {
   adminComplianceQueryKey,
   useAdminComplianceQuery,
 } from "@/hooks/use-admin-compliance-query";
+import { useMountedTabs } from "@/hooks/use-mounted-tabs";
 
 
 function formatLabel(value: string) {
@@ -68,7 +74,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 function userProfileHref(userRef: string) {
-  return `/dashboard/users/${encodeURIComponent(clientIdToProfilePath(userRef))}`;
+  return userDashboardProfileHref(userRef, "portfolio");
 }
 
 function matchesSearchQuery(query: string, ...values: Array<string | null | undefined>) {
@@ -79,14 +85,18 @@ function matchesSearchQuery(query: string, ...values: Array<string | null | unde
 
 type ComplianceTab = "reviews" | "deletions" | "actions";
 
+export type CompliancePanelTab = ComplianceTab;
+
 type UserCompliancePanelProps = {
   canReadReviews: boolean;
   canResolveReviews: boolean;
   canExecuteDeletions: boolean;
   canApproveActions: boolean;
+  activeTab?: CompliancePanelTab;
+  showTabBar?: boolean;
 };
 
-function TabCount({ count, active }: { count: number; active?: boolean }) {
+export function ComplianceTabCount({ count, active }: { count: number; active?: boolean }) {
   return (
     <span
       className={cn(
@@ -130,25 +140,36 @@ export function UserCompliancePanel({
   canResolveReviews,
   canExecuteDeletions,
   canApproveActions,
+  activeTab: controlledActiveTab,
+  showTabBar = true,
 }: UserCompliancePanelProps) {
   const queryClient = useQueryClient();
-  const complianceParams = {
-    canReadReviews,
-    canExecuteDeletions,
-    canApproveActions,
-  };
-  const { data, isLoading, isFetching, error: queryError, refetch } =
+  const { user: currentUser, soleSuperAdmin } = useAdminAuth();
+  const complianceParams = useMemo(
+    () => ({
+      canReadReviews,
+      canExecuteDeletions,
+      canApproveActions,
+      canReadDocuments: false,
+    }),
+    [canApproveActions, canExecuteDeletions, canReadReviews],
+  );
+  const { data, isPending, isFetching, error: queryError, refetch } =
     useAdminComplianceQuery(complianceParams);
 
   const reviews = data?.reviews ?? [];
   const deletions = data?.deletions ?? [];
   const pendingActions = data?.pendingActions ?? [];
-  const loading = isLoading && !data;
+  const loading = isPending && !data;
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<ComplianceTab>("reviews");
+  const defaultTab = controlledActiveTab ?? "reviews";
+  const { activeTab, selectTab, keepMounted } = useMountedTabs<ComplianceTab>(
+    defaultTab,
+    controlledActiveTab,
+  );
   const [reviewQuery, setReviewQuery] = useState("");
   const [deletionQuery, setDeletionQuery] = useState("");
   const [actionQuery, setActionQuery] = useState("");
@@ -197,9 +218,9 @@ export function UserCompliancePanel({
 
   useEffect(() => {
     if (!visibleTabs.some((tab) => tab.key === activeTab)) {
-      setActiveTab(visibleTabs[0]?.key ?? "reviews");
+      selectTab(visibleTabs[0]?.key ?? "reviews");
     }
-  }, [activeTab, visibleTabs]);
+  }, [activeTab, selectTab, visibleTabs]);
 
   useEffect(() => {
     setReviewPage(0);
@@ -221,6 +242,7 @@ export function UserCompliancePanel({
           item.user_email,
           item.reason,
           item.status,
+          item.client_id,
           item.user_id,
         ),
       ),
@@ -230,7 +252,7 @@ export function UserCompliancePanel({
   const filteredDeletions = useMemo(
     () =>
       deletions.filter((item) =>
-        matchesSearchQuery(deletionQuery, item.email, item.user_id),
+        matchesSearchQuery(deletionQuery, item.email, item.client_id, item.user_id),
       ),
     [deletionQuery, deletions],
   );
@@ -242,9 +264,11 @@ export function UserCompliancePanel({
           actionQuery,
           item.action_type,
           item.target_email,
+          item.target_client_id,
           item.target_id,
           item.target_type,
           item.requested_by_email,
+          item.requested_by_client_id,
           item.reason,
         ),
       ),
@@ -324,9 +348,24 @@ export function UserCompliancePanel({
     }
   };
 
+  const handleWithdrawAction = async (actionId: string) => {
+    setActionLoading(`withdraw-${actionId}`);
+    setMessage("");
+    setError("");
+    try {
+      await withdrawAdminAction(actionId);
+      setMessage("Pending action withdrawn.");
+      await loadData();
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not withdraw action."));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (visibleTabs.length === 0) {
     return (
-      <AdminFeedbackMessage variant="warning">
+      <AdminFeedbackMessage variant="warning" dismissible={false}>
         You do not have compliance queue permissions.
       </AdminFeedbackMessage>
     );
@@ -334,56 +373,85 @@ export function UserCompliancePanel({
 
   return (
     <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as ComplianceTab)}
+        onValueChange={(value) => selectTab(value as ComplianceTab)}
         className="gap-4"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <AdminTabList variant="secondary">
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <AdminTabTrigger
-                  key={tab.key}
-                  value={tab.key}
-                  className="gap-2"
-                >
-                  <Icon className="size-4 shrink-0" />
-                  {tab.label}
-                  <TabCount count={tab.count} active={activeTab === tab.key} />
-                </AdminTabTrigger>
-              );
-            })}
-          </AdminTabList>
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder={
+              activeTab === "reviews"
+                ? "Search reviews"
+                : activeTab === "deletions"
+                  ? "Search deletions"
+                  : "Search actions"
+            }
+            value={
+              activeTab === "reviews"
+                ? reviewQuery
+                : activeTab === "deletions"
+                  ? deletionQuery
+                  : actionQuery
+            }
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              if (activeTab === "reviews") {
+                setReviewQuery(nextValue);
+                return;
+              }
+              if (activeTab === "deletions") {
+                setDeletionQuery(nextValue);
+                return;
+              }
+              setActionQuery(nextValue);
+            }}
+          />
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            {showTabBar ? (
+              <AdminTabList variant="secondary">
+                {visibleTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <AdminTabTrigger key={tab.key} value={tab.key} className="gap-2">
+                      <Icon className="size-4 shrink-0" />
+                      {tab.label}
+                      <ComplianceTabCount count={tab.count} active={activeTab === tab.key} />
+                    </AdminTabTrigger>
+                  );
+                })}
+              </AdminTabList>
+            ) : null}
+
+            {canExecuteDeletions && activeTab === "deletions" ? (
+              <Button
+                size="sm"
+                disabled={actionLoading === "deletion-executor"}
+                onClick={() => void handleRunDeletionExecutor()}
+              >
+                {actionLoading === "deletion-executor" ? "Running..." : "Run deletion executor"}
+              </Button>
+            ) : null}
+
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               disabled={isFetching}
               onClick={() => void refetch()}
+              aria-label="Refresh"
             >
               <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
-              Refresh
             </Button>
           </div>
         </div>
 
         {canReadReviews ? (
-          <TabsContent value="reviews" className="mt-0 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSearchInput
-                containerClassName="max-w-sm"
-                placeholder="Search reviews"
-                value={reviewQuery}
-                onChange={(event) => setReviewQuery(event.target.value)}
-              />
-            </div>
-
+          <TabsContent value="reviews" className="mt-0 space-y-4" keepMounted={keepMounted("reviews")}>
             <AdminDataTable
               minWidth="lg"
               footer={
@@ -408,7 +476,9 @@ export function UserCompliancePanel({
               <AdminTableHeader>
                 <tr>
                   {canResolveReviews ? (
-                    <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
+                    <AdminTableHeadCell className="w-[3.25rem]">
+                      <span className="sr-only">Actions</span>
+                    </AdminTableHeadCell>
                   ) : null}
                   <AdminTableHeadCell>User</AdminTableHeadCell>
                   <AdminTableHeadCell>Reason</AdminTableHeadCell>
@@ -435,31 +505,43 @@ export function UserCompliancePanel({
                   reviewPagination.items.map((item) => (
                     <AdminTableRow key={item.id}>
                       {canResolveReviews ? (
-                        <AdminTableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              disabled={actionLoading === `review-${item.id}`}
-                              onClick={() => void handleResolveReview(item.id, "reviewed")}
-                            >
-                              Reviewed
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={actionLoading === `review-${item.id}`}
-                              onClick={() => void handleResolveReview(item.id, "dismissed")}
-                            >
-                              Dismiss
-                            </Button>
-                          </div>
+                        <AdminTableCell className="w-[3.25rem] text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                  aria-label={`Actions for ${item.user_email}`}
+                                  disabled={actionLoading === `review-${item.id}`}
+                                >
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              }
+                            />
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                disabled={actionLoading === `review-${item.id}`}
+                                onClick={() => void handleResolveReview(item.id, "reviewed")}
+                              >
+                                Mark reviewed
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={actionLoading === `review-${item.id}`}
+                                onClick={() => void handleResolveReview(item.id, "dismissed")}
+                              >
+                                Dismiss
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </AdminTableCell>
                       ) : null}
                       <AdminTableCell>
                         <div className="space-y-1">
                           <p className="font-medium text-foreground">{item.user_email}</p>
                           <Link
-                            href={userProfileHref(item.user_id)}
+                            href={userProfileHref(pickUserRef(item))}
                             className="inline-flex items-center gap-1 text-caption text-primary hover:underline"
                           >
                             View profile
@@ -485,23 +567,7 @@ export function UserCompliancePanel({
         ) : null}
 
         {canExecuteDeletions ? (
-          <TabsContent value="deletions" className="mt-0 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSearchInput
-                containerClassName="max-w-sm"
-                placeholder="Search deletions"
-                value={deletionQuery}
-                onChange={(event) => setDeletionQuery(event.target.value)}
-              />
-              <Button
-                size="sm"
-                disabled={actionLoading === "deletion-executor"}
-                onClick={() => void handleRunDeletionExecutor()}
-              >
-                {actionLoading === "deletion-executor" ? "Running..." : "Run deletion executor"}
-              </Button>
-            </div>
-
+          <TabsContent value="deletions" className="mt-0 space-y-4" keepMounted={keepMounted("deletions")}>
             <AdminDataTable
               minWidth="md"
               footer={
@@ -548,12 +614,12 @@ export function UserCompliancePanel({
                   </AdminTableStateRow>
                 ) : (
                   deletionPagination.items.map((item) => (
-                    <AdminTableRow key={item.user_id}>
+                    <AdminTableRow key={item.client_id || item.user_id}>
                       <AdminTableCell>
                         <div className="space-y-1">
                           <p className="font-medium text-foreground">{item.email}</p>
                           <Link
-                            href={userProfileHref(item.user_id)}
+                            href={userProfileHref(pickUserRef(item))}
                             className="inline-flex items-center gap-1 text-caption text-primary hover:underline"
                           >
                             View profile
@@ -585,16 +651,7 @@ export function UserCompliancePanel({
         ) : null}
 
         {canApproveActions ? (
-          <TabsContent value="actions" className="mt-0 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <AdminSearchInput
-                containerClassName="max-w-sm"
-                placeholder="Search actions"
-                value={actionQuery}
-                onChange={(event) => setActionQuery(event.target.value)}
-              />
-            </div>
-
+          <TabsContent value="actions" className="mt-0 space-y-4" keepMounted={keepMounted("actions")}>
             <AdminDataTable
               minWidth="xl"
               footer={
@@ -618,7 +675,9 @@ export function UserCompliancePanel({
             >
               <AdminTableHeader>
                 <tr>
-                  <AdminTableHeadCell className="text-right">Decision</AdminTableHeadCell>
+                  <AdminTableHeadCell className="w-[3.25rem]">
+                    <span className="sr-only">Decision</span>
+                  </AdminTableHeadCell>
                   <AdminTableHeadCell>Action</AdminTableHeadCell>
                   <AdminTableHeadCell>Target</AdminTableHeadCell>
                   <AdminTableHeadCell>Requested by</AdminTableHeadCell>
@@ -633,7 +692,11 @@ export function UserCompliancePanel({
                     <ComplianceEmptyState
                       icon={ClipboardList}
                       title="No pending admin actions"
-                      description="Maker-checker requests for high-impact operations will queue here for approval."
+                      description={
+                        soleSuperAdmin
+                          ? "As the sole Super Admin, new requests run immediately. Approve or withdraw any older queued items here."
+                          : "Maker-checker requests for high-impact operations will queue here for approval."
+                      }
                     />
                   </AdminTableStateRow>
                 ) : filteredActions.length === 0 ? (
@@ -641,26 +704,67 @@ export function UserCompliancePanel({
                     No admin actions match your search.
                   </AdminTableStateRow>
                 ) : (
-                  actionPagination.items.map((item) => (
+                  actionPagination.items.map((item) => {
+                    const isOwnRequest = Boolean(
+                      currentUser?.id && item.requested_by === currentUser.id,
+                    );
+                    const canSelfApprove = isOwnRequest && soleSuperAdmin;
+
+                    return (
                     <AdminTableRow key={item.id}>
-                      <AdminTableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            disabled={actionLoading === `approve-${item.id}`}
-                            onClick={() => void handleApproveAction(item.id)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={actionLoading === `reject-${item.id}`}
-                            onClick={() => void handleRejectAction(item.id)}
-                          >
-                            Reject
-                          </Button>
-                        </div>
+                      <AdminTableCell className="w-[3.25rem] text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                aria-label={`Decision for ${formatLabel(item.action_type)}`}
+                                disabled={
+                                  actionLoading === `approve-${item.id}` ||
+                                  actionLoading === `reject-${item.id}` ||
+                                  actionLoading === `withdraw-${item.id}`
+                                }
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end">
+                            {isOwnRequest && !canSelfApprove ? (
+                              <DropdownMenuItem
+                                disabled={actionLoading === `withdraw-${item.id}`}
+                                onClick={() => void handleWithdrawAction(item.id)}
+                              >
+                                Withdraw
+                              </DropdownMenuItem>
+                            ) : (
+                              <>
+                                <DropdownMenuItem
+                                  disabled={actionLoading === `approve-${item.id}`}
+                                  onClick={() => void handleApproveAction(item.id)}
+                                >
+                                  Approve
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={actionLoading === `reject-${item.id}`}
+                                  onClick={() => void handleRejectAction(item.id)}
+                                >
+                                  Reject
+                                </DropdownMenuItem>
+                                {canSelfApprove ? (
+                                  <DropdownMenuItem
+                                    disabled={actionLoading === `withdraw-${item.id}`}
+                                    onClick={() => void handleWithdrawAction(item.id)}
+                                  >
+                                    Withdraw
+                                  </DropdownMenuItem>
+                                ) : null}
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </AdminTableCell>
                       <AdminTableCell>
                         <p className="font-medium text-foreground">
@@ -669,25 +773,46 @@ export function UserCompliancePanel({
                         {item.reason ? (
                           <p className="mt-1 text-caption text-muted-foreground">{item.reason}</p>
                         ) : null}
+                        {isOwnRequest ? (
+                          <p className="mt-1 text-caption text-warning">
+                            {canSelfApprove
+                              ? "You submitted this request. As the sole Super Admin, you can approve or withdraw it yourself."
+                              : "You submitted this request. Another admin must approve it, or withdraw it to clear the queue."}
+                          </p>
+                        ) : null}
                       </AdminTableCell>
                       <AdminTableCell>
                         <p className="text-foreground">
                           {item.target_email ?? formatLabel(item.target_type ?? "Platform")}
                         </p>
-                        {item.target_id ? (
+                        {item.target_client_id ? (
+                          <Link
+                            href={userProfileHref(item.target_client_id)}
+                            className="mt-1 inline-flex items-center gap-1 font-mono text-caption text-muted-foreground hover:text-primary"
+                          >
+                            {item.target_client_id}
+                            <ExternalLink className="size-3" />
+                          </Link>
+                        ) : item.target_id ? (
                           <p className="mt-1 font-mono text-caption text-muted-foreground">
                             {item.target_id}
                           </p>
                         ) : null}
                       </AdminTableCell>
                       <AdminTableCell className="text-muted-foreground">
-                        {item.requested_by_email ?? "Unknown"}
+                        <p>{item.requested_by_email ?? "Unknown"}</p>
+                        {item.requested_by_client_id ? (
+                          <p className="mt-0.5 font-mono text-caption text-muted-foreground">
+                            {item.requested_by_client_id}
+                          </p>
+                        ) : null}
                       </AdminTableCell>
                       <AdminTableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDateTime(item.created_at)}
                       </AdminTableCell>
                     </AdminTableRow>
-                  ))
+                    );
+                  })
                 )}
               </AdminTableBody>
             </AdminDataTable>

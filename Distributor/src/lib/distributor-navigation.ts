@@ -3,7 +3,6 @@ import {
   BarChart3,
   Bell,
   CalendarClock,
-  ClipboardCheck,
   FileSpreadsheet,
   FolderKanban,
   Layers3,
@@ -29,14 +28,10 @@ import {
 } from "@/lib/dist-management-hub-tabs";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { buildYourClientsListHref } from "@/lib/distributor-clients-list-scope";
-import { getDistributorClientProfile } from "@/lib/dummy/client-profile";
-import { getBranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
+import { resolveDistributorOperationsSection } from "@/lib/distributor-operations-sections";
 import {
   DISTRIBUTOR_OPERATIONS_DEFAULT_SECTION,
   distributorOperationsSectionHref,
-  resolveDistributorOperationsSection,
-} from "@/lib/distributor-operations-sections";
-import {
   parseYourOperationsPathname,
   resolveDistributorOperationsVariant,
 } from "@/lib/distributor-operations-variants";
@@ -89,14 +84,6 @@ export const DISTRIBUTOR_PAYOUTS_ROUTE: DistributorNavItem = {
   description: "Salary, incentives, work time, and leave",
 };
 
-export const DISTRIBUTOR_COMPLIANCE_ROUTE: DistributorNavItem = {
-  id: "compliance",
-  label: "Compliance",
-  href: "/dashboard/compliance",
-  icon: ClipboardCheck,
-  description: ZYND_MITRA_COPY.complianceQueueDesc,
-};
-
 export const DISTRIBUTOR_LEADS_ROUTE: DistributorNavItem = {
   id: "leads",
   label: "Leads",
@@ -118,7 +105,6 @@ export const DISTRIBUTOR_WORKSPACE_ROUTES: DistributorNavItem[] = [
   DISTRIBUTOR_YOUR_CLIENTS_ROUTE,
   DISTRIBUTOR_YOUR_OPERATIONS_ROUTE,
   DISTRIBUTOR_PAYOUTS_ROUTE,
-  DISTRIBUTOR_COMPLIANCE_ROUTE,
   DISTRIBUTOR_LEADS_ROUTE,
   DISTRIBUTOR_REPORTS_ROUTE,
 ];
@@ -328,11 +314,10 @@ export function getDistributorBreadcrumbSegments(
   if (pathname.startsWith("/dashboard/dist-management/distributors/")) {
     const parts = pathname.split("/").filter(Boolean);
     const distributorId = parts[3];
-    const profile = distributorId ? getBranchDistributorProfile(distributorId) : null;
     return [
       { label: "Dist management", href: buildDistManagementHubHref() },
       { label: ZYND_MITRA_COPY.plural, href: "/dashboard/dist-management/distributors" },
-      { label: profile?.name ?? ZYND_MITRA_COPY.singular },
+      { label: distributorId ? `Mitra ${distributorId}` : ZYND_MITRA_COPY.singular },
     ];
   }
 
@@ -383,10 +368,6 @@ export function getDistributorBreadcrumbSegments(
     return [{ label: "My work" }];
   }
 
-  if (pathname.startsWith("/dashboard/compliance")) {
-    return [{ label: "Compliance" }];
-  }
-
   if (pathname.startsWith("/dashboard/leads")) {
     return [{ label: "Leads" }];
   }
@@ -410,30 +391,28 @@ export function getDistributorBreadcrumbSegments(
     const clientId = parts[2];
     const groupId = parts[4];
     const isFamilyDetail = parts[3] === "family" && groupId;
-    const profile = clientId ? getDistributorClientProfile(clientId) : null;
-    if (isFamilyDetail && clientId && profile) {
-      const group = profile.familyGroups.find((item) => item.id === groupId);
+    if (isFamilyDetail && clientId) {
       const clientHref = distributorClientDetailHref("your-book", clientId);
       const familyHref = distributorClientDetailTabHref("your-book", clientId, "family");
       return [
         { label: "Your clients", href: YOUR_CLIENTS_LIST_HREF },
-        { label: profile.displayName, href: clientHref },
+        { label: "Client", href: clientHref },
         { label: familyTabLabel, href: familyHref },
-        { label: group?.name ?? "Family group" },
+        { label: "Family group" },
       ];
     }
-    if (clientId && profile) {
+    if (clientId) {
       const clientHref = distributorClientDetailHref("your-book", clientId);
       if (searchParams?.get("tab") === "family") {
         return [
           { label: "Your clients", href: YOUR_CLIENTS_LIST_HREF },
-          { label: profile.displayName, href: clientHref },
+          { label: "Client", href: clientHref },
           { label: familyTabLabel },
         ];
       }
       return [
         { label: "Your clients", href: YOUR_CLIENTS_LIST_HREF },
-        { label: profile.displayName },
+        { label: "Client" },
       ];
     }
     return [{ label: "Your clients" }];
@@ -451,33 +430,31 @@ export function getDistributorBreadcrumbSegments(
     const clientId = parts[3];
     const groupId = parts[5];
     const isFamilyDetail = parts[4] === "family" && groupId;
-    const profile = clientId ? getDistributorClientProfile(clientId) : null;
-    if (isFamilyDetail && clientId && profile) {
-      const group = profile.familyGroups.find((item) => item.id === groupId);
+    if (isFamilyDetail && clientId) {
       const clientHref = distributorClientDetailHref("system-resident", clientId);
       const familyHref = distributorClientDetailTabHref("system-resident", clientId, "family");
       return [
         { label: "Your clients", href: YOUR_CLIENTS_LIST_HREF },
         { label: DISTRIBUTOR_ALL_INVESTORS_LABEL, href: allInvestorsListHref },
-        { label: profile.displayName, href: clientHref },
+        { label: "Client", href: clientHref },
         { label: familyTabLabel, href: familyHref },
-        { label: group?.name ?? "Family group" },
+        { label: "Family group" },
       ];
     }
-    if (clientId && profile) {
+    if (clientId) {
       const clientHref = distributorClientDetailHref("system-resident", clientId);
       if (searchParams?.get("tab") === "family") {
         return [
           { label: "Your clients", href: YOUR_CLIENTS_LIST_HREF },
           { label: DISTRIBUTOR_ALL_INVESTORS_LABEL, href: allInvestorsListHref },
-          { label: profile.displayName, href: clientHref },
+          { label: "Client", href: clientHref },
           { label: familyTabLabel },
         ];
       }
       return [
         { label: "Your clients", href: YOUR_CLIENTS_LIST_HREF },
         { label: DISTRIBUTOR_ALL_INVESTORS_LABEL, href: allInvestorsListHref },
-        { label: profile.displayName },
+        { label: "Client" },
       ];
     }
     return [

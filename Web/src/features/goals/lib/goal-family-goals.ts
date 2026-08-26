@@ -7,6 +7,7 @@ import {
 
 export type DashboardFamilyGoal = FamilyGoal & {
   groupTitle: string;
+  groupAvatarUrl?: string | null;
 };
 
 export async function buildDashboardFamilyGoals(
@@ -23,6 +24,7 @@ export async function buildDashboardFamilyGoals(
           .map((goal) => ({
             ...goal,
             groupTitle: group.title,
+            groupAvatarUrl: group.avatar_url ?? null,
           }));
       } catch {
         return [];

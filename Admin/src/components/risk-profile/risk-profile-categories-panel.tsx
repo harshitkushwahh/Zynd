@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Plus } from "lucide-react";
 
@@ -54,13 +54,27 @@ import {
 } from "@/lib/risk-profile-admin-api";
 
 const ALL = "all";
-const STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
+export const RISK_PROFILE_CATEGORY_STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All statuses" },
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
 
-export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }) {
+export function RiskProfileCategoriesPanel({
+  canManage,
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  statusFilter: statusFilterProp,
+  onStatusFilterChange,
+}: {
+  canManage: boolean;
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  statusFilter?: string;
+  onStatusFilterChange?: (value: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { data: categories = [], isPending, isFetching, error: queryError } = useRiskCategoriesQuery(true);
   const [error, setError] = useState("");
@@ -74,8 +88,12 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
   const [weight, setWeight] = useState("0.25");
   const [sortOrder, setSortOrder] = useState("0");
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalStatusFilter, setInternalStatusFilter] = useState(ALL);
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const statusFilter = onStatusFilterChange ? (statusFilterProp ?? ALL) : internalStatusFilter;
+  const setStatusFilter = onStatusFilterChange ?? setInternalStatusFilter;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
@@ -96,6 +114,10 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
     () => paginateItems(filteredCategories, page, pageSize),
     [filteredCategories, page, pageSize],
   );
+
+  useEffect(() => {
+    setPage(0);
+  }, [search, statusFilter]);
 
   const tableColumnCount = 6;
   const showSkeleton = isPending && categories.length === 0;
@@ -192,46 +214,50 @@ export function RiskProfileCategoriesPanel({ canManage }: { canManage: boolean }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search categories"
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setPage(0);
-          }}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminSelect
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value);
+      {showToolbar ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder="Search categories"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
               setPage(0);
             }}
-            options={STATUS_FILTER_OPTIONS}
-            placeholder="Status"
-            className="min-w-select-sm"
           />
-          {canManage ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                resetCreateForm();
-                setCreateDialogOpen(true);
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+            <AdminSelect
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value);
+                setPage(0);
               }}
-            >
-              <Plus className="size-3.5" />
-              Add category
-            </Button>
-          ) : null}
+              options={RISK_PROFILE_CATEGORY_STATUS_FILTER_OPTIONS}
+              placeholder="Status"
+              className="min-w-select-sm shrink-0"
+              triggerClassName="w-auto"
+            />
+            {canManage ? (
+              <Button
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  resetCreateForm();
+                  setCreateDialogOpen(true);
+                }}
+              >
+                <Plus className="size-3.5" />
+                Add category
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {error || loadError ? (
-        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
       ) : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
         minWidth="md"

@@ -28,7 +28,7 @@ export function AuthDialogSteps() {
     <>
       <div className="grid min-h-[520px] grid-cols-1 md:grid-cols-[88fr_112fr]">
         <AuthBrandPanel />
-        <div className="flex min-h-0 flex-col bg-background p-6 sm:p-8">
+        <div className="flex min-h-0 flex-col bg-popover p-6 sm:p-8">
           <AuthProgress currentStep={progressStep} />
           <AuthFormHeader title={title} description={description} />
           <div className="relative flex flex-1 flex-col overflow-hidden">

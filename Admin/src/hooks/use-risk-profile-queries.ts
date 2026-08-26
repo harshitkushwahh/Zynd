@@ -15,7 +15,6 @@ import {
   type RiskCategory,
   type RiskQuestion,
   type RiskTemplate,
-  type RiskTier,
   type UserRiskProfileItem,
 } from "@/lib/risk-profile-admin-api";
 

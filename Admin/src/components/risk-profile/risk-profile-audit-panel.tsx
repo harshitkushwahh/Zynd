@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
@@ -34,6 +34,18 @@ import { cn } from "@/lib/utils";
 const ALL = "all";
 const RISK_PROFILE_GROUP = "Risk profile";
 
+export const RISK_PROFILE_AUDIT_EVENT_FILTER_OPTIONS: AdminSelectOption[] = (() => {
+  const group = AUDIT_EVENT_GROUPS.find((item) => item.label === RISK_PROFILE_GROUP);
+  const types = group?.types ?? [];
+  return [
+    { value: ALL, label: "All risk events" },
+    ...types.map((eventType) => ({
+      value: eventType,
+      label: formatAuditEvent(eventType),
+    })),
+  ];
+})();
+
 function matchesSearch(log: RiskAuditLogItem, query: string) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
@@ -51,10 +63,28 @@ function matchesSearch(log: RiskAuditLogItem, query: string) {
   return haystack.includes(normalized);
 }
 
-export function RiskProfileAuditPanel() {
+export function RiskProfileAuditPanel({
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  eventFilter: eventFilterProp,
+  onEventFilterChange,
+  refreshKey,
+}: {
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  eventFilter?: string;
+  onEventFilterChange?: (value: string) => void;
+  refreshKey?: number;
+} = {}) {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [eventFilter, setEventFilter] = useState(ALL);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalEventFilter, setInternalEventFilter] = useState(ALL);
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const eventFilter = onEventFilterChange ? (eventFilterProp ?? ALL) : internalEventFilter;
+  const setEventFilter = onEventFilterChange ?? setInternalEventFilter;
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
@@ -70,17 +100,14 @@ export function RiskProfileAuditPanel() {
     ? getErrorMessage(queryError, "Could not load risk profile audit logs.")
     : "";
 
-  const eventFilterOptions = useMemo<AdminSelectOption[]>(() => {
-    const group = AUDIT_EVENT_GROUPS.find((item) => item.label === RISK_PROFILE_GROUP);
-    const types = group?.types ?? [];
-    return [
-      { value: ALL, label: "All risk events" },
-      ...types.map((eventType) => ({
-        value: eventType,
-        label: formatAuditEvent(eventType),
-      })),
-    ];
-  }, []);
+  useEffect(() => {
+    if (refreshKey == null || refreshKey === 0) return;
+    void queryClient.invalidateQueries({ queryKey: riskAuditLogsQueryKey(queryParams) });
+  }, [queryClient, queryParams, refreshKey]);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [eventFilter]);
 
   const filteredLogs = useMemo(
     () => logs.filter((log) => matchesSearch(log, search)),
@@ -91,40 +118,43 @@ export function RiskProfileAuditPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search events, user, IP, or date"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminSelect
-            value={eventFilter}
-            onValueChange={(value) => {
-              setEventFilter(value);
-              setOffset(0);
-            }}
-            options={eventFilterOptions}
-            placeholder="Event type"
-            className="min-w-select-xl"
+      {showToolbar ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder="Search events, user, IP, or date"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
           />
 
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              void queryClient.invalidateQueries({ queryKey: riskAuditLogsQueryKey(queryParams) })
-            }
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
-          </Button>
-        </div>
-      </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <AdminSelect
+              value={eventFilter}
+              onValueChange={(value) => {
+                setEventFilter(value);
+                setOffset(0);
+              }}
+              options={RISK_PROFILE_AUDIT_EVENT_FILTER_OPTIONS}
+              placeholder="Event type"
+              className="min-w-select-xl"
+              triggerClassName="w-auto"
+            />
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() =>
+                void queryClient.invalidateQueries({ queryKey: riskAuditLogsQueryKey(queryParams) })
+              }
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
         minWidth="lg"

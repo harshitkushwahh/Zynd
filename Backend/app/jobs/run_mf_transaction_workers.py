@@ -11,8 +11,10 @@ from sqlalchemy import select
 from app.application.investor.investor_provision_worker_service import process_pending_investor_provisions
 from app.application.mf.cas_import_service import process_cas_import
 from app.application.mf.mf_ondc_order_service import advance_ondc_orders, process_pending_orders, sync_open_orders
+from app.application.mf.mf_redemption_service import sync_open_redemption_orders
 from app.application.mf.mf_sip_worker_service import (
     advance_sip_plans,
+    process_pending_mandate_switches,
     process_pending_mandates,
     process_pending_sip_plans,
     sync_open_mandates,
@@ -20,6 +22,7 @@ from app.application.mf.mf_sip_worker_service import (
 from app.application.mf.mf_transaction_ops_service import expire_stale_checkouts, replay_failed_webhooks
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
+from app.core.logging_config import configure_logging
 from app.infrastructure.persistence.mf_transaction_models import MfCasImport, MfCasImportStatus
 
 logger = logging.getLogger(__name__)
@@ -62,6 +65,10 @@ async def run_mf_order_worker_once() -> dict:
             sip_result = {
                 "submit": await process_pending_sip_plans(session, batch_size=settings.zynd_mf_order_worker_batch_size),
                 "advance": await advance_sip_plans(session, batch_size=settings.zynd_mf_order_worker_batch_size),
+                "bank_switch": await process_pending_mandate_switches(
+                    session,
+                    batch_size=settings.zynd_mf_order_worker_batch_size,
+                ),
             }
         submit_result = await process_pending_orders(session, batch_size=settings.zynd_mf_order_worker_batch_size)
         try:
@@ -72,6 +79,10 @@ async def run_mf_order_worker_once() -> dict:
         sync_result = {}
         if settings.zynd_mf_order_status_sync_enabled:
             sync_result = await sync_open_orders(session, batch_size=settings.zynd_mf_order_worker_batch_size)
+            sync_result["redemptions"] = await sync_open_redemption_orders(
+                session,
+                batch_size=settings.zynd_mf_order_worker_batch_size,
+            )
         ops_result = {"expire": await expire_stale_checkouts(session)}
         if settings.zynd_mf_webhook_replay_enabled:
             ops_result["webhook_replay"] = await replay_failed_webhooks(
@@ -118,6 +129,30 @@ async def run_mf_cas_worker_once() -> dict:
     return {"processed": processed, "succeeded": succeeded, "failed": failed}
 
 
+def _worker_tick_had_activity(result: dict) -> bool:
+    if result.get("skipped"):
+        return False
+    if result.get("advance", {}).get("error"):
+        return True
+
+    counters = (
+        result.get("provision", {}).get("provisioned"),
+        result.get("provision", {}).get("synced"),
+        result.get("submit", {}).get("submitted"),
+        result.get("advance", {}).get("advanced"),
+        result.get("sync", {}).get("updated"),
+        result.get("sync", {}).get("redemptions", {}).get("updated"),
+        result.get("mandates", {}).get("submit", {}).get("submitted"),
+        result.get("mandates", {}).get("sync", {}).get("updated"),
+        result.get("sip", {}).get("submit", {}).get("submitted"),
+        result.get("sip", {}).get("advance", {}).get("advanced"),
+        result.get("sip", {}).get("bank_switch", {}).get("completed"),
+        result.get("ops", {}).get("expire", {}).get("expired_checkouts"),
+        result.get("ops", {}).get("webhook_replay", {}).get("replayed"),
+    )
+    return any(int(value or 0) > 0 for value in counters)
+
+
 async def run_mf_order_worker_loop() -> None:
     settings = get_settings()
     tick = max(settings.zynd_mf_order_worker_tick_seconds, 10)
@@ -125,8 +160,10 @@ async def run_mf_order_worker_loop() -> None:
     while True:
         try:
             result = await run_mf_order_worker_once()
-            if result.get("submit", {}).get("processed") or result.get("sync", {}).get("processed"):
+            if _worker_tick_had_activity(result):
                 logger.info("MF order worker tick: %s", result)
+            else:
+                logger.debug("MF order worker idle tick")
         except Exception:
             logger.exception("MF order worker tick failed")
         await asyncio.sleep(tick)
@@ -176,5 +213,5 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    configure_logging()
     raise SystemExit(asyncio.run(main()))

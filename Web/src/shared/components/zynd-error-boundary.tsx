@@ -2,14 +2,16 @@
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
+import { ZyndErrorFallback } from "@/shared/components/zynd-error-fallback";
 import { copy } from "@/shared/config/copy";
+import { cn } from "@/lib/utils";
 
 type ZyndErrorBoundaryProps = {
   children: ReactNode;
   title?: string;
   description?: string;
   onReset?: () => void;
+  variant?: "inline" | "page";
 };
 
 type ZyndErrorBoundaryState = {
@@ -40,20 +42,23 @@ export class ZyndErrorBoundary extends Component<
       return this.props.children;
     }
 
+    const variant = this.props.variant ?? "page";
+
     return (
       <div
-        role="alert"
-        className="rounded-[var(--radius-card)] border border-destructive/25 bg-destructive/5 px-4 py-5"
+        className={cn(
+          variant === "page" && "flex min-h-0 flex-1 flex-col",
+          variant === "inline" &&
+            "rounded-[var(--radius-card)] border border-destructive/20 bg-destructive/[0.03]",
+        )}
       >
-        <p className="text-compact font-semibold text-foreground">
-          {this.props.title ?? copy.dashboard.error.boundaryTitle}
-        </p>
-        <p className="mt-2 text-caption leading-relaxed text-muted-foreground">
-          {this.props.description ?? copy.dashboard.error.boundaryDescription}
-        </p>
-        <Button type="button" variant="outline" size="sm" className="mt-4" onClick={this.handleReset}>
-          {copy.dashboard.error.retry}
-        </Button>
+        <ZyndErrorFallback
+          variant={variant}
+          title={this.props.title ?? copy.dashboard.error.boundaryTitle}
+          description={this.props.description ?? copy.dashboard.error.boundaryDescription}
+          onRetry={this.handleReset}
+          className={variant === "page" ? "min-h-0 flex-1" : undefined}
+        />
       </div>
     );
   }

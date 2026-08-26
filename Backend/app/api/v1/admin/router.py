@@ -8,17 +8,26 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.admin.distributor_partners_router import router as distributor_partners_router
+from app.api.v1.admin.distributor_hierarchy_router import router as distributor_hierarchy_router
+from app.api.v1.admin.master_data_router import router as master_data_router
 from app.api.v1.admin.admin_invitations_router import router as admin_invitations_router
 from app.api.v1.admin.mf_integrations_router import router as mf_integrations_router
 from app.api.v1.admin.mf_router import router as mf_admin_router
 from app.api.v1.admin.mf_transactions_router import router as mf_transactions_router
+from app.api.v1.admin.product_qr_router import router as product_qr_router
+from app.api.v1.admin.referrals_router import router as referrals_router
+from app.api.v1.admin.search_router import router as search_router
 from app.api.v1.admin.zynd_logs_router import router as zynd_logs_router
 from app.api.v1.admin.risk_profile_router import router as risk_profile_router
 from app.api.v1.admin.family_groups_router import router as family_groups_router
 from app.api.v1.admin.goals_router import router as goals_router
+from app.api.v1.auth.schemas import OkResponse
 from app.api.v1.admin.schemas import (
     AdminActionListResponse,
     AdminActionRequestResponse,
+    AdminAccountAccessHoldRequest,
+    AdminAccountActionResponse,
     AdminDocumentDownloadResponse,
     AdminDocumentListResponse,
     AdminDocumentResponse,
@@ -26,6 +35,7 @@ from app.api.v1.admin.schemas import (
     AdminDeleteDocumentRequest,
     AdminKycDocumentResponse,
     AdminKycReviewResponse,
+    PendingKycReviewCountResponse,
     AdminLegalHoldRequest,
     AdminRejectKycDocumentRequest,
     AdminVerifyKycDocumentsResponse,
@@ -41,6 +51,9 @@ from app.api.v1.admin.schemas import (
     AdminTransferResponse,
     AdminUserListItemResponse,
     AdminUserListResponse,
+    AdminAccountListItemResponse,
+    AdminAccountListResponse,
+    AdminUserDirectoryMetricsResponse,
     AdminUserProfileDetailResponse,
     AdminUserSummaryResponse,
     AdminUserRolesResponse,
@@ -73,6 +86,7 @@ from app.application.admin.admin_action_service import (
     create_admin_action_request,
     list_admin_action_requests,
     reject_admin_action_request,
+    withdraw_admin_action_request,
 )
 from app.application.admin.audit_admin_service import list_audit_logs
 from app.application.admin.document_admin_service import (
@@ -80,7 +94,11 @@ from app.application.admin.document_admin_service import (
     get_document_admin_row,
     list_documents_for_user_admin,
 )
-from app.application.admin.document_kyc_service import get_user_kyc_review, reject_kyc_document
+from app.application.admin.document_kyc_service import (
+    count_pending_kyc_reviews,
+    get_user_kyc_review,
+    reject_kyc_document,
+)
 from app.application.admin.rbac_service import (
     assign_role_to_admin_user,
     create_admin_permission,
@@ -115,6 +133,12 @@ from app.application.admin.user_admin_service import (
     get_user_by_reference,
     get_user_summary,
     get_user_summary_by_reference,
+    get_user_directory_metrics,
+    list_admin_accounts,
+    cancel_admin_deletion_schedule,
+    hold_admin_account_access,
+    restore_admin_account_access,
+    remove_admin_account,
     list_users,
 )
 from app.application.admin.user_profile_admin_service import get_user_profile_detail
@@ -140,10 +164,16 @@ router.include_router(mf_admin_router)
 router.include_router(risk_profile_router)
 router.include_router(family_groups_router)
 router.include_router(goals_router)
+router.include_router(distributor_partners_router)
+router.include_router(distributor_hierarchy_router)
+router.include_router(master_data_router)
 router.include_router(admin_invitations_router)
 router.include_router(mf_integrations_router)
 router.include_router(mf_transactions_router)
 router.include_router(zynd_logs_router)
+router.include_router(search_router)
+router.include_router(referrals_router)
+router.include_router(product_qr_router)
 
 
 async def _require_user_by_reference(db: AsyncSession, reference: str) -> User:
@@ -199,7 +229,14 @@ async def get_admin_permissions(
     current_user: Annotated[User, Depends(require_admin_user)],
 ) -> AdminPermissionsResponse:
     permissions = sorted(await get_user_permission_keys(db, current_user.id))
-    return AdminPermissionsResponse(permissions=permissions)
+    role_keys = sorted(await list_user_role_keys(db, current_user.id))
+    from app.application.admin.rbac_service import is_sole_active_super_admin
+
+    return AdminPermissionsResponse(
+        permissions=permissions,
+        role_keys=role_keys,
+        sole_super_admin=await is_sole_active_super_admin(db, current_user.id),
+    )
 
 
 @router.get("/rbac/roles", response_model=AdminRolesResponse)
@@ -576,13 +613,13 @@ async def get_audit_logs(
 ) -> AuditLogListResponse:
     parsed_user_id: UUID | None = None
     if user_id:
-        try:
-            parsed_user_id = UUID(user_id)
-        except ValueError as exc:
+        user = await get_user_by_reference(db, user_id)
+        if user is None:
             raise HTTPException(
-                status_code=400,
-                detail={"code": "invalid_user_id", "message": "Invalid user ID."},
-            ) from exc
+                status_code=404,
+                detail={"code": "user_not_found", "message": "User not found."},
+            )
+        parsed_user_id = user.id
 
     parsed_event_type: AuditEventType | None = None
     if event_type:
@@ -686,6 +723,30 @@ async def post_reject_admin_action(
     return AdminActionRequestResponse(**result)
 
 
+@router.post("/actions/{action_id}/withdraw", response_model=AdminActionRequestResponse)
+async def post_withdraw_admin_action(
+    action_id: str,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_admin_user)],
+) -> AdminActionRequestResponse:
+    try:
+        parsed_id = UUID(action_id)
+        result = await withdraw_admin_action_request(
+            db,
+            action_id=parsed_id,
+            requester=current_user,
+            ip=get_client_ip(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409 if "not found" not in str(exc).lower() else 404,
+            detail={"code": "withdraw_failed", "message": str(exc)},
+        ) from exc
+    await db.commit()
+    return AdminActionRequestResponse(**result)
+
+
 @router.get("/retention/schedule", response_model=RetentionScheduleResponse)
 async def get_retention_schedule(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -704,13 +765,17 @@ async def get_pending_deletions(
 ) -> PendingDeletionsResponse:
     result = await db.execute(
         select(User)
-        .where(User.status == UserStatus.deletion_pending)
+        .where(
+            User.status == UserStatus.deletion_pending,
+            User.role == UserRole.user,
+        )
         .order_by(User.deletion_scheduled_at.asc())
     )
     now = datetime.now(timezone.utc)
     items = [
         PendingDeletionItemResponse(
             user_id=user.id,
+            client_id=user.client_id or "",
             email=user.email,
             deletion_requested_at=user.deletion_requested_at,
             deletion_scheduled_at=user.deletion_scheduled_at,
@@ -740,6 +805,146 @@ async def post_run_deletion_executor(
         action_id=result["id"],
         message="Deletion executor run submitted for approval.",
     )
+
+
+@router.get("/admin-accounts", response_model=AdminAccountListResponse)
+async def get_admin_accounts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("admin.accounts.manage"))],
+) -> AdminAccountListResponse:
+    items = await list_admin_accounts(db)
+    return AdminAccountListResponse(
+        items=[AdminAccountListItemResponse(**item) for item in items]
+    )
+
+
+@router.post("/admin-accounts/{user_id}/access-hold", response_model=AdminAccountActionResponse)
+async def post_admin_account_access_hold(
+    user_id: str,
+    body: AdminAccountAccessHoldRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("admin.accounts.manage"))],
+) -> AdminAccountActionResponse:
+    user = await _require_user_by_reference(db, user_id)
+    if user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "not_admin_account", "message": "Target is not an admin account."},
+        )
+
+    try:
+        await hold_admin_account_access(
+            db,
+            user=user,
+            admin=admin,
+            ip=get_client_ip(request),
+            notes=body.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "access_hold_failed", "message": str(exc)},
+        ) from exc
+
+    await db.commit()
+    return AdminAccountActionResponse(
+        message="Admin console access suspended.",
+    )
+
+
+@router.post("/admin-accounts/{user_id}/restore-access", response_model=AdminAccountActionResponse)
+async def post_admin_account_restore_access(
+    user_id: str,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("admin.accounts.manage"))],
+) -> AdminAccountActionResponse:
+    user = await _require_user_by_reference(db, user_id)
+    if user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "not_admin_account", "message": "Target is not an admin account."},
+        )
+
+    try:
+        await restore_admin_account_access(
+            db,
+            user=user,
+            admin=admin,
+            ip=get_client_ip(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "restore_access_failed", "message": str(exc)},
+        ) from exc
+
+    await db.commit()
+    return AdminAccountActionResponse(
+        message="Admin console access restored.",
+    )
+
+
+@router.post("/admin-accounts/{user_id}/remove", response_model=AdminAccountActionResponse)
+async def post_admin_account_remove(
+    user_id: str,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("admin.accounts.manage"))],
+) -> AdminAccountActionResponse:
+    user = await _require_user_by_reference(db, user_id)
+    if user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "not_admin_account", "message": "Target is not an admin account."},
+        )
+
+    try:
+        await remove_admin_account(
+            db,
+            user=user,
+            admin=admin,
+            ip=get_client_ip(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "remove_admin_account_failed", "message": str(exc)},
+        ) from exc
+
+    await db.commit()
+    return AdminAccountActionResponse(
+        message="Admin account removed successfully.",
+    )
+
+
+@router.post("/admin-accounts/{user_id}/cancel-deletion", response_model=OkResponse)
+async def post_admin_account_cancel_deletion(
+    user_id: str,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    admin: Annotated[User, Depends(require_permission("admin.accounts.manage"))],
+) -> OkResponse:
+    user = await _require_user_by_reference(db, user_id)
+    try:
+        await cancel_admin_deletion_schedule(db, user=user, admin=admin, ip=get_client_ip(request))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "cancel_deletion_failed", "message": str(exc)},
+        ) from exc
+    await db.commit()
+    return OkResponse()
+
+
+@router.get("/users/metrics", response_model=AdminUserDirectoryMetricsResponse)
+async def get_admin_user_directory_metrics(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("users.read"))],
+) -> AdminUserDirectoryMetricsResponse:
+    metrics = await get_user_directory_metrics(db)
+    return AdminUserDirectoryMetricsResponse(**metrics)
 
 
 @router.get("/users", response_model=AdminUserListResponse)
@@ -897,6 +1102,15 @@ async def post_suspend_user(
 ) -> PendingActionResponse:
     user = await _require_user_by_reference(db, user_id)
 
+    if user.role == UserRole.admin:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "admin_account_suspend",
+                "message": "Use Compliance → Admin accounts to manage admin access.",
+            },
+        )
+
     try:
         action = await create_admin_action_request(
             db,
@@ -929,6 +1143,14 @@ async def post_unsuspend_user(
     admin: Annotated[User, Depends(require_permission("users.suspend"))],
 ) -> PendingActionResponse:
     user = await _require_user_by_reference(db, user_id)
+    if user.role == UserRole.admin:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "admin_account_unsuspend",
+                "message": "Use Compliance → Admin accounts to restore admin access.",
+            },
+        )
 
     try:
         action = await create_admin_action_request(
@@ -1073,6 +1295,15 @@ async def get_admin_document_download(
 
     await db.commit()
     return AdminDocumentDownloadResponse(**payload)
+
+
+@router.get("/kyc-review/pending-count", response_model=PendingKycReviewCountResponse)
+async def get_pending_kyc_review_count(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("documents.read"))],
+) -> PendingKycReviewCountResponse:
+    count = await count_pending_kyc_reviews(db)
+    return PendingKycReviewCountResponse(count=count)
 
 
 @router.get("/users/{user_id}/kyc-review", response_model=AdminKycReviewResponse)

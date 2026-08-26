@@ -10,7 +10,7 @@ import {
   getBranchTargetHeatmapForYear,
   heatmapAttainmentLevel,
   type BranchTargetAttainmentYear,
-} from "@/lib/dummy/branch-team-performance";
+} from "@/lib/distributor-branch-team-performance-data";
 import { cn } from "@/lib/utils";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 

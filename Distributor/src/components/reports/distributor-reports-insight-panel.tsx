@@ -29,7 +29,7 @@ import {
   getDistributorReportIncentiveCategories,
   getDistributorReportIncentiveTrend,
   type DistributorReportAumMovementRow,
-} from "@/lib/dummy/distributor-reports";
+} from "@/lib/distributor-reports-data";
 import {
   distributorReportsInsightTabTitle,
   type DistributorReportsInsightTabId,
@@ -106,7 +106,12 @@ function ChartCard({
 type InsightPlotTooltipProps = {
   active?: boolean;
   label?: string | number;
-  payload?: ReadonlyArray<{ name?: string; value?: number; dataKey?: string }>;
+  payload?: ReadonlyArray<{
+    name?: string;
+    value?: number;
+    dataKey?: string;
+    payload?: AumMovementBar;
+  }>;
   valueFormatter?: (value: number, name?: string) => string;
 };
 

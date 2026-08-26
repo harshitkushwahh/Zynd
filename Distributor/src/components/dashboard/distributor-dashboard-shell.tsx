@@ -9,6 +9,7 @@ import {
 } from "@/components/dashboard/distributor-dashboard-sidebar";
 import { DistributorDashboardNavbar } from "@/components/dashboard/distributor-dashboard-navbar";
 import { DistributorDashboardBreadcrumb } from "@/components/dashboard/distributor-dashboard-breadcrumb";
+import { DistributorPageChromeProvider } from "@/components/dashboard/distributor-page-chrome-context";
 import { DistributorDocumentTitleSync } from "@/components/dashboard/distributor-document-title-sync";
 import { QuickTransactionSuccessDialogHost } from "@/components/quick-transaction/quick-transaction-success-dialog";
 import {
@@ -35,12 +36,14 @@ function DistributorDashboardMainColumn({ children }: { children: React.ReactNod
 
       <SidebarInset className={DISTRIBUTOR_MAIN_SCROLL_CLASS}>
         <DistributorDocumentTitleSync />
-        <div className={DISTRIBUTOR_MAIN_CONTENT_CLASS}>
-          <Suspense fallback={<div className="distributor-breadcrumb-row" aria-hidden />}>
-            <DistributorDashboardBreadcrumb />
-          </Suspense>
-          {children}
-        </div>
+        <DistributorPageChromeProvider>
+          <div className={DISTRIBUTOR_MAIN_CONTENT_CLASS}>
+            <Suspense fallback={<div className="distributor-breadcrumb-row" aria-hidden />}>
+              <DistributorDashboardBreadcrumb />
+            </Suspense>
+            {children}
+          </div>
+        </DistributorPageChromeProvider>
       </SidebarInset>
 
       <DistributorDashboardMobileNav />

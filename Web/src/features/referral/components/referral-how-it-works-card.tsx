@@ -3,6 +3,7 @@
 import { Share2, TrendingUp, Trophy, type LucideIcon } from "lucide-react";
 
 import { WobbleCard } from "@/components/ui/wobble-card";
+import { REFERRAL_CARD_RADIUS_CLASS } from "@/features/referral/lib/referral-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -112,6 +113,7 @@ export function ReferralHowItWorksCard() {
           return (
             <WobbleCard
               key={step.label}
+              radiusClassName={REFERRAL_CARD_RADIUS_CLASS}
               containerClassName={config.containerClassName}
               className="relative min-h-full"
             >

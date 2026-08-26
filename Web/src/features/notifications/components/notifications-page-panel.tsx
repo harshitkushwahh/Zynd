@@ -153,9 +153,15 @@ export function NotificationsPagePanel() {
                 Refresh
               </Button>
               {unreadCount > 0 ? (
-                <Button type="button" size="sm" className="gap-1.5" onClick={() => void handleMarkAllRead()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="size-8 rounded-full"
+                  aria-label="Mark all read"
+                  onClick={() => void handleMarkAllRead()}
+                >
                   <CheckCheck className="size-3.5" strokeWidth={2.25} />
-                  Mark all read
                 </Button>
               ) : null}
             </div>

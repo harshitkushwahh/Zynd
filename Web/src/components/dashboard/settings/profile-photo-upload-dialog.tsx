@@ -49,12 +49,13 @@ export function ProfilePhotoUploadDialog({
       browseLabel={copy.profilePhoto.browse}
       changeLabel={copy.profilePhoto.changePhoto}
       submitLabel={copy.profilePhoto.save}
-      cancelLabel={copy.profilePhoto.cancel}
       uploadingLabel={copy.profilePhoto.uploading}
       uploadFailedMessage={copy.profilePhoto.uploadFailed}
       emptySelectionMessage={copy.profilePhoto.choosePhoto}
       previewAlt={copy.profilePhoto.previewAlt}
       previewShape="circle"
+      hideCancel
+      hideFooterOnEmpty
       enableCrop
       cropAspect={1}
       cropShape="round"

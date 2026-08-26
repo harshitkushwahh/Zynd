@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
-  ArrowRight,
   CalendarDays,
   IndianRupee,
   Info,
@@ -15,11 +14,11 @@ import {
   Wallet,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { PageTitle } from "@/components/ui/page-title";
-import { Skeleton } from "@/components/ui/skeleton";
+import { MfCartPageSkeleton } from "@/features/invest/components/mf-cart-page-skeleton";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   checkoutMfCart,
@@ -27,6 +26,7 @@ import {
   clearMfCartTab,
   fetchMfCart,
   removeMfCartItem,
+  upsertMfCartItem,
   type MfCart,
   type MfCartItem,
   type MfMandateType,
@@ -37,9 +37,14 @@ import { MfBreadcrumb } from "@/features/invest/components/mf-breadcrumb";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
 import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
-import { formatInstallmentDuration } from "@/features/invest/lib/mf-sip-calculator";
+import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
+import { MfSipInstallmentsInput } from "@/features/invest/components/mf-sip-installments-input";
+import {
+  SIP_ORDER_DEFAULT_INSTALLMENTS,
+} from "@/features/invest/lib/mf-sip-calculator";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
+import { useAddBankAccountAction } from "@/features/invest/hooks/use-add-bank-account-action";
 import { markMfSipCartCheckoutPlans } from "@/features/invest/lib/mf-payment-session";
 import { setMfCartQueryData } from "@/features/invest/hooks/use-mf-cart-query";
 import { invalidateInvestQueries } from "@/features/invest/lib/invalidate-invest-queries";
@@ -49,11 +54,26 @@ import {
   MF_INVEST_PAYMENT_CARD_CLASS,
   MF_PAGE_SECTION_CLASS,
 } from "@/features/invest/lib/mf-ui";
+import { TabPanel } from "@/shared/ui/tab-panel";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type CartTab = "lumpsum" | "sip";
+const SIP_MAX_INSTALLMENT_DAY = 28;
 
+function CartTabPanel({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <TabPanel active={active} className="col-start-1 row-start-1 min-w-0">
+      {children}
+    </TabPanel>
+  );
+}
 function CartTabToggle({
   tab,
   onChange,
@@ -86,7 +106,8 @@ function CartTabToggle({
             aria-selected={isActive}
             onClick={() => onChange(option.id)}
             className={cn(
-              "inline-flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-compact font-medium transition-colors",
+              "inline-flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-compact font-medium",
+              "transition-[color,background-color,box-shadow,opacity] duration-200 ease-out motion-reduce:transition-none",
               isActive
                 ? "bg-foreground text-background shadow-zynd-low"
                 : "text-muted-foreground hover:text-foreground",
@@ -112,15 +133,30 @@ function CartItemRow({
   item,
   tab,
   removingProductId,
+  updatingProductId,
+  checkoutDisabled,
   onRemove,
+  onUpdateSipSettings,
 }: {
   item: MfCartItem;
   tab: CartTab;
   removingProductId: string | null;
+  updatingProductId: string | null;
+  checkoutDisabled: boolean;
   onRemove: (productId: string) => void;
+  onUpdateSipSettings: (
+    item: MfCartItem,
+    updates: { installment_day?: number; number_of_installments?: number },
+  ) => void;
 }) {
   const name = item.product_name ?? copy.mutualFunds.unknownFund;
   const amcName = item.amc_name ?? name;
+  const isUpdating = updatingProductId === item.product_id;
+  const rowDisabled =
+    checkoutDisabled || removingProductId === item.product_id || isUpdating;
+  const installmentDay = item.installment_day ?? 20;
+  const numberOfInstallments =
+    item.number_of_installments ?? SIP_ORDER_DEFAULT_INSTALLMENTS;
 
   return (
     <li
@@ -141,25 +177,35 @@ function CartItemRow({
           <span className="text-body font-semibold tabular-nums text-foreground">
             {formatInr(item.amount_inr)}
           </span>
-          {tab === "sip" && item.installment_day ? (
-            <Badge variant="secondary" className="gap-1 font-normal">
-              <CalendarDays className="size-3" />
-              {copy.mutualFunds.sipInstallmentDay.replace("{day}", String(item.installment_day))}
-            </Badge>
-          ) : null}
-          {tab === "sip" && item.number_of_installments ? (
-            <Badge variant="secondary" className="gap-1 font-normal">
-              {formatInstallmentDuration(item.number_of_installments)}
-            </Badge>
-          ) : null}
         </div>
+        {tab === "sip" ? (
+          <div className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:max-w-md">
+            <MfSipDayPicker
+              compact
+              compactDisplay="labeled"
+              maxDay={SIP_MAX_INSTALLMENT_DAY}
+              value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
+              disabled={rowDisabled}
+              onChange={(day) => onUpdateSipSettings(item, { installment_day: day })}
+            />
+            <MfSipInstallmentsInput
+              compact
+              compactDisplay="labeled"
+              value={numberOfInstallments}
+              disabled={rowDisabled}
+              onChange={(installments) =>
+                onUpdateSipSettings(item, { number_of_installments: installments })
+              }
+            />
+          </div>
+        ) : null}
       </div>
 
       <Button
         variant="ghost"
         size="icon"
         className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        disabled={removingProductId === item.product_id}
+        disabled={rowDisabled}
         onClick={() => onRemove(item.product_id)}
         aria-label={copy.mutualFunds.cartRemoveItem}
       >
@@ -177,12 +223,21 @@ function CartItemsList({
   items,
   tab,
   removingProductId,
+  updatingProductId,
+  checkoutDisabled,
   onRemove,
+  onUpdateSipSettings,
 }: {
   items: MfCartItem[];
   tab: CartTab;
   removingProductId: string | null;
+  updatingProductId: string | null;
+  checkoutDisabled: boolean;
   onRemove: (productId: string) => void;
+  onUpdateSipSettings: (
+    item: MfCartItem,
+    updates: { installment_day?: number; number_of_installments?: number },
+  ) => void;
 }) {
   return (
     <ul className="space-y-3">
@@ -192,7 +247,10 @@ function CartItemsList({
           item={item}
           tab={tab}
           removingProductId={removingProductId}
+          updatingProductId={updatingProductId}
+          checkoutDisabled={checkoutDisabled}
           onRemove={onRemove}
+          onUpdateSipSettings={onUpdateSipSettings}
         />
       ))}
     </ul>
@@ -218,27 +276,11 @@ function CartEmptyState({ tab }: { tab: CartTab }) {
       <p className="mt-2 max-w-sm text-compact leading-relaxed text-muted-foreground">
         {isLumpsum ? copy.mutualFunds.cartEmptyHint : copy.mutualFunds.cartSipEmptyHint}
       </p>
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+      <div className="mt-6">
         <Button nativeButton={false} render={<Link href="/dashboard/mutual-funds/all" />}>
           {copy.mutualFunds.cartBrowseFunds}
         </Button>
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={<Link href="/dashboard/mutual-funds" />}
-        >
-          {copy.mutualFunds.cartExploreHome}
-        </Button>
       </div>
-    </div>
-  );
-}
-
-function CartLoadingSkeleton() {
-  return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
-      <Skeleton className={cn("h-[14rem] w-full", MF_CARD_RADIUS_CLASS)} />
-      <Skeleton className={cn("h-[22rem] w-full", MF_CARD_RADIUS_CLASS)} />
     </div>
   );
 }
@@ -259,6 +301,8 @@ function CartCheckoutPanel({
   onPaymentMethodChange,
   mandateType,
   onMandateTypeChange,
+  onAddAccount,
+  canAddAccount,
   isEmpty = false,
   className,
 }: {
@@ -277,12 +321,12 @@ function CartCheckoutPanel({
   onPaymentMethodChange: (value: MfPaymentMethod) => void;
   mandateType: MfMandateType;
   onMandateTypeChange: (value: MfMandateType) => void;
+  onAddAccount?: () => void;
+  canAddAccount?: boolean;
   isEmpty?: boolean;
   className?: string;
 }) {
   const checkoutDisabled = isEmpty || checkingOut || banksLoading || !hasPaymentReadyAccount;
-  const checkoutHint =
-    tab === "lumpsum" ? copy.mutualFunds.cartSinglePaymentHint : copy.mutualFunds.cartSipCheckoutHint;
 
   return (
     <aside
@@ -290,7 +334,6 @@ function CartCheckoutPanel({
         "flex min-w-0 flex-col overflow-hidden xl:sticky xl:top-6 xl:self-start",
         MF_INVEST_PAYMENT_CARD_CLASS,
         MF_CARD_RADIUS_CLASS,
-        isEmpty && "opacity-95",
         className,
       )}
       aria-disabled={isEmpty || undefined}
@@ -305,6 +348,24 @@ function CartCheckoutPanel({
             {copy.mutualFunds.cartItemCount.replace("{count}", String(activeCount))}
           </p>
         </div>
+        <Tooltip>
+          <TooltipTrigger
+            type="button"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            aria-label={
+              tab === "lumpsum"
+                ? copy.mutualFunds.cartSinglePaymentHint
+                : copy.mutualFunds.cartSipCheckoutHint
+            }
+          >
+            <Info className="size-4" strokeWidth={2.25} aria-hidden />
+          </TooltipTrigger>
+          <TooltipContent side="top" align="end" className="max-w-[16rem] text-pretty">
+            {tab === "lumpsum"
+              ? copy.mutualFunds.cartSinglePaymentHint
+              : copy.mutualFunds.cartSipCheckoutHint}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="flex flex-col gap-5 p-5 sm:p-6">
@@ -328,24 +389,32 @@ function CartCheckoutPanel({
           </p>
         </div>
 
-        <div className="flex gap-3 rounded-[var(--radius-card)] border border-border/70 bg-muted/10 px-3.5 py-3">
-          <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <p className="text-caption leading-relaxed text-muted-foreground">{checkoutHint}</p>
+        <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+          <div
+            className={cn(
+              "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "lumpsum" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          >
+            <MfPaymentMethodPicker
+              value={paymentMethod}
+              onChange={onPaymentMethodChange}
+              disabled={checkoutDisabled}
+            />
+          </div>
+          <div
+            className={cn(
+              "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "sip" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          >
+            <MfMandateTypePicker
+              value={mandateType}
+              onChange={onMandateTypeChange}
+              disabled={checkoutDisabled}
+            />
+          </div>
         </div>
-
-        {tab === "lumpsum" ? (
-          <MfPaymentMethodPicker
-            value={paymentMethod}
-            onChange={onPaymentMethodChange}
-            disabled={checkoutDisabled}
-          />
-        ) : (
-          <MfMandateTypePicker
-            value={mandateType}
-            onChange={onMandateTypeChange}
-            disabled={checkoutDisabled}
-          />
-        )}
 
         <div className="space-y-2">
           <MfBankAccountPicker
@@ -353,10 +422,12 @@ function CartCheckoutPanel({
               selectedId={selectedBankAccountId}
               onSelect={onSelectBankAccount}
               loading={banksLoading}
-              error={banksError}
+              error={banksError ?? undefined}
               disabled={checkoutDisabled}
               hint=""
               label=""
+              onAddAccount={onAddAccount}
+              canAddAccount={canAddAccount}
           />
         </div>
 
@@ -367,7 +438,6 @@ function CartCheckoutPanel({
         >
           {checkingOut ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
           {tab === "lumpsum" ? copy.mutualFunds.cartCheckoutCta : copy.mutualFunds.cartSipCheckoutCta}
-          {!checkingOut ? <ArrowRight className="ml-2 size-4" /> : null}
         </Button>
       </div>
     </aside>
@@ -382,18 +452,31 @@ export function MfCartView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
+  const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
   const [clearingTab, setClearingTab] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
   const [mandateType, setMandateType] = useState<MfMandateType>("upi");
   const {
     accounts,
+    allAccounts,
     selectedBankAccountId,
     setSelectedBankAccountId,
     loading: banksLoading,
     error: banksError,
     hasPaymentReadyAccount,
+    reloadAccounts,
   } = usePaymentReadyBankAccounts(true);
+  const { canAddAccount, requestAddBankAccount } = useAddBankAccountAction({
+    accounts: allAccounts,
+    onAccountAdded: () => {
+      void reloadAccounts();
+    },
+  });
+  const bankPickerProps = {
+    onAddAccount: requestAddBankAccount,
+    canAddAccount,
+  };
 
   const loadCart = useCallback(async () => {
     try {
@@ -417,11 +500,38 @@ export function MfCartView() {
     void loadCart();
   }, [loadCart]);
 
-  const activeItems = tab === "lumpsum" ? cart?.lumpsum_items ?? [] : cart?.sip_items ?? [];
-  const activeTotal =
-    tab === "lumpsum" ? cart?.lumpsum_total_amount_inr ?? 0 : cart?.sip_total_amount_inr ?? 0;
-  const activeCount =
-    tab === "lumpsum" ? cart?.lumpsum_item_count ?? 0 : cart?.sip_item_count ?? 0;
+  const lumpsumItems = cart?.lumpsum_items ?? [];
+  const sipItems = cart?.sip_items ?? [];
+  const lumpsumCount = cart?.lumpsum_item_count ?? 0;
+  const sipCount = cart?.sip_item_count ?? 0;
+  const activeCount = tab === "lumpsum" ? lumpsumCount : sipCount;
+
+  async function handleUpdateSipSettings(
+    item: MfCartItem,
+    updates: { installment_day?: number; number_of_installments?: number },
+  ) {
+    setUpdatingProductId(item.product_id);
+    try {
+      const next = await upsertMfCartItem({
+        product_id: item.product_id,
+        amount_inr: item.amount_inr,
+        investment_type: "sip",
+        installment_day: updates.installment_day ?? item.installment_day ?? 20,
+        frequency: "monthly",
+        number_of_installments:
+          updates.number_of_installments ??
+          item.number_of_installments ??
+          SIP_ORDER_DEFAULT_INSTALLMENTS,
+      });
+      setCart(next);
+      setMfCartQueryData(queryClient, next);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : copy.mutualFunds.cartUpdateFailed);
+    } finally {
+      setUpdatingProductId(null);
+    }
+  }
 
   async function handleRemove(productId: string) {
     setRemovingProductId(productId);
@@ -491,22 +601,26 @@ export function MfCartView() {
     }
   }
 
-  const description =
-    tab === "lumpsum" ? copy.mutualFunds.cartDescription : copy.mutualFunds.cartSipDescription;
-  const DescriptionIcon = tab === "lumpsum" ? Wallet : CalendarDays;
-  const clearDisabled = activeCount === 0 || clearingTab || removingProductId !== null || checkingOut;
+  const clearDisabled =
+    activeCount === 0 ||
+    clearingTab ||
+    removingProductId !== null ||
+    updatingProductId !== null ||
+    checkingOut;
+  const cartItemsDisabled = checkingOut || clearingTab;
 
   if (loading) {
     return (
       <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-6")}>
         <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
-        <CartLoadingSkeleton />
+        <MfCartPageSkeleton itemRows={4} />
       </div>
     );
   }
 
   return (
-    <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-6 pb-8")}>
+    <>
+    <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-5 pb-6")}>
       <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
       <FundEligibilityBanner />
 
@@ -514,16 +628,29 @@ export function MfCartView() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <PageTitle>{copy.mutualFunds.cartTitle}</PageTitle>
-            {activeCount > 0 ? (
-              <Badge variant="secondary" className="font-normal tabular-nums">
-                {copy.mutualFunds.cartItemCount.replace("{count}", String(activeCount))}
-              </Badge>
-            ) : null}
           </div>
-          <p className="mt-2 flex items-start gap-2 text-compact leading-relaxed text-muted-foreground">
-            <DescriptionIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {description}
-          </p>
+          <div className="relative mt-1.5">
+            <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
+              <p
+                className={cn(
+                  "col-start-1 row-start-1 flex items-start gap-2 text-compact leading-snug text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  tab === "lumpsum" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+                )}
+              >
+                <Wallet className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {copy.mutualFunds.cartDescription}
+              </p>
+              <p
+                className={cn(
+                  "col-start-1 row-start-1 flex items-start gap-2 text-compact leading-snug text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  tab === "sip" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+                )}
+              >
+                <CalendarDays className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {copy.mutualFunds.cartSipDescription}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -531,8 +658,8 @@ export function MfCartView() {
         <CartTabToggle
           tab={tab}
           onChange={setTab}
-          lumpsumCount={cart?.lumpsum_item_count ?? 0}
-          sipCount={cart?.sip_item_count ?? 0}
+          lumpsumCount={lumpsumCount}
+          sipCount={sipCount}
         />
         <Button
           type="button"
@@ -554,38 +681,89 @@ export function MfCartView() {
       {error ? <FieldMessage variant="error" message={error} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
-        <div className="min-w-0">
-          {activeCount === 0 ? (
-            <CartEmptyState tab={tab} />
-          ) : (
-            <CartItemsList
-              items={activeItems}
-              tab={tab}
-              removingProductId={removingProductId}
-              onRemove={handleRemove}
-            />
-          )}
+        <div className="grid min-w-0 [&>*]:col-start-1 [&>*]:row-start-1">
+          <CartTabPanel active={tab === "lumpsum"}>
+            {lumpsumCount === 0 ? (
+              <CartEmptyState tab="lumpsum" />
+            ) : (
+              <CartItemsList
+                items={lumpsumItems}
+                tab="lumpsum"
+                removingProductId={removingProductId}
+                updatingProductId={updatingProductId}
+                checkoutDisabled={cartItemsDisabled}
+                onRemove={handleRemove}
+                onUpdateSipSettings={handleUpdateSipSettings}
+              />
+            )}
+          </CartTabPanel>
+          <CartTabPanel active={tab === "sip"}>
+            {sipCount === 0 ? (
+              <CartEmptyState tab="sip" />
+            ) : (
+              <CartItemsList
+                items={sipItems}
+                tab="sip"
+                removingProductId={removingProductId}
+                updatingProductId={updatingProductId}
+                checkoutDisabled={cartItemsDisabled}
+                onRemove={handleRemove}
+                onUpdateSipSettings={handleUpdateSipSettings}
+              />
+            )}
+          </CartTabPanel>
         </div>
 
-        <CartCheckoutPanel
-          tab={tab}
-          activeCount={activeCount}
-          activeTotal={activeTotal}
-          checkingOut={checkingOut}
-          banksLoading={banksLoading}
-          hasPaymentReadyAccount={hasPaymentReadyAccount}
-          accounts={accounts}
-          selectedBankAccountId={selectedBankAccountId}
-          onSelectBankAccount={setSelectedBankAccountId}
-          banksError={banksError}
-          onCheckout={() => void handleCheckout()}
-          paymentMethod={paymentMethod}
-          onPaymentMethodChange={setPaymentMethod}
-          mandateType={mandateType}
-          onMandateTypeChange={setMandateType}
-          isEmpty={activeCount === 0}
-        />
+        <div className="grid min-w-0 [&>*]:col-start-1 [&>*]:row-start-1">
+          <CartCheckoutPanel
+            tab="lumpsum"
+            activeCount={lumpsumCount}
+            activeTotal={cart?.lumpsum_total_amount_inr ?? 0}
+            checkingOut={checkingOut}
+            banksLoading={banksLoading}
+            hasPaymentReadyAccount={hasPaymentReadyAccount}
+            accounts={accounts}
+            selectedBankAccountId={selectedBankAccountId}
+            onSelectBankAccount={setSelectedBankAccountId}
+            banksError={banksError}
+            onCheckout={() => void handleCheckout()}
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            mandateType={mandateType}
+            onMandateTypeChange={setMandateType}
+            {...bankPickerProps}
+            isEmpty={lumpsumCount === 0}
+            className={cn(
+              "transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "lumpsum" ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          />
+          <CartCheckoutPanel
+            tab="sip"
+            activeCount={sipCount}
+            activeTotal={cart?.sip_total_amount_inr ?? 0}
+            checkingOut={checkingOut}
+            banksLoading={banksLoading}
+            hasPaymentReadyAccount={hasPaymentReadyAccount}
+            accounts={accounts}
+            selectedBankAccountId={selectedBankAccountId}
+            onSelectBankAccount={setSelectedBankAccountId}
+            banksError={banksError}
+            onCheckout={() => void handleCheckout()}
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={setPaymentMethod}
+            mandateType={mandateType}
+            onMandateTypeChange={setMandateType}
+            {...bankPickerProps}
+            isEmpty={sipCount === 0}
+            className={cn(
+              "transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              tab === "sip" ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+            )}
+          />
+        </div>
       </div>
     </div>
+    </>
   );
 }

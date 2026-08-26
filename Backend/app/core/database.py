@@ -13,10 +13,18 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
+
+_engine_connect_args: dict[str, object] = {}
+if settings.app_env == "development":
+    # Avoid asyncpg stale prepared plans after local schema resets without a full process restart.
+    _engine_connect_args["prepared_statement_cache_size"] = 0
+
 engine = create_async_engine(
     settings.database_url,
     echo=settings.database_echo,
     pool_pre_ping=True,
+    pool_recycle=300,
+    connect_args=_engine_connect_args,
 )
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

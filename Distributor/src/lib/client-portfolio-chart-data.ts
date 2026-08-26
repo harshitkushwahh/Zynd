@@ -4,6 +4,17 @@ export type PortfolioChartPoint = {
   label: string;
   value: number;
   invested: number;
+  date?: string;
+};
+
+const PORTFOLIO_CHART_PERIOD_DAYS: Record<PortfolioChartPeriod, number | null> = {
+  "1D": 1,
+  "1M": 30,
+  "6M": 180,
+  "1Y": 365,
+  "3Y": 365 * 3,
+  "5Y": 365 * 5,
+  "10Y": null,
 };
 
 export const PORTFOLIO_CHART_PERIODS: PortfolioChartPeriod[] = [
@@ -152,6 +163,28 @@ export function getPortfolioChartSeries(
   investedAmount = 0,
 ): PortfolioChartPoint[] {
   return buildPoints(clientId, currentValue, investedAmount, period);
+}
+
+export function filterPortfolioChartByPeriod(
+  points: readonly PortfolioChartPoint[],
+  period: PortfolioChartPeriod,
+): PortfolioChartPoint[] {
+  if (points.length === 0) return [];
+
+  const datedPoints = points.filter((point) => Boolean(point.date));
+  if (datedPoints.length >= 2) {
+    const days = PORTFOLIO_CHART_PERIOD_DAYS[period];
+    if (days == null) return [...datedPoints];
+
+    const end = new Date(datedPoints[datedPoints.length - 1].date!);
+    const start = new Date(end);
+    start.setDate(start.getDate() - days);
+    const filtered = datedPoints.filter((point) => new Date(point.date!) >= start);
+    if (filtered.length >= 2) return [...filtered];
+    return datedPoints.slice(Math.max(0, datedPoints.length - 2));
+  }
+
+  return points.length >= 2 ? [...points] : [];
 }
 
 export function portfolioChartPeriodDescription(period: PortfolioChartPeriod): string {

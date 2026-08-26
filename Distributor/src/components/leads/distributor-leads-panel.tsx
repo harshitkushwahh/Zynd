@@ -21,8 +21,8 @@ import {
   type DistributorLeadRow,
   type DistributorLeadSource,
   type DistributorLeadStage,
-} from "@/lib/dummy/distributor-leads";
-import { distributorClientDetailHref } from "@/lib/distributor-client-routes";
+} from "@/lib/distributor-leads-data";
+import { distributorClientDetailHref, distributorClientPathRef } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
@@ -167,7 +167,10 @@ export function DistributorLeadsPanel({ title, description }: DistributorLeadsPa
           <Table.Row id={row.id}>
             <Table.Cell>
               <Link
-                href={distributorClientDetailHref("your-book", row.clientId)}
+                href={distributorClientDetailHref(
+                  "your-book",
+                  distributorClientPathRef({ id: row.clientId, clientCode: row.clientCode }),
+                )}
                 className="font-medium hover:underline"
               >
                 {row.clientLabel}

@@ -1,14 +1,16 @@
 "use client";
 
 import { PieChart as PieChartIcon } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Cell, Pie, PieChart } from "recharts";
+
+import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-container";
 
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import {
   type FamilyGroupPortfolioSlice,
 } from "@/features/family-groups/api/family-groups-api";
 import { useFamilyGroupPortfolioQuery } from "@/features/family-groups/hooks/use-family-group-dashboard-queries";
-import { FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
+import { FAMILY_GROUP_DASHBOARD_PANEL_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -42,18 +44,11 @@ export function FamilyGroupPortfolioPanel({ groupId, className }: FamilyGroupPor
 
   return (
     <section
-      className={cn(
-        FAMILY_GROUP_CARD_RADIUS_CLASS,
-        "h-full border border-border bg-card p-4 shadow-zynd-low sm:p-5",
-        className,
-      )}
+      className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "h-full p-3 sm:p-4", className)}
     >
-      <div>
-        <h3 className="text-body font-semibold text-foreground">{dashboard.portfolioTitle}</h3>
-        <p className="mt-1 text-compact text-muted-foreground">{dashboard.portfolioSubtitle}</p>
-      </div>
+      <h3 className="text-compact font-semibold text-foreground">{dashboard.portfolioTitle}</h3>
 
-      <div className="mt-5 min-h-[18rem]">
+      <div className="mt-2 min-h-[18rem]">
         {showSkeleton ? (
           <div className="flex h-[18rem] items-center justify-center text-compact text-muted-foreground">
             {dashboard.portfolioLoading}
@@ -88,7 +83,7 @@ export function FamilyGroupPortfolioPanel({ groupId, className }: FamilyGroupPor
                 <p className="text-[11px] text-muted-foreground">{dashboard.totalValueLabel}</p>
               </div>
               <div className="relative z-10 size-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <RechartsMeasuredContainer width="100%" height="100%" minWidth={0}>
                   <PieChart>
                     <Pie
                       data={chartData}
@@ -107,7 +102,7 @@ export function FamilyGroupPortfolioPanel({ groupId, className }: FamilyGroupPor
                       ))}
                     </Pie>
                   </PieChart>
-                </ResponsiveContainer>
+                </RechartsMeasuredContainer>
               </div>
             </div>
 

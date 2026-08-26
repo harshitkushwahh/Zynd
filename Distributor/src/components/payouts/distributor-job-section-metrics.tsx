@@ -8,8 +8,9 @@ import { DistributorMetricCard } from "@/components/dashboard/distributor-metric
 import {
   DUMMY_DISTRIBUTOR_JOB_COMPENSATION,
   getDistributorJobCompensationSummary,
-} from "@/lib/dummy/distributor-job-dashboard";
-import { getDistributorPayoutSummary, DUMMY_DISTRIBUTOR_PAYOUTS } from "@/lib/dummy/distributor-payouts";
+  type DistributorJobCompensation,
+} from "@/lib/distributor-job-dashboard-data";
+import { getDistributorPayoutSummary, DUMMY_DISTRIBUTOR_PAYOUTS } from "@/lib/distributor-payouts-data";
 import {
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 type DistributorJobSectionMetricsProps = {
   className?: string;
+  compensation?: DistributorJobCompensation;
 };
 
 function formatTileAmount(amount: number): { display: string; title: string } {
@@ -28,9 +30,15 @@ function formatTileAmount(amount: number): { display: string; title: string } {
   };
 }
 
-export function DistributorJobSectionMetrics({ className }: DistributorJobSectionMetricsProps) {
-  const compensation = DUMMY_DISTRIBUTOR_JOB_COMPENSATION;
-  const summary = useMemo(() => getDistributorJobCompensationSummary(compensation), [compensation]);
+export function DistributorJobSectionMetrics({
+  className,
+  compensation,
+}: DistributorJobSectionMetricsProps) {
+  const compensationData = compensation ?? DUMMY_DISTRIBUTOR_JOB_COMPENSATION;
+  const summary = useMemo(
+    () => getDistributorJobCompensationSummary(compensationData),
+    [compensationData],
+  );
   const payoutSummary = useMemo(
     () => getDistributorPayoutSummary(DUMMY_DISTRIBUTOR_PAYOUTS),
     [],
@@ -51,7 +59,7 @@ export function DistributorJobSectionMetrics({ className }: DistributorJobSectio
         label="Take-home"
         value={takeHome.display}
         valueTitle={takeHome.title}
-        hint={`${compensation.periodLabel} · Salary + incentives`}
+        hint={`${compensationData.periodLabel || "Current period"} · Salary + incentives`}
         showTileAction={false}
         fitTileValue
       />
@@ -93,7 +101,7 @@ export function DistributorJobSectionMetrics({ className }: DistributorJobSectio
         fitTileValue
       />
       <DistributorCompensationSplitCard
-        compensation={compensation}
+        compensation={compensationData}
         className="distributor-your-clients-metrics__cell distributor-your-clients-metrics__split min-w-0 shrink-0"
       />
     </div>

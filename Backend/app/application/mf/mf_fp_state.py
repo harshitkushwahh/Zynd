@@ -88,6 +88,25 @@ def map_fp_plan_state(fp_state: str | None) -> "MfSipPlanStatus":
     return MfSipPlanStatus.review
 
 
+def map_fp_redemption_state_to_order(fp_state: str | None) -> MfOrderStatus:
+    normalized = (fp_state or "").strip().lower()
+    if not normalized:
+        return MfOrderStatus.processing
+    if normalized in {"successful", "succeeded"}:
+        return MfOrderStatus.succeeded
+    if normalized in {"failed", "rejected", "expired"}:
+        return MfOrderStatus.failed
+    if normalized == "cancelled":
+        return MfOrderStatus.cancelled
+    if normalized == "submitted":
+        return MfOrderStatus.submitted
+    if normalized in {"confirmed", "processing", "review", "under_review"}:
+        return MfOrderStatus.processing
+    if normalized in {"pending", "review_completed", "created"}:
+        return MfOrderStatus.payment_pending
+    return MfOrderStatus.processing
+
+
 FP_MANDATE_APPROVED_STATES = frozenset(
     {"approved", "APPROVED", "active", "ACTIVE", "registered", "REGISTERED", "success", "SUCCESS", "authorized", "AUTHORIZED"}
 )

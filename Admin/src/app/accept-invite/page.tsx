@@ -6,14 +6,16 @@ import { AdminInviteOnboardingPage } from "@/components/auth/admin-invite-onboar
 
 export default function AcceptInvitePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="admin-login-shell flex min-h-full flex-1 items-center justify-center px-4 py-10">
-          <p className="text-caption text-muted-foreground">Opening your invitation…</p>
-        </div>
-      }
-    >
-      <AdminInviteOnboardingPage />
-    </Suspense>
+    <div className="admin-login-shell min-h-dvh w-full">
+      <Suspense
+        fallback={
+          <div className="flex min-h-dvh w-full items-center justify-center px-4 py-10">
+            <p className="text-caption text-muted-foreground">Opening your invitation…</p>
+          </div>
+        }
+      >
+        <AdminInviteOnboardingPage />
+      </Suspense>
+    </div>
   );
 }

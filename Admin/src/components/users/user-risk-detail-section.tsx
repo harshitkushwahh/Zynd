@@ -1,5 +1,8 @@
 "use client";
 
+import { Scale } from "lucide-react";
+
+import { AdminUserProfileSectionEmptyState } from "@/components/users/admin-user-profile-section-empty-state";
 import { AdminUserRiskProfileLayout } from "@/components/users/admin-user-risk-profile-layout";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminTableSkeleton } from "@/components/ui/admin-skeletons";
@@ -20,14 +23,16 @@ export function UserRiskDetailSection({ userId }: UserRiskDetailSectionProps) {
   }
 
   if (error) {
-    return <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>;
+    return <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>;
   }
 
   if (!data || data.notFound || !data.profile) {
     return (
-      <p className="text-caption text-muted-foreground">
-        This user has not completed a risk profile assessment yet.
-      </p>
+      <AdminUserProfileSectionEmptyState
+        icon={Scale}
+        title="No risk profile yet"
+        description="This user has not completed a risk profile assessment yet."
+      />
     );
   }
 

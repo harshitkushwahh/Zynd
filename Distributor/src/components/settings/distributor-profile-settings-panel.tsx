@@ -141,7 +141,8 @@ export function DistributorProfileSettingsPanel() {
   const profile = getDistributorProfile(user?.id);
   const addressText = formatDistributorProfileAddress(profile.address);
   const hasAddress = Boolean(addressText.trim());
-  const distributorCode = profile.distributorCode.trim();
+  const distributorCode = user?.zyndClientId?.trim() ?? "";
+  const mobile = user?.phoneMasked?.trim() ?? "";
 
   return (
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
@@ -181,9 +182,9 @@ export function DistributorProfileSettingsPanel() {
           icon={Hash}
         >
           <dl className="divide-y divide-border">
-            <DetailRow label={ZYND_MITRA_COPY.mitraCode} value={profile.distributorCode} icon={Hash} mono />
+            <DetailRow label={ZYND_MITRA_COPY.mitraCode} value={distributorCode} icon={Hash} mono />
             <DetailRow label="Email" value={user?.email ?? ""} icon={Mail} />
-            <DetailRow label="Mobile number" value={profile.mobile} icon={Phone} />
+            <DetailRow label="Mobile number" value={mobile} icon={Phone} />
           </dl>
         </ProfileSectionCard>
 

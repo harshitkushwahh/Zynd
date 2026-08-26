@@ -1,10 +1,10 @@
 import type { DistributorOperationsSectionId } from "@/lib/distributor-operations-sections";
 import { distributorOperationsSectionHref } from "@/lib/distributor-operations-variants";
-import type { DistributorOrder, DistributorTxnRequest } from "@/lib/dummy/types";
-import { getOrdersForListScope } from "@/lib/dummy/orders";
-import { getSystematicPlansForListScope } from "@/lib/dummy/systematic-plans";
-import { getTransactionGroupsForListScope } from "@/lib/dummy/transaction-groups";
-import { getTxnRequestsForListScope } from "@/lib/dummy/txn-requests";
+import type { DistributorOrder, DistributorTxnRequest } from "@/lib/distributor-types";
+import { getOrdersForListScope } from "@/lib/distributor-operations-list-data";
+import { getSystematicPlansForListScope } from "@/lib/distributor-operations-list-data";
+import { getTransactionGroupsForListScope } from "@/lib/distributor-operations-list-data";
+import { getTxnRequestsForListScope } from "@/lib/distributor-operations-list-data";
 
 /** Your operations list scope: distributor book vs entire platform. */
 export type DistributorOrdersListScope = "your-book" | "all";

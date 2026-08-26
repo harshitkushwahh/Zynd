@@ -150,8 +150,8 @@ export function AdminChangeEmailSettingsPanel({
           <Label htmlFor="admin-email-otp">Verification code</Label>
           <OtpInput id="admin-email-otp" value={otp} onChange={setOtp} />
         </div>
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-        {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+        {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={loading || !isValidOtp(otp)}>
             <MailCheck className="size-3.5" />
@@ -181,30 +181,26 @@ export function AdminChangeEmailSettingsPanel({
       </div>
 
       <div className="space-y-4 rounded-[var(--radius-card)] border border-border p-4">
-        <div className="space-y-2">
-          <Label htmlFor="admin-new-email">New email</Label>
-          <div className="relative">
-            <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="admin-new-email"
-              type="email"
-              className="pl-9"
-              value={newEmail}
-              onChange={(event) => setNewEmail(event.target.value)}
-              autoComplete="email"
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="admin-email-password">Current password</Label>
-          <PasswordInput
-            id="admin-email-password"
-            icon={KeyRound}
-            value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            autoComplete="current-password"
+        <div className="relative">
+          <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="admin-new-email"
+            type="email"
+            className="pl-9"
+            placeholder="New email address"
+            value={newEmail}
+            onChange={(event) => setNewEmail(event.target.value)}
+            autoComplete="email"
           />
         </div>
+        <PasswordInput
+          id="admin-email-password"
+          icon={KeyRound}
+          placeholder="Current password"
+          value={currentPassword}
+          onChange={(event) => setCurrentPassword(event.target.value)}
+          autoComplete="current-password"
+        />
         {step === "mfa" ? (
           <div className="space-y-2">
             <Label htmlFor="admin-email-mfa">Authenticator code</Label>
@@ -213,8 +209,8 @@ export function AdminChangeEmailSettingsPanel({
         ) : null}
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <Button type="submit" disabled={loading}>
         {loading ? "Sending…" : step === "mfa" ? "Continue with MFA" : "Send verification code"}

@@ -17,7 +17,7 @@ import {
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_TILES_ONLY_CLASS,
 } from "@/lib/distributor-layout";
-import type { DistributorOrder, DistributorSystematicPlan } from "@/lib/dummy/types";
+import type { DistributorOrder, DistributorSystematicPlan } from "@/lib/distributor-types";
 import { getYourOrdersOperationMix } from "@/lib/your-operations-dual-ring";
 import { cn } from "@/lib/utils";
 

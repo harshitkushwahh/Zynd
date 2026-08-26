@@ -7,10 +7,10 @@ import { useClientDetailTabNavigation } from "@/components/clients/client-detail
 import { ClientRiskProfileHeroCard } from "@/components/clients/client-risk-profile-hero-card";
 import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { buildDemoClientRiskAssessments } from "@/lib/client-risk-assessments";
+import { buildClientRiskAssessmentFromProfile } from "@/lib/client-risk-assessments";
 import { hasAssessedRiskProfile, resolveClientRiskGauge } from "@/lib/client-risk-gauge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientProfile } from "@/lib/dummy/types";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
 import { resolveRiskTierVisual } from "@/lib/risk-profile/risk-tier-ui";
 import { cn } from "@/lib/utils";
 
@@ -33,10 +33,10 @@ export function ClientRiskProfileCard({
   const assessed = hasAssessedRiskProfile(profile);
   const reference = clientReference ?? profile.investor.clientCode;
   const tabNavigation = useClientDetailTabNavigation();
-  const currentAssessment = useMemo(() => {
-    const rows = buildDemoClientRiskAssessments(profile);
-    return rows.find((row) => row.isCurrent) ?? rows[0] ?? null;
-  }, [profile]);
+  const currentAssessment = useMemo(
+    () => buildClientRiskAssessmentFromProfile(profile),
+    [profile],
+  );
 
   const openRiskProfileTab = () => {
     tabNavigation?.navigateToTab("risk");

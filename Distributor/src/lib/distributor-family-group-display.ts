@@ -1,5 +1,5 @@
 import { DISTRIBUTOR_CLIENT_PROFILE_FALLBACK_SRC } from "@/lib/distributor-client-profile-hero";
-import type { DistributorClientFamilyGroup } from "@/lib/dummy/types";
+import type { DistributorClientFamilyGroup } from "@/lib/distributor-types";
 
 export function familyGroupAvatarSrc(group: DistributorClientFamilyGroup): string {
   if (group.avatarUrl?.trim()) return group.avatarUrl.trim();

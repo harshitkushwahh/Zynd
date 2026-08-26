@@ -7,7 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.referral.referral_attribution_service import advance_referral_first_investment
 from app.application.referral.referral_engagement_service import record_referral_engagement_investment
 from app.infrastructure.persistence.models import User
-from app.infrastructure.persistence.referral_models import ReferralAttribution, ReferralInvestmentProduct
+from app.infrastructure.persistence.referral_models import (
+    ReferralAttribution,
+    ReferralInvestmentMode,
+    ReferralInvestmentProduct,
+)
 
 
 async def record_referral_first_investment(
@@ -16,6 +20,7 @@ async def record_referral_first_investment(
     user: User,
     product: ReferralInvestmentProduct,
     amount_inr: int,
+    investment_mode: ReferralInvestmentMode = ReferralInvestmentMode.other,
 ) -> ReferralAttribution | None:
     """Advance a referred user to stage 3 when their first investment clears."""
     return await advance_referral_first_investment(
@@ -23,6 +28,7 @@ async def record_referral_first_investment(
         referee=user,
         product=product,
         amount_inr=amount_inr,
+        investment_mode=investment_mode,
     )
 
 
@@ -43,6 +49,7 @@ async def record_referral_investment_activity(
     user: User,
     product: ReferralInvestmentProduct,
     amount_inr: int,
+    investment_mode: ReferralInvestmentMode = ReferralInvestmentMode.other,
 ) -> None:
     """Record first investment and, when eligible, post-qualification engagement."""
     await record_referral_first_investment(
@@ -50,6 +57,7 @@ async def record_referral_investment_activity(
         user=user,
         product=product,
         amount_inr=amount_inr,
+        investment_mode=investment_mode,
     )
     await record_referral_engagement_investment(
         db,

@@ -18,6 +18,7 @@ import {
   AdminTableStateRow,
 } from "@/components/ui/admin-table";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   createAdminInvitation,
   fetchAdminInvitations,
@@ -27,8 +28,6 @@ import {
   type AdminInvitation,
   type AdminRole,
 } from "@/lib/admin-api";
-import { ApiError } from "@/lib/api-client";
-
 
 function invitationStatusVariant(status: AdminInvitation["status"]) {
   if (status === "pending") return "warning" as const;
@@ -42,7 +41,11 @@ function formatInviteName(invitation: AdminInvitation) {
   return parts.length ? parts.join(" ") : "—";
 }
 
-export function AdminInvitationsSettingsPanel() {
+export function AdminInvitationsSettingsPanel({
+  trailingToolbar,
+}: {
+  trailingToolbar?: React.ReactNode;
+}) {
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [invitations, setInvitations] = useState<AdminInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +145,7 @@ export function AdminInvitationsSettingsPanel() {
             {pendingCount} pending invitation{pendingCount === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <Button variant="outline" size="icon" onClick={() => void loadData()} aria-label="Refresh">
             <RefreshCw className="size-3.5" />
           </Button>
@@ -150,11 +153,12 @@ export function AdminInvitationsSettingsPanel() {
             <UserPlus className="size-3.5" />
             Send invitation
           </Button>
+          {trailingToolbar}
         </div>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <AdminDataTable minWidth="default">
         <AdminTableHeader>
@@ -177,25 +181,39 @@ export function AdminInvitationsSettingsPanel() {
               <AdminTableRow key={invitation.id}>
                 <AdminTableCell className="text-right">
                   {invitation.status === "pending" ? (
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading === invitation.id}
-                        onClick={() => void handleResend(invitation)}
-                      >
-                        <Mail className="size-3.5" />
-                        Resend
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading === invitation.id}
-                        onClick={() => void handleRevoke(invitation)}
-                      >
-                        <XCircle className="size-3.5" />
-                        Revoke
-                      </Button>
+                    <div className="flex justify-end gap-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              disabled={actionLoading === invitation.id}
+                              aria-label="Resend invitation"
+                              onClick={() => void handleResend(invitation)}
+                            >
+                              <Mail className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                        <TooltipContent side="top">Resend</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              disabled={actionLoading === invitation.id}
+                              aria-label="Revoke invitation"
+                              onClick={() => void handleRevoke(invitation)}
+                            >
+                              <XCircle className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                        <TooltipContent side="top">Revoke</TooltipContent>
+                      </Tooltip>
                     </div>
                   ) : (
                     <span className="text-caption text-muted-foreground">—</span>

@@ -68,39 +68,46 @@ function SelectContent({
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
+  disablePortal = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-  >) {
-  return (
-    <SelectPrimitive.Portal>
-      <SelectPrimitive.Positioner
-        side={side}
-        sideOffset={sideOffset}
-        align={align}
-        alignOffset={alignOffset}
-        alignItemWithTrigger={alignItemWithTrigger}
-        className="isolate z-50"
+  > & {
+    disablePortal?: boolean;
+  }) {
+  const positioner = (
+    <SelectPrimitive.Positioner
+      side={side}
+      sideOffset={sideOffset}
+      align={align}
+      alignOffset={alignOffset}
+      alignItemWithTrigger={alignItemWithTrigger}
+      className="isolate z-[100]"
+    >
+      <SelectPrimitive.Popup
+        data-slot="select-content"
+        data-align-trigger={alignItemWithTrigger}
+        render={<AdminAnimatedPopup />}
+        className={cn(
+          "max-h-(--available-height) w-(--anchor-width) min-w-36 data-[align-trigger=true]:animate-none",
+          className,
+        )}
+        {...props}
       >
-        <SelectPrimitive.Popup
-          data-slot="select-content"
-          data-align-trigger={alignItemWithTrigger}
-          render={<AdminAnimatedPopup />}
-          className={cn(
-            "max-h-(--available-height) w-(--anchor-width) min-w-36 data-[align-trigger=true]:animate-none",
-            className,
-          )}
-          {...props}
-        >
-          <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
-          <SelectScrollDownButton />
-        </SelectPrimitive.Popup>
-      </SelectPrimitive.Positioner>
-    </SelectPrimitive.Portal>
-  )
+        <SelectScrollUpButton />
+        <SelectPrimitive.List>{children}</SelectPrimitive.List>
+        <SelectScrollDownButton />
+      </SelectPrimitive.Popup>
+    </SelectPrimitive.Positioner>
+  );
+
+  if (disablePortal) {
+    return positioner;
+  }
+
+  return <SelectPrimitive.Portal>{positioner}</SelectPrimitive.Portal>;
 }
 
 function SelectLabel({

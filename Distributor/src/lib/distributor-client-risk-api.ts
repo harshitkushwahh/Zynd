@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 import type {
   DistributorClientRiskAssessment,
   DistributorClientRiskAssessmentAnswer,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 type ApiTierConfig = {
   message_summary?: string;

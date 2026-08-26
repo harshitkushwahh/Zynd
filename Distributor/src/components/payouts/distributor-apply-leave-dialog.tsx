@@ -14,11 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { applyDistributorLeaveRequest } from "@/lib/distributor-work-api";
 import {
-  DUMMY_DISTRIBUTOR_LEAVE_BALANCES,
   type DistributorLeaveBalance,
   type DistributorLeaveType,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -34,18 +34,21 @@ type DistributorApplyLeaveDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   balances: DistributorLeaveBalance[];
+  onSubmitted?: () => void;
 };
 
 export function DistributorApplyLeaveDialog({
   open,
   onOpenChange,
   balances,
+  onSubmitted,
 }: DistributorApplyLeaveDialogProps) {
   const [leaveType, setLeaveType] = useState<DistributorLeaveType>("Annual");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const remainingForType = useMemo(
     () => balances.find((balance) => balance.type === leaveType)?.remaining ?? 0,
@@ -57,7 +60,8 @@ export function DistributorApplyLeaveDialog({
     setFromDate("");
     setToDate("");
     setReason("");
-    setSubmitted(false);
+    setSubmitError(null);
+    setIsSubmitting(false);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -67,7 +71,22 @@ export function DistributorApplyLeaveDialog({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    setSubmitted(true);
+    setSubmitError(null);
+    setIsSubmitting(true);
+    void applyDistributorLeaveRequest({
+      leaveType,
+      fromDate,
+      toDate,
+      reason,
+    })
+      .then(() => {
+        onSubmitted?.();
+        handleOpenChange(false);
+      })
+      .catch((error: unknown) => {
+        setSubmitError(error instanceof Error ? error.message : "Could not submit leave request.");
+      })
+      .finally(() => setIsSubmitting(false));
   };
 
   return (
@@ -85,9 +104,9 @@ export function DistributorApplyLeaveDialog({
             </DialogDescription>
           </div>
 
-          {submitted ? (
-            <p className="distributor-apply-leave-dialog__hint" role="status">
-              Leave request submitted for demo. Approval workflow is not connected yet.
+          {submitError ? (
+            <p className="distributor-apply-leave-dialog__hint" role="alert">
+              {submitError}
             </p>
           ) : (
             <div className="distributor-apply-leave-dialog__fields">
@@ -160,13 +179,11 @@ export function DistributorApplyLeaveDialog({
 
           <div className="distributor-apply-leave-dialog__actions">
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-              {submitted ? "Close" : "Cancel"}
+              Cancel
             </Button>
-            {!submitted ? (
-              <DistributorActionButton type="submit" variant="primary">
-                Submit request
-              </DistributorActionButton>
-            ) : null}
+            <DistributorActionButton type="submit" variant="primary" disabled={isSubmitting}>
+              {isSubmitting ? "Submitting…" : "Submit request"}
+            </DistributorActionButton>
           </div>
         </form>
       </DialogContent>

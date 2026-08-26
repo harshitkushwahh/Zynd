@@ -8,8 +8,8 @@ import { useClientDetailTabNavigation } from "@/components/clients/client-detail
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import { summarizeKycProgress } from "@/lib/distributor-client-kyc-steps";
-import type { DistributorClientKycStep } from "@/lib/dummy/types";
+import { summarizeKycProgress, isKycJourneyComplete } from "@/lib/distributor-client-kyc-steps";
+import type { DistributorClientKycStep } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 import {
   DISTRIBUTOR_LABEL_CAPS_INLINE_END_CLASS,
@@ -35,8 +35,14 @@ export function ClientKycVerificationCard({
   variant = "default",
 }: ClientKycVerificationCardProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.kyc;
-  const { completed, total, percent } = summarizeKycProgress(steps);
-  const allComplete = completed === total && total > 0;
+  const journeyComplete =
+    kycCompliant ||
+    isKycJourneyComplete(steps) ||
+    overallStatus === "completed";
+  const { completed, total, percent: stepPercent } = summarizeKycProgress(steps);
+  const percent = journeyComplete ? 100 : stepPercent;
+  const allComplete = journeyComplete || (completed === total && total > 0);
+  const StatusIcon = allComplete ? CheckCircle2 : ClipboardCheck;
   const tabNavigation = useClientDetailTabNavigation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const inline = variant === "inline";
@@ -65,7 +71,7 @@ export function ClientKycVerificationCard({
               )}
               aria-hidden
             >
-              <ClipboardCheck className="size-5" strokeWidth={2.25} />
+              <StatusIcon className="size-5" strokeWidth={2.25} />
             </div>
             <div className="distributor-client-kyc-sidebar-card__body">
               <div className="distributor-client-kyc-sidebar-card__head">
@@ -85,7 +91,10 @@ export function ClientKycVerificationCard({
                 aria-label={`${copy.title} ${percent}%`}
               >
                 <div
-                  className="distributor-client-kyc-sidebar-card__progress-fill"
+                  className={cn(
+                    "distributor-client-kyc-sidebar-card__progress-fill",
+                    allComplete && "distributor-client-kyc-sidebar-card__progress-fill--complete",
+                  )}
                   style={{ width: `${percent}%` }}
                 />
               </div>
@@ -123,7 +132,7 @@ export function ClientKycVerificationCard({
             inline ? "mt-2 gap-1 py-1" : "mt-3 flex-1 gap-2 py-2",
           )}
         >
-          <CheckCircle2
+          <StatusIcon
             className={cn(
               inline ? "size-9" : "size-11",
               allComplete ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/45",

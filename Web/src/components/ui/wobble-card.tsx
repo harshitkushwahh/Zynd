@@ -4,6 +4,7 @@ import { useState, type MouseEvent, type ReactNode } from "react";
 import { motion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { ZYND_MEDIUM_RADIUS_CLASS } from "@/shared/config/ui-classes";
 
 const WOBBLE_MAX_OFFSET = 8;
 
@@ -11,13 +12,20 @@ type WobbleCardProps = {
   children: ReactNode;
   containerClassName?: string;
   className?: string;
+  /** Defaults to {@link ZYND_MEDIUM_RADIUS_CLASS}; referral surfaces pass card radius. */
+  radiusClassName?: string;
 };
 
 function clampWobble(value: number) {
   return Math.max(-WOBBLE_MAX_OFFSET, Math.min(WOBBLE_MAX_OFFSET, value));
 }
 
-export function WobbleCard({ children, containerClassName, className }: WobbleCardProps) {
+export function WobbleCard({
+  children,
+  containerClassName,
+  className,
+  radiusClassName = ZYND_MEDIUM_RADIUS_CLASS,
+}: WobbleCardProps) {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
 
@@ -37,10 +45,7 @@ export function WobbleCard({ children, containerClassName, className }: WobbleCa
         setIsHovering(false);
         setMousePosition({ x: 0, y: 0 });
       }}
-      className={cn(
-        "relative w-full overflow-hidden rounded-[var(--radius-medium)]",
-        containerClassName
-      )}
+      className={cn("relative w-full overflow-hidden", radiusClassName, containerClassName)}
     >
       <div
         className="relative h-full [background-image:radial-gradient(88%_100%_at_top,rgba(255,255,255,0.18),rgba(255,255,255,0))] px-4 py-5 sm:px-5 sm:py-6"

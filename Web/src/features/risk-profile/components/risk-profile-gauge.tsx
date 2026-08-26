@@ -20,7 +20,7 @@ export function preloadRiskProfileGauge() {
 
 const GaugeComponent = dynamic(() => preloadRiskProfileGauge(), { ssr: false });
 
-export type RiskProfileGaugeSize = "navbar" | "mini" | "full";
+export type RiskProfileGaugeSize = "navbar" | "overview" | "mini" | "search" | "card" | "full";
 
 type RiskProfileGaugeProps = {
   score: number;
@@ -46,18 +46,42 @@ type GaugeSizeConfig = {
 const SIZE_CONFIG: Record<RiskProfileGaugeSize, GaugeSizeConfig> = {
   navbar: {
     containerClass:
-      "h-5 w-9 shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full",
+      "risk-profile-gauge h-5 w-9 shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full",
     marginInPercent: 0.02,
     arcWidth: 0.24,
     pointerWidth: 7,
     animationDuration: 450,
   },
+  overview: {
+    containerClass:
+      "risk-profile-gauge h-8 w-[3.25rem] shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full",
+    marginInPercent: 0.03,
+    arcWidth: 0.22,
+    pointerWidth: 9,
+    animationDuration: 900,
+  },
   mini: {
     containerClass:
-      "h-14 w-[4.75rem] shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full",
+      "risk-profile-gauge h-14 w-[4.75rem] shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full",
     marginInPercent: 0.04,
     arcWidth: 0.22,
     pointerWidth: 11,
+    animationDuration: 900,
+  },
+  search: {
+    containerClass:
+      "risk-profile-gauge h-10 w-[5rem] shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full",
+    marginInPercent: 0.035,
+    arcWidth: 0.22,
+    pointerWidth: 10,
+    animationDuration: 900,
+  },
+  card: {
+    containerClass:
+      "risk-profile-gauge h-[5.75rem] w-[7.5rem] shrink-0 overflow-hidden [&_.gauge-component]:!h-full [&_.gauge-component]:!w-full sm:h-[6.25rem] sm:w-[8rem]",
+    marginInPercent: 0.04,
+    arcWidth: 0.2,
+    pointerWidth: 14,
     animationDuration: 900,
   },
   full: {
@@ -91,7 +115,12 @@ export function RiskProfileGauge({
   const resolvedDisplayScore = resolveDisplayScore(score, displayScore);
   const resolvedSize = resolveGaugeSize(mini, size);
   const sizeConfig = SIZE_CONFIG[resolvedSize];
-  const arcOnly = resolvedSize === "navbar" || resolvedSize === "mini";
+  const arcOnly =
+    resolvedSize === "navbar" ||
+    resolvedSize === "mini" ||
+    resolvedSize === "search" ||
+    resolvedSize === "card" ||
+    resolvedSize === "overview";
   const subArcs = riskProfile?.gaugeSubArcs ?? RISK_GAUGE_SUB_ARCS;
   const enableGaugeFadeIn = resolvedSize === "mini";
 

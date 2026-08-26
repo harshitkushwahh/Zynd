@@ -1,4 +1,4 @@
-import type { InvestorType } from "@/lib/dummy/types";
+import type { InvestorType } from "@/lib/distributor-types";
 
 export type DistributorClientsSectionId = "resident" | "nri";
 

@@ -19,7 +19,7 @@ import {
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
-import type { DistributorTxnRequest, TxnRequestStatus } from "@/lib/dummy/types";
+import type { DistributorTxnRequest, TxnRequestStatus } from "@/lib/distributor-types";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";

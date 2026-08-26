@@ -130,7 +130,7 @@ export function DistributorHeadDistributorClientsTab({
                 <AdminTableCell>
                   <div className="flex items-center gap-3">
                     <Avatar size="sm">
-                      <AvatarFallback className="bg-muted text-caption font-medium">
+                      <AvatarFallback className="text-caption font-medium">
                         {initialsFromName(row.name)}
                       </AvatarFallback>
                     </Avatar>

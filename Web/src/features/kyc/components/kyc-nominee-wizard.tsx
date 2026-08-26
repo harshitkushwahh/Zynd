@@ -115,22 +115,28 @@ function validateWizardStep(
       if (!draft.guardian.sourceOfWealth) {
         errors.guardianSourceOfWealth = copy.kyc.nominee.requiredField;
       }
-      const guardianDocumentError = validateKycNomineeDocument(
-        draft.guardian.documentType,
-        draft.guardian.documentNumber,
-      );
-      if (guardianDocumentError) {
-        if (!draft.guardian.documentType) errors.guardianDocumentType = guardianDocumentError;
-        else errors.guardianDocumentNumber = guardianDocumentError;
+      if (!draft.guardian.documentType) {
+        errors.guardianDocumentType = copy.kyc.nominee.requiredField;
+      } else {
+        const guardianDocumentError = validateKycNomineeDocument(
+          draft.guardian.documentType,
+          draft.guardian.documentNumber,
+        );
+        if (guardianDocumentError) {
+          errors.guardianDocumentNumber = guardianDocumentError;
+        }
       }
     } else {
-      const documentError = validateKycNomineeDocument(
-        draft.identity.documentType,
-        draft.identity.documentNumber,
-      );
-      if (documentError) {
-        if (!draft.identity.documentType) errors.documentType = documentError;
-        else errors.documentNumber = documentError;
+      if (!draft.identity.documentType) {
+        errors.documentType = copy.kyc.nominee.requiredField;
+      } else {
+        const documentError = validateKycNomineeDocument(
+          draft.identity.documentType,
+          draft.identity.documentNumber,
+        );
+        if (documentError) {
+          errors.documentNumber = documentError;
+        }
       }
     }
   }

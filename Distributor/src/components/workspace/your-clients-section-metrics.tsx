@@ -5,8 +5,8 @@ import { ShieldCheck, UserCheck, UserPlus, Users } from "lucide-react";
 import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
 import { DistributorClientsBookSummaryCard } from "@/components/workspace/your-clients-book-summary-card";
 import { DistributorClientsInvestmentRatioCard } from "@/components/workspace/your-clients-investment-ratio-card";
-import { DUMMY_INVESTORS, filterInvestorsByType } from "@/lib/dummy/investors";
-import type { InvestorType } from "@/lib/dummy/types";
+import { DUMMY_INVESTORS, filterInvestorsByType } from "@/lib/distributor-investor-utils";
+import type { InvestorType } from "@/lib/distributor-types";
 import { DISTRIBUTOR_METRIC_TILE_CELL_CLASS } from "@/lib/distributor-layout";
 
 type YourClientsSectionMetricsProps = {

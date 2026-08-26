@@ -24,7 +24,7 @@ class KycPanFailure(BaseModel):
 class KycPanConfirmNamesRequest(BaseModel):
     first_name: str = Field(min_length=2, max_length=80)
     middle_name: str = Field(default="", max_length=80)
-    last_name: str = Field(min_length=2, max_length=80)
+    last_name: str = Field(default="", max_length=80)
 
 
 class KycPanConfirmNamesResponse(BaseModel):
@@ -94,7 +94,17 @@ class KycBootstrapResponse(BaseModel):
     kyc_form_failure_reason: Optional[str] = None
     proof_details_status: Optional[str] = None
     esign_details_status: Optional[str] = None
+    geolocation_draft: Optional[dict[str, Any]] = None
     step_statuses: Optional[KycStepStatuses] = None
+    client_id: Optional[str] = None
+
+
+class KycGeolocationDraft(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy_meters: float = Field(alias="accuracyMeters")
+
+    model_config = {"populate_by_name": True}
 
 
 class KycJourneyStateRequest(BaseModel):
@@ -104,6 +114,7 @@ class KycJourneyStateRequest(BaseModel):
     nominee_draft_json: Optional[list[dict[str, Any]]] = None
     bank_draft_json: Optional[dict[str, Any]] = None
     signature_draft_json: Optional[dict[str, Any]] = None
+    geolocation_json: Optional[KycGeolocationDraft] = None
     last_completed_step: Optional[
         Literal["pan", "digilocker", "address", "personal", "nominee", "bank", "signature", "review"]
     ] = None
@@ -188,9 +199,18 @@ class KycBankFailure(BaseModel):
     reason: Optional[str] = None
 
 
+class PoaFieldStatus(BaseModel):
+    status: Optional[str] = None
+    code: Optional[str] = None
+    reason: Optional[str] = None
+
+
 class KycBankVerifyResponse(BaseModel):
     success: bool
     account_holder_name: Optional[str] = None
+    pan_holder_name: Optional[str] = None
+    kyckart_account_holder_name: Optional[str] = None
+    kyckart_lookup_error: Optional[str] = None
     bank_name: Optional[str] = None
     branch: Optional[str] = None
     pan_verified: bool = False
@@ -200,6 +220,9 @@ class KycBankVerifyResponse(BaseModel):
     requires_proof_upload: bool = False
     preverify_id: Optional[str] = None
     failure: Optional[KycBankFailure] = None
+    poa_pan_status: Optional[PoaFieldStatus] = None
+    poa_bank_status: Optional[PoaFieldStatus] = None
+    poa_readiness_status: Optional[PoaFieldStatus] = None
 
 
 class KycBankProofUploadResponse(BaseModel):
@@ -217,8 +240,13 @@ class KycBankManualVerifyResponse(BaseModel):
 class KycBankPreverifyStatusResponse(BaseModel):
     status: Optional[str] = None
     bank_verified: bool = False
+    pan_verified: bool = False
+    readiness_verified: bool = False
     code: Optional[str] = None
     reason: Optional[str] = None
+    poa_pan_status: Optional[PoaFieldStatus] = None
+    poa_bank_status: Optional[PoaFieldStatus] = None
+    poa_readiness_status: Optional[PoaFieldStatus] = None
 
 
 class KycFormSubmitRequest(BaseModel):
@@ -244,3 +272,49 @@ class KycReadinessCheckResponse(BaseModel):
     overall_status: str
     readiness: KycReadinessInfo
     message: str
+
+
+def _poa_field_status(raw: dict | None) -> PoaFieldStatus | None:
+    if not raw:
+        return None
+    return PoaFieldStatus(
+        status=raw.get("status"),
+        code=raw.get("code"),
+        reason=raw.get("reason"),
+    )
+
+
+def build_kyc_bank_verify_response(result: dict) -> KycBankVerifyResponse:
+    return KycBankVerifyResponse(
+        success=bool(result.get("success")),
+        account_holder_name=result.get("accountHolderName"),
+        pan_holder_name=result.get("panHolderName"),
+        kyckart_account_holder_name=result.get("kyckartAccountHolderName"),
+        kyckart_lookup_error=result.get("kyckartLookupError"),
+        bank_name=result.get("bankName"),
+        branch=result.get("branch"),
+        pan_verified=bool(result.get("panVerified")),
+        bank_verified=bool(result.get("bankVerified")),
+        readiness_verified=bool(result.get("readinessVerified")),
+        requires_manual_verification=bool(result.get("requiresManualVerification")),
+        requires_proof_upload=bool(result.get("requiresProofUpload")),
+        preverify_id=result.get("preverifyId"),
+        failure=KycBankFailure(**result["failure"]) if result.get("failure") else None,
+        poa_pan_status=_poa_field_status(result.get("poaPanStatus")),
+        poa_bank_status=_poa_field_status(result.get("poaBankStatus")),
+        poa_readiness_status=_poa_field_status(result.get("poaReadinessStatus")),
+    )
+
+
+def build_kyc_bank_preverify_status_response(result: dict) -> KycBankPreverifyStatusResponse:
+    return KycBankPreverifyStatusResponse(
+        status=result.get("status"),
+        bank_verified=bool(result.get("bankVerified")),
+        pan_verified=bool(result.get("panVerified")),
+        readiness_verified=bool(result.get("readinessVerified")),
+        code=result.get("code"),
+        reason=result.get("reason"),
+        poa_pan_status=_poa_field_status(result.get("poaPanStatus")),
+        poa_bank_status=_poa_field_status(result.get("poaBankStatus")),
+        poa_readiness_status=_poa_field_status(result.get("poaReadinessStatus")),
+    )

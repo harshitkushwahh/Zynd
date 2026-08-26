@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DistributorHeadStatusBadge } from "@/components/distributor-head/distributor-head-badge";
+import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import {
@@ -15,15 +16,21 @@ import {
   AdminTableHeader,
   AdminTablePagination,
   AdminTableRow,
+  AdminTableSkeletonRows,
   AdminTableStateRow,
   paginateItems,
 } from "@/components/ui/admin-table";
-import { DUMMY_DISTRIBUTORS, DUMMY_MANAGERS } from "@/lib/dummy/distributor-head-data";
 import {
-  distributorHeadDistributorHref,
-  matchesDistributorSearch,
-} from "@/lib/distributor-head-queries";
+  fetchAdminHierarchyManagers,
+  fetchAdminHierarchyPartners,
+  type AdminHierarchyManager,
+  type AdminHierarchyPartner,
+} from "@/lib/admin-distributor-hierarchy-api";
+import { matchesHierarchyPartnerSearch } from "@/lib/admin-distributor-hierarchy-mappers";
+import { distributorHeadDistributorHref } from "@/lib/distributor-head-queries";
+import { MITRA_HIERARCHY_COPY } from "@/lib/mitra-hierarchy-copy";
 import { formatDistributorHeadInr } from "@/lib/distributor-head-format";
+import { getErrorMessage, isIgnorableListLoadError } from "@/lib/errors";
 
 const STATUS_ALL = "all";
 const MANAGER_ALL = "all";
@@ -38,28 +45,57 @@ const STATUS_FILTER_OPTIONS: AdminSelectOption[] = [
 
 export function DistributorHeadDistributorsPanel() {
   const router = useRouter();
+  const [items, setItems] = useState<AdminHierarchyPartner[]>([]);
+  const [managers, setManagers] = useState<AdminHierarchyManager[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(STATUS_ALL);
   const [managerFilter, setManagerFilter] = useState(MANAGER_ALL);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [nextItems, nextManagers] = await Promise.all([
+        fetchAdminHierarchyPartners(),
+        fetchAdminHierarchyManagers(),
+      ]);
+      setItems(nextItems);
+      setManagers(nextManagers);
+    } catch (err) {
+      setItems([]);
+      setManagers([]);
+      if (!isIgnorableListLoadError(err)) {
+        setError(getErrorMessage(err, `Could not load ${MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()}.`));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   const managerFilterOptions = useMemo<AdminSelectOption[]>(
     () => [
-      { value: MANAGER_ALL, label: "All managers" },
-      ...DUMMY_MANAGERS.map((manager) => ({ value: manager.id, label: manager.name })),
+      { value: MANAGER_ALL, label: `All ${MITRA_HIERARCHY_COPY.branchManagers.toLowerCase()}` },
+      ...managers.map((manager) => ({ value: manager.id, label: manager.name })),
     ],
-    [],
+    [managers],
   );
 
   const filtered = useMemo(() => {
-    return DUMMY_DISTRIBUTORS.filter((row) => {
-      if (!matchesDistributorSearch(row, search)) return false;
+    return items.filter((row) => {
+      if (!matchesHierarchyPartnerSearch(row, search)) return false;
       if (statusFilter !== STATUS_ALL && row.status !== statusFilter) return false;
-      if (managerFilter !== MANAGER_ALL && row.managerId !== managerFilter) return false;
+      if (managerFilter !== MANAGER_ALL && row.manager_id !== managerFilter) return false;
       return true;
     });
-  }, [managerFilter, search, statusFilter]);
+  }, [items, managerFilter, search, statusFilter]);
 
   const pagination = useMemo(
     () => paginateItems(filtered, page, pageSize),
@@ -73,14 +109,16 @@ export function DistributorHeadDistributorsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search by name, ARN, manager, or branch"
+          containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+          placeholder={`Search by name, ARN, ${MITRA_HIERARCHY_COPY.branchManager.toLowerCase()}, or branch`}
           value={search}
           onChange={(event) => handleSearchChange(event.target.value)}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
           <AdminSelect
             value={managerFilter}
             onValueChange={(value) => {
@@ -88,8 +126,9 @@ export function DistributorHeadDistributorsPanel() {
               setPage(0);
             }}
             options={managerFilterOptions}
-            placeholder="Manager"
-            className="min-w-select-md"
+            placeholder={MITRA_HIERARCHY_COPY.branchManager}
+            className="min-w-select-md shrink-0"
+            triggerClassName="w-auto"
           />
           <AdminSelect
             value={statusFilter}
@@ -99,7 +138,8 @@ export function DistributorHeadDistributorsPanel() {
             }}
             options={STATUS_FILTER_OPTIONS}
             placeholder="Status"
-            className="min-w-select-sm"
+            className="min-w-select-sm shrink-0"
+            triggerClassName="w-auto"
           />
         </div>
       </div>
@@ -128,7 +168,7 @@ export function DistributorHeadDistributorsPanel() {
           <tr>
             <AdminTableHeadCell>Name</AdminTableHeadCell>
             <AdminTableHeadCell>ARN</AdminTableHeadCell>
-            <AdminTableHeadCell>Manager</AdminTableHeadCell>
+            <AdminTableHeadCell>{MITRA_HIERARCHY_COPY.branchManager}</AdminTableHeadCell>
             <AdminTableHeadCell>Branch</AdminTableHeadCell>
             <AdminTableHeadCell>Clients</AdminTableHeadCell>
             <AdminTableHeadCell>AUM</AdminTableHeadCell>
@@ -137,9 +177,11 @@ export function DistributorHeadDistributorsPanel() {
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          {pagination.items.length === 0 ? (
+          {loading ? (
+            <AdminTableSkeletonRows columns={TABLE_COLUMN_COUNT} rows={6} />
+          ) : pagination.items.length === 0 ? (
             <AdminTableStateRow colSpan={TABLE_COLUMN_COUNT}>
-              No distributors match your search or filters.
+              No {MITRA_HIERARCHY_COPY.zyndMitras.toLowerCase()} match your search or filters.
             </AdminTableStateRow>
           ) : (
             pagination.items.map((row) => (
@@ -153,15 +195,15 @@ export function DistributorHeadDistributorsPanel() {
                     <p className="text-caption text-muted-foreground">{row.email}</p>
                   </div>
                 </AdminTableCell>
-                <AdminTableCell className="font-mono text-caption">{row.arn}</AdminTableCell>
-                <AdminTableCell>{row.managerName}</AdminTableCell>
-                <AdminTableCell>{row.branchName}</AdminTableCell>
-                <AdminTableCell>{row.clientCount}</AdminTableCell>
+                <AdminTableCell className="font-mono text-caption">{row.arn || "—"}</AdminTableCell>
+                <AdminTableCell>{row.manager_name || "—"}</AdminTableCell>
+                <AdminTableCell>{row.branch_name || "—"}</AdminTableCell>
+                <AdminTableCell>{row.client_count}</AdminTableCell>
                 <AdminTableCell className="tabular-nums">
-                  {formatDistributorHeadInr(row.aumInr)}
+                  {formatDistributorHeadInr(row.aum_inr)}
                 </AdminTableCell>
                 <AdminTableCell className="tabular-nums">
-                  {formatDistributorHeadInr(row.salesMtdInr)}
+                  {formatDistributorHeadInr(row.sales_mtd_inr)}
                 </AdminTableCell>
                 <AdminTableCell>
                   <DistributorHeadStatusBadge status={row.status} />

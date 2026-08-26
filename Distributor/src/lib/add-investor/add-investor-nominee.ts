@@ -278,6 +278,9 @@ export function formatAddInvestorNomineeSummary(nominees: AddInvestorNomineeReco
     .join(" · ");
 }
 
-export function relationshipLabel(value: string): string {
-  return ADD_INVESTOR_NOMINEE_RELATIONSHIPS.find((item) => item.value === value)?.label ?? value;
+export function relationshipLabel(
+  value: string,
+  options: ReadonlyArray<{ value: string; label: string }> = ADD_INVESTOR_NOMINEE_RELATIONSHIPS,
+): string {
+  return options.find((item) => item.value === value)?.label ?? value;
 }

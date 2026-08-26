@@ -3,10 +3,13 @@ import type {
   FamilyGroupMemberPreview,
   FamilyGroupRole,
 } from "@/features/family-groups/api/family-groups-api";
-import { ZYND_CARD_RADIUS_CLASS, ZYND_CONTROL_RADIUS_CLASS } from "@/shared/config/ui-classes";
+import { ZYND_CARD_RADIUS_CLASS, ZYND_CONTROL_RADIUS_CLASS, ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 
 export const FAMILY_GROUP_CARD_RADIUS_CLASS = ZYND_CARD_RADIUS_CLASS;
+export const FAMILY_GROUP_HERO_RADIUS_CLASS = ZYND_3XL_RADIUS_CLASS;
+export const FAMILY_GROUP_DASHBOARD_PANEL_CLASS =
+  `overflow-hidden ${ZYND_3XL_RADIUS_CLASS} border border-border bg-card`;
 export const FAMILY_GROUP_CONTROL_RADIUS_CLASS = ZYND_CONTROL_RADIUS_CLASS;
 export const FAMILY_GROUP_HERO_GLASS_CLASS =
   "border border-primary-foreground/12 bg-[color-mix(in_srgb,var(--zynd-navy)_16%,transparent)] backdrop-blur-[5px]";

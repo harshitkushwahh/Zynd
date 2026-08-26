@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "@/lib/errors";
-import { Shield, UserX } from "lucide-react";
+import { Activity, Shield, ShieldCheck, UserX } from "lucide-react";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminProfilePageSkeleton } from "@/components/ui/admin-skeletons";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { UserProfileHeroSection } from "@/components/users/user-profile-hero-sec
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { UserActivityTable } from "@/components/users/user-activity-table";
+import { AdminAccountRecordsPanel } from "@/components/logs/admin-account-records-panel";
 import {
   AdminSectionBreadcrumb,
   userManagementBreadcrumbSegments,
@@ -23,19 +25,24 @@ import { UserRiskDetailSection } from "@/components/users/user-risk-detail-secti
 import { UserFamilyGroupsDetailSection } from "@/components/users/user-family-groups-detail-section";
 import { UserGoalsDetailSection } from "@/components/users/user-goals-detail-section";
 import { UserKycDetailSection } from "@/components/users/user-kyc-detail-section";
+import { UserReferralsDetailSection } from "@/components/users/user-referrals-detail-section";
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";
 import {
+  PLATFORM_ADMIN_PROFILE_TABS,
   resolveUserProfileTab,
   userProfileTabHref,
   USER_PROFILE_TABS,
+  type PlatformAdminProfileTabKey,
   type UserProfileTabKey,
 } from "@/lib/admin-user-profile-navigation";
+import { UserProfilePlatformAdminSection } from "@/components/users/user-profile-platform-admin-section";
 import { useMountedTabs } from "@/hooks/use-mounted-tabs";
 import {
   adminUserProfileQueryKey,
   useAdminUserProfileQuery,
 } from "@/hooks/use-admin-user-profile-query";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
+import { SUPER_ADMIN_ROLE_KEY } from "@/lib/admin-role-display";
 import {
   assignAdminUserRole,
   revokeAdminUserRole,
@@ -52,17 +59,18 @@ export function UserProfileView({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { hasPermission } = useAdminAuth();
+  const { hasPermission, hasRole } = useAdminAuth();
   const canReadUsers = hasPermission("users.read");
   const canSuspend = hasPermission("users.suspend");
+  const canManageAdminAccounts =
+    hasRole(SUPER_ADMIN_ROLE_KEY) && hasPermission("admin.accounts.manage");
   const canManageRbac = hasPermission("rbac.manage");
   const canReadKyc = hasPermission("documents.read");
   const canDownloadDocs = hasPermission("documents.download");
-  const canVerifyDocs = hasPermission("documents.verify");
   const canReadMf = hasPermission("mf.transactions.read");
   const canReadRiskProfile = hasPermission("risk_profile.users.read");
   const canReadFamilyGroups = hasPermission("family_groups.read");
-  const canManageFamilyGroups = hasPermission("family_groups.manage");
+  const canReadReferrals = hasPermission("referrals.read");
   const canReadAudit = hasPermission("audit.read");
 
   const profileQueryParams = useMemo(
@@ -84,6 +92,9 @@ export function UserProfileView({
   const roles = profileData?.roles ?? [];
   const assignedRoles = profileData?.assignedRoles ?? [];
   const showPageSkeleton = profilePending && !profileData;
+  const isPlatformAdmin = summary?.role === "admin";
+  const canShowCustomerAccountActions = canSuspend && !isPlatformAdmin;
+  const canShowAdminAccountLink = isPlatformAdmin && canManageAdminAccounts;
   const profileError = profileQueryError
     ? getErrorMessage(profileQueryError, "Could not load user profile.")
     : "";
@@ -117,33 +128,53 @@ export function UserProfileView({
 
   const showPortfolioWithoutInvestments = canManageRbac || canSuspend;
 
-  const visibleProfileTabs = useMemo(
-    () =>
-      USER_PROFILE_TABS.filter((tab) => {
-        if (tab.key === "kyc" && !profileDetail?.kyc) return false;
-        if (tab.key === "portfolio") {
-          const hasInvestments = Boolean(profileDetail?.investments);
-          if (!hasInvestments && !showPortfolioWithoutInvestments) return false;
-          if (!hasInvestments && showPortfolioWithoutInvestments) return true;
-        }
+  const visibleProfileTabs = useMemo(() => {
+    if (isPlatformAdmin) {
+      return PLATFORM_ADMIN_PROFILE_TABS.filter((tab) => {
         if (!tab.permissions?.length) return true;
-        if (tab.match === "all") {
-          return tab.permissions.every((permission) => hasPermission(permission));
-        }
         return tab.permissions.some((permission) => hasPermission(permission));
-      }),
-    [hasPermission, profileDetail?.investments, profileDetail?.kyc, showPortfolioWithoutInvestments],
-  );
+      });
+    }
 
-  const activeProfileTab = resolveUserProfileTab(profileTabSlug, hasPermission, {
-    kyc: Boolean(profileDetail?.kyc),
-    investments: Boolean(profileDetail?.investments) || showPortfolioWithoutInvestments,
-  });
+    return USER_PROFILE_TABS.filter((tab) => {
+      if (tab.key === "kyc" && !profileDetail?.kyc) return false;
+      if (tab.key === "portfolio") {
+        const hasInvestments = Boolean(profileDetail?.investments);
+        if (!hasInvestments && !showPortfolioWithoutInvestments) return false;
+        if (!hasInvestments && showPortfolioWithoutInvestments) return true;
+      }
+      if (!tab.permissions?.length) return true;
+      if (tab.match === "all") {
+        return tab.permissions.every((permission) => hasPermission(permission));
+      }
+      return tab.permissions.some((permission) => hasPermission(permission));
+    });
+  }, [
+    hasPermission,
+    isPlatformAdmin,
+    profileDetail?.investments,
+    profileDetail?.kyc,
+    showPortfolioWithoutInvestments,
+  ]);
 
-  const { activeTab: activeTabKey, selectTab, keepMounted } = useMountedTabs<UserProfileTabKey>(
-    activeProfileTab?.key ?? visibleProfileTabs[0]?.key ?? "portfolio",
-    activeProfileTab?.key,
-  );
+  const activeCustomerProfileTab = !isPlatformAdmin
+    ? resolveUserProfileTab(profileTabSlug, hasPermission, {
+        kyc: Boolean(profileDetail?.kyc),
+        investments: Boolean(profileDetail?.investments) || showPortfolioWithoutInvestments,
+      })
+    : null;
+
+  const activePlatformAdminTab = isPlatformAdmin
+    ? visibleProfileTabs.find((tab) => tab.slug === profileTabSlug) ?? visibleProfileTabs[0] ?? null
+    : null;
+
+  const defaultTabKey = isPlatformAdmin
+    ? (activePlatformAdminTab?.key ?? "overview")
+    : (activeCustomerProfileTab?.key ?? visibleProfileTabs[0]?.key ?? "portfolio");
+
+  const { activeTab: activeTabKey, selectTab, keepMounted } = useMountedTabs<
+    UserProfileTabKey | PlatformAdminProfileTabKey
+  >(defaultTabKey, isPlatformAdmin ? activePlatformAdminTab?.key : activeCustomerProfileTab?.key);
 
   useEffect(() => {
     if (showPageSkeleton || visibleProfileTabs.length === 0) return;
@@ -172,6 +203,9 @@ export function UserProfileView({
     selectTab(tab.key);
     router.push(userProfileTabHref(profilePath, tab), { scroll: false });
   };
+
+  const platformAdminVisibleTabs = isPlatformAdmin ? visibleProfileTabs : [];
+  const customerVisibleTabs = !isPlatformAdmin ? visibleProfileTabs : [];
 
   const handleSuspend = async () => {
     if (!canSuspend || !summary) return;
@@ -243,6 +277,59 @@ export function UserProfileView({
     }
   };
 
+  const platformAdminHeroActions =
+    isPlatformAdmin && summary ? (
+      <>
+        {canShowAdminAccountLink ? (
+          <Button
+            nativeButton={false}
+            render={<Link href="/dashboard/compliance/admin-accounts" />}
+            variant="outline"
+            size="sm"
+          >
+            <ShieldCheck className="size-4" />
+            Manage in Admin accounts
+          </Button>
+        ) : null}
+        {canManageRbac ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setTeamRolesDialogOpen(true)}
+          >
+            <Shield className="size-4" />
+            View team roles
+          </Button>
+        ) : null}
+        {canReadAudit ? (
+          <>
+            {platformAdminVisibleTabs.some((tab) => tab.key === "activity") ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleProfileTabChange("activity")}
+              >
+                <Activity className="size-4" />
+                View activity timeline
+              </Button>
+            ) : null}
+            <Button
+              nativeButton={false}
+              render={
+                <Link href={`/dashboard/zynd-logs?record=${encodeURIComponent(summary.client_id)}`} />
+              }
+              variant="outline"
+              size="sm"
+            >
+              Open in Zynd Logs · Record
+            </Button>
+          </>
+        ) : null}
+      </>
+    ) : null;
+
   if (!canReadUsers) {
     return (
       <p className="text-compact text-muted-foreground">You do not have permission to view user profiles.</p>
@@ -260,44 +347,33 @@ export function UserProfileView({
           ])}
         />
 
-        {!showPageSkeleton && summary && (canManageRbac || canSuspend) ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {canSuspend ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setAccountActionsDialogOpen(true)}
-              >
-                <UserX className="size-4" />
-                Account actions
-              </Button>
-            ) : null}
-            {canManageRbac ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setTeamRolesDialogOpen(true)}
-              >
-                <Shield className="size-4" />
-                View team roles
-              </Button>
-            ) : null}
+        {!showPageSkeleton && summary && canShowCustomerAccountActions ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAccountActionsDialogOpen(true)}
+            >
+              <UserX className="size-4" />
+              Account actions
+            </Button>
           </div>
         ) : null}
       </div>
 
       {error || profileError ? (
-        <AdminFeedbackMessage variant="destructive">{error || profileError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>
+          {error || profileError}
+        </AdminFeedbackMessage>
       ) : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       {showPageSkeleton ? (
         <AdminProfilePageSkeleton />
       ) : summary ? (
         <>
-          {canSuspend ? (
+          {canShowCustomerAccountActions ? (
             <UserAccountActionsDialog
               open={accountActionsDialogOpen}
               onOpenChange={setAccountActionsDialogOpen}
@@ -336,84 +412,128 @@ export function UserProfileView({
             canReadMf={canReadMf}
             canReadKyc={canReadKyc}
             canReadRiskProfile={canReadRiskProfile}
+            isPlatformAdmin={isPlatformAdmin}
+            identityActions={platformAdminHeroActions}
             onOpenPortfolioTab={
-              visibleProfileTabs.some((tab) => tab.key === "portfolio")
+              !isPlatformAdmin && customerVisibleTabs.some((tab) => tab.key === "portfolio")
                 ? () => handleProfileTabChange("portfolio")
                 : undefined
             }
             onOpenRiskTab={
-              visibleProfileTabs.some((tab) => tab.key === "risk")
+              !isPlatformAdmin && customerVisibleTabs.some((tab) => tab.key === "risk")
                 ? () => handleProfileTabChange("risk")
                 : undefined
             }
           />
 
-          <Tabs value={activeTabKey} onValueChange={handleProfileTabChange} className="gap-6">
-            <AdminTabList variant="primary">
-              {visibleProfileTabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <AdminTabTrigger key={tab.key} value={tab.key} className="gap-2">
-                    <Icon className="size-4 shrink-0" />
-                    {tab.label}
-                  </AdminTabTrigger>
-                );
-              })}
-            </AdminTabList>
+          {visibleProfileTabs.length > 0 ? (
+            <Tabs value={activeTabKey} onValueChange={handleProfileTabChange} className="gap-6">
+              <AdminTabList variant="primary">
+                {visibleProfileTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <AdminTabTrigger key={tab.key} value={tab.key} className="gap-2">
+                      <Icon className="size-4 shrink-0" />
+                      {tab.label}
+                    </AdminTabTrigger>
+                  );
+                })}
+              </AdminTabList>
 
-            {(canReadMf && profileDetail?.investments) || showPortfolioWithoutInvestments ? (
-              <TabsContent
-                value="portfolio"
-                keepMounted={keepMounted("portfolio")}
-                className="mt-0 space-y-4"
-              >
-                {canReadMf && profileDetail?.investments ? (
-                  <UserInvestmentsDetailSection investments={profileDetail.investments} />
-                ) : null}
-              </TabsContent>
-            ) : null}
+              {isPlatformAdmin ? (
+                <>
+                  {platformAdminVisibleTabs.some((tab) => tab.key === "overview") ? (
+                    <TabsContent
+                      value="overview"
+                      keepMounted={keepMounted("overview")}
+                      className="mt-0"
+                    >
+                      <UserProfilePlatformAdminSection
+                        summary={summary}
+                        assignedRoles={assignedRoles}
+                        roleNameByKey={roleNameByKey}
+                      />
+                    </TabsContent>
+                  ) : null}
 
-            {canReadFamilyGroups ? (
-              <TabsContent
-                value="family"
-                keepMounted={keepMounted("family")}
-                className="mt-0"
-              >
-                <UserFamilyGroupsDetailSection userId={summary.user_id} profilePath={profilePath} />
-              </TabsContent>
-            ) : null}
+                  {canReadAudit && platformAdminVisibleTabs.some((tab) => tab.key === "activity") ? (
+                    <TabsContent
+                      value="activity"
+                      keepMounted={keepMounted("activity")}
+                      className="mt-0"
+                    >
+                      <AdminAccountRecordsPanel initialUserRef={clientId} embedded />
+                    </TabsContent>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {(canReadMf && profileDetail?.investments) || showPortfolioWithoutInvestments ? (
+                    <TabsContent
+                      value="portfolio"
+                      keepMounted={keepMounted("portfolio")}
+                      className="mt-0 space-y-4"
+                    >
+                      {canReadMf && profileDetail?.investments ? (
+                        <UserInvestmentsDetailSection investments={profileDetail.investments} />
+                      ) : null}
+                    </TabsContent>
+                  ) : null}
 
-            {canReadUsers ? (
-              <TabsContent
-                value="goals"
-                keepMounted={keepMounted("goals")}
-                className="mt-0"
-              >
-                <UserGoalsDetailSection userRef={clientId} />
-              </TabsContent>
-            ) : null}
+                  {canReadFamilyGroups ? (
+                    <TabsContent
+                      value="family"
+                      keepMounted={keepMounted("family")}
+                      className="mt-0"
+                    >
+                      <UserFamilyGroupsDetailSection userId={clientId} profilePath={profilePath} />
+                    </TabsContent>
+                  ) : null}
 
-            {canReadKyc && profileDetail?.kyc ? (
-              <TabsContent value="kyc" keepMounted={keepMounted("kyc")} className="mt-0">
-                <UserKycDetailSection
-                  kyc={profileDetail.kyc}
-                  hasDownload={canDownloadDocs}
-                />
-              </TabsContent>
-            ) : null}
+                  <TabsContent
+                    value="goals"
+                    keepMounted={keepMounted("goals")}
+                    className="mt-0"
+                  >
+                    <UserGoalsDetailSection userRef={clientId} />
+                  </TabsContent>
 
-            {canReadRiskProfile ? (
-              <TabsContent value="risk" keepMounted={keepMounted("risk")} className="mt-0">
-                <UserRiskDetailSection userId={summary.user_id} />
-              </TabsContent>
-            ) : null}
+                  {canReadKyc && profileDetail?.kyc ? (
+                    <TabsContent value="kyc" keepMounted={keepMounted("kyc")} className="mt-0">
+                      <UserKycDetailSection
+                        kyc={profileDetail.kyc}
+                        hasDownload={canDownloadDocs}
+                      />
+                    </TabsContent>
+                  ) : null}
 
-            {canReadAudit ? (
-              <TabsContent value="activity" keepMounted={keepMounted("activity")} className="mt-0">
-                <UserActivityTable userId={summary.user_id} />
-              </TabsContent>
-            ) : null}
-          </Tabs>
+                  {canReadRiskProfile ? (
+                    <TabsContent value="risk" keepMounted={keepMounted("risk")} className="mt-0">
+                      <UserRiskDetailSection userId={clientId} />
+                    </TabsContent>
+                  ) : null}
+
+                  {canReadReferrals ? (
+                    <TabsContent value="referrals" keepMounted={keepMounted("referrals")} className="mt-0">
+                      <UserReferralsDetailSection userId={clientId} />
+                    </TabsContent>
+                  ) : null}
+
+                  {canReadAudit ? (
+                    <TabsContent value="activity" keepMounted={keepMounted("activity")} className="mt-0">
+                      <UserActivityTable userId={clientId} />
+                    </TabsContent>
+                  ) : null}
+                </>
+              )}
+            </Tabs>
+          ) : isPlatformAdmin ? (
+            <UserProfilePlatformAdminSection
+              summary={summary}
+              assignedRoles={assignedRoles}
+              roleNameByKey={roleNameByKey}
+            />
+          ) : null}
         </>
       ) : null}
     </div>

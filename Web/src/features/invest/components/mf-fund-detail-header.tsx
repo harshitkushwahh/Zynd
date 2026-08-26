@@ -70,10 +70,10 @@ export function MfFundDetailHeader({ fund }: MfFundDetailHeaderProps) {
             <img
               src={logoUrl}
               alt=""
-              className="size-11 shrink-0 rounded-[var(--radius-control)] border border-border bg-background object-contain p-1 sm:size-12"
+              className="size-11 shrink-0 rounded-[var(--radius-medium)] border border-border bg-background object-contain p-1.5 sm:size-12"
             />
           ) : (
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-caption font-semibold text-muted-foreground sm:size-12">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-medium)] border border-border bg-muted text-caption font-semibold text-muted-foreground sm:size-12">
               {fund.amc_name.slice(0, 2).toUpperCase()}
             </div>
           )}

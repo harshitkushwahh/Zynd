@@ -30,7 +30,12 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfSipPlan,
     MfSipPlanStatus,
 )
-from app.infrastructure.persistence.models import KycJourneyState, User
+from app.infrastructure.persistence.models import KycJourneyState, KycOverallStatus, User, UserKycStatus
+
+
+async def _seed_kyc_completed(db_session, user_id) -> None:
+    db_session.add(UserKycStatus(user_id=user_id, overall_status=KycOverallStatus.completed))
+    await db_session.flush()
 
 
 async def _seed_user_with_two_banks(db_session) -> tuple[User, InvestorBankAccount, InvestorBankAccount]:
@@ -48,6 +53,7 @@ async def _seed_user_with_two_banks(db_session) -> tuple[User, InvestorBankAccou
             pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
         )
     )
+    await _seed_kyc_completed(db_session, user.id)
     primary = InvestorBankAccount(
         investor_profile_id=user.id,
         is_primary=True,
@@ -131,8 +137,12 @@ def _verification_outcome(**overrides) -> HybridBankVerificationOutcome:
         "requires_manual": False,
         "requires_proof_upload": False,
         "failure": None,
-        "display_holder_name": "Test User",
+        "kyckart_holder_name": "Test User",
+        "kyckart_lookup_error": None,
         "pan_holder_name": "Test User",
+        "poa_pan_status": {"status": "verified"},
+        "poa_bank_status": {"status": "verified"},
+        "poa_readiness_status": {"status": "verified"},
         "bank_name": "HDFC Bank",
         "branch": "Jayanagar",
         "poa_account_type": "savings",
@@ -162,6 +172,7 @@ async def test_verify_and_add_bank_account_creates_primary_row(db_session) -> No
         )
     )
     db_session.add(InvestorProfile(user_id=user.id))
+    await _seed_kyc_completed(db_session, user.id)
     await db_session.flush()
 
     with patch(
@@ -204,6 +215,7 @@ async def test_verify_and_add_bank_account_rejects_duplicate_verified(db_session
         )
     )
     db_session.add(InvestorProfile(user_id=user.id))
+    await _seed_kyc_completed(db_session, user.id)
     db_session.add(
         InvestorBankAccount(
             investor_profile_id=user.id,
@@ -231,6 +243,72 @@ async def test_verify_and_add_bank_account_rejects_duplicate_verified(db_session
 
 
 @pytest.mark.asyncio
+async def test_list_user_bank_accounts_hidden_until_kyc_completed(db_session) -> None:
+    user = User(
+        id=uuid4(),
+        email=f"bank-hidden-{uuid4()}@example.com",
+        phone=f"+919{uuid4().int % 10_000_000_000:010d}",
+        password_hash="hash",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        KycJourneyState(
+            user_id=user.id,
+            pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
+            bank_draft_json={"accountNumber": "123456789012", "ifscCode": "HDFC0001234"},
+        )
+    )
+    db_session.add(
+        InvestorBankAccount(
+            investor_profile_id=user.id,
+            is_primary=True,
+            account_type="savings",
+            account_number_last4="9012",
+            ifsc_code="HDFC0001234",
+            primary_account_holder_name="Test User",
+            verification_status=InvestorBankVerificationStatus.verified,
+            source=InvestorObjectSource.kyc,
+            sync_status=InvestorObjectSyncStatus.draft,
+        )
+    )
+    await db_session.flush()
+
+    rows = await list_user_bank_accounts(db_session, user_id=user.id)
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_verify_and_add_bank_account_requires_kyc_completed(db_session) -> None:
+    user = User(
+        id=uuid4(),
+        email=f"bank-kyc-{uuid4()}@example.com",
+        phone=f"+919{uuid4().int % 10_000_000_000:010d}",
+        password_hash="hash",
+    )
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        KycJourneyState(
+            user_id=user.id,
+            pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
+        )
+    )
+    db_session.add(InvestorProfile(user_id=user.id))
+    await db_session.flush()
+
+    with pytest.raises(InvestorBankAccountError) as exc:
+        await verify_and_add_bank_account(
+            db_session,
+            user=user,
+            account_number="123456789012",
+            account_type="Savings",
+            ifsc_code="HDFC0001234",
+        )
+    assert exc.value.code == "kyc_required"
+
+
+@pytest.mark.asyncio
 async def test_list_user_bank_accounts_returns_masked_rows(db_session) -> None:
     user = User(
         id=uuid4(),
@@ -246,6 +324,7 @@ async def test_list_user_bank_accounts_returns_masked_rows(db_session) -> None:
             pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
         )
     )
+    await _seed_kyc_completed(db_session, user.id)
     db_session.add(
         InvestorBankAccount(
             investor_profile_id=user.id,
@@ -283,6 +362,7 @@ async def test_set_primary_bank_account_switches_primary(db_session) -> None:
             pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
         )
     )
+    await _seed_kyc_completed(db_session, user.id)
 
     first = InvestorBankAccount(
         investor_profile_id=user.id,
@@ -344,6 +424,7 @@ async def test_disable_bank_account_hides_from_list(db_session) -> None:
             pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
         )
     )
+    await _seed_kyc_completed(db_session, user.id)
     primary = InvestorBankAccount(
         investor_profile_id=user.id,
         is_primary=True,
@@ -399,6 +480,7 @@ async def test_disable_bank_account_rejects_primary(db_session) -> None:
             pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
         )
     )
+    await _seed_kyc_completed(db_session, user.id)
     primary = InvestorBankAccount(
         investor_profile_id=user.id,
         is_primary=True,
@@ -527,6 +609,7 @@ async def test_list_user_bank_accounts_consolidates_duplicate_kotak_last4(db_ses
             pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
         )
     )
+    await _seed_kyc_completed(db_session, user.id)
 
     ciphertext, key_version = encrypt_account_number("123456789725")
     primary = InvestorBankAccount(
@@ -588,6 +671,7 @@ async def test_list_user_bank_accounts_stubs_payment_ready_verified_bank(db_sess
             pan_draft_json={"panNumber": "ABCDE1234F", "fullName": "Test User"},
         )
     )
+    await _seed_kyc_completed(db_session, user.id)
     ciphertext, key_version = encrypt_account_number("123456789012")
     bank = InvestorBankAccount(
         investor_profile_id=user.id,
@@ -618,3 +702,35 @@ async def test_list_user_bank_accounts_stubs_payment_ready_verified_bank(db_sess
     assert bank.sync_status == InvestorObjectSyncStatus.active
     assert bank.external_bank_account_id
     assert bank.external_old_id is not None
+
+
+@pytest.mark.asyncio
+async def test_list_user_bank_accounts_includes_hub_fields(db_session) -> None:
+    user, primary, secondary = await _seed_user_with_two_banks(db_session)
+    mandate = MfMandate(
+        user_id=user.id,
+        investor_bank_account_id=primary.id,
+        bank_account_old_id=int(primary.external_old_id),
+        status=MfMandateStatus.approved,
+        mandate_limit=5000,
+        idempotency_key=str(uuid4()),
+        fp_mandate_id=9002,
+    )
+    db_session.add(mandate)
+    await db_session.flush()
+    await _seed_sip_plan(
+        db_session,
+        user_id=user.id,
+        mandate_id=mandate.id,
+        status=MfSipPlanStatus.active,
+    )
+
+    rows = await list_user_bank_accounts(db_session, user_id=user.id)
+    by_id = {row["id"]: row for row in rows}
+
+    assert by_id[str(primary.id)]["is_payment_ready"] is True
+    assert by_id[str(primary.id)]["active_sip_count"] == 1
+    assert by_id[str(primary.id)]["blocks_removal"] is True
+    assert by_id[str(primary.id)]["blocks_primary_switch"] is True
+    assert by_id[str(secondary.id)]["active_sip_count"] == 0
+    assert by_id[str(secondary.id)]["blocks_removal"] is False

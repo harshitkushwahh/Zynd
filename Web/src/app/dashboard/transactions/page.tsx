@@ -1,5 +1,7 @@
-import { MfTransactionsPage } from "@/features/invest/components/mf-transactions-page";
+import { redirect } from "next/navigation";
+
+import { portfolioTabHref } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
 
 export default function TransactionsPage() {
-  return <MfTransactionsPage />;
+  redirect(portfolioTabHref("transactions"));
 }

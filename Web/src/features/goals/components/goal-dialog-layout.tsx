@@ -72,14 +72,14 @@ export function GoalDialogSplitLayout({ main, aside, className }: GoalDialogSpli
     <div
       className={cn(
         GOAL_DIALOG_BODY_SCROLL_CLASS,
-        "flex min-h-0 flex-1 flex-col bg-background lg:flex-row lg:items-stretch lg:overflow-hidden",
+        "flex min-h-0 flex-1 flex-col bg-popover lg:flex-row lg:items-stretch lg:overflow-hidden",
         className,
       )}
     >
-      <div className="min-h-0 flex-1 bg-background px-5 py-4 sm:px-6 sm:py-5 lg:overflow-y-auto lg:[scrollbar-width:thin] lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-border">
+      <div className="min-h-0 flex-1 bg-popover px-5 py-4 sm:px-6 sm:py-5 lg:overflow-y-auto lg:[scrollbar-width:thin] lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-border">
         {main}
       </div>
-      <aside className="flex min-h-0 shrink-0 flex-col border-t border-border/70 bg-background lg:w-[20rem] lg:overflow-hidden lg:border-l lg:border-t-0 xl:w-[22rem]">
+      <aside className="flex min-h-0 shrink-0 flex-col border-t border-border/70 bg-popover lg:w-[20rem] lg:overflow-hidden lg:border-l lg:border-t-0 xl:w-[22rem]">
         <div className="flex min-h-0 flex-1 flex-col lg:overflow-y-auto lg:[scrollbar-width:thin] lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-border">
           {aside}
         </div>

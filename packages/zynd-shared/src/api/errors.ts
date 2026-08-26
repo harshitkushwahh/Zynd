@@ -36,23 +36,39 @@ export function isAuthFailure(error: unknown) {
   );
 }
 
+function normalizeApiErrorMessage(message: string, status: number) {
+  const trimmed = message.trim();
+  if (status === 404 && (trimmed === "Not Found" || trimmed.length === 0)) {
+    return "Request failed";
+  }
+  return trimmed || "Request failed";
+}
+
 export async function parseApiError(response: Response): Promise<ApiError> {
   try {
     const body = await response.json();
     const detail = body.detail as ApiErrorBody | ApiErrorBody[] | string | undefined;
     if (typeof detail === "string") {
-      return new ApiError(detail, "api_error", response.status);
+      return new ApiError(
+        normalizeApiErrorMessage(detail, response.status),
+        "api_error",
+        response.status,
+      );
     }
     if (Array.isArray(detail) && detail[0]?.message) {
-      return new ApiError(detail[0].message, detail[0].code ?? "api_error", response.status);
+      return new ApiError(
+        normalizeApiErrorMessage(detail[0].message, response.status),
+        detail[0].code ?? "api_error",
+        response.status,
+      );
     }
     if (detail && typeof detail === "object" && "message" in detail) {
       return new ApiError(
-        detail.message ?? "Request failed",
+        normalizeApiErrorMessage(detail.message ?? "Request failed", response.status),
         detail.code ?? "api_error",
         response.status,
         "captcha_required" in detail ? Boolean(detail.captcha_required) : undefined,
-        "retry_after_seconds" in detail ? Number(detail.retry_after_seconds) : undefined
+        "retry_after_seconds" in detail ? Number(detail.retry_after_seconds) : undefined,
       );
     }
   } catch {

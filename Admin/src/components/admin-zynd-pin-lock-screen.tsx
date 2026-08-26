@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LockKeyhole } from "lucide-react";
+import Image from "next/image";
 
 import { useAdminZyndPin } from "@/contexts/admin-zynd-pin-context";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
@@ -85,11 +85,16 @@ export function AdminZyndPinLockScreen() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-6 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-card p-6">
+      <div className="w-full max-w-sm rounded-[var(--radius-3xl)] border border-border bg-card p-6">
         <div className="mb-5 flex flex-col items-center text-center">
-          <div className="mb-3 flex size-12 items-center justify-center rounded-[var(--radius-card)] bg-primary/10 text-primary">
-            <LockKeyhole className="size-5" />
-          </div>
+          <Image
+            src="/zynda.png"
+            alt="ZYND"
+            width={40}
+            height={40}
+            className="mb-3 size-10 object-contain object-center"
+            priority
+          />
           <h1 className="text-h4 font-semibold text-foreground">Enter your Zynd PIN</h1>
           <p className="mt-1 text-caption text-muted-foreground">
             {displayName ? `Unlock the admin console, ${displayName}.` : "Unlock the admin console."}

@@ -11,8 +11,51 @@ import {
   Users,
 } from "lucide-react";
 
-import { kycProgressPct } from "@/lib/distributor-client-copy";
-import type { DistributorClientKycStep } from "@/lib/dummy/types";
+import { DISTRIBUTOR_KYC_STEPS, kycProgressPct } from "@/lib/distributor-client-copy";
+import type { DistributorClientKycStep, DistributorKycStepStatus } from "@/lib/distributor-types";
+
+type BuildDistributorKycStepsInput = {
+  stepStatuses?: Record<string, string> | null;
+  incompleteSteps?: Array<{ key: string; status?: string }> | null;
+  kycCompliant: boolean;
+  kycAlreadyRegistered?: boolean;
+};
+
+function mapApiKycStepStatus(
+  statusRaw: string,
+  kycCompliant: boolean,
+): DistributorKycStepStatus {
+  if (statusRaw === "failed") return "failed";
+  if (statusRaw === "skipped") return "not_applicable";
+  if (statusRaw === "verified" || statusRaw === "completed") return "completed";
+  // Fully registered investors may have legacy pending flags on otherwise complete steps.
+  if (kycCompliant) return "completed";
+  // Draft-only progress (saved) and untouched steps stay open in the console.
+  return "pending";
+}
+
+export function buildDistributorKycSteps({
+  stepStatuses,
+  incompleteSteps,
+  kycCompliant,
+  kycAlreadyRegistered = false,
+}: BuildDistributorKycStepsInput): DistributorClientKycStep[] {
+  const statuses = stepStatuses ?? {};
+  const incomplete = new Map(
+    (incompleteSteps ?? []).map((step) => [step.key, step.status ?? "pending"]),
+  );
+
+  const steps = DISTRIBUTOR_KYC_STEPS.map(({ id, label }) => {
+    const statusRaw = statuses[id] ?? incomplete.get(id) ?? "pending";
+    return {
+      id,
+      label,
+      status: mapApiKycStepStatus(statusRaw, kycCompliant),
+    };
+  });
+
+  return applyKycStepApplicability(steps, kycCompliant, kycAlreadyRegistered);
+}
 
 export type DistributorKycStepGroup = {
   id: string;
@@ -58,16 +101,19 @@ export function kycStepIcon(stepId: string): LucideIcon {
   return STEP_ICONS[stepId] ?? ClipboardCheck;
 }
 
-/** KRA-compliant investors skip DigiLocker, signature, and eSign. */
+/** KRA path investors skip DigiLocker, signature, and eSign. */
 export function applyKycStepApplicability(
   steps: DistributorClientKycStep[],
   kycCompliant: boolean,
+  kycAlreadyRegistered = false,
 ): DistributorClientKycStep[] {
+  const kraPath = kycCompliant || kycAlreadyRegistered;
+
   return steps.map((step) => {
-    const skipForCompliant =
-      kycCompliant &&
+    const skipForKraPath =
+      kraPath &&
       (step.id === "digilocker" || step.id === "signature" || step.id === "esign");
-    if (skipForCompliant) {
+    if (skipForKraPath) {
       return {
         ...step,
         applicable: false,
@@ -103,6 +149,12 @@ export function groupKycSteps(steps: DistributorClientKycStep[]): Array<{
     group,
     steps: group.stepIds.map((id) => byId.get(id)).filter(Boolean) as DistributorClientKycStep[],
   })).filter((entry) => entry.steps.length > 0);
+}
+
+/** True when every applicable step is completed. */
+export function isKycJourneyComplete(steps: DistributorClientKycStep[]): boolean {
+  const applicable = kycApplicableSteps(steps);
+  return applicable.length > 0 && applicable.every((step) => step.status === "completed");
 }
 
 /** Latest step in the journey: failed or pending if any, otherwise the final applicable step. */

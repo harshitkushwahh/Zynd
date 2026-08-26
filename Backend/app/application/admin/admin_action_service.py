@@ -90,6 +90,33 @@ async def create_admin_action_request(
         )
     )
     await db.flush()
+
+    from app.application.admin.rbac_service import is_sole_active_super_admin
+
+    if await is_sole_active_super_admin(db, requester.id):
+        outcome = await _execute_action(db, request=request, approver=requester, ip=ip)
+        request.status = AdminActionStatus.approved
+        request.approved_by = requester.id
+        request.resolved_at = _now()
+        db.add(
+            AuditLog(
+                user_id=requester.id,
+                event_type=AuditEventType.admin_action_approved,
+                ip_address=ip,
+                metadata_={
+                    "action_id": str(request.id),
+                    "action_type": request.action_type.value,
+                    "requested_by": str(request.requested_by),
+                    "sole_super_admin_auto_executed": True,
+                },
+            )
+        )
+        await db.flush()
+        serialized = await _serialize_request(db, request)
+        serialized["outcome"] = outcome
+        serialized["auto_executed"] = True
+        return serialized
+
     return await _serialize_request(db, request)
 
 
@@ -119,7 +146,10 @@ async def approve_admin_action_request(
     if request.status != AdminActionStatus.pending:
         raise ValueError("Action request is no longer pending.")
     if request.requested_by == approver.id:
-        raise ValueError("Maker-checker violation: approver cannot be the requester.")
+        from app.application.admin.rbac_service import is_sole_active_super_admin
+
+        if not await is_sole_active_super_admin(db, approver.id):
+            raise ValueError("Maker-checker violation: approver cannot be the requester.")
 
     outcome = await _execute_action(db, request=request, approver=approver, ip=ip)
     request.status = AdminActionStatus.approved
@@ -173,6 +203,42 @@ async def reject_admin_action_request(
                 "action_id": str(request.id),
                 "action_type": request.action_type.value,
                 "notes": notes,
+            },
+        )
+    )
+    await db.flush()
+    return await _serialize_request(db, request)
+
+
+async def withdraw_admin_action_request(
+    db: AsyncSession,
+    *,
+    action_id: UUID,
+    requester: User,
+    ip: str | None = None,
+) -> dict[str, Any]:
+    result = await db.execute(select(AdminActionRequest).where(AdminActionRequest.id == action_id))
+    request = result.scalar_one_or_none()
+    if not request:
+        raise ValueError("Action request not found.")
+    if request.status != AdminActionStatus.pending:
+        raise ValueError("Action request is no longer pending.")
+    if request.requested_by != requester.id:
+        raise ValueError("Only the requester can withdraw this action.")
+
+    request.status = AdminActionStatus.rejected
+    request.approved_by = requester.id
+    request.rejection_notes = "Withdrawn by requester."
+    request.resolved_at = _now()
+    db.add(
+        AuditLog(
+            user_id=requester.id,
+            event_type=AuditEventType.admin_action_rejected,
+            ip_address=ip,
+            metadata_={
+                "action_id": str(request.id),
+                "action_type": request.action_type.value,
+                "notes": "Withdrawn by requester.",
             },
         )
     )
@@ -263,21 +329,27 @@ async def _serialize_request(db: AsyncSession, request: AdminActionRequest) -> d
     requester = await db.get(User, request.requested_by)
     approver = await db.get(User, request.approved_by) if request.approved_by else None
     target_email = None
+    target_client_id = None
     if request.target_id:
         target = await db.get(User, request.target_id)
-        target_email = target.email if target else None
+        if target:
+            target_email = target.email
+            target_client_id = target.client_id or ""
     return {
         "id": request.id,
         "action_type": request.action_type.value,
         "status": request.status.value,
         "target_type": request.target_type,
         "target_id": request.target_id,
+        "target_client_id": target_client_id,
         "target_email": target_email,
         "payload": request.payload,
         "reason": request.reason,
         "requested_by": request.requested_by,
+        "requested_by_client_id": requester.client_id if requester else None,
         "requested_by_email": requester.email if requester else None,
         "approved_by": request.approved_by,
+        "approved_by_client_id": approver.client_id if approver else None,
         "approved_by_email": approver.email if approver else None,
         "rejection_notes": request.rejection_notes,
         "resolved_at": request.resolved_at,

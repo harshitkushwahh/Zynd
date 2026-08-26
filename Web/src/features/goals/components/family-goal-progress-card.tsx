@@ -28,7 +28,7 @@ export function FamilyGoalProgressCard({ goal }: FamilyGoalProgressCardProps) {
 
   return (
     <Link
-      href={buildFamilyGroupHref(goal.family_group_id)}
+      href={buildFamilyGroupHref({ id: goal.family_group_id, title: goal.groupTitle })}
       className="block rounded-[var(--radius-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
     >
       <Card className="h-full border border-border/60 shadow-none ring-0 transition-colors hover:border-border/80">

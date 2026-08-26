@@ -79,6 +79,14 @@ async def fetch_latest_ter_month(*, financial_year: str) -> str:
     return str(months[0]["MonthNumber"])
 
 
+async def fetch_amfi_member_list() -> list[dict]:
+    """AMFI fund-house registry (mfId + mfName) from populate-mf."""
+    payload = await amfi_get_json("/api/populate-mf", referer="net-asset-value")
+    if not isinstance(payload, list):
+        raise ValueError("Unexpected AMFI member list response")
+    return [row for row in payload if isinstance(row, dict)]
+
+
 async def fetch_all_ter_rows(*, month: str, page_size: int, max_pages: int | None = None) -> list[dict]:
     first_rows, meta = await fetch_ter_page(month=month, page=1, page_size=page_size)
     page_count = int(meta.get("pageCount") or 1)

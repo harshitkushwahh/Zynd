@@ -11,7 +11,7 @@ import {
 } from "@/features/family-groups/api/family-groups-api";
 import { FamilyGroupGoalContributionsDialog } from "@/features/family-groups/components/family-group-goal-contributions-dialog";
 import { useFamilyGroupGoalsQuery } from "@/features/family-groups/hooks/use-family-group-dashboard-queries";
-import { FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
+import { FAMILY_GROUP_CARD_RADIUS_CLASS, FAMILY_GROUP_DASHBOARD_PANEL_CLASS } from "@/features/family-groups/lib/family-group-ui";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
@@ -42,18 +42,11 @@ export function FamilyGroupGoalsPanel({ groupId, myRole, className }: FamilyGrou
 
   return (
     <section
-      className={cn(
-        FAMILY_GROUP_CARD_RADIUS_CLASS,
-        "flex h-full flex-col border border-border bg-card p-4 shadow-zynd-low sm:p-5",
-        className,
-      )}
+      className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-3 sm:p-4", className)}
     >
-      <div>
-        <h3 className="text-body font-semibold text-foreground">{dashboard.goalsTitle}</h3>
-        <p className="mt-1 text-compact text-muted-foreground">{dashboard.goalsSubtitle}</p>
-      </div>
+      <h3 className="text-compact font-semibold text-foreground">{dashboard.goalsTitle}</h3>
 
-      <div className="mt-5 min-h-[18rem] flex-1">
+      <div className="mt-2 min-h-[18rem] flex-1">
         {showSkeleton ? (
           <div className="flex h-[18rem] items-center justify-center gap-2 text-compact text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />

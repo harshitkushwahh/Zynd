@@ -5,7 +5,7 @@ import type {
   InvestorOnboardingStatus,
   InvestorServiceModel,
   InvestorType,
-} from "@/lib/dummy/types";
+} from "@/lib/distributor-types";
 
 export type InvestorTableFilters = {
   search: string;

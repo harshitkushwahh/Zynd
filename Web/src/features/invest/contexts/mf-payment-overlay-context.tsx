@@ -15,11 +15,16 @@ import { MfCartCheckoutPayView } from "@/features/invest/components/mf-cart-chec
 import { MfOrderPayView } from "@/features/invest/components/mf-order-pay-view";
 import { MfSipMandateView } from "@/features/invest/components/mf-sip-mandate-view";
 import {
+  clearMfSipPaymentSession,
+  clearMfSipPaymentDismissed,
   getLastMfPaymentCheckoutId,
   getLastMfPaymentOrderId,
   getLastMfPaymentPlanId,
   markMfPaymentReturnPath,
   wasMfPaymentRedirected,
+  wasMfSipFirstInstallmentRedirected,
+  wasMfSipMandateRedirected,
+  wasMfSipPaymentDismissed,
 } from "@/features/invest/lib/mf-payment-session";
 
 export type MfPaymentOverlayTarget =
@@ -71,12 +76,16 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
     if (options?.captureReturnPath !== false) {
       captureCurrentReturnPath();
     }
+    clearMfSipPaymentDismissed(planId);
     setActivePayment({ kind: "sip-mandate", planId });
   }, []);
 
   const closePayment = useCallback(() => {
+    if (activePayment?.kind === "sip-mandate") {
+      clearMfSipPaymentSession(activePayment.planId);
+    }
     setActivePayment(null);
-  }, []);
+  }, [activePayment]);
 
   const resumeAfterGatewayReturn = useCallback(() => {
     setActivePayment((current) => {
@@ -93,7 +102,13 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
       }
 
       const planId = getLastMfPaymentPlanId();
-      if (planId && wasMfPaymentRedirected(planId)) {
+      const pendingMandate = planId ? wasMfSipMandateRedirected(planId) : false;
+      const pendingFirst = planId ? wasMfSipFirstInstallmentRedirected(planId) : false;
+      if (
+        planId &&
+        (pendingMandate || pendingFirst) &&
+        !wasMfSipPaymentDismissed(planId)
+      ) {
         return { kind: "sip-mandate", planId };
       }
 
@@ -122,13 +137,7 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
       openSipMandate,
       closePayment,
     }),
-    [
-      activePayment,
-      closePayment,
-      openCartCheckoutPayment,
-      openOrderPayment,
-      openSipMandate,
-    ],
+    [activePayment, closePayment, openCartCheckoutPayment, openOrderPayment, openSipMandate],
   );
 
   return (

@@ -75,6 +75,7 @@ class AuditEventType(str, enum.Enum):
     mfa_disabled = "mfa_disabled"
     account_suspended = "account_suspended"
     account_unsuspended = "account_unsuspended"
+    admin_account_removed = "admin_account_removed"
     transfer_requested = "transfer_requested"
     admin_action_requested = "admin_action_requested"
     admin_action_approved = "admin_action_approved"
@@ -867,10 +868,15 @@ class AdminInvitation(Base):
     )
 
 
+from app.infrastructure.persistence import distributor_partner_models as _distributor_partner_models  # noqa: F401,E402
+from app.infrastructure.persistence import distributor_branch_models as _distributor_branch_models  # noqa: F401,E402
+from app.infrastructure.persistence import distributor_state_head_models as _distributor_state_head_models  # noqa: F401,E402
+from app.infrastructure.persistence import distributor_work_models as _distributor_work_models  # noqa: F401,E402
 from app.infrastructure.persistence import family_group_models as _family_group_models  # noqa: F401,E402
 from app.infrastructure.persistence import investor_models as _investor_profile_models  # noqa: F401,E402
 from app.infrastructure.persistence import mf_models as _mf_models  # noqa: F401,E402
 from app.infrastructure.persistence import mf_transaction_models as _mf_transaction_models  # noqa: F401,E402
 from app.infrastructure.persistence import notification_models as _notification_models  # noqa: F401,E402
 from app.infrastructure.persistence import referral_models as _referral_models  # noqa: F401,E402
+from app.infrastructure.persistence import referral_reward_models as _referral_reward_models  # noqa: F401,E402
 

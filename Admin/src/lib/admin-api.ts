@@ -1,13 +1,14 @@
 import { apiRequest } from "@/lib/api-client";
-import { clientIdToProfilePath } from "@/lib/admin-user-ref";
+import { pickUserRef, userRefToPath } from "@/lib/admin-user-ref";
 
 function adminUserRefPath(userRef: string) {
-  return clientIdToProfilePath(userRef);
+  return userRefToPath(pickUserRef({ client_id: userRef, user_id: userRef }));
 }
 
 export type SecurityReviewItem = {
   id: string;
   user_id: string;
+  client_id: string;
   user_email: string;
   reason: string;
   status: string;
@@ -19,6 +20,7 @@ export type SecurityReviewItem = {
 
 export type PendingDeletionItem = {
   user_id: string;
+  client_id: string;
   email: string;
   deletion_requested_at: string | null;
   deletion_scheduled_at: string | null;
@@ -53,6 +55,62 @@ export async function runDeletionExecutor() {
     action_id: string;
     message: string;
   }>("/admin/deletions/run-executor", { method: "POST" });
+}
+
+export type AdminAccountListItem = {
+  user_id: string;
+  client_id: string;
+  user_ref: string;
+  email: string;
+  display_name: string;
+  status: string;
+  roles: string[];
+  mfa_enrolled: boolean;
+  suspended_at: string | null;
+  suspension_reason_code: string | null;
+  deletion_requested_at: string | null;
+  deletion_scheduled_at: string | null;
+  created_at: string;
+};
+
+export async function fetchAdminAccounts() {
+  const result = await apiRequest<{ items: AdminAccountListItem[] }>("/admin/admin-accounts");
+  return result.items;
+}
+
+export async function holdAdminAccountAccess(userId: string, notes?: string) {
+  return apiRequest<{
+    status: "completed";
+    message: string;
+  }>(`/admin/admin-accounts/${adminUserRefPath(userId)}/access-hold`, {
+    method: "POST",
+    body: JSON.stringify({ notes: notes || undefined }),
+  });
+}
+
+export async function restoreAdminAccountAccess(userId: string) {
+  return apiRequest<{
+    status: "completed";
+    message: string;
+  }>(`/admin/admin-accounts/${adminUserRefPath(userId)}/restore-access`, {
+    method: "POST",
+  });
+}
+
+export async function cancelAdminAccountDeletion(userId: string) {
+  return apiRequest<{ ok: boolean }>(
+    `/admin/admin-accounts/${adminUserRefPath(userId)}/cancel-deletion`,
+    { method: "POST" },
+  );
+}
+
+export async function removeAdminAccount(userId: string) {
+  return apiRequest<{
+    status: "completed";
+    message: string;
+  }>(`/admin/admin-accounts/${adminUserRefPath(userId)}/remove`, {
+    method: "POST",
+  });
 }
 
 export async function fetchRetentionSchedule() {
@@ -189,6 +247,17 @@ export async function fetchAdminUsers(params?: {
     `/admin/users${query ? `?${query}` : ""}`,
   );
   return result.items;
+}
+
+export type AdminUserDirectoryMetrics = {
+  registered_users: number;
+  kyc_compliant: number;
+  suspended_accounts: number;
+  active_investors: number;
+};
+
+export async function fetchAdminUserDirectoryMetrics() {
+  return apiRequest<AdminUserDirectoryMetrics>("/admin/users/metrics");
 }
 
 export async function fetchAdminUserRoles(userId: string) {
@@ -683,12 +752,15 @@ export type AdminActionItem = {
   status: string;
   target_type: string | null;
   target_id: string | null;
+  target_client_id: string | null;
   target_email: string | null;
   payload: Record<string, unknown>;
   reason: string | null;
   requested_by: string;
+  requested_by_client_id: string | null;
   requested_by_email: string | null;
   approved_by: string | null;
+  approved_by_client_id: string | null;
   approved_by_email: string | null;
   rejection_notes: string | null;
   resolved_at: string | null;
@@ -715,6 +787,12 @@ export async function rejectAdminAction(actionId: string, notes?: string) {
   });
 }
 
+export async function withdrawAdminAction(actionId: string) {
+  return apiRequest<AdminActionItem>(`/admin/actions/${encodeURIComponent(actionId)}/withdraw`, {
+    method: "POST",
+  });
+}
+
 export type AdminKycDocument = {
   id: string;
   doc_type: string;
@@ -736,6 +814,10 @@ export type AdminKycReview = {
 
 export async function fetchAdminKycReview(userId: string) {
   return apiRequest<AdminKycReview>(`/admin/users/${adminUserRefPath(userId)}/kyc-review`);
+}
+
+export async function fetchPendingKycReviewCount() {
+  return apiRequest<{ count: number }>("/admin/kyc-review/pending-count");
 }
 
 export async function fetchAdminDocumentDownload(documentId: string) {

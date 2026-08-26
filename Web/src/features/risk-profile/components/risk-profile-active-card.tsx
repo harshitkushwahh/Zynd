@@ -22,6 +22,11 @@ import {
 import {
   DASHBOARD_ACTIVE_PAGE_LABEL_CLASS,
 } from "@/components/dashboard/dashboard-layout";
+import {
+  NavbarPageHoverCardBody,
+  NAVBAR_PAGE_HOVER_CARD_CLASS,
+  NAVBAR_PAGE_HOVER_CARD_SIDE_OFFSET,
+} from "@/components/dashboard/navbar-page-hover-card";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -135,10 +140,17 @@ export function RiskProfileActiveCard({
         )}
       </HoverCardTrigger>
 
-      <HoverCardContent side="bottom" align="end" className="w-72">
-        <div className="flex items-start gap-3">
-          {profile && mode === "profile" ? (
-            <div className="shrink-0 pt-0.5">
+      <HoverCardContent
+        side="bottom"
+        align="end"
+        sideOffset={NAVBAR_PAGE_HOVER_CARD_SIDE_OFFSET}
+        className={NAVBAR_PAGE_HOVER_CARD_CLASS}
+      >
+        <NavbarPageHoverCardBody
+          title={hoverTitle}
+          description={hoverDescription}
+          leading={
+            profile && mode === "profile" ? (
               <RiskProfileGauge
                 score={profile.score}
                 displayScore={displayScore}
@@ -146,23 +158,16 @@ export function RiskProfileActiveCard({
                 size="navbar"
                 showCaption={false}
               />
-            </div>
-          ) : (
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-              <span className="text-caption font-semibold tabular-nums">
-                {mode === "progress" && progress
-                  ? `${progress.current}/${progress.total}`
-                  : mode === "completed"
-                    ? copy.riskProfile.navbarAssessmentComplete
-                    : "RP"}
-              </span>
-            </div>
-          )}
-          <div className="min-w-0 space-y-1">
-            <p className="line-clamp-2 text-compact font-semibold text-foreground">{hoverTitle}</p>
-            <p className="text-caption leading-relaxed text-muted-foreground">{hoverDescription}</p>
-          </div>
-        </div>
+            ) : (
+              <RiskProfileGauge
+                score={RISK_PROFILE_PLACEHOLDER_SCORE}
+                tier={RISK_PROFILE_PLACEHOLDER_TIER}
+                size="navbar"
+                showCaption={false}
+              />
+            )
+          }
+        />
       </HoverCardContent>
     </HoverCard>
   );

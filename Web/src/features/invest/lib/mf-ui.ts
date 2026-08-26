@@ -8,7 +8,7 @@ export const MF_FUND_CARD_RADIUS_CLASS = "rounded-3xl";
 export const MF_FUND_DETAIL_RADIUS_CLASS = "rounded-3xl";
 
 /** Fund detail stat tiles (NAV, AUM, TER, 1 day change). */
-export const MF_FUND_DETAIL_METRIC_RADIUS_CLASS = "rounded-2xl";
+export const MF_FUND_DETAIL_METRIC_RADIUS_CLASS = "rounded-card";
 
 /** @deprecated Use {@link MF_FUND_DETAIL_RADIUS_CLASS}. */
 export const MF_FUND_DETAIL_SURFACE_RADIUS_CLASS = MF_FUND_DETAIL_RADIUS_CLASS;

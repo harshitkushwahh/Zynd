@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Building2 } from "lucide-react";
 
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
 import { Button } from "@/components/ui/button";

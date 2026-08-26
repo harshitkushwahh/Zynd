@@ -5,6 +5,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.mf.amc_amfi_code_service import sync_fund_amc_codes_from_amfi
 from app.application.mf.amc_name_parser import normalize_amc_display_name, parse_amc_from_scheme_name
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
 from app.application.mf.scheme_sql_upsert_service import get_or_create_amc
@@ -31,6 +32,7 @@ async def run_amfi_fund_bridge(
 
     run = await begin_ingestion_run(session, job_name="amfi-fund-bridge", triggered_by=triggered_by)
     scheme_codes_updated = amc_reassigned = processed = 0
+    amc_names_by_id: dict[int, set[str]] = {}
 
     try:
         master_by_isin: dict[str, AmfiSchemeMaster] = {}
@@ -50,6 +52,9 @@ async def run_amfi_fund_bridge(
             if master and master.scheme_code and fund.scheme_code != master.scheme_code:
                 fund.scheme_code = master.scheme_code
                 scheme_codes_updated += 1
+
+            if master and master.amc_name:
+                amc_names_by_id.setdefault(fund.amc_id, set()).add(master.amc_name)
 
             amc = await session.get(FundAmc, fund.amc_id)
             if not amc:
@@ -78,21 +83,25 @@ async def run_amfi_fund_bridge(
                 if product:
                     product.provider = new_amc.name
 
+        amc_code_stats = await sync_fund_amc_codes_from_amfi(session, amc_names_by_id=amc_names_by_id)
+
         await finish_ingestion_run(
             session,
             run,
             status=IngestionRunStatus.succeeded,
             records_processed=processed,
-            records_inserted=scheme_codes_updated + amc_reassigned,
+            records_inserted=scheme_codes_updated + amc_reassigned + amc_code_stats["amc_codes_updated"],
             metadata={
                 "scheme_codes_updated": scheme_codes_updated,
                 "amc_reassigned": amc_reassigned,
+                **amc_code_stats,
             },
         )
         return {
             "processed": processed,
             "scheme_codes_updated": scheme_codes_updated,
             "amc_reassigned": amc_reassigned,
+            **amc_code_stats,
             "run_uuid": str(run.run_uuid),
         }
     except Exception as exc:

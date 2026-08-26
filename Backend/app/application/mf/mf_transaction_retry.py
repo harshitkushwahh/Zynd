@@ -25,6 +25,9 @@ def is_transient_error(exc: Exception) -> bool:
     if isinstance(exc, FpClientError):
         if exc.status_code >= 500:
             return True
+        # Finprim 4xx validation errors (e.g. missing contact on investor profile) are permanent.
+        if 400 <= exc.status_code < 500:
+            return False
         return exc.code in _TRANSIENT_FP_CODES
     message = str(exc).lower()
     return "timeout" in message or "temporarily unavailable" in message

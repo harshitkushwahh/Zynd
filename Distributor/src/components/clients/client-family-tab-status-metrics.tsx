@@ -10,7 +10,7 @@ import {
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS,
   DISTRIBUTOR_YOUR_CLIENTS_METRICS_TILES_ONLY_CLASS,
 } from "@/lib/distributor-layout";
-import type { DistributorClientFamilyGroup } from "@/lib/dummy/types";
+import type { DistributorClientFamilyGroup } from "@/lib/distributor-types";
 import { formatPortfolioMetricAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

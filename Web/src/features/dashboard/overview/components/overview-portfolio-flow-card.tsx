@@ -1,16 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Clock } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
 import { OverviewPortfolioFlowChart } from "@/features/dashboard/overview/components/overview-portfolio-flow-chart";
 import {
   OverviewLockedCardBackdrop,
   OverviewLockedCardOverlay,
 } from "@/features/dashboard/overview/components/overview-locked-card-overlay";
+import { usePortfolioSummaryQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
+import { PORTFOLIO_PAGE_HREF } from "@/features/dashboard/portfolio/lib/portfolio-page-tabs";
 import {
-  filterPortfolioFlowByRange,
   type OverviewPortfolioFlowPoint,
   type OverviewPortfolioFlowRange,
 } from "@/features/dashboard/overview/lib/overview-portfolio-flow-series";
@@ -19,6 +22,11 @@ import {
   OVERVIEW_PORTFOLIO_LOCKED_PREVIEW,
 } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import type { OverviewPortfolioPreview } from "@/features/dashboard/overview/lib/overview-portfolio-preview";
+import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
+import {
+  getUpcomingHoldingOrders,
+  sumUpcomingHoldingOrdersInr,
+} from "@/features/invest/lib/mf-transaction-filters";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -37,31 +45,93 @@ function toneClass(tone: "positive" | "negative" | "muted") {
   );
 }
 
+function PortfolioFlowProcessingBody({
+  data,
+  upcomingCount,
+  chartSeries,
+}: {
+  data: OverviewPortfolioPreview;
+  upcomingCount: number;
+  chartSeries: readonly OverviewPortfolioFlowPoint[];
+}) {
+  const portfolioCopy = copy.dashboard.portfolio;
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 top-6 select-none blur-[5px] opacity-70"
+      >
+        <div className="mt-auto px-1 pt-3 sm:px-2">
+          <OverviewPortfolioFlowChart
+            series={[...chartSeries]}
+            range="1y"
+            onRangeChange={() => undefined}
+          />
+        </div>
+      </div>
+
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        <div className="px-4 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[1.75rem] font-semibold leading-none tracking-tight tabular-nums text-foreground sm:text-[2rem]">
+              {formatInr(data.investedInr)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-auto px-4 pb-4 pt-3 sm:px-5">
+          <div className="flex items-center gap-2.5 rounded-[1.15rem] border border-warning/25 bg-warning/10 px-3 py-3 backdrop-blur-[2px]">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning">
+              <Clock className="size-4" strokeWidth={2.25} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-compact font-semibold text-warning">
+                {portfolioCopy.overviewUpcomingHoldingsTitle}
+              </p>
+              <p className="mt-0.5 text-caption text-warning/80">
+                {upcomingCount} {upcomingCount === 1 ? "fund" : "funds"} awaiting unit allotment
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PortfolioFlowCardBody({
   data,
   series,
   locked = false,
+  chartInteractive = false,
 }: {
   data: OverviewPortfolioPreview;
   series: readonly OverviewPortfolioFlowPoint[];
   locked?: boolean;
+  chartInteractive?: boolean;
 }) {
   const overview = copy.dashboard.overview;
   const totalReturn = formatSignedReturn(data.totalReturnPct);
   const dayChange = formatSignedReturn(data.dayChangePct);
   const [range, setRange] = useState<OverviewPortfolioFlowRange>("1y");
-  const chartPoints = useMemo(
-    () => filterPortfolioFlowByRange(series, range),
-    [range, series],
+
+  const chartSection = (
+    <div className={cn("mt-auto px-1 pt-3 sm:px-2", locked && "pointer-events-none select-none")}>
+      <OverviewPortfolioFlowChart
+        series={[...series]}
+        range={range}
+        onRangeChange={locked ? () => undefined : setRange}
+      />
+    </div>
   );
 
   return (
     <>
-      <div className="px-4 pt-4 sm:px-5 sm:pt-5">
+      <div className="px-4 sm:px-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-caption text-muted-foreground">{overview.portfolioCurrentValue}</p>
-            <p className="mt-1 text-[1.75rem] font-semibold leading-none tracking-tight tabular-nums text-foreground sm:text-[2rem]">
+            <p className="text-[1.75rem] font-semibold leading-none tracking-tight tabular-nums text-foreground sm:text-[2rem]">
               {formatInr(data.currentValueInr)}
             </p>
           </div>
@@ -89,44 +159,115 @@ function PortfolioFlowCardBody({
         </div>
       </div>
 
-      <div className={cn("mt-auto px-1 pt-3 sm:px-2", locked && "pointer-events-none select-none")}>
-        <OverviewPortfolioFlowChart
-          points={chartPoints}
-          range={range}
-          onRangeChange={locked ? () => undefined : setRange}
-        />
-      </div>
+      {chartInteractive ? (
+        <div
+          className="relative z-10"
+          onClick={(event) => event.preventDefault()}
+          onKeyDown={(event) => event.stopPropagation()}
+          role="presentation"
+        >
+          {chartSection}
+        </div>
+      ) : (
+        chartSection
+      )}
     </>
   );
 }
 
 export function OverviewPortfolioFlowCard({
-  data = null,
-  series = [],
+  data: dataProp = null,
+  series: seriesProp = [],
   className,
 }: OverviewPortfolioFlowCardProps) {
   const overview = copy.dashboard.overview;
-  const hasData = Boolean(data && series.length > 0);
+  const portfolioCopy = copy.dashboard.portfolio;
+  const { preview, flowSeries, showSkeleton, summary } = usePortfolioSummaryQuery();
+  const { orders, showSkeleton: ordersLoading } = useMfOrdersQuery(100);
+
+  const upcomingOrders = useMemo(() => getUpcomingHoldingOrders(orders), [orders]);
+  const pendingInr = useMemo(() => sumUpcomingHoldingOrdersInr(orders), [orders]);
+
+  const liveData = dataProp ?? preview;
+  const liveSeries = seriesProp.length > 0 ? seriesProp : flowSeries;
+  const hasChartData = Boolean(liveData && liveSeries.length > 0);
+  const hasHoldings =
+    (summary?.holdings_count ?? 0) > 0 ||
+    (summary?.current_value_inr ?? 0) > 0 ||
+    (summary?.invested_inr ?? 0) > 0;
+  const isProcessing =
+    !hasChartData &&
+    !hasHoldings &&
+    (summary?.has_pending_orders || upcomingOrders.length > 0);
+
+  const processingPreview = useMemo<OverviewPortfolioPreview | null>(() => {
+    if (!isProcessing || pendingInr <= 0) return null;
+    return {
+      currentValueInr: pendingInr,
+      investedInr: pendingInr,
+      totalReturnInr: 0,
+      totalReturnPct: 0,
+      dayChangeInr: 0,
+      dayChangePct: 0,
+      xirrPct: 0,
+      holdingsCount: 0,
+      activeSipsCount: summary?.active_sips_count ?? 0,
+      monthlySipInr: summary?.monthly_sip_inr ?? 0,
+      growth: [],
+      allocation: [],
+    };
+  }, [isProcessing, pendingInr, summary?.active_sips_count, summary?.monthly_sip_inr]);
+
   const previewData = OVERVIEW_PORTFOLIO_LOCKED_PREVIEW;
   const previewSeries = OVERVIEW_PORTFOLIO_FLOW_LOCKED_SERIES;
+  const isLocked = !showSkeleton && !ordersLoading && !hasChartData && !isProcessing;
+  const loading = showSkeleton || ordersLoading;
+
+  const cardClassName = cn(
+    "group flex min-h-[13.5rem] min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card shadow-zynd-low",
+    isLocked &&
+      "transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-zynd-mid",
+    className,
+  );
 
   return (
-    <section
-      className={cn(
-        "flex min-h-[13.5rem] min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card",
-        className,
-      )}
+    <Link
+      href={PORTFOLIO_PAGE_HREF}
+      className={cardClassName}
+      aria-label={
+        isLocked
+          ? `${overview.portfolioTitle}. ${overview.portfolioFlowEmpty}`
+          : isProcessing
+            ? `${overview.portfolioTitle}. ${portfolioCopy.overviewUpcomingHoldingsTitle}`
+            : overview.portfolioViewAll
+      }
     >
-      {hasData && data ? (
-        <PortfolioFlowCardBody data={data} series={series} />
+      <div className="px-4 pt-3.5 sm:px-5 sm:pt-4">
+        <OverviewCompactCardHeader
+          title={overview.portfolioTitle}
+          groupHover={isLocked}
+          ariaLabel={overview.portfolioViewAll}
+        />
+      </div>
+
+      {loading ? (
+        <div className="px-4 pb-4 sm:px-5">
+          <Skeleton className="h-8 w-36" />
+          <Skeleton className="mt-3 h-3.5 w-56 max-w-full" />
+          <Skeleton className="mt-6 h-[6.75rem] w-full rounded-[var(--radius-control)]" />
+        </div>
+      ) : hasChartData && liveData ? (
+        <PortfolioFlowCardBody data={liveData} series={liveSeries} chartInteractive />
+      ) : isProcessing && processingPreview ? (
+        <PortfolioFlowProcessingBody
+          data={processingPreview}
+          upcomingCount={upcomingOrders.length}
+          chartSeries={previewSeries}
+        />
       ) : (
-        <div className="relative flex min-h-[13.5rem] flex-1 flex-col">
-          <div className="flex flex-1 flex-col blur-[5px]">
-            <PortfolioFlowCardBody
-              data={previewData}
-              series={previewSeries}
-              locked
-            />
+        <div className="relative flex min-h-0 flex-1 flex-col pb-1">
+          <div className="pointer-events-none flex flex-1 select-none flex-col blur-[5px]">
+            <PortfolioFlowCardBody data={previewData} series={previewSeries} locked />
           </div>
           <OverviewLockedCardBackdrop />
           <OverviewLockedCardOverlay
@@ -135,7 +276,7 @@ export function OverviewPortfolioFlowCard({
           />
         </div>
       )}
-    </section>
+    </Link>
   );
 }
 
@@ -143,12 +284,16 @@ export function OverviewPortfolioFlowCardSkeleton({ className }: { className?: s
   return (
     <section
       className={cn(
-        "flex min-h-[13.5rem] min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card",
+        "flex min-h-[13.5rem] min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card shadow-zynd-low",
         className,
       )}
       aria-hidden="true"
     >
-      <div className="px-4 pt-4 sm:px-5 sm:pt-5">
+      <div className="flex shrink-0 items-start justify-between gap-2 px-4 pt-3.5 sm:px-5 sm:pt-4">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="size-3.5" />
+      </div>
+      <div className="px-4 sm:px-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-2">
             <Skeleton className="h-3 w-20" />

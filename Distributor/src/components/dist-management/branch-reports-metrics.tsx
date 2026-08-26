@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { AlertTriangle, LineChart, TrendingUp, Users } from "lucide-react";
 
 import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
-import { getBranchReportSummary } from "@/lib/dummy/branch-reports";
+import { getBranchReportSummary } from "@/lib/distributor-branch-reports-data";
 import {
   DISTRIBUTOR_DIST_MANAGEMENT_HUB_METRICS_CLASS,
   DISTRIBUTOR_METRIC_TILE_CELL_CLASS,

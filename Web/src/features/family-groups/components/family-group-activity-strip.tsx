@@ -6,15 +6,22 @@ import { Crown } from "lucide-react";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { Button } from "@/components/ui/button";
 import { type FamilyGroupActivityItem } from "@/features/family-groups/api/family-groups-api";
+import type { FamilyGroupSummary } from "@/features/family-groups/api/family-groups-api";
 import { useFamilyGroupActivityQuery } from "@/features/family-groups/hooks/use-family-group-dashboard-queries";
 import { FamilyGroupActivityEmptyState } from "@/features/family-groups/components/family-group-activity-empty-state";
 import { buildFamilyGroupActivityHref } from "@/features/family-groups/lib/family-group-navigation";
-import { formatRelativeActivityTime, familyMemberInitials, FAMILY_GROUP_CARD_RADIUS_CLASS } from "@/features/family-groups/lib/family-group-ui";
+import {
+  formatRelativeActivityTime,
+  familyMemberInitials,
+  FAMILY_GROUP_CARD_RADIUS_CLASS,
+  FAMILY_GROUP_DASHBOARD_PANEL_CLASS,
+} from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type FamilyGroupActivityStripProps = {
-  groupId: string;
+  group: FamilyGroupSummary;
+  groups?: FamilyGroupSummary[];
   className?: string;
   layout?: "horizontal" | "vertical";
 };
@@ -61,39 +68,33 @@ function ActivityCard({ item, stacked = false }: { item: FamilyGroupActivityItem
 }
 
 export function FamilyGroupActivityStrip({
-  groupId,
+  group,
+  groups = [group],
   className,
   layout = "horizontal",
 }: FamilyGroupActivityStripProps) {
   const { items, showSkeleton, errorMessage, refetch, isFetching } = useFamilyGroupActivityQuery(
-    groupId,
+    group.id,
     DASHBOARD_ACTIVITY_PREVIEW_LIMIT,
   );
 
   return (
     <section
-      className={cn(
-        FAMILY_GROUP_CARD_RADIUS_CLASS,
-        "flex h-full flex-col border border-border bg-card p-4 shadow-zynd-low sm:p-5",
-        className,
-      )}
+      className={cn(FAMILY_GROUP_DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-3 sm:p-4", className)}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-body font-semibold text-foreground">{copy.familyGroups.dashboard.activityTitle}</h3>
-          <p className="mt-1 text-compact text-muted-foreground">{copy.familyGroups.dashboard.activitySubtitle}</p>
-        </div>
+        <h3 className="text-compact font-semibold text-foreground">{copy.familyGroups.dashboard.activityTitle}</h3>
         <Button
           variant="muted"
           size="sm"
           nativeButton={false}
-          render={<Link href={buildFamilyGroupActivityHref(groupId)} />}
+          render={<Link href={buildFamilyGroupActivityHref(group, groups)} />}
         >
           {copy.familyGroups.dashboard.viewAllActivity}
         </Button>
       </div>
 
-      <div className="mt-4 min-h-0 flex-1">
+      <div className="mt-2 min-h-0 flex-1">
         {showSkeleton ? (
           <p className="text-compact text-muted-foreground">{copy.familyGroups.activity.loading}</p>
         ) : errorMessage ? (

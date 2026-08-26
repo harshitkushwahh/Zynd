@@ -3,17 +3,24 @@
 import { Shield, UserRound } from "lucide-react";
 
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
+import { teamRoleBadgeVariant } from "@/lib/admin-role-display";
 
 function userStatusVariant(status: string): StatusBadgeVariant {
   if (status === "active") return "success";
   if (status === "suspended") return "destructive";
   if (status === "pending") return "warning";
+  if (status === "deleted") return "neutral";
   return "neutral";
 }
 
 export function UserStatusBadge({ status }: { status: string }) {
+  const isDeleted = status === "deleted";
+
   return (
-    <StatusBadge variant={userStatusVariant(status)}>
+    <StatusBadge
+      variant={userStatusVariant(status)}
+      className={isDeleted ? "text-muted-foreground line-through decoration-muted-foreground/60" : undefined}
+    >
       {status.replaceAll("_", " ")}
     </StatusBadge>
   );
@@ -24,7 +31,21 @@ export function PlatformRoleBadge({ role }: { role: string }) {
 
   return (
     <StatusBadge variant={isAdmin ? "info" : "neutral"} icon={isAdmin ? Shield : UserRound}>
-      {isAdmin ? "Admin" : "Customer"}
+      {isAdmin ? "Platform admin" : "Customer"}
+    </StatusBadge>
+  );
+}
+
+export function TeamRoleBadge({
+  roleKey,
+  label,
+}: {
+  roleKey: string;
+  label: string;
+}) {
+  return (
+    <StatusBadge variant={teamRoleBadgeVariant(roleKey)} showIcon={false}>
+      {label}
     </StatusBadge>
   );
 }

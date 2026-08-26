@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { PaginationPageMinimalCenter } from "@/components/core/table";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
-import { PageTitle } from "@/components/ui/page-title";
+import { PageHeader } from "@/components/ui/page-header";
 import { ReferralListRow } from "@/features/referral/components/referral-list-row";
 import { ReferralYourReferralsEmptyState } from "@/features/referral/components/referral-your-referrals-empty-state";
 import { ReferralYourReferralsSkeleton } from "@/features/referral/components/referral-skeleton";
@@ -128,7 +129,7 @@ export function ReferralYourReferralsPanel() {
 
   if (errorMessage) {
     return (
-      <>
+      <DashboardContentFade>
         <ReferralYourReferralsBreadcrumb />
         <LoadErrorCard
           title={copy.referral.loadFailedTitle}
@@ -143,25 +144,21 @@ export function ReferralYourReferralsPanel() {
             </Button>
           }
         />
-      </>
+      </DashboardContentFade>
     );
   }
 
   return (
-    <>
+    <DashboardContentFade>
       <ReferralYourReferralsBreadcrumb />
 
       <div className="space-y-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
-              <Users className="size-5 text-primary" strokeWidth={2.25} />
-            </div>
-            <div className="min-w-0">
-              <PageTitle>{copy.referral.referralsPageTitle}</PageTitle>
-              <p className="mt-1 text-compact text-muted-foreground">{copy.referral.referralsPageSubtitle}</p>
-            </div>
-          </div>
+          <PageHeader
+            icon={Users}
+            title={copy.referral.referralsPageTitle}
+            descriptionClassName="mt-1"
+          />
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <Select
@@ -271,6 +268,6 @@ export function ReferralYourReferralsPanel() {
           ) : null}
         </section>
       </div>
-    </>
+    </DashboardContentFade>
   );
 }

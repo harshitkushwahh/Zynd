@@ -1,83 +1,77 @@
 "use client";
 
-import { ArrowLeftRight, IndianRupee, PieChart, Users } from "lucide-react";
+import { ArrowLeftRight, IndianRupee, Users } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { DistributorHeadBranchContributionsDonut } from "@/components/distributor-head/distributor-head-branch-contributions-donut";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DUMMY_BRANCHES,
-  DUMMY_SALES_ROWS,
-  DUMMY_STATE_HEAD,
-  sumBranchesAum,
-} from "@/lib/dummy/distributor-head-data";
+import type {
+  AdminHierarchyBranch,
+  AdminHierarchyOverview,
+} from "@/lib/admin-distributor-hierarchy-api";
 import {
   formatDistributorHeadCount,
   formatDistributorHeadInr,
 } from "@/lib/distributor-head-format";
 
-export function DistributorHeadStateTotalsCard() {
-  const bookAum = sumBranchesAum();
-  const activeClients = DUMMY_BRANCHES.reduce((sum, branch) => sum + branch.activeClients, 0);
-  const latestSales = DUMMY_SALES_ROWS[0];
-  const transactionCount = latestSales?.transactionCount ?? 0;
+type DistributorHeadStateTotalsCardProps = {
+  overview: AdminHierarchyOverview | null;
+  branches: AdminHierarchyBranch[];
+};
+
+export function DistributorHeadStateTotalsCard({
+  overview,
+  branches,
+}: DistributorHeadStateTotalsCardProps) {
+  const bookAum = branches.reduce((sum, branch) => sum + branch.aum_inr, 0);
+  const activeClients = branches.reduce((sum, branch) => sum + branch.active_clients, 0);
+  const pendingReview = overview?.pending_review_count ?? 0;
 
   return (
-    <Card className="distributor-head-state-totals h-fit overflow-hidden">
-      <CardHeader className="distributor-head-state-totals__header space-y-2 border-b border-border/60 pb-4">
+    <Card className="distributor-head-overview-card distributor-head-state-totals h-fit min-w-0 border border-border shadow-none ring-0">
+      <CardHeader className="distributor-head-state-totals__header space-y-2 border-b border-border/60 px-4 pb-3 pt-4 sm:px-5">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base font-semibold">State totals</CardTitle>
-          <Badge variant="outline" className="shrink-0 font-normal text-micro">
-            Demo
-          </Badge>
         </div>
         <p className="text-caption text-muted-foreground">
-          {DUMMY_STATE_HEAD.state} · {DUMMY_BRANCHES.length} branches
+          {overview?.state_name ?? "State"} · {overview?.branch_count ?? branches.length} branches
         </p>
       </CardHeader>
-      <CardContent className="space-y-3 p-4 pt-4">
+      <CardContent className="space-y-3 p-3 pt-3 sm:p-4">
         <div className="distributor-head-state-totals__hero">
           <div className="distributor-head-state-totals__hero-icon">
             <IndianRupee className="size-5" strokeWidth={2} />
           </div>
           <div className="min-w-0">
             <p className="text-caption text-muted-foreground">Book AUM (branches)</p>
-            <p className="font-heading text-h3 font-semibold tabular-nums tracking-tight text-foreground">
+            <p className="font-heading text-xl font-semibold tabular-nums tracking-tight text-foreground sm:text-2xl">
               {formatDistributorHeadInr(bookAum)}
             </p>
           </div>
         </div>
 
-        <div className="grid gap-2">
-          <div className="distributor-head-state-totals__row">
-            <div className="distributor-head-state-totals__row-icon distributor-head-state-totals__row-icon--info">
+        <div className="distributor-head-state-totals__stat-grid">
+          <div className="distributor-head-state-totals__stat-card">
+            <div className="distributor-head-state-totals__stat-icon distributor-head-state-totals__stat-icon--info">
               <Users className="size-4" strokeWidth={2} />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-caption text-muted-foreground">Clients (active)</p>
-              <p className="text-lg font-semibold tabular-nums text-foreground">
-                {formatDistributorHeadCount(activeClients)}
-              </p>
-            </div>
+            <p className="text-caption text-muted-foreground">Clients (active)</p>
+            <p className="text-lg font-semibold tabular-nums text-foreground">
+              {formatDistributorHeadCount(activeClients)}
+            </p>
           </div>
 
-          <div className="distributor-head-state-totals__row">
-            <div className="distributor-head-state-totals__row-icon distributor-head-state-totals__row-icon--success">
+          <div className="distributor-head-state-totals__stat-card">
+            <div className="distributor-head-state-totals__stat-icon distributor-head-state-totals__stat-icon--success">
               <ArrowLeftRight className="size-4" strokeWidth={2} />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-caption text-muted-foreground">Latest month transactions</p>
-              <p className="text-lg font-semibold tabular-nums text-foreground">
-                {formatDistributorHeadCount(transactionCount)}
-              </p>
-              {latestSales ? (
-                <p className="mt-0.5 flex items-center gap-1 text-micro text-muted-foreground">
-                  <PieChart className="size-3 shrink-0 opacity-70" />
-                  {latestSales.periodLabel}
-                </p>
-              ) : null}
-            </div>
+            <p className="text-caption text-muted-foreground">Pending HO review</p>
+            <p className="text-lg font-semibold tabular-nums text-foreground">
+              {formatDistributorHeadCount(pendingReview)}
+            </p>
           </div>
         </div>
+
+        <DistributorHeadBranchContributionsDonut branches={branches} totalAum={bookAum} />
       </CardContent>
     </Card>
   );

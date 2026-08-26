@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
-import { MfOrderPaymentReturnView } from "@/features/invest/components/mf-order-pay-view";
+import { MfPaymentReturnView } from "@/features/invest/components/mf-payment-return-view";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 
@@ -17,7 +17,7 @@ function PaymentReturnFallback() {
 export default function MutualFundPaymentReturnPage() {
   return (
     <Suspense fallback={<PaymentReturnFallback />}>
-      <MfOrderPaymentReturnView />
+      <MfPaymentReturnView />
     </Suspense>
   );
 }

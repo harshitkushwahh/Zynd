@@ -58,13 +58,13 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center gap-1 rounded-[var(--radius-control)] border px-2 text-[11px] font-medium leading-none",
+        "inline-flex h-6 max-w-full items-center gap-1 rounded-full border px-3 text-caption font-medium leading-none whitespace-nowrap",
         config.className,
         className
       )}
     >
       {showIcon ? <Icon className="size-3 shrink-0" strokeWidth={2.25} /> : null}
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }

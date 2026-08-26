@@ -201,7 +201,7 @@ export function AdminZyndPinSettingsSection() {
               <Label>Authenticator code</Label>
               <OtpInput value={totpCode} onChange={setTotpCode} />
             </div>
-            {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+            {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
             <Button
               className="w-full"
               disabled={!isValidPassword(currentPassword) || !isValidOtp(totpCode)}
@@ -227,7 +227,7 @@ export function AdminZyndPinSettingsSection() {
                 error={!!error || (confirmPin.length === 4 && pin !== confirmPin)}
               />
             </div>
-            {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+            {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -265,7 +265,7 @@ export function AdminZyndPinSettingsSection() {
       >
         {forgotStep === "send" ? (
           <div className="space-y-4">
-            {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+            {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
             <Button className="w-full" disabled={loading} onClick={() => void handleSendResetOtp()}>
               {loading ? "Sending…" : "Send reset code"}
             </Button>
@@ -284,7 +284,7 @@ export function AdminZyndPinSettingsSection() {
               <p className="text-center text-caption font-medium text-foreground">Confirm PIN</p>
               <AdminPinInput value={resetConfirmPin} onChange={setResetConfirmPin} />
             </div>
-            {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+            {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
             <Button
               className="w-full"
               disabled={

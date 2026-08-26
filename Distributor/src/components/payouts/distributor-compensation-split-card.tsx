@@ -7,7 +7,7 @@ import { DistributorInsightCardHeader } from "@/components/ui/distributor-insigh
 import {
   getDistributorJobCompensationSplit,
   type DistributorJobCompensation,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { formatAum, formatPortfolioMetricAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

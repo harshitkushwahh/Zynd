@@ -1,6 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
 import type { AuthSecurityPolicy } from "@/features/auth/api/types";
-import type { OtpSendResponse } from "@/features/auth/api/types";
 
 export async function mfaEnrollStart() {
   return apiRequest<{
@@ -8,6 +7,7 @@ export async function mfaEnrollStart() {
     qr_uri: string;
     manual_secret: string;
     expires_in: number;
+    qr_png_base64?: string;
   }>("/auth/mfa/enroll/start", { method: "POST" });
 }
 
@@ -52,6 +52,7 @@ export async function mfaResetStart(currentTotpCode: string) {
     qr_uri: string;
     manual_secret: string;
     expires_in: number;
+    qr_png_base64?: string;
   }>("/auth/mfa/reset/start", {
     method: "POST",
     body: JSON.stringify({ current_totp_code: currentTotpCode }),

@@ -33,8 +33,6 @@ import {
 } from "@/components/ui/admin-dialog-presets";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -43,8 +41,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SendAdminInvitationDialog } from "@/components/users/send-admin-invitation-dialog";
-import { UserStatusBadge } from "@/components/users/user-status-badge";
+import { TeamRoleBadge, UserStatusBadge } from "@/components/users/user-status-badge";
 import { userInitials } from "@/lib/admin-capabilities";
 import {
   assignAdminUserRole,
@@ -55,7 +54,6 @@ import {
   type AdminRole,
   type AdminUserListItem,
 } from "@/lib/admin-api";
-import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 
@@ -113,7 +111,7 @@ function ManageRolesDialog({
         />
       }
     >
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
       <div className="space-y-3">
         {roles.map((role) => {
@@ -146,9 +144,10 @@ function ManageRolesDialog({
 
 type UserRoleAssignmentPanelProps = {
   roles: AdminRole[];
+  trailingToolbar?: React.ReactNode;
 };
 
-export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps) {
+export function UserRoleAssignmentPanel({ roles, trailingToolbar }: UserRoleAssignmentPanelProps) {
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
   const [teamRolesByUserId, setTeamRolesByUserId] = useState<Record<string, string[]>>({});
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -358,7 +357,7 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
             }}
           />
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <Button variant="outline" size="icon" onClick={() => void loadUsers()} aria-label="Refresh">
               <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
             </Button>
@@ -366,11 +365,12 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
               <Plus className="size-3.5" />
               Send invitation
             </Button>
+            {trailingToolbar}
           </div>
         </div>
 
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-        {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+        {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
         {selectedUserIds.size > 0 ? (
           <div className="flex flex-col gap-3 rounded-[var(--radius-card)] border border-primary/20 bg-primary/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -443,17 +443,24 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
                     className={cn("hover:bg-muted/20", selected && "bg-primary/5")}
                   >
                     <AdminTableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setManageDialogError("");
-                            setManageUser(user);
-                          }}
-                        >
-                          <Settings2 className="size-3.5" />
-                          Manage roles
-                        </Button>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              aria-label="Manage roles"
+                              onClick={() => {
+                                setManageDialogError("");
+                                setManageUser(user);
+                              }}
+                            >
+                              <Settings2 className="size-3.5" />
+                            </Button>
+                          }
+                        />
+                        <TooltipContent side="top">Manage roles</TooltipContent>
+                      </Tooltip>
                     </AdminTableCell>
                     <AdminTableCell>
                         <input
@@ -467,7 +474,7 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
                     <AdminTableCell>
                       <div className="flex items-center gap-3">
                         <Avatar size="sm">
-                          <AvatarFallback className="bg-primary/10 text-caption font-medium text-primary">
+                          <AvatarFallback className="text-caption font-medium">
                             {userInitials(user.email)}
                           </AvatarFallback>
                         </Avatar>
@@ -486,9 +493,11 @@ export function UserRoleAssignmentPanel({ roles }: UserRoleAssignmentPanelProps)
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
                             {teamRoles.map((roleKey) => (
-                              <StatusBadge key={roleKey} variant="info" showIcon={false}>
-                                {roleNameByKey.get(roleKey) ?? roleKey}
-                              </StatusBadge>
+                              <TeamRoleBadge
+                                key={roleKey}
+                                roleKey={roleKey}
+                                label={roleNameByKey.get(roleKey) ?? roleKey}
+                              />
                             ))}
                           </div>
                         )}

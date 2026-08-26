@@ -75,9 +75,9 @@ async def test_list_users_and_audit_logs(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_support_agent_has_read_only_permissions(db_session: AsyncSession) -> None:
+async def test_mitra_has_read_only_permissions(db_session: AsyncSession) -> None:
     admin = User(
-        email=f"support-{uuid4()}@example.com",
+        email=f"mitra-{uuid4()}@example.com",
         password_hash="hash",
         role=UserRole.admin,
         status=UserStatus.active,
@@ -89,7 +89,7 @@ async def test_support_agent_has_read_only_permissions(db_session: AsyncSession)
     await assign_role_to_admin_user(
         db_session,
         user_id=admin.id,
-        role_key="support_agent",
+        role_key="mitra",
     )
     await revoke_role_from_admin_user(
         db_session,
@@ -98,10 +98,9 @@ async def test_support_agent_has_read_only_permissions(db_session: AsyncSession)
     )
 
     permissions = await get_user_permission_keys(db_session, admin.id)
-    assert "users.read" in permissions
-    assert "security_reviews.read" in permissions
-    assert "documents.read" in permissions
-    assert "users.suspend" not in permissions
+    assert "distributor.clients.read" in permissions
+    assert "distributor.clients.list" in permissions
+    assert "users.read" not in permissions
     assert "rbac.manage" not in permissions
     assert "transactions.execute" not in permissions
     assert "documents.download" not in permissions
@@ -122,17 +121,17 @@ async def test_rbac_assign_and_revoke_roles(db_session: AsyncSession) -> None:
     roles = await assign_role_to_admin_user(
         db_session,
         user_id=admin.id,
-        role_key="compliance_officer",
+        role_key="mitra_state_head",
     )
-    assert "compliance_officer" in roles
+    assert "mitra_state_head" in roles
     assert "super_admin" in roles
 
     roles = await revoke_role_from_admin_user(
         db_session,
         user_id=admin.id,
-        role_key="compliance_officer",
+        role_key="mitra_state_head",
     )
-    assert "compliance_officer" not in roles
+    assert "mitra_state_head" not in roles
     assert "super_admin" in roles
 
 
@@ -185,9 +184,9 @@ async def test_security_config_update_via_maker_checker(db_session: AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_compliance_officer_lacks_transactions_execute(db_session: AsyncSession) -> None:
+async def test_mitra_state_head_lacks_transactions_execute(db_session: AsyncSession) -> None:
     admin = User(
-        email=f"co-{uuid4()}@example.com",
+        email=f"msh-{uuid4()}@example.com",
         password_hash="hash",
         role=UserRole.admin,
         status=UserStatus.active,
@@ -196,13 +195,13 @@ async def test_compliance_officer_lacks_transactions_execute(db_session: AsyncSe
     await db_session.flush()
     await ensure_rbac_seed(db_session)
 
-    await assign_role_to_admin_user(db_session, user_id=admin.id, role_key="compliance_officer")
+    await assign_role_to_admin_user(db_session, user_id=admin.id, role_key="mitra_state_head")
     await revoke_role_from_admin_user(db_session, user_id=admin.id, role_key="super_admin")
 
     assert not await user_has_permission(db_session, admin.id, "transactions.execute")
 
-    super_admin_roles = await list_user_role_keys(db_session, admin.id)
-    assert super_admin_roles == ["compliance_officer"]
+    assigned_roles = await list_user_role_keys(db_session, admin.id)
+    assert assigned_roles == ["mitra_state_head"]
 
 
 def test_permission_matrix_fully_enforced() -> None:

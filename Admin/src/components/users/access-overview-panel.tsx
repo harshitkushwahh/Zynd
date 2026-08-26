@@ -18,12 +18,11 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
-import { Button } from "@/components/ui/button";
 import {
-  CAPABILITY_GROUPS,
   groupCapabilityKeys,
   orphanCapabilities,
 } from "@/lib/admin-capabilities";
+import { getRoleCoverage } from "@/lib/admin-role-display";
 import type { AdminPermission, AdminRole } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
 
@@ -31,17 +30,6 @@ type AccessOverviewPanelProps = {
   roles: AdminRole[];
   permissionCatalog: AdminPermission[];
 };
-
-const TOTAL_CATALOG_CAPABILITIES = CAPABILITY_GROUPS.reduce(
-  (sum, group) => sum + group.capabilities.length,
-  0,
-);
-
-function getRoleCoverage(role: AdminRole) {
-  return TOTAL_CATALOG_CAPABILITIES > 0
-    ? Math.round((role.permissions.length / TOTAL_CATALOG_CAPABILITIES) * 100)
-    : 0;
-}
 
 function getRoleAreas(role: AdminRole) {
   return groupCapabilityKeys(role.permissions).filter((group) => group.enabledCount > 0);

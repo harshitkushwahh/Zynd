@@ -1,7 +1,30 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+_TERMINAL_KYC_FORM_STATUSES = frozenset({"failed", "expired", "submitted"})
+_REUSABLE_KYC_FORM_STATUSES = frozenset(
+    {"under_review", "created", "awaiting_esign", "awaiting_submission"}
+)
+
+
+def _pick_reusable_kyc_form(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+    reusable = [
+        form
+        for form in candidates
+        if str(form.get("status") or "") in _REUSABLE_KYC_FORM_STATUSES
+        or (
+            str(form.get("status") or "") not in _TERMINAL_KYC_FORM_STATUSES
+            and str(form.get("status") or "")
+        )
+    ]
+    if not reusable:
+        return None
+    return reusable[-1]
 
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import fp_get, fp_patch, fp_post, fp_post_multipart
@@ -63,6 +86,29 @@ async def fetch_kyc_form(form_id: str) -> dict[str, Any]:
         return await stub_fetch_kyc_form(form_id)
 
     return await fp_get(f"/poa/kyc_forms/{form_id}", use_poa=True)
+
+
+async def find_kyc_form_by_pan(pan: str) -> dict[str, Any] | None:
+    settings = get_settings()
+    clean_pan = pan.strip().upper()
+    if not clean_pan:
+        return None
+    if not settings.resolved_kyc_provider_live:
+        from app.infrastructure.kyc.stub_provider import _STUB_KYC_FORMS
+
+        matches = [
+            form
+            for form in _STUB_KYC_FORMS.values()
+            if str(form.get("pan") or "").upper() == clean_pan
+        ]
+        return _pick_reusable_kyc_form(matches)
+
+    # Cybrilla gateway does not expose GET /poa/kyc_forms?pan=; reuse via stored form ID instead.
+    logger.debug(
+        "[KYC] find_kyc_form_by_pan | PAN list lookup skipped (endpoint unavailable) | pan=%s",
+        clean_pan,
+    )
+    return None
 
 
 async def upload_kyc_form_signature(

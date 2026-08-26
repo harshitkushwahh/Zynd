@@ -2,8 +2,10 @@ import {
   Activity,
   ClipboardCheck,
   Gauge,
+  Gift,
   Goal,
   PieChart,
+  Shield,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
@@ -14,7 +16,10 @@ export type UserProfileTabKey =
   | "goals"
   | "kyc"
   | "risk"
+  | "referrals"
   | "activity";
+
+export type PlatformAdminProfileTabKey = "overview" | "activity";
 
 export type UserProfileTab = {
   key: UserProfileTabKey;
@@ -62,6 +67,36 @@ export const USER_PROFILE_TABS: UserProfileTab[] = [
     permissions: ["risk_profile.users.read"],
   },
   {
+    key: "referrals",
+    slug: "referrals",
+    label: "Referrals",
+    icon: Gift,
+    permissions: ["referrals.read"],
+  },
+  {
+    key: "activity",
+    slug: "activity",
+    label: "Activity",
+    icon: Activity,
+    permissions: ["audit.read"],
+  },
+];
+
+export const PLATFORM_ADMIN_PROFILE_TABS: Array<{
+  key: PlatformAdminProfileTabKey;
+  slug: string;
+  label: string;
+  icon: LucideIcon;
+  permissions?: string[];
+}> = [
+  {
+    key: "overview",
+    slug: "overview",
+    label: "Account",
+    icon: Shield,
+    permissions: ["users.read"],
+  },
+  {
     key: "activity",
     slug: "activity",
     label: "Activity",
@@ -71,8 +106,11 @@ export const USER_PROFILE_TABS: UserProfileTab[] = [
 ];
 
 export const USER_PROFILE_TAB_SLUGS = new Set(USER_PROFILE_TABS.map((tab) => tab.slug));
+export const PLATFORM_ADMIN_PROFILE_TAB_SLUGS = new Set(
+  PLATFORM_ADMIN_PROFILE_TABS.map((tab) => tab.slug),
+);
 
-export function userProfileTabHref(profilePath: string, tab: UserProfileTab) {
+export function userProfileTabHref(profilePath: string, tab: { slug: string }) {
   return `/dashboard/users/${encodeURIComponent(profilePath)}/${tab.slug}`;
 }
 

@@ -3,9 +3,13 @@
 import { TrendingUp } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { InvestFundDetail } from "@/features/invest/api/invest-api";
+import type { InvestFundDetail, InvestNavPoint } from "@/features/invest/api/invest-api";
 import { formatSignedReturn } from "@/features/invest/lib/mf-format";
-import type { MfNavRange } from "@/features/invest/lib/mf-nav-history";
+import {
+  hasSufficientNavHistoryForRange,
+  normalizeNavPoints,
+  type MfNavRange,
+} from "@/features/invest/lib/mf-nav-history";
 import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -29,14 +33,15 @@ const LEFT_RETURN_ROWS: ReturnRow[] = [
 
 const RIGHT_RETURN_ROWS: ReturnRow[] = [
   { key: "return_1y", label: "1Y", range: "1y" },
-  { key: "return_3y", label: "3Y", range: "3y" },
-  { key: "return_5y", label: "5Y", range: "5y" },
+  { key: "return_3y", label: "3Y CAGR", range: "3y" },
+  { key: "return_5y", label: "5Y CAGR" },
 ];
 
 type MfFundReturnsCardProps = {
   returns: InvestFundDetail["returns"];
   selectedRange?: MfNavRange;
   onRangeSelect?: (range: MfNavRange) => void;
+  navPoints?: InvestNavPoint[];
 };
 
 function ReturnCell({
@@ -45,15 +50,17 @@ function ReturnCell({
   range,
   highlighted,
   onRangeSelect,
+  rangeAvailable = true,
 }: {
   label: string;
   value: number | null | undefined;
   range?: MfNavRange;
   highlighted: boolean;
   onRangeSelect?: (range: MfNavRange) => void;
+  rangeAvailable?: boolean;
 }) {
   const display = formatSignedReturn(value);
-  const interactive = Boolean(range && onRangeSelect);
+  const interactive = Boolean(range && onRangeSelect && rangeAvailable);
 
   return (
     <div
@@ -71,7 +78,7 @@ function ReturnCell({
           : undefined
       }
       className={cn(
-        "flex items-center justify-between gap-3 px-4 py-3",
+        "flex cursor-default items-center justify-between gap-3 px-4 py-3",
         interactive && "cursor-pointer transition-colors hover:bg-muted/30",
         highlighted && "bg-primary/5",
       )}
@@ -96,11 +103,13 @@ function ReturnColumn({
   returns,
   selectedRange,
   onRangeSelect,
+  navChartPoints,
 }: {
   rows: ReturnRow[];
   returns: InvestFundDetail["returns"];
   selectedRange?: MfNavRange;
   onRangeSelect?: (range: MfNavRange) => void;
+  navChartPoints: ReturnType<typeof normalizeNavPoints>;
 }) {
   return (
     <div className="divide-y divide-border/60">
@@ -110,6 +119,7 @@ function ReturnColumn({
           label={label}
           value={returns[key]}
           range={range}
+          rangeAvailable={range ? hasSufficientNavHistoryForRange(navChartPoints, range) : false}
           highlighted={range != null && range === selectedRange}
           onRangeSelect={onRangeSelect}
         />
@@ -118,13 +128,20 @@ function ReturnColumn({
   );
 }
 
-export function MfFundReturnsCard({ returns, selectedRange, onRangeSelect }: MfFundReturnsCardProps) {
+export function MfFundReturnsCard({
+  returns,
+  selectedRange,
+  onRangeSelect,
+  navPoints = [],
+}: MfFundReturnsCardProps) {
+  const navChartPoints = normalizeNavPoints(navPoints);
+
   return (
     <Card className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
       <CardHeader className="border-b border-border/60 bg-muted/10">
         <div className="flex items-start gap-3">
-          <div className="sip-icon-badge mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full">
-            <TrendingUp className="size-4" strokeWidth={2.25} />
+          <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+            <TrendingUp className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
           </div>
           <div className="min-w-0">
             <CardTitle>{copy.mutualFunds.returnsTitle}</CardTitle>
@@ -149,12 +166,14 @@ export function MfFundReturnsCard({ returns, selectedRange, onRangeSelect }: MfF
             returns={returns}
             selectedRange={selectedRange}
             onRangeSelect={onRangeSelect}
+            navChartPoints={navChartPoints}
           />
           <ReturnColumn
             rows={RIGHT_RETURN_ROWS}
             returns={returns}
             selectedRange={selectedRange}
             onRangeSelect={onRangeSelect}
+            navChartPoints={navChartPoints}
           />
         </div>
       </CardContent>

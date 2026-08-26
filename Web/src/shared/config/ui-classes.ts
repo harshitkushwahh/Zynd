@@ -3,6 +3,9 @@
 /** Standard dashboard card radius — maps to `--radius-card` via zynd-brand.css `.rounded-card`. */
 export const ZYND_CARD_RADIUS_CLASS = "rounded-card";
 
+/** High-promo card radius — maps to `--radius-3xl` (referral, risk profile, MF sidebar). */
+export const ZYND_3XL_RADIUS_CLASS = "rounded-3xl";
+
 /** Inputs, chips, and compact controls — maps to `--radius-control`. */
 export const ZYND_CONTROL_RADIUS_CLASS = "rounded-control";
 

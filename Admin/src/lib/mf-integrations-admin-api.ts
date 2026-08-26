@@ -23,6 +23,16 @@ export type MfIntegrationProviderStatus = {
   notes: string[];
 };
 
+export type ZyndCompanySettings = {
+  distributor_arn: string | null;
+  distributor_euin: string | null;
+  updated_at: string | null;
+  source: {
+    distributor_arn: string;
+    distributor_euin: string;
+  };
+};
+
 export async function fetchMfIntegrations() {
   const result = await apiRequest<{ items: MfIntegrationProviderStatus[] }>(
     "/admin/mf/integrations",
@@ -41,4 +51,20 @@ export async function updateMfIntegrationEnvironment(
       body: JSON.stringify({ environment }),
     },
   );
+}
+
+export async function fetchZyndCompanySettings() {
+  return apiRequest<ZyndCompanySettings>("/admin/mf/integrations/company");
+}
+
+export async function updateZyndCompanySettings(body: {
+  distributor_arn?: string;
+  distributor_euin?: string;
+  clear_distributor_arn?: boolean;
+  clear_distributor_euin?: boolean;
+}) {
+  return apiRequest<ZyndCompanySettings>("/admin/mf/integrations/company", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
 }

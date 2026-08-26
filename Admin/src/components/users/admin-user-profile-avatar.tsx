@@ -32,7 +32,7 @@ export function AdminUserProfileAvatar({
   return (
     <Avatar className={cn(sizeClasses[size], className)}>
       {resolvedSrc ? <AvatarImage src={resolvedSrc} alt={name} /> : null}
-      <AvatarFallback className="bg-primary/10 font-medium text-primary">{initials}</AvatarFallback>
+      <AvatarFallback className="font-medium">{initials}</AvatarFallback>
     </Avatar>
   );
 }

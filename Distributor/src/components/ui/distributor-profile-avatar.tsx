@@ -8,6 +8,7 @@ const sizeClasses = {
   sm: "size-8 text-caption",
   md: "size-9 text-compact",
   lg: "size-10 text-compact",
+  xl: "size-14 text-body",
 } as const;
 
 export type DistributorProfileAvatarProps = {

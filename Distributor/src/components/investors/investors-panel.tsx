@@ -23,20 +23,15 @@ import {
 } from "@/components/investors/assign-distributor-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
-import { useResidentDistributorAssignment } from "@/contexts/resident-distributor-assignment-context";
-import {
-  distributorClientDetailHref,
-} from "@/lib/distributor-client-routes";
+import { distributorClientDetailHrefForInvestor } from "@/lib/distributor-client-routes";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
+import type { DistributorInvestor, InvestorType } from "@/lib/distributor-types";
 import {
-  DUMMY_INVESTORS,
   filterDistributorBookInvestors,
   filterInvestorsByType,
   filterSystemResidentInvestors,
-} from "@/lib/dummy/investors";
+} from "@/lib/distributor-investor-utils";
 import { fetchDistributorClients } from "@/lib/distributor-clients-api";
-import { env } from "@/lib/env";
-import type { InvestorType } from "@/lib/dummy/types";
 import { formatDistributorDate } from "@/lib/format";
 import {
   DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS,
@@ -74,26 +69,26 @@ export function InvestorsPanel({
   showServiceModelFilter = false,
 }: InvestorsPanelProps) {
   const router = useRouter();
-  const { isBranchManager } = useDistributorAuth();
+  const { isBranchManager, canManageBranchBook } = useDistributorAuth();
   const showManagerAssignment =
-    isBranchManager && investorScope === "system-residents" && listOrigin === "system-resident";
-  const { assignments } = useResidentDistributorAssignment();
-  const [assignInvestor, setAssignInvestor] = useState<(typeof DUMMY_INVESTORS)[number] | null>(
-    null,
-  );
+    isBranchManager &&
+    canManageBranchBook &&
+    investorScope === "system-residents" &&
+    listOrigin === "system-resident";
+  const [assignInvestor, setAssignInvestor] = useState<DistributorInvestor | null>(null);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [filters, setFilters] = useState<InvestorTableFilters>(DEFAULT_INVESTOR_TABLE_FILTERS);
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
     column: "createdAt",
     direction: "descending",
   });
-  const [apiInvestors, setApiInvestors] = useState<typeof DUMMY_INVESTORS | null>(null);
+  const [apiInvestors, setApiInvestors] = useState<DistributorInvestor[] | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!env.useBackendClients) return;
     let cancelled = false;
-    void fetchDistributorClients({ limit: 100 })
+    const scope = investorScope === "distributor-book" ? "book" : "platform";
+    void fetchDistributorClients({ limit: 100, scope })
       .then((items) => {
         if (!cancelled) {
           setApiInvestors(items);
@@ -109,9 +104,9 @@ export function InvestorsPanel({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [investorScope]);
 
-  const sourceInvestors = env.useBackendClients ? (apiInvestors ?? []) : DUMMY_INVESTORS;
+  const sourceInvestors = apiInvestors ?? [];
 
   const scoped = useMemo(() => {
     let rows = sourceInvestors;
@@ -135,8 +130,8 @@ export function InvestorsPanel({
 
   const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
-  const openClientDetail = (investorId: string) => {
-    router.push(distributorClientDetailHref(listOrigin, investorId));
+  const openClientDetail = (investor: DistributorInvestor) => {
+    router.push(distributorClientDetailHrefForInvestor(listOrigin, investor));
   };
 
   const onboardedCount = scoped.filter((i) => i.onboardingStatus === "Onboarded").length;
@@ -146,10 +141,23 @@ export function InvestorsPanel({
   const nonCompliantCount = scoped.length - compliantCount;
 
   const clearDisabled = investorFiltersAreDefault(filters);
-  const isLoadingApi = env.useBackendClients && apiInvestors === null;
+  const isLoadingApi = apiInvestors === null;
+  const isBookEmpty = !isLoadingApi && !apiError && scoped.length === 0;
   const clientCodeColumnClass = showServiceModel
     ? DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_WIDE_CLASS
     : DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS;
+
+  const emptyTitle = apiError
+    ? "Could not load clients"
+    : isBookEmpty
+      ? "No clients added"
+      : "No clients match your filters";
+
+  const emptyDescription = apiError
+    ? apiError
+    : isBookEmpty
+      ? "Clients you onboard will appear in this list."
+      : "Adjust filters or clear all to reset the list.";
 
   const handleClearAll = () => {
     setFilters(DEFAULT_INVESTOR_TABLE_FILTERS);
@@ -170,7 +178,7 @@ export function InvestorsPanel({
     />
   );
 
-  const openAssignDialog = (investor: (typeof DUMMY_INVESTORS)[number]) => {
+  const openAssignDialog = (investor: DistributorInvestor) => {
     setAssignInvestor(investor);
     setAssignDialogOpen(true);
   };
@@ -192,7 +200,6 @@ export function InvestorsPanel({
     >
       <Table.Header>
         <Table.Head id="emailMasked" label="Email" allowsSorting />
-        <Table.Head id="panMasked" label="PAN" allowsSorting />
         <Table.Head
           id="clientCode"
           label="Client code"
@@ -223,12 +230,9 @@ export function InvestorsPanel({
           <Table.Row
             id={investor.id}
             className="cursor-pointer"
-            onAction={() => openClientDetail(investor.id)}
+            onAction={() => openClientDetail(investor)}
           >
             <Table.Cell className="font-medium">{investor.emailMasked}</Table.Cell>
-            <Table.Cell className="font-mono text-caption text-muted-foreground">
-              {investor.panMasked}
-            </Table.Cell>
             <Table.Cell className={cn("font-mono text-caption", clientCodeColumnClass)}>
               {investor.clientCode}
             </Table.Cell>
@@ -288,12 +292,8 @@ export function InvestorsPanel({
       <DistributorTableOnlyShell
         toolbar={toolbar}
         isEmpty={!isLoadingApi && sorted.length === 0}
-        emptyTitle={
-          apiError ? "Could not load clients" : "No investors match your filters"
-        }
-        emptyDescription={
-          apiError ?? "Adjust filters or clear all to reset the list."
-        }
+        emptyTitle={emptyTitle}
+        emptyDescription={emptyDescription}
       >
         {table}
       </DistributorTableOnlyShell>
@@ -305,12 +305,8 @@ export function InvestorsPanel({
         title={title}
         description={description}
         isEmpty={!isLoadingApi && sorted.length === 0}
-        emptyTitle={
-          apiError ? "Could not load clients" : "No investors match your filters"
-        }
-        emptyDescription={
-          apiError ?? "Adjust filters or clear all to reset the list."
-        }
+        emptyTitle={emptyTitle}
+        emptyDescription={emptyDescription}
         metrics={
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <DistributorMetricCard

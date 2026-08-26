@@ -15,7 +15,6 @@ import {
   revokeAllOtherAdminSessions,
   type AdminUserSession,
 } from "@/lib/admin-account-api";
-import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type DeviceKind = "mobile" | "laptop" | "desktop";
@@ -156,7 +155,7 @@ export function AdminDevicesSettingsPanel() {
 
   return (
     <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
       {sessions.length ? (
         <div className="space-y-3">
           {sessions.map((session) => (

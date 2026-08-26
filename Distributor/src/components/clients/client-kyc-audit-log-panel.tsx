@@ -13,7 +13,7 @@ import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
-import type { DistributorClientKycAuditEntry } from "@/lib/dummy/types";
+import type { DistributorClientKycAuditEntry } from "@/lib/distributor-types";
 import { formatDistributorDateTime } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { cn } from "@/lib/utils";

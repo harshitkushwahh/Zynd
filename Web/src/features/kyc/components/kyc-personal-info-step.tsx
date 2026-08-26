@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { KycInfoCallout } from "@/features/kyc/components/kyc-info-callout";
 import { KycSelectField } from "@/features/kyc/components/kyc-select-field";
 import {
   createEmptyPersonalInfo,
@@ -33,6 +34,10 @@ type KycPersonalInfoStepProps = {
     pepExposed: Array<{ label: string; value: string }>;
   };
   nationalityOptions?: Array<{ label: string; value: string }>;
+  fathersNameFromDigilocker?: boolean;
+  digilockerFathersNameIncomplete?: boolean;
+  onRetryDigilocker?: () => void;
+  retryingDigilocker?: boolean;
   saving?: boolean;
   onSubmit: (value: KycPersonalInfoValue) => void;
 };
@@ -98,6 +103,10 @@ export function KycPersonalInfoStep({
   initialValue,
   enumOptions,
   nationalityOptions,
+  fathersNameFromDigilocker = false,
+  digilockerFathersNameIncomplete = false,
+  onRetryDigilocker,
+  retryingDigilocker = false,
   saving = false,
   onSubmit,
 }: KycPersonalInfoStepProps) {
@@ -129,6 +138,10 @@ export function KycPersonalInfoStep({
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
 
+    if (digilockerFathersNameIncomplete) {
+      return;
+    }
+
     const nextErrors = validateKycPersonalInfo(form);
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
@@ -140,6 +153,13 @@ export function KycPersonalInfoStep({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {fathersNameFromDigilocker ? (
+        <KycInfoCallout
+          title={copy.kyc.personalInfo.fathersNameDigilockerTitle}
+          description={copy.kyc.personalInfo.fathersNameDigilockerHint}
+        />
+      ) : null}
+
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="kyc-fathers-name">{copy.kyc.personalInfo.fields.fathersName}</Label>
@@ -153,6 +173,24 @@ export function KycPersonalInfoStep({
             maxLength={KYC_PERSON_NAME_LIMITS.max}
             aria-invalid={Boolean(errors.fathersName)}
           />
+          {digilockerFathersNameIncomplete ? (
+            <div className="space-y-2 rounded-[var(--radius-card)] border border-warning/25 bg-warning/[0.06] px-3.5 py-3">
+              <p className="text-[11px] leading-relaxed text-foreground">
+                {copy.kyc.personalInfo.digilockerPrefillIncomplete}
+              </p>
+              {onRetryDigilocker ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={retryingDigilocker}
+                  onClick={onRetryDigilocker}
+                >
+                  {retryingDigilocker ? copy.kyc.digilocker.retrying : copy.kyc.digilocker.retry}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {errors.fathersName ? <FieldMessage message={errors.fathersName} /> : null}
         </div>
 
@@ -250,7 +288,12 @@ export function KycPersonalInfoStep({
         </div>
       </div>
 
-      <Button type="submit" size="lg" className="w-full" disabled={saving}>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full"
+        disabled={saving || digilockerFathersNameIncomplete}
+      >
         {saving ? copy.kyc.saving : copy.kyc.phase1CompleteCta}
       </Button>
     </form>

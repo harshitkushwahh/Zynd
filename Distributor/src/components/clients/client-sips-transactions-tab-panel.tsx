@@ -20,12 +20,12 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   buildClientOrdersForInvestor,
   buildClientSipsForInvestor,
-} from "@/lib/dummy/client-profile";
+} from "@/lib/distributor-client-profile-data";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
-import type { DistributorInvestor, DistributorOrder, DistributorSystematicPlan, OrderStatus, SystematicPlanStatus } from "@/lib/dummy/types";
+import type { DistributorInvestor, DistributorOrder, DistributorSystematicPlan, OrderStatus, SystematicPlanStatus } from "@/lib/distributor-types";
 import { formatAum, formatDistributorDate } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { orderStatusVariant, planStatusVariant } from "@/lib/status-meta";

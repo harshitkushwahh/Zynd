@@ -521,7 +521,7 @@ export function GoalCalculatorPanel({
 
   if (isJourneyDialog) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-popover">
         <GoalDialogSplitLayout
           main={
             <form

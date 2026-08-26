@@ -1,7 +1,5 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
-
 import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -43,8 +41,6 @@ export function RiskProfileSessionErrorDialog({
         // Blocking dialog — only the primary action dismisses.
       }}
       title={copy.riskProfile.lockedAttemptsTitle}
-      description={copy.riskProfile.lockedAttemptsDescription}
-      icon={AlertCircle}
       maxWidth="md"
       showCloseButton={false}
     >

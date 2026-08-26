@@ -12,11 +12,11 @@ const QUICK_TRANSACTION_HREF = "/dashboard/quick-transaction";
 const ADD_DISTRIBUTOR_HREF = "/dashboard/add-distributor";
 
 export function DistributorDashboardTransactionActions() {
-  const { isBranchManager } = useDistributorAuth();
+  const { isBranchManager, canManageBranchBook } = useDistributorAuth();
 
   return (
     <div className="flex shrink-0 items-center gap-1.5">
-      {isBranchManager ? (
+      {isBranchManager && canManageBranchBook ? (
         <DistributorActionButton
           variant="outline"
           nativeButton={false}
@@ -27,15 +27,17 @@ export function DistributorDashboardTransactionActions() {
           <span className="sr-only lg:hidden">{ZYND_MITRA_COPY.add}</span>
         </DistributorActionButton>
       ) : null}
-      <DistributorActionButton
-        variant="outline"
-        nativeButton={false}
-        render={<Link href={ADD_INVESTOR_HREF} />}
-      >
-        <UserPlus className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-        <span className="hidden md:inline">Add investor</span>
-        <span className="sr-only md:hidden">Add investor</span>
-      </DistributorActionButton>
+      {canManageBranchBook ? (
+        <DistributorActionButton
+          variant="outline"
+          nativeButton={false}
+          render={<Link href={ADD_INVESTOR_HREF} />}
+        >
+          <UserPlus className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+          <span className="hidden md:inline">Add investor</span>
+          <span className="sr-only md:hidden">Add investor</span>
+        </DistributorActionButton>
+      ) : null}
       <DistributorActionButton
         variant="primary"
         nativeButton={false}

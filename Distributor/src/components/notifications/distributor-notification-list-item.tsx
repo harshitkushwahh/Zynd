@@ -1,6 +1,6 @@
 "use client";
 
-import type { DistributorNotification } from "@/lib/dummy/notifications";
+import type { DistributorNotification } from "@/lib/distributor-notifications-data";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 

@@ -31,7 +31,7 @@ export function AdminSettingsSidebar() {
     <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card md:w-72">
       <div className="shrink-0 border-b border-border px-5 py-6 text-center">
         <Avatar className="mx-auto size-[4.5rem]">
-          <AvatarFallback className="bg-primary/10 text-h3 font-semibold text-primary">
+          <AvatarFallback className="text-h3 font-semibold">
             {userInitials(user.email)}
           </AvatarFallback>
         </Avatar>

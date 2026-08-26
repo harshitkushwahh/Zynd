@@ -22,9 +22,19 @@ export type DashboardBreadcrumbItem = {
 type DashboardBreadcrumbProps = {
   items: DashboardBreadcrumbItem[];
   className?: string;
+  separator?: "chevron" | "slash";
 };
 
-export function DashboardBreadcrumb({ items, className }: DashboardBreadcrumbProps) {
+export function DashboardBreadcrumb({
+  items,
+  className,
+  separator = "chevron",
+}: DashboardBreadcrumbProps) {
+  const separatorNode =
+    separator === "slash" ? (
+      <span className="text-muted-foreground/70">/</span>
+    ) : undefined;
+
   return (
     <Breadcrumb className={cn("mb-6 shrink-0", className)}>
       <BreadcrumbList>
@@ -43,7 +53,7 @@ export function DashboardBreadcrumb({ items, className }: DashboardBreadcrumbPro
 
           return (
             <span key={`${item.label}-${index}`} className="contents">
-              <BreadcrumbSeparator />
+              <BreadcrumbSeparator>{separatorNode}</BreadcrumbSeparator>
               <BreadcrumbItem>
                 {isLast ? (
                   <BreadcrumbPage>{item.label}</BreadcrumbPage>

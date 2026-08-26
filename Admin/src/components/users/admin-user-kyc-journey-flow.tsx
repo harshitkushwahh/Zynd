@@ -15,7 +15,7 @@ import { AlertCircle, CheckCircle2, Circle, MinusCircle } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
 
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { useTheme } from "@/contexts/theme-context";
 import {
   adminKycStepIcon,
@@ -104,14 +104,34 @@ function stepInvestorPathBadge(
 
 function stepRequirementHint(step: AdminKycFlowStep, kycCompliant: boolean): string | null {
   if (kycCompliant) return null;
-  if (step.id === "signature") return "Required for new KYC";
-  if (step.id === "esign") return "Required for new KYC";
+  if (step.id === "signature") return "New KYC required";
+  if (step.id === "esign") return "New KYC required";
   return null;
+}
+
+function KycFlowNodeBadge({
+  variant,
+  children,
+}: {
+  variant: StatusBadgeVariant;
+  children: React.ReactNode;
+}) {
+  return (
+    <StatusBadge
+      variant={variant}
+      showIcon={false}
+      className="admin-user-kyc-flow__node-badge h-auto min-h-4 px-1.5 text-[0.625rem] leading-tight normal-case"
+    >
+      {children}
+    </StatusBadge>
+  );
 }
 
 function KycInvestorPathBadgePill({ variant }: { variant: KycInvestorPathBadge }) {
   const label = variant === "kra" ? "KRA compliant" : "New to KYC";
-  return <StatusBadge variant={variant === "kra" ? "success" : "info"}>{label}</StatusBadge>;
+  return (
+    <KycFlowNodeBadge variant={variant === "kra" ? "success" : "info"}>{label}</KycFlowNodeBadge>
+  );
 }
 
 function KycStepNodeComponent(props: NodeProps) {
@@ -156,7 +176,7 @@ function KycStepNodeComponent(props: NodeProps) {
         {investorPathBadge ? (
           <KycInvestorPathBadgePill variant={investorPathBadge} />
         ) : requirementHint ? (
-          <StatusBadge variant="neutral">{requirementHint}</StatusBadge>
+          <KycFlowNodeBadge variant="neutral">{requirementHint}</KycFlowNodeBadge>
         ) : null}
       </article>
       <Handle type="source" position={sourcePosition} className="admin-user-kyc-flow__handle" />

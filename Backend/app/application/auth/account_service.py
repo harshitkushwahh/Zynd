@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -18,8 +19,10 @@ from app.application.auth.mfa_service import (
     verify_user_backup_code,
     verify_user_totp,
 )
+from app.application.referral.referral_qr_service import generate_referral_qr_png
 from app.application.auth.audit_service import write_audit
-from app.application.auth.auth_client_policy import validate_user_role_for_client
+from app.application.auth.auth_client_policy import AuthClientKind, auth_client_from_pending_payload, validate_user_role_for_client
+from app.application.admin.rbac_service import list_user_role_keys
 from app.application.auth.errors import AuthError
 from app.application.auth.session_service import revoke_all_sessions
 from app.application.notifications.notification_service import schedule_user_notification
@@ -47,7 +50,12 @@ from app.infrastructure.persistence.models import (
     User,
     UserBackupCode,
     UserMfaSecret,
+    UserRole,
     UserStatus,
+)
+from app.infrastructure.security.password_policy import (
+    PasswordStrengthError,
+    validate_password_strength,
 )
 from app.infrastructure.security.passwords import hash_password, verify_password
 from app.infrastructure.security.pending_auth import (
@@ -66,6 +74,15 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+MFA_QR_PNG_SIZE = 256
+
+
+def _mfa_qr_png_base64(secret: str, email: str) -> str:
+    qr_uri = build_provisioning_uri(secret, email)
+    png_bytes = generate_referral_qr_png(qr_uri, size=MFA_QR_PNG_SIZE)
+    return base64.b64encode(png_bytes).decode("ascii")
+
+
 async def mfa_enroll_start(db: AsyncSession, user: User) -> dict[str, Any]:
     if user_has_mfa(user):
         raise AuthError("MFA is already enabled.", "mfa_already_enabled", 409)
@@ -79,12 +96,34 @@ async def mfa_enroll_start(db: AsyncSession, user: User) -> dict[str, Any]:
         {"user_id": str(user.id), "secret": secret},
         settings.mfa_pending_ttl_seconds,
     )
+    qr_uri = build_provisioning_uri(secret, user.email)
     return {
         "enroll_token": enroll_token,
-        "qr_uri": build_provisioning_uri(secret, user.email),
+        "qr_uri": qr_uri,
         "manual_secret": secret,
         "expires_in": settings.mfa_pending_ttl_seconds,
+        "qr_png_base64": _mfa_qr_png_base64(secret, user.email),
     }
+
+
+async def mfa_enroll_qr(
+    db: AsyncSession,
+    *,
+    user: User,
+    enroll_token: str,
+    size: int = 512,
+) -> bytes:
+    del db
+    if user_has_mfa(user):
+        raise AuthError("MFA is already enabled.", "mfa_already_enabled", 409)
+
+    payload = await peek_pending_auth("mfa_enroll", enroll_token)
+    if not payload or payload.get("user_id") != str(user.id):
+        raise AuthError("Enrollment session expired. Start again.", "enroll_expired", 410)
+
+    secret = payload["secret"]
+    qr_uri = build_provisioning_uri(secret, user.email)
+    return generate_referral_qr_png(qr_uri, size=size)
 
 
 async def mfa_enroll_confirm(
@@ -204,12 +243,34 @@ async def mfa_reset_start(
         ip=ip,
         metadata={"action": "mfa_reset_started"},
     )
+    qr_uri = build_provisioning_uri(secret, user.email)
     return {
         "reset_token": reset_token,
-        "qr_uri": build_provisioning_uri(secret, user.email),
+        "qr_uri": qr_uri,
         "manual_secret": secret,
         "expires_in": settings.mfa_pending_ttl_seconds,
+        "qr_png_base64": _mfa_qr_png_base64(secret, user.email),
     }
+
+
+async def mfa_reset_qr(
+    db: AsyncSession,
+    *,
+    user: User,
+    reset_token: str,
+    size: int = 512,
+) -> bytes:
+    del db
+    if not user_has_mfa(user):
+        raise AuthError("MFA is not enabled.", "mfa_not_enrolled", 400)
+
+    payload = await peek_pending_auth("mfa_reset", reset_token)
+    if not payload or payload.get("user_id") != str(user.id):
+        raise AuthError("Reset session expired. Start again.", "reset_expired", 410)
+
+    secret = payload["secret"]
+    qr_uri = build_provisioning_uri(secret, user.email)
+    return generate_referral_qr_png(qr_uri, size=size)
 
 
 async def mfa_reset_confirm(
@@ -430,7 +491,7 @@ async def verify_mfa_login(
         login_method=login_method,
     ) | {
         "device_fingerprint": payload["device_fingerprint"],
-        "admin_client": bool(payload.get("admin_client")),
+        "auth_client": auth_client_from_pending_payload(payload),
     }
 
 
@@ -560,7 +621,8 @@ async def confirm_oauth_link(
     if not await verify_otp(OtpPurpose.oauth_link, str(user.id), email_otp):
         raise AuthError("Invalid or expired verification code.", "invalid_otp", 400)
 
-    validate_user_role_for_client(user, admin_client=False)
+    role_keys = await list_user_role_keys(db, user.id)
+    validate_user_role_for_client(user, client="web", role_keys=role_keys)
 
     provider = OAuthProvider(payload["provider"])
     result = await db.execute(
@@ -601,7 +663,7 @@ async def confirm_oauth_link(
         device_fingerprint=device_fingerprint,
         user_agent=user_agent,
         provider=provider.value,
-        admin_client=False,
+        auth_client="web",
     )
     if pending:
         from app.application.auth.login_sms_service import enrich_mfa_login_pending
@@ -626,7 +688,7 @@ async def _maybe_mfa_pending_login(
     device_fingerprint: str,
     user_agent: str | None,
     provider: str | None = None,
-    admin_client: bool = False,
+    auth_client: AuthClientKind = "web",
 ) -> dict[str, Any] | None:
     from app.application.auth.service import _maybe_mfa_pending_login as pending
 
@@ -635,7 +697,7 @@ async def _maybe_mfa_pending_login(
         device_fingerprint=device_fingerprint,
         user_agent=user_agent,
         provider=provider,
-        admin_client=admin_client,
+        auth_client=auth_client,
     )
 
 
@@ -731,6 +793,10 @@ async def change_password(
         sms_otp=sms_otp,
         ip=ip,
     )
+    try:
+        validate_password_strength(new_password)
+    except PasswordStrengthError as exc:
+        raise AuthError(str(exc), "invalid_password", 400) from exc
     try:
         await ensure_password_not_pwned(new_password)
     except PasswordPwnedError as exc:
@@ -918,6 +984,13 @@ async def request_account_deletion(
         sms_otp=sms_otp,
         ip=ip,
     )
+
+    if user.role != UserRole.user:
+        raise AuthError(
+            "Admin and service accounts cannot use self-service deletion.",
+            "admin_deletion_blocked",
+            403,
+        )
 
     settings = get_settings()
     user.status = UserStatus.deletion_pending

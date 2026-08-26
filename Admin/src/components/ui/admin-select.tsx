@@ -23,6 +23,10 @@ type AdminSelectProps = {
   className?: string;
   triggerClassName?: string;
   contentAlign?: "start" | "center" | "end";
+  disabled?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  modal?: boolean;
   "aria-label"?: string;
 };
 
@@ -35,20 +39,36 @@ export function AdminSelect({
   className,
   triggerClassName,
   contentAlign = "start",
+  disabled = false,
+  open,
+  onOpenChange,
+  modal = false,
   "aria-label": ariaLabel,
 }: AdminSelectProps) {
   const selectedLabel = options.find((option) => option.value === value)?.label;
+  const controlledOpenProps =
+    open !== undefined
+      ? {
+          open,
+          onOpenChange: (next: boolean) => {
+            onOpenChange?.(next);
+          },
+        }
+      : {};
 
   return (
     <Select
       value={value}
+      modal={modal}
+      {...controlledOpenProps}
       onValueChange={(next) => {
         if (next != null) onValueChange(next);
       }}
     >
       <SelectTrigger
         size={size}
-        className={cn(className, triggerClassName)}
+        disabled={disabled}
+        className={cn(className, triggerClassName ?? "w-full")}
         aria-label={ariaLabel ?? placeholder}
       >
         <SelectValue placeholder={placeholder}>

@@ -4,16 +4,17 @@ import { useMemo } from "react";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
+import { PageHeader } from "@/components/ui/page-header";
 import { GoalPersonalListCard } from "@/features/goals/components/goal-personal-list-card";
 import { GoalsSectionEmptyState } from "@/features/goals/components/goals-section-empty-state";
-import {
-  GoalsContentFade,
-  GoalsListPageHeader,
-} from "@/features/goals/components/goals-page-loading-view";
+import { GoalsContentFade } from "@/features/goals/components/goals-page-loading-view";
 import { GoalsListPageSkeleton } from "@/features/goals/components/goals-list-page-skeleton";
 import { useCachedPersonalGoalsList } from "@/features/goals/hooks/use-cached-personal-goals-list";
 import { GOALS_LIST_HREF } from "@/features/goals/lib/goal-navigation";
+import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { copy } from "@/shared/config/copy";
+
+const GoalsIcon = DASHBOARD_ROUTES.find((route) => route.id === "goals")!.icon;
 
 export function GoalsPersonalListPage() {
   const { goals, error, showSkeleton, hasResolved, reload } = useCachedPersonalGoalsList();
@@ -32,7 +33,8 @@ export function GoalsPersonalListPage() {
         ]}
       />
 
-      <GoalsListPageHeader
+      <PageHeader
+        icon={GoalsIcon}
         title={copy.goals.personalGoalsListTitle}
         description={copy.goals.personalGoalsListDescription}
         loading={showSkeleton}

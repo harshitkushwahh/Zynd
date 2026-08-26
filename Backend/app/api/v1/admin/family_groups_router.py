@@ -19,6 +19,7 @@ from app.api.v1.admin.family_groups_schemas import (
     AdminUserFamilyGroupsResponse,
 )
 from app.api.v1.auth.deps import get_client_ip, require_permission
+from app.application.admin.user_admin_service import get_user_by_reference
 from app.application.family_groups.admin_service import (
     admin_force_archive_family_group,
     admin_force_remove_group_member,
@@ -42,6 +43,16 @@ def _handle_family_group_error(exc: FamilyGroupError) -> HTTPException:
         status_code=exc.status_code,
         detail={"code": exc.code, "message": exc.message},
     )
+
+
+async def _resolve_user_id(db: AsyncSession, user_ref: str) -> UUID:
+    user = await get_user_by_reference(db, user_ref)
+    if user is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "user_not_found", "message": "User not found."},
+        )
+    return user.id
 
 
 @router.get("", response_model=AdminFamilyGroupListResponse)
@@ -153,13 +164,14 @@ async def get_admin_family_group_audit_logs(
     )
 
 
-@router.get("/users/{user_id}", response_model=AdminUserFamilyGroupsResponse)
+@router.get("/users/{user_ref}", response_model=AdminUserFamilyGroupsResponse)
 async def get_admin_user_family_groups(
-    user_id: UUID,
+    user_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_permission("family_groups.read"))],
 ) -> AdminUserFamilyGroupsResponse:
     try:
+        user_id = await _resolve_user_id(db, user_ref)
         payload = await list_admin_user_family_groups(db, user_id=user_id)
     except FamilyGroupError as exc:
         raise _handle_family_group_error(exc) from exc
@@ -213,21 +225,22 @@ async def post_admin_force_archive_family_group(
 
 
 @router.post(
-    "/{group_id}/members/{user_id}/remove",
+    "/{group_id}/members/{user_ref}/remove",
     response_model=AdminFamilyGroupActionResponse,
 )
 async def post_admin_force_remove_group_member(
     group_id: UUID,
-    user_id: UUID,
+    user_ref: str,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     admin: Annotated[User, Depends(require_permission("family_groups.manage"))],
 ) -> AdminFamilyGroupActionResponse:
     try:
+        target_user_id = await _resolve_user_id(db, user_ref)
         await admin_force_remove_group_member(
             db,
             group_id=group_id,
-            target_user_id=user_id,
+            target_user_id=target_user_id,
             admin=admin,
             ip=get_client_ip(request),
         )

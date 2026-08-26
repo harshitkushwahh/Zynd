@@ -164,7 +164,7 @@ export function RolesPermissionsPanel({
           />
 
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+            {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
             <Button onClick={openCreate}>
               <Plus className="size-3.5" />
               New role
@@ -172,7 +172,7 @@ export function RolesPermissionsPanel({
           </div>
         </div>
 
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
         <AdminDataTable
           minWidth="xl"

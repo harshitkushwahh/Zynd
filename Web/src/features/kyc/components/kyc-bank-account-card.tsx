@@ -1,6 +1,8 @@
 "use client";
 
-import { Building2, CheckCircle2, Loader2, PencilLine } from "lucide-react";
+import { CheckCircle2, Loader2, PencilLine } from "lucide-react";
+
+import { BankLogo } from "@/components/banking/bank-logo";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { KycPanReadinessBadge } from "@/features/kyc/components/kyc-pan-readiness-badge";
@@ -14,6 +16,7 @@ type KycBankAccountCardProps = {
   isComplete: boolean;
   accountDetails: KycBankAccountDetails | null;
   verification: KycBankVerificationResult | null;
+  ifscCode?: string | null;
   readiness?: KycReadinessInfo | null;
   onEdit?: () => void;
 };
@@ -72,6 +75,7 @@ export function KycBankAccountCard({
   isComplete,
   accountDetails,
   verification,
+  ifscCode,
   readiness,
   onEdit,
 }: KycBankAccountCardProps) {
@@ -99,11 +103,16 @@ export function KycBankAccountCard({
           {isProcessing ? (
             <Loader2 className="size-4 animate-spin" strokeWidth={2} />
           ) : (
-            <Building2 className="size-4" strokeWidth={2} />
+            <BankLogo
+              ifscCode={ifscCode}
+              bankName={accountDetails?.bankName}
+              size="sm"
+              fallbackClassName="bg-primary/[0.08] text-primary ring-primary/20"
+            />
           )}
         </div>
 
-        <div className="min-w-0 flex-1 text-left leading-tight">
+        <div className="min-w-0 flex-1 space-y-1 text-left leading-tight">
           <p className="text-caption font-semibold tracking-tight text-foreground">
             {isProcessing
               ? copy.kyc.bank.verifyingTitle
@@ -111,7 +120,7 @@ export function KycBankAccountCard({
                 ? copy.kyc.bank.manualPendingTitle
                 : copy.kyc.bank.namePendingTitle}
           </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+          <p className="text-[11px] leading-snug text-muted-foreground">
             {isProcessing
               ? copy.kyc.bank.verifyingDescription
               : requiresManual
@@ -163,6 +172,15 @@ export function KycBankAccountCard({
             <KycBankVerificationBadges verification={verification} readiness={readiness} />
           ) : null}
         </div>
+
+        {accountDetails ? (
+          <BankLogo
+            bankName={accountDetails.bankName}
+            ifscCode={ifscCode}
+            size="sm"
+            fallbackClassName="bg-success/10 text-success ring-success/20"
+          />
+        ) : null}
 
         {isComplete && !requiresManual && onEdit ? (
           <button

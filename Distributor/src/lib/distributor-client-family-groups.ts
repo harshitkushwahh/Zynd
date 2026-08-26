@@ -1,4 +1,4 @@
-import type { DistributorClientFamilyGroup } from "@/lib/dummy/types";
+import type { DistributorClientFamilyGroup } from "@/lib/distributor-types";
 
 /**
  * Distributors may open family group detail only when the viewed client owns the group.

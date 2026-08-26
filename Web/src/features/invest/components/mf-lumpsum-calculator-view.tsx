@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LineChart, TrendingUp } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
+import { PAGE_HEADER_ICON_CLASS } from "@/components/ui/page-header";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   fetchInvestFundDetail,
@@ -18,8 +20,10 @@ import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculat
 import { MfCalculatorSliderField } from "@/features/invest/components/mf-calculator-slider-field";
 import { LumpsumCorpusDonut } from "@/features/invest/components/mf-lumpsum-corpus-donut";
 import { MfFundPicker } from "@/features/invest/components/mf-fund-picker";
+import { MfGrowthProjectionHeader } from "@/features/invest/components/mf-growth-projection-header";
 import { MfLumpsumCalculatorResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
+import { MF_TOOL_ICONS } from "@/features/invest/lib/mf-dashboard-sidebar-data";
 import {
   MF_CALC_CARD_CLASS,
   MF_CALC_CARD_CONTENT_CLASS,
@@ -31,7 +35,7 @@ import {
   MF_CALC_INVESTED_DOT_CLASS,
   MF_CALC_PANEL_CLASS,
 } from "@/features/invest/lib/mf-calculator-ui";
-import { formatDate, formatInr, formatReturn } from "@/features/invest/lib/mf-format";
+import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import {
   clampLumpsumAmount,
   LUMPSUM_CALCULATOR_DEFAULT_AMOUNT,
@@ -43,6 +47,7 @@ import {
   scenariosToChartSeries,
 } from "@/features/invest/lib/mf-lumpsum-calculator";
 import { copy } from "@/shared/config/copy";
+import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
 
 function findBestScenario(scenarios: InvestReturnCalculatorScenario[]) {
@@ -58,10 +63,9 @@ function findBestScenario(scenarios: InvestReturnCalculatorScenario[]) {
 type LumpsumCorpusProgressProps = {
   invested: number;
   projectedValue: number;
-  returnPct: number | null;
 };
 
-function LumpsumCorpusProgress({ invested, projectedValue, returnPct }: LumpsumCorpusProgressProps) {
+function LumpsumCorpusProgress({ invested, projectedValue }: LumpsumCorpusProgressProps) {
   const gains = Math.max(0, projectedValue - invested);
   const investedShare =
     projectedValue > 0 ? Math.min(100, (invested / projectedValue) * 100) : 100;
@@ -69,20 +73,7 @@ function LumpsumCorpusProgress({ invested, projectedValue, returnPct }: LumpsumC
 
   return (
     <div className={cn(MF_CALC_PANEL_CLASS, "mt-4")}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-caption font-medium text-foreground">{copy.mutualFunds.lumpsumChartTitle}</p>
-        {returnPct != null ? (
-          <p
-            className={cn(
-              "text-caption font-semibold tabular-nums",
-              returnPct > 0 ? MF_CALC_GAIN_TEXT_CLASS : "text-muted-foreground",
-            )}
-          >
-            {formatReturn(returnPct)}
-          </p>
-        ) : null}
-      </div>
-      <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-muted">
+      <div className="relative h-2 overflow-hidden rounded-full bg-muted">
         <div
           className={cn("absolute inset-y-0 left-0 transition-[width] duration-300", MF_CALC_INVESTED_BAR_CLASS)}
           style={{ width: `${investedShare}%` }}
@@ -214,7 +205,6 @@ function LumpsumResultsCard({ result }: LumpsumResultsCardProps) {
             <LumpsumCorpusProgress
               invested={result.amount_inr}
               projectedValue={selectedScenario.value_inr}
-              returnPct={selectedScenario.return_pct}
             />
           </div>
 
@@ -222,13 +212,10 @@ function LumpsumResultsCard({ result }: LumpsumResultsCardProps) {
             invested={result.amount_inr}
             projectedValue={selectedScenario.value_inr}
             horizonLabel={selectedScenario.horizon.toUpperCase()}
+            returnPct={selectedScenario.return_pct}
             showLegend={false}
             className="lg:px-2"
           />
-        </div>
-
-        <div className="mt-auto border-t border-border pt-3">
-          <MfCalculatorDisclaimer disclaimer={result.disclaimer} dataQuality={result.data_quality} />
         </div>
       </CardContent>
     </Card>
@@ -332,35 +319,27 @@ export function MfLumpsumCalculatorView() {
   );
 
   return (
-    <MfToolsPageShell
-      trail={[
-        { label: copy.mutualFunds.lumpsumCalcTitle, href: "/dashboard/mutual-funds/calculators/lumpsum" },
-      ]}
-      title={copy.mutualFunds.lumpsumCalcTitle}
-      description={copy.mutualFunds.lumpsumCalcDescription}
-    >
+    <DashboardContentFade>
+      <MfToolsPageShell
+        trail={[
+          { label: copy.mutualFunds.lumpsumCalcTitle, href: "/dashboard/mutual-funds/calculators/lumpsum" },
+        ]}
+        title={copy.mutualFunds.lumpsumCalcTitle}
+        icon={MF_TOOL_ICONS["lumpsum-calc"]}
+      >
       <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
         <Card className={cn("h-full", MF_CALC_CARD_CLASS)}>
           <CardContent className={MF_CALC_CARD_CONTENT_CLASS}>
             <div className="flex items-center gap-2.5 text-body font-semibold tracking-tight">
-              <span className={MF_CALC_ICON_BADGE_CLASS}>
-                <LineChart className="size-4" strokeWidth={2.25} />
-              </span>
+              <LineChart
+                className={cn("size-5 shrink-0", PAGE_HEADER_ICON_CLASS)}
+                strokeWidth={2.25}
+              />
               {copy.mutualFunds.lumpsumInputsTitle}
             </div>
 
-            <div className="space-y-2">
-              <MfFundPicker value={fund} onChange={setFund} />
-              {fund?.min_lumpsum_amount_inr != null ? (
-                <p className="text-caption text-muted-foreground">
-                  {copy.mutualFunds.lumpsumFundMinNote.replace(
-                    "{amount}",
-                    formatInr(fund.min_lumpsum_amount_inr),
-                  )}
-                </p>
-              ) : null}
-            </div>
+            <MfFundPicker value={fund} onChange={setFund} />
 
             <MfCalculatorSliderField
               id="lumpsum-amount"
@@ -383,7 +362,7 @@ export function MfLumpsumCalculatorView() {
 
         <div className="flex h-full min-h-0 flex-col gap-4">
           {!fund ? (
-            <Card className="h-full flex-1 rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
+            <Card className={cn("h-full flex-1 border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]", ZYND_3XL_RADIUS_CLASS)}>
               <CardContent className="flex h-full min-h-full flex-col items-center justify-center gap-3 p-5 text-center sm:p-6">
                 <TrendingUp className="size-8 text-[var(--sip-empty-icon)]" />
                 <div>
@@ -412,10 +391,10 @@ export function MfLumpsumCalculatorView() {
 
         <Card className={cn("w-full", MF_CALC_CARD_CLASS)}>
           <CardContent className={cn(MF_CALC_CARD_CONTENT_CLASS, "gap-4")}>
-            <div className="space-y-1">
-              <CardTitle>{copy.mutualFunds.sipChartTitle}</CardTitle>
-              <CardDescription>{copy.mutualFunds.sipChartDescription}</CardDescription>
-            </div>
+            <MfGrowthProjectionHeader
+              title={copy.mutualFunds.sipChartTitle}
+              description={copy.mutualFunds.lumpsumChartDescription}
+            />
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
@@ -447,5 +426,6 @@ export function MfLumpsumCalculatorView() {
         </Card>
       </div>
     </MfToolsPageShell>
+    </DashboardContentFade>
   );
 }

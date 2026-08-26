@@ -115,7 +115,21 @@ function resolveFormCategories(
   return Array.from(merged.values());
 }
 
-export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean }) {
+export function RiskProfileQuestionsPanel({
+  canManage,
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  categoryFilter: categoryFilterProp,
+  onCategoryFilterChange,
+}: {
+  canManage: boolean;
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  categoryFilter?: string;
+  onCategoryFilterChange?: (value: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { data, isPending, isFetching, error: queryError } = useRiskQuestionsPanelQuery();
   const categories = data?.categories ?? [];
@@ -133,8 +147,12 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
   const [options, setOptions] = useState<OptionDraft[]>([EMPTY_OPTION(), EMPTY_OPTION()]);
   const [saving, setSaving] = useState(false);
   const [togglingQuestionId, setTogglingQuestionId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState(ALL);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalCategoryFilter, setInternalCategoryFilter] = useState(ALL);
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const categoryFilter = onCategoryFilterChange ? (categoryFilterProp ?? ALL) : internalCategoryFilter;
+  const setCategoryFilter = onCategoryFilterChange ?? setInternalCategoryFilter;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
@@ -175,6 +193,10 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
     () => paginateItems(filteredQuestions, page, pageSize),
     [filteredQuestions, page, pageSize],
   );
+
+  useEffect(() => {
+    setPage(0);
+  }, [search, categoryFilter]);
 
   const showSkeleton = isPending && !data;
   const loadError = queryError ? getErrorMessage(queryError, "Could not load questions.") : "";
@@ -316,43 +338,51 @@ export function RiskProfileQuestionsPanel({ canManage }: { canManage: boolean })
       <div className="space-y-4">
         <RiskProfileBulkImportFeedback />
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <AdminSearchInput
-            containerClassName="max-w-sm"
-            placeholder="Search questions"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(0);
-            }}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <AdminSelect
-              value={categoryFilter}
-              onValueChange={(value) => {
-                setCategoryFilter(value);
+        {showToolbar ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <AdminSearchInput
+              containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+              placeholder="Search questions"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
                 setPage(0);
               }}
-              options={categoryFilterOptions}
-              placeholder="Category"
-              className="min-w-select-md"
             />
-            {canManage ? (
-              <>
-                <RiskProfileBulkImportActions />
-                <Button size="sm" onClick={openCreateDialog} disabled={!activeCategories.length}>
-                  <Plus className="size-3.5" />
-                  Add question
-                </Button>
-              </>
-            ) : null}
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+              <AdminSelect
+                value={categoryFilter}
+                onValueChange={(value) => {
+                  setCategoryFilter(value);
+                  setPage(0);
+                }}
+                options={categoryFilterOptions}
+                placeholder="Category"
+                className="min-w-select-md shrink-0"
+                triggerClassName="w-auto"
+              />
+              {canManage ? (
+                <>
+                  <RiskProfileBulkImportActions />
+                  <Button
+                    size="sm"
+                    className="shrink-0"
+                    onClick={openCreateDialog}
+                    disabled={!activeCategories.length}
+                  >
+                    <Plus className="size-3.5" />
+                    Add question
+                  </Button>
+                </>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {error || loadError ? (
-          <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+          <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
         ) : null}
-        {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+        {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
         <AdminDataTable
           minWidth="lg"

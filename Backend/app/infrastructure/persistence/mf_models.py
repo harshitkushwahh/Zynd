@@ -27,8 +27,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 
-def _pg_enum(enum_cls: type[enum.Enum]):
-    return Enum(enum_cls, values_callable=lambda members: [member.value for member in members])
+def _pg_enum(enum_cls: type[enum.Enum], *, name: str | None = None):
+    kwargs: dict = {"values_callable": lambda members: [member.value for member in members]}
+    if name is not None:
+        kwargs["name"] = name
+    return Enum(enum_cls, **kwargs)
 
 
 class ProductType(str, enum.Enum):
@@ -220,7 +223,7 @@ class IngestionRunLog(Base):
     status: Mapped[IngestionRunStatus] = mapped_column(
         _pg_enum(IngestionRunStatus), default=IngestionRunStatus.running, nullable=False
     )
-    triggered_by: Mapped[str] = mapped_column(String(32), default="SCHEDULER", nullable=False)
+    triggered_by: Mapped[str] = mapped_column(String(64), default="SCHEDULER", nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     records_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -489,3 +492,55 @@ class AmcRegistry(Base):
     )
 
     amc: Mapped[FundAmc] = relationship(back_populates="registry")
+
+
+class MfPipelineRunStatus(str, enum.Enum):
+    pending = "pending"
+    running = "running"
+    paused = "paused"
+    succeeded = "succeeded"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class MfPipelineRun(Base):
+    __tablename__ = "mf_pipeline_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, index=True)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    triggered_by: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[MfPipelineRunStatus] = mapped_column(
+        _pg_enum(MfPipelineRunStatus, name="mf_pipeline_run_status"),
+        default=MfPipelineRunStatus.pending,
+        nullable=False,
+        index=True,
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_step_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    context: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    steps: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    logs: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    final_counts: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    health_summary: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MfSchedulerJobSkip(Base):
+    """Records scheduler jobs satisfied manually so cron skips until the next IST day."""
+
+    __tablename__ = "mf_scheduler_job_skips"
+    __table_args__ = (UniqueConstraint("job_name", "skip_date_ist", name="uq_mf_scheduler_job_skips"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    skip_date_ist: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    pipeline_run_uuid: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

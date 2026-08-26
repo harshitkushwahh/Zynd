@@ -9,9 +9,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { DUMMY_TXN_REQUESTS } from "@/lib/dummy/txn-requests";
-import { createTxnRequestRef } from "@/lib/dummy/create-txn-request-ref";
-import type { DistributorTxnRequest } from "@/lib/dummy/types";
+import { createTxnRequestRef } from "@/lib/distributor-txn-request-ref";
+import type { DistributorTxnRequest } from "@/lib/distributor-types";
 import type { QuickTxnSuccessState } from "@/lib/quick-transaction-success";
 
 export type SubmitInvestorConfirmationInput = {
@@ -35,9 +34,7 @@ type DistributorTxnRequestsContextValue = {
 const DistributorTxnRequestsContext = createContext<DistributorTxnRequestsContextValue | null>(null);
 
 export function DistributorTxnRequestsProvider({ children }: { children: ReactNode }) {
-  const [requests, setRequests] = useState<DistributorTxnRequest[]>(() =>
-    DUMMY_TXN_REQUESTS.map((item) => ({ ...item })),
-  );
+  const [requests, setRequests] = useState<DistributorTxnRequest[]>([]);
   const [quickTxnSuccess, setQuickTxnSuccess] = useState<QuickTxnSuccessState | null>(null);
 
   const submitForInvestorConfirmation = useCallback((input: SubmitInvestorConfirmationInput) => {

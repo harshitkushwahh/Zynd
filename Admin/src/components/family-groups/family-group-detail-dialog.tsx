@@ -112,7 +112,7 @@ export function FamilyGroupDetailDialog({
         description={detail?.description ?? "Review group metadata, members, invites, and activity."}
       >
         {loading ? <AdminDetailDialogSkeleton /> : null}
-        {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
+        {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
 
         {detail && !loading ? (
           <div className="space-y-4">

@@ -10,7 +10,7 @@ import {
 
 import { ClientPortfolioValueChart } from "@/components/clients/client-portfolio-value-chart";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
-import type { DistributorClientProfile } from "@/lib/dummy/types";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
 import { formatAum, formatPortfolioMetricAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,6 @@ type PortfolioTotals = {
 };
 
 type ClientPortfolioOverviewProps = {
-  clientId: string;
   profile: DistributorClientProfile;
   totals: PortfolioTotals;
 };
@@ -74,7 +73,6 @@ function PortfolioMetricCard({
 }
 
 export function ClientPortfolioOverview({
-  clientId,
   profile,
   totals,
 }: ClientPortfolioOverviewProps) {
@@ -127,9 +125,7 @@ export function ClientPortfolioOverview({
         />
       </div>
       <ClientPortfolioValueChart
-        clientId={clientId}
-        currentValue={totals.current}
-        investedAmount={totals.invested}
+        series={profile.portfolioGrowth}
         className="distributor-client-portfolio-overview__chart"
       />
     </div>

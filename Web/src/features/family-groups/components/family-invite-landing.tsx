@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { previewFamilyGroupInvite } from "@/features/family-groups/api/family-groups-api";
 import {
-  normalizeFamilyInviteToken,
   persistFamilyInviteToken,
 } from "@/features/family-groups/lib/family-invite-storage";
 import { useAuth } from "@/contexts/auth-context";

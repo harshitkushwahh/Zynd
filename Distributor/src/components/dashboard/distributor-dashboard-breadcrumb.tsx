@@ -12,6 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { useDistributorPageChrome } from "@/components/dashboard/distributor-page-chrome-context";
 import { getDistributorBreadcrumbSegments } from "@/lib/distributor-navigation";
 import { distributorBreadcrumbOffsetClass } from "@/lib/distributor-layout";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,12 @@ export function DistributorDashboardBreadcrumb({
 }: DistributorDashboardBreadcrumbProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { hideBreadcrumb } = useDistributorPageChrome();
   const segments = getDistributorBreadcrumbSegments(pathname, searchParams);
+
+  if (hideBreadcrumb) {
+    return null;
+  }
 
   return (
     <Breadcrumb className={cn(distributorBreadcrumbOffsetClass(), className)}>

@@ -99,7 +99,7 @@ export function AdminSecurityConfigPage({ tabSlug }: AdminSecurityConfigPageProp
               canManage={canManageMfTransactions}
             />
           ) : (
-            <AdminFeedbackMessage variant="warning">
+            <AdminFeedbackMessage variant="warning" dismissible={false}>
               You do not have permission to view mutual fund ops thresholds.
             </AdminFeedbackMessage>
           )}

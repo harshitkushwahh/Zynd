@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Fingerprint, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Check, Fingerprint, ShieldCheck } from "lucide-react";
 
 import { PinInput } from "@/features/account/pin/components/pin-input";
+import { ZyndPinSetupHeroImage } from "@/features/account/pin/components/zynd-pin-setup-hero-image";
 import { setupZyndPin } from "@/features/account/pin/api/pin-api";
 import {
   isPlatformBiometricAvailable,
@@ -13,7 +14,6 @@ import { AuthSubmitFooter } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OtpInput } from "@/components/auth/auth-shared";
 import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
@@ -22,16 +22,22 @@ import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
 import { ApiError } from "@/lib/api-client";
 import { appConfig } from "@/shared/config/app-config";
 import { copy } from "@/shared/config/copy";
+import { useResetWhenDialogOpens } from "@/hooks/use-reset-when-dialog-opens";
 import { cn } from "@/lib/utils";
 
-type SetupStep = "verify" | "pin" | "done";
+type SetupStep = "start" | "verify" | "pin" | "done";
 
 const STEPS: { id: Exclude<SetupStep, "done">; label: string }[] = [
+  { id: "start", label: "Get started" },
   { id: "verify", label: "Verify identity" },
   { id: "pin", label: "Create PIN" },
 ];
 
 const STEP_COPY: Record<SetupStep, { title: string; description: string }> = {
+  start: {
+    title: copy.pin.setupTitle,
+    description: copy.pin.setupDescription,
+  },
   verify: {
     title: copy.pin.setupSteps.verifyTitle,
     description: copy.pin.setupSteps.verifyDescription,
@@ -50,19 +56,16 @@ const SETUP_BENEFITS = [...copy.pin.setupBenefits];
 
 type PinSetupProgressProps = {
   step: SetupStep;
+  compact?: boolean;
 };
 
-function PinSetupProgress({ step }: PinSetupProgressProps) {
+function PinSetupProgress({ step, compact = false }: PinSetupProgressProps) {
   if (step === "done") return null;
 
   const currentIndex = STEPS.findIndex((item) => item.id === step);
 
   return (
-    <div className="mb-4">
-      <span className="inline-flex items-center rounded-[var(--radius-control)] border border-border bg-muted/50 px-2 py-0.5 text-caption font-medium text-muted-foreground">
-        Step {currentIndex + 1} of {STEPS.length}
-      </span>
-      <div className="mt-2 flex gap-1.5">
+    <div className={cn("flex gap-1.5", compact ? "mb-1" : "mb-3")}>
         {STEPS.map((item, index) => {
           const done = index < currentIndex;
           const active = index === currentIndex;
@@ -73,12 +76,11 @@ function PinSetupProgress({ step }: PinSetupProgressProps) {
                 "h-1.5 flex-1 rounded-[var(--radius-full)] transition-all duration-300",
                 done && "bg-success",
                 active && "bg-primary",
-                !done && !active && "bg-border"
+                !done && !active && "bg-border",
               )}
             />
           );
         })}
-      </div>
     </div>
   );
 }
@@ -92,7 +94,7 @@ type ZyndPinSetupDialogProps = {
 export function ZyndPinSetupDialog({ open, onOpenChange, onCompleted }: ZyndPinSetupDialogProps) {
   const { refreshUser, user } = useAuth();
   const pinContext = useZyndPinOptional();
-  const [step, setStep] = useState<SetupStep>("verify");
+  const [step, setStep] = useState<SetupStep>("start");
   const [currentPassword, setCurrentPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [pin, setPin] = useState("");
@@ -108,8 +110,8 @@ export function ZyndPinSetupDialog({ open, onOpenChange, onCompleted }: ZyndPinS
   const pinsMatch = pinComplete && confirmComplete && pin === confirmPin;
   const pinsMismatch = pinComplete && confirmComplete && pin !== confirmPin;
 
-  const resetState = () => {
-    setStep("verify");
+  const resetState = useCallback(() => {
+    setStep("start");
     setCurrentPassword("");
     setTotpCode("");
     setPin("");
@@ -118,7 +120,9 @@ export function ZyndPinSetupDialog({ open, onOpenChange, onCompleted }: ZyndPinS
     setLoading(false);
     setBiometricLoading(false);
     setBiometricEnabled(false);
-  };
+  }, []);
+
+  useResetWhenDialogOpens(open, resetState);
 
   useEffect(() => {
     if (!open) return;
@@ -126,13 +130,8 @@ export function ZyndPinSetupDialog({ open, onOpenChange, onCompleted }: ZyndPinS
   }, [open]);
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) resetState();
     onOpenChange(next);
   };
-
-  useEffect(() => {
-    if (!open) resetState();
-  }, [open]);
 
   const handleVerifyContinue = (event: React.FormEvent) => {
     event.preventDefault();
@@ -169,187 +168,178 @@ export function ZyndPinSetupDialog({ open, onOpenChange, onCompleted }: ZyndPinS
     }
   };
 
-  const { title, description } = STEP_COPY[step];
+  const { title } = STEP_COPY[step];
 
   return (
-    <BrandDialog
-      open={open}
-      onOpenChange={handleOpenChange}
-      title={title}
-      description={description}
-      icon={LockKeyhole}
-      headerDensity="compact"
-    >
-      <div className="px-5 py-4">
-          <PinSetupProgress step={step} />
+    <BrandDialog open={open} onOpenChange={handleOpenChange} title={title} maxWidth="lg">
+      <div className={cn("px-5 pb-4", step === "start" ? "pt-4" : "pt-1.5")}>
+        {step === "start" ? <ZyndPinSetupHeroImage className="mb-4" /> : null}
 
-          {step === "verify" ? (
-            <form className="space-y-4" onSubmit={handleVerifyContinue}>
-              <ul className="space-y-2">
-                {SETUP_BENEFITS.map((point) => (
-                  <li key={point} className="flex items-start gap-2.5 text-compact text-muted-foreground">
-                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Check className="size-3" strokeWidth={2.5} />
-                    </span>
-                    {point}
-                  </li>
-                ))}
-              </ul>
+        <PinSetupProgress step={step} compact={step !== "start"} />
 
-              <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-4 shadow-zynd-low">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <KeyRound className="size-3.5 text-muted-foreground" />
-                      <Label htmlFor="zynd-pin-password" className="text-caption font-medium">
-                        {copy.pin.setupStepPassword}
-                      </Label>
-                    </div>
-                    <PasswordInput
-                      id="zynd-pin-password"
-                      autoComplete="current-password"
-                      placeholder="Enter your password"
-                      value={currentPassword}
-                      onChange={(event) => setCurrentPassword(event.target.value)}
-                    />
+        {step === "start" ? (
+          <div className="space-y-5">
+            <ul className="space-y-2.5">
+              {SETUP_BENEFITS.map((point) => (
+                <li key={point} className="flex items-start gap-2.5 text-compact text-muted-foreground">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Check className="size-3" strokeWidth={2.5} />
+                  </span>
+                  {point}
+                </li>
+              ))}
+            </ul>
+
+            <AuthSubmitFooter>
+              <Button className="w-full" onClick={() => setStep("verify")}>
+                {copy.mfa.continue}
+              </Button>
+            </AuthSubmitFooter>
+          </div>
+        ) : null}
+
+        {step === "verify" ? (
+          <form className="mt-2 space-y-4" onSubmit={handleVerifyContinue}>
+            <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-4 shadow-zynd-low">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="zynd-pin-password" className="text-caption font-medium">
+                    {copy.pin.setupStepPassword}
+                  </Label>
+                  <PasswordInput
+                    id="zynd-pin-password"
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-3 border-t border-border pt-4 text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <ShieldCheck className="size-4 text-primary" strokeWidth={2.25} aria-hidden />
+                    <Label htmlFor="zynd-pin-totp" className="text-caption font-medium">
+                      {copy.pin.setupStepMfa}
+                    </Label>
                   </div>
-
-                  <div className="border-t border-border pt-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <ShieldCheck className="size-3.5 text-muted-foreground" />
-                      <p className="text-caption font-medium text-foreground">{copy.pin.setupStepMfa}</p>
-                    </div>
-                    <OtpInput value={totpCode} onChange={setTotpCode} />
-                  </div>
+                  <p className="text-caption leading-relaxed text-muted-foreground">
+                    {copy.auth.mfaAuthenticatorForApp}
+                  </p>
+                  <OtpInput id="zynd-pin-totp" value={totpCode} onChange={setTotpCode} error={!!error} />
                 </div>
               </div>
+            </div>
 
-              <FieldMessage message={error} />
+            <FieldMessage message={error} />
 
-              <AuthSubmitFooter hint={copy.pin.setupVerifyHint}>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={!currentPassword || totpCode.length !== appConfig.otpLength}
-                >
-                  {copy.mfa.continue}
-                </Button>
-              </AuthSubmitFooter>
-            </form>
-          ) : null}
+            <AuthSubmitFooter className="pt-0">
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!currentPassword || totpCode.length !== appConfig.otpLength}
+              >
+                {copy.mfa.continue}
+              </Button>
+            </AuthSubmitFooter>
+          </form>
+        ) : null}
 
-          {step === "pin" ? (
-            <form className="space-y-4" onSubmit={handlePinSubmit}>
-              <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-4 shadow-zynd-low">
-                <div className="space-y-5">
-                  <div>
-                    <p className="mb-3 text-center text-caption font-medium text-foreground">
-                      {copy.pin.setupStepCreate}
+        {step === "pin" ? (
+          <form className="mt-2 space-y-4" onSubmit={handlePinSubmit}>
+            <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-4 shadow-zynd-low">
+              <div className="space-y-5">
+                <div>
+                  <p className="mb-3 text-center text-caption font-medium text-foreground">
+                    {copy.pin.setupStepCreate}
+                  </p>
+                  <PinInput value={pin} onChange={setPin} autoFocus />
+                </div>
+
+                <div className="border-t border-border pt-5">
+                  <p className="mb-3 text-center text-caption font-medium text-foreground">
+                    {copy.pin.setupStepConfirm}
+                  </p>
+                  <PinInput
+                    value={confirmPin}
+                    onChange={setConfirmPin}
+                    error={pinsMismatch || !!error}
+                  />
+                  {pinsMatch ? (
+                    <p className="mt-3 flex items-center justify-center gap-1.5 text-caption text-success">
+                      <Check className="size-3.5" strokeWidth={2.5} />
+                      PINs match
                     </p>
-                    <PinInput value={pin} onChange={setPin} autoFocus />
-                  </div>
-
-                  <div className="border-t border-border pt-5">
-                    <p className="mb-3 text-center text-caption font-medium text-foreground">
-                      {copy.pin.setupStepConfirm}
-                    </p>
-                    <PinInput
-                      value={confirmPin}
-                      onChange={setConfirmPin}
-                      error={pinsMismatch || !!error}
-                    />
-                    {pinsMatch ? (
-                      <p className="mt-3 flex items-center justify-center gap-1.5 text-caption text-success">
-                        <Check className="size-3.5" strokeWidth={2.5} />
-                        PINs match
-                      </p>
-                    ) : null}
-                  </div>
+                  ) : null}
                 </div>
               </div>
+            </div>
 
-              <FieldMessage message={error} />
+            <FieldMessage message={error} />
 
-              <AuthSubmitFooter className="space-y-2 pt-2">
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={loading || !pinsMatch}
-                >
-                  {loading ? copy.mfa.verifying : copy.pin.setUpButton}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-8 w-full"
-                  disabled={loading}
-                  onClick={() => {
-                    setStep("verify");
-                    setError("");
-                    setPin("");
-                    setConfirmPin("");
-                  }}
-                >
-                  Back
-                </Button>
-              </AuthSubmitFooter>
-            </form>
-          ) : null}
+            <AuthSubmitFooter className="pt-0">
+              <Button type="submit" className="w-full" disabled={loading || !pinsMatch}>
+                {loading ? copy.mfa.verifying : copy.pin.setUpButton}
+              </Button>
+            </AuthSubmitFooter>
+          </form>
+        ) : null}
 
-          {step === "done" ? (
-            <div className="space-y-4">
-              <div className="flex flex-col items-center rounded-[var(--radius-card)] border border-success/25 bg-success/5 px-4 py-5 text-center">
-                <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-success/15 text-success">
-                  <Check className="size-6" strokeWidth={2.5} />
-                </div>
+        {step === "done" ? (
+          <div className="mt-2 space-y-4">
+            <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-success/25 bg-success/5 px-3 py-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+                <Check className="size-5" strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0 text-left">
                 <p className="text-compact font-semibold text-foreground">
                   {copy.pin.setupSteps.successTitle}
                 </p>
-                <p className="mt-1 max-w-sm text-caption leading-relaxed text-muted-foreground">
+                <p className="mt-0.5 text-caption leading-snug text-muted-foreground">
                   {copy.pin.setupSteps.successDescription}
                 </p>
               </div>
-
-              {biometricAvailable && !biometricEnabled ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={biometricLoading || !user?.id}
-                  onClick={async () => {
-                    if (!user?.id) return;
-                    setBiometricLoading(true);
-                    setError("");
-                    try {
-                      await registerPinBiometricUnlock(user.id);
-                      setBiometricEnabled(true);
-                      onCompleted?.();
-                    } catch (err) {
-                      setError(
-                        err instanceof ApiError ? err.message : copy.pin.biometricCouldNotEnable
-                      );
-                    } finally {
-                      setBiometricLoading(false);
-                    }
-                  }}
-                >
-                  <Fingerprint className="size-4" />
-                  {biometricLoading ? copy.mfa.verifying : copy.pin.biometricEnableButton}
-                </Button>
-              ) : null}
-
-              {biometricEnabled ? (
-                <UiMessage variant="success" message={copy.pin.biometricEnabledLabel} className="mt-0" />
-              ) : null}
-
-              <AuthSubmitFooter>
-                <Button className="w-full" onClick={() => handleOpenChange(false)}>
-                  Done
-                </Button>
-              </AuthSubmitFooter>
             </div>
-          ) : null}
-        </div>
+
+            {biometricAvailable && !biometricEnabled ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={biometricLoading || !user?.id}
+                onClick={async () => {
+                  if (!user?.id) return;
+                  setBiometricLoading(true);
+                  setError("");
+                  try {
+                    await registerPinBiometricUnlock(user.id);
+                    setBiometricEnabled(true);
+                    onCompleted?.();
+                  } catch (err) {
+                    setError(
+                      err instanceof ApiError ? err.message : copy.pin.biometricCouldNotEnable,
+                    );
+                  } finally {
+                    setBiometricLoading(false);
+                  }
+                }}
+              >
+                <Fingerprint className="size-4" />
+                {biometricLoading ? copy.mfa.verifying : copy.pin.biometricEnableButton}
+              </Button>
+            ) : null}
+
+            {biometricEnabled ? (
+              <UiMessage variant="success" message={copy.pin.biometricEnabledLabel} className="mt-0" />
+            ) : null}
+
+            <AuthSubmitFooter>
+              <Button className="w-full" onClick={() => handleOpenChange(false)}>
+                Done
+              </Button>
+            </AuthSubmitFooter>
+          </div>
+        ) : null}
+      </div>
     </BrandDialog>
   );
 }

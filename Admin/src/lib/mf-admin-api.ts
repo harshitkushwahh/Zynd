@@ -117,6 +117,7 @@ export type MfAmc = {
 
 export type MfJob = {
   name: string;
+  sequence: number;
   phase: number;
   cron: string;
   enabled: boolean;
@@ -369,6 +370,175 @@ export async function fetchMfIngestionRuns(limit = 20) {
     `/admin/mf/ingestion-runs?limit=${limit}`
   );
   return result.runs;
+}
+
+export type MfPipelineStep = {
+  key: string;
+  label: string;
+  status: "pending" | "running" | "succeeded" | "failed" | "skipped";
+  result: Record<string, unknown> | null;
+  error: string | null;
+  ingestion_run_uuid: string | null;
+};
+
+export type MfPipelineLogLine = {
+  timestamp: string;
+  level: string;
+  message: string;
+};
+
+export type MfPipelineMode =
+  | "full"
+  | "bootstrap"
+  | "after-ingest"
+  | "nav-analytics-only"
+  | "health-repair"
+  | "staging-only";
+
+export type MfPipelineRun = {
+  run_id: string;
+  mode: string;
+  triggered_by: string;
+  status: "pending" | "running" | "paused" | "succeeded" | "failed" | "cancelled";
+  started_at: string | null;
+  finished_at: string | null;
+  current_step_key: string | null;
+  progress: {
+    completed_steps: number;
+    total_steps: number;
+    percent: number;
+  };
+  steps: MfPipelineStep[];
+  logs: MfPipelineLogLine[];
+  final_counts: Record<string, unknown> | null;
+  health_summary: Record<string, unknown> | null;
+  error: string | null;
+  can_resume: boolean;
+  pause_reason: string | null;
+  staging_batch_uuid: string | null;
+  can_approve_staging: boolean;
+  health_diff: MfPipelineHealthDiff | null;
+  skip_steps: string[];
+  auto_resume: boolean;
+  auto_resume_pending: boolean;
+};
+
+export type MfPipelineMaintenanceWindow = {
+  enabled: boolean;
+  enforced: boolean;
+  start: string;
+  end: string;
+  within_window: boolean;
+  opens_at_ist: string | null;
+};
+
+export type MfPipelinePreview = {
+  mode: string;
+  dry_run: boolean;
+  step_count: number;
+  included_step_count: number;
+  steps: Array<{ key: string; label: string }>;
+  effective_steps: Array<{ key: string; label: string; included: boolean }>;
+  scheduler_mapped_steps: Array<{ key: string; label: string; scheduler_job: string }>;
+  skip_steps: string[];
+  flags: {
+    app_env: string;
+    scheme_staging_enabled: boolean;
+    scheme_promote_auto: boolean;
+    requires_production_confirm: boolean;
+    maintenance_window: MfPipelineMaintenanceWindow;
+    auto_resume_enabled: boolean;
+  };
+  blockers: string[];
+  can_start: boolean;
+};
+
+export type MfPipelineHealthDiff = {
+  before_totals: { critical: number; warning: number; public_blocked: number };
+  after_totals: { critical: number; warning: number; public_blocked: number };
+  totals_delta: Partial<Record<"critical" | "warning" | "public_blocked", number>>;
+  changes: Array<{
+    key: string;
+    label: string;
+    severity: string | null;
+    before: number;
+    after: number;
+    delta: number;
+  }>;
+};
+
+export async function previewMfPipeline(mode: MfPipelineMode = "full", skipSteps: string[] = []) {
+  const skipQuery =
+    skipSteps.length > 0 ? `&skip_steps=${encodeURIComponent(skipSteps.join(","))}` : "";
+  return apiRequest<MfPipelinePreview>(
+    `/admin/mf/pipeline/preview?mode=${encodeURIComponent(mode)}${skipQuery}`
+  );
+}
+
+export async function startMfPipeline(
+  mode: MfPipelineMode = "full",
+  confirmProduction = false,
+  skipSteps: string[] = [],
+  autoResume = true
+) {
+  const result = await apiRequest<{ run: MfPipelineRun }>("/admin/mf/pipeline/run", {
+    method: "POST",
+    body: JSON.stringify({
+      mode,
+      confirm_production: confirmProduction,
+      skip_steps: skipSteps,
+      auto_resume: autoResume,
+    }),
+  });
+  return result.run;
+}
+
+export async function fetchMfPipelineRun(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/pipeline/runs/${encodeURIComponent(runId)}`
+  );
+  return result.run;
+}
+
+export async function fetchActiveMfPipelineRun() {
+  const result = await apiRequest<{ run: MfPipelineRun }>("/admin/mf/pipeline/runs/active");
+  return result.run;
+}
+
+export async function cancelMfPipelineRun(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/pipeline/runs/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST" }
+  );
+  return result.run;
+}
+
+export async function resumeMfPipelineRun(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/pipeline/runs/${encodeURIComponent(runId)}/resume`,
+    { method: "POST" }
+  );
+  return result.run;
+}
+
+export async function retryMfPipelineStep(runId: string, stepKey: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/pipeline/runs/${encodeURIComponent(runId)}/retry-step`,
+    { method: "POST", body: JSON.stringify({ step_key: stepKey }) }
+  );
+  return result.run;
+}
+
+export async function clearStuckMfPipelineRuns() {
+  return apiRequest<{ cleaned: number }>("/admin/mf/pipeline/clear-stuck", { method: "POST" });
+}
+
+export async function approveMfPipelineStaging(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/pipeline/runs/${encodeURIComponent(runId)}/approve-staging`,
+    { method: "POST" }
+  );
+  return result.run;
 }
 
 export type MfProductContent = {

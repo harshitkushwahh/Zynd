@@ -14,13 +14,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
-import type { BranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
+import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
 import {
   getLeaveRequestStatusLabel,
   type DistributorLeaveBalance,
   type DistributorLeaveRequest,
   type DistributorLeaveRequestStatus,
-} from "@/lib/dummy/distributor-job-dashboard";
+} from "@/lib/distributor-job-dashboard-data";
 import { formatDistributorDate } from "@/lib/format";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 import { cn } from "@/lib/utils";

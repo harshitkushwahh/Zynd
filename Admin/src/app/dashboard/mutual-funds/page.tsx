@@ -26,9 +26,9 @@ import { CategoryCurationDialog } from "@/components/mf/category-curation-panel"
 import { ContentRulesPanel } from "@/components/mf/content-rules-panel";
 import { FundContentPanel } from "@/components/mf/fund-content-panel";
 import { MfOperationsPanel } from "@/components/mf/mf-operations-panel";
+import { MfPipelineAutoPanel } from "@/components/mf/mf-pipeline-auto-panel";
 import { lifecycleTone, MfStatusChip } from "@/components/mf/mf-status-chip";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
-import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
 import { SchemeStagingPanel } from "@/components/mf/scheme-staging-panel";
 import { AdminDrawer } from "@/components/ui/admin-drawer";
 import {
@@ -73,7 +73,6 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
-import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
   fetchMfAmcs,
@@ -291,7 +290,7 @@ function FundDetailDrawer({
           {loading ? (
             <AdminFormSkeleton rows={6} />
           ) : error ? (
-            <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage>
+            <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
           ) : detail ? (
             <div className="space-y-6">
               <div className="flex flex-wrap gap-2">
@@ -473,6 +472,7 @@ export default function MutualFundsAdminPage() {
   const canManageAmcs = hasPermission("mf.amcs.manage");
   const canReadJobs = hasPermission("mf.jobs.read");
   const canRunJobs = hasPermission("mf.jobs.run");
+  const canRunPipeline = hasPermission("mf.pipeline.run");
 
   const defaultTab: TabKey = canReadCatalog ? "overview" : "operations";
   const [tab, setTab] = useState<TabKey>(defaultTab);
@@ -750,7 +750,7 @@ export default function MutualFundsAdminPage() {
   return (
     <>
       {!hasAnyMfAccess ? (
-        <AdminFeedbackMessage variant="warning">
+        <AdminFeedbackMessage variant="warning" dismissible={false}>
           You do not have permission to view mutual fund administration.
         </AdminFeedbackMessage>
       ) : (
@@ -771,12 +771,12 @@ export default function MutualFundsAdminPage() {
 
             <div className="min-w-0">
               {error ? (
-                <AdminFeedbackMessage variant="destructive" className="mb-4">
+                <AdminFeedbackMessage variant="destructive" className="mb-4" onDismiss={() => setError("")}>
                   {error}
                 </AdminFeedbackMessage>
               ) : null}
               {message ? (
-                <AdminFeedbackMessage variant="success" className="mb-4">
+                <AdminFeedbackMessage variant="success" className="mb-4" onDismiss={() => setMessage("")}>
                   {message}
                 </AdminFeedbackMessage>
               ) : null}
@@ -795,6 +795,14 @@ export default function MutualFundsAdminPage() {
                       />
                     ))}
                   </AdminMetricCardsGrid>
+
+                  {canRunJobs ? (
+                    <MfPipelineAutoPanel
+                      canRun={canRunPipeline}
+                      onCompleted={() => void loadData()}
+                      onOpenStagingTab={() => setTab("staging")}
+                    />
+                  ) : null}
 
                   <div className="space-y-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1069,7 +1077,7 @@ export default function MutualFundsAdminPage() {
                 <TabsContent value="funds" className="mt-0 space-y-4" keepMounted={keepTabMounted("funds")}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <AdminSearchInput
-                      containerClassName="max-w-sm"
+                      containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
                       placeholder="Search scheme, ISIN, or product"
                       value={fundSearch}
                       onChange={(event) => {
@@ -1078,7 +1086,7 @@ export default function MutualFundsAdminPage() {
                       }}
                     />
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       <AdminSelect
                         value={fundLifecycle || ALL}
                         onValueChange={(value) => {
@@ -1088,6 +1096,7 @@ export default function MutualFundsAdminPage() {
                         options={FUND_LIFECYCLE_OPTIONS}
                         placeholder="Lifecycle"
                         className="min-w-select-sm"
+                        triggerClassName="w-auto"
                       />
                       <AdminSelect
                         value={fundCategory || ALL}
@@ -1098,6 +1107,7 @@ export default function MutualFundsAdminPage() {
                         options={fundCategoryOptions}
                         placeholder="Category"
                         className="min-w-select-sm"
+                        triggerClassName="w-auto"
                       />
                     </div>
                   </div>

@@ -92,4 +92,45 @@ def bank_account_metadata_snapshot(bank: InvestorBankAccount) -> dict[str, str]:
     }
 
 
-__all__ = ["bank_account_metadata_snapshot", "resolve_payment_bank_account"]
+async def load_bank_account_by_old_id(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    bank_account_old_id: int,
+) -> InvestorBankAccount | None:
+    return await session.scalar(
+        select(InvestorBankAccount).where(
+            InvestorBankAccount.investor_profile_id == user_id,
+            InvestorBankAccount.external_old_id == bank_account_old_id,
+        )
+    )
+
+
+async def load_mandate_bank_account(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    mandate,
+) -> InvestorBankAccount | None:
+    if mandate.investor_bank_account_id is not None:
+        bank = await session.get(InvestorBankAccount, mandate.investor_bank_account_id)
+        if (
+            bank is not None
+            and bank.investor_profile_id == user_id
+            and not is_bank_account_disabled(bank)
+        ):
+            return bank
+
+    return await load_bank_account_by_old_id(
+        session,
+        user_id=user_id,
+        bank_account_old_id=mandate.bank_account_old_id,
+    )
+
+
+__all__ = [
+    "bank_account_metadata_snapshot",
+    "load_bank_account_by_old_id",
+    "load_mandate_bank_account",
+    "resolve_payment_bank_account",
+]

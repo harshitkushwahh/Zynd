@@ -14,6 +14,10 @@ class OtpPurpose(str, Enum):
     login_second_factor = "login_second_factor"
     step_up_sms = "step_up_sms"
     fund_confirmation = "fund_confirmation"
+    partner_onboarding_email = "partner_onboarding_email"
+    partner_onboarding_mobile = "partner_onboarding_mobile"
+    client_onboarding_email = "client_onboarding_email"
+    client_onboarding_mobile = "client_onboarding_mobile"
 
 
 OtpChannel = Literal["email", "sms"]
@@ -76,6 +80,30 @@ OTP_PURPOSE_REGISTRY: dict[OtpPurpose, OtpPurposeDefinition] = {
         channel="sms",
         email_subject="Confirm your ZYND transaction",
     ),
+    OtpPurpose.partner_onboarding_email: OtpPurposeDefinition(
+        purpose=OtpPurpose.partner_onboarding_email,
+        storage_key="partner_onboarding_email",
+        channel="email",
+        email_subject="Verify Zynd Mitra work email",
+    ),
+    OtpPurpose.partner_onboarding_mobile: OtpPurposeDefinition(
+        purpose=OtpPurpose.partner_onboarding_mobile,
+        storage_key="partner_onboarding_mobile",
+        channel="sms",
+        email_subject="Verify Zynd Mitra mobile",
+    ),
+    OtpPurpose.client_onboarding_email: OtpPurposeDefinition(
+        purpose=OtpPurpose.client_onboarding_email,
+        storage_key="client_onboarding_email",
+        channel="email",
+        email_subject="Verify investor email for Zynd",
+    ),
+    OtpPurpose.client_onboarding_mobile: OtpPurposeDefinition(
+        purpose=OtpPurpose.client_onboarding_mobile,
+        storage_key="client_onboarding_mobile",
+        channel="sms",
+        email_subject="Verify investor mobile for Zynd",
+    ),
 }
 
 # Backward-compatible storage-key aliases used before Phase 4.
@@ -116,4 +144,12 @@ def build_otp_message(*, purpose: OtpPurpose, code: str) -> str:
         return f"Your ZYND verification code is {code}. It expires in 10 minutes."
     if purpose == OtpPurpose.fund_confirmation:
         return f"Your ZYND transaction confirmation code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.partner_onboarding_email:
+        return f"Your Zynd Mitra work email verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.partner_onboarding_mobile:
+        return f"Your Zynd Mitra mobile verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.client_onboarding_email:
+        return f"Your Zynd investor email verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.client_onboarding_mobile:
+        return f"Your Zynd investor mobile verification code is {code}. It expires in 10 minutes."
     return f"Your ZYND verification code is {code}. It expires in 10 minutes."

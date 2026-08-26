@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Building2,
   Eye,
   FileImage,
   FileText,

@@ -127,7 +127,7 @@ export function GoalSliderInputField({
     return (
       <div
         className={cn(
-          "rounded-[var(--radius-card)] border border-border/70 bg-background/80 p-3.5 shadow-sm",
+          "rounded-[var(--radius-card)] border border-border/70 bg-muted/20 p-3.5 shadow-sm",
           className,
         )}
       >

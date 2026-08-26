@@ -13,7 +13,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ZYND Admin — Platform Console",
+  title: {
+    default: "ZYND Admin",
+    template: "%s · ZYND Admin",
+  },
   description: "Administrative console for the ZYND wealth platform.",
   icons: {
     icon: [

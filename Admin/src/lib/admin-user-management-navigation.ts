@@ -1,22 +1,22 @@
 import {
   ClipboardList,
   Eye,
-  FileCheck2,
   KeyRound,
   Shield,
-  ShieldAlert,
+  UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react";
 
 export type UserManagementTabKey =
   | "people"
-  | "compliance"
-  | "kyc"
+  | "team"
   | "roles"
   | "permissions"
   | "action-types"
   | "access-overview";
+
+export type TeamWorkspaceSubTabKey = "members" | "invitations";
 
 export type UserManagementTab = {
   key: UserManagementTabKey;
@@ -35,18 +35,11 @@ export const USER_MANAGEMENT_TABS: UserManagementTab[] = [
     permissions: ["users.read"],
   },
   {
-    key: "compliance",
-    slug: "compliance",
-    label: "Compliance",
-    icon: ShieldAlert,
-    permissions: ["security_reviews.read", "deletion.execute", "admin_actions.approve"],
-  },
-  {
-    key: "kyc",
-    slug: "kyc",
-    label: "KYC review",
-    icon: FileCheck2,
-    permissions: ["documents.read"],
+    key: "team",
+    slug: "team",
+    label: "Manage team",
+    icon: UserCog,
+    permissions: ["rbac.manage"],
   },
   {
     key: "roles",
@@ -77,6 +70,29 @@ export const USER_MANAGEMENT_TABS: UserManagementTab[] = [
     permissions: ["rbac.manage"],
   },
 ];
+
+export const TEAM_WORKSPACE_SUB_TABS: Array<{
+  key: TeamWorkspaceSubTabKey;
+  slug?: string;
+  label: string;
+}> = [
+  { key: "members", label: "Team members" },
+  { key: "invitations", slug: "invitations", label: "Invitations" },
+];
+
+export const TEAM_WORKSPACE_SUB_TAB_SLUGS = new Set(
+  TEAM_WORKSPACE_SUB_TABS.map((tab) => tab.slug).filter((slug): slug is string => Boolean(slug)),
+);
+
+export function teamWorkspaceSubTabHref(subTab: TeamWorkspaceSubTabKey) {
+  const match = TEAM_WORKSPACE_SUB_TABS.find((tab) => tab.key === subTab);
+  return match?.slug ? `/dashboard/users/team/${match.slug}` : "/dashboard/users/team";
+}
+
+export function resolveTeamWorkspaceSubTab(subTabSlug?: string): TeamWorkspaceSubTabKey {
+  if (subTabSlug === "invitations") return "invitations";
+  return "members";
+}
 
 export const USER_MANAGEMENT_TAB_SLUGS = new Set(
   USER_MANAGEMENT_TABS.map((tab) => tab.slug).filter((slug): slug is string => Boolean(slug)),

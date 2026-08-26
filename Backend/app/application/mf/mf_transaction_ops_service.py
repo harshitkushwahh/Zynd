@@ -9,9 +9,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
-from app.application.mf.mf_ondc_order_service import advance_ondc_order, sync_order_from_fp
+from app.application.mf.mf_lumpsum_reconciliation_service import (
+    reconcile_checkout_payment,
+    reconcile_order_payment,
+)
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _derive_next_action, serialize_order
-from app.application.mf.mf_sip_plan_service import advance_sip_plan, serialize_sip_plan
+from app.application.mf.mf_sip_plan_service import advance_sip_plan, reconcile_sip_plan_from_fp, serialize_sip_plan
 from app.application.mf.mf_cart_service import serialize_checkout
 from app.application.mf.mf_mandate_service import serialize_mandate, sync_mandate_from_fp
 from app.application.mf.mf_webhook_service import replay_finprim_webhook_event
@@ -414,7 +417,7 @@ async def _serialize_mandates_for_admin(
     for mandate in mandates:
         user = users.get(mandate.user_id)
         linked_plans = plans_by_mandate.get(mandate.id, [])
-        payload = serialize_mandate(mandate)
+        payload = serialize_mandate(mandate, expose_mandate_limit=True)
         payload.update(
             {
                 "user_id": str(mandate.user_id),
@@ -821,7 +824,7 @@ async def get_mandate_admin(session: AsyncSession, mandate_id: uuid.UUID) -> dic
         for plan in linked_plans
     ]
 
-    mandate_payload = serialize_mandate(mandate)
+    mandate_payload = serialize_mandate(mandate, expose_mandate_limit=True)
     mandate_payload.update(
         {
             "user_id": str(mandate.user_id),
@@ -878,20 +881,29 @@ async def expire_stale_checkouts(session: AsyncSession) -> dict[str, int]:
     )
     expired = 0
     for checkout in checkouts:
-        checkout.status = MfCheckoutStatus.cancelled
-        checkout.failure_code = checkout.failure_code or "payment_expired"
-        checkout.failure_reason = checkout.failure_reason or "Payment link expired"
         orders = list(
             (
                 await session.execute(
-                    select(MfOrder).where(
-                        MfOrder.checkout_id == checkout.id,
-                        MfOrder.status.not_in(list(TERMINAL_STATUSES)),
-                    )
+                    select(MfOrder).where(MfOrder.checkout_id == checkout.id)
                 )
             ).scalars()
         )
-        for order in orders:
+        reconcile = await reconcile_checkout_payment(session, checkout)
+        if reconcile.get("repaired"):
+            continue
+        await session.refresh(checkout)
+        if checkout.status not in {MfCheckoutStatus.submitted, MfCheckoutStatus.payment_pending}:
+            continue
+
+        checkout.status = MfCheckoutStatus.cancelled
+        checkout.failure_code = checkout.failure_code or "payment_expired"
+        checkout.failure_reason = checkout.failure_reason or "Payment link expired"
+        open_orders = [
+            order
+            for order in orders
+            if order.status not in TERMINAL_STATUSES and order.status != MfOrderStatus.submitted
+        ]
+        for order in open_orders:
             order.status = MfOrderStatus.cancelled
             order.failure_code = order.failure_code or "payment_expired"
             order.failure_reason = order.failure_reason or "Payment link expired"
@@ -904,13 +916,11 @@ async def reconcile_order_admin(session: AsyncSession, order_id: uuid.UUID) -> d
     order = await session.get(MfOrder, order_id)
     if not order:
         raise ValueError("Order not found")
-    synced = await sync_order_from_fp(session, order)
-    advanced = await advance_ondc_order(session, order)
+    result = await reconcile_order_payment(session, order)
     product = await session.get(Product, order.product_id)
     checkout = await session.get(MfCheckout, order.checkout_id) if order.checkout_id else None
     return {
-        "synced": synced,
-        "advanced": advanced,
+        **result,
         "order": serialize_order(order, product_name=product.name if product else None, checkout=checkout),
     }
 
@@ -919,11 +929,11 @@ async def reconcile_sip_plan_admin(session: AsyncSession, plan_id: uuid.UUID) ->
     plan = await session.get(MfSipPlan, plan_id)
     if not plan:
         raise ValueError("SIP plan not found")
-    advanced = await advance_sip_plan(session, plan)
+    outcome = await reconcile_sip_plan_from_fp(session, plan, retry_submit=True)
     product = await session.get(Product, plan.product_id)
     mandate = await session.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
     return {
-        "advanced": advanced,
+        **outcome,
         "plan": serialize_sip_plan(plan, product_name=product.name if product else None, mandate=mandate),
     }
 
@@ -933,7 +943,7 @@ async def reconcile_mandate_admin(session: AsyncSession, mandate_id: uuid.UUID) 
     if not mandate:
         raise ValueError("Mandate not found")
     synced = await sync_mandate_from_fp(session, mandate, force=True)
-    return {"synced": synced, "mandate": serialize_mandate(mandate)}
+    return {"synced": synced, "mandate": serialize_mandate(mandate, expose_mandate_limit=True)}
 
 
 async def replay_webhook_admin(session: AsyncSession, event_id: int) -> dict[str, Any]:

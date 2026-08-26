@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SortDescriptor } from "react-aria-components";
 
@@ -17,11 +17,12 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
 import {
-  DUMMY_BRANCH_DISTRIBUTORS,
+  mapPartnerListItemToBranchRecord,
   type BranchDistributorRecord,
   type BranchDistributorStatus,
-} from "@/lib/dummy/branch-distributors";
-import { branchDistributorDetailHref } from "@/lib/dummy/branch-distributor-profile";
+} from "@/lib/distributor-branch-distributors-data";
+import { fetchDistributorPartners } from "@/lib/distributor-partners-api";
+import { branchDistributorDetailHref } from "@/lib/distributor-branch-distributor-profile-data";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
@@ -31,11 +32,22 @@ import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import { cn } from "@/lib/utils";
 import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
-const STATUS_OPTIONS: Array<{ value: BranchDistributorStatus; label: string }> = [
+const STATUS_OPTIONS: Array<{ value: BranchDistributorStatus | "all"; label: string }> = [
   { value: "Active", label: "Active" },
+  { value: "Pending review", label: "Pending review" },
+  { value: "Pending password", label: "Pending password" },
+  { value: "Rejected", label: "Rejected" },
   { value: "Former", label: "Former" },
   { value: "Paused", label: "Paused" },
 ];
+
+function statusVariant(status: BranchDistributorStatus): StatusBadgeVariant {
+  if (status === "Active") return "success";
+  if (status === "Pending review" || status === "Pending password") return "warning";
+  if (status === "Rejected") return "neutral";
+  if (status === "Paused") return "warning";
+  return "neutral";
+}
 
 type ClientsFilter = "all" | "large-book" | "growing-book";
 
@@ -44,16 +56,9 @@ const CLIENTS_FILTER_OPTIONS: Array<{ value: ClientsFilter; label: string }> = [
   { value: "growing-book", label: "Under 50 clients" },
 ];
 
-function statusVariant(status: BranchDistributorStatus): StatusBadgeVariant {
-  if (status === "Active") return "success";
-  if (status === "Paused") return "warning";
-  return "neutral";
-}
-
 export function BranchDistributorsPanel({ title, description }: DistributorPageConfig) {
   const router = useRouter();
   const { loading: authLoading } = useDistributorAuth();
-  const { showSkeleton } = useDistributorScopePageReveal({ ready: !authLoading });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<BranchDistributorStatus | "all">("all");
   const [clientsFilter, setClientsFilter] = useState<ClientsFilter>("all");
@@ -61,9 +66,36 @@ export function BranchDistributorsPanel({ title, description }: DistributorPageC
     column: "name",
     direction: "ascending",
   });
+  const [partners, setPartners] = useState<BranchDistributorRecord[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(true);
+  const [partnersError, setPartnersError] = useState("");
+  const { showSkeleton } = useDistributorScopePageReveal({ ready: !authLoading && !partnersLoading });
+
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    setPartnersLoading(true);
+    setPartnersError("");
+    void fetchDistributorPartners()
+      .then((result) => {
+        if (cancelled) return;
+        setPartners(result.items.map(mapPartnerListItemToBranchRecord));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPartners([]);
+        setPartnersError("Could not load Zynd Mitras.");
+      })
+      .finally(() => {
+        if (!cancelled) setPartnersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading]);
 
   const filtered = useMemo(() => {
-    return DUMMY_BRANCH_DISTRIBUTORS.filter((row) => {
+    return partners.filter((row) => {
       if (statusFilter !== "all" && row.status !== statusFilter) return false;
       if (clientsFilter === "large-book" && row.clientCount < 50) return false;
       if (clientsFilter === "growing-book" && row.clientCount >= 50) return false;
@@ -73,9 +105,10 @@ export function BranchDistributorsPanel({ title, description }: DistributorPageC
         row.email,
         row.arn,
         row.status,
+        row.id,
       );
     });
-  }, [clientsFilter, searchQuery, statusFilter]);
+  }, [clientsFilter, partners, searchQuery, statusFilter]);
 
   const sorted = useMemo(
     () => sortByDescriptor(filtered, sortDescriptor),
@@ -143,6 +176,7 @@ export function BranchDistributorsPanel({ title, description }: DistributorPageC
     >
       <Table.Header>
         <Table.Head id="name" label="Name" isRowHeader allowsSorting />
+        <Table.Head id="id" label="Zynd Mitra ID" allowsSorting />
         <Table.Head id="email" label="Email" allowsSorting />
         <Table.Head id="arn" label="ARN" allowsSorting />
         <Table.Head id="clientCount" label="Clients" allowsSorting className="text-right [&>div]:justify-end" />
@@ -158,6 +192,7 @@ export function BranchDistributorsPanel({ title, description }: DistributorPageC
             onAction={() => router.push(branchDistributorDetailHref(row.id))}
           >
             <Table.Cell className="font-medium">{row.name}</Table.Cell>
+            <Table.Cell className="font-mono text-caption">{row.id}</Table.Cell>
             <Table.Cell>{row.email}</Table.Cell>
             <Table.Cell className="font-mono text-caption">{row.arn}</Table.Cell>
             <Table.Cell className="text-right tabular-nums">{row.clientCount}</Table.Cell>
@@ -179,12 +214,16 @@ export function BranchDistributorsPanel({ title, description }: DistributorPageC
   return (
     <div className={cn(DISTRIBUTOR_PAGE_STACK_CLASS, "distributor-scope-page--enter")}>
       <DistributorPageHeader title={title} description={description} />
-      <BranchDistributorsMetrics />
+      <BranchDistributorsMetrics rows={partners} />
       <DistributorTableOnlyShell
         toolbar={toolbar}
         isEmpty={pageItems.length === 0}
-        emptyTitle={ZYND_MITRA_COPY.emptyFiltered}
-        emptyDescription="Adjust status, book size, or search to reset."
+        emptyTitle={partnersError || ZYND_MITRA_COPY.emptyFiltered}
+        emptyDescription={
+          partnersError
+            ? "Refresh the page or try again later."
+            : "Onboard a Zynd Mitra or adjust filters to see results."
+        }
         tableSize="md"
       >
         {table}

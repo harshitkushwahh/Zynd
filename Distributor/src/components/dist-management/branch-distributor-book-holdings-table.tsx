@@ -2,7 +2,7 @@
 
 import { Table } from "@/components/application/table";
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
-import type { BranchDistributorBookHolding } from "@/lib/dummy/branch-distributor-profile";
+import type { BranchDistributorBookHolding } from "@/lib/distributor-branch-distributor-profile-data";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum } from "@/lib/format";
 

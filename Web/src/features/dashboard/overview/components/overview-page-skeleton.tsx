@@ -24,12 +24,12 @@ export function OverviewPageSkeleton() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,1.15fr)] xl:items-stretch">
-        <div className="grid grid-cols-[minmax(9rem,10.5rem)_minmax(0,1fr)] gap-3 sm:gap-4">
+        <div className="grid h-full min-h-[9.5rem] grid-cols-[minmax(9rem,10.5rem)_minmax(0,1fr)] items-stretch gap-3 sm:gap-4">
           <OverviewRiskCardSkeleton />
           <OverviewSipsCardSkeleton />
         </div>
 
-        <OverviewGoalsCardSkeleton className="min-w-0" />
+        <OverviewGoalsCardSkeleton className="min-w-0 self-stretch" />
 
         <div className="grid gap-3 sm:gap-4 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] lg:items-stretch xl:col-span-2">
           <OverviewFamilyCardSkeleton />

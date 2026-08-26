@@ -444,11 +444,9 @@ export function AdminSecurityConfigSettingsPanel({
   const handleSubmit = async (item: SecurityConfigItem) => {
     const raw = draftValues[item.key] ?? "";
     const meta = getSecurityConfigFieldMeta(item.key);
-    let parsed: string | number | boolean = raw;
+    let parsed: string | number | boolean;
 
-    if (meta.type === "select") {
-      parsed = raw;
-    } else {
+    if (meta.type !== "select") {
       const boundsError = getSecurityConfigNumberBoundsError(item.key, raw);
       if (boundsError) {
         setError(boundsError);
@@ -472,6 +470,8 @@ export function AdminSecurityConfigSettingsPanel({
         setError("High risk score must be higher than medium risk score.");
         return;
       }
+    } else {
+      parsed = raw;
     }
 
     setSubmittingKey(item.key);
@@ -497,8 +497,8 @@ export function AdminSecurityConfigSettingsPanel({
 
   return (
     <div className="space-y-4">
-      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success">{message}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 
       <div className={cn(activeTab === "other" && other.length === 0 && "hidden")}>
         <SecurityConfigTabContent

@@ -5,8 +5,12 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.errors import KycError
-from app.application.kyc.journey_gate_service import is_rekyc_modification, require_pan_verified
+from app.application.kyc.journey_gate_service import require_pan_verified, requires_digilocker
 from app.application.kyc.journey_state_service import get_or_create_journey, save_journey_state
+from app.application.kyc.digilocker_prefill import (
+    digilocker_prefill_missing_fields,
+    enrich_digilocker_address_prefill,
+)
 from app.application.kyc.master_data import map_identity_document_to_drafts
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import (
@@ -19,7 +23,7 @@ from app.infrastructure.persistence.models import User
 async def start_digilocker(db: AsyncSession, *, user: User) -> dict[str, Any]:
     journey = await get_or_create_journey(db, user.id)
     require_pan_verified(journey)
-    if journey.kyc_already_registered or is_rekyc_modification(journey):
+    if not requires_digilocker(journey):
         raise KycError("DigiLocker is not required for KRA-compliant investors.", "digilocker_not_required", 409)
 
     pan_draft = journey.pan_draft_json or {}
@@ -84,10 +88,10 @@ async def load_identity_document(
         }
 
     mapped = map_identity_document_to_drafts(document)
-    contact_draft = mapped["addressPrefill"]
-    personal_draft = journey.personal_draft_json or {}
-    if mapped.get("fathersName"):
-        personal_draft = {**personal_draft, "fathersName": mapped["fathersName"]}
+    contact_draft = await enrich_digilocker_address_prefill(mapped["addressPrefill"])
+    personal_draft = dict(journey.personal_draft_json or {})
+    personal_draft["fathersName"] = str(mapped.get("fathersName") or "").strip()
+    missing_fields = digilocker_prefill_missing_fields(contact_draft, personal_draft)
 
     await save_journey_state(
         db,
@@ -107,4 +111,6 @@ async def load_identity_document(
         "contactDraft": contact_draft,
         "personalDraft": personal_draft,
         "aadhaarLast4": mapped.get("aadhaarLast4"),
+        "prefillIncomplete": bool(missing_fields),
+        "missingFields": missing_fields,
     }

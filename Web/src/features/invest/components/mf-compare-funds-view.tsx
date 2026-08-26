@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUpRight, GitCompare, LineChart, TableProperties } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { Card, CardContent } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
@@ -14,9 +15,10 @@ import {
 } from "@/features/invest/api/invest-api";
 import { MfCalculatorDisclaimer } from "@/features/invest/components/mf-calculator-disclaimer";
 import { MfCompareFundsNavChartSection } from "@/features/invest/components/mf-compare-funds-nav-chart";
-import { CompareFundsSlotTabs } from "@/features/invest/components/mf-compare-funds-slot-tabs";
+import { CompareFundSlotSearch, CompareFundsSlotTabList } from "@/features/invest/components/mf-compare-funds-slot-tabs";
 import { MfCompareFundsResultsSkeleton } from "@/features/invest/components/mf-tools-page-skeleton";
 import { MfToolsPageShell } from "@/features/invest/components/mf-tools-page-shell";
+import { MF_TOOL_ICONS } from "@/features/invest/lib/mf-dashboard-sidebar-data";
 import { useCompareFundNavQueries } from "@/features/invest/hooks/use-compare-fund-nav-queries";
 import type { MfNavRange } from "@/features/invest/lib/mf-nav-history";
 import {
@@ -24,7 +26,6 @@ import {
   MF_CALC_CARD_CONTENT_CLASS,
   MF_CALC_GAIN_BAR_CLASS,
   MF_CALC_GAIN_TEXT_CLASS,
-  MF_CALC_ICON_BADGE_CLASS,
   MF_CALC_PANEL_CLASS,
 } from "@/features/invest/lib/mf-calculator-ui";
 import {
@@ -37,6 +38,7 @@ import {
 } from "@/features/invest/lib/mf-format";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
 import { copy } from "@/shared/config/copy";
+import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
 
 const MAX_SLOTS = 3;
@@ -275,7 +277,7 @@ function CompareSelectedBadge({ count, max = MAX_SLOTS }: { count: number; max?:
 
   return (
     <div
-      className="min-w-[7rem] rounded-[var(--radius-control)] border border-[var(--sip-hero-border)] px-3.5 py-2.5"
+      className="min-w-[7rem] rounded-2xl border border-[var(--sip-hero-border)] px-3.5 py-2.5"
       aria-label={label}
     >
       <p className="text-caption font-medium leading-none whitespace-nowrap tabular-nums">
@@ -449,6 +451,7 @@ function CompareResultsTable({ funds }: CompareResultsTableProps) {
 
 export function MfCompareFundsView() {
   const [slots, setSlots] = useState<Array<InvestFundSummary | null>>([null, null, null]);
+  const [activeSlot, setActiveSlot] = useState(0);
   const [funds, setFunds] = useState<InvestFundDetail[]>([]);
   const [disclaimer, setDisclaimer] = useState("");
   const [loading, setLoading] = useState(false);
@@ -503,40 +506,51 @@ export function MfCompareFundsView() {
   const excludeIds = selectedIds;
 
   return (
-    <MfToolsPageShell
-      trail={[{ label: copy.mutualFunds.compareTitle }]}
-      title={copy.mutualFunds.compareTitle}
-      description={copy.mutualFunds.compareDescription}
-    >
+    <DashboardContentFade>
+      <MfToolsPageShell
+        trail={[{ label: copy.mutualFunds.compareTitle }]}
+        title={copy.mutualFunds.compareTitle}
+        icon={MF_TOOL_ICONS.compare}
+      >
       <div className="space-y-6">
-        <Card className={MF_CALC_CARD_CLASS}>
-          <CardContent className={MF_CALC_CARD_CONTENT_CLASS}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className={MF_CALC_ICON_BADGE_CLASS}>
-                  <GitCompare className="size-4" strokeWidth={2.25} />
-                </span>
-                <div>
-                  <p className="text-body font-semibold tracking-tight text-foreground">
-                    {copy.mutualFunds.compareSelectTitle}
-                  </p>
+        <div className="space-y-4">
+          <Card className={MF_CALC_CARD_CLASS}>
+            <CardContent className={MF_CALC_CARD_CONTENT_CLASS}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <GitCompare
+                    className="size-5 shrink-0 text-black dark:text-white"
+                    strokeWidth={2.25}
+                  />
+                  <div>
+                    <p className="text-body font-semibold tracking-tight text-foreground">
+                      {copy.mutualFunds.compareSelectTitle}
+                    </p>
+                  </div>
                 </div>
+                <CompareSelectedBadge count={selectedCount} />
               </div>
-              <CompareSelectedBadge count={selectedCount} />
-            </div>
 
-            <CompareFundsSlotTabs
-              slots={slots}
-              onSlotsChange={setSlots}
-              excludeProductIds={excludeIds}
-            />
-          </CardContent>
-        </Card>
+              <CompareFundsSlotTabList
+                slots={slots}
+                activeSlot={activeSlot}
+                onActiveSlotChange={setActiveSlot}
+              />
+
+              <CompareFundSlotSearch
+                activeSlot={activeSlot}
+                slots={slots}
+                onSlotsChange={setSlots}
+                excludeProductIds={excludeIds}
+              />
+            </CardContent>
+          </Card>
+        </div>
 
         {error ? <FieldMessage variant="error" message={error} /> : null}
 
         {!loading && selectedCount === 0 ? (
-          <Card className="rounded-[var(--radius-medium)] border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]">
+          <Card className={cn("border border-dashed border-border bg-transparent py-0 shadow-none ring-0 [--card-spacing:0]", ZYND_3XL_RADIUS_CLASS)}>
             <CardContent className="flex min-h-[220px] flex-col items-center justify-center gap-3 p-8 text-center">
               <GitCompare className="size-10 text-[var(--sip-empty-icon)]" />
               <div>
@@ -595,5 +609,6 @@ export function MfCompareFundsView() {
         ) : null}
       </div>
     </MfToolsPageShell>
+    </DashboardContentFade>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, RefreshCw } from "lucide-react";
 
@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { pickUserRef } from "@/lib/admin-user-ref";
 import { getErrorMessage } from "@/lib/errors";
 import { downloadAdminRiskProfileReport } from "@/lib/risk-profile-pdf-download";
 import {
@@ -43,7 +44,7 @@ import { cn } from "@/lib/utils";
 
 const ALL = "all";
 
-const TIER_FILTER_OPTIONS: AdminSelectOption[] = [
+export const RISK_PROFILE_USER_TIER_FILTER_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All tiers" },
   { value: "secure", label: "Secure" },
   { value: "conservative", label: "Conservative" },
@@ -58,10 +59,28 @@ function tierBadgeVariant(tier: string) {
   return "success" as const;
 }
 
-export function RiskProfileUsersPanel() {
+export function RiskProfileUsersPanel({
+  showToolbar = true,
+  search: searchProp,
+  onSearchChange,
+  tierFilter: tierFilterProp,
+  onTierFilterChange,
+  refreshKey,
+}: {
+  showToolbar?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  tierFilter?: string;
+  onTierFilterChange?: (value: string) => void;
+  refreshKey?: number;
+} = {}) {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [tier, setTier] = useState(ALL);
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalTier, setInternalTier] = useState(ALL);
+  const search = onSearchChange ? (searchProp ?? "") : internalSearch;
+  const setSearch = onSearchChange ?? setInternalSearch;
+  const tier = onTierFilterChange ? (tierFilterProp ?? ALL) : internalTier;
+  const setTier = onTierFilterChange ?? setInternalTier;
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [error, setError] = useState("");
@@ -84,6 +103,15 @@ export function RiskProfileUsersPanel() {
     ? getErrorMessage(queryError, "Could not load user risk profiles.")
     : "";
 
+  useEffect(() => {
+    if (refreshKey == null || refreshKey === 0) return;
+    void queryClient.invalidateQueries({ queryKey: riskProfileUsersQueryKey(queryParams) });
+  }, [queryClient, queryParams, refreshKey]);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [tier]);
+
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return items;
@@ -100,44 +128,47 @@ export function RiskProfileUsersPanel() {
   };
 
   const handleDownloadReport = async (item: UserRiskProfileItem) => {
-    await downloadAdminRiskProfileReport(item.user_id, item.assessment_id);
+    await downloadAdminRiskProfileReport(pickUserRef(item), item.assessment_id);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <AdminSearchInput
-          containerClassName="max-w-sm"
-          placeholder="Search by name, email, or ID"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminSelect
-            value={tier}
-            onValueChange={(value) => {
-              setTier(value);
-              setOffset(0);
-            }}
-            options={TIER_FILTER_OPTIONS}
-            placeholder="Tier"
-            className="min-w-select-sm"
+      {showToolbar ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <AdminSearchInput
+            containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+            placeholder="Search by name, email, or ID"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              void queryClient.invalidateQueries({ queryKey: riskProfileUsersQueryKey(queryParams) })
-            }
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <AdminSelect
+              value={tier}
+              onValueChange={(value) => {
+                setTier(value);
+                setOffset(0);
+              }}
+              options={RISK_PROFILE_USER_TIER_FILTER_OPTIONS}
+              placeholder="Tier"
+              className="min-w-select-sm"
+              triggerClassName="w-auto"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() =>
+                void queryClient.invalidateQueries({ queryKey: riskProfileUsersQueryKey(queryParams) })
+              }
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {error || loadError ? (
-        <AdminFeedbackMessage variant="destructive">{error || loadError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
       ) : null}
 
       <AdminDataTable
@@ -248,7 +279,7 @@ export function RiskProfileUsersPanel() {
       <RiskProfileAssessmentDetailDialog
         open={Boolean(detailState)}
         user={detailState?.user ?? null}
-        userId={detailState?.user.user_id ?? null}
+        userId={detailState ? pickUserRef(detailState.user) : null}
         assessmentId={detailState?.assessmentId ?? null}
         onClose={() => setDetailState(null)}
       />

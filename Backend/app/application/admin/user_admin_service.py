@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import unquote
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth.session_service import revoke_all_sessions
@@ -18,6 +18,7 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfOrderStatus,
 )
 from app.infrastructure.persistence.models import (
+    AdminUserRoleAssignment,
     AuditEventType,
     AuditLog,
     KycOverallStatus,
@@ -84,6 +85,42 @@ async def _kyc_compliant_user_ids(db: AsyncSession, user_ids: list[UUID]) -> set
     return set(rows.scalars())
 
 
+async def _kyc_onboarding_complete_user_ids(db: AsyncSession, user_ids: list[UUID]) -> set[UUID]:
+    """Investors whose KYC was submitted or fully verified — mitra onboarding is done."""
+    if not user_ids:
+        return set()
+
+    rows = await db.execute(
+        select(UserKycStatus.user_id).where(
+            UserKycStatus.user_id.in_(user_ids),
+            UserKycStatus.overall_status.in_(
+                (KycOverallStatus.submitted, KycOverallStatus.completed),
+            ),
+        )
+    )
+    return set(rows.scalars())
+
+
+ZYND_ID_SUFFIX = "@zynd"
+
+
+def user_path_ref(user: User) -> str:
+    client_id = (user.client_id or "").strip()
+    if client_id.endswith(ZYND_ID_SUFFIX):
+        return client_id[: -len(ZYND_ID_SUFFIX)]
+    if client_id:
+        return client_id
+    return str(user.id)
+
+
+def user_identity_fields(user: User) -> dict[str, Any]:
+    return {
+        "user_id": user.id,
+        "client_id": user.client_id or "",
+        "user_ref": user_path_ref(user),
+    }
+
+
 async def get_user_by_reference(db: AsyncSession, reference: str) -> User | None:
     """Resolve a user by UUID or Zynd client_id."""
     normalized = unquote(reference).strip()
@@ -126,6 +163,13 @@ async def suspend_user(
     ip: str | None = None,
     notes: str | None = None,
 ) -> dict[str, Any]:
+    from app.application.admin.rbac_service import (
+        SUPER_ADMIN_ROLE_KEY,
+        count_active_super_admins,
+        list_user_role_keys,
+        user_has_permission,
+    )
+
     if reason_code not in SUSPENSION_REASON_CODES:
         raise ValueError("Invalid suspension reason code.")
     if user.status == UserStatus.deleted:
@@ -134,6 +178,21 @@ async def suspend_user(
         raise ValueError("Account is already suspended.")
     if user.id == admin.id:
         raise ValueError("You cannot suspend your own account.")
+
+    if user.role == UserRole.admin:
+        if not await user_has_permission(db, admin.id, "admin.accounts.manage"):
+            raise ValueError("Only super admins can suspend admin accounts.")
+        target_roles = await list_user_role_keys(db, user.id)
+        if SUPER_ADMIN_ROLE_KEY in target_roles:
+            if await count_active_super_admins(db) <= 1 and user.status == UserStatus.active:
+                raise ValueError("Cannot suspend the last active super admin.")
+        if user.status == UserStatus.deletion_pending:
+            raise ValueError(
+                "This admin account is in the customer deletion queue. "
+                "Cancel deletion scheduling before changing access."
+            )
+    elif user.status == UserStatus.deletion_pending:
+        raise ValueError("Accounts pending deletion cannot be suspended.")
 
     user.status = UserStatus.suspended
     user.suspended_at = _now()
@@ -184,6 +243,12 @@ async def unsuspend_user(
     ip: str | None = None,
     notes: str | None = None,
 ) -> dict[str, Any]:
+    if user.role == UserRole.admin:
+        from app.application.admin.rbac_service import user_has_permission
+
+        if not await user_has_permission(db, admin.id, "admin.accounts.manage"):
+            raise ValueError("Only super admins can restore admin account access.")
+
     if user.status != UserStatus.suspended:
         raise ValueError("Account is not suspended.")
 
@@ -215,16 +280,246 @@ async def unsuspend_user(
     }
 
 
+async def list_admin_accounts(db: AsyncSession) -> list[dict[str, Any]]:
+    from app.application.admin.rbac_service import list_user_role_keys
+
+    result = await db.execute(
+        select(User)
+        .where(
+            User.role == UserRole.admin,
+            User.status != UserStatus.deleted,
+        )
+        .order_by(User.email.asc())
+    )
+    items: list[dict[str, Any]] = []
+    for user in result.scalars():
+        items.append(
+            {
+                **user_identity_fields(user),
+                "email": user.email,
+                "display_name": _display_name(user),
+                "status": user.status.value,
+                "roles": sorted(await list_user_role_keys(db, user.id)),
+                "mfa_enrolled": user.mfa_enrolled_at is not None,
+                "suspended_at": user.suspended_at,
+                "suspension_reason_code": user.suspension_reason_code,
+                "deletion_requested_at": user.deletion_requested_at,
+                "deletion_scheduled_at": user.deletion_scheduled_at,
+                "created_at": user.created_at,
+            }
+        )
+    return items
+
+
+async def count_admin_accounts_on_hold(db: AsyncSession) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(
+            User.role == UserRole.admin,
+            User.status == UserStatus.suspended,
+        )
+    )
+    return int(result.scalar_one())
+
+
+async def cancel_admin_deletion_schedule(
+    db: AsyncSession,
+    *,
+    user: User,
+    admin: User,
+    ip: str | None = None,
+) -> dict[str, Any]:
+    from app.application.admin.rbac_service import user_has_permission
+    from app.application.auth.account_service import cancel_account_deletion
+
+    if user.role != UserRole.admin:
+        raise ValueError("Only admin accounts can be managed through this workflow.")
+    if not await user_has_permission(db, admin.id, "admin.accounts.manage"):
+        raise ValueError("Only super admins can cancel admin deletion scheduling.")
+    if user.status != UserStatus.deletion_pending:
+        raise ValueError("No pending deletion request for this admin account.")
+
+    await cancel_account_deletion(db, user=user, ip=ip)
+    await db.flush()
+    return {"user_id": str(user.id), "status": user.status.value}
+
+
+async def hold_admin_account_access(
+    db: AsyncSession,
+    *,
+    user: User,
+    admin: User,
+    ip: str | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    if user.role != UserRole.admin:
+        raise ValueError("Target is not an admin account.")
+    return await suspend_user(
+        db,
+        user=user,
+        admin=admin,
+        reason_code="compliance_hold",
+        ip=ip,
+        notes=notes,
+    )
+
+
+async def restore_admin_account_access(
+    db: AsyncSession,
+    *,
+    user: User,
+    admin: User,
+    ip: str | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    if user.role != UserRole.admin:
+        raise ValueError("Target is not an admin account.")
+    return await unsuspend_user(
+        db,
+        user=user,
+        admin=admin,
+        ip=ip,
+        notes=notes or "Restore admin console access",
+    )
+
+
+async def remove_admin_account(
+    db: AsyncSession,
+    *,
+    user: User,
+    admin: User,
+    ip: str | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    from app.application.admin.rbac_service import user_has_permission
+    from app.application.compliance.anonymization import anonymize_user_profile
+    from app.application.compliance.deletion_executor_service import _purge_auth_credentials
+    from app.infrastructure.persistence.distributor_branch_models import DistributorBranch
+
+    if user.role != UserRole.admin:
+        raise ValueError("Target is not an admin account.")
+    if not await user_has_permission(db, admin.id, "admin.accounts.manage"):
+        raise ValueError("Only super admins can remove admin accounts.")
+    if user.id == admin.id:
+        raise ValueError("You cannot remove your own admin account.")
+    if user.status == UserStatus.deleted:
+        raise ValueError("Admin account is already removed.")
+    if user.status != UserStatus.suspended:
+        raise ValueError("Suspend the admin account before removing it from the system.")
+
+    original_email = user.email
+    original_client_id = user.client_id
+    removed_at = _now()
+
+    await db.execute(
+        update(DistributorBranch)
+        .where(DistributorBranch.manager_user_id == user.id)
+        .values(manager_user_id=None, updated_at=removed_at)
+    )
+    await _purge_auth_credentials(db, user.id)
+    await db.execute(
+        delete(AdminUserRoleAssignment).where(AdminUserRoleAssignment.user_id == user.id)
+    )
+
+    anonymize_user_profile(user)
+    user.status = UserStatus.deleted
+    user.deleted_at = removed_at
+    user.suspended_at = None
+    user.suspension_reason_code = None
+    user.suspended_by = None
+    user.deletion_requested_at = None
+    user.deletion_scheduled_at = None
+
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            event_type=AuditEventType.admin_account_removed,
+            ip_address=ip,
+            metadata_={
+                "admin_id": str(admin.id),
+                "notes": notes,
+                "original_email": original_email,
+                "original_client_id": original_client_id,
+                "removed_at": removed_at.isoformat(),
+                "outcome": "removed_successfully",
+            },
+        )
+    )
+
+    await db.flush()
+    return {
+        "user_id": str(user.id),
+        "status": user.status.value,
+        "removed_at": removed_at,
+    }
+
+
+async def get_user_directory_metrics(db: AsyncSession) -> dict[str, int]:
+    customer_filter = User.role == UserRole.user
+
+    registered_users = (
+        await db.execute(select(func.count()).select_from(User).where(customer_filter))
+    ).scalar_one()
+    suspended_accounts = (
+        await db.execute(
+            select(func.count()).select_from(User).where(
+                customer_filter,
+                User.status == UserStatus.suspended,
+            )
+        )
+    ).scalar_one()
+    kyc_compliant = (
+        await db.execute(
+            select(func.count())
+            .select_from(UserKycStatus)
+            .join(User, User.id == UserKycStatus.user_id)
+            .where(
+                customer_filter,
+                UserKycStatus.overall_status == KycOverallStatus.completed,
+            )
+        )
+    ).scalar_one()
+    invested_order_users = (
+        select(MfOrder.user_id)
+        .where(MfOrder.status == MfOrderStatus.succeeded)
+        .distinct()
+    )
+    invested_holding_users = select(MfExternalHolding.user_id).distinct()
+    active_investors = (
+        await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                customer_filter,
+                or_(
+                    User.id.in_(invested_order_users),
+                    User.id.in_(invested_holding_users),
+                ),
+            )
+        )
+    ).scalar_one()
+
+    return {
+        "registered_users": int(registered_users),
+        "kyc_compliant": int(kyc_compliant),
+        "suspended_accounts": int(suspended_accounts),
+        "active_investors": int(active_investors),
+    }
+
+
 async def list_users(
     db: AsyncSession,
     *,
     email: str | None = None,
     status: UserStatus | None = None,
     role: UserRole | None = None,
+    user_ids: list[UUID] | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    query = select(User).order_by(User.created_at.desc())
+    deleted_last = case((User.status == UserStatus.deleted, 1), else_=0)
+    query = select(User).order_by(deleted_last.asc(), User.created_at.desc())
     if email:
         normalized = email.lower().strip()
         query = query.where(User.email.ilike(f"%{normalized}%"))
@@ -232,6 +527,10 @@ async def list_users(
         query = query.where(User.status == status)
     if role:
         query = query.where(User.role == role)
+    if user_ids is not None:
+        if not user_ids:
+            return []
+        query = query.where(User.id.in_(user_ids))
     query = query.limit(min(limit, 100)).offset(max(offset, 0))
     result = await db.execute(query)
     users = list(result.scalars())

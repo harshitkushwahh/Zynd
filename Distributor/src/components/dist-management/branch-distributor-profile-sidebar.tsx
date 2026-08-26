@@ -6,7 +6,7 @@ import { BadgeCheck, Building2, Check, Copy, Hash, MapPin, Phone } from "lucide-
 
 import { DistributorProfileAvatar } from "@/components/ui/distributor-profile-avatar";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { BranchDistributorProfile } from "@/lib/dummy/branch-distributor-profile";
+import type { BranchDistributorProfile } from "@/lib/distributor-branch-distributor-profile-data";
 import { formatDistributorBranchName } from "@/lib/distributor-branch-display";
 import { formatDistributorProfileAddress } from "@/lib/distributor-profile";
 import { cn } from "@/lib/utils";
@@ -148,6 +148,7 @@ export function BranchDistributorProfileSidebar({
 
         <RegistrationDivider />
 
+        <BranchDistributorRegistrationRow icon={Hash} label="Zynd Mitra ID" value={profile.id} />
         <BranchDistributorRegistrationRow icon={Hash} label="ARN" value={profile.arn} />
         <BranchDistributorRegistrationRow icon={BadgeCheck} label="EUIN" value={profile.euin} />
       </div>

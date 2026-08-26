@@ -185,11 +185,8 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
       <div className="relative min-h-[12rem] min-w-0">
         {activeError ? <FieldMessage variant="error" message={activeError} className="mb-4" /> : null}
 
-        {isLoadingActive ? (
-          <MfFundCardSkeletonGrid
-            count={BROWSE_TAB_SKELETON_COUNT}
-            className="animate-in fade-in duration-200"
-          />
+        {isLoadingActive && !activeFunds ? (
+          <MfFundCardSkeletonGrid count={BROWSE_TAB_SKELETON_COUNT} />
         ) : null}
 
         {!isLoadingActive && activeFunds && activeFunds.length === 0 && !activeError ? (
@@ -198,11 +195,8 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
           </div>
         ) : null}
 
-        {!isLoadingActive && activeFunds && activeFunds.length > 0 ? (
-          <div
-            key={activeCategory?.slug}
-            className={cn(MF_FUNDS_GRID_CLASS, "animate-in fade-in duration-300")}
-          >
+        {activeFunds && activeFunds.length > 0 ? (
+          <div className={MF_FUNDS_GRID_CLASS}>
             {activeFunds.map((fund) => (
               <MfFundCard key={fund.product_id} fund={fund} onSelect={onSelectFund} />
             ))}

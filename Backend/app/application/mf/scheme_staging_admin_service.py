@@ -88,6 +88,7 @@ async def approve_scheme_staging_batch(
     batch_uuid: str,
     *,
     admin_user_id: UUID,
+    auto_resume_pipeline: bool = True,
 ) -> dict:
     doc = await get_batch(batch_uuid)
     if not doc:
@@ -102,6 +103,10 @@ async def approve_scheme_staging_batch(
         approved_at=now,
     )
     refreshed = await get_batch(batch_uuid)
+    if auto_resume_pipeline:
+        from app.application.mf.mf_pipeline_auto_resume_service import try_auto_resume_for_batch
+
+        await try_auto_resume_for_batch(batch_uuid, source="staging_approve")
     return _serialize_batch(refreshed or doc)
 
 

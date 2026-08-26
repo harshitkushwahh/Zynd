@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Distributor console
 
-- Frontend-first distributor dashboard (investors, orders, SIPs, txn requests)
-- Dummy auth and dummy data until backend is built
+- Frontend distributor dashboard (investors, orders, SIPs, txn requests)
+- Uses backend API for auth and client data
 - Cross-app utilities live in `packages/zynd-shared` (`@zynd/shared`)
 - See `docs/FRONTEND_SHARED_BOUNDARIES.md` at repo root

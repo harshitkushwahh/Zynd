@@ -4,7 +4,6 @@ import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 type SearchConsoleTriggerProps = {
   onOpen: () => void;
@@ -14,10 +13,8 @@ type SearchConsoleTriggerProps = {
 
 export function SearchConsoleTrigger({
   onOpen,
-  variant = "default",
+  variant: _variant = "default",
 }: SearchConsoleTriggerProps) {
-  const isLeading = variant === "leading";
-
   return (
     <>
       <Tooltip>
@@ -27,10 +24,7 @@ export function SearchConsoleTrigger({
               type="button"
               variant="ghost"
               size="sm"
-              className={cn(
-                "distributor-search-console-trigger hidden justify-start text-muted-foreground shadow-none hover:text-foreground focus-visible:ring-0 md:inline-flex",
-                isLeading ? "w-52 lg:w-60" : "w-52 lg:w-60",
-              )}
+              className="distributor-search-console-trigger hidden w-52 justify-start text-muted-foreground shadow-none hover:text-foreground focus-visible:ring-0 md:inline-flex lg:w-60"
               onClick={onOpen}
             >
               <Search className="size-3.5 shrink-0 text-muted-foreground" />

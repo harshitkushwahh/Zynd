@@ -73,3 +73,75 @@ export function readinessFromBootstrap(payload: KycBootstrapResponse): KycReadin
     reason: payload.readiness_reason,
   };
 }
+
+export function isRekycReadinessCode(code: string | null | undefined): boolean {
+  if (!code) return false;
+  const normalized = code.toLowerCase();
+  return ["kyc_incomplete", "kyc_legacy", "kyc_onhold", "kyc_rejected"].includes(normalized);
+}
+
+export function isDigilockerRequired(
+  kycAlreadyRegistered: boolean | null | undefined,
+  readinessCode: string | null | undefined,
+): boolean {
+  if (kycAlreadyRegistered) return false;
+  const normalized = (readinessCode ?? "").toLowerCase();
+  if (normalized === "kyc_incomplete") return true;
+  if (isRekycReadinessCode(readinessCode)) return false;
+  return true;
+}
+
+export function isDigilockerComplete(input: {
+  external_kyc_status?: string | null;
+} | null | undefined): boolean {
+  return input?.external_kyc_status === "returned_success";
+}
+
+export function shouldBlockAddressStep(input: {
+  kyc_already_registered?: boolean | null;
+  readiness_code?: string | null;
+  external_kyc_status?: string | null;
+} | null | undefined): boolean {
+  if (!input) return false;
+  return isDigilockerRequired(input.kyc_already_registered, input.readiness_code) && !isDigilockerComplete(input);
+}
+
+export function capReachableStepIndex(
+  serverIndex: number,
+  steps: Array<{ id: string }>,
+  input: {
+    kyc_already_registered?: boolean | null;
+    readiness_code?: string | null;
+    external_kyc_status?: string | null;
+  } | null | undefined,
+): number {
+  if (!shouldBlockAddressStep(input)) return serverIndex;
+  const addressIndex = steps.findIndex((step) => step.id === "address");
+  if (addressIndex <= 0) return serverIndex;
+  return Math.min(serverIndex, addressIndex - 1);
+}
+
+export function shouldShowDigilockerFailureAlert(
+  payload: KycBootstrapResponse | null | undefined,
+  forceShow = false,
+): boolean {
+  if (forceShow) return true;
+  if (!payload || !shouldBlockAddressStep(payload)) return false;
+  if (payload.pan_verification_status !== "verified") return false;
+  if (isDigilockerComplete(payload)) return false;
+
+  if (payload.digilocker_failure_reason) return true;
+
+  const status = payload.external_kyc_status;
+  if (status === "returned_failed" || status === "started") return true;
+
+  return false;
+}
+
+export function digilockerFailureDescription(
+  payload: KycBootstrapResponse | null | undefined,
+): string | null {
+  if (!payload) return null;
+  return payload.digilocker_failure_reason ?? null;
+}
+

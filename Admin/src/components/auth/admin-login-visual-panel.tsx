@@ -1,32 +1,33 @@
 "use client";
 
+import { AdminAuthLottie } from "@/components/auth/admin-login-visual-lottie";
+
 export type AdminLoginVisualPanelProps = {
   hello?: string;
   title?: string;
   description?: string;
+  lottieSrc?: string;
 };
 
 export function AdminLoginVisualPanel({
-  hello = "Hello ZYND! 👋",
+  hello = "ZYND Admin Console",
   title,
-  description = "Manage distributors, investors, compliance, and platform operations from one secure administrative hub.",
+  description = "Manage your wealth with confidence and show every client the support they deserve.",
+  lottieSrc,
 }: AdminLoginVisualPanelProps) {
   return (
     <div className="admin-login-visual-panel">
       <div className="admin-login-visual-panel__content">
-        <div className="admin-login-visual-panel__mark" aria-hidden="true">
-          <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M32 4L36.5 27.5L60 32L36.5 36.5L32 60L27.5 36.5L4 32L27.5 27.5L32 4Z"
-              fill="currentColor"
-            />
-          </svg>
-        </div>
+        <div className="admin-login-visual-panel__intro">
+          <div className="admin-login-visual-panel__mark" aria-hidden="true">
+            <AdminAuthLottie src={lottieSrc} />
+          </div>
 
-        <div className="admin-login-visual-panel__copy">
-          <h2 className="admin-login-visual-panel__hello">{hello}</h2>
-          {title ? <p className="admin-login-visual-panel__title">{title}</p> : null}
-          <p className="admin-login-visual-panel__description">{description}</p>
+          <div className="admin-login-visual-panel__copy">
+            <h2 className="admin-login-visual-panel__hello">{hello}</h2>
+            {title ? <p className="admin-login-visual-panel__title">{title}</p> : null}
+            <p className="admin-login-visual-panel__description">{description}</p>
+          </div>
         </div>
       </div>
 

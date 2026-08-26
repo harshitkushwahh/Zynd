@@ -7,10 +7,20 @@ export const queryKeys = {
     cart: () => ["invest", "cart"] as const,
     home: () => ["invest", "home"] as const,
     orders: (limit?: number) => ["invest", "orders", { limit: limit ?? 100 }] as const,
+    order: (orderId: string) => ["invest", "order", orderId] as const,
     sipPlans: () => ["invest", "sip-plans"] as const,
     externalHoldings: () => ["invest", "external-holdings"] as const,
     fundNavs: (productId: string, limit: number) =>
       ["invest", "fund-navs", productId, { limit }] as const,
+  },
+  portfolio: {
+    all: () => ["portfolio"] as const,
+    summary: () => ["portfolio", "summary"] as const,
+    holdings: () => ["portfolio", "holdings"] as const,
+    holdingDetail: (holdingId: string) => ["portfolio", "holding-detail", holdingId] as const,
+    redeemUnits: () => ["portfolio", "redeem-units"] as const,
+    redemptionJourney: (fpRedemptionId: string) =>
+      ["portfolio", "redemption-journey", fpRedemptionId] as const,
   },
   referral: {
     all: () => ["referral"] as const,

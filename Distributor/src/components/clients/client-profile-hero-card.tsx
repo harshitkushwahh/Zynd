@@ -4,8 +4,7 @@ import { ClientCodeCopyBadge } from "@/components/clients/client-code-copy-badge
 import { ClientProfileHeroOAuthIcons } from "@/components/clients/client-profile-hero-oauth-icons";
 import { ClientProfileHeroStatusBadges } from "@/components/clients/client-profile-hero-status-badges";
 import { DistributorProfileHeroCard } from "@/components/ui/distributor-profile-hero-card";
-import { DISTRIBUTOR_CLIENT_PROFILE_FALLBACK_SRC } from "@/lib/distributor-client-profile-hero";
-import type { DistributorClientProfile } from "@/lib/dummy/types";
+import type { DistributorClientProfile } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
 
 type ClientProfileHeroCardProps = {
@@ -33,7 +32,6 @@ export function ClientProfileHeroCard({ profile, className }: ClientProfileHeroC
         <ClientProfileHeroOAuthIcons connectedAccounts={profile.personalInfo.connectedAccounts} />
       }
       imageSrc={imageSrc}
-      fallbackImageSrc={DISTRIBUTOR_CLIENT_PROFILE_FALLBACK_SRC}
       email={email}
       phone={profile.contactPhone}
     />

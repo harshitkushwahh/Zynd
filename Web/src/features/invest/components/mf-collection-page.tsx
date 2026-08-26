@@ -19,16 +19,19 @@ import {
   type InvestConfig,
   type InvestFundSummary,
 } from "@/features/invest/api/invest-api";
+import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { MfBreadcrumb } from "@/features/invest/components/mf-breadcrumb";
+import { MfFundsTableSkeleton } from "@/features/invest/components/mf-funds-table-skeleton";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
 import { MfFundsTable } from "@/features/invest/components/mf-funds-table";
 import { buildBulkCartItems } from "@/features/invest/lib/mf-cart-amount";
 import { collectionMetaFor } from "@/features/invest/lib/mf-collection-meta";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
 import { MF_ALL_FUNDS_PAGE_SIZE, mergeInvestFunds, resolveInvestFundsPageHasMore } from "@/features/invest/lib/mf-fund-ranking";
-import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
+import { MF_PAGE_SECTION_CLASS, MF_INVEST_SIDEBAR_GRID_CLASS, MF_INVEST_SIDEBAR_WIDTH_CLASS } from "@/features/invest/lib/mf-ui";
 import { useAuth } from "@/contexts/auth-context";
 import { copy } from "@/shared/config/copy";
+import { cn } from "@/lib/utils";
 
 type MfCollectionPageProps = {
   slug: string;
@@ -241,8 +244,12 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
             .replace("{total}", String(funds.length)),
         );
       }
-      if (cart.item_count >= cart.max_items) {
-        toast.message(copy.mutualFunds.cartFullHint);
+      if (cart.lumpsum_item_count >= cart.max_items) {
+        toast.message(
+          copy.mutualFunds.cartTypeFullHint
+            .replace("{type}", "One-time")
+            .replace("{max}", String(cart.max_items)),
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.cartBuyAllFailed);
@@ -285,36 +292,41 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
 
       {error ? <FieldMessage variant="error" message={error} className="mb-4" /> : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="relative min-w-0">
+      <div className={cn("grid min-w-0 gap-6", MF_INVEST_SIDEBAR_GRID_CLASS)}>
+        <div className="relative min-w-0 max-w-full overflow-hidden">
           <div className="relative flex h-[min(36rem,calc(100vh-12rem))] flex-col overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
             {initialLoading ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center text-muted-foreground">
-                <Loader2 className="mr-2 size-5 animate-spin" />
-                {copy.mutualFunds.loadingFunds}
-              </div>
+              <MfFundsTableSkeleton />
             ) : funds.length === 0 && !error ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center px-6 text-center text-compact text-muted-foreground">
+              <DashboardContentFade className="flex h-full min-h-[280px] items-center justify-center px-6 text-center text-compact text-muted-foreground">
                 {copy.mutualFunds.collectionEmpty}
-              </div>
+              </DashboardContentFade>
             ) : (
-              <MfFundsTable
-                funds={funds}
-                totalCount={total}
-                loadingMore={loadingMore}
+              <DashboardContentFade className="h-full min-h-0">
+                <MfFundsTable
+                  funds={funds}
+                  totalCount={total}
+                  loadingMore={loadingMore}
                 hasMore={hasMore}
+                compact
+                hideCategoryColumn
                 scrollContainerRef={scrollContainerRef}
                 loadMoreRef={loadMoreRef}
                 onRowClick={handleSelectFund}
                 onRowDoubleClick={handleOpenFund}
                 selectedProductId={selectedFund?.product_id}
-              />
+                />
+              </DashboardContentFade>
             )}
           </div>
         </div>
 
         <MfInvestPaymentCard
+          className={MF_INVEST_SIDEBAR_WIDTH_CLASS}
           fundName={selectedFund?.name}
+          amcLogoUrl={selectedFund?.amc_logo_url}
+          amcName={selectedFund?.amc_name}
+          amcSlug={selectedFund?.amc_slug}
           productId={selectedFund?.product_id}
           minLumpsumAmountInr={selectedFund?.min_lumpsum_amount_inr}
           minSipAmountInr={selectedFund?.min_sip_amount_inr}
