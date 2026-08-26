@@ -70,7 +70,6 @@ export function AddInvestorVerifyChannel({
     audience === "distributor" && DISTRIBUTOR_CHANNEL_DESC[channel]
       ? DISTRIBUTOR_CHANNEL_DESC[channel]
       : meta.description;
-  const otpComplete = otp.length === 6;
   const verified = otpSent && isValidSixDigitOtp(otp);
 
   const destination =

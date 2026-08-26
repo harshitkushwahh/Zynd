@@ -22,10 +22,10 @@ export function getSystematicPlansForListScope(
 
 export function getTxnRequestsForListScope(
   requests: DistributorTxnRequest[],
-  scope: TxnRequestsListScope,
+  _scope: TxnRequestsListScope,
 ): DistributorTxnRequest[] {
   const book = requests.filter((request) => request.inDistributorBook !== false);
-  return scope === "all" ? book : book;
+  return book;
 }
 
 export function getTransactionGroupsForListScope(

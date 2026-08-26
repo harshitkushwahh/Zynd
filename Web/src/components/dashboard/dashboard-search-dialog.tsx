@@ -55,7 +55,10 @@ export function DashboardSearchDialog({
 }: DashboardSearchDialogProps) {
   const router = useRouter();
   const riskProfile = useRiskProfileOptional();
-  const navRoutes = DASHBOARD_ROUTES.filter((route) => route.enabled && !route.disabled);
+  const navRoutes = useMemo(
+    () => DASHBOARD_ROUTES.filter((route) => route.enabled && !route.disabled),
+    [],
+  );
   const [query, setQuery] = useState("");
 
   const trimmedQuery = query.trim();

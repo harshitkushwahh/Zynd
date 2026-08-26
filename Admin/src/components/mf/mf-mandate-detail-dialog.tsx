@@ -15,7 +15,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { userInitials } from "@/lib/admin-capabilities";
-import { ApiError } from "@/lib/api-client";
 import {
   fetchMfTransactionMandateDetail,
   syncMfTransactionMandate,

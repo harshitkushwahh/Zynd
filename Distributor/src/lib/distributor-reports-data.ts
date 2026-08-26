@@ -1,4 +1,3 @@
-import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 
 export type DistributorNetSalesTrendPoint = {
   month: string;

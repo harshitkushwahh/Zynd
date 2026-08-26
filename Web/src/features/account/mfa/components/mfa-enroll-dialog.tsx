@@ -157,7 +157,7 @@ export function MfaEnrollDialog({ open, onOpenChange, onCompleted }: MfaEnrollDi
     window.setTimeout(() => setCopied(null), 2000);
   };
 
-  const { title, description } = STEP_COPY[step];
+  const { title } = STEP_COPY[step];
 
   return (
     <BrandDialog

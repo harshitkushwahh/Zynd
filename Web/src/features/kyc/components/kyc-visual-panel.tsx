@@ -1,10 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo } from "react";
 
 import { KycTestimonialCarousel } from "@/features/kyc/components/kyc-testimonial-carousel";
-import { getKycStepPanelVisual } from "@/features/kyc/components/kyc-step-visual";
 import type { KycJourneyStepId } from "@/features/kyc/lib/kyc-journey";
 import { APP_NAME } from "@/shared/config/brand";
 import { copy } from "@/shared/config/copy";
@@ -23,13 +21,9 @@ function getBrandHeadline(activeStepId?: KycJourneyStepId) {
   return headlines.default;
 }
 
-export function KycVisualPanel({ activeStepId, hidePanelVisual = false, className }: KycVisualPanelProps) {
+export function KycVisualPanel({ activeStepId, className }: KycVisualPanelProps) {
   const testimonials = copy.kyc.brandPanel.testimonials;
-  const panelVisual = useMemo(() => {
-    if (hidePanelVisual) return null;
-    return getKycStepPanelVisual(activeStepId);
-  }, [activeStepId, hidePanelVisual]);
-  const headline = useMemo(() => getBrandHeadline(activeStepId), [activeStepId]);
+  const headline = getBrandHeadline(activeStepId);
 
   return (
     <aside
@@ -64,11 +58,7 @@ export function KycVisualPanel({ activeStepId, hidePanelVisual = false, classNam
             </div>
           </div>
 
-          {panelVisual ? (
-            <div className="flex flex-1 items-center justify-center py-4">{panelVisual}</div>
-          ) : (
-            <div className="flex-1" aria-hidden />
-          )}
+          <div className="flex-1" aria-hidden />
 
           <KycTestimonialCarousel testimonials={testimonials} />
         </div>

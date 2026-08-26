@@ -183,7 +183,7 @@ export function AddInvestorAddressPanel({
 
   const handleStateChange = (value: string | null) => {
     if (!value) return;
-    updateFields(activeTab, { state: value ?? "" });
+    updateFields(activeTab, { state: value });
   };
 
   return (

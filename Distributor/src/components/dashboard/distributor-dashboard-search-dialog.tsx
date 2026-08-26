@@ -23,7 +23,6 @@ import {
   searchDistributorTransactionGroups,
   searchDistributorTxnRequests,
 } from "@/lib/distributor-global-search";
-import { env } from "@/lib/env";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import type { DistributorInvestor } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";

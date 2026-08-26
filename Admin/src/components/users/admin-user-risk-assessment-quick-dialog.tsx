@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Download, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 
 import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
 import { RiskProfileTierBadge } from "@/components/risk-profile/risk-profile-tier-badge";

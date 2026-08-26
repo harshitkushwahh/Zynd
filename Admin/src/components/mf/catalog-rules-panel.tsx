@@ -50,8 +50,6 @@ import {
   updateMfCatalogRule,
   type MfCatalogRule,
 } from "@/lib/mf-admin-api";
-import { cn } from "@/lib/utils";
-
 
 const DEFAULT_CONDITIONS = '{\n  "amc_empanelled": true,\n  "fp_purchasable": true,\n  "lifecycle_status": "DRAFT"\n}';
 const DEFAULT_ACTIONS = '{\n  "set_lifecycle_status": "ACTIVE"\n}';

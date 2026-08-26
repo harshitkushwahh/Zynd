@@ -40,7 +40,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SendAdminInvitationDialog } from "@/components/users/send-admin-invitation-dialog";
 import { TeamRoleBadge, UserStatusBadge } from "@/components/users/user-status-badge";

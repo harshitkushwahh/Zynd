@@ -52,7 +52,6 @@ import { DistributorPageHeader } from "@/components/dashboard/distributor-page-h
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
 import { DistributorFeedbackMessage } from "@/components/ui/distributor-feedback-message";
 import {
-  isValidSixDigitOtp,
   ADD_INVESTOR_JOURNEY_PHASE_LABEL,
   addInvestorStepIndex,
   buildAddInvestorJourneySteps,

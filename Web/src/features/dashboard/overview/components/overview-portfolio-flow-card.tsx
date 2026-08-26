@@ -111,7 +111,6 @@ function PortfolioFlowCardBody({
   locked?: boolean;
   chartInteractive?: boolean;
 }) {
-  const overview = copy.dashboard.overview;
   const totalReturn = formatSignedReturn(data.totalReturnPct);
   const dayChange = formatSignedReturn(data.dayChangePct);
   const [range, setRange] = useState<OverviewPortfolioFlowRange>("1y");

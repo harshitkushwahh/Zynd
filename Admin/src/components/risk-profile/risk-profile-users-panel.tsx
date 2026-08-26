@@ -90,11 +90,14 @@ export function RiskProfileUsersPanel({
     assessmentId: string;
   } | null>(null);
 
-  const queryParams = {
-    tier: tier === ALL ? undefined : tier,
-    limit: pageSize,
-    offset,
-  };
+  const queryParams = useMemo(
+    () => ({
+      tier: tier === ALL ? undefined : tier,
+      limit: pageSize,
+      offset,
+    }),
+    [tier, pageSize, offset],
+  );
   const { data, isPending, isFetching, error: queryError } = useRiskProfileUsersQuery(queryParams);
   const items = data?.items ?? [];
   const hasMore = data?.hasMore ?? false;
