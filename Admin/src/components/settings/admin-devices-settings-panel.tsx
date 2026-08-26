@@ -15,7 +15,6 @@ import {
   revokeAllOtherAdminSessions,
   type AdminUserSession,
 } from "@/lib/admin-account-api";
-import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type DeviceKind = "mobile" | "laptop" | "desktop";

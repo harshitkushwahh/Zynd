@@ -28,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ApiError } from "@/lib/api-client";
 import {
   fetchMfTransactionWebhooks,
   replayMfTransactionWebhook,

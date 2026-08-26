@@ -386,6 +386,53 @@ const FundTableDataRow = memo(function FundTableDataRow({
   );
 });
 
+type VirtualFundTableRowProps = {
+  fund: MfFundsTableRow;
+  layout: ReturnType<typeof resolveFundsTableLayout>;
+  selected: boolean;
+  draggable: boolean;
+  showScreenerSelection: boolean;
+  selectionChecked: boolean;
+  onToggleScreenerSelection: (fund: MfFundsTableRow) => void;
+  navigateToFund: (fund: InvestFundSummary) => void;
+  onRowDoubleClick?: (fund: InvestFundSummary) => void;
+};
+
+const VirtualFundTableRow = memo(function VirtualFundTableRow({
+  fund,
+  layout,
+  selected,
+  draggable,
+  showScreenerSelection,
+  selectionChecked,
+  onToggleScreenerSelection,
+  navigateToFund,
+  onRowDoubleClick,
+}: VirtualFundTableRowProps) {
+  const onNavigate = useCallback(() => navigateToFund(fund), [fund, navigateToFund]);
+  const onDoubleClick = useCallback(() => {
+    onRowDoubleClick?.(fund);
+  }, [fund, onRowDoubleClick]);
+  const onToggleSelection = useCallback(
+    () => onToggleScreenerSelection(fund),
+    [fund, onToggleScreenerSelection],
+  );
+
+  return (
+    <FundTableDataRow
+      fund={fund}
+      layout={layout}
+      selected={selected}
+      draggable={draggable}
+      screenerSelectionEnabled={showScreenerSelection}
+      selectionChecked={selectionChecked}
+      onToggleSelection={showScreenerSelection ? onToggleSelection : undefined}
+      onNavigate={onNavigate}
+      onDoubleClick={onRowDoubleClick ? onDoubleClick : undefined}
+    />
+  );
+});
+
 function VirtualSortHead({
   id,
   label,
@@ -707,27 +754,21 @@ export function MfFundsTable({
                       if (!fund) return null;
 
                       return (
-                        <FundTableDataRow
+                        <VirtualFundTableRow
                           key={fund.tableId}
                           fund={fund}
                           layout={layout}
                           selected={selectedProductId === fund.product_id}
                           draggable={draggableRows}
-                          screenerSelectionEnabled={showScreenerSelection}
+                          showScreenerSelection={showScreenerSelection}
                           selectionChecked={
                             showScreenerSelection
                               ? screenerSelection.isSelected(fund.product_id)
                               : false
                           }
-                          onToggleSelection={
-                            showScreenerSelection
-                              ? () => handleToggleScreenerSelection(fund)
-                              : undefined
-                          }
-                          onNavigate={() => navigateToFund(fund)}
-                          onDoubleClick={
-                            onRowDoubleClick ? () => onRowDoubleClick(fund) : undefined
-                          }
+                          onToggleScreenerSelection={handleToggleScreenerSelection}
+                          navigateToFund={navigateToFund}
+                          onRowDoubleClick={onRowDoubleClick}
                         />
                       );
                     })}

@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/admin-table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ApiError } from "@/lib/api-client";
 import {
   addMfCategoryFund,
   bulkAddAmcToCategory,

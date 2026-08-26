@@ -502,7 +502,7 @@ export function OverviewFamilyCircles({ className }: OverviewFamilyCirclesProps)
                     ) : returnDisplay.tone === "negative" ? (
                       <ArrowDown className="size-3" strokeWidth={2.5} />
                     ) : null}
-                    {returnDisplay.tone === "positive" && returnPct != null
+                    {returnDisplay.tone === "positive"
                       ? `${returnPct.toFixed(2)}%`
                       : returnDisplay.text}
                   </span>

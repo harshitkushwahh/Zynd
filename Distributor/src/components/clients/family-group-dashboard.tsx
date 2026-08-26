@@ -307,14 +307,6 @@ function FamilyGroupContributionsCard({
     ? (focusedMember.displayName.split(" ")[0] ?? focusedMember.displayName)
     : copy.contributionsRingTotalLabel;
 
-  const memberFillByUserId = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const entry of contributionData) {
-      map[entry.userId] = entry.fill;
-    }
-    return map;
-  }, [contributionData]);
-
   return (
     <Card className="distributor-family-group-dashboard__contributions-card h-full border-border bg-card p-0 shadow-sm">
       <div className="distributor-family-group-dashboard__contributions-body p-4 pb-3">

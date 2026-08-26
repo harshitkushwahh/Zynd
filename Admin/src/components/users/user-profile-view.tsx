@@ -67,11 +67,9 @@ export function UserProfileView({
   const canManageRbac = hasPermission("rbac.manage");
   const canReadKyc = hasPermission("documents.read");
   const canDownloadDocs = hasPermission("documents.download");
-  const canVerifyDocs = hasPermission("documents.verify");
   const canReadMf = hasPermission("mf.transactions.read");
   const canReadRiskProfile = hasPermission("risk_profile.users.read");
   const canReadFamilyGroups = hasPermission("family_groups.read");
-  const canManageFamilyGroups = hasPermission("family_groups.manage");
   const canReadReferrals = hasPermission("referrals.read");
   const canReadAudit = hasPermission("audit.read");
 
@@ -492,15 +490,13 @@ export function UserProfileView({
                     </TabsContent>
                   ) : null}
 
-                  {canReadUsers ? (
-                    <TabsContent
-                      value="goals"
-                      keepMounted={keepMounted("goals")}
-                      className="mt-0"
-                    >
-                      <UserGoalsDetailSection userRef={clientId} />
-                    </TabsContent>
-                  ) : null}
+                  <TabsContent
+                    value="goals"
+                    keepMounted={keepMounted("goals")}
+                    className="mt-0"
+                  >
+                    <UserGoalsDetailSection userRef={clientId} />
+                  </TabsContent>
 
                   {canReadKyc && profileDetail?.kyc ? (
                     <TabsContent value="kyc" keepMounted={keepMounted("kyc")} className="mt-0">

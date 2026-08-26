@@ -33,7 +33,6 @@ import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ApiError } from "@/lib/api-client";
 import {
   fetchMfCatalogHealth,
   fetchMfCatalogHealthIssues,

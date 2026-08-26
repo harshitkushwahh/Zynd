@@ -13,7 +13,6 @@ import {
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { PASSWORD_CRITERIA } from "@/lib/password-criteria";
 import { DEFAULT_COUNTRY } from "@/lib/input-rules";
 import { IndiaFlagIcon } from "@/components/auth/india-flag-icon";

@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { changeAdminPassword } from "@/lib/admin-account-api";
 import { isValidOtp, isValidPassword } from "@/lib/admin-validation";
-import { ApiError } from "@/lib/api-client";
 
 type AdminChangePasswordSettingsPanelProps = {
   mfaEnabled: boolean;

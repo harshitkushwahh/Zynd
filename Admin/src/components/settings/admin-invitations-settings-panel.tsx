@@ -28,8 +28,6 @@ import {
   type AdminInvitation,
   type AdminRole,
 } from "@/lib/admin-api";
-import { ApiError } from "@/lib/api-client";
-
 
 function invitationStatusVariant(status: AdminInvitation["status"]) {
   if (status === "pending") return "warning" as const;

@@ -25,7 +25,6 @@ import {
   DISTRIBUTOR_NOTIFICATION_POPOVER_HEADER_CLASS,
   DISTRIBUTOR_POPOVER_BADGE_CLASS,
 } from "@/lib/distributor-layout";
-import { cn } from "@/lib/utils";
 
 export function DistributorNotificationPopover() {
   const { notifications, unreadCount, markRead, markAllRead } = useDistributorNotifications();

@@ -12,7 +12,6 @@ import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
 import { AdminDetailDialogSkeleton } from "@/components/ui/admin-skeletons";
 import { OrderStatusBadge } from "@/components/users/user-status-badge";
 import { Separator } from "@/components/ui/separator";
-import { ApiError } from "@/lib/api-client";
 import {
   fetchMfTransactionCheckoutDetail,
   type MfTransactionCheckout,

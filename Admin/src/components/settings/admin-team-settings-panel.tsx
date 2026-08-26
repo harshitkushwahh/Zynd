@@ -7,8 +7,6 @@ import { UserRoleAssignmentPanel } from "@/components/users/user-role-assignment
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSettingsPanelSkeleton } from "@/components/ui/admin-skeletons";
 import { fetchAdminRoles, type AdminRole } from "@/lib/admin-api";
-import { ApiError } from "@/lib/api-client";
-
 
 export function AdminTeamSettingsPanel({
   trailingToolbar,

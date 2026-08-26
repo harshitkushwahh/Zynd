@@ -1,6 +1,5 @@
 import { apiRequest } from "@/lib/api-client";
 import type { AuthSecurityPolicy } from "@/features/auth/api/types";
-import type { OtpSendResponse } from "@/features/auth/api/types";
 
 export async function mfaEnrollStart() {
   return apiRequest<{

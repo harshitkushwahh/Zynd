@@ -1,4 +1,3 @@
-import type { LucideIcon } from "lucide-react";
 import { KeyRound, Mail, Phone } from "lucide-react";
 
 import type { AddInvestorWizardProgressStep } from "@/components/add-investor/add-investor-wizard-progress";

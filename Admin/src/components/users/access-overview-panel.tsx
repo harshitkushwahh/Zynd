@@ -18,7 +18,6 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminDetailDialog } from "@/components/ui/admin-dialog-presets";
-import { Button } from "@/components/ui/button";
 import {
   groupCapabilityKeys,
   orphanCapabilities,

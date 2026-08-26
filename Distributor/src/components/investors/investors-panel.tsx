@@ -23,7 +23,6 @@ import {
 } from "@/components/investors/assign-distributor-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
-import { useResidentDistributorAssignment } from "@/contexts/resident-distributor-assignment-context";
 import { distributorClientDetailHrefForInvestor } from "@/lib/distributor-client-routes";
 import type { DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 import type { DistributorInvestor, InvestorType } from "@/lib/distributor-types";
@@ -76,7 +75,6 @@ export function InvestorsPanel({
     canManageBranchBook &&
     investorScope === "system-residents" &&
     listOrigin === "system-resident";
-  const { assignments } = useResidentDistributorAssignment();
   const [assignInvestor, setAssignInvestor] = useState<DistributorInvestor | null>(null);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [filters, setFilters] = useState<InvestorTableFilters>(DEFAULT_INVESTOR_TABLE_FILTERS);

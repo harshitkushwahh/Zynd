@@ -25,8 +25,11 @@ if (config.apiKey) {
 }
 
 self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const targetUrl = event.notification?.data?.web_url || "/dashboard/notifications";
+  const notification = event.notification;
+  if (!notification) return;
+
+  notification.close();
+  const targetUrl = notification.data?.web_url || "/dashboard/notifications";
   const absoluteUrl = new URL(targetUrl, self.location.origin).href;
 
   event.waitUntil(

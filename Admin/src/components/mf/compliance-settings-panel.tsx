@@ -7,7 +7,6 @@ import { getErrorMessage } from "@/lib/errors";
 import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import {
-  AdminDialogFooterActions,
   AdminFormDialog,
   AdminInfoDialog,
 } from "@/components/ui/admin-dialog-presets";
@@ -24,14 +23,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/lib/api-client";
 import {
   fetchMfComplianceSettings,
   updateMfComplianceSettings,
   type MfComplianceSettings,
 } from "@/lib/mf-admin-api";
-import { cn } from "@/lib/utils";
-
 
 function formatSourceLabel(source: string) {
   return source.replaceAll("_", " ");
@@ -366,7 +362,7 @@ export const ComplianceSettingsPanel = forwardRef<
   if (embedded) return content;
 
   return (
-    <Card className={cn(!embedded && "mt-0")}>
+    <Card className="mt-0">
       <CardHeader>
         <CardTitle>Compliance & disclaimers</CardTitle>
         <CardDescription>

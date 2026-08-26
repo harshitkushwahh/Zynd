@@ -23,7 +23,6 @@ import {
   regenerateMfaBackupCodes,
 } from "@/lib/admin-account-api";
 import { isValidOtp, isValidPassword } from "@/lib/admin-validation";
-import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const MFA_SETUP_POINTS = [

@@ -318,7 +318,6 @@ function PayrollPromotionStrip({
         "distributor-compensation-breakdown-card__promotion",
         compact && "distributor-compensation-breakdown-card__promotion--compact",
         banner && "distributor-compensation-breakdown-card__promotion--banner",
-        panel && "distributor-compensation-breakdown-card__promotion--panel",
       )}
     >
       <span className="distributor-compensation-breakdown-card__promotion-icon" aria-hidden>
@@ -345,7 +344,7 @@ function PayrollPromotionStrip({
           >
             {formatAmount(promotion.newBaseSalary)}
           </span>
-          {!banner && !panel ? (
+          {!banner ? (
             <span className="distributor-compensation-breakdown-card__promotion-salary-note">base salary</span>
           ) : null}
         </p>

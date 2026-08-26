@@ -14,7 +14,6 @@ import {
 import { RiskProfileViewAnswersDialog } from "@/features/risk-profile/components/risk-profile-view-answers-dialog";
 import { downloadRiskProfilePdf } from "@/features/risk-profile/lib/risk-profile-pdf-download";
 import {
-  resolveDisplayScore,
   resolveRiskTierVisual,
   RISK_PROFILE_HERO_RADIUS_CLASS,
   type RiskProfileHistoryRow,

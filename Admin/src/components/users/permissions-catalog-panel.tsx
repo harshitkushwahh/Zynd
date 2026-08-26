@@ -37,7 +37,6 @@ import {
   permissionDescription,
   type PermissionRouteEntry,
 } from "@/lib/admin-permissions-meta";
-import { ApiError } from "@/lib/api-client";
 
 type PermissionsCatalogPanelProps = {
   permissionCatalog: AdminPermission[];

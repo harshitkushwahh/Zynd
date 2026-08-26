@@ -17,7 +17,6 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { downloadDistributorClientRiskReport } from "@/lib/distributor-client-risk-api";
 import type { DistributorClientRiskAssessment } from "@/lib/distributor-types";
-import { formatDistributorDate } from "@/lib/format";
 import { resolveRiskTierVisual } from "@/lib/risk-profile/risk-tier-ui";
 import { cn } from "@/lib/utils";
 import {

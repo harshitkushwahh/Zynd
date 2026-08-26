@@ -1,7 +1,5 @@
 "use client";
 
-import { Construction } from "lucide-react";
-
 import { AdminEmptyState } from "@/components/dashboard/admin-empty-state";
 import { AdminPageHeader } from "@/components/dashboard/admin-page-header";
 import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";

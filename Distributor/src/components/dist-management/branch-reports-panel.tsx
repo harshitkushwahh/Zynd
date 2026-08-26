@@ -147,10 +147,14 @@ export function BranchReportsPanel({
     });
   }, []);
 
-  const distributorOptions = DUMMY_BRANCH_AUM_SALES_ROLLUP.map((row) => ({
-    value: row.distributorId,
-    label: row.name,
-  }));
+  const distributorOptions = useMemo(
+    () =>
+      DUMMY_BRANCH_AUM_SALES_ROLLUP.map((row) => ({
+        value: row.distributorId,
+        label: row.name,
+      })),
+    [],
+  );
 
   const rollupRows = useMemo(() => getBranchAumSalesRollup(rollupPeriod), [rollupPeriod]);
 

@@ -17,7 +17,6 @@ import {
   getOAuthProviderLabel,
 } from "@/features/auth/constants/auth-steps";
 import { useAuthDialogFlow } from "@/features/auth/hooks/auth-dialog-flow";
-import { isValidOtp } from "@/lib/auth-validation";
 import { clampToMaxLength, inputRuleProps } from "@/lib/input-rules";
 import { copy } from "@/shared/config/copy";
 

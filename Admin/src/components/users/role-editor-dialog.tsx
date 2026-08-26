@@ -23,7 +23,6 @@ import {
   type AdminPermission,
   type AdminRole,
 } from "@/lib/admin-api";
-import { ApiError } from "@/lib/api-client";
 
 
 function slugifyRoleKey(value: string) {

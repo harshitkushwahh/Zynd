@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/lib/api-client";
 import {
   fetchMfBulkCatalogJobs,
   previewMfBulkCatalog,

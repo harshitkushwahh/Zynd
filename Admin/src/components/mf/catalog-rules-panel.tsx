@@ -42,7 +42,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/lib/api-client";
 import {
   applyMfCatalogRules,
   createMfCatalogRule,
@@ -481,7 +480,7 @@ export const CatalogRulesPanel = forwardRef<
   if (embedded) return content;
 
   return (
-    <Card className={cn(!embedded && "mt-0")}>
+    <Card className="mt-0">
       <CardHeader>
         <CardTitle>Catalog rules</CardTitle>
         <CardDescription>

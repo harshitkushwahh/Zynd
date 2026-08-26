@@ -29,7 +29,6 @@ import { MfOperationsPanel } from "@/components/mf/mf-operations-panel";
 import { MfPipelineAutoPanel } from "@/components/mf/mf-pipeline-auto-panel";
 import { lifecycleTone, MfStatusChip } from "@/components/mf/mf-status-chip";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
-import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
 import { SchemeStagingPanel } from "@/components/mf/scheme-staging-panel";
 import { AdminDrawer } from "@/components/ui/admin-drawer";
 import {
@@ -74,7 +73,6 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
-import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
   fetchMfAmcs,

@@ -66,7 +66,9 @@ export function KycNomineeDocumentNumberField({
         spellCheck={false}
         aria-invalid={Boolean(error)}
         className={cn(
-          nomineeDocumentUsesUppercaseInput(documentType) && "font-mono uppercase tracking-[0.08em]",
+          documentType &&
+            nomineeDocumentUsesUppercaseInput(documentType) &&
+            "font-mono uppercase tracking-[0.08em]",
         )}
         onChange={(event) => handleChange(event.target.value)}
         onBlur={handleBlur}

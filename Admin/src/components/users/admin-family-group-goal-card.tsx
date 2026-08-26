@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Target } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 
 import { AdminCircularProgressRing } from "@/components/ui/admin-circular-progress-ring";
 import { AdminOverviewStatCell } from "@/components/ui/admin-overview-stat-cell";

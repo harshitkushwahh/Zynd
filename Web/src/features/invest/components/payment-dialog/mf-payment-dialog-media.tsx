@@ -36,7 +36,7 @@ export function MfPaymentDialogMedia({ phase, className }: MfPaymentDialogMediaP
     >
       <KycJsonLottie
         src={lottieSrc}
-        loop={phase === "success" ? false : false}
+        loop={false}
         className="size-[4.5rem] max-h-[4.5rem] max-w-[4.5rem]"
       />
     </div>
