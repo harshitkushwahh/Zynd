@@ -57,8 +57,6 @@ import { getErrorMessage } from "@/lib/errors";
 import {
   displayZyndId,
   pickUserRef,
-  userDashboardProfileHref,
-  userRefToPath,
 } from "@/lib/admin-user-ref";
 import {
   MITRA_MANAGER_ROLE_KEY,
@@ -521,34 +519,30 @@ export function AdminAccountsPanel({ enabled = true }: AdminAccountsPanelProps) 
           }
         }}
       >
-        <AdminDialogContent size="md">
-          <AdminDialogHeader
-            title="Remove admin account"
-            description={
-              removeTarget
-                ? `Permanently remove ${removeTarget.email} from the platform. This clears console access, roles, and credentials. The removal is recorded in admin account records.`
-                : "Permanently remove this admin account from the platform."
-            }
-            icon={Trash2}
-            iconTone="destructive"
-          />
-          <AdminDialogFooter>
-            <Button variant="outline" onClick={() => setRemoveTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={
-                !removeTarget || actionLoading === `remove-${removeTarget ? pickUserRef(removeTarget) : ""}`
-              }
-              onClick={() => void submitRemoveAccount()}
-            >
-              {actionLoading === `remove-${removeTarget ? pickUserRef(removeTarget) : ""}`
-                ? "Removing..."
-                : "Remove account"}
-            </Button>
-          </AdminDialogFooter>
-        </AdminDialogContent>
+        {removeTarget ? (
+          <AdminDialogContent size="md">
+            <AdminDialogHeader
+              title="Remove admin account"
+              description={`Permanently remove ${removeTarget.email} from the platform. This clears console access, roles, and credentials. The removal is recorded in admin account records.`}
+              icon={Trash2}
+              iconTone="destructive"
+            />
+            <AdminDialogFooter>
+              <Button variant="outline" onClick={() => setRemoveTarget(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={actionLoading === `remove-${pickUserRef(removeTarget)}`}
+                onClick={() => void submitRemoveAccount()}
+              >
+                {actionLoading === `remove-${pickUserRef(removeTarget)}`
+                  ? "Removing..."
+                  : "Remove account"}
+              </Button>
+            </AdminDialogFooter>
+          </AdminDialogContent>
+        ) : null}
       </AdminDialog>
     </div>
   );

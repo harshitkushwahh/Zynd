@@ -162,7 +162,7 @@ function PortfolioOverviewPanel() {
         <LoadErrorCard
           icon={LineChart}
           title={portfolioCopy.overviewLoadFailed}
-          description={errorMessage ?? portfolioCopy.overviewLoadFailedDescription}
+          description={errorMessage}
           retryLabel={portfolioCopy.retry}
           retryLoading={summaryFetching || holdingsFetching}
           onRetry={() => {

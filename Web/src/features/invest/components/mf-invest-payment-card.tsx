@@ -903,7 +903,7 @@ export function MfInvestPaymentCard({
       }
       openSipMandate(plan.plan_id);
     } catch (err) {
-      if (err instanceof ApiError && err.code === "sip_not_allowed" && productId) {
+      if (err instanceof ApiError && err.code === "sip_not_allowed") {
         setMode("lumpsum");
       }
       setActionError(err instanceof Error ? err.message : copy.mutualFunds.sipFailed);

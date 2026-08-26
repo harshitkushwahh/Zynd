@@ -152,7 +152,7 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
     );
   }
 
-  if (ordersResolved && !resolvedOrder) {
+  if (!resolvedOrder) {
     notFound();
   }
 
@@ -171,7 +171,10 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
     );
   }
 
-  if (!order || !isUpcomingHoldingOrder(order)) {
+  if (!order) {
+    notFound();
+  }
+  if (!isUpcomingHoldingOrder(order)) {
     notFound();
   }
 

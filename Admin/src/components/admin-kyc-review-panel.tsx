@@ -14,7 +14,7 @@ import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
-import { AdminProfilePageSkeleton, AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
+import { AdminProfilePageSkeleton } from "@/components/ui/admin-skeletons";
 import {
   AdminDataTable,
   AdminTableBody,

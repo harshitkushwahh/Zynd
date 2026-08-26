@@ -431,8 +431,7 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
         isDetailView ||
         isStateHeadDetailRoute ||
         isBranchDetailRoute ||
-        isManagerDetailRoute ||
-        !canViewMitraConsole
+        isManagerDetailRoute
           ? undefined
           : <DistributorHeadStateBadges persona={mitraPersona} />
       }
@@ -456,17 +455,15 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
             })}
           </AdminTabList>
 
-          {canViewMitraConsole ? (
-            <TabsContent
-              value="overview"
-              keepMounted={keepMounted("overview")}
-              className="distributor-head-console__panel mt-0"
-            >
-              <DistributorHeadOverviewPanel persona={mitraPersona} />
-            </TabsContent>
-          ) : null}
+          <TabsContent
+            value="overview"
+            keepMounted={keepMounted("overview")}
+            className="distributor-head-console__panel mt-0"
+          >
+            <DistributorHeadOverviewPanel persona={mitraPersona} />
+          </TabsContent>
 
-          {canViewMitraConsole && !isStateHeadOnly ? (
+          {!isStateHeadOnly ? (
             <TabsContent
               value="state-heads"
               keepMounted={keepMounted("state-heads")}
@@ -486,64 +483,54 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
             </TabsContent>
           ) : null}
 
-          {canViewMitraConsole ? (
-            <TabsContent
-              value="managers"
-              keepMounted={keepMounted("managers")}
-              className="distributor-head-console__panel mt-0"
-            >
-              <DistributorHeadManagersPanel />
-            </TabsContent>
-          ) : null}
+          <TabsContent
+            value="managers"
+            keepMounted={keepMounted("managers")}
+            className="distributor-head-console__panel mt-0"
+          >
+            <DistributorHeadManagersPanel />
+          </TabsContent>
 
-          {canViewMitraConsole ? (
-            <TabsContent
-              value="leave"
-              keepMounted={keepMounted("leave")}
-              className="distributor-head-console__panel mt-0"
-            >
-              <DistributorHeadLeaveApplicationsPanel />
-            </TabsContent>
-          ) : null}
+          <TabsContent
+            value="leave"
+            keepMounted={keepMounted("leave")}
+            className="distributor-head-console__panel mt-0"
+          >
+            <DistributorHeadLeaveApplicationsPanel />
+          </TabsContent>
 
-          {canViewMitraConsole ? (
-            <TabsContent
-              value="distributors"
-              keepMounted={keepMounted("distributors")}
-              className="distributor-head-console__panel mt-0"
-            >
-              {!entityId || listTabId !== "distributors" ? (
-                <DistributorHeadDistributorsPanel />
-              ) : distributorDetail ? (
-                <DistributorHeadDistributorView
-                  distributor={distributorDetail}
-                  profileTabSlug={distributorProfileTabSlug}
-                />
-              ) : !detailLoading ? (
-                <p className="text-compact text-muted-foreground">{MITRA_HIERARCHY_COPY.mitraNotFound}</p>
-              ) : null}
-            </TabsContent>
-          ) : null}
+          <TabsContent
+            value="distributors"
+            keepMounted={keepMounted("distributors")}
+            className="distributor-head-console__panel mt-0"
+          >
+            {!entityId || listTabId !== "distributors" ? (
+              <DistributorHeadDistributorsPanel />
+            ) : distributorDetail ? (
+              <DistributorHeadDistributorView
+                distributor={distributorDetail}
+                profileTabSlug={distributorProfileTabSlug}
+              />
+            ) : !detailLoading ? (
+              <p className="text-compact text-muted-foreground">{MITRA_HIERARCHY_COPY.mitraNotFound}</p>
+            ) : null}
+          </TabsContent>
 
-          {canViewMitraConsole ? (
-            <TabsContent
-              value="branches"
-              keepMounted={keepMounted("branches")}
-              className="distributor-head-console__panel mt-0"
-            >
-              <DistributorHeadBranchesPanel />
-            </TabsContent>
-          ) : null}
+          <TabsContent
+            value="branches"
+            keepMounted={keepMounted("branches")}
+            className="distributor-head-console__panel mt-0"
+          >
+            <DistributorHeadBranchesPanel />
+          </TabsContent>
 
-          {canViewMitraConsole ? (
-            <TabsContent
-              value="sales"
-              keepMounted={keepMounted("sales")}
-              className="distributor-head-console__panel mt-0"
-            >
-              <DistributorHeadSalesPanel />
-            </TabsContent>
-          ) : null}
+          <TabsContent
+            value="sales"
+            keepMounted={keepMounted("sales")}
+            className="distributor-head-console__panel mt-0"
+          >
+            <DistributorHeadSalesPanel />
+          </TabsContent>
         </Tabs>
       ) : null}
 

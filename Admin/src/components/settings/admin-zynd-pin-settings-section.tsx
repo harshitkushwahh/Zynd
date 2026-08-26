@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { useAdminZyndPinOptional } from "@/contexts/admin-zynd-pin-context";
 import { isValidOtp, isValidPassword } from "@/lib/admin-validation";
-import { ApiError } from "@/lib/api-client";
 import {
   resetZyndPinWithOtp,
   sendZyndPinResetOtp,

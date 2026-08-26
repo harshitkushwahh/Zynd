@@ -345,15 +345,6 @@ export const DISTRIBUTOR_NET_SALES_CHART_PERIODS: DistributorNetSalesChartPeriod
   "10Y",
 ];
 
-const NET_SALES_PERIOD_POINT_COUNT: Record<DistributorNetSalesChartPeriod, number> = {
-  "1M": 2,
-  "6M": 6,
-  "1Y": 12,
-  "3Y": 36,
-  "5Y": 60,
-  "10Y": 120,
-};
-
 export type DistributorNetSalesHyperCardData = {
   label: string;
   currentAmount: number;

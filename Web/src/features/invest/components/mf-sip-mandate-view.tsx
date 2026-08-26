@@ -158,7 +158,6 @@ function resolveSipMandateMessage(args: {
     plan,
     error,
     returnedFromMandate,
-    returnedFromFirstInstallment,
     firstInstallmentRetryOffered,
     abandonChecked,
     redirectingToFirstInstallment,
@@ -518,9 +517,7 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
       ? copy.mutualFunds.sipJourneyFailedTitle
       : phase === "success"
         ? copy.mutualFunds.sipJourneySuccessTitle
-        : isFirstInstallmentPending(plan)
-          ? copy.mutualFunds.sipMandateTitle
-          : copy.mutualFunds.sipMandateTitle;
+        : copy.mutualFunds.sipMandateTitle;
 
   function dismissMandateDialog() {
     dismissedRef.current = true;

@@ -88,11 +88,14 @@ export function RiskProfileAuditPanel({
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
-  const queryParams = {
-    eventType: eventFilter === ALL ? undefined : eventFilter,
-    limit: pageSize,
-    offset,
-  };
+  const queryParams = useMemo(
+    () => ({
+      eventType: eventFilter === ALL ? undefined : eventFilter,
+      limit: pageSize,
+      offset,
+    }),
+    [eventFilter, pageSize, offset],
+  );
   const { data, isPending, isFetching, error: queryError } = useRiskAuditLogsQuery(queryParams);
   const logs = data?.items ?? [];
   const hasMore = data?.hasMore ?? false;

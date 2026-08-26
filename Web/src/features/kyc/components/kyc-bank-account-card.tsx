@@ -173,14 +173,12 @@ export function KycBankAccountCard({
           ) : null}
         </div>
 
-        {accountDetails ? (
-          <BankLogo
-            bankName={accountDetails.bankName}
-            ifscCode={ifscCode}
-            size="sm"
-            fallbackClassName="bg-success/10 text-success ring-success/20"
-          />
-        ) : null}
+        <BankLogo
+          bankName={accountDetails.bankName}
+          ifscCode={ifscCode}
+          size="sm"
+          fallbackClassName="bg-success/10 text-success ring-success/20"
+        />
 
         {isComplete && !requiresManual && onEdit ? (
           <button

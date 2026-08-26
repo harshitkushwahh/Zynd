@@ -1,7 +1,6 @@
 "use client";
 
 import { ThemeSwitchVisual } from "@/components/ui/theme-switch-visual";
-import { cn } from "@/lib/utils";
 
 type ThemeToggleProps = {
   theme: "light" | "dark";

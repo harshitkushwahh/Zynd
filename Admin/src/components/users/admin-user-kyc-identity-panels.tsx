@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Eye,
@@ -26,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { AdminKycDocument, AdminUserKycDetail, AdminUserKycPan, AdminUserKycPersonal } from "@/lib/admin-api";
 import { documentReviewStatusVariant, kycStepStatusVariant } from "@/components/users/user-status-badge";
-import { cn } from "@/lib/utils";
 
 const PEP_EXPOSED_LABELS: Record<string, string> = {
   not_applicable: "No",

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
-import { formatCompactInr, formatInr } from "@/lib/format-inr";
+import { formatInr } from "@/lib/format-inr";
 import { AdminFamilyGroupChartEmptyState } from "@/components/users/admin-family-group-chart-empty-state";
 import { cn } from "@/lib/utils";
 

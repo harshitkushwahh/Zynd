@@ -37,7 +37,6 @@ import {
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import {
   parsePortfolioHoldingRouteParam,
-  portfolioHoldingDetailHref,
   type PortfolioHoldingDetail,
   type PortfolioHoldingTransaction,
 } from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
@@ -618,7 +617,10 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
     );
   }
 
-  if (!holding || status === "not_found" || status === "invalid_holding_id") {
+  if (!holding) {
+    notFound();
+  }
+  if (status === "not_found" || status === "invalid_holding_id") {
     notFound();
   }
 

@@ -41,7 +41,7 @@ import {
   buildSipPlanJourneyView,
   type SipPlanJourneyDisplayStep,
 } from "@/features/invest/lib/mf-sip-plan-journey-copy";
-import { formatDate, formatDateTime, formatInr, formatSipFrequencyLabel, formatSipInstallmentCount, formatSipInstallmentDay, formatSipNextInstallmentDate, isSipNextInstallmentNoData } from "@/features/invest/lib/mf-format";
+import { formatDateTime, formatInr, formatSipFrequencyLabel, formatSipInstallmentCount, formatSipInstallmentDay, formatSipNextInstallmentDate, isSipNextInstallmentNoData } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Info, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { AuthSubmitFooter, OtpInput } from "@/components/auth/auth-shared";
 import { PinInput } from "@/features/account/pin/components/pin-input";
