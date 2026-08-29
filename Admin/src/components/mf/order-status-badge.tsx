@@ -7,12 +7,11 @@ export function orderStatusVariant(status: string): StatusBadgeVariant {
   if (normalized === "SUCCEEDED" || normalized === "ACTIVE" || normalized === "COMPLETED") {
     return "success";
   }
-  if (
-    normalized === "FAILED" ||
-    normalized === "CANCELLED" ||
-    normalized === "REJECTED"
-  ) {
+  if (normalized === "FAILED" || normalized === "REJECTED") {
     return "destructive";
+  }
+  if (normalized === "CANCELLED" || normalized === "CANCELED") {
+    return "neutral";
   }
   if (normalized === "PENDING" || normalized === "PROCESSING" || normalized === "PAYMENT_PENDING") {
     return "warning";

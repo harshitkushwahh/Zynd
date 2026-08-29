@@ -53,6 +53,7 @@ from app.application.risk_profile.scoring_service import (
     get_user_risk_profile,
     list_user_assessments,
 )
+from app.infrastructure.persistence.family_group_models import FamilyGroupStatus
 from app.infrastructure.persistence.models import User, UserRole
 
 
@@ -259,6 +260,7 @@ def _serialize_list_item(
     *,
     pan_last4: str | None,
     kyc_onboarding_complete: bool | None = None,
+    aum_inr: float | None = None,
 ) -> dict[str, Any]:
     kyc_compliant = bool(row.get("kyc_compliant"))
     onboarding_complete = (
@@ -279,9 +281,26 @@ def _serialize_list_item(
         "compliance_status": "Compliant" if kyc_compliant else "Non Compliant",
         "investment_status": "Invested" if has_invested else "Non Invested",
         "investor_type": "Resident Individual",
-        "aum": None,
+        "aum": aum_inr,
         "created_at": row.get("created_at"),
     }
+
+
+async def _load_aum_by_user_id(
+    db: AsyncSession,
+    user_ids: list[UUID],
+) -> dict[UUID, float]:
+    if not user_ids:
+        return {}
+
+    aum_by_user_id: dict[UUID, float] = {}
+    for user_id in user_ids:
+        summary = await get_user_portfolio_summary(db, user_id=user_id)
+        current_value = summary.get("current_value_inr")
+        if current_value is None:
+            continue
+        aum_by_user_id[user_id] = float(current_value)
+    return aum_by_user_id
 
 
 async def list_distributor_clients(
@@ -327,13 +346,21 @@ async def list_distributor_clients(
         db,
         [row["user_id"] for row in prepared_rows],
     )
+    profile_images = await resolve_profile_image_urls_by_user_id(
+        db,
+        user_ids=[row["user_id"] for row in prepared_rows],
+    )
+    invested_user_ids = [row["user_id"] for row in prepared_rows]
+    aum_by_user_id = await _load_aum_by_user_id(db, invested_user_ids)
 
     for row in prepared_rows:
         payload = _serialize_list_item(
             row,
             pan_last4=None,
             kyc_onboarding_complete=row["user_id"] in onboarding_complete_ids,
+            aum_inr=aum_by_user_id.get(row["user_id"]),
         )
+        payload["profile_image_url"] = profile_images.get(row["user_id"])
         in_book = row["user_id"] in book_client_ids
         link = links_by_user_id.get(row["user_id"])
         payload["mitra_client_id"] = link.mitra_client_id if link else None
@@ -361,6 +388,11 @@ async def _build_referrals(db: AsyncSession, *, user_id: UUID) -> dict[str, Any]
         "qualified": await count_qualified_for_referrer(db, referrer_user_id=user_id),
         "referral_code": referral_code.code,
     }
+
+
+def _is_active_family_group_row(row: dict[str, Any]) -> bool:
+    status = str(row.get("status") or "").strip().lower()
+    return status in {"", FamilyGroupStatus.active.value}
 
 
 async def _serialize_distributor_family_group(
@@ -420,12 +452,12 @@ async def _list_distributor_client_goals(db: AsyncSession, *, user_id: UUID) -> 
     group_names: dict[UUID, str] = {}
     for membership in memberships_payload.get("memberships") or []:
         group_id = membership.get("group_id")
-        if not group_id:
+        if not group_id or not _is_active_family_group_row(membership):
             continue
         group_names[group_id] = str(membership.get("title") or membership.get("name") or "Family group")
     for created in memberships_payload.get("created_groups") or []:
         group_id = created.get("id")
-        if not group_id:
+        if not group_id or not _is_active_family_group_row(created):
             continue
         group_names.setdefault(
             group_id,
@@ -435,7 +467,7 @@ async def _list_distributor_client_goals(db: AsyncSession, *, user_id: UUID) -> 
     for group_id, group_name in group_names.items():
         try:
             family_goals = await list_family_goals(db, group_id=group_id, user_id=user_id)
-        except GoalError:
+        except (GoalError, FamilyGroupError):
             continue
         for goal in family_goals:
             items.append({**goal, "scope": "family", "family_group_name": group_name})

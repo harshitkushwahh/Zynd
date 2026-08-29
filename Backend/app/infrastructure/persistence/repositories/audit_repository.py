@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 from uuid import UUID
 
@@ -36,6 +37,7 @@ class SqlAlchemyAuditRepository:
         *,
         user_id: UUID | None = None,
         event_type: AuditEventType | None = None,
+        event_types: Collection[AuditEventType] | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -46,7 +48,9 @@ class SqlAlchemyAuditRepository:
         )
         if user_id:
             query = query.where(AuditLog.user_id == user_id)
-        if event_type:
+        if event_types:
+            query = query.where(AuditLog.event_type.in_(tuple(event_types)))
+        elif event_type:
             query = query.where(AuditLog.event_type == event_type)
         query = query.limit(min(limit, 200)).offset(max(offset, 0))
         result = await self._session.execute(query)

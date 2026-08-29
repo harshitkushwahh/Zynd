@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getErrorMessage } from "@/lib/errors";
 import {
   AlertCircle,
@@ -129,19 +129,20 @@ function StagingBatchStatsBar({
   normalized,
   excluded,
   invalid,
+  trailing,
 }: {
   normalized: number;
   excluded: number;
   invalid: number;
+  trailing?: ReactNode;
 }) {
   const total = normalized + excluded + invalid;
-  if (total <= 0) {
-    return (
-      <div className="h-2 overflow-hidden rounded-full bg-muted/40">
-        <div className="h-full w-full bg-muted/60" />
-      </div>
-    );
-  }
+  const caption =
+    total <= 0
+      ? "No classified rows yet"
+      : `${total.toLocaleString()} classified rows${
+          normalized > 0 ? ` · ${Math.round((normalized / total) * 100)}% normalized` : ""
+        }`;
 
   const segments = [
     { key: "normalized", value: normalized, className: "bg-success" },
@@ -152,19 +153,23 @@ function StagingBatchStatsBar({
   return (
     <div className="space-y-2">
       <div className="flex h-2 overflow-hidden rounded-full bg-muted/40">
-        {segments.map((segment) => (
-          <div
-            key={segment.key}
-            className={cn("h-full transition-[width]", segment.className)}
-            style={{ width: `${(segment.value / total) * 100}%` }}
-            title={`${segment.key}: ${segment.value.toLocaleString()}`}
-          />
-        ))}
+        {total <= 0 ? (
+          <div className="h-full w-full bg-muted/60" />
+        ) : (
+          segments.map((segment) => (
+            <div
+              key={segment.key}
+              className={cn("h-full transition-[width]", segment.className)}
+              style={{ width: `${(segment.value / total) * 100}%` }}
+              title={`${segment.key}: ${segment.value.toLocaleString()}`}
+            />
+          ))
+        )}
       </div>
-      <p className="text-caption text-muted-foreground">
-        {total.toLocaleString()} classified rows
-        {normalized > 0 ? ` · ${Math.round((normalized / total) * 100)}% normalized` : ""}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <p className="text-caption text-muted-foreground">{caption}</p>
+        {trailing ? <div className="flex flex-wrap items-center gap-2">{trailing}</div> : null}
+      </div>
     </div>
   );
 }
@@ -411,6 +416,28 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
                 normalized={selected.stats.normalized ?? 0}
                 excluded={selected.stats.excluded ?? 0}
                 invalid={selected.stats.invalid ?? 0}
+                trailing={
+                  <>
+                    <AdminSelect
+                      value={validationFilter || ALL}
+                      onValueChange={(value) => setValidationFilter(value === ALL ? "" : value)}
+                      options={VALIDATION_FILTER_OPTIONS}
+                      placeholder="Validation"
+                      aria-label="Filter by validation"
+                      className="min-w-select-sm"
+                      triggerClassName="w-auto"
+                    />
+                    <AdminSelect
+                      value={promoteFilter || ALL}
+                      onValueChange={(value) => setPromoteFilter(value === ALL ? "" : value)}
+                      options={PROMOTE_FILTER_OPTIONS}
+                      placeholder="Promote"
+                      aria-label="Filter by promote status"
+                      className="min-w-select-sm"
+                      triggerClassName="w-auto"
+                    />
+                  </>
+                }
               />
               <div className="grid w-full grid-cols-2 gap-x-6 gap-y-4 xl:grid-cols-4">
                 <StagingBatchStatTile
@@ -555,25 +582,6 @@ export function SchemeStagingPanel({ canPublish }: { canPublish: boolean }) {
 
       {selected ? (
         <div className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <AdminSelect
-                  value={validationFilter || ALL}
-                  onValueChange={(value) => setValidationFilter(value === ALL ? "" : value)}
-                  options={VALIDATION_FILTER_OPTIONS}
-                  placeholder="Validation"
-                  className="min-w-select-sm"
-                />
-                <AdminSelect
-                  value={promoteFilter || ALL}
-                  onValueChange={(value) => setPromoteFilter(value === ALL ? "" : value)}
-                  options={PROMOTE_FILTER_OPTIONS}
-                  placeholder="Promote"
-                  className="min-w-select-sm"
-                />
-              </div>
-            </div>
-
             <AdminDataTable
               minWidth="xl"
               footer={

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.infrastructure.persistence.notification_models import NotificationCategory
 
 SECURITY_SETTINGS_SECTION = "security"
@@ -31,6 +33,7 @@ NOTIFICATION_TYPE_ROUTES: dict[str, tuple[str, str | None]] = {
     "account.profile_image.updated": ("/dashboard/settings", "personal-details"),
     "invest.risk_profile.completed": ("/dashboard/risk-profile", None),
     "invest.risk_profile.unlock_otp": ("/dashboard/notifications", None),
+    "invest.mitra_txn_recommendation": ("/dashboard/mutual-funds/recommendation", None),
     "family.invite.received": ("/dashboard/family", None),
     "family.invite.accepted": ("/dashboard/family", None),
     "family.invite.declined": ("/dashboard/family", None),
@@ -66,7 +69,16 @@ def build_notification_web_url(
     notification_id: str,
     notification_type: str,
     category: NotificationCategory,
+    metadata: dict[str, Any] | None = None,
 ) -> str:
+    recommendation_token = (metadata or {}).get("recommendation_token")
+    if notification_type == "invest.mitra_txn_recommendation" and recommendation_token:
+        base = frontend_url.rstrip("/")
+        return (
+            f"{base}/dashboard/mutual-funds/recommendation/{recommendation_token}"
+            f"?notification_id={notification_id}&notification_type={notification_type}"
+        )
+
     path, settings_section = resolve_notification_deep_link_path(
         notification_type=notification_type,
         category=category,

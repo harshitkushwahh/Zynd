@@ -3,6 +3,18 @@
 .btn-wrapper {
   position: relative;
   display: inline-block;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.recommend-funds-popover-trigger,
+.recommend-funds-popover-trigger:focus,
+.recommend-funds-popover-trigger:focus-visible,
+.recommend-funds-popover-trigger[data-popup-open],
+.recommend-funds-popover-trigger *:focus,
+.recommend-funds-popover-trigger *:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .btn-wrapper .btn {
@@ -13,7 +25,10 @@
   --highlight-color-hue: 262deg;
 
   position: relative;
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -40,6 +55,25 @@
     border var(--transition),
     background-color var(--transition),
     background var(--transition);
+}
+
+.btn-wrapper .btn:focus,
+.btn-wrapper .btn:focus-visible,
+.btn-wrapper .btn:active {
+  outline: none;
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 22%),
+    inset 0 2px 2px rgb(255 255 255 / 16%),
+    inset 0 4px 4px rgb(255 255 255 / 10%),
+    inset 0 8px 8px rgb(167 139 250 / 12%),
+    0 -1px 1px rgb(91 33 182 / 18%),
+    0 -4px 4px rgb(91 33 182 / 22%),
+    0 -8px 8px rgb(91 33 182 / 26%);
+}
+
+.btn-wrapper .btn::-moz-focus-inner {
+  border: 0;
+  padding: 0;
 }
 
 .dark .btn-wrapper .btn {
@@ -375,5 +409,778 @@
 
   .btn-wrapper .txt-1 {
     opacity: 1 !important;
+  }
+}
+
+.recommend-funds-popover-shell {
+  position: relative;
+  overflow: visible !important;
+}
+
+.recommend-funds-popover-hover-bridge {
+  position: absolute;
+  top: -14px;
+  right: -12px;
+  left: -12px;
+  z-index: 20;
+  height: 14px;
+}
+
+.recommend-funds-popover-shell button:focus:not(:focus-visible),
+.recommend-funds-popover-shell [data-slot="button"]:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+.recommend-funds-popover-border-glow {
+  --color-sensitivity: calc(var(--edge-sensitivity) + 8);
+  --cursor-angle: 135deg;
+  transition:
+    border-color 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  border-color: rgb(233 213 255 / 42%);
+  box-shadow:
+    0 0 0 1px rgb(216 180 254 / 22%),
+    0 0 18px rgb(196 181 253 / 38%),
+    0 0 36px rgb(167 139 250 / 28%),
+    0 12px 28px rgb(91 33 182 / 28%);
+}
+
+@property --edge-proximity {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.recommend-funds-popover-border-glow.recommend-funds-popover-border-glow-open {
+  --edge-proximity: 82;
+  animation: recommend-funds-popover-glow-rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes recommend-funds-popover-glow-rise {
+  from {
+    --edge-proximity: 24;
+  }
+
+  to {
+    --edge-proximity: 82;
+  }
+}
+
+.recommend-funds-popover-border-glow.recommend-funds-popover-border-glow-open:not(:hover):not(.sweep-active)::before {
+  opacity: calc((var(--edge-proximity) - var(--color-sensitivity)) / (100 - var(--color-sensitivity)));
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.recommend-funds-popover-border-glow.recommend-funds-popover-border-glow-open:not(:hover):not(.sweep-active)::after {
+  opacity: calc(
+    var(--fill-opacity, 0.5) * (var(--edge-proximity) - var(--color-sensitivity)) /
+      (100 - var(--color-sensitivity))
+  );
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.recommend-funds-popover-border-glow.recommend-funds-popover-border-glow-open:not(:hover):not(.sweep-active) > .edge-light {
+  opacity: calc((var(--edge-proximity) - var(--edge-sensitivity)) / (100 - var(--edge-sensitivity)));
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.recommend-funds-popover-border-glow.recommend-funds-popover-border-glow-open {
+  border-color: rgb(243 232 255 / 52%);
+  box-shadow:
+    0 0 0 1px rgb(233 213 255 / 30%),
+    0 0 22px rgb(216 180 254 / 46%),
+    0 0 44px rgb(192 132 252 / 34%),
+    0 12px 32px rgb(91 33 182 / 30%);
+}
+
+.recommend-funds-popover-border-glow:hover {
+  border-color: rgb(243 232 255 / 58%);
+  box-shadow:
+    0 0 0 1px rgb(233 213 255 / 35%),
+    0 0 24px rgb(216 180 254 / 52%),
+    0 0 48px rgb(192 132 252 / 38%),
+    0 12px 32px rgb(91 33 182 / 32%);
+}
+
+.recommend-funds-popover-border-glow > .edge-light::before {
+  box-shadow:
+    inset 0 0 0 1px var(--glow-color, hsl(280deg 100% 88% / 100%)),
+    inset 0 0 2px 0 var(--glow-color-60, hsl(280deg 100% 88% / 60%)),
+    inset 0 0 6px 0 var(--glow-color-50, hsl(280deg 100% 88% / 50%)),
+    inset 0 0 12px 0 var(--glow-color-40, hsl(280deg 100% 88% / 40%)),
+    inset 0 0 24px 0 var(--glow-color-30, hsl(280deg 100% 88% / 30%)),
+    inset 0 0 36px 3px var(--glow-color-20, hsl(280deg 100% 88% / 20%)),
+    inset 0 0 64px 4px var(--glow-color-10, hsl(280deg 100% 88% / 10%)),
+    0 0 2px 0 var(--glow-color-60, hsl(280deg 100% 88% / 60%)),
+    0 0 8px 0 var(--glow-color-50, hsl(280deg 100% 88% / 50%)),
+    0 0 16px 0 var(--glow-color-40, hsl(280deg 100% 88% / 40%)),
+    0 0 32px 0 var(--glow-color-30, hsl(280deg 100% 88% / 30%)),
+    0 0 48px 3px var(--glow-color-20, hsl(280deg 100% 88% / 20%)),
+    0 0 72px 4px var(--glow-color-10, hsl(280deg 100% 88% / 10%));
+}
+
+.recommend-funds-popover-border-glow .border-glow-inner {
+  overflow: hidden;
+  border-radius: inherit;
+  position: relative;
+}
+
+.dark .recommend-funds-popover-border-glow {
+  box-shadow:
+    0 0 0 1px rgb(216 180 254 / 18%),
+    0 0 18px rgb(196 181 253 / 34%),
+    0 0 36px rgb(167 139 250 / 24%),
+    0 12px 28px rgb(46 16 101 / 45%);
+}
+
+.dark .recommend-funds-popover-border-glow.recommend-funds-popover-border-glow-open {
+  box-shadow:
+    0 0 0 1px rgb(233 213 255 / 24%),
+    0 0 22px rgb(216 180 254 / 42%),
+    0 0 44px rgb(192 132 252 / 30%),
+    0 12px 32px rgb(46 16 101 / 48%);
+}
+
+.dark .recommend-funds-popover-border-glow:hover {
+  box-shadow:
+    0 0 0 1px rgb(233 213 255 / 28%),
+    0 0 24px rgb(216 180 254 / 48%),
+    0 0 48px rgb(192 132 252 / 34%),
+    0 12px 32px rgb(46 16 101 / 50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recommend-funds-popover-border-glow.recommend-funds-popover-border-glow-open {
+    --edge-proximity: 82;
+    animation: none;
+  }
+}
+
+.recommend-funds-popover-grainient-layer {
+  pointer-events: none;
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 18% 22%, rgb(109 40 217 / 55%) 0%, transparent 48%),
+    radial-gradient(circle at 82% 78%, rgb(59 7 100 / 70%) 0%, transparent 52%),
+    linear-gradient(145deg, #6d28d9 0%, #5b21b6 48%, #3b0764 100%);
+}
+
+.recommend-funds-popover-grainient-layer canvas {
+  opacity: 0;
+  transition: opacity 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.recommend-funds-popover-grainient-layer-ready canvas {
+  opacity: 1;
+}
+
+.recommend-funds-popover-grainient-layer .grainient-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.recommend-funds-popover-grainient-layer canvas {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recommend-funds-popover-grainient-layer canvas {
+    opacity: 1;
+    transition: none;
+  }
+}
+
+.recommend-funds-popover-success {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.recommend-funds-popover-portfolio-story {
+  position: relative;
+  z-index: 1;
+  grid-column: 3;
+  display: flex;
+  min-width: 12rem;
+  max-width: 14.5rem;
+  flex-direction: column;
+  align-self: center;
+  justify-self: center;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 42%);
+  border-radius: var(--radius-2xl);
+  background: rgb(255 255 255 / 28%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px rgb(46 16 101 / 18%);
+}
+
+.recommend-funds-popover-portfolio-story-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem 0.875rem;
+  background: transparent;
+}
+
+.recommend-funds-popover-portfolio-status-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.recommend-funds-popover-portfolio-status-progress {
+  margin-top: 0.5rem;
+  height: 0.3125rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 24%);
+}
+
+.recommend-funds-popover-portfolio-status-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  transition: width 0.25s ease;
+}
+
+.recommend-funds-popover-portfolio-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.recommend-funds-popover-portfolio-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.recommend-funds-popover-portfolio-status-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+
+.recommend-funds-popover-portfolio-status-dot-portfolio {
+  background: rgb(16 185 129);
+}
+
+.recommend-funds-popover-portfolio-status-dot-cart {
+  background: rgb(251 191 36);
+}
+
+.recommend-funds-popover-portfolio-status-dot-pending {
+  background: rgb(91 33 182 / 22%);
+  border: 1px solid rgb(91 33 182 / 18%);
+}
+
+.recommend-funds-popover-portfolio-status-count {
+  min-width: 1rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #fff;
+}
+
+.recommend-funds-popover-portfolio-status-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: rgb(255 255 255 / 82%);
+}
+
+.recommend-funds-popover-portfolio-story-why {
+  border-top: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.625rem 0 0;
+}
+
+.recommend-funds-popover-portfolio-story-why-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 68%);
+}
+
+.recommend-funds-popover-portfolio-story-why-copy {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: rgb(255 255 255 / 88%);
+}
+
+.recommend-funds-popover-body {
+  display: grid;
+  grid-template-columns: minmax(17rem, 1.55fr) auto minmax(12rem, 1fr);
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 0.25rem 0.875rem 0.625rem;
+}
+
+.recommend-funds-popover-funds-column {
+  grid-column: 1;
+  min-width: 17rem;
+}
+
+.recommend-funds-popover-body-spacer {
+  grid-column: 3;
+  min-width: 0;
+}
+
+.recommend-funds-popover-allocation-panel {
+  position: relative;
+  grid-column: 2;
+  display: flex;
+  width: 14.5rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  align-self: center;
+  justify-self: center;
+  padding: 0.375rem 0.5rem 0.625rem;
+}
+
+.recommend-funds-popover-allocation-title {
+  width: 100%;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: rgb(255 255 255 / 92%);
+}
+
+.recommend-funds-popover-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.recommend-funds-popover-footer .recommend-funds-popover-info-trigger {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+}
+
+.recommend-funds-popover-allocation-chart-wrap {
+  position: relative;
+  width: min(100%, 11.25rem);
+  margin-top: 0.625rem;
+  aspect-ratio: 1;
+}
+
+.recommend-funds-popover-allocation-chart-center {
+  pointer-events: none;
+  position: absolute;
+  inset: 22%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.recommend-funds-popover-allocation-chip-swiper {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+
+.recommend-funds-popover-allocation-chip-arrow {
+  display: flex;
+  width: 1.625rem;
+  height: 1.625rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 10%);
+  color: rgb(255 255 255 / 82%);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.recommend-funds-popover-allocation-chip-arrow:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 34%);
+  background: rgb(255 255 255 / 18%);
+  color: #fff;
+}
+
+.recommend-funds-popover-allocation-chip-arrow-disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.recommend-funds-popover-allocation-chip-track {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 0.375rem;
+  overflow-x: auto;
+  overscroll-x: contain;
+  padding-block: 0.125rem;
+}
+
+.recommend-funds-popover-allocation-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-full);
+  border: 1px solid rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 8%);
+  padding: 0.25rem 0.625rem;
+  font-size: 10px;
+  color: rgb(255 255 255 / 88%);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.recommend-funds-popover-allocation-chip:hover {
+  border-color: rgb(255 255 255 / 28%);
+  background: rgb(255 255 255 / 14%);
+  color: #fff;
+}
+
+.recommend-funds-popover-allocation-chip-active {
+  border-color: rgb(255 255 255 / 36%);
+  background: #fff;
+  color: var(--zynd-purple-dark);
+  box-shadow: 0 2px 8px rgb(46 16 101 / 28%);
+}
+
+.recommend-funds-popover-allocation-chip-active:hover {
+  border-color: rgb(255 255 255 / 36%);
+  background: rgb(255 255 255 / 96%);
+  color: var(--zynd-purple-dark);
+}
+
+.recommend-funds-popover-allocation-chip-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+}
+
+.recommend-funds-popover-allocation-chip-active .recommend-funds-popover-allocation-chip-dot {
+  box-shadow: 0 0 0 1px rgb(91 33 182 / 18%);
+}
+
+.recommend-funds-popover-allocation-chip-label {
+  white-space: nowrap;
+}
+
+.recommend-funds-popover-allocation-chip-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.recommend-funds-popover-fund-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--radius-control);
+  padding: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.recommend-funds-popover-fund-row:hover {
+  background: rgb(255 255 255 / 10%);
+}
+
+.recommend-funds-popover-fund-logo {
+  display: flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  border: 1px solid rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 15%);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.recommend-funds-popover-fund-name {
+  min-width: 0;
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #fff;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.recommend-funds-popover-fund-action {
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.recommend-funds-popover-fund-action:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.recommend-funds-popover-fund-action:disabled {
+  pointer-events: auto;
+}
+
+.recommend-funds-popover-fund-action-default {
+  border-color: rgb(255 255 255 / 28%);
+  background: #fff;
+  color: var(--zynd-purple-dark);
+}
+
+.recommend-funds-popover-fund-action-default:hover:not(:disabled) {
+  background: rgb(255 255 255 / 92%);
+  color: var(--zynd-purple-dark);
+}
+
+.recommend-funds-popover-fund-action-default:disabled {
+  opacity: 0.45;
+}
+
+.recommend-funds-popover-fund-action-cart {
+  border-color: rgb(251 191 36 / 55%);
+  background: rgb(251 191 36 / 92%);
+  color: rgb(120 53 15 / 92%);
+}
+
+.recommend-funds-popover-fund-action-cart:hover:not(:disabled),
+.recommend-funds-popover-fund-action-cart:disabled {
+  background: rgb(251 191 36 / 92%);
+  color: rgb(120 53 15 / 92%);
+  opacity: 1;
+}
+
+.recommend-funds-popover-fund-action-portfolio {
+  border-color: rgb(16 185 129 / 85%);
+  background: rgb(16 185 129);
+  color: #fff;
+}
+
+.recommend-funds-popover-fund-action-portfolio:hover:not(:disabled),
+.recommend-funds-popover-fund-action-portfolio:disabled {
+  background: rgb(16 185 129);
+  color: #fff;
+  opacity: 1;
+}
+
+.recommend-funds-popover-info-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-full);
+  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 10%);
+  color: rgb(255 255 255 / 82%);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.recommend-funds-popover-info-trigger:hover {
+  border-color: rgb(255 255 255 / 34%);
+  background: rgb(255 255 255 / 18%);
+  color: #fff;
+}
+
+.recommend-funds-popover-allocation-chart {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.recommend-funds-popover-allocation-chart-lg {
+  width: 100%;
+  height: 100%;
+}
+
+.recommend-funds-popover-allocation-chart .recharts-wrapper,
+.recommend-funds-popover-allocation-chart .recharts-surface {
+  overflow: visible !important;
+}
+
+.recommend-funds-popover-allocation-tooltip {
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: var(--radius-control);
+  background: rgb(59 7 100 / 96%);
+  padding: 0.375rem 0.5rem;
+  box-shadow: 0 8px 20px rgb(46 16 101 / 45%);
+}
+
+.recommend-funds-popover-allocation-tooltip-label {
+  font-size: 10px;
+  color: rgb(255 255 255 / 72%);
+}
+
+.recommend-funds-popover-allocation-tooltip-value {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.recommend-funds-popover-body-loading {
+  opacity: 0.92;
+}
+
+.recommend-funds-popover-state {
+  display: flex;
+  min-height: 14.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 2rem 1.75rem 1.75rem;
+  text-align: center;
+}
+
+.recommend-funds-popover-state-title {
+  max-width: 18rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #fff;
+}
+
+.recommend-funds-popover-state-description {
+  max-width: 20rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: rgb(255 255 255 / 78%);
+}
+
+.recommend-funds-popover-state-action {
+  margin-top: 0.375rem;
+  border: 1px solid rgb(255 255 255 / 24%);
+  background: rgb(255 255 255 / 96%);
+  color: var(--zynd-purple-dark);
+  box-shadow: none;
+}
+
+.recommend-funds-popover-state-action:hover {
+  background: #fff;
+}
+
+.recommend-funds-popover-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: var(--radius-control);
+  padding: 0.5rem;
+}
+
+.recommend-funds-popover-skeleton-logo,
+.recommend-funds-popover-skeleton-line,
+.recommend-funds-popover-skeleton-chart {
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 12%) 0%,
+    rgb(255 255 255 / 24%) 50%,
+    rgb(255 255 255 / 12%) 100%
+  );
+  background-size: 200% 100%;
+  animation: recommend-funds-popover-shimmer 1.4s ease-in-out infinite;
+}
+
+.recommend-funds-popover-skeleton-logo {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+}
+
+.recommend-funds-popover-skeleton-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.recommend-funds-popover-skeleton-line {
+  height: 0.625rem;
+  border-radius: 999px;
+}
+
+.recommend-funds-popover-skeleton-line-wide {
+  width: 92%;
+}
+
+.recommend-funds-popover-skeleton-line-narrow {
+  width: 58%;
+}
+
+.recommend-funds-popover-skeleton-chart {
+  width: min(100%, 11.25rem);
+  margin-top: 0.625rem;
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+}
+
+@keyframes recommend-funds-popover-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recommend-funds-popover-skeleton-logo,
+  .recommend-funds-popover-skeleton-line,
+  .recommend-funds-popover-skeleton-chart {
+    animation: none;
   }
 }

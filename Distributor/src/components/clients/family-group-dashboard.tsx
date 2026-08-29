@@ -11,6 +11,10 @@ import {
   ClientPortfolioValueChart,
   usePortfolioValueChartControls,
 } from "@/components/clients/client-portfolio-value-chart";
+import {
+  resolveClientPortfolioChartSeries,
+  resolveEnabledClientPortfolioChartPeriods,
+} from "@/lib/client-portfolio-chart-data";
 import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
 import { DistributorInsightCardHeader } from "@/components/ui/distributor-insight-card-header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -113,6 +117,19 @@ export function FamilyGroupDashboard({
   );
 
   const portfolioChartControls = usePortfolioValueChartControls();
+  const portfolioChartSeries = useMemo(
+    () =>
+      resolveClientPortfolioChartSeries(
+        [],
+        portfolio.current,
+        portfolio.invested,
+      ),
+    [portfolio.current, portfolio.invested],
+  );
+  const enabledPortfolioChartPeriods = useMemo(
+    () => resolveEnabledClientPortfolioChartPeriods(portfolioChartSeries),
+    [portfolioChartSeries],
+  );
   const groupAvatarSrc = familyGroupAvatarSrc(group);
   const groupDescription = familyGroupDescription(group, copy.familyGroupIdentityDescription);
 
@@ -220,12 +237,15 @@ export function FamilyGroupDashboard({
                 showLegend={false}
                 showRefresh={false}
                 period={portfolioChartControls.period}
+                enabledPeriods={enabledPortfolioChartPeriods}
                 onPeriodChange={portfolioChartControls.setPeriod}
               />
             </div>
           </div>
           <ClientPortfolioValueChart
             series={[]}
+            currentValue={portfolio.current}
+            investedAmount={portfolio.invested}
             className="distributor-family-group-dashboard__chart"
             hideToolbar
             period={portfolioChartControls.period}

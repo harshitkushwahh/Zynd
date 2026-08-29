@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { AdminKycDocument, AdminUserKycDetail, AdminUserKycPan, AdminUserKycPersonal } from "@/lib/admin-api";
+import { isAdminKycKraPath } from "@/lib/admin-user-kyc-steps";
 import { documentReviewStatusVariant, kycStepStatusVariant } from "@/components/users/user-status-badge";
 
 const PEP_EXPOSED_LABELS: Record<string, string> = {
@@ -185,17 +186,23 @@ function AddressIdentityPanel({ kyc }: { kyc: AdminUserKycDetail }) {
 
   return (
     <KycPanelShell title="Address" icon={MapPin} className="admin-user-kyc-identity-panel--full">
-      {addressesMatch ? (
-        <p className="admin-user-kyc-identity-address-note">
-          Permanent and correspondence addresses match
-        </p>
-      ) : null}
-      <div className="admin-user-kyc-identity-address-grid">
+      <div
+        className={
+          addressesMatch || !correspondence || !permanent
+            ? "admin-user-kyc-identity-address-grid admin-user-kyc-identity-address-grid--single"
+            : "admin-user-kyc-identity-address-grid"
+        }
+      >
         {permanent ? (
           <article className="admin-user-kyc-identity-address-card">
             <div className="admin-user-kyc-identity-address-card__head">
               <MapPin className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
               <span>Permanent address</span>
+              {addressesMatch ? (
+                <span className="admin-user-kyc-identity-address-card__tag">
+                  Also used for correspondence
+                </span>
+              ) : null}
             </div>
             <p className="admin-user-kyc-identity-address-card__street">{permanent.street}</p>
             {permanent.cityLine ? (
@@ -219,17 +226,6 @@ function AddressIdentityPanel({ kyc }: { kyc: AdminUserKycDetail }) {
             {correspondence.country ? (
               <p className="admin-user-kyc-identity-address-card__country">{correspondence.country}</p>
             ) : null}
-          </article>
-        ) : null}
-        {correspondence && addressesMatch ? (
-          <article className="admin-user-kyc-identity-address-card admin-user-kyc-identity-address-card--muted">
-            <div className="admin-user-kyc-identity-address-card__head">
-              <MapPin className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
-              <span>Also used for correspondence</span>
-            </div>
-            <p className="admin-user-kyc-identity-address-card__hint">
-              Same address applies to both permanent and correspondence records.
-            </p>
           </article>
         ) : null}
       </div>
@@ -305,12 +301,17 @@ function DocumentsIdentityPanel({
   onPreview: (documentId: string) => void;
 }) {
   if (kyc.documents.length === 0) {
+    const kraPath = isAdminKycKraPath(kyc);
     return (
       <KycPanelShell title="Uploaded documents" icon={FileText} className="admin-user-kyc-identity-panel--full">
         <KycPanelEmpty
           icon={FileText}
-          title="No documents uploaded"
-          description="Uploaded KYC files will appear here for viewing."
+          title={kraPath ? "No documents required" : "No documents uploaded"}
+          description={
+            kraPath
+              ? "KRA-compliant investors skip DigiLocker, signature upload, and eSign, so no KYC files are expected here."
+              : "Uploaded KYC files will appear here for viewing."
+          }
         />
       </KycPanelShell>
     );

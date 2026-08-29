@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.amfi_parsers import parse_ter_rows, parse_ter_tracker_csv
+from app.infrastructure.mf.pipeline_progress import emit_pipeline_progress
 from app.application.mf.enrichment_match_service import build_fund_match_indexes, resolve_fund_id
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
 from app.core.config import get_settings
@@ -70,14 +71,13 @@ async def run_amfi_ter_ingestion(
         if not parsed:
             raise ValueError("No TER rows parsed from AMFI API or tracker fallback")
 
-        print(f"AMFI TER match: {len(parsed)} rows to process", flush=True)
+        await emit_pipeline_progress(f"AMFI TER match: {len(parsed)} rows to process")
         by_code, by_name = await build_fund_match_indexes(session)
         for row in parsed:
             processed += 1
             if processed % 5000 == 0:
-                print(
+                await emit_pipeline_progress(
                     f"AMFI TER match: processed={processed} upserted={upserted} skipped={skipped}",
-                    flush=True,
                 )
             fund_id = resolve_fund_id(
                 by_scheme_code=by_code,

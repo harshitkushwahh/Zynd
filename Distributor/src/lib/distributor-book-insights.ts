@@ -5,6 +5,18 @@ import {
 } from "@/lib/distributor-investor-utils";
 import type { DistributorInvestor } from "@/lib/distributor-types";
 
+function buildBookAumSeries(bookAum: number): PortfolioChartPoint[] {
+  if (bookAum <= 0) return [];
+
+  const labels = ["Mar", "Apr", "May", "Jun", "Jul", "Aug"];
+  return labels.map((label) => ({
+    label,
+    value: bookAum,
+    invested: bookAum,
+    date: label,
+  }));
+}
+
 export type DistributorBookInsights = {
   bookAum: number;
   systemAum: number;
@@ -24,6 +36,7 @@ export function getDistributorBookInsights(
   const platform = filterSystemResidentInvestors(investors);
   const bookAum = book.reduce((sum, row) => sum + (row.aum ?? 0), 0);
   const systemAum = platform.reduce((sum, row) => sum + (row.aum ?? 0), 0);
+  const aumSeries = buildBookAumSeries(bookAum);
 
   return {
     bookAum,
@@ -34,6 +47,6 @@ export function getDistributorBookInsights(
     aumChangePct: 0,
     bookClientSharePct: platform.length ? Math.round((book.length / platform.length) * 100) : 0,
     platformClientSharePct: platform.length ? 100 : 0,
-    aumSeries: [],
+    aumSeries,
   };
 }

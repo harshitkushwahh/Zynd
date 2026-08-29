@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useWizardKeyboardNavigation } from "@/hooks/use-wizard-keyboard-navigation";
 import {
@@ -12,18 +12,20 @@ import {
   CheckCircle2,
   ClipboardCheck,
   HandCoins,
+  IndianRupee,
   Landmark,
   Layers3,
   Repeat2,
   Search,
   UserRound,
   Wallet,
+  X,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Selection, SortDescriptor } from "react-aria-components";
 
-import { paginateTableItems, Table, TableCard } from "@/components/application/table";
+import { paginateTableItems, Table, TableCard, TableEmptyState } from "@/components/application/table";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { QuickTransactionSectionHeader } from "@/components/quick-transaction/quick-transaction-section-header";
@@ -32,18 +34,27 @@ import type { QuickTransactionWizardStepId } from "@/components/quick-transactio
 import { useQuickTransactionPageReveal } from "@/components/quick-transaction/use-quick-transaction-page-reveal";
 import { useQuickTransactionStepSwitch } from "@/components/quick-transaction/use-quick-transaction-step-switch";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
+import { DistributorProfileAvatar } from "@/components/ui/distributor-profile-avatar";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { amountInWordsInr } from "@/lib/amount-in-words";
 import { useDistributorNotifications } from "@/contexts/distributor-notifications-context";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
-import { DUMMY_INVESTORS, searchInvestors } from "@/lib/distributor-investor-utils";
-import { DUMMY_SCHEMES, getDistributorSchemeById, searchSchemes, type DistributorScheme } from "@/lib/distributor-schemes-data";
+import { distributorClientPathRef } from "@/lib/distributor-client-routes";
+import { resolveAmcLogoUrl } from "@/lib/distributor-asset-url";
+import { fetchDistributorClients } from "@/lib/distributor-clients-api";
+import { searchDistributorSchemes, QUICK_TXN_MAX_FUNDS } from "@/lib/distributor-txn-recommendations-api";
 import {
   DISTRIBUTOR_PAGE_STACK_CLASS,
   DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
 } from "@/lib/distributor-layout";
+import {
+  filterDistributorBookInvestors,
+  searchInvestors,
+} from "@/lib/distributor-investor-utils";
+import type { DistributorInvestor } from "@/lib/distributor-types";
+
 import { formatAum, formatDistributorDate } from "@/lib/format";
 import type { QuickTxnType } from "@/lib/quick-transaction-types";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
@@ -51,6 +62,60 @@ import { onboardingStatusVariant } from "@/lib/status-meta";
 import { cn } from "@/lib/utils";
 
 type WizardStepId = QuickTransactionWizardStepId;
+
+type WizardFund = {
+  id: string;
+  name: string;
+  amc: string;
+  amcSlug: string | null;
+  amcLogoUrl: string | null;
+  irn: string;
+  minAmount: number;
+  maxAmount: number;
+  category: string;
+  logoMark: string;
+};
+
+const WIZARD_FUND_MAX_AMOUNT = 10_000_000;
+
+function mapApiSchemeToWizardFund(
+  item: Awaited<ReturnType<typeof searchDistributorSchemes>>["items"][number],
+  txnType: QuickTxnType,
+): WizardFund {
+  const minAmount =
+    txnType === "sip"
+      ? item.min_sip_amount_inr ?? item.min_lumpsum_amount_inr ?? 100
+      : item.min_lumpsum_amount_inr ?? item.min_sip_amount_inr ?? 100;
+  const mark = item.amc_name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+  return {
+    id: item.product_id,
+    name: item.name,
+    amc: item.amc_name,
+    amcSlug: item.amc_slug,
+    amcLogoUrl: item.amc_logo_url,
+    irn: item.product_code || item.isin,
+    minAmount,
+    maxAmount: WIZARD_FUND_MAX_AMOUNT,
+    category: item.category_slug ?? "Mutual fund",
+    logoMark: mark || "MF",
+  };
+}
+
+function filterWizardFunds(funds: WizardFund[], query: string): WizardFund[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return funds;
+  return funds.filter(
+    (scheme) =>
+      scheme.name.toLowerCase().includes(q) ||
+      scheme.amc.toLowerCase().includes(q) ||
+      scheme.irn.toLowerCase().includes(q) ||
+      scheme.category.toLowerCase().includes(q),
+  );
+}
 
 const WIZARD_STEPS: Array<{ id: WizardStepId; label: string; description: string; icon: LucideIcon }> = [
   {
@@ -67,7 +132,7 @@ const WIZARD_STEPS: Array<{ id: WizardStepId; label: string; description: string
   },
   {
     id: "funds",
-    label: "Select fund",
+    label: "Select funds",
     description: "Scheme & IRN",
     icon: Layers3,
   },
@@ -130,19 +195,60 @@ const QUICK_TXN_INVESTOR_TABLE_PAGE_SIZE = 4;
 /** Fund table shows four rows per page in the wizard */
 const QUICK_TXN_FUND_TABLE_PAGE_SIZE = 4;
 
+function parseFundAmount(value: string): number {
+  const parsed = Number.parseFloat(value.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function stepIndex(step: WizardStepId): number {
   return WIZARD_STEPS.findIndex((item) => item.id === step);
 }
 
-function SchemeLogo({ scheme, compact }: { scheme: DistributorScheme; compact?: boolean }) {
+function SchemeLogo({ scheme, compact }: { scheme: WizardFund; compact?: boolean }) {
+  const sizeClass = compact ? "size-8" : "size-11";
+  const logoUrl = resolveAmcLogoUrl(scheme.amcLogoUrl, scheme.amcSlug);
+
+  if (logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className={cn(
+          "shrink-0 rounded-[var(--radius-control)] border border-border bg-background object-contain p-0.5",
+          sizeClass,
+        )}
+      />
+    );
+  }
+
   return (
     <div
-      className={cn("quick-txn-scheme-logo", compact && "quick-txn-scheme-logo--compact")}
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted font-semibold text-muted-foreground",
+        compact ? "text-[10px]" : "text-micro",
+        sizeClass,
+      )}
       aria-hidden
     >
-      <Image src="/logo.png" alt="" width={40} height={40} className="size-full object-contain" />
-      <span className="quick-txn-scheme-logo__mark">{scheme.logoMark}</span>
+      {scheme.logoMark}
     </div>
+  );
+}
+
+function SchemeName({ name, compact }: { name: string; compact?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "min-w-0 font-medium leading-snug break-words whitespace-normal text-foreground",
+        compact ? "line-clamp-2 text-compact" : "line-clamp-3 text-body",
+      )}
+      title={name}
+    >
+      {name}
+    </span>
   );
 }
 
@@ -156,8 +262,9 @@ export function QuickTransactionWizard() {
   const [investorSearch, setInvestorSearch] = useState("");
   const [selectedInvestorKeys, setSelectedInvestorKeys] = useState<Selection>(new Set());
   const [selectedSchemeKeys, setSelectedSchemeKeys] = useState<Selection>(new Set());
+  const [selectedFundsById, setSelectedFundsById] = useState<Record<string, WizardFund>>({});
+  const [fundAmounts, setFundAmounts] = useState<Record<string, string>>({});
   const [fundSearch, setFundSearch] = useState("");
-  const [amount, setAmount] = useState("");
   const [sipInstallments, setSipInstallments] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<(typeof PAYMENT_METHODS)[number]["id"] | "">("");
   const [investorPage, setInvestorPage] = useState(1);
@@ -170,21 +277,110 @@ export function QuickTransactionWizard() {
     column: "name",
     direction: "ascending",
   });
+  const [bookInvestors, setBookInvestors] = useState<DistributorInvestor[] | null>(null);
+  const [investorsLoadError, setInvestorsLoadError] = useState<string | null>(null);
+  const [schemeResults, setSchemeResults] = useState<WizardFund[]>([]);
+  const [schemesLoading, setSchemesLoading] = useState(false);
+  const [schemesLoadError, setSchemesLoadError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const selectedSchemeId = useMemo(() => {
-    if (selectedSchemeKeys === "all") return null;
-    const id = [...selectedSchemeKeys][0];
-    return id != null ? String(id) : null;
+  const selectedSchemeIds = useMemo(() => {
+    if (selectedSchemeKeys === "all") return [];
+    return [...selectedSchemeKeys].map(String);
   }, [selectedSchemeKeys]);
 
-  const selectedScheme = selectedSchemeId ? getDistributorSchemeById(selectedSchemeId) : undefined;
+  const selectedSchemes = useMemo(
+    () => selectedSchemeIds.map((id) => selectedFundsById[id]).filter(Boolean) as WizardFund[],
+    [selectedFundsById, selectedSchemeIds],
+  );
 
-  const amountNumber = useMemo(() => {
-    const parsed = Number.parseFloat(amount.replace(/,/g, ""));
-    return Number.isFinite(parsed) ? parsed : 0;
-  }, [amount]);
+  const handleSchemeSelectionChange = (keys: Selection) => {
+    if (keys === "all") return;
+    const ids = [...keys].map(String);
+    if (ids.length > QUICK_TXN_MAX_FUNDS) {
+      addNotification({
+        title: "Fund limit reached",
+        body: `You can add up to ${QUICK_TXN_MAX_FUNDS} funds per recommendation (same as the investor cart limit).`,
+      });
+    }
+    const cappedIds = ids.slice(0, QUICK_TXN_MAX_FUNDS);
+    setSelectedSchemeKeys(new Set(cappedIds));
+    setSelectedFundsById((current) => {
+      const next: Record<string, WizardFund> = {};
+      for (const id of cappedIds) {
+        const fund = current[id] ?? schemeResults.find((scheme) => scheme.id === id);
+        if (fund) next[id] = fund;
+      }
+      return next;
+    });
+    setFundAmounts((current) => {
+      const next: Record<string, string> = {};
+      for (const id of cappedIds) {
+        next[id] = current[id] ?? "";
+      }
+      return next;
+    });
+  };
 
-  const amountWords = useMemo(() => amountInWordsInr(amountNumber), [amountNumber]);
+  const removeSelectedFund = (fundId: string) => {
+    const nextIds = selectedSchemeIds.filter((id) => id !== fundId);
+    handleSchemeSelectionChange(new Set(nextIds));
+    if (nextIds.length === 0 && displayStep === "amount") {
+      goToStep("funds");
+    }
+  };
+
+  useEffect(() => {
+    if (displayStep !== "funds" && step !== "funds") return;
+    let cancelled = false;
+    setSchemesLoading(true);
+    void searchDistributorSchemes({ q: fundSearch, page: 1, page_size: 40 })
+      .then((response) => {
+        if (!cancelled) {
+          setSchemeResults(response.items.map((item) => mapApiSchemeToWizardFund(item, txnType)));
+          setSchemesLoadError(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setSchemeResults([]);
+          setSchemesLoadError(
+            error instanceof Error ? error.message : "Could not load funds.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSchemesLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [displayStep, fundSearch, step, txnType]);
+
+  const fundLines = useMemo(
+    () =>
+      selectedSchemeIds
+        .map((id) => {
+          const fund = selectedFundsById[id];
+          if (!fund) return null;
+          return {
+            fund,
+            amount: parseFundAmount(fundAmounts[id] ?? ""),
+          };
+        })
+        .filter((line): line is { fund: WizardFund; amount: number } => line !== null),
+    [fundAmounts, selectedFundsById, selectedSchemeIds],
+  );
+
+  const totalAmount = useMemo(
+    () => fundLines.reduce((sum, line) => sum + line.amount, 0),
+    [fundLines],
+  );
+
+  const totalAmountWords = useMemo(() => amountInWordsInr(totalAmount), [totalAmount]);
 
   const sipInstallmentCount = useMemo(() => {
     const parsed = Number.parseInt(sipInstallments.trim(), 10);
@@ -193,10 +389,36 @@ export function QuickTransactionWizard() {
 
   const sipInstallmentsValid = txnType !== "sip" || (sipInstallmentCount >= 1 && sipInstallmentCount <= 360);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDistributorClients({ limit: 100, scope: "book" })
+      .then((items) => {
+        if (!cancelled) {
+          setBookInvestors(filterDistributorBookInvestors(items));
+          setInvestorsLoadError(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setBookInvestors([]);
+          setInvestorsLoadError(
+            error instanceof Error ? error.message : "Could not load investors.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const onboardedInvestors = useMemo(
+    () => (bookInvestors ?? []).filter((investor) => investor.onboardingStatus === "Onboarded"),
+    [bookInvestors],
+  );
+
   const investorsFiltered = useMemo(() => {
-    const onboarded = DUMMY_INVESTORS.filter((i) => i.onboardingStatus === "Onboarded");
-    return searchInvestors(onboarded, investorSearch);
-  }, [investorSearch]);
+    return searchInvestors(onboardedInvestors, investorSearch);
+  }, [investorSearch, onboardedInvestors]);
 
   const investorsSorted = useMemo(
     () => sortByDescriptor(investorsFiltered, sortDescriptor),
@@ -209,8 +431,8 @@ export function QuickTransactionWizard() {
   );
 
   const fundsFiltered = useMemo(
-    () => searchSchemes(DUMMY_SCHEMES, fundSearch),
-    [fundSearch],
+    () => filterWizardFunds(schemeResults, fundSearch),
+    [fundSearch, schemeResults],
   );
 
   const fundsSorted = useMemo(
@@ -235,20 +457,43 @@ export function QuickTransactionWizard() {
   }, [selectedInvestorKeys, investorsFiltered]);
 
   const selectedInvestors = useMemo(
-    () => DUMMY_INVESTORS.filter((i) => selectedInvestorIds.includes(i.id)),
-    [selectedInvestorIds],
+    () => (bookInvestors ?? []).filter((investor) => selectedInvestorIds.includes(investor.id)),
+    [bookInvestors, selectedInvestorIds],
   );
 
-  const amountValid =
-    selectedScheme &&
-    amountNumber >= selectedScheme.minAmount &&
-    amountNumber <= selectedScheme.maxAmount;
+  const isLoadingInvestors = bookInvestors === null;
+  const investorEmptyTitle = investorsLoadError
+    ? "Could not load investors"
+    : investorSearch.trim()
+      ? "No investors match your search"
+      : "No onboarded investors yet";
+  const investorEmptyDescription = investorsLoadError
+    ? investorsLoadError
+    : investorSearch.trim()
+      ? "Try a different client code, email, PAN, or mobile number."
+      : "Onboard a client in your book before starting a quick transaction.";
+  const fundEmptyTitle = schemesLoadError
+    ? "Could not load funds"
+    : fundSearch.trim()
+      ? "No funds match your search"
+      : "No investable funds found";
+  const fundEmptyDescription = schemesLoadError
+    ? schemesLoadError
+    : fundSearch.trim()
+      ? "Try a different scheme name, IRN, AMC, or category."
+      : "Fund search will populate schemes from the live catalog.";
+
+  const allFundAmountsValid =
+    fundLines.length > 0 &&
+    fundLines.every(
+      (line) => line.amount >= line.fund.minAmount && line.amount <= line.fund.maxAmount,
+    );
 
   const canContinue = (() => {
     if (displayStep === "type") return txnType === "one-time" || txnType === "sip";
     if (displayStep === "investors") return selectedInvestorIds.length > 0;
-    if (displayStep === "funds") return Boolean(selectedSchemeId);
-    if (displayStep === "amount") return amountValid && paymentMethod.length > 0 && sipInstallmentsValid;
+    if (displayStep === "funds") return selectedSchemeIds.length > 0;
+    if (displayStep === "amount") return allFundAmountsValid && paymentMethod.length > 0 && sipInstallmentsValid;
     return true;
   })();
 
@@ -266,40 +511,57 @@ export function QuickTransactionWizard() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const investor = selectedInvestors[0];
-    const scheme = selectedScheme;
-    if (!investor || !scheme || !paymentMethod) {
+    if (!investor || fundLines.length === 0 || !paymentMethod) {
       return;
     }
 
     const paymentMethodLabel =
       PAYMENT_METHODS.find((method) => method.id === paymentMethod)?.label ?? paymentMethod;
 
-    const success = submitForInvestorConfirmation({
-      txnType: txnType === "sip" ? "sip" : "one-time",
-      amount: amountNumber,
-      sipInstallments,
-      clientCode: investor.clientCode,
-      investorEmailMasked: investor.emailMasked,
-      fundName: scheme.name,
-      irn: scheme.irn,
-      paymentMethodLabel,
-    });
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const success = await submitForInvestorConfirmation({
+        clientReference: distributorClientPathRef(investor),
+        txnType: txnType === "sip" ? "sip" : "one-time",
+        sipInstallments,
+        clientCode: investor.clientCode,
+        investorDisplayName: investor.displayName,
+        profileImageUrl: investor.profileImageUrl,
+        investorEmailMasked: investor.emailMasked,
+        paymentMethod,
+        paymentMethodLabel,
+        items: fundLines.map((line) => ({
+          productId: line.fund.id,
+          amount: line.amount,
+          fundName: line.fund.name,
+          irn: line.fund.irn,
+          amcLogoUrl: line.fund.amcLogoUrl,
+          amcSlug: line.fund.amcSlug,
+          logoMark: line.fund.logoMark,
+        })),
+      });
 
-    addNotification({
-      title: "Investor confirmation sent",
-      body: `${success.requestRef} is pending approval from ${investor.clientCode} (${formatAum(amountNumber)} ${txnType === "sip" ? "SIP" : "purchase"}).`,
-    });
+      addNotification({
+        title: "Recommendation link sent",
+        body: `${success.requestRef} was sent to ${investor.clientCode} with ${fundLines.length} fund${fundLines.length === 1 ? "" : "s"}.`,
+      });
 
-    router.push("/dashboard");
+      router.push("/dashboard");
+    } catch (error: unknown) {
+      setSubmitError(error instanceof Error ? error.message : "Could not send recommendation.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   useWizardKeyboardNavigation({
     onContinue: displayStep === "review" ? handleSubmit : goNext,
     onBack: goBack,
-    canContinue: canContinue && !isSwitching,
-    canBack: displayStep !== "type" && !isSwitching,
+    canContinue: canContinue && !isSwitching && !isSubmitting,
+    canBack: displayStep !== "type" && !isSwitching && !isSubmitting,
   });
 
   const currentStepIndex = stepIndex(displayStep);
@@ -486,64 +748,90 @@ export function QuickTransactionWizard() {
                 />
               </div>
               <TableCard.Root size="md">
-                <Table
-                  aria-label="Investors for quick transaction"
-                  size="md"
-                  className="min-w-[var(--table-min-width-3xl)]"
-                  selectionMode="single"
-                  selectionBehavior="replace"
-                  selectedKeys={selectedInvestorKeys}
-                  onSelectionChange={setSelectedInvestorKeys}
-                  sortDescriptor={sortDescriptor}
-                  onSortChange={(descriptor) => {
-                    setSortDescriptor(descriptor);
-                    setInvestorPage(1);
-                  }}
-                  pagination={{
-                    page: safePage,
-                    totalPages,
-                    onPageChange: setInvestorPage,
-                    alwaysVisible: true,
-                  }}
-                >
-                  <Table.Header size="md">
-                    <Table.Head id="clientCode" label="Client" isRowHeader allowsSorting />
-                    <Table.Head id="emailMasked" label="Email" allowsSorting />
-                    <Table.Head id="investorType" label="Type" allowsSorting />
-                    <Table.Head id="onboardingStatus" label="Onboarding" allowsSorting />
-                    <Table.Head
-                      id="createdAt"
-                      label="Created"
-                      allowsSorting
-                      className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}
-                    />
-                  </Table.Header>
-                  <Table.Body items={pageItems}>
-                    {(investor) => (
-                      <Table.Row id={investor.id}>
-                        <Table.Cell className="font-mono text-compact font-medium">
-                          {investor.clientCode}
-                        </Table.Cell>
-                        <Table.Cell className="text-muted-foreground">
-                          {investor.emailMasked}
-                        </Table.Cell>
-                        <Table.Cell className="text-compact">
-                          {investor.investorType}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <StatusBadge variant={onboardingStatusVariant(investor.onboardingStatus)}>
-                            {investor.onboardingStatus}
-                          </StatusBadge>
-                        </Table.Cell>
-                        <Table.Cell
-                          className={cn("text-compact text-muted-foreground", DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS)}
-                        >
-                          {formatDistributorDate(investor.createdAt)}
-                        </Table.Cell>
-                      </Table.Row>
-                    )}
-                  </Table.Body>
-                </Table>
+                {isLoadingInvestors ? (
+                  <TableEmptyState
+                    title="Loading investors…"
+                    description="Fetching onboarded clients from your book."
+                    icon={UserRound}
+                  />
+                ) : investorsSorted.length === 0 ? (
+                  <TableEmptyState
+                    title={investorEmptyTitle}
+                    description={investorEmptyDescription}
+                    icon={UserRound}
+                  />
+                ) : (
+                  <Table
+                    aria-label="Investors for quick transaction"
+                    size="md"
+                    className="min-w-[var(--table-min-width-3xl)]"
+                    selectionMode="single"
+                    selectionBehavior="replace"
+                    selectedKeys={selectedInvestorKeys}
+                    onSelectionChange={setSelectedInvestorKeys}
+                    sortDescriptor={sortDescriptor}
+                    onSortChange={(descriptor) => {
+                      setSortDescriptor(descriptor);
+                      setInvestorPage(1);
+                    }}
+                    pagination={{
+                      page: safePage,
+                      totalPages,
+                      onPageChange: setInvestorPage,
+                      alwaysVisible: true,
+                    }}
+                  >
+                    <Table.Header size="md">
+                      <Table.Head id="clientCode" label="Client" isRowHeader allowsSorting />
+                      <Table.Head id="emailMasked" label="Email" allowsSorting />
+                      <Table.Head id="investorType" label="Type" allowsSorting />
+                      <Table.Head id="onboardingStatus" label="Onboarding" allowsSorting />
+                      <Table.Head
+                        id="createdAt"
+                        label="Created"
+                        allowsSorting
+                        className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}
+                      />
+                    </Table.Header>
+                    <Table.Body items={pageItems}>
+                      {(investor) => (
+                        <Table.Row id={investor.id}>
+                          <Table.Cell>
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <DistributorProfileAvatar
+                                name={investor.displayName || investor.clientCode}
+                                imageSrc={investor.profileImageUrl}
+                                size="sm"
+                              />
+                              <span className="min-w-0 truncate font-mono text-compact font-medium">
+                                {investor.clientCode}
+                              </span>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell className="text-muted-foreground">
+                            {investor.emailMasked}
+                          </Table.Cell>
+                          <Table.Cell className="text-compact">
+                            {investor.investorType}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <StatusBadge variant={onboardingStatusVariant(investor.onboardingStatus)}>
+                              {investor.onboardingStatus}
+                            </StatusBadge>
+                          </Table.Cell>
+                          <Table.Cell
+                            className={cn(
+                              "text-compact text-muted-foreground",
+                              DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
+                            )}
+                          >
+                            {formatDistributorDate(investor.createdAt)}
+                          </Table.Cell>
+                        </Table.Row>
+                      )}
+                    </Table.Body>
+                  </Table>
+                )}
               </TableCard.Root>
             </div>
           ) : null}
@@ -551,16 +839,14 @@ export function QuickTransactionWizard() {
           {step === "funds" ? (
             <div className="quick-txn-wizard__section">
               <QuickTransactionSectionHeader
-                title="Select fund"
-                helpText={`Pick a scheme for this ${txnType === "sip" ? "SIP" : "lumpsum"}.`}
+                title="Select funds"
+                helpText={`Pick up to ${QUICK_TXN_MAX_FUNDS} schemes for this ${txnType === "sip" ? "SIP" : "lumpsum"} cart.`}
                 helpAriaLabel="Fund selection guidance"
                 trailing={
-                  <StatusBadge variant={selectedScheme ? "info" : "neutral"}>
-                    {selectedScheme
-                      ? selectedScheme.irn
-                        ? `1 fund selected · ${selectedScheme.irn}`
-                        : "1 fund selected"
-                      : "No fund selected"}
+                  <StatusBadge variant={selectedSchemeIds.length > 0 ? "info" : "neutral"}>
+                    {selectedSchemeIds.length > 0
+                      ? `${selectedSchemeIds.length}/${QUICK_TXN_MAX_FUNDS} funds selected`
+                      : "No funds selected"}
                   </StatusBadge>
                 }
               />
@@ -578,14 +864,27 @@ export function QuickTransactionWizard() {
                 />
               </div>
               <TableCard.Root size="md">
+                {schemesLoading ? (
+                  <TableEmptyState
+                    title="Loading funds…"
+                    description="Searching investable schemes from the catalog."
+                    icon={Layers3}
+                  />
+                ) : fundsSorted.length === 0 ? (
+                  <TableEmptyState
+                    title={fundEmptyTitle}
+                    description={fundEmptyDescription}
+                    icon={Layers3}
+                  />
+                ) : (
                 <Table
                   aria-label="Funds for quick transaction"
                   size="md"
                   className="min-w-[var(--table-min-width-3xl)]"
-                  selectionMode="single"
-                  selectionBehavior="replace"
+                  selectionMode="multiple"
+                  selectionBehavior="toggle"
                   selectedKeys={selectedSchemeKeys}
-                  onSelectionChange={setSelectedSchemeKeys}
+                  onSelectionChange={handleSchemeSelectionChange}
                   sortDescriptor={fundSortDescriptor}
                   onSortChange={(descriptor) => {
                     setFundSortDescriptor(descriptor);
@@ -619,13 +918,13 @@ export function QuickTransactionWizard() {
                   <Table.Body items={fundPageItems}>
                     {(scheme) => (
                       <Table.Row id={scheme.id}>
-                        <Table.Cell>
-                          <div className="flex min-w-0 items-center gap-2.5">
+                        <Table.Cell className="max-w-[16rem]">
+                          <div className="flex min-w-0 items-start gap-2.5">
                             <SchemeLogo scheme={scheme} compact />
-                            <span className="min-w-0 truncate text-compact font-medium">{scheme.name}</span>
+                            <SchemeName name={scheme.name} compact />
                           </div>
                         </Table.Cell>
-                        <Table.Cell className="text-compact text-muted-foreground">
+                        <Table.Cell className="max-w-[10rem] text-compact leading-snug break-words whitespace-normal text-muted-foreground">
                           {scheme.amc}
                         </Table.Cell>
                         <Table.Cell className="text-compact">
@@ -644,62 +943,176 @@ export function QuickTransactionWizard() {
                     )}
                   </Table.Body>
                 </Table>
+                )}
               </TableCard.Root>
             </div>
           ) : null}
 
-          {step === "amount" && selectedScheme ? (
+          {step === "amount" && selectedSchemes.length > 0 ? (
             <div className="quick-txn-wizard__section">
               <QuickTransactionSectionHeader
-                title="Amount & payment"
+                title="Amounts & payment"
                 helpText={
                   txnType === "sip"
-                    ? "Enter installment amount, number of SIP installments, and payment method."
-                    : "Enter the transaction amount and payment method."
+                    ? "Enter installment amount for each fund, number of SIP installments, and payment method."
+                    : "Enter the investment amount for each selected fund and choose payment method."
                 }
                 helpAriaLabel="Amount and payment guidance"
+                trailing={
+                  <StatusBadge variant="info">
+                    {selectedSchemes.length} fund{selectedSchemes.length === 1 ? "" : "s"}
+                  </StatusBadge>
+                }
               />
 
-              <div className="quick-txn-scheme-summary quick-txn-scheme-summary--compact">
-                <SchemeLogo scheme={selectedScheme} compact />
-                <div className="min-w-0 flex-1">
-                  <p className="text-compact font-semibold">{selectedScheme.name}</p>
-                  <p className="font-mono text-micro text-muted-foreground">IRN {selectedScheme.irn}</p>
-                  <p className="text-caption text-muted-foreground">
-                    Min {formatAum(selectedScheme.minAmount)} · Max {formatAum(selectedScheme.maxAmount)}
-                  </p>
-                </div>
-              </div>
-
               <form className="quick-txn-amount-form" onSubmit={(event) => event.preventDefault()}>
-                <FieldGroup>
-                  <div className="quick-txn-amount-words">
-                    <p className="quick-txn-amount-words__label">Amount in words</p>
-                    <p className="quick-txn-amount-words__value">
-                      {amountNumber > 0 ? amountWords : "N/A"}
-                    </p>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="quick-txn-amount">
-                      {txnType === "sip" ? "Installment amount (INR)" : "Amount (INR)"}
-                    </FieldLabel>
-                    <Input
-                      id="quick-txn-amount"
-                      inputMode="decimal"
-                      placeholder="e.g. 5000"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                    />
-                    {amountNumber > 0 && !amountValid ? (
-                      <p className="mt-1 text-caption text-destructive">
-                        Amount must be between {formatAum(selectedScheme.minAmount)} and{" "}
-                        {formatAum(selectedScheme.maxAmount)}.
-                      </p>
-                    ) : null}
-                  </Field>
+                <div className="quick-txn-amount-layout">
+                  <aside className="quick-txn-amount-aside" aria-label="Total amount summary">
+                    <div
+                      className={cn(
+                        "quick-txn-amount-words",
+                        totalAmount <= 0 && "quick-txn-amount-words--empty",
+                      )}
+                    >
+                      <div className="quick-txn-amount-words__header">
+                        <span className="quick-txn-amount-words__icon" aria-hidden>
+                          <IndianRupee className="size-4" strokeWidth={2.25} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="quick-txn-amount-words__label">Total amount</p>
+                          <p className="quick-txn-amount-words__figure">
+                            {totalAmount > 0 ? formatAum(totalAmount) : "N/A"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="quick-txn-amount-words__divider" aria-hidden />
+
+                      <div className="quick-txn-amount-words__body">
+                        <p className="quick-txn-amount-words__caption">Amount in words</p>
+                        <p className="quick-txn-amount-words__value">
+                          {totalAmount > 0 ? (
+                            <>
+                              <span className="quick-txn-amount-words__quote" aria-hidden>
+                                “
+                              </span>
+                              {totalAmountWords}
+                              <span className="quick-txn-amount-words__quote" aria-hidden>
+                                ”
+                              </span>
+                            </>
+                          ) : (
+                            "N/A"
+                          )}
+                        </p>
+                        {txnType === "sip" && totalAmount > 0 && sipInstallmentCount > 0 ? (
+                          <p className="quick-txn-amount-words__meta">
+                            {sipInstallmentCount} monthly installment{sipInstallmentCount === 1 ? "" : "s"} ·
+                            Portfolio total {formatAum(totalAmount * sipInstallmentCount)}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="quick-txn-amount-aside__divider" aria-hidden />
+
+                    <Field className="quick-txn-amount-aside__payment">
+                      <FieldLabel>Payment method</FieldLabel>
+                      <div className="quick-txn-payment-methods">
+                        {PAYMENT_METHODS.map((method) => (
+                          <Button
+                            key={method.id}
+                            type="button"
+                            variant={paymentMethod === method.id ? "default" : "outline"}
+                            className="quick-txn-payment-method-btn"
+                            onClick={() => setPaymentMethod(method.id)}
+                          >
+                            {method.id === "upi" ? (
+                              <Image
+                                src="/bhim.svg"
+                                alt=""
+                                width={20}
+                                height={20}
+                                className="size-5 shrink-0"
+                                aria-hidden
+                              />
+                            ) : (
+                              <Landmark className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                            )}
+                            {method.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </Field>
+                  </aside>
+
+                  <div className="quick-txn-amount-main">
+                    <FieldGroup>
+                      <div
+                        className="quick-txn-amount-funds-scroll"
+                        aria-label="Fund amounts"
+                        tabIndex={0}
+                      >
+                        {fundLines.map((line) => (
+                          <div
+                            key={line.fund.id}
+                            className="quick-txn-amount-fund-card rounded-[var(--radius-card)] border border-border bg-muted/15 p-3"
+                          >
+                            <div className="quick-txn-amount-fund-card__header">
+                              <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                                <SchemeLogo scheme={line.fund} compact />
+                                <div className="min-w-0 flex-1">
+                                  <SchemeName name={line.fund.name} compact />
+                                  <p className="font-mono text-micro text-muted-foreground">
+                                    IRN {line.fund.irn}
+                                  </p>
+                                  <p className="text-caption text-muted-foreground">
+                                    Min {formatAum(line.fund.minAmount)} · Max {formatAum(line.fund.maxAmount)}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="quick-txn-amount-fund-card__remove shrink-0 rounded-[var(--radius-control)] text-muted-foreground hover:bg-muted hover:text-foreground"
+                                aria-label={`Remove ${line.fund.name}`}
+                                onClick={() => removeSelectedFund(line.fund.id)}
+                              >
+                                <X className="size-4" strokeWidth={2.25} aria-hidden />
+                              </Button>
+                            </div>
+                            <Field className="mt-3">
+                              <FieldLabel htmlFor={`quick-txn-amount-${line.fund.id}`}>
+                                {txnType === "sip" ? "Installment amount (INR)" : "Amount (INR)"}
+                              </FieldLabel>
+                              <Input
+                                id={`quick-txn-amount-${line.fund.id}`}
+                                inputMode="decimal"
+                                placeholder="e.g. 5000"
+                                value={fundAmounts[line.fund.id] ?? ""}
+                                onChange={(event) =>
+                                  setFundAmounts((current) => ({
+                                    ...current,
+                                    [line.fund.id]: event.target.value,
+                                  }))
+                                }
+                              />
+                              {line.amount > 0 &&
+                              (line.amount < line.fund.minAmount || line.amount > line.fund.maxAmount) ? (
+                                <p className="mt-1 text-caption text-destructive">
+                                  Amount must be between {formatAum(line.fund.minAmount)} and{" "}
+                                  {formatAum(line.fund.maxAmount)}.
+                                </p>
+                              ) : null}
+                            </Field>
+                          </div>
+                        ))}
+                      </div>
+
                   {txnType === "sip" ? (
                     <Field>
-                      <FieldLabel htmlFor="quick-txn-sip-installments">SIP installments</FieldLabel>
+                      <FieldLabel htmlFor="quick-txn-sip-installments">SIP installments (all funds)</FieldLabel>
                       <Input
                         id="quick-txn-sip-installments"
                         inputMode="numeric"
@@ -708,7 +1121,7 @@ export function QuickTransactionWizard() {
                         onChange={(event) => setSipInstallments(event.target.value.replace(/\D/g, ""))}
                       />
                       <p className="mt-1 text-caption text-muted-foreground">
-                        Number of monthly installments (1–360).
+                        Number of monthly installments (1–360) applied to each SIP line.
                       </p>
                       {sipInstallments.length > 0 && !sipInstallmentsValid ? (
                         <p className="mt-1 text-caption text-destructive">
@@ -716,36 +1129,10 @@ export function QuickTransactionWizard() {
                         </p>
                       ) : null}
                     </Field>
-                  ) : null}
-                  <Field>
-                    <FieldLabel>Payment method</FieldLabel>
-                    <div className="quick-txn-payment-methods">
-                      {PAYMENT_METHODS.map((method) => (
-                        <Button
-                          key={method.id}
-                          type="button"
-                          variant={paymentMethod === method.id ? "default" : "outline"}
-                          className="quick-txn-payment-method-btn"
-                          onClick={() => setPaymentMethod(method.id)}
-                        >
-                          {method.id === "upi" ? (
-                            <Image
-                              src="/bhim.svg"
-                              alt=""
-                              width={20}
-                              height={20}
-                              className="size-5 shrink-0"
-                              aria-hidden
-                            />
-                          ) : (
-                            <Landmark className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
-                          )}
-                          {method.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </Field>
-                </FieldGroup>
+                      ) : null}
+                    </FieldGroup>
+                  </div>
+                </div>
               </form>
             </div>
           ) : null}
@@ -754,7 +1141,7 @@ export function QuickTransactionWizard() {
             <div className="quick-txn-wizard__section">
               <QuickTransactionSectionHeader
                 title="Review"
-                helpText="Confirm details before submitting (demo only)."
+                helpText="Confirm details before sending the recommendation link."
                 helpAriaLabel="Review step guidance"
                 trailing={<StatusBadge variant="success">Ready to submit</StatusBadge>}
               />
@@ -763,18 +1150,30 @@ export function QuickTransactionWizard() {
                 <div className="quick-txn-review-hero">
                   <div className="quick-txn-review-hero__top">
                     <p className="quick-txn-review-hero__label">
-                      {txnType === "sip" ? "SIP installment amount" : "Investment amount"}
+                      {txnType === "sip" ? "Total SIP per month" : "Total investment"}
                     </p>
                     <p className="quick-txn-review-hero__amount">
-                      {amountNumber > 0 ? formatAum(amountNumber) : "—"}
+                      {totalAmount > 0 ? formatAum(totalAmount) : "—"}
                     </p>
                     <p className="quick-txn-review-hero__words">
-                      {amountNumber > 0 ? amountWords : "N/A"}
+                      {totalAmount > 0 ? (
+                        <>
+                          <span className="quick-txn-review-hero__words-quote" aria-hidden>
+                            “
+                          </span>
+                          {totalAmountWords}
+                          <span className="quick-txn-review-hero__words-quote" aria-hidden>
+                            ”
+                          </span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </p>
                     {txnType === "sip" && sipInstallmentCount > 0 ? (
                       <p className="quick-txn-review-hero__sip-meta">
-                        {sipInstallmentCount} monthly installment{sipInstallmentCount === 1 ? "" : "s"} · Total{" "}
-                        {formatAum(amountNumber * sipInstallmentCount)}
+                        {sipInstallmentCount} monthly installment{sipInstallmentCount === 1 ? "" : "s"} per fund ·
+                        Portfolio total {formatAum(totalAmount * sipInstallmentCount)}
                       </p>
                     ) : null}
                   </div>
@@ -809,16 +1208,24 @@ export function QuickTransactionWizard() {
                       <p className="quick-txn-review-card__value">{txnType === "sip" ? "SIP" : "One time"}</p>
                       {txnType === "sip" && sipInstallmentCount > 0 ? (
                         <p className="quick-txn-review-card__hint">
-                          {sipInstallmentCount} installments × {formatAum(amountNumber)}
+                          {sipInstallmentCount} installments × {formatAum(totalAmount)} / month across{" "}
+                          {fundLines.length} fund{fundLines.length === 1 ? "" : "s"}
                         </p>
                       ) : null}
                     </div>
                   </div>
 
                   <div className="quick-txn-review-card">
-                    <span className="quick-txn-review-card__icon" aria-hidden>
-                      <UserRound className="size-4" strokeWidth={2.25} />
-                    </span>
+                    <DistributorProfileAvatar
+                      name={
+                        selectedInvestors[0]?.displayName ||
+                        selectedInvestors[0]?.clientCode ||
+                        "Investor"
+                      }
+                      imageSrc={selectedInvestors[0]?.profileImageUrl}
+                      size="sm"
+                      className="quick-txn-review-card__avatar shrink-0"
+                    />
                     <div className="min-w-0">
                       <p className="quick-txn-review-card__label">Investor</p>
                       <p className="quick-txn-review-card__value font-mono">
@@ -829,23 +1236,41 @@ export function QuickTransactionWizard() {
                   </div>
                 </div>
 
-                {selectedScheme ? (
-                  <div className="quick-txn-review-fund">
-                    <SchemeLogo scheme={selectedScheme} compact />
-                    <div className="min-w-0 flex-1">
-                      <p className="quick-txn-review-card__label">Selected fund</p>
-                      <p className="quick-txn-review-fund__name">{selectedScheme.name}</p>
-                      <div className="quick-txn-review-fund__meta">
-                        <span className="font-mono">{selectedScheme.irn}</span>
-                        <span aria-hidden>·</span>
-                        <span>{selectedScheme.category}</span>
-                        <span aria-hidden>·</span>
-                        <span>
-                          {formatAum(selectedScheme.minAmount)} – {formatAum(selectedScheme.maxAmount)}
-                        </span>
+                <div className="quick-txn-review-funds">
+                  <p className="quick-txn-review-card__label">
+                    Selected funds ({fundLines.length}/{QUICK_TXN_MAX_FUNDS})
+                  </p>
+                  <div
+                    className="quick-txn-review-funds-scroll"
+                    aria-label="Selected funds"
+                    tabIndex={0}
+                  >
+                    {fundLines.map((line) => (
+                      <div key={line.fund.id} className="quick-txn-review-fund">
+                        <SchemeLogo scheme={line.fund} compact />
+                        <div className="min-w-0 flex-1">
+                          <SchemeName name={line.fund.name} compact />
+                          <div className="quick-txn-review-fund__meta">
+                            <span className="font-mono">{line.fund.irn}</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatAum(line.amount)}</span>
+                            {txnType === "sip" && sipInstallmentCount > 0 ? (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span>{sipInstallmentCount} installments</span>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
+                </div>
+
+                {submitError ? (
+                  <p className="mt-4 rounded-[var(--radius-card)] border border-destructive/30 bg-destructive/5 px-3 py-2 text-compact text-destructive">
+                    {submitError}
+                  </p>
                 ) : null}
               </div>
             </div>
@@ -858,16 +1283,20 @@ export function QuickTransactionWizard() {
               type="button"
               variant="outline"
               onClick={goBack}
-              disabled={displayStep === "type" || isSwitching}
+              disabled={displayStep === "type" || isSwitching || isSubmitting}
             >
               Back
             </DistributorActionButton>
             {displayStep === "review" ? (
-              <DistributorActionButton type="button" onClick={handleSubmit} disabled={!canContinue || isSwitching}>
-                Submit transaction
+              <DistributorActionButton
+                type="button"
+                onClick={() => void handleSubmit()}
+                disabled={!canContinue || isSwitching || isSubmitting}
+              >
+                {isSubmitting ? "Sending…" : "Send recommendation"}
               </DistributorActionButton>
             ) : (
-              <DistributorActionButton type="button" onClick={goNext} disabled={!canContinue || isSwitching}>
+              <DistributorActionButton type="button" onClick={goNext} disabled={!canContinue || isSwitching || isSubmitting}>
                 Continue
               </DistributorActionButton>
             )}

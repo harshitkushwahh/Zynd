@@ -33,6 +33,8 @@ KYC_STEP_LABELS: dict[str, str] = {
 SUCCESS_ESIGN_STATUSES = {"success", "completed", "verified", "signed"}
 FAILED_ESIGN_STATUSES = {"failed", "failure", "error"}
 SUCCESS_EXTERNAL_KYC_STATUSES = {"returned_success", "success", "completed", "verified"}
+KRA_SKIPPED_STEP_KEYS: tuple[str, ...] = ("digilocker", "signature", "esign", "nominee")
+COMPLETED_STEP_STATUSES = {"verified", "completed"}
 
 
 def _step_label(step_key: str) -> str:
@@ -47,6 +49,16 @@ def _format_failure_payload(payload: dict[str, Any] | None) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return None
+
+
+def apply_kra_skipped_step_statuses(step_statuses: dict[str, str], *, kyc_already_registered: bool) -> dict[str, str]:
+    if not kyc_already_registered:
+        return step_statuses
+    updated = dict(step_statuses)
+    for key in KRA_SKIPPED_STEP_KEYS:
+        if updated.get(key) not in COMPLETED_STEP_STATUSES:
+            updated[key] = "skipped"
+    return updated
 
 
 def derive_esign_step_status(
@@ -111,7 +123,7 @@ def build_compliance_issues(
             detail=pan_failure or journey.readiness_reason or "PAN could not be verified.",
         )
 
-    if journey.digilocker_failure_reason:
+    if journey.digilocker_failure_reason and not journey.kyc_already_registered:
         push(
             issue_id="digilocker",
             step_key="digilocker",
@@ -140,7 +152,11 @@ def build_compliance_issues(
         )
 
     external_status = (journey.external_kyc_status or "").lower()
-    if external_status and external_status not in SUCCESS_EXTERNAL_KYC_STATUSES:
+    if (
+        external_status
+        and external_status not in SUCCESS_EXTERNAL_KYC_STATUSES
+        and not journey.kyc_already_registered
+    ):
         push(
             issue_id="external-kyc",
             step_key="digilocker",
@@ -149,7 +165,7 @@ def build_compliance_issues(
             detail=f"Provider status: {journey.external_kyc_status}",
         )
 
-    if (journey.esign_details_status or "").lower() in FAILED_ESIGN_STATUSES:
+    if (journey.esign_details_status or "").lower() in FAILED_ESIGN_STATUSES and not journey.kyc_already_registered:
         push(
             issue_id="esign",
             step_key="esign",
@@ -231,7 +247,7 @@ def build_kyc_audit_log(
                 action="KRA path confirmed",
                 step_key="pan",
                 detail=journey.readiness_reason
-                or "Investor is KRA-compliant. DigiLocker, signature, and eSign are not required.",
+                or "Investor is KRA-compliant. DigiLocker, signature, eSign, and nominee are not required.",
                 actor="system",
             )
         )

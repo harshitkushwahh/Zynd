@@ -114,6 +114,13 @@ def test_run_state_exposes_staging_pause_metadata():
         mode="full",
         triggered_by="ADMIN",
         status=MfPipelineRunStatus.paused,
+        steps=[
+            MfPipelineStepState(
+                key="cybrilla-scheme-promote",
+                label="Promote validated schemes",
+                status=MfPipelineStepStatus.pending,
+            )
+        ],
         context={
             "pause_reason": "awaiting_staging_approval",
             "batch_uuid": "batch-123",
@@ -123,6 +130,38 @@ def test_run_state_exposes_staging_pause_metadata():
     assert payload["pause_reason"] == "awaiting_staging_approval"
     assert payload["staging_batch_uuid"] == "batch-123"
     assert payload["can_approve_staging"] is True
+
+
+def test_run_state_hides_stale_staging_approval_after_promote():
+    run = MfPipelineRunState(
+        run_id="run-2",
+        mode="full",
+        triggered_by="ADMIN",
+        status=MfPipelineRunStatus.paused,
+        current_step_key="amfi-ter-monthly",
+        error="Interrupted by server restart — resume to continue",
+        steps=[
+            MfPipelineStepState(
+                key="cybrilla-scheme-promote",
+                label="Promote validated schemes",
+                status=MfPipelineStepStatus.succeeded,
+            ),
+            MfPipelineStepState(
+                key="amfi-ter-monthly",
+                label="amfi ter monthly",
+                status=MfPipelineStepStatus.running,
+            ),
+        ],
+        context={
+            "pause_reason": "awaiting_staging_approval",
+            "batch_uuid": "batch-123",
+        },
+    )
+    payload = run.to_dict()
+    assert payload["can_approve_staging"] is False
+    assert payload["auto_resume_pending"] is False
+    assert payload["staging_batch_uuid"] is None
+    assert payload["can_resume"] is True
 
 
 @pytest.mark.asyncio

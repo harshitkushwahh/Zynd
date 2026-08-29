@@ -22,9 +22,10 @@ export function mapPortfolioSummaryToInvestedPreview(
         : [];
 
   return {
-    totalValueInr: summary.invested_inr,
+    totalValueInr: summary.current_value_inr,
+    investedInr: summary.invested_inr,
     totalReturnPct: summary.total_return_pct,
-    dayChangePct: summary.day_change_pct ?? 0,
+    dayChangePct: summary.day_change_pct,
     dayChangePoints,
   };
 }

@@ -13,6 +13,8 @@ from app.infrastructure.persistence.models import AuditEventType, Base
 from app.infrastructure.persistence import risk_profile_models  # noqa: F401
 from app.infrastructure.persistence import family_group_models  # noqa: F401
 from app.infrastructure.persistence import goal_models  # noqa: F401
+from app.infrastructure.persistence import recommendation_models  # noqa: F401
+from app.infrastructure.persistence import mitra_txn_recommendation_models  # noqa: F401
 
 # Enum values added after initial schema creation — sync for isolated test DBs.
 _AUDIT_EVENT_ENUM_EXTENSIONS = [

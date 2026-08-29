@@ -1,7 +1,13 @@
 import { FileSpreadsheet, FolderTree, Layers3, Lock, MessageSquareText, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type RiskProfileTabId = "categories" | "questions" | "templates" | "tiers" | "users" | "locked";
+export type RiskProfileTabId =
+  | "categories"
+  | "questions"
+  | "templates"
+  | "tiers"
+  | "users"
+  | "locked";
 
 export type RiskProfileTab = {
   id: RiskProfileTabId;

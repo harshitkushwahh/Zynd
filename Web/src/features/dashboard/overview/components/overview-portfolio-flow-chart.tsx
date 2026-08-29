@@ -51,7 +51,7 @@ function PortfolioFlowTooltipRow({
           className={cn(
             "size-1.5 shrink-0 rounded-full",
             tone === "profit" && "bg-[var(--zynd-emerald)]",
-            tone === "loss" && "bg-destructive",
+            tone === "loss" && "bg-[var(--zynd-accent-red)]",
             tone === "muted" && "bg-muted-foreground",
           )}
           aria-hidden="true"
@@ -102,7 +102,7 @@ function PortfolioFlowTooltip({ active, payload, label }: PortfolioFlowTooltipPr
             className={cn(
               "text-[10px] font-semibold tabular-nums",
               gainDisplay.tone === "positive" && "text-success",
-              gainDisplay.tone === "negative" && "text-destructive",
+              gainDisplay.tone === "negative" && "text-[var(--zynd-accent-red)]",
               gainDisplay.tone === "muted" && "text-muted-foreground",
             )}
           >

@@ -7,8 +7,8 @@ import {
   Info,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { DISTRIBUTOR_SELECTION_BADGE_CLASS } from "@/lib/distributor-layout";
+import { cn } from "@/lib/utils";
 
 export type StatusBadgeVariant =
   | "success"
@@ -19,13 +19,28 @@ export type StatusBadgeVariant =
 
 const variantConfig: Record<
   StatusBadgeVariant,
-  { icon: LucideIcon; badgeVariant: StatusBadgeVariant }
+  { icon: LucideIcon; className: string }
 > = {
-  success: { icon: CheckCircle2, badgeVariant: "success" },
-  warning: { icon: AlertTriangle, badgeVariant: "warning" },
-  destructive: { icon: AlertCircle, badgeVariant: "destructive" },
-  info: { icon: Info, badgeVariant: "info" },
-  neutral: { icon: Circle, badgeVariant: "neutral" },
+  success: {
+    icon: CheckCircle2,
+    className: "border-success/25 bg-success/10 text-success",
+  },
+  warning: {
+    icon: AlertTriangle,
+    className: "border-warning/25 bg-warning/10 text-warning",
+  },
+  destructive: {
+    icon: AlertCircle,
+    className: "border-destructive/25 bg-destructive/10 text-destructive",
+  },
+  info: {
+    icon: Info,
+    className: "border-primary/25 bg-primary/10 text-primary",
+  },
+  neutral: {
+    icon: Circle,
+    className: "border-border bg-muted/40 text-muted-foreground",
+  },
 };
 
 type StatusBadgeProps = {
@@ -33,17 +48,32 @@ type StatusBadgeProps = {
   children: React.ReactNode;
   /** Optional icon override (defaults to the variant icon). */
   icon?: LucideIcon;
+  showIcon?: boolean;
+  className?: string;
 };
 
 /** Compact status chip with icon — single badge UI for the Distributor app. */
-export function StatusBadge({ variant, children, icon }: StatusBadgeProps) {
+export function StatusBadge({
+  variant,
+  children,
+  icon,
+  showIcon = true,
+  className,
+}: StatusBadgeProps) {
   const config = variantConfig[variant];
   const Icon = icon ?? config.icon;
 
   return (
-    <Badge variant={config.badgeVariant} className={DISTRIBUTOR_SELECTION_BADGE_CLASS}>
-      <Icon strokeWidth={2.25} />
+    <span
+      className={cn(
+        "group/badge inline-flex h-5 w-fit shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-tiny font-medium leading-none capitalize",
+        DISTRIBUTOR_SELECTION_BADGE_CLASS,
+        config.className,
+        className,
+      )}
+    >
+      {showIcon ? <Icon className="size-3 shrink-0" strokeWidth={2.25} /> : null}
       {children}
-    </Badge>
+    </span>
   );
 }

@@ -8,10 +8,12 @@ export type InvestorServiceModel = "pm" | "diy";
 
 export type DistributorInvestor = {
   id: string;
+  displayName: string;
   emailMasked: string;
   panMasked: string;
   clientCode: string;
   mobileMasked: string;
+  profileImageUrl?: string | null;
   onboardingStatus: InvestorOnboardingStatus;
   complianceStatus: InvestorComplianceStatus;
   investmentStatus: InvestorInvestmentStatus;
@@ -32,6 +34,9 @@ export type DistributorOrder = {
   investorEmailMasked: string;
   clientCode: string;
   schemeName: string;
+  amcName?: string | null;
+  amcSlug?: string | null;
+  amcLogoUrl?: string | null;
   orderType: "Purchase" | "Redeem" | "Switch";
   amount: number;
   status: OrderStatus;
@@ -65,12 +70,21 @@ export type DistributorTxnRequest = {
   requestRef: string;
   investorEmailMasked: string;
   clientCode: string;
+  investorDisplayName?: string;
+  profileImageUrl?: string | null;
   requestType: "Purchase" | "Redeem" | "SIP Register" | "Folio Update";
   amount: number | null;
   status: TxnRequestStatus;
   createdAt: string;
   /** False for platform-wide rows in “All orders”. Defaults to true. */
   inDistributorBook?: boolean;
+  /** Present for multi-fund quick transaction batches. */
+  fundCount?: number;
+  fundSummary?: string;
+  schemeName?: string;
+  amcName?: string | null;
+  amcSlug?: string | null;
+  amcLogoUrl?: string | null;
 };
 
 export type DistributorTransactionGroup = {
@@ -82,6 +96,8 @@ export type DistributorTransactionGroup = {
   totalAmount: number;
   status: "Draft" | "Submitted" | "Completed";
   createdAt: string;
+  /** One-time vs SIP — used for operations sidebar variants. */
+  channel?: "one-time" | "sip";
   /** False for platform-wide rows in “All orders”. Defaults to true. */
   inDistributorBook?: boolean;
 };
@@ -177,6 +193,8 @@ export type DistributorClientHolding = {
   redeemableValue: number;
   units: number;
   navPerUnit?: number | null;
+  returnAmount?: number;
+  returnPct?: number;
   asOfDate?: string | null;
 };
 

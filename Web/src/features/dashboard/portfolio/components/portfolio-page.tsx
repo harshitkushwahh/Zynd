@@ -45,18 +45,11 @@ import {
   buildProcessingPortfolioPreview,
 } from "@/features/dashboard/portfolio/lib/portfolio-processing-preview";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
+import { mfReturnToneTextClass } from "@/features/invest/lib/mf-return-tone-styles";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 import { CalendarClock, TrendingUp, Wallet } from "lucide-react";
-
-function toneClass(tone: "positive" | "negative" | "muted") {
-  return cn(
-    tone === "positive" && "text-success",
-    tone === "negative" && "text-destructive",
-    tone === "muted" && "text-muted-foreground",
-  );
-}
 
 function PortfolioStatCard({
   label,
@@ -85,7 +78,7 @@ function PortfolioStatCard({
       <p
         className={cn(
           "mt-2 text-h4 font-semibold tabular-nums tracking-tight",
-          tone ? toneClass(tone) : "text-foreground",
+          tone ? mfReturnToneTextClass(tone) : "text-foreground",
         )}
       >
         {value}

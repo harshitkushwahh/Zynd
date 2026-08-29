@@ -69,8 +69,8 @@ export function KycEntryGate({ reasons, onReady }: KycEntryGateProps) {
             </Button>
           ) : null}
           {reasons.includes("phone_not_verified") || reasons.includes("email_not_verified") ? (
-            <Button type="button" variant="secondary" asChild>
-              <Link href="/dashboard/settings">{copy.kyc.entryGate.openSettings}</Link>
+            <Button variant="secondary" nativeButton={false} render={<Link href="/dashboard/settings" />}>
+              {copy.kyc.entryGate.openSettings}
             </Button>
           ) : null}
         </div>

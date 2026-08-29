@@ -17,3 +17,21 @@ export function resolveDistributorAssetUrl(url: string | null | undefined): stri
 
   return `${env.apiUrl.replace(/\/$/, "")}/${trimmed.replace(/^\//, "")}`;
 }
+
+const INVEST_ASSETS_PREFIX = "/invest/assets/";
+
+function buildInvestAssetUrl(assetPath: string) {
+  const normalized = assetPath.replace(/^\/+/, "");
+  return `${env.apiUrl.replace(/\/$/, "")}${INVEST_ASSETS_PREFIX}${normalized}`;
+}
+
+/** Resolve AMC logo from API value, falling back to the standard storage path from slug. */
+export function resolveAmcLogoUrl(
+  logoUrl: string | null | undefined,
+  amcSlug: string | null | undefined,
+) {
+  const resolved = resolveDistributorAssetUrl(logoUrl);
+  if (resolved) return resolved;
+  if (!amcSlug) return null;
+  return buildInvestAssetUrl(`public/amcs/${amcSlug}.png`);
+}

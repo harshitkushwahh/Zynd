@@ -14,7 +14,12 @@ from app.application.mf.mf_lumpsum_reconciliation_service import (
     reconcile_order_payment,
 )
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _derive_next_action, serialize_order
-from app.application.mf.mf_sip_plan_service import advance_sip_plan, reconcile_sip_plan_from_fp, serialize_sip_plan
+from app.application.mf.mf_sip_plan_service import (
+    advance_sip_plan,
+    load_sip_plan_fund_metadata,
+    reconcile_sip_plan_from_fp,
+    serialize_sip_plan,
+)
 from app.application.mf.mf_cart_service import serialize_checkout
 from app.application.mf.mf_mandate_service import serialize_mandate, sync_mandate_from_fp
 from app.application.mf.mf_webhook_service import replay_finprim_webhook_event
@@ -782,8 +787,16 @@ async def get_sip_plan_admin(session: AsyncSession, plan_id: uuid.UUID) -> dict[
             )
         ).scalars()
     )
+    amc_names, amc_logos, isins = await load_sip_plan_fund_metadata(session, [plan])
     return {
-        "plan": serialize_sip_plan(plan, product_name=product.name if product else None, mandate=mandate),
+        "plan": serialize_sip_plan(
+            plan,
+            product_name=product.name if product else None,
+            mandate=mandate,
+            amc_name=amc_names.get(plan.fund_id),
+            amc_logo_url=amc_logos.get(plan.fund_id),
+            isin=isins.get(plan.fund_id),
+        ),
         "events": [
             {
                 "from_status": event.from_status,

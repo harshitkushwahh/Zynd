@@ -59,8 +59,8 @@ export function FundEligibilityBanner({ className }: FundEligibilityBannerProps)
         <p className="text-compact font-medium text-foreground">{title}</p>
         <p className="text-caption text-muted-foreground">{description}</p>
       </div>
-      <Button asChild>
-        <Link href="/dashboard/settings">{copy.kyc.entryGate.openSettings}</Link>
+      <Button nativeButton={false} render={<Link href="/dashboard/settings" />}>
+        {copy.kyc.entryGate.openSettings}
       </Button>
     </div>
   );

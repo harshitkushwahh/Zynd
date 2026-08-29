@@ -72,6 +72,7 @@ class FirebasePushService:
             notification_id=str(notification.id),
             notification_type=notification.notification_type,
             category=notification.category,
+            metadata=notification.metadata_json,
         )
 
         data = {

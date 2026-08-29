@@ -11,7 +11,7 @@ import {
   upsertMfCartItem,
   type MfCart,
 } from "@/features/invest/api/invest-api";
-import { setMfCartQueryData } from "@/features/invest/hooks/use-mf-cart-query";
+import { setMfCartQueryData, syncMfCartQueryData } from "@/features/invest/hooks/use-mf-cart-query";
 import type { MfFundScreenerSelectionItem } from "@/features/invest/contexts/mf-fund-screener-selection-context";
 import {
   resolveScreenerCartLumpsumAmount,
@@ -21,6 +21,7 @@ import {
   canAddToMfCart,
   filterLumpsumBulkCartAdds,
   getMfCartMaxItems,
+  mfCartHasItem,
   remainingMfCartSlots,
 } from "@/features/invest/lib/mf-cart-limits";
 import type { MfFundScreenerDragPayload } from "@/features/invest/lib/mf-fund-screener-drag";
@@ -109,7 +110,7 @@ export function useMfScreenerCartDrop() {
               })
             : await bulkUpsertMfCartItems({ items });
 
-        setMfCartQueryData(queryClient, cart);
+        syncMfCartQueryData(queryClient, cart);
 
         toast.success(
           addable.length === 1
@@ -148,6 +149,10 @@ export function useMfScreenerCartDrop() {
   const addFundToCart = useCallback(
     async (fund: ScreenerCartFund) => {
       const cartSnapshot = await resolveMfCartSnapshot(queryClient);
+      if (mfCartHasItem(cartSnapshot, fund.product_id, "lumpsum")) {
+        toast.info(copy.mutualFunds.cartAlreadyInCart);
+        return null;
+      }
       if (!canAddToMfCart(cartSnapshot, fund.product_id, "lumpsum")) {
         toast.error(
           screenerCartBlockedMessage(cartSnapshot.lumpsum_item_count, cartSnapshot.max_items),

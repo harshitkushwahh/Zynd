@@ -25,6 +25,7 @@ export type PortfolioRedeemUnitsRow = {
   id: string;
   fundName: string;
   amcName: string;
+  amcLogoUrl: string | null;
   redeemableUnits: number;
   currentNav: number;
   redeemableValueInr: number;
@@ -37,6 +38,7 @@ export function mapRedeemUnitsItemToRow(item: PortfolioRedeemUnitsItem): Portfol
     id: item.id,
     fundName: item.fund_name,
     amcName: item.amc_name ?? "Mutual fund",
+    amcLogoUrl: item.amc_logo_url,
     redeemableUnits: item.redeemable_units,
     currentNav: item.nav ?? 0,
     redeemableValueInr:

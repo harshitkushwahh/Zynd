@@ -1,5 +1,8 @@
 export type PortfolioChartPeriod = "1D" | "1M" | "6M" | "1Y" | "3Y" | "5Y" | "10Y";
 
+/** Client detail portfolio chart — shorter period menu. */
+export type ClientPortfolioChartPeriod = "1D" | "1M" | "all";
+
 export type PortfolioChartPoint = {
   label: string;
   value: number;
@@ -16,6 +19,14 @@ const PORTFOLIO_CHART_PERIOD_DAYS: Record<PortfolioChartPeriod, number | null> =
   "5Y": 365 * 5,
   "10Y": null,
 };
+
+const CLIENT_PORTFOLIO_CHART_PERIOD_DAYS: Record<ClientPortfolioChartPeriod, number | null> = {
+  "1D": 1,
+  "1M": 30,
+  all: null,
+};
+
+export const CLIENT_PORTFOLIO_CHART_PERIODS: ClientPortfolioChartPeriod[] = ["1D", "1M", "all"];
 
 export const PORTFOLIO_CHART_PERIODS: PortfolioChartPeriod[] = [
   "1D",
@@ -165,6 +176,177 @@ export function getPortfolioChartSeries(
   return buildPoints(clientId, currentValue, investedAmount, period);
 }
 
+function trimLeadingEmptyPoints(points: readonly PortfolioChartPoint[]): PortfolioChartPoint[] {
+  const firstActive = points.findIndex((point) => point.value > 0 || point.invested > 0);
+  if (firstActive <= 0) return [...points];
+  return points.slice(firstActive);
+}
+
+function isActivePortfolioChartPoint(point: PortfolioChartPoint): boolean {
+  return point.value > 0 || point.invested > 0;
+}
+
+function compactActivePortfolioChartPoints(points: readonly PortfolioChartPoint[]): PortfolioChartPoint[] {
+  return points.filter(isActivePortfolioChartPoint);
+}
+
+function relabelPortfolioChartPoints(points: readonly PortfolioChartPoint[]): PortfolioChartPoint[] {
+  const historyDays = portfolioChartHistoryDays(points);
+
+  return points.map((point) => {
+    if (!point.date) return point;
+    const date = new Date(`${point.date}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return point;
+
+    const label =
+      historyDays <= 45
+        ? date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+        : date.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+
+    return { ...point, label };
+  });
+}
+
+function normalizePortfolioChartSeries(points: readonly PortfolioChartPoint[]): PortfolioChartPoint[] {
+  return trimLeadingEmptyPoints(
+    points.map((point) => ({
+      ...point,
+      value: Math.max(0, Number(point.value) || 0),
+      invested: Math.max(0, Number(point.invested) || 0),
+    })),
+  );
+}
+
+export function buildPortfolioChartFallbackSeries(
+  currentValue: number,
+  investedAmount: number,
+): PortfolioChartPoint[] {
+  if (currentValue <= 0 && investedAmount <= 0) return [];
+
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 1);
+
+  return relabelPortfolioChartPoints([
+    {
+      label: "",
+      value: investedAmount,
+      invested: investedAmount,
+      date: start.toISOString().slice(0, 10),
+    },
+    {
+      label: "",
+      value: currentValue,
+      invested: investedAmount,
+      date: end.toISOString().slice(0, 10),
+    },
+  ]);
+}
+
+export function resolveClientPortfolioChartSeries(
+  series: readonly PortfolioChartPoint[],
+  currentValue: number,
+  investedAmount: number,
+): PortfolioChartPoint[] {
+  const normalized = normalizePortfolioChartSeries(series);
+  const active = compactActivePortfolioChartPoints(normalized);
+  const historyDays = portfolioChartHistoryDays(active);
+
+  if (active.length <= 3 || historyDays <= 45) {
+    return buildPortfolioChartFallbackSeries(currentValue, investedAmount);
+  }
+
+  const next = active.map((point) => ({ ...point }));
+  const last = next[next.length - 1];
+  next[next.length - 1] = {
+    ...last,
+    value: currentValue > 0 ? currentValue : last.value,
+    invested: investedAmount > 0 ? investedAmount : last.invested,
+  };
+
+  return relabelPortfolioChartPoints(next);
+}
+
+export function portfolioChartHistoryDays(points: readonly PortfolioChartPoint[]): number {
+  const dated = points.filter((point) => point.date);
+  if (dated.length < 2) return dated.length > 0 ? 0 : 0;
+
+  const start = new Date(dated[0].date!);
+  const end = new Date(dated[dated.length - 1].date!);
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86_400_000));
+}
+
+export function isClientPortfolioChartPeriodEnabled(
+  period: ClientPortfolioChartPeriod,
+  historyDays: number,
+  hasData: boolean,
+): boolean {
+  if (!hasData) return false;
+  if (period === "all" || period === "1D") return true;
+  if (period === "1M") return historyDays >= 28;
+  return false;
+}
+
+export function resolveDefaultClientPortfolioChartPeriod(
+  series: readonly PortfolioChartPoint[],
+): ClientPortfolioChartPeriod {
+  const enabled = resolveEnabledClientPortfolioChartPeriods(series);
+  if (enabled.includes("1M")) return "1M";
+  if (enabled.includes("1D")) return "1D";
+  return enabled.includes("all") ? "all" : "1D";
+}
+
+export function resolveEnabledClientPortfolioChartPeriods(
+  series: readonly PortfolioChartPoint[],
+): ClientPortfolioChartPeriod[] {
+  const historyDays = portfolioChartHistoryDays(series);
+  const hasData = series.length > 0;
+
+  return CLIENT_PORTFOLIO_CHART_PERIODS.filter((period) =>
+    isClientPortfolioChartPeriodEnabled(period, historyDays, hasData),
+  );
+}
+
+export function coerceClientPortfolioChartPeriod(
+  period: ClientPortfolioChartPeriod,
+  series: readonly PortfolioChartPoint[],
+): ClientPortfolioChartPeriod {
+  const enabled = resolveEnabledClientPortfolioChartPeriods(series);
+  if (enabled.includes(period)) return period;
+  return resolveDefaultClientPortfolioChartPeriod(series);
+}
+
+export function filterClientPortfolioChartByPeriod(
+  points: readonly PortfolioChartPoint[],
+  period: ClientPortfolioChartPeriod,
+): PortfolioChartPoint[] {
+  if (points.length === 0) return [];
+
+  const source = relabelPortfolioChartPoints(compactActivePortfolioChartPoints(points));
+  if (source.length === 0) return [];
+
+  const days = CLIENT_PORTFOLIO_CHART_PERIOD_DAYS[period];
+  if (days == null || source.every((point) => !point.date)) {
+    return source.length >= 2
+      ? source
+      : buildPortfolioChartFallbackSeries(
+          source[source.length - 1]?.value ?? 0,
+          source[source.length - 1]?.invested ?? 0,
+        );
+  }
+
+  const end = new Date(`${source[source.length - 1].date!}T12:00:00`);
+  const start = new Date(end);
+  start.setDate(start.getDate() - days);
+  const filtered = source.filter((point) => new Date(`${point.date!}T12:00:00`) >= start);
+  if (filtered.length >= 2) return filtered;
+
+  return source.length >= 2 ? source : buildPortfolioChartFallbackSeries(
+    source[source.length - 1]?.value ?? 0,
+    source[source.length - 1]?.invested ?? 0,
+  );
+}
+
 export function filterPortfolioChartByPeriod(
   points: readonly PortfolioChartPoint[],
   period: PortfolioChartPeriod,
@@ -172,19 +354,20 @@ export function filterPortfolioChartByPeriod(
   if (points.length === 0) return [];
 
   const datedPoints = points.filter((point) => Boolean(point.date));
-  if (datedPoints.length >= 2) {
-    const days = PORTFOLIO_CHART_PERIOD_DAYS[period];
-    if (days == null) return [...datedPoints];
+  const source = trimLeadingEmptyPoints(datedPoints.length >= 2 ? datedPoints : points);
+  if (source.length === 0) return [];
 
-    const end = new Date(datedPoints[datedPoints.length - 1].date!);
-    const start = new Date(end);
-    start.setDate(start.getDate() - days);
-    const filtered = datedPoints.filter((point) => new Date(point.date!) >= start);
-    if (filtered.length >= 2) return [...filtered];
-    return datedPoints.slice(Math.max(0, datedPoints.length - 2));
+  const days = PORTFOLIO_CHART_PERIOD_DAYS[period];
+  if (days == null || source.every((point) => !point.date)) {
+    return source.length >= 2 ? source : [];
   }
 
-  return points.length >= 2 ? [...points] : [];
+  const end = new Date(source[source.length - 1].date!);
+  const start = new Date(end);
+  start.setDate(start.getDate() - days);
+  const filtered = source.filter((point) => new Date(point.date!) >= start);
+  if (filtered.length >= 2) return filtered;
+  return source.length >= 2 ? source : [];
 }
 
 export function portfolioChartPeriodDescription(period: PortfolioChartPeriod): string {
@@ -202,6 +385,15 @@ export function portfolioChartPeriodDescription(period: PortfolioChartPeriod): s
 
 export function portfolioChartPeriodTabLabel(period: PortfolioChartPeriod): string {
   return period;
+}
+
+export function clientPortfolioChartPeriodSelectLabel(period: ClientPortfolioChartPeriod): string {
+  const labels: Record<ClientPortfolioChartPeriod, string> = {
+    "1D": "1 day",
+    "1M": "1 month",
+    all: "All",
+  };
+  return labels[period];
 }
 
 export function portfolioChartPeriodSelectLabel(period: PortfolioChartPeriod): string {

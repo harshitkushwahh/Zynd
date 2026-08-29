@@ -82,7 +82,17 @@ class MfPipelineRunState:
         )
         total = len(self.steps)
         pause_reason = self.context.get("pause_reason")
-        staging_batch_uuid = self.context.get("batch_uuid") if pause_reason == "awaiting_staging_approval" else None
+        promote_step = next((step for step in self.steps if step.key == "cybrilla-scheme-promote"), None)
+        promote_still_open = promote_step is not None and promote_step.status in {
+            MfPipelineStepStatus.pending,
+            MfPipelineStepStatus.running,
+        }
+        awaiting_staging = (
+            pause_reason == "awaiting_staging_approval"
+            and self.status == MfPipelineRunStatus.paused
+            and promote_still_open
+        )
+        staging_batch_uuid = self.context.get("batch_uuid") if awaiting_staging else None
         auto_resume_enabled = self.context.get("auto_resume", True) is not False
         return {
             "run_id": self.run_id,
@@ -106,14 +116,11 @@ class MfPipelineRunState:
             in {MfPipelineRunStatus.paused, MfPipelineRunStatus.failed, MfPipelineRunStatus.cancelled},
             "pause_reason": pause_reason,
             "staging_batch_uuid": staging_batch_uuid,
-            "can_approve_staging": pause_reason == "awaiting_staging_approval"
-            and self.status == MfPipelineRunStatus.paused,
+            "can_approve_staging": awaiting_staging,
             "health_diff": self.context.get("health_diff"),
             "skip_steps": list(self.context.get("skip_steps") or []),
             "auto_resume": auto_resume_enabled,
-            "auto_resume_pending": self.status == MfPipelineRunStatus.paused
-            and auto_resume_enabled
-            and pause_reason == "awaiting_staging_approval",
+            "auto_resume_pending": awaiting_staging and auto_resume_enabled,
         }
 
 

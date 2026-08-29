@@ -59,4 +59,10 @@ export const queryKeys = {
     tiers: () => ["risk", "tiers"] as const,
     config: () => ["risk", "config"] as const,
   },
+  recommendations: {
+    all: () => ["recommendations"] as const,
+    fundsForYou: () => ["recommendations", "funds-for-you"] as const,
+    mitraTxnRecommendation: (token: string) =>
+      ["recommendations", "mitra-txn", token] as const,
+  },
 } as const;

@@ -115,6 +115,7 @@ export function YourOperationsPage({ sectionSlug, variantSlug }: YourOperationsP
   const pageTitle = getDistributorOperationsPageTitle(displayScope);
   const tableLayout = { layout: "table" as const };
   const listScopeProp = { operationsListScope: displayScope };
+  const variantProp = { operationsVariantId: activeVariant.id };
 
   const sectionContent = (() => {
     switch (activeSection.id) {
@@ -124,6 +125,7 @@ export function YourOperationsPage({ sectionSlug, variantSlug }: YourOperationsP
             {...DISTRIBUTOR_PAGE_CONFIG.orders}
             {...tableLayout}
             {...listScopeProp}
+            {...variantProp}
           />
         );
       case "systematic-plans":
@@ -140,6 +142,7 @@ export function YourOperationsPage({ sectionSlug, variantSlug }: YourOperationsP
             {...DISTRIBUTOR_PAGE_CONFIG.txnRequests}
             {...tableLayout}
             {...listScopeProp}
+            {...variantProp}
           />
         );
       case "transaction-groups":
@@ -148,6 +151,7 @@ export function YourOperationsPage({ sectionSlug, variantSlug }: YourOperationsP
             {...DISTRIBUTOR_PAGE_CONFIG.transactionGroups}
             {...tableLayout}
             {...listScopeProp}
+            {...variantProp}
           />
         );
       default:

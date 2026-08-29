@@ -686,6 +686,8 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
   }, [run]);
 
   const isRunning = run?.status === "running" || run?.status === "pending";
+  const awaitingStaging = Boolean(run?.can_approve_staging && run.staging_batch_uuid && !isRunning);
+  const showResume = Boolean(run?.can_resume && !isRunning && !awaitingStaging);
   const failedStep = run?.steps.find((step) => step.status === "failed") ?? null;
   const maintenanceWindow = preview?.flags.maintenance_window;
   const startBlocked = preview ? !preview.can_start : false;
@@ -711,7 +713,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
           {canRun ? (
             <PipelineModeSelect
               value={mode}
-              disabled={starting || isRunning || !!run?.can_resume}
+              disabled={starting || isRunning || showResume || awaitingStaging}
               onValueChange={setMode}
             />
           ) : null}
@@ -737,7 +739,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
               </Button>
               <Button
                 size="sm"
-                disabled={starting || isRunning || !!run?.can_resume || startBlocked}
+                disabled={starting || isRunning || showResume || awaitingStaging || startBlocked}
                 onClick={() => handleStartRequest()}
               >
                 {starting ? (
@@ -752,7 +754,22 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
                   </>
                 )}
               </Button>
-              {run?.can_resume && !isRunning ? (
+              {awaitingStaging ? (
+                <Button size="sm" disabled={approvingStaging} onClick={() => void handleApproveStaging()}>
+                  {approvingStaging ? (
+                    <>
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                      Approving…
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="size-3.5" />
+                      Approve
+                    </>
+                  )}
+                </Button>
+              ) : null}
+              {showResume ? (
                 <Button size="sm" variant="secondary" disabled={resuming} onClick={() => void handleResume()}>
                   {resuming ? (
                     <>
@@ -835,39 +852,19 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
         </AdminFeedbackMessage>
       ) : null}
 
-      {run?.auto_resume_pending ? (
-        <AdminFeedbackMessage variant="success">
-          Pipeline will auto-resume when the staging batch is approved (if auto-resume is enabled server-side).
-        </AdminFeedbackMessage>
-      ) : null}
-
-      {run?.can_approve_staging && run.staging_batch_uuid && !isRunning ? (
+      {awaitingStaging ? (
         <AdminFeedbackMessage variant="warning">
           <div className="space-y-2">
             <p>
               Pipeline paused for staging approval. Batch{" "}
-              <span className="font-mono">{run.staging_batch_uuid}</span> must be approved before promote
+              <span className="font-mono">{run?.staging_batch_uuid}</span> must be approved before promote
               continues.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {onOpenStagingTab ? (
-                <Button size="sm" variant="outline" onClick={onOpenStagingTab}>
-                  Open Staging tab
-                </Button>
-              ) : null}
-              {canRun ? (
-                <Button size="sm" disabled={approvingStaging} onClick={() => void handleApproveStaging()}>
-                  {approvingStaging ? (
-                    <>
-                      <LoaderCircle className="size-3.5 animate-spin" />
-                      Approving…
-                    </>
-                  ) : (
-                    "Approve & continue"
-                  )}
-                </Button>
-              ) : null}
-            </div>
+            {onOpenStagingTab ? (
+              <Button size="sm" variant="outline" onClick={onOpenStagingTab}>
+                Open Staging tab
+              </Button>
+            ) : null}
           </div>
         </AdminFeedbackMessage>
       ) : null}
@@ -913,7 +910,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
                 Current step: <span className="font-mono text-foreground">{run.current_step_key}</span>
               </p>
             ) : null}
-            {run.error ? (
+            {run.error && !awaitingStaging ? (
               <AdminFeedbackMessage variant="destructive">{run.error}</AdminFeedbackMessage>
             ) : null}
             {run.can_resume && failedStep && canRun ? (

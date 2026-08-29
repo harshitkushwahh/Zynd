@@ -23,6 +23,7 @@ import {
   searchDistributorTransactionGroups,
   searchDistributorTxnRequests,
 } from "@/lib/distributor-global-search";
+import { useDistributorOrders } from "@/contexts/distributor-orders-context";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import type { DistributorInvestor } from "@/lib/distributor-types";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,7 @@ export function DistributorDashboardSearchDialog({
 }: DistributorDashboardSearchDialogProps) {
   const router = useRouter();
   const { requests: txnRequestItems } = useDistributorTxnRequests();
+  const { bookOrders } = useDistributorOrders();
   const [query, setQuery] = useState("");
   const [apiClients, setApiClients] = useState<DistributorInvestor[] | null>(null);
 
@@ -104,7 +106,7 @@ export function DistributorDashboardSearchDialog({
     () => searchDistributorInvestorsInList(apiClients ?? [], query),
     [query, apiClients],
   );
-  const orders = useMemo(() => searchDistributorOrders(query), [query]);
+  const orders = useMemo(() => searchDistributorOrders(query, bookOrders), [bookOrders, query]);
   const plans = useMemo(() => searchDistributorSystematicPlans(query), [query]);
   const txnRequests = useMemo(
     () => searchDistributorTxnRequests(query, txnRequestItems),
@@ -235,7 +237,7 @@ export function DistributorDashboardSearchDialog({
           ) : null}
 
           {txnRequests.length > 0 ? (
-            <SearchGroup heading="Txn requests">
+            <SearchGroup heading="Quick transactions">
               {txnRequests.map((request) => (
                 <SearchResultButton
                   key={request.id}

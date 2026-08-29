@@ -12,6 +12,7 @@ from app.infrastructure.persistence import provider_log_models  # noqa: F401
 from app.infrastructure.persistence import risk_profile_models  # noqa: F401
 from app.infrastructure.persistence import family_group_models  # noqa: F401
 from app.infrastructure.persistence import goal_models  # noqa: F401
+from app.infrastructure.persistence import recommendation_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

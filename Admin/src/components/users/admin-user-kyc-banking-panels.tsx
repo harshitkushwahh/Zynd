@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { AdminUserKycDetail, AdminUserKycNominee } from "@/lib/admin-api";
+import { isAdminKycKraPath } from "@/lib/admin-user-kyc-steps";
 import { kycStepStatusVariant } from "@/components/users/user-status-badge";
 
 type BankAccountView = {
@@ -192,12 +193,17 @@ function SignaturePanel({
   );
 
   if (!isUploaded && !kyc.signature?.mode) {
+    const kraPath = isAdminKycKraPath(kyc);
     return (
       <KycPanelShell title="Signature" icon={PenLine}>
         <KycPanelEmpty
           icon={PenLine}
-          title="Signature not uploaded"
-          description="A drawn or uploaded signature will appear here once the customer completes that step."
+          title={kraPath ? "Signature not required" : "Signature not uploaded"}
+          description={
+            kraPath
+              ? "KRA-compliant investors skip DigiLocker, signature upload, and eSign."
+              : "A drawn or uploaded signature will appear here once the customer completes that step."
+          }
         />
       </KycPanelShell>
     );
@@ -288,12 +294,17 @@ function NomineesPanel({ kyc }: { kyc: AdminUserKycDetail }) {
   const nominees = kyc.nominees;
 
   if (nominees.length === 0) {
+    const kraPath = isAdminKycKraPath(kyc);
     return (
       <KycPanelShell title="Nominees" icon={Users} className="admin-user-kyc-identity-panel--full">
         <KycPanelEmpty
           icon={Users}
-          title="No nominees added"
-          description="Nominee information will appear once the customer completes the nominee step."
+          title={kraPath ? "Nominee not required" : "No nominees added"}
+          description={
+            kraPath
+              ? "KRA-compliant investors are already verified and do not complete a nominee step here."
+              : "Nominee information will appear once the customer completes the nominee step."
+          }
         />
       </KycPanelShell>
     );

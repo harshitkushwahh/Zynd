@@ -126,6 +126,8 @@ export function ClientPortfolioOverview({
       </div>
       <ClientPortfolioValueChart
         series={profile.portfolioGrowth}
+        currentValue={totals.current}
+        investedAmount={totals.invested}
         className="distributor-client-portfolio-overview__chart"
       />
     </div>

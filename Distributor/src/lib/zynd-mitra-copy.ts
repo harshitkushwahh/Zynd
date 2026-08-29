@@ -52,7 +52,7 @@ export const ZYND_MITRA_COPY = {
   adjustEntryMitra: "Adjust entry type, Zynd Mitra, or search to reset.",
   adjustStageMitra: "Adjust Zynd Mitra, stage, or search to reset.",
   yourBookArn: "Only clients linked to your Zynd Mitra ARN (demo).",
-  txnAwaitingMitra: "Pending and recent transaction requests awaiting Zynd Mitra action.",
+  txnAwaitingMitra: "Single-fund recommendations you sent from quick transaction.",
   fullBookDesc:
     "Full investor book for this Zynd Mitra — onboarding, compliance, and investment status at a glance.",
   targetsPerMitra: "Targets vs actuals for each Zynd Mitra.",

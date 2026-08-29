@@ -416,13 +416,50 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "notes": "Create and update assessment templates and category question counts.",
     },
     {
+        "permission": "recommendations.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/recommendations/config",
+            "GET /admin/recommendations/baskets",
+            "GET /admin/recommendations/baskets/{basket_id}",
+            "GET /admin/recommendations/preview",
+            "GET /admin/recommendations/publish-readiness",
+            "GET /admin/recommendations/metrics",
+            "GET /admin/recommendations/audit",
+        ],
+        "notes": "View recommendation baskets, preview stable picks, and published config version.",
+    },
+    {
+        "permission": "recommendations.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/recommendations/baskets",
+            "PATCH /admin/recommendations/baskets/{basket_id}",
+            "DELETE /admin/recommendations/baskets/{basket_id}",
+            "PUT /admin/recommendations/baskets/{basket_id}/funds",
+            "POST /admin/recommendations/baskets/{basket_id}/funds",
+            "DELETE /admin/recommendations/baskets/{basket_id}/funds/{product_id}",
+        ],
+        "notes": "Create and maintain tier recommendation baskets and fund pools.",
+    },
+    {
+        "permission": "recommendations.publish",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/recommendations/publish",
+        ],
+        "notes": "Publish recommendation configuration and bump config version.",
+    },
+    {
         "permission": "family_groups.read",
         "status": "enforced",
         "routes": [
             "GET /admin/family-groups",
             "GET /admin/family-groups/{group_id}",
+            "GET /admin/family-groups/invites",
+            "GET /admin/family-groups/invites/{invite_id}",
         ],
-        "notes": "Phase 5 admin console — directory and group detail.",
+        "notes": "Phase 5 admin console — directory, group detail, and invite journey.",
     },
     {
         "permission": "family_groups.manage",

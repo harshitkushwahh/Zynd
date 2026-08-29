@@ -2,8 +2,9 @@
 
 import { notFound, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { PieChart } from "lucide-react";
+import { CircleAlert, PieChart } from "lucide-react";
 
+import { ClientDetailEmptyState } from "@/components/clients/client-detail-empty-state";
 import { ClientDetailNotFoundView } from "@/components/clients/client-detail-not-found-view";
 import { ClientDetailPageSkeleton } from "@/components/clients/client-detail-page-skeleton";
 import { ClientDetailTabsShell } from "@/components/clients/client-detail-tabs-shell";
@@ -22,7 +23,6 @@ import { ClientPortfolioHoldingsList } from "@/components/clients/client-portfol
 import { ClientRiskProfileCard } from "@/components/clients/client-risk-profile-card";
 import { ClientRiskProfileTab } from "@/components/clients/client-risk-profile-tab";
 import { ClientSipsTransactionsTabPanel } from "@/components/clients/client-sips-transactions-tab-panel";
-import { DistributorPageBackButton } from "@/components/dashboard/distributor-page-back-button";
 import { useDistributorPageChrome } from "@/components/dashboard/distributor-page-chrome-context";
 import { fetchDistributorClientDetail } from "@/lib/distributor-clients-api";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
@@ -30,10 +30,7 @@ import {
   getClientDetailErrorMessage,
   isClientNotFoundError,
 } from "@/lib/distributor-client-errors";
-import {
-  distributorClientListHref,
-  type DistributorClientListOrigin,
-} from "@/lib/distributor-client-routes";
+import { type DistributorClientListOrigin } from "@/lib/distributor-client-routes";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import type {
   DistributorClientProfile,
@@ -62,7 +59,6 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
   const [loadState, setLoadState] = useState<ClientDetailLoadState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const copy = DISTRIBUTOR_CLIENT_COPY;
-  const listHref = distributorClientListHref(listOrigin);
   const tabFromUrl = parseClientDetailTabId(searchParams.get("tab"));
   const initialTab: ClientDetailTabId = tabFromUrl ?? "portfolio";
   const { showSkeleton } = useClientPageReveal({
@@ -132,15 +128,14 @@ export function YourClientDetailPage({ listOrigin, clientId }: YourClientDetailP
 
   if (loadState === "error") {
     return (
-      <div className={`${DISTRIBUTOR_PAGE_STACK_CLASS} space-y-3`}>
-        <DistributorPageBackButton href={listHref} />
-        <p className="text-compact text-muted-foreground">{errorMessage}</p>
+      <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
+        <ClientDetailEmptyState message={errorMessage} icon={CircleAlert} />
       </div>
     );
   }
 
   if (!profile) {
-    return <ClientDetailNotFoundView backHref={listHref} />;
+    return <ClientDetailNotFoundView />;
   }
 
   const { investor } = profile;

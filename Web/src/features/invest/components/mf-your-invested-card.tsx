@@ -29,51 +29,32 @@ import {
   portfolioSummaryHasInvestments,
 } from "@/features/invest/lib/mf-invested-card-mapper";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
+import { mfReturnTonePillClass } from "@/features/invest/lib/mf-return-tone-styles";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 function changePillClass(tone: "positive" | "negative" | "muted") {
-  return cn(
-    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
-    tone === "positive" && "bg-success/12 text-success",
-    tone === "negative" && "bg-destructive/12 text-destructive",
-    tone === "muted" && "bg-muted text-foreground",
-  );
+  return mfReturnTonePillClass(tone);
 }
 
-function MfYourInvestedCardBody({
-  data,
-  dayChangePct,
-}: {
-  data: MfInvestedPreview;
-  dayChangePct: number;
-}) {
-  const dayChange = formatSignedReturn(dayChangePct);
+function metaPillClass() {
+  return "inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground";
+}
+
+function MfYourInvestedCardBody({ data }: { data: MfInvestedPreview }) {
   const totalReturn = formatSignedReturn(data.totalReturnPct);
-  const chartTone = investedChartTone(dayChangePct);
+  const chartTone = investedChartTone(data.totalReturnPct);
 
   return (
     <>
       <div className="relative z-10 px-3.5 pb-0 pt-3.5 text-center">
-        <p className="text-caption text-muted-foreground">{copy.mutualFunds.yourInvestedTitle}</p>
+        <p className="text-caption text-muted-foreground">{copy.mutualFunds.yourInvestedTotalLabel}</p>
         <p className="mt-0.5 text-h4 font-bold tabular-nums tracking-tight text-foreground">
           {formatInr(data.totalValueInr)}
         </p>
         <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-          <span className={changePillClass(dayChange.tone)}>{dayChange.text}</span>
-          <span className="text-[11px] text-muted-foreground">
-            {copy.mutualFunds.yourInvestedTotalReturn}{" "}
-            <span
-              className={cn(
-                "font-medium tabular-nums",
-                totalReturn.tone === "positive" && "text-success",
-                totalReturn.tone === "negative" && "text-destructive",
-                totalReturn.tone === "muted" && "text-foreground",
-              )}
-            >
-              {totalReturn.text}
-            </span>
-          </span>
+          <span className={changePillClass(totalReturn.tone)}>{totalReturn.text}</span>
+          <span className={metaPillClass()}>{formatInr(data.investedInr)}</span>
         </div>
       </div>
 
@@ -146,7 +127,7 @@ export function MfYourInvestedCard() {
       {loading ? (
         <>
           <div className="relative z-10 px-3.5 pb-0 pt-3.5 text-center">
-            <p className="text-caption text-muted-foreground">{copy.mutualFunds.yourInvestedTitle}</p>
+            <p className="text-caption text-muted-foreground">{copy.mutualFunds.yourInvestedTotalLabel}</p>
             <div className="mt-1 flex flex-col items-center gap-2">
               <Skeleton className="h-8 w-32" />
               <Skeleton className="h-5 w-40" />
@@ -159,10 +140,7 @@ export function MfYourInvestedCard() {
       ) : isLocked ? (
         <div className="relative flex min-h-[9.5rem] flex-1 flex-col">
           <div className="pointer-events-none flex flex-1 select-none flex-col blur-[5px]">
-            <MfYourInvestedCardBody
-              data={previewData}
-              dayChangePct={previewData.dayChangePct}
-            />
+            <MfYourInvestedCardBody data={previewData} />
           </div>
           <OverviewLockedCardBackdrop className="inset-0" />
           <OverviewLockedCardOverlay
@@ -175,10 +153,7 @@ export function MfYourInvestedCard() {
       ) : isProcessing ? (
         <MfYourInvestedProcessingBody pendingInr={pendingInr} upcomingCount={upcomingOrders.length} />
       ) : liveData ? (
-        <MfYourInvestedCardBody
-          data={liveData}
-          dayChangePct={liveData.dayChangePct}
-        />
+        <MfYourInvestedCardBody data={liveData} />
       ) : null}
     </Link>
   );

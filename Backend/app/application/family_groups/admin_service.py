@@ -495,6 +495,183 @@ async def list_admin_family_group_invites(
     return payload
 
 
+def _build_admin_invite_journey(invite: FamilyGroupInvite) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = [
+        {
+            "id": "sent",
+            "status": "sent",
+            "label": "Invite sent",
+            "message": "Invitation was created and sent to the invitee.",
+            "occurred_at": invite.created_at,
+            "state": "completed",
+        }
+    ]
+    if invite.reminder_sent_at or invite.reminder_count > 0:
+        reminder_message = (
+            f"Reminder sent ({invite.reminder_count} total)."
+            if invite.reminder_count > 1
+            else "A reminder was sent to the invitee."
+        )
+        events.append(
+            {
+                "id": "reminder",
+                "status": "reminder_sent",
+                "label": "Reminder sent",
+                "message": reminder_message,
+                "occurred_at": invite.reminder_sent_at,
+                "state": "completed",
+            }
+        )
+
+    status = invite.status
+    if status == FamilyGroupInviteStatus.pending:
+        events.append(
+            {
+                "id": "awaiting",
+                "status": "pending",
+                "label": "Awaiting response",
+                "message": "The invitee has not accepted or declined yet.",
+                "occurred_at": None,
+                "state": "current",
+            }
+        )
+        events.append(
+            {
+                "id": "expires",
+                "status": "expires",
+                "label": "Expires",
+                "message": "Invite expires if there is no response.",
+                "occurred_at": invite.expires_at,
+                "state": "upcoming",
+            }
+        )
+    elif status == FamilyGroupInviteStatus.accepted:
+        events.append(
+            {
+                "id": "accepted",
+                "status": "accepted",
+                "label": "Accepted",
+                "message": "The invitee accepted and joined the family group.",
+                "occurred_at": invite.accepted_at,
+                "state": "completed",
+            }
+        )
+    elif status == FamilyGroupInviteStatus.declined:
+        events.append(
+            {
+                "id": "declined",
+                "status": "declined",
+                "label": "Declined",
+                "message": "The invitee declined this invitation.",
+                "occurred_at": invite.declined_at,
+                "state": "completed",
+            }
+        )
+    elif status == FamilyGroupInviteStatus.revoked:
+        events.append(
+            {
+                "id": "revoked",
+                "status": "revoked",
+                "label": "Revoked",
+                "message": "This invitation was withdrawn.",
+                "occurred_at": invite.revoked_at,
+                "state": "completed",
+            }
+        )
+    elif status == FamilyGroupInviteStatus.expired:
+        events.append(
+            {
+                "id": "expired",
+                "status": "expired",
+                "label": "Expired",
+                "message": "The invitation expired before a response.",
+                "occurred_at": invite.expires_at,
+                "state": "completed",
+            }
+        )
+    return events
+
+
+async def get_admin_family_group_invite_detail(
+    db: AsyncSession,
+    *,
+    invite_id: UUID,
+) -> dict[str, Any]:
+    await _mark_expired_invites(db)
+    invite = await db.get(FamilyGroupInvite, invite_id)
+    if not invite:
+        raise FamilyGroupError("invite_not_found", "Family group invite not found.", status_code=404)
+
+    group = await db.get(FamilyGroup, invite.group_id)
+    if not group:
+        raise FamilyGroupError("group_not_found", "Family group not found.", status_code=404)
+
+    inviter = await db.get(User, invite.invited_by_user_id)
+    invitee = await db.get(User, invite.invitee_user_id) if invite.invitee_user_id else None
+    accepted_user = await db.get(User, invite.accepted_user_id) if invite.accepted_user_id else None
+
+    activity_rows = await db.execute(
+        select(FamilyGroupActivity)
+        .where(FamilyGroupActivity.group_id == invite.group_id)
+        .order_by(FamilyGroupActivity.created_at.asc(), FamilyGroupActivity.id.asc())
+        .limit(100)
+    )
+    invite_key = str(invite.id)
+    related_event_types = {
+        FamilyGroupActivityType.invite_sent,
+        FamilyGroupActivityType.invite_accepted,
+        FamilyGroupActivityType.invite_declined,
+        FamilyGroupActivityType.invite_revoked,
+        FamilyGroupActivityType.nominee_suggested_from_kyc,
+    }
+    activity: list[dict[str, Any]] = []
+    for row in activity_rows.scalars().all():
+        metadata = row.metadata_json or {}
+        matches_invite = str(metadata.get("invite_id") or "") == invite_key
+        matches_invitee = (
+            invite.invitee_user_id is not None
+            and row.target_user_id == invite.invitee_user_id
+            and row.event_type
+            in {
+                FamilyGroupActivityType.invite_accepted,
+                FamilyGroupActivityType.invite_declined,
+            }
+        )
+        if not (matches_invite or (row.event_type in related_event_types and matches_invitee)):
+            continue
+        activity.append(
+            {
+                "id": row.id,
+                "event_type": row.event_type.value,
+                "message": row.message,
+                "actor_user_id": row.actor_user_id,
+                "target_user_id": row.target_user_id,
+                "created_at": row.created_at,
+            }
+        )
+
+    serialized = _serialize_invite(invite, for_head=True)
+    return {
+        **serialized,
+        "group_title": group.title,
+        "group_status": group.status.value,
+        "invited_by_user_id": invite.invited_by_user_id,
+        "invited_by_display_name": _user_display_name(inviter),
+        "invited_by_email_masked": mask_referee_email(inviter.email) if inviter else None,
+        "invitee_display_name": _user_display_name(invitee),
+        "accepted_user_id": invite.accepted_user_id,
+        "accepted_display_name": _user_display_name(accepted_user),
+        "accepted_at": invite.accepted_at,
+        "declined_at": invite.declined_at,
+        "revoked_at": invite.revoked_at,
+        "reminder_sent_at": invite.reminder_sent_at,
+        "reminder_count": invite.reminder_count,
+        "updated_at": invite.updated_at,
+        "activity": activity,
+        "journey": _build_admin_invite_journey(invite),
+    }
+
+
 async def list_admin_user_family_groups(
     db: AsyncSession,
     *,

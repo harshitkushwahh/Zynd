@@ -92,13 +92,7 @@ export function UserReferralsDetailSection({ userId }: UserReferralsDetailSectio
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className={PROFILE_SECTION_TITLE_CLASS}>Referral program</h2>
-        <p className="mt-1 text-compact text-muted-foreground">
-          Track who this user invited, their referral code activity, and whether they joined through
-          someone else.
-        </p>
-      </div>
+      <h2 className={PROFILE_SECTION_TITLE_CLASS}>Referral program</h2>
 
       <AdminMetricCardsGrid columns="four">
         <AdminMetricCard label="Link clicks" value={data.click_count} icon={MousePointerClick} />

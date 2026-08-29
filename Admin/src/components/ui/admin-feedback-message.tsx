@@ -95,7 +95,7 @@ export function AdminFeedbackMessage({
   return (
     <div
       className={cn(
-        "flex items-start gap-2 rounded-[var(--radius-control)] border px-3 py-2.5",
+        "flex min-w-0 max-w-full items-start gap-2 rounded-[var(--radius-control)] border px-3 py-2.5",
         config.containerClassName,
         className,
       )}

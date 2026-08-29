@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Landmark, Repeat2, ShoppingCart, TrendingUp, Wallet } from "lucide-react";
 
 import { AmcLogo } from "@/components/mf/amc-logo";
+import { MfOrderJourneyDialog } from "@/components/mf/mf-order-journey-dialog";
+import { MfSipPlanDetailDialog } from "@/components/mf/mf-sip-plan-detail-dialog";
+import {
+  AdminUserInvestmentDetailDialog,
+  matchHoldingForPurchase,
+  matchPurchasesForHolding,
+} from "@/components/users/admin-user-investment-detail-dialog";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
 import { AdminMetricCardsGrid } from "@/components/ui/admin-metric-cards-grid";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
@@ -21,7 +28,7 @@ import {
   AdminTableRows,
   paginateItems,
 } from "@/components/ui/admin-table";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type { AdminUserInvestmentsDetail } from "@/lib/admin-api";
 import { orderStatusVariant } from "@/components/users/user-status-badge";
@@ -78,6 +85,59 @@ function recordSearchText(record: InvestmentRecord, fields: string[]) {
 function matchesSearch(record: InvestmentRecord, query: string, fields: string[]) {
   if (!query) return true;
   return recordSearchText(record, fields).includes(query);
+}
+
+const PAYMENT_COMPLETE_FP_STATES = new Set([
+  "confirmed",
+  "payment_confirmed",
+  "submitted_to_amc",
+  "units_allocated",
+  "completed",
+]);
+
+function orderStatusKey(order: InvestmentRecord) {
+  return String(order.status ?? "").trim().toUpperCase();
+}
+
+function orderFpState(order: InvestmentRecord) {
+  return String(order.fp_state ?? "").trim().toLowerCase();
+}
+
+function isPaymentCompleteAwaitingAllotment(order: InvestmentRecord) {
+  const status = orderStatusKey(order);
+  const fpState = orderFpState(order);
+  if (status === "COMPLETED") return true;
+  if (status === "SUBMITTED") return true;
+  if (status === "PROCESSING" && PAYMENT_COMPLETE_FP_STATES.has(fpState)) return true;
+  return false;
+}
+
+function transactionStatusLabel(order: InvestmentRecord) {
+  const status = orderStatusKey(order);
+  if (status === "SUCCEEDED") return "Succeeded";
+  if (status === "CANCELLED") return "Cancelled";
+  if (status === "FAILED") return "Failed";
+  if (isPaymentCompleteAwaitingAllotment(order)) return "Completed";
+  return status.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()) || "Unknown";
+}
+
+function transactionStatusVariant(order: InvestmentRecord): StatusBadgeVariant {
+  const status = orderStatusKey(order);
+  if (status === "SUCCEEDED") return "success";
+  if (isPaymentCompleteAwaitingAllotment(order)) return "info";
+  return orderStatusVariant(status);
+}
+
+function transactionStatusMessage(order: InvestmentRecord) {
+  const status = orderStatusKey(order);
+  if (status === "SUCCEEDED") return "Units allocated";
+  if (isPaymentCompleteAwaitingAllotment(order)) {
+    return "Payment complete. Unit allocation pending";
+  }
+  const failureReason = String(order.failure_reason ?? "").trim();
+  if (failureReason) return failureReason;
+  if (status === "CANCELLED" || status === "FAILED") return "Payment was not completed";
+  return "—";
 }
 
 function buildFieldFilterOptions(
@@ -301,9 +361,16 @@ function CartTabPanel({ items }: { items: InvestmentRecord[] }) {
   );
 }
 
-function PurchasesTabPanel({ items }: { items: InvestmentRecord[] }) {
+function PurchasesTabPanel({
+  items,
+  holdings,
+}: {
+  items: InvestmentRecord[];
+  holdings: InvestmentRecord[];
+}) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState(ALL);
+  const [selectedPurchase, setSelectedPurchase] = useState<InvestmentRecord | null>(null);
 
   const typeOptions = useMemo(
     () =>
@@ -362,7 +429,7 @@ function PurchasesTabPanel({ items }: { items: InvestmentRecord[] }) {
             emptyMessage="No completed purchases yet."
           >
             {pagination.pageItems.map((order) => (
-              <AdminTableRow key={String(order.order_id)}>
+              <AdminTableRow key={String(order.order_id)} onClick={() => setSelectedPurchase(order)}>
                 <AdminTableCell>
                   <InvestmentFundCell
                     name={stringValue(order.product_name ?? order.product_id)}
@@ -380,6 +447,13 @@ function PurchasesTabPanel({ items }: { items: InvestmentRecord[] }) {
           </AdminTableRows>
         </AdminTableBody>
       </AdminDataTable>
+
+      <AdminUserInvestmentDetailDialog
+        open={selectedPurchase != null}
+        purchase={selectedPurchase}
+        holding={selectedPurchase ? matchHoldingForPurchase(selectedPurchase, holdings) : null}
+        onClose={() => setSelectedPurchase(null)}
+      />
     </div>
   );
 }
@@ -387,9 +461,13 @@ function PurchasesTabPanel({ items }: { items: InvestmentRecord[] }) {
 function TransactionsTabPanel({ items }: { items: InvestmentRecord[] }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const statusOptions = useMemo(
-    () => buildFieldFilterOptions(items, "status", "All statuses", (value) => value.toUpperCase()),
+    () =>
+      buildFieldFilterOptions(items, "status", "All statuses", (value) =>
+        transactionStatusLabel({ status: value }),
+      ),
     [items],
   );
 
@@ -404,6 +482,7 @@ function TransactionsTabPanel({ items }: { items: InvestmentRecord[] }) {
         "amc_name",
         "order_type",
         "status",
+        "fp_state",
         "failure_reason",
         "product_id",
       ]);
@@ -441,38 +520,50 @@ function TransactionsTabPanel({ items }: { items: InvestmentRecord[] }) {
             <AdminTableHeadCell>Amount</AdminTableHeadCell>
             <AdminTableHeadCell>Status</AdminTableHeadCell>
             <AdminTableHeadCell>Created</AdminTableHeadCell>
-            <AdminTableHeadCell>Failure</AdminTableHeadCell>
+            <AdminTableHeadCell>Message</AdminTableHeadCell>
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
           <AdminTableRows colSpan={6} isEmpty={filteredItems.length === 0} emptyMessage="No transactions found.">
-            {pagination.pageItems.map((order) => (
-              <AdminTableRow key={String(order.order_id)}>
-                <AdminTableCell>
-                  <InvestmentFundCell
-                    name={stringValue(order.product_name ?? order.product_id)}
-                    amcLogoUrl={order.amc_logo_url as string | null | undefined}
-                    amcName={order.amc_name as string | null | undefined}
-                  />
-                </AdminTableCell>
-                <AdminTableCell className="capitalize text-muted-foreground">
-                  {stringValue(order.order_type)}
-                </AdminTableCell>
-                <AdminTableCell className="tabular-nums">{formatInr(order.amount_inr)}</AdminTableCell>
-                <AdminTableCell>
-                  <StatusBadge variant={orderStatusVariant(String(order.status ?? ""))}>
-                    {stringValue(order.status)}
-                  </StatusBadge>
-                </AdminTableCell>
-                <AdminTableCell className="text-muted-foreground">{formatDate(order.created_at)}</AdminTableCell>
-                <AdminTableCell className="max-w-[12rem] truncate text-muted-foreground">
-                  {order.failure_reason ? String(order.failure_reason) : "—"}
-                </AdminTableCell>
-              </AdminTableRow>
-            ))}
+            {pagination.pageItems.map((order) => {
+              const orderId = String(order.order_id ?? "");
+              return (
+                <AdminTableRow
+                  key={orderId || stringValue(order.product_id)}
+                  onClick={orderId ? () => setSelectedOrderId(orderId) : undefined}
+                >
+                  <AdminTableCell>
+                    <InvestmentFundCell
+                      name={stringValue(order.product_name ?? order.product_id)}
+                      amcLogoUrl={order.amc_logo_url as string | null | undefined}
+                      amcName={order.amc_name as string | null | undefined}
+                    />
+                  </AdminTableCell>
+                  <AdminTableCell className="capitalize text-muted-foreground">
+                    {stringValue(order.order_type)}
+                  </AdminTableCell>
+                  <AdminTableCell className="tabular-nums">{formatInr(order.amount_inr)}</AdminTableCell>
+                  <AdminTableCell>
+                    <StatusBadge variant={transactionStatusVariant(order)}>
+                      {transactionStatusLabel(order)}
+                    </StatusBadge>
+                  </AdminTableCell>
+                  <AdminTableCell className="text-muted-foreground">{formatDate(order.created_at)}</AdminTableCell>
+                  <AdminTableCell className="max-w-[16rem] truncate text-muted-foreground">
+                    {transactionStatusMessage(order)}
+                  </AdminTableCell>
+                </AdminTableRow>
+              );
+            })}
           </AdminTableRows>
         </AdminTableBody>
       </AdminDataTable>
+
+      <MfOrderJourneyDialog
+        open={selectedOrderId != null}
+        orderId={selectedOrderId}
+        onClose={() => setSelectedOrderId(null)}
+      />
     </div>
   );
 }
@@ -480,6 +571,7 @@ function TransactionsTabPanel({ items }: { items: InvestmentRecord[] }) {
 function SipPlansTabPanel({ items }: { items: InvestmentRecord[] }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
+  const [selectedPlan, setSelectedPlan] = useState<InvestmentRecord | null>(null);
 
   const statusOptions = useMemo(
     () => buildFieldFilterOptions(items, "status", "All statuses", (value) => value.toUpperCase()),
@@ -532,7 +624,7 @@ function SipPlansTabPanel({ items }: { items: InvestmentRecord[] }) {
         <AdminTableBody>
           <AdminTableRows colSpan={5} isEmpty={filteredItems.length === 0} emptyMessage="No SIP plans found.">
             {pagination.pageItems.map((plan) => (
-              <AdminTableRow key={String(plan.plan_id)}>
+              <AdminTableRow key={String(plan.plan_id)} onClick={() => setSelectedPlan(plan)}>
                 <AdminTableCell>
                   <InvestmentFundCell
                     name={stringValue(plan.product_name ?? plan.product_id)}
@@ -557,13 +649,27 @@ function SipPlansTabPanel({ items }: { items: InvestmentRecord[] }) {
           </AdminTableRows>
         </AdminTableBody>
       </AdminDataTable>
+
+      <MfSipPlanDetailDialog
+        open={selectedPlan != null}
+        planId={selectedPlan ? String(selectedPlan.plan_id) : null}
+        initialPlan={selectedPlan}
+        onClose={() => setSelectedPlan(null)}
+      />
     </div>
   );
 }
 
-function HoldingsTabPanel({ items }: { items: InvestmentRecord[] }) {
+function HoldingsTabPanel({
+  items,
+  purchases,
+}: {
+  items: InvestmentRecord[];
+  purchases: InvestmentRecord[];
+}) {
   const [search, setSearch] = useState("");
   const [amcFilter, setAmcFilter] = useState(ALL);
+  const [selectedHolding, setSelectedHolding] = useState<InvestmentRecord | null>(null);
 
   const amcOptions = useMemo(
     () => buildFieldFilterOptions(items, "amc_name", "All AMCs"),
@@ -620,11 +726,14 @@ function HoldingsTabPanel({ items }: { items: InvestmentRecord[] }) {
           </tr>
         </AdminTableHeader>
         <AdminTableBody>
-          <AdminTableRows colSpan={5} isEmpty={filteredItems.length === 0} emptyMessage="No holdings imported yet.">
+          <AdminTableRows colSpan={5} isEmpty={filteredItems.length === 0} emptyMessage="No holdings yet.">
             {pagination.pageItems.map((holding) => {
               const schemeName = stringValue(holding.scheme_name ?? holding.matched_scheme_name);
               return (
-                <AdminTableRow key={`${String(holding.isin)}-${String(holding.folio_number)}`}>
+                <AdminTableRow
+                  key={`${String(holding.isin)}-${String(holding.folio_number)}`}
+                  onClick={() => setSelectedHolding(holding)}
+                >
                   <AdminTableCell>
                     <InvestmentFundCell
                       name={schemeName}
@@ -647,19 +756,49 @@ function HoldingsTabPanel({ items }: { items: InvestmentRecord[] }) {
           </AdminTableRows>
         </AdminTableBody>
       </AdminDataTable>
+
+      <AdminUserInvestmentDetailDialog
+        open={selectedHolding != null}
+        holding={selectedHolding}
+        relatedPurchases={selectedHolding ? matchPurchasesForHolding(selectedHolding, purchases) : []}
+        onClose={() => setSelectedHolding(null)}
+      />
     </div>
   );
 }
 
-function countActiveSipPlans(plans: InvestmentRecord[]) {
-  return plans.filter((plan) => String(plan.status ?? "").toLowerCase() === "active").length;
+function sipPlanStatus(plan: InvestmentRecord) {
+  return String(plan.status ?? "").toLowerCase();
+}
+
+function countSipsByStatus(plans: InvestmentRecord[]) {
+  let active = 0;
+  let cancelled = 0;
+  for (const plan of plans) {
+    const status = sipPlanStatus(plan);
+    if (status === "active") active += 1;
+    if (status === "cancelled" || status === "canceled") cancelled += 1;
+  }
+  return { active, cancelled };
 }
 
 function sipPlansHint(plans: InvestmentRecord[]) {
-  const activeCount = countActiveSipPlans(plans);
   if (plans.length === 0) return "No SIP plans";
-  if (activeCount === 0) return "No active plans";
-  return activeCount === 1 ? "1 active plan" : `${activeCount} active plans`;
+  const { active, cancelled } = countSipsByStatus(plans);
+  return `${active} active · ${cancelled} cancelled`;
+}
+
+function holdingsValue(holdings: InvestmentRecord[]) {
+  return holdings.reduce((total, holding) => {
+    const amount = Number(holding.market_value_inr);
+    return Number.isFinite(amount) ? total + amount : total;
+  }, 0);
+}
+
+function holdingsHint(holdings: InvestmentRecord[]) {
+  if (holdings.length === 0) return "No holdings yet";
+  const total = holdingsValue(holdings);
+  return total > 0 ? formatInr(total) : "Current schemes";
 }
 
 export function UserInvestmentsDetailSection({
@@ -711,7 +850,7 @@ export function UserInvestmentsDetailSection({
           icon={Landmark}
           label="Holdings"
           value={String(holdings.length)}
-          hint="Imported schemes"
+          hint={holdingsHint(holdings)}
         />
       </AdminMetricCardsGrid>
 
@@ -741,7 +880,7 @@ export function UserInvestmentsDetailSection({
             <CartTabPanel items={cartItems} />
           </TabsContent>
           <TabsContent value="purchases" className="mt-0">
-            <PurchasesTabPanel items={purchases} />
+            <PurchasesTabPanel items={purchases} holdings={holdings} />
           </TabsContent>
           <TabsContent value="transactions" className="mt-0">
             <TransactionsTabPanel items={orders} />
@@ -750,7 +889,7 @@ export function UserInvestmentsDetailSection({
             <SipPlansTabPanel items={sipPlans} />
           </TabsContent>
           <TabsContent value="holdings" className="mt-0">
-            <HoldingsTabPanel items={holdings} />
+            <HoldingsTabPanel items={holdings} purchases={purchases} />
           </TabsContent>
         </Tabs>
       </section>

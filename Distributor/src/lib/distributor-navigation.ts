@@ -114,7 +114,7 @@ export const DISTRIBUTOR_NOTIFICATIONS_ROUTE: DistributorNavItem = {
   label: "Notifications",
   href: "/dashboard/notifications",
   icon: Bell,
-  description: "Txn requests, investors, orders, and plan alerts",
+  description: "Quick transactions, investors, orders, and plan alerts",
 };
 
 export const DISTRIBUTOR_SETTINGS_ROUTE: DistributorNavItem = {
@@ -137,7 +137,7 @@ export const DISTRIBUTOR_NAV_GROUPS: DistributorNavGroup[] = [
         label: "Orders",
         href: distributorOperationsSectionHref("orders"),
         icon: Layers3,
-        description: "Lumpsum and redeem order activity",
+        description: "MF orders from clients in your book",
       },
       {
         id: "systematic-plans",
@@ -148,17 +148,17 @@ export const DISTRIBUTOR_NAV_GROUPS: DistributorNavGroup[] = [
       },
       {
         id: "txn-requests",
-        label: "Txn Requests",
+        label: "Quick transactions",
         href: "/dashboard/txn-requests",
         icon: ArrowLeftRight,
-        description: "Pending transaction approvals",
+        description: "Single-fund recommendations sent from quick transaction",
       },
       {
         id: "transaction-groups",
         label: "Transaction Groups",
         href: "/dashboard/transaction-groups",
         icon: FolderKanban,
-        description: "Grouped multi-leg transactions",
+        description: "Multi-fund quick transaction batches for your book clients",
       },
     ],
   },

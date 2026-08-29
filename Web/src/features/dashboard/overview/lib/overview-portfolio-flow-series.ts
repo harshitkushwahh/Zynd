@@ -114,9 +114,11 @@ export function portfolioFlowYDomain(points: OverviewPortfolioFlowPoint[]): [num
   const values = points.flatMap((point) => [point.invested, point.value]);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = Math.max(max - min, 1);
+  const spread = max - min;
+  const relativeFloor = Math.max(Math.abs(max), Math.abs(min)) * 0.02;
+  const range = Math.max(spread, relativeFloor, 1);
 
-  return [min - range * 0.04, max + range * 0.08];
+  return [min - range * 0.12, max + range * 0.12];
 }
 
 export type PortfolioFlowChartTone = "profit" | "loss";
@@ -144,7 +146,7 @@ export const PORTFOLIO_FLOW_CHART_COLORS: Record<
     cursor: "var(--zynd-emerald)",
   },
   loss: {
-    stroke: "hsl(var(--destructive))",
-    cursor: "hsl(var(--destructive))",
+    stroke: "var(--zynd-accent-red)",
+    cursor: "var(--zynd-accent-red)",
   },
 };

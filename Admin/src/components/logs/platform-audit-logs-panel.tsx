@@ -29,10 +29,25 @@ import {
   usePlatformAuditLogsQuery,
 } from "@/hooks/use-platform-audit-logs-query";
 import { type AuditLogItem } from "@/lib/admin-api";
-import { AUDIT_EVENT_GROUPS, AUDIT_EVENT_TYPES, formatAuditEvent } from "@/lib/admin-audit-events";
+import {
+  AUDIT_EVENT_GROUPS,
+  AUDIT_EVENT_TYPES,
+  FAMILY_GROUP_AUDIT_GROUP_LABEL,
+  RECOMMENDATION_AUDIT_GROUP_LABEL,
+  formatAuditEvent,
+} from "@/lib/admin-audit-events";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";
+
+function resolveInitialCategory(value?: string) {
+  if (!value) return ALL;
+  const normalized = value.trim().toLowerCase().replaceAll("-", " ").replaceAll("_", " ");
+  const match = AUDIT_EVENT_GROUPS.find((group) => group.label.toLowerCase() === normalized);
+  if (match) return match.label;
+  if (normalized === "family group") return FAMILY_GROUP_AUDIT_GROUP_LABEL;
+  return ALL;
+}
 
 const CATEGORY_OPTIONS: AdminSelectOption[] = [
   { value: ALL, label: "All categories" },
@@ -49,6 +64,19 @@ const EVENT_TYPE_OPTIONS: AdminSelectOption[] = [
     label: formatAuditEvent(eventType),
   })),
 ];
+
+function buildCategoryEventTypeOptions(groupLabel: string, allLabel: string): AdminSelectOption[] {
+  const group = AUDIT_EVENT_GROUPS.find((item) => item.label === groupLabel);
+  if (!group) return EVENT_TYPE_OPTIONS;
+
+  return [
+    { value: ALL, label: allLabel },
+    ...group.types.map((eventType) => ({
+      value: eventType,
+      label: formatAuditEvent(eventType),
+    })),
+  ];
+}
 
 function matchesSearch(log: AuditLogItem, query: string) {
   const normalized = query.trim().toLowerCase();
@@ -77,21 +105,46 @@ function matchesGroupFilter(log: AuditLogItem, groupKey: string) {
   return (group.types as readonly string[]).includes(log.event_type);
 }
 
-export function PlatformAuditLogsPanel() {
+export function PlatformAuditLogsPanel({
+  initialCategory = ALL,
+}: {
+  initialCategory?: string;
+}) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState(ALL);
-  const [groupFilter, setGroupFilter] = useState(ALL);
+  const [groupFilter, setGroupFilter] = useState(resolveInitialCategory(initialCategory));
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
 
-  const queryParams = { eventFilter, offset, pageSize };
+  const categoryEventTypes = useMemo(() => {
+    if (groupFilter === ALL) return undefined;
+    return AUDIT_EVENT_GROUPS.find((group) => group.label === groupFilter)?.types;
+  }, [groupFilter]);
+
+  const queryParams = { eventFilter, groupFilter, eventTypes: categoryEventTypes, offset, pageSize };
   const { data, isPending, isFetching, error } = usePlatformAuditLogsQuery(queryParams);
+
+  const eventTypeOptions = useMemo(() => {
+    if (groupFilter === ALL) return EVENT_TYPE_OPTIONS;
+    if (groupFilter === RECOMMENDATION_AUDIT_GROUP_LABEL) {
+      return buildCategoryEventTypeOptions(groupFilter, "All recommendation events");
+    }
+    if (groupFilter === FAMILY_GROUP_AUDIT_GROUP_LABEL) {
+      return buildCategoryEventTypeOptions(groupFilter, "All family group events");
+    }
+    return buildCategoryEventTypeOptions(groupFilter, "All events in category");
+  }, [groupFilter]);
 
   const logs = data?.items ?? [];
   const hasMore = data?.hasMore ?? false;
   const showSkeleton = isPending && !data;
   const errorMessage = error ? getErrorMessage(error, "Could not load platform audit logs.") : "";
+
+  useEffect(() => {
+    setEventFilter(ALL);
+    setOffset(0);
+  }, [groupFilter]);
 
   useEffect(() => {
     setOffset(0);
@@ -127,7 +180,7 @@ export function PlatformAuditLogsPanel() {
           <AdminSelect
             value={eventFilter}
             onValueChange={setEventFilter}
-            options={EVENT_TYPE_OPTIONS}
+            options={eventTypeOptions}
             placeholder="Event type"
             className="min-w-select-xl shrink-0"
             triggerClassName="w-auto"
@@ -147,7 +200,7 @@ export function PlatformAuditLogsPanel() {
       </div>
 
       {errorMessage ? (
-        <AdminFeedbackMessage variant="destructive" onDismiss={() => setErrorMessage("")}>{errorMessage}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive">{errorMessage}</AdminFeedbackMessage>
       ) : null}
 
       <AdminDataTable

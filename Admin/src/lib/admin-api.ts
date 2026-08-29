@@ -371,12 +371,14 @@ export type AuditLogItem = {
 export async function fetchAuditLogs(params?: {
   user_id?: string;
   event_type?: string;
+  event_types?: readonly string[];
   limit?: number;
   offset?: number;
 }) {
   const search = new URLSearchParams();
   if (params?.user_id) search.set("user_id", params.user_id);
   if (params?.event_type) search.set("event_type", params.event_type);
+  if (params?.event_types?.length) search.set("event_types", params.event_types.join(","));
   if (params?.limit) search.set("limit", String(params.limit));
   if (params?.offset) search.set("offset", String(params.offset));
   const query = search.toString();

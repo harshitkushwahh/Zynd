@@ -8,6 +8,7 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import get_settings
+from app.infrastructure.mf.pipeline_progress import emit_pipeline_progress
 
 logger = logging.getLogger(__name__)
 
@@ -94,17 +95,15 @@ async def fetch_all_ter_rows(*, month: str, page_size: int, max_pages: int | Non
         page_count = min(page_count, max_pages)
 
     all_rows = list(first_rows)
-    print(
+    await emit_pipeline_progress(
         f"AMFI TER fetch: page 1/{page_count} rows={len(all_rows)}",
-        flush=True,
     )
     for page in range(2, page_count + 1):
         rows, _ = await fetch_ter_page(month=month, page=page, page_size=page_size)
         all_rows.extend(rows)
         if page % 5 == 0 or page == page_count:
-            print(
+            await emit_pipeline_progress(
                 f"AMFI TER fetch: page {page}/{page_count} rows={len(all_rows)}",
-                flush=True,
             )
         if page % 10 == 0:
             await asyncio.sleep(0.05)
