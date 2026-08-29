@@ -90,7 +90,7 @@ function stepStatusLabel(step: AdminKycFlowStep) {
 
 type KycInvestorPathBadge = "kra" | "new";
 
-const KYC_PATH_BADGE_STEP_IDS = new Set(["digilocker", "signature", "esign"]);
+const KYC_PATH_BADGE_STEP_IDS = new Set(["digilocker", "signature", "esign", "nominee"]);
 
 function stepInvestorPathBadge(
   step: AdminKycFlowStep,

@@ -36,7 +36,11 @@ function RecentTxnRow({ request }: { request: DistributorTxnRequest }) {
       href="/dashboard/txn-requests"
       className="distributor-salaries-incentive__row distributor-salaries-incentive__row--link"
     >
-      <DistributorProfileAvatar name={request.clientCode} size="sm" />
+      <DistributorProfileAvatar
+        name={request.investorDisplayName ?? request.clientCode}
+        imageSrc={request.profileImageUrl}
+        size="sm"
+      />
       <span className="distributor-salaries-incentive__row-copy">
         <span className="distributor-salaries-incentive__row-name">{request.requestRef}</span>
         <span className="distributor-salaries-incentive__row-meta">
@@ -57,9 +61,9 @@ function TxnSidebarHeader({ count }: { count: number }) {
     <div className="distributor-salaries-incentive__header-main">
       <div className="distributor-salaries-incentive__header-copy">
         <p className="distributor-salaries-incentive__eyebrow">Sent by you</p>
-        <h2 className="distributor-salaries-incentive__title">Txn requests</h2>
+        <h2 className="distributor-salaries-incentive__title">Quick transactions</h2>
       </div>
-      <span className="distributor-salaries-incentive__header-count tabular-nums" aria-label={`${count} txn requests`}>
+      <span className="distributor-salaries-incentive__header-count tabular-nums" aria-label={`${count} quick transactions`}>
         {count}
       </span>
     </div>
@@ -95,7 +99,7 @@ export function DistributorSalariesIncentiveColumn({ className }: DistributorSal
 
   return (
     <div className={cn("distributor-salaries-incentive-column", className)}>
-      <aside className="distributor-salaries-incentive" aria-label="Txn requests">
+      <aside className="distributor-salaries-incentive" aria-label="Quick transactions">
         <header className="distributor-salaries-incentive__header">
           <TxnSidebarHeader count={txnRequests.length} />
         </header>
@@ -103,7 +107,7 @@ export function DistributorSalariesIncentiveColumn({ className }: DistributorSal
         <div className="distributor-salaries-incentive__list-block">
           <div className="distributor-salaries-incentive__list">
             {recentTxnRequests.length === 0 ? (
-              <p className="distributor-salaries-incentive__list-empty">No txn requests yet.</p>
+              <p className="distributor-salaries-incentive__list-empty">No quick transactions yet.</p>
             ) : (
               recentTxnRequests.map((request) => <RecentTxnRow key={request.id} request={request} />)
             )}
@@ -134,7 +138,7 @@ export function DistributorSalariesIncentiveColumn({ className }: DistributorSal
           </div>
 
           <Link href="/dashboard/txn-requests" className="distributor-salaries-incentive__txn-cta">
-            <span className="distributor-salaries-incentive__txn-cta-label">View all txn requests</span>
+            <span className="distributor-salaries-incentive__txn-cta-label">View all quick transactions</span>
             <ChevronRight className="distributor-salaries-incentive__txn-cta-icon" strokeWidth={2.25} aria-hidden />
           </Link>
         </div>

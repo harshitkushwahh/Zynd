@@ -40,10 +40,10 @@ import { formatPortfolioGoalFundingHint, formatGoalFundingBreakdown, goalContrib
 import { getErrorMessage } from "@/lib/errors";
 
 type AdminUserFamilyGroupDetailPageProps = {
-  profilePath: string;
-  clientId: string;
   groupId: string;
   canManageFamilyGroups: boolean;
+  profilePath?: string;
+  clientId?: string;
 };
 
 function groupInitials(title: string) {
@@ -141,20 +141,25 @@ export function AdminUserFamilyGroupDetailPage({
   }
 
   const portfolio = payload.portfolio;
-  const backHref = userFamilyGroupsTabHref(profilePath);
+  const breadcrumbSegments =
+    profilePath && clientId
+      ? [
+          ...userManagementBreadcrumbSegments([{ label: "Users" }]),
+          { label: clientId, href: `/dashboard/users/${encodeURIComponent(profilePath)}` },
+          { label: "Family groups", href: userFamilyGroupsTabHref(profilePath) },
+          { label: payload.title },
+        ]
+      : [
+          { label: "Platform" },
+          { label: "Family Groups", href: "/dashboard/family-groups" },
+          { label: payload.title },
+        ];
 
   return (
     <div className="admin-user-family-group-detail space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-3">
-          <AdminSectionBreadcrumb
-            segments={[
-              ...userManagementBreadcrumbSegments([{ label: "Users" }]),
-              { label: clientId, href: `/dashboard/users/${encodeURIComponent(profilePath)}` },
-              { label: "Family groups", href: backHref },
-              { label: payload.title },
-            ]}
-          />
+          <AdminSectionBreadcrumb segments={breadcrumbSegments} />
         </div>
 
         {canManageFamilyGroups && payload.status === "active" ? (

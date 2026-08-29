@@ -51,6 +51,9 @@ const NOTIFICATION_TYPE_ROUTES: Record<string, NotificationDeepLink> = {
   "invest.risk_profile.unlock_otp": {
     path: "/dashboard/notifications",
   },
+  "invest.mitra_txn_recommendation": {
+    path: "/dashboard/mutual-funds/recommendation",
+  },
   "family.invite.received": {
     path: "/dashboard/family",
   },

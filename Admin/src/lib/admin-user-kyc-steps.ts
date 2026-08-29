@@ -62,34 +62,43 @@ export function adminKycStepIcon(stepId: string): LucideIcon {
   return STEP_ICONS[stepId] ?? ClipboardCheck;
 }
 
-function mapApiStepStatus(status: string): AdminKycFlowStepStatus {
+const KRA_SKIPPED_STEP_IDS = new Set(["digilocker", "signature", "esign", "nominee"]);
+
+export function isAdminKycKraPath(kyc: Pick<AdminUserKycDetail, "kyc_already_registered">) {
+  return Boolean(kyc.kyc_already_registered);
+}
+
+export function isAdminKycJourneyComplete(kyc: Pick<AdminUserKycDetail, "overall_status">) {
+  return kyc.overall_status === "completed";
+}
+
+function mapApiStepStatus(status: string, journeyComplete: boolean): AdminKycFlowStepStatus {
   if (status === "skipped") return "not_applicable";
   if (status === "verified" || status === "completed") return "completed";
   if (status === "failed") return "failed";
+  if (journeyComplete) return "completed";
   return "pending";
 }
 
 export function buildAdminKycFlowSteps(kyc: AdminUserKycDetail): AdminKycFlowStep[] {
+  const journeyComplete = isAdminKycJourneyComplete(kyc);
   const steps = ADMIN_KYC_FLOW_STEP_IDS.map((id) => ({
     id,
     label: STEP_LABELS[id] ?? id,
-    status: mapApiStepStatus(kyc.step_statuses[id] ?? "pending"),
+    status: mapApiStepStatus(kyc.step_statuses[id] ?? "pending", journeyComplete),
     applicable: true,
   }));
 
-  return applyKycStepApplicability(steps, kyc.kyc_already_registered ?? false);
+  return applyKycStepApplicability(steps, isAdminKycKraPath(kyc));
 }
 
-/** KRA-compliant investors skip DigiLocker, signature, and eSign. */
+/** KRA-compliant investors skip DigiLocker, signature, eSign, and nominee. */
 export function applyKycStepApplicability(
   steps: AdminKycFlowStep[],
   kycAlreadyRegistered: boolean,
 ): AdminKycFlowStep[] {
   return steps.map((step) => {
-    const skipForCompliant =
-      kycAlreadyRegistered &&
-      (step.id === "digilocker" || step.id === "signature" || step.id === "esign");
-    if (skipForCompliant) {
+    if (kycAlreadyRegistered && KRA_SKIPPED_STEP_IDS.has(step.id)) {
       return {
         ...step,
         applicable: false,

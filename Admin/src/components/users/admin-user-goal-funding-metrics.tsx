@@ -24,7 +24,8 @@ export function AdminUserGoalFundingMetrics({
 }: AdminUserGoalFundingMetricsProps) {
   return (
     <AdminMetricCardsGrid
-      className={cn("admin-user-goal-funding-metrics sm:grid-cols-2", className)}
+      columns="two"
+      className={cn("admin-user-goal-funding-metrics", className)}
     >
       <AdminMetricCard
         label="Target"

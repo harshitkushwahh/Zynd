@@ -26,7 +26,7 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
   orders: {
     iconName: "layers3",
     title: "Orders",
-    description: "Lumpsum, redeem, and switch order activity (dummy data).",
+    description: "Lumpsum, redeem, and switch orders from clients in your book.",
   },
   systematicPlans: {
     iconName: "calendarClock",
@@ -35,8 +35,8 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
   },
   txnRequests: {
     iconName: "arrowLeftRight",
-    title: "Txn Requests",
-    description: ZYND_MITRA_COPY.txnAwaitingMitra,
+    title: "Quick transactions",
+    description: "Single-fund recommendations you sent from quick transaction.",
   },
   allInvestors: {
     iconName: "users",
@@ -56,7 +56,7 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
   transactionGroups: {
     iconName: "folderKanban",
     title: "Transaction Groups",
-    description: "Grouped multi-leg transactions for batch processing (dummy data).",
+    description: "Multi-fund quick transaction batches sent to investors in your book.",
   },
   notifications: {
     iconName: "bell",

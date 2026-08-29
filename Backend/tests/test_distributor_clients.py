@@ -8,7 +8,11 @@ from httpx import ASGITransport, AsyncClient
 
 from app.application.admin.rbac_service import ensure_rbac_seed, set_admin_user_roles
 from app.application.distributor.distributor_client_link_service import create_distributor_client_link
+from app.application.distributor.distributor_client_service import (
+    _list_distributor_client_goals,
+)
 from app.application.documents.client_id_service import assign_client_id
+from app.application.family_groups.group_service import archive_family_group, create_family_group
 from app.infrastructure.persistence.models import Session, User, UserRole, UserStatus
 from app.infrastructure.security.passwords import hash_password
 from app.infrastructure.security.tokens import create_access_token
@@ -100,3 +104,57 @@ async def test_distributor_clients_list_and_detail(db_session) -> None:
             headers=headers,
         )
         assert by_client_id.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_distributor_orders_list_scoped_to_book(db_session) -> None:
+    headers, mitra = await _mitra_auth_headers(db_session)
+
+    investor = User(
+        email=f"investor-{uuid4()}@example.com",
+        password_hash=hash_password("Password1!"),
+        role=UserRole.user,
+        status=UserStatus.active,
+        first_name="Ravi",
+        last_name="Sharma",
+    )
+    db_session.add(investor)
+    await db_session.flush()
+    await assign_client_id(db_session, investor)
+    await create_distributor_client_link(db_session, client_user=investor, actor=mitra)
+    await db_session.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/distributor/orders?scope=book", headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_distributor_orders_requires_permission(db_session) -> None:
+    transport = ASGITransport(app=app)
+    headers = await _admin_auth_headers(db_session, role_keys=["mitra_state_head"])
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/distributor/orders", headers=headers)
+    assert response.status_code == 403
+
+    investor = User(
+        email=f"investor-{uuid4()}@example.com",
+        password_hash=hash_password("Password1!"),
+        role=UserRole.user,
+        status=UserStatus.active,
+        first_name="Harshit",
+        last_name="Kushwah",
+    )
+    db_session.add(investor)
+    await db_session.flush()
+    await assign_client_id(db_session, investor)
+
+    created = await create_family_group(db_session, user=investor, title="Archived Household")
+    await archive_family_group(db_session, group_id=created["id"], user=investor)
+    await db_session.commit()
+
+    goals = await _list_distributor_client_goals(db_session, user_id=investor.id)
+
+    assert goals == []

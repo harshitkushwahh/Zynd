@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-context";
 import { useResolvedDisplayName } from "@/shared/hooks/use-resolved-display-name";
 import { useKycOptional } from "@/contexts/kyc-context";
 import { useProfileImage } from "@/contexts/profile-image-context";
-import { fetchAuthSecurityPolicy } from "@/features/account/api/mfa-api";
 import { ProfileKycStatusBadge } from "@/features/dashboard/overview/components/profile-kyc-status-badge";
 import { ProfileMfaStatusBadge } from "@/features/dashboard/overview/components/profile-mfa-status-badge";
 import type { OverviewKycProfileProgress } from "@/features/dashboard/overview/lib/overview-profile-kyc-state";
@@ -38,30 +37,6 @@ function useProfileMfaStatus() {
   const { user } = useAuth();
   const overview = copy.dashboard.overview;
   const mfaComplete = Boolean(user?.mfa_enrolled);
-  const phoneVerified = Boolean(user?.phone_verified_at);
-  const [smsFallbackEnabled, setSmsFallbackEnabled] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!mfaComplete) {
-      setSmsFallbackEnabled(null);
-      return;
-    }
-
-    let cancelled = false;
-    void fetchAuthSecurityPolicy()
-      .then((policy) => {
-        if (!cancelled) {
-          setSmsFallbackEnabled(Boolean(policy.step_up_sms_fallback_enabled));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setSmsFallbackEnabled(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mfaComplete]);
 
   return useMemo(() => {
     const href = "/dashboard/settings?section=security" as const;
@@ -73,23 +48,18 @@ function useProfileMfaStatus() {
         detailLines: [
           overview.profileMfaTooltipPendingLine1,
           overview.profileMfaTooltipPendingLine2,
-        ] as [string, string],
+        ],
         href,
       };
     }
 
-    const detailLines: [string, string] =
-      smsFallbackEnabled && phoneVerified
-        ? [overview.profileMfaTooltipCompleteLine1, overview.profileMfaTooltipCompleteSms]
-        : [overview.profileMfaTooltipCompleteLine1, overview.profileMfaTooltipCompleteLine2];
-
     return {
       complete: true,
       title: overview.profileMfaTooltipCompleteTitle,
-      detailLines,
+      detailLines: [overview.profileMfaTooltipComplete],
       href,
     };
-  }, [mfaComplete, overview, phoneVerified, smsFallbackEnabled]);
+  }, [mfaComplete, overview]);
 }
 
 export function OverviewProfileCard({ className }: OverviewProfileCardProps) {

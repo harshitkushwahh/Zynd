@@ -18,13 +18,30 @@ export function buildNotificationHref(input: NotificationDeepLinkInput): string 
     params.set("family_invite_id", inviteId);
   }
 
+  const recommendationToken = input.metadata?.recommendation_token;
+  if (typeof recommendationToken === "string" && recommendationToken) {
+    return `/dashboard/mutual-funds/recommendation/${encodeURIComponent(recommendationToken)}${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
+  }
+
   const query = params.toString();
   return query ? `${resolved.path}?${query}` : resolved.path;
 }
 
 export function buildNotificationHrefFromPushData(data: Record<string, string | undefined>): string {
+  let metadata: Record<string, unknown> | null = null;
+  if (data.metadata) {
+    try {
+      metadata = JSON.parse(data.metadata) as Record<string, unknown>;
+    } catch {
+      metadata = null;
+    }
+  }
+
   return buildNotificationHref({
     notification_type: data.notification_type ?? "",
     category: data.category as NotificationDeepLinkInput["category"],
+    metadata,
   });
 }

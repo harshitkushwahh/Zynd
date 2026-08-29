@@ -12,7 +12,13 @@ from app.api.v1.admin.risk_profile_schemas import (
     UserRiskProfileAssessmentDetailResponse,
     UserRiskProfileAssessmentListResponse,
 )
-from app.api.v1.auth.deps import get_client_ip, require_permission
+from app.api.v1.auth.deps import get_client_ip, require_any_permission, require_permission
+from app.api.v1.distributor.txn_recommendation_schemas import (
+    CreateMitraTxnRecommendationRequest,
+    DistributorSchemeSearchResponse,
+    MitraTxnRecommendationListResponse,
+    MitraTxnRecommendationResponse,
+)
 from app.api.v1.distributor.schemas import (
     ClientOnboardingContactUpdateRequest,
     ClientOnboardingContactUpdateResponse,
@@ -24,6 +30,7 @@ from app.api.v1.distributor.schemas import (
     DistributorClientDetailResponse,
     DistributorClientFamilyGroupDetailResponse,
     DistributorClientListResponse,
+    DistributorOrderListResponse,
     DistributorComplianceQueueResponse,
     DistributorConsoleContextResponse,
     DistributorPartnerDetailResponse,
@@ -108,6 +115,18 @@ from app.application.distributor.distributor_client_service import (
     get_distributor_client_risk_assessment_detail,
     list_distributor_client_risk_assessments,
     list_distributor_clients,
+)
+from app.application.distributor.distributor_orders_service import list_distributor_orders_for_actor
+from app.application.distributor.mitra_txn_recommendation_service import (
+    CreateMitraTxnRecommendationInput,
+    CreateMitraTxnRecommendationItemInput,
+    MitraTxnRecommendationError,
+    MitraTxnInvestmentType,
+    MitraTxnPaymentMethod,
+    create_mitra_txn_recommendation,
+    get_mitra_txn_recommendation_for_actor,
+    list_mitra_txn_recommendations_for_actor,
+    search_distributor_schemes,
 )
 from app.application.distributor.partner_onboarding_service import (
     PartnerOnboardingError,
@@ -1075,6 +1094,25 @@ async def list_distributor_clients_route(
     return DistributorClientListResponse(items=items)
 
 
+@router.get("/orders", response_model=DistributorOrderListResponse)
+async def list_distributor_orders_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.list"))],
+    scope: str = Query(default="book"),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> DistributorOrderListResponse:
+    items = await list_distributor_orders_for_actor(
+        db,
+        actor=actor,
+        scope=scope,
+        limit=limit,
+        offset=offset,
+    )
+    await db.commit()
+    return DistributorOrderListResponse(items=items)
+
+
 @router.get("/clients/{client_reference}", response_model=DistributorClientDetailResponse)
 async def get_distributor_client_detail_route(
     client_reference: str,
@@ -1192,6 +1230,107 @@ async def download_distributor_client_risk_report_route(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _mitra_txn_recommendation_http_error(exc: MitraTxnRecommendationError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
+
+
+@router.get("/schemes/search", response_model=DistributorSchemeSearchResponse)
+async def search_distributor_schemes_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("distributor.txn_recommendations.create"))],
+    q: str = Query(default="", max_length=120),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+) -> DistributorSchemeSearchResponse:
+    payload = await search_distributor_schemes(db, query=q, page=page, page_size=page_size)
+    await db.commit()
+    return DistributorSchemeSearchResponse(**payload)
+
+
+@router.get("/txn-recommendations", response_model=MitraTxnRecommendationListResponse)
+async def list_mitra_txn_recommendations_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[
+        User,
+        Depends(
+            require_any_permission(
+                "distributor.txn_recommendations.read",
+                "distributor.txn_recommendations.create",
+            )
+        ),
+    ],
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> MitraTxnRecommendationListResponse:
+    items = await list_mitra_txn_recommendations_for_actor(
+        db,
+        actor=actor,
+        limit=limit,
+        offset=offset,
+    )
+    await db.commit()
+    return MitraTxnRecommendationListResponse(
+        items=[MitraTxnRecommendationResponse(**item) for item in items],
+    )
+
+
+@router.get("/txn-recommendations/{token}", response_model=MitraTxnRecommendationResponse)
+async def get_mitra_txn_recommendation_route(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.txn_recommendations.read"))],
+) -> MitraTxnRecommendationResponse:
+    payload = await get_mitra_txn_recommendation_for_actor(db, actor=actor, token=token)
+    if payload is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": "Recommendation not found."},
+        )
+    await db.commit()
+    return MitraTxnRecommendationResponse(**payload)
+
+
+@router.post(
+    "/clients/{client_reference}/txn-recommendations",
+    response_model=MitraTxnRecommendationResponse,
+)
+async def create_mitra_txn_recommendation_route(
+    client_reference: str,
+    body: CreateMitraTxnRecommendationRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.txn_recommendations.create"))],
+) -> MitraTxnRecommendationResponse:
+    try:
+        payload = await create_mitra_txn_recommendation(
+            db,
+            actor=actor,
+            payload=CreateMitraTxnRecommendationInput(
+                client_reference=client_reference,
+                investment_type=MitraTxnInvestmentType(body.investment_type),
+                payment_method=MitraTxnPaymentMethod(body.payment_method),
+                number_of_installments=body.number_of_installments,
+                installment_day=body.installment_day,
+                sip_frequency=body.sip_frequency,
+                items=[
+                    CreateMitraTxnRecommendationItemInput(
+                        product_id=item.product_id,
+                        amount_inr=item.amount_inr,
+                        number_of_installments=item.number_of_installments,
+                        installment_day=item.installment_day,
+                    )
+                    for item in body.items
+                ],
+            ),
+        )
+    except MitraTxnRecommendationError as exc:
+        raise _mitra_txn_recommendation_http_error(exc) from exc
+    await db.commit()
+    return MitraTxnRecommendationResponse(**payload)
 
 
 from app.api.v1.distributor.work_router import router as distributor_work_router

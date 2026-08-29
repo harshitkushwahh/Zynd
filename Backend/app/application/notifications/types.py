@@ -32,6 +32,7 @@ class NotificationType(str, Enum):
     ACCOUNT_PROFILE_IMAGE_UPDATED = "account.profile_image.updated"
     INVEST_RISK_PROFILE_COMPLETED = "invest.risk_profile.completed"
     INVEST_RISK_PROFILE_UNLOCK_OTP = "invest.risk_profile.unlock_otp"
+    INVEST_MITRA_TXN_RECOMMENDATION = "invest.mitra_txn_recommendation"
     FAMILY_INVITE_RECEIVED = "family.invite.received"
     FAMILY_INVITE_ACCEPTED = "family.invite.accepted"
     FAMILY_INVITE_DECLINED = "family.invite.declined"
@@ -210,6 +211,12 @@ NOTIFICATION_DEFINITIONS: dict[NotificationType, NotificationDefinition] = {
         notification_type=NotificationType.INVEST_RISK_PROFILE_UNLOCK_OTP,
         category=NotificationCategory.security,
         default_email=False,
+        default_in_app=True,
+    ),
+    NotificationType.INVEST_MITRA_TXN_RECOMMENDATION: NotificationDefinition(
+        notification_type=NotificationType.INVEST_MITRA_TXN_RECOMMENDATION,
+        category=NotificationCategory.account,
+        default_email=True,
         default_in_app=True,
     ),
     NotificationType.FAMILY_INVITE_RECEIVED: NotificationDefinition(

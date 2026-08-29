@@ -30,6 +30,7 @@ import {
   syncMfTransactionSipPlan,
   type MfTransactionSipPlan,
 } from "@/lib/mf-transactions-admin-api";
+import { MfSipPlanDetailDialog } from "@/components/mf/mf-sip-plan-detail-dialog";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";
@@ -105,6 +106,7 @@ export function MfTransactionSipPlansPanel({
   const setStatusFilter = onStatusFilterChange ?? setInternalStatusFilter;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
+  const [selectedPlan, setSelectedPlan] = useState<MfTransactionSipPlan | null>(null);
 
   const loadData = useCallback(async () => {
     if (!canRead) return;
@@ -243,14 +245,17 @@ export function MfTransactionSipPlansPanel({
             </AdminTableStateRow>
           ) : (
             pagination.items.map((plan) => (
-              <AdminTableRow key={plan.plan_id}>
+              <AdminTableRow key={plan.plan_id} onClick={() => setSelectedPlan(plan)}>
                 {canManage ? (
                   <AdminTableCell>
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={actionLoading === `sync-${plan.plan_id}`}
-                      onClick={() => void handleSyncPlan(plan.plan_id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleSyncPlan(plan.plan_id);
+                      }}
                     >
                       <RotateCcw className="size-3.5" />
                       Sync
@@ -315,6 +320,13 @@ export function MfTransactionSipPlansPanel({
           )}
         </AdminTableBody>
       </AdminDataTable>
+
+      <MfSipPlanDetailDialog
+        open={selectedPlan != null}
+        planId={selectedPlan?.plan_id ?? null}
+        initialPlan={selectedPlan}
+        onClose={() => setSelectedPlan(null)}
+      />
     </div>
   );
 }

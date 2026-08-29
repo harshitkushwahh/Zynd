@@ -53,8 +53,10 @@ export function mapPortfolioGrowthToFlowSeries(
 
   const today = new Date();
   today.setHours(12, 0, 0, 0);
-  const dateKey = today.toISOString().slice(0, 10);
-  const label = today.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+  const endDateKey = today.toISOString().slice(0, 10);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 1);
+  const startDateKey = startDate.toISOString().slice(0, 10);
 
   const investedPoint = growth.find((point) => point.label.toLowerCase() === "invested") ?? growth[0]!;
   const currentPoint =
@@ -63,16 +65,17 @@ export function mapPortfolioGrowthToFlowSeries(
   const invested = investedPoint.invested ?? investedPoint.value;
 
   // Same-day anchors keep range tabs on 1M until dated growth history arrives.
+  // Keep distinct labels/dates so Recharts can draw a visible segment for small moves.
   return [
     {
-      date: dateKey,
-      label,
+      date: startDateKey,
+      label: investedPoint.label,
       invested,
       value: investedPoint.value,
     },
     {
-      date: dateKey,
-      label,
+      date: endDateKey,
+      label: currentPoint.label,
       invested,
       value: currentPoint.value,
     },

@@ -1,11 +1,7 @@
 "use client";
 
 import "@/styles/zynd-recommend-funds-button.css";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { RecommendFundsHoverCard } from "@/components/dashboard/recommend-funds-hover-card";
 import { copy } from "@/shared/config/copy";
 
 const SPARKLES_PATH =
@@ -35,43 +31,39 @@ export function RecommendFundsNavbarButton() {
   const navbarCopy = copy.navbar.recommendFunds;
 
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <div className="btn-wrapper">
-            <button
-              type="button"
-              className="btn"
-              aria-disabled="true"
-              aria-label={navbarCopy.label}
-              onClick={(event) => event.preventDefault()}
+    <RecommendFundsHoverCard
+      trigger={
+        <div className="btn-wrapper" onMouseDown={(event) => event.preventDefault()}>
+          <button
+            type="button"
+            className="btn"
+            aria-label={navbarCopy.label}
+            onClick={(event) => event.preventDefault()}
+          >
+            <svg
+              className="btn-svg"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              aria-hidden
             >
-              <svg
-                className="btn-svg"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d={SPARKLES_PATH}
-                />
-              </svg>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d={SPARKLES_PATH}
+              />
+            </svg>
 
-              <div className="txt-wrapper">
-                <div className="txt-1" aria-hidden>
-                  <ButtonLetters text={navbarCopy.idleLabel} />
-                </div>
-                <div className="txt-2" aria-hidden>
-                  <ButtonLetters text={navbarCopy.activeLabel} />
-                </div>
+            <div className="txt-wrapper">
+              <div className="txt-1" aria-hidden>
+                <ButtonLetters text={navbarCopy.idleLabel} />
               </div>
-            </button>
-          </div>
-        }
-      />
-      <TooltipContent side="bottom">{navbarCopy.comingSoon}</TooltipContent>
-    </Tooltip>
+              <div className="txt-2" aria-hidden>
+                <ButtonLetters text={navbarCopy.activeLabel} />
+              </div>
+            </div>
+          </button>
+        </div>
+      }
+    />
   );
 }

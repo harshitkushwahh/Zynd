@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Accordion, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { DistributorWorkspaceAccordionContent } from "@/components/workspace/distributor-workspace-accordion-content";
+import { useDistributorOrders } from "@/contexts/distributor-orders-context";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import { getOperationsVariantCountMap } from "@/lib/distributor-operations-variant-counts";
 import {
@@ -42,7 +43,9 @@ export function YourOperationsSidebar() {
   const sections = getDistributorOperationsSections();
   const { sectionId: activeSectionId } = parseYourOperationsPathname(pathname);
   const operationsListScope = resolveDistributorOrdersListScope(searchParams.get("ordersScope"));
-  const { requests: txnRequests } = useDistributorTxnRequests();
+  const { requests: txnRequests, transactionGroups } = useDistributorTxnRequests();
+  const { bookOrders, allOrders } = useDistributorOrders();
+  const scopedOrders = operationsListScope === "all" ? allOrders : bookOrders;
 
   const variantCountsBySection = useMemo(() => {
     const sectionIds: DistributorOperationsSectionId[] = [
@@ -54,10 +57,10 @@ export function YourOperationsSidebar() {
     return Object.fromEntries(
       sectionIds.map((id) => [
         id,
-        getOperationsVariantCountMap(id, operationsListScope, txnRequests),
+        getOperationsVariantCountMap(id, operationsListScope, txnRequests, transactionGroups, scopedOrders),
       ]),
     ) as Record<DistributorOperationsSectionId, Record<string, number>>;
-  }, [operationsListScope, txnRequests]);
+  }, [operationsListScope, scopedOrders, transactionGroups, txnRequests]);
 
   const [expandedSections, setExpandedSections] = useState<string[]>(() => [
     activeSectionId ?? "orders",

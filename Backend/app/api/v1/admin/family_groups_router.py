@@ -12,6 +12,7 @@ from app.api.v1.admin.family_groups_schemas import (
     AdminFamilyGroupAuditLogItemResponse,
     AdminFamilyGroupAuditLogListResponse,
     AdminFamilyGroupDetailResponse,
+    AdminFamilyGroupInviteDetailResponse,
     AdminFamilyGroupInviteListItemResponse,
     AdminFamilyGroupInviteListResponse,
     AdminFamilyGroupListResponse,
@@ -25,6 +26,7 @@ from app.application.family_groups.admin_service import (
     admin_force_remove_group_member,
     get_admin_family_group_analytics,
     get_admin_family_group_detail,
+    get_admin_family_group_invite_detail,
     list_admin_family_group_invites,
     list_admin_family_groups,
     list_admin_user_family_groups,
@@ -119,6 +121,19 @@ async def get_admin_family_group_invites(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/invites/{invite_id}", response_model=AdminFamilyGroupInviteDetailResponse)
+async def get_admin_family_group_invite(
+    invite_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("family_groups.read"))],
+) -> AdminFamilyGroupInviteDetailResponse:
+    try:
+        payload = await get_admin_family_group_invite_detail(db, invite_id=invite_id)
+    except FamilyGroupError as exc:
+        raise _handle_family_group_error(exc) from exc
+    return AdminFamilyGroupInviteDetailResponse(**payload)
 
 
 @router.get("/audit", response_model=AdminFamilyGroupAuditLogListResponse)

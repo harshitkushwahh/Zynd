@@ -1,18 +1,13 @@
 "use client";
 
-import { useMemo, useState, type LucideIcon, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { CalendarClock, Check, Copy, Hash, Layers, Loader2 } from "lucide-react";
+import { CalendarClock, Check, Copy, Info, Layers } from "lucide-react";
 
+import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { UiMessage } from "@/components/ui/ui-message";
+import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import { useRedemptionJourneyQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
 import { portfolioHoldingDetailRedeemHref } from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
 import {
@@ -20,8 +15,14 @@ import {
   type RedemptionJourneyDisplayStep,
 } from "@/features/dashboard/portfolio/lib/portfolio-redeem-journey-copy";
 import type { PortfolioRedeemUnitsRow } from "@/features/dashboard/portfolio/lib/portfolio-redeem-mapper";
-import { portfolioHoldingAmcInitials } from "@/features/dashboard/portfolio/lib/portfolio-types";
+import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfOrderStatusBadge, mfOrderStatusVariant } from "@/features/invest/components/mf-order-status-badge";
+import {
+  MF_JOURNEY_DIALOG_BODY_SHELL_CLASS,
+  MF_JOURNEY_DIALOG_GRID_CLASS,
+  MF_JOURNEY_DIALOG_SCROLL_PANEL_CLASS,
+  MfJourneyDialogSkeleton,
+} from "@/features/invest/components/payment-dialog/mf-journey-dialog-skeleton";
 import { formatDateTime, formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -33,86 +34,26 @@ type PortfolioRedeemUnitsJourneyDialogProps = {
 };
 
 const DIALOG_CLOSE_MS = 320;
-const DIALOG_SURFACE_CLASS = "overflow-hidden rounded-[var(--radius-card)] border border-border bg-muted/10";
-const SECTION_HEADER_CLASS = "border-b border-border bg-muted/20 px-4 py-3";
 
-function DetailTile({
-  icon: Icon,
+function SummaryCard({
   label,
-  value,
-  mono = false,
-  className,
+  children,
   action,
+  className,
 }: {
-  icon: LucideIcon;
   label: string;
-  value: string;
-  mono?: boolean;
-  className?: string;
+  children: ReactNode;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex min-w-0 items-start gap-3 rounded-[var(--radius-card)] border border-border bg-muted/10 p-3.5 shadow-zynd-low",
-        className,
-      )}
-    >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
-        <Icon className="size-4" strokeWidth={2.25} />
+    <div className={cn("rounded-2xl border border-border/60 bg-muted/20 p-3.5", className)}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        {action}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-caption font-medium text-muted-foreground">{label}</p>
-          {action}
-        </div>
-        <p
-          className={cn(
-            "mt-1 break-words text-compact font-medium text-foreground",
-            mono && "break-all font-mono text-caption font-normal leading-relaxed",
-          )}
-        >
-          {value}
-        </p>
-      </div>
+      <div className="mt-1">{children}</div>
     </div>
-  );
-}
-
-function OrderIdTile({ orderId }: { orderId: string }) {
-  const [copied, setCopied] = useState(false);
-  const portfolioCopy = copy.dashboard.portfolio;
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(orderId);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  return (
-    <DetailTile
-      icon={Hash}
-      label={portfolioCopy.redeemJourneyOrderId}
-      value={orderId}
-      mono
-      className="sm:col-span-2"
-      action={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 px-2 text-caption text-muted-foreground hover:text-foreground"
-          onClick={() => void handleCopy()}
-        >
-          {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
-          {copied ? copy.transactions.journeyCopied : portfolioCopy.redeemJourneyCopyOrderId}
-        </Button>
-      }
-    />
   );
 }
 
@@ -157,83 +98,186 @@ function JourneyStepRow({ step, isLast }: { step: RedemptionJourneyDisplayStep; 
   );
 }
 
-function RedeemFundSummary({
+function RedeemHoldingSummaryPanel({
   row,
+  mode,
   amountInr,
   status,
+  orderId,
+  placedAt,
+  units,
 }: {
   row: PortfolioRedeemUnitsRow;
-  amountInr: number;
+  mode: "idle" | "active";
+  amountInr?: number;
   status?: string;
+  orderId?: string;
+  placedAt?: string;
+  units?: number;
 }) {
-  return (
-    <section className={DIALOG_SURFACE_CLASS}>
-      <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-[11px] font-semibold text-muted-foreground">
-              {portfolioHoldingAmcInitials(row.amcName)}
-            </div>
-            <div className="min-w-0">
-              <p className="font-medium leading-snug text-foreground">{row.fundName}</p>
-              <p className="mt-0.5 text-caption text-muted-foreground">{row.amcName}</p>
-            </div>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-caption text-muted-foreground">{copy.transactions.tableAmount}</p>
-            <p className="mt-0.5 text-body font-semibold tabular-nums text-foreground">{formatInr(amountInr)}</p>
-          </div>
-        </div>
+  const portfolioCopy = copy.dashboard.portfolio;
+  const [copied, setCopied] = useState(false);
 
-        {status ? (
-          <div className="mt-4 flex items-center gap-2">
-            <span className="text-caption font-medium text-muted-foreground">{copy.transactions.tableStatus}</span>
-            <MfOrderStatusBadge status={status} />
+  const handleCopy = async () => {
+    if (!orderId) return;
+    try {
+      await navigator.clipboard.writeText(orderId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <aside
+      className={cn(
+        "border-b border-border/60 bg-muted/10 p-5 sm:p-6 md:border-b-0 md:border-r",
+        MF_JOURNEY_DIALOG_SCROLL_PANEL_CLASS,
+      )}
+    >
+      <div className="flex flex-col items-center text-center md:items-start md:text-left">
+        <MfFundAmcAvatar
+          amcLogoUrl={row.amcLogoUrl}
+          amcName={row.amcName}
+          size="md"
+          className="size-14 text-caption"
+        />
+        <p className="mt-4 text-body font-semibold leading-snug text-foreground">{row.fundName}</p>
+        <p className="mt-1 text-caption text-muted-foreground">{row.amcName}</p>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {mode === "idle" ? (
+          <>
+            <SummaryCard label={portfolioCopy.redeemUnitsUnits}>
+              <p className="text-h4 font-semibold tabular-nums text-foreground">
+                {row.redeemableUnits.toFixed(3)}
+              </p>
+            </SummaryCard>
+            <SummaryCard label={portfolioCopy.redeemUnitsValue}>
+              <p className="text-h4 font-semibold tabular-nums text-foreground">
+                {formatInr(row.redeemableValueInr)}
+              </p>
+            </SummaryCard>
+          </>
+        ) : (
+          <>
+            <SummaryCard label={copy.transactions.tableAmount}>
+              <p className="text-h4 font-semibold tabular-nums text-foreground">{formatInr(amountInr ?? 0)}</p>
+            </SummaryCard>
+
+            {status ? (
+              <SummaryCard label={copy.transactions.tableStatus}>
+                <MfOrderStatusBadge status={status} />
+              </SummaryCard>
+            ) : null}
+
+            {units != null ? (
+              <SummaryCard
+                label={portfolioCopy.redeemJourneyUnitsLabel}
+                action={<Layers className="size-4 shrink-0 text-muted-foreground/70" strokeWidth={2.25} />}
+              >
+                <p className="text-compact font-semibold tabular-nums text-foreground">{units.toFixed(3)}</p>
+              </SummaryCard>
+            ) : null}
+
+            {placedAt ? (
+              <SummaryCard
+                label={portfolioCopy.redeemJourneyPlacedOn}
+                action={<CalendarClock className="size-4 shrink-0 text-muted-foreground/70" strokeWidth={2.25} />}
+              >
+                <p className="text-compact font-medium text-foreground">{formatDateTime(placedAt)}</p>
+              </SummaryCard>
+            ) : null}
+
+            {orderId ? (
+              <SummaryCard
+                label={portfolioCopy.redeemJourneyOrderId}
+                action={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => void handleCopy()}
+                    aria-label={portfolioCopy.redeemJourneyCopyOrderId}
+                  >
+                    {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
+                  </Button>
+                }
+              >
+                <p className="break-all font-mono text-caption leading-relaxed text-foreground">{orderId}</p>
+              </SummaryCard>
+            ) : null}
+          </>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function RedeemNoActivePanel({ row, message }: { row: PortfolioRedeemUnitsRow; message: string }) {
+  const portfolioCopy = copy.dashboard.portfolio;
+
+  return (
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col md:overflow-hidden">
+      <div
+        className={cn(
+          "flex flex-1 flex-col items-center justify-center px-5 py-10 sm:px-6 sm:py-12",
+          MF_JOURNEY_DIALOG_SCROLL_PANEL_CLASS,
+        )}
+      >
+        <div className="mx-auto flex w-full max-w-sm flex-col items-center text-center">
+          <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-muted-foreground">
+            <Info className="size-5" strokeWidth={2.25} aria-hidden />
           </div>
-        ) : null}
+          <p className="mt-4 text-compact leading-relaxed text-muted-foreground">{message}</p>
+          <Button
+            className="mt-6 w-full"
+            nativeButton={false}
+            render={<Link href={portfolioHoldingDetailRedeemHref(row.id)} />}
+          >
+            {portfolioCopy.redeemJourneyStartRedeem}
+          </Button>
+        </div>
       </div>
     </section>
   );
 }
 
-function RedeemDetailTiles({
-  orderId,
-  placedAt,
-  units,
+function RedeemJourneyTimelinePanel({
+  journey,
 }: {
-  orderId: string;
-  placedAt: string;
-  units: number;
+  journey: ReturnType<typeof buildRedemptionJourneyView>;
 }) {
-  const portfolioCopy = copy.dashboard.portfolio;
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <DetailTile icon={Layers} label={portfolioCopy.redeemJourneyUnitsLabel} value={units.toFixed(3)} />
-      <DetailTile icon={CalendarClock} label={portfolioCopy.redeemJourneyPlacedOn} value={formatDateTime(placedAt)} />
-      <OrderIdTile orderId={orderId} />
-    </div>
-  );
-}
-
-function RedeemJourneyTimelineSection({ journey }: { journey: ReturnType<typeof buildRedemptionJourneyView> }) {
   const portfolioCopy = copy.dashboard.portfolio;
   const isNegativeOutcome =
     journey.outcomeSummary?.toLowerCase().includes("cancel") ||
     journey.outcomeSummary?.toLowerCase().includes("fail");
 
   return (
-    <section className={DIALOG_SURFACE_CLASS}>
-      <div className={cn(SECTION_HEADER_CLASS, "flex items-center justify-between gap-3")}>
-        <p className="text-compact font-semibold text-foreground">{portfolioCopy.redeemJourneyWhatHappened}</p>
-        {journey.steps.length > 0 ? (
-          <StatusBadge variant="neutral" showIcon={false} className="shrink-0 whitespace-nowrap">
-            {journey.steps.length} step{journey.steps.length === 1 ? "" : "s"}
-          </StatusBadge>
-        ) : null}
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col md:overflow-hidden">
+      <div className="shrink-0 p-5 pb-0 sm:p-6 sm:pb-0">
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 pr-2">
+          <p className="min-w-0 flex-1 text-compact font-semibold text-foreground">
+            {portfolioCopy.redeemJourneyWhatHappened}
+          </p>
+          {journey.steps.length > 0 ? (
+            <StatusBadge variant="neutral" showIcon={false} className="shrink-0 whitespace-nowrap">
+              {journey.steps.length} step{journey.steps.length === 1 ? "" : "s"}
+            </StatusBadge>
+          ) : null}
+        </div>
       </div>
 
-      <div className="space-y-4 p-4 sm:p-5">
+      <div
+        className={cn(
+          "space-y-4 px-5 pb-5 sm:px-6 sm:pb-6",
+          MF_JOURNEY_DIALOG_SCROLL_PANEL_CLASS,
+          "md:flex-1",
+        )}
+      >
         {journey.outcomeSummary ? (
           <UiMessage
             variant={isNegativeOutcome ? "error" : "info"}
@@ -245,7 +289,7 @@ function RedeemJourneyTimelineSection({ journey }: { journey: ReturnType<typeof 
         {journey.steps.length === 0 ? (
           <p className="text-compact text-muted-foreground">{portfolioCopy.redeemJourneyEmpty}</p>
         ) : (
-          <div className="rounded-[var(--radius-control)] border border-border/70 bg-muted/10 px-3 py-4 sm:px-4">
+          <div className="rounded-2xl border border-border/60 bg-muted/10 px-3 py-4 sm:px-4">
             {journey.steps.map((step, index) => (
               <JourneyStepRow
                 key={`${step.event.created_at ?? "event"}-${index}`}
@@ -257,20 +301,6 @@ function RedeemJourneyTimelineSection({ journey }: { journey: ReturnType<typeof 
         )}
       </div>
     </section>
-  );
-}
-
-function NoActiveRedemptionPanel({ row }: { row: PortfolioRedeemUnitsRow }) {
-  const portfolioCopy = copy.dashboard.portfolio;
-
-  return (
-    <div className="space-y-4">
-      <RedeemFundSummary row={row} amountInr={row.redeemableValueInr} />
-      <UiMessage variant="info" message={portfolioCopy.redeemJourneyNoActiveRedemption} className="mt-0" />
-      <Button asChild className="w-full">
-        <Link href={portfolioHoldingDetailRedeemHref(row.id)}>{portfolioCopy.redeemJourneyStartRedeem}</Link>
-      </Button>
-    </div>
   );
 }
 
@@ -293,44 +323,67 @@ export function PortfolioRedeemUnitsJourneyDialog({
     };
   }, [journey]);
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90vh,44rem)] max-w-[min(100vw-2rem,36rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
-        <DialogHeader className="shrink-0 items-center border-b border-border/60 px-5 py-4 text-center sm:px-6">
-          <DialogTitle className="w-full text-center">{portfolioCopy.redeemUnitsJourneyTitle}</DialogTitle>
-        </DialogHeader>
+  const showIdleState = Boolean(row && !fpRedemptionId && !showSkeleton && !errorMessage);
+  const showActiveState = Boolean(row && orderJourney && !showSkeleton && !errorMessage);
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
-          {row && showSkeleton ? (
-            <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
-              <Loader2 className="size-6 animate-spin" aria-hidden />
+  return (
+    <BrandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={portfolioCopy.redeemUnitsJourneyTitle}
+      maxWidth="xl"
+      className="max-h-[min(90vh,44rem)] w-full max-w-[min(calc(100vw-2rem),60rem)]"
+    >
+      <>
+        <div className={MF_JOURNEY_DIALOG_BODY_SHELL_CLASS}>
+          {row && showSkeleton ? <MfJourneyDialogSkeleton variant="order" /> : null}
+
+          {row && errorMessage ? (
+            <div className="flex items-center p-5 sm:p-6">
+              <FieldMessage variant="error" message={errorMessage} />
             </div>
           ) : null}
 
-          {row && errorMessage ? <UiMessage variant="error" message={errorMessage} className="mt-0" /> : null}
-
-          {row && !fpRedemptionId && !showSkeleton && !errorMessage ? (
-            <NoActiveRedemptionPanel row={row} />
+          {showIdleState && row ? (
+            <div
+              className={cn(
+                MF_JOURNEY_DIALOG_GRID_CLASS,
+                "md:grid-cols-[minmax(17rem,21rem)_minmax(0,1fr)]",
+              )}
+            >
+              <RedeemHoldingSummaryPanel row={row} mode="idle" />
+              <RedeemNoActivePanel row={row} message={portfolioCopy.redeemJourneyNoActiveRedemption} />
+            </div>
           ) : null}
 
           {row && fpRedemptionId && !showSkeleton && !errorMessage && !journey && fetchStatus === "not_found" ? (
-            <UiMessage variant="error" message={portfolioCopy.redeemJourneyLoadFailed} className="mt-0" />
+            <div className="flex items-center p-5 sm:p-6">
+              <FieldMessage variant="error" message={portfolioCopy.redeemJourneyLoadFailed} />
+            </div>
           ) : null}
 
-          {row && orderJourney && !showSkeleton && !errorMessage ? (
-            <div className="space-y-4">
-              <RedeemFundSummary row={row} amountInr={orderJourney.amountInr} status={orderJourney.status} />
-              <RedeemDetailTiles
+          {showActiveState && row && orderJourney ? (
+            <div
+              className={cn(
+                MF_JOURNEY_DIALOG_GRID_CLASS,
+                "md:grid-cols-[minmax(17rem,21rem)_minmax(0,1fr)]",
+              )}
+            >
+              <RedeemHoldingSummaryPanel
+                row={row}
+                mode="active"
+                amountInr={orderJourney.amountInr}
+                status={orderJourney.status}
                 orderId={orderJourney.orderId}
                 placedAt={orderJourney.placedAt}
                 units={orderJourney.units}
               />
-              <RedeemJourneyTimelineSection journey={orderJourney.view} />
+              <RedeemJourneyTimelinePanel journey={orderJourney.view} />
             </div>
           ) : null}
         </div>
-      </DialogContent>
-    </Dialog>
+      </>
+    </BrandDialog>
   );
 }
 

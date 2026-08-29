@@ -91,9 +91,10 @@ const PROVIDER_TABS = LOG_TABS.filter(
 type ZyndLogsPanelProps = {
   initialRecordUserRef?: string;
   initialTab?: LogTab;
+  initialCategory?: string;
 };
 
-export function ZyndLogsPanel({ initialRecordUserRef, initialTab }: ZyndLogsPanelProps) {
+export function ZyndLogsPanel({ initialRecordUserRef, initialTab, initialCategory }: ZyndLogsPanelProps) {
   const { hasPermission } = useAdminAuth();
   const canRead = hasPermission("audit.read");
   const defaultTab = initialTab ?? (initialRecordUserRef ? RECORD_TAB : PLATFORM_TAB);
@@ -131,7 +132,7 @@ export function ZyndLogsPanel({ initialRecordUserRef, initialTab }: ZyndLogsPane
         </AdminTabList>
 
         <TabsContent value={PLATFORM_TAB} className="mt-0" keepMounted={keepMounted(PLATFORM_TAB)}>
-          <PlatformAuditLogsPanel />
+          <PlatformAuditLogsPanel initialCategory={initialCategory} />
         </TabsContent>
 
         <TabsContent value={RECORD_TAB} className="mt-0" keepMounted={keepMounted(RECORD_TAB)}>

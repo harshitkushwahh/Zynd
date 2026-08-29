@@ -3,9 +3,10 @@ import { env } from "@/lib/env";
 export const APP_NAME = env.appName;
 export const APP_TAGLINE = env.appTagline;
 
-export function appTitle(suffix?: string): string {
-  if (!suffix) return `${APP_NAME} - ${APP_TAGLINE}`;
-  return `${APP_NAME} - ${suffix}`;
+export function appTitle(pageLabel?: string): string {
+  const trimmed = pageLabel?.trim();
+  if (trimmed) return `${trimmed} · ${APP_NAME}`;
+  return `${APP_TAGLINE} · ${APP_NAME}`;
 }
 
 export function appBrandLockup(): string {

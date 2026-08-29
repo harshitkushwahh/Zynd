@@ -83,6 +83,32 @@ class AdminFamilyGroupInviteListResponse(BaseModel):
     offset: int
 
 
+class AdminFamilyGroupInviteJourneyEventResponse(BaseModel):
+    id: str
+    status: str
+    label: str
+    message: str
+    occurred_at: Optional[datetime] = None
+    state: str
+
+
+class AdminFamilyGroupInviteDetailResponse(AdminFamilyGroupInviteListItemResponse):
+    invited_by_user_id: UUID
+    invited_by_display_name: Optional[str] = None
+    invited_by_email_masked: Optional[str] = None
+    invitee_display_name: Optional[str] = None
+    accepted_user_id: Optional[UUID] = None
+    accepted_display_name: Optional[str] = None
+    accepted_at: Optional[datetime] = None
+    declined_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    reminder_sent_at: Optional[datetime] = None
+    reminder_count: int = 0
+    updated_at: datetime
+    activity: list[AdminFamilyGroupActivityResponse] = Field(default_factory=list)
+    journey: list[AdminFamilyGroupInviteJourneyEventResponse] = Field(default_factory=list)
+
+
 class AdminFamilyGroupMemberPreviewResponse(BaseModel):
     user_id: UUID
     display_name: str

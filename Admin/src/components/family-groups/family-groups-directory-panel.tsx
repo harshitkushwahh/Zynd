@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { MoreHorizontal, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 
-import { FamilyGroupDetailDialog } from "@/components/family-groups/family-group-detail-dialog";
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -20,28 +20,20 @@ import {
   getOffsetPage,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { familyGroupsGroupHref } from "@/lib/admin-family-groups-navigation";
 import { fetchAdminFamilyGroups, type AdminFamilyGroupSummary } from "@/lib/family-groups-admin-api";
 import { formatTimestampDetail } from "@/lib/format-date";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
-type FamilyGroupsDirectoryPanelProps = {
-  canManage: boolean;
-};
+const ALL = "all";
+
+const STATUS_OPTIONS = [
+  { value: ALL, label: "All statuses" },
+  { value: "active", label: "Active" },
+  { value: "archived", label: "Archived" },
+];
 
 function statusVariant(status: string): "success" | "neutral" | "info" {
   if (status === "active") return "success";
@@ -49,28 +41,33 @@ function statusVariant(status: string): "success" | "neutral" | "info" {
   return "info";
 }
 
-export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryPanelProps) {
+function statusLabel(status: string) {
+  return status.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function FamilyGroupsDirectoryPanel() {
+  const router = useRouter();
   const [items, setItems] = useState<AdminFamilyGroupSummary[]>([]);
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(ALL);
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const result = await fetchAdminFamilyGroups({
-        status: status === "all" ? undefined : status,
+        status: status === ALL ? undefined : status,
         search: search.trim() || undefined,
-        limit: ADMIN_TABLE_PAGE_SIZE,
+        limit: pageSize,
         offset,
       });
       setItems(result.items);
-      setHasMore(result.items.length === ADMIN_TABLE_PAGE_SIZE);
+      setHasMore(result.items.length === pageSize);
     } catch (err) {
       setItems([]);
       setHasMore(false);
@@ -78,7 +75,7 @@ export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryP
     } finally {
       setLoading(false);
     }
-  }, [offset, search, status]);
+  }, [offset, pageSize, search, status]);
 
   useEffect(() => {
     void loadGroups();
@@ -86,52 +83,64 @@ export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryP
 
   return (
     <div className="space-y-4">
-      <AdminSectionTitle description="Browse customer family groups, members, and moderation actions.">
-        Group directory
-      </AdminSectionTitle>
-
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <AdminSearchInput
-            containerClassName="max-w-sm"
-            placeholder="Search by group name"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                setOffset(0);
-                void loadGroups();
-              }
-            }}
-          />
-          <Select
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <AdminSearchInput
+          containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+          placeholder="Search by group name"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              setOffset(0);
+              void loadGroups();
+            }
+          }}
+        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <AdminSelect
             value={status}
             onValueChange={(value) => {
-              setStatus(value ?? "all");
+              setStatus(value);
               setOffset(0);
             }}
-          >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
+            options={STATUS_OPTIONS}
+            aria-label="Filter by status"
+            className="min-w-select-sm"
+            triggerClassName="w-auto"
+          />
+          <Button type="button" variant="outline" size="icon" onClick={() => void loadGroups()} aria-label="Refresh">
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
         </div>
-        <Button type="button" variant="outline" size="icon" onClick={() => void loadGroups()} aria-label="Refresh">
-          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-        </Button>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {error ? (
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>
+          {error}
+        </AdminFeedbackMessage>
+      ) : null}
 
-      <AdminDataTable minWidth="lg">
+      <AdminDataTable
+        minWidth="2xl"
+        footer={
+          <AdminTablePagination
+            page={getOffsetPage(offset, pageSize)}
+            hasPrevious={offset > 0}
+            hasNext={hasMore}
+            disabled={loading}
+            currentPageCount={items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setOffset(0);
+            }}
+            onPrevious={() => setOffset((current) => Math.max(0, current - pageSize))}
+            onNext={() => setOffset((current) => current + pageSize)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
-            <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell>
             <AdminTableHeadCell>Group</AdminTableHeadCell>
             <AdminTableHeadCell>Head</AdminTableHeadCell>
             <AdminTableHeadCell>Members</AdminTableHeadCell>
@@ -141,42 +150,26 @@ export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryP
         </AdminTableHeader>
         <AdminTableBody>
           <AdminTableRows
-            colSpan={6}
+            colSpan={5}
             loading={loading}
             isEmpty={items.length === 0}
             emptyMessage="No family groups found."
           >
             {items.map((group) => (
-              <AdminTableRow key={group.id}>
-                <AdminTableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button type="button" variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      }
-                    />
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setSelectedGroupId(group.id)}>
-                        View details
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </AdminTableCell>
+              <AdminTableRow key={group.id} onClick={() => router.push(familyGroupsGroupHref(group.id))}>
                 <AdminTableCell>
                   <div>
                     <p className="font-medium text-foreground">{group.title}</p>
                     {group.tag ? (
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">{group.tag}</p>
+                      <p className="mt-0.5 text-caption text-muted-foreground">{group.tag}</p>
                     ) : null}
                   </div>
                 </AdminTableCell>
                 <AdminTableCell>
                   <div>
-                    <p className="text-compact text-foreground">{group.head_display_name ?? "—"}</p>
+                    <p className="text-foreground">{group.head_display_name ?? "—"}</p>
                     {group.head_email_masked ? (
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">{group.head_email_masked}</p>
+                      <p className="mt-0.5 text-caption text-muted-foreground">{group.head_email_masked}</p>
                     ) : null}
                   </div>
                 </AdminTableCell>
@@ -188,34 +181,17 @@ export function FamilyGroupsDirectoryPanel({ canManage }: FamilyGroupsDirectoryP
                 </AdminTableCell>
                 <AdminTableCell>
                   <StatusBadge variant={statusVariant(group.status)} showIcon={false}>
-                    {group.status}
+                    {statusLabel(group.status)}
                   </StatusBadge>
                 </AdminTableCell>
-                <AdminTableCell>{formatTimestampDetail(group.created_at)}</AdminTableCell>
+                <AdminTableCell className="text-muted-foreground">
+                  {formatTimestampDetail(group.created_at)}
+                </AdminTableCell>
               </AdminTableRow>
             ))}
           </AdminTableRows>
         </AdminTableBody>
       </AdminDataTable>
-
-      <AdminTablePagination
-        page={getOffsetPage(offset)}
-        hasPrevious={offset > 0}
-        hasNext={hasMore}
-        disabled={loading}
-        onPrevious={() => setOffset((current) => Math.max(0, current - ADMIN_TABLE_PAGE_SIZE))}
-        onNext={() => setOffset((current) => current + ADMIN_TABLE_PAGE_SIZE)}
-      />
-
-      <FamilyGroupDetailDialog
-        groupId={selectedGroupId}
-        open={Boolean(selectedGroupId)}
-        canManage={canManage}
-        onOpenChange={(open) => {
-          if (!open) setSelectedGroupId(null);
-        }}
-        onUpdated={() => void loadGroups()}
-      />
     </div>
   );
 }

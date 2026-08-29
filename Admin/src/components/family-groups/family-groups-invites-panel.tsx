@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
-import { AdminSectionTitle } from "@/components/dashboard/admin-section-title";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminSearchInput } from "@/components/ui/admin-search-input";
+import { AdminSelect } from "@/components/ui/admin-select";
 import {
   ADMIN_TABLE_PAGE_SIZE,
   AdminDataTable,
@@ -19,20 +19,23 @@ import {
   getOffsetPage,
 } from "@/components/ui/admin-table";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { FamilyGroupInviteJourneyDialog } from "@/components/family-groups/family-group-invite-journey-dialog";
 import { fetchAdminFamilyGroupInvites, type AdminFamilyGroupInvite } from "@/lib/family-groups-admin-api";
 import { formatTimestampDetail } from "@/lib/format-date";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
-const INVITE_STATUSES = ["pending", "accepted", "declined", "revoked", "expired"];
+const ALL = "all";
+
+const STATUS_OPTIONS = [
+  { value: ALL, label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "accepted", label: "Accepted" },
+  { value: "declined", label: "Declined" },
+  { value: "revoked", label: "Revoked" },
+  { value: "expired", label: "Expired" },
+];
 
 function inviteVariant(status: string): "warning" | "success" | "neutral" | "info" {
   if (status === "pending") return "warning";
@@ -41,27 +44,33 @@ function inviteVariant(status: string): "warning" | "success" | "neutral" | "inf
   return "info";
 }
 
+function statusLabel(status: string) {
+  return status.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export function FamilyGroupsInvitesPanel() {
   const [items, setItems] = useState<AdminFamilyGroupInvite[]>([]);
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(ALL);
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(ADMIN_TABLE_PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedInvite, setSelectedInvite] = useState<AdminFamilyGroupInvite | null>(null);
 
   const loadInvites = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const result = await fetchAdminFamilyGroupInvites({
-        status: status === "all" ? undefined : status,
+        status: status === ALL ? undefined : status,
         search: search.trim() || undefined,
-        limit: ADMIN_TABLE_PAGE_SIZE,
+        limit: pageSize,
         offset,
       });
       setItems(result.items);
-      setHasMore(result.items.length === ADMIN_TABLE_PAGE_SIZE);
+      setHasMore(result.items.length === pageSize);
     } catch (err) {
       setItems([]);
       setHasMore(false);
@@ -69,7 +78,7 @@ export function FamilyGroupsInvitesPanel() {
     } finally {
       setLoading(false);
     }
-  }, [offset, search, status]);
+  }, [offset, pageSize, search, status]);
 
   useEffect(() => {
     void loadInvites();
@@ -77,52 +86,62 @@ export function FamilyGroupsInvitesPanel() {
 
   return (
     <div className="space-y-4">
-      <AdminSectionTitle description="Pending and historical invites across all family groups.">
-        Cross-group invites
-      </AdminSectionTitle>
-
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <AdminSearchInput
-            containerClassName="max-w-sm"
-            placeholder="Search group or invitee email"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                setOffset(0);
-                void loadInvites();
-              }
-            }}
-          />
-          <Select
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <AdminSearchInput
+          containerClassName="w-full max-w-sm sm:w-auto sm:min-w-[14rem]"
+          placeholder="Search group or invitee email"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              setOffset(0);
+              void loadInvites();
+            }
+          }}
+        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <AdminSelect
             value={status}
             onValueChange={(value) => {
-              setStatus(value ?? "all");
+              setStatus(value);
               setOffset(0);
             }}
-          >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {INVITE_STATUSES.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={STATUS_OPTIONS}
+            aria-label="Filter by status"
+            className="min-w-select-sm"
+            triggerClassName="w-auto"
+          />
+          <Button type="button" variant="outline" size="icon" onClick={() => void loadInvites()} aria-label="Refresh">
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
         </div>
-        <Button type="button" variant="outline" size="icon" onClick={() => void loadInvites()} aria-label="Refresh">
-          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-        </Button>
       </div>
 
-      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {error ? (
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>
+          {error}
+        </AdminFeedbackMessage>
+      ) : null}
 
-      <AdminDataTable minWidth="lg">
+      <AdminDataTable
+        minWidth="2xl"
+        footer={
+          <AdminTablePagination
+            page={getOffsetPage(offset, pageSize)}
+            hasPrevious={offset > 0}
+            hasNext={hasMore}
+            disabled={loading}
+            currentPageCount={items.length}
+            pageSize={pageSize}
+            onPageSizeChange={(next) => {
+              setPageSize(next);
+              setOffset(0);
+            }}
+            onPrevious={() => setOffset((current) => Math.max(0, current - pageSize))}
+            onNext={() => setOffset((current) => current + pageSize)}
+          />
+        }
+      >
         <AdminTableHeader>
           <tr>
             <AdminTableHeadCell>Group</AdminTableHeadCell>
@@ -140,39 +159,41 @@ export function FamilyGroupsInvitesPanel() {
             emptyMessage="No invites found."
           >
             {items.map((invite) => (
-              <AdminTableRow key={invite.id}>
+              <AdminTableRow key={invite.id} onClick={() => setSelectedInvite(invite)}>
                 <AdminTableCell>
                   <div>
                     <p className="font-medium text-foreground">{invite.group_title ?? "—"}</p>
                     {invite.group_status ? (
-                      <p className="mt-0.5 text-[11px] capitalize text-muted-foreground">{invite.group_status}</p>
+                      <p className="mt-0.5 text-caption capitalize text-muted-foreground">
+                        {statusLabel(invite.group_status)}
+                      </p>
                     ) : null}
                   </div>
                 </AdminTableCell>
                 <AdminTableCell>{invite.invitee_email ?? "—"}</AdminTableCell>
                 <AdminTableCell>
-                  {invite.intended_role}
+                  {statusLabel(invite.intended_role)}
                   {invite.intended_badge_label ? ` · ${invite.intended_badge_label}` : ""}
                 </AdminTableCell>
                 <AdminTableCell>
                   <StatusBadge variant={inviteVariant(invite.status)} showIcon={false}>
-                    {invite.status}
+                    {statusLabel(invite.status)}
                   </StatusBadge>
                 </AdminTableCell>
-                <AdminTableCell>{formatTimestampDetail(invite.expires_at)}</AdminTableCell>
+                <AdminTableCell className="text-muted-foreground">
+                  {formatTimestampDetail(invite.expires_at)}
+                </AdminTableCell>
               </AdminTableRow>
             ))}
           </AdminTableRows>
         </AdminTableBody>
       </AdminDataTable>
 
-      <AdminTablePagination
-        page={getOffsetPage(offset)}
-        hasPrevious={offset > 0}
-        hasNext={hasMore}
-        disabled={loading}
-        onPrevious={() => setOffset((current) => Math.max(0, current - ADMIN_TABLE_PAGE_SIZE))}
-        onNext={() => setOffset((current) => current + ADMIN_TABLE_PAGE_SIZE)}
+      <FamilyGroupInviteJourneyDialog
+        open={Boolean(selectedInvite)}
+        inviteId={selectedInvite?.id ?? null}
+        initialInvite={selectedInvite}
+        onClose={() => setSelectedInvite(null)}
       />
     </div>
   );

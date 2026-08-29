@@ -12,7 +12,8 @@ function mapDisplayTone(tone: ReturnType<typeof resolveSipPlanDisplayStatus>["to
 export function mfSipPlanStatusVariantFromStatus(status: string): StatusBadgeVariant {
   const normalized = status.trim().toUpperCase();
   if (normalized === "ACTIVE") return "success";
-  if (normalized === "FAILED" || normalized === "CANCELLED") return "destructive";
+  if (normalized === "FAILED") return "destructive";
+  if (normalized === "CANCELLED") return "neutral";
   if (normalized === "PENDING" || normalized === "REVIEW" || normalized === "CONSENT_PENDING") {
     return "warning";
   }
@@ -38,8 +39,10 @@ export function MfSipPlanStatusBadgeLegacy({ status }: { status: string }) {
   const variant =
     normalized === "ACTIVE"
       ? "success"
-      : normalized === "FAILED" || normalized === "CANCELLED"
+      : normalized === "FAILED"
         ? "destructive"
+        : normalized === "CANCELLED"
+          ? "neutral"
         : normalized === "PENDING" || normalized === "REVIEW" || normalized === "CONSENT_PENDING"
           ? "warning"
           : "neutral";

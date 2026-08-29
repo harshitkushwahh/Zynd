@@ -36,9 +36,12 @@ export function orderStatusVariant(status: OrderStatus): StatusBadgeVariant {
   return "warning";
 }
 
-export function planStatusVariant(status: SystematicPlanStatus): StatusBadgeVariant {
-  if (status === "Active") return "success";
-  if (status === "Paused") return "warning";
+export function planStatusVariant(status: SystematicPlanStatus | string): StatusBadgeVariant {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  if (normalized === "active") return "success";
+  if (normalized === "paused") return "warning";
+  if (normalized === "failed") return "destructive";
+  if (normalized === "cancelled" || normalized === "canceled") return "neutral";
   return "neutral";
 }
 

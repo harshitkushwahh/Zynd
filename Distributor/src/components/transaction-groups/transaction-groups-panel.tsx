@@ -11,12 +11,14 @@ import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-ta
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
+import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
 import {
   getScopedTransactionGroups,
   type DistributorOrdersListScope,
 } from "@/lib/distributor-operations-orders-scope";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
+import { transactionGroupVariantId } from "@/lib/map-mitra-txn-recommendation";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 import type { DistributorTransactionGroup } from "@/lib/distributor-types";
@@ -58,6 +60,7 @@ function groupStatusVariant(status: GroupStatus): StatusBadgeVariant {
 type TransactionGroupsPanelProps = DistributorPageConfig & {
   layout?: "page" | "table";
   operationsListScope?: DistributorOrdersListScope;
+  operationsVariantId?: string;
 };
 
 const TABLE_MIN_CLASS = "w-full min-w-[var(--table-min-width-xl)]";
@@ -67,11 +70,19 @@ export function TransactionGroupsPanel({
   description,
   layout = "page",
   operationsListScope = "your-book",
+  operationsVariantId,
 }: TransactionGroupsPanelProps) {
+  const { transactionGroups: allGroups } = useDistributorTxnRequests();
   const sourceGroups = useMemo(
-    () => getScopedTransactionGroups(operationsListScope),
-    [operationsListScope],
+    () => getScopedTransactionGroups(allGroups, operationsListScope),
+    [allGroups, operationsListScope],
   );
+  const variantScoped = useMemo(() => {
+    if (!operationsVariantId) return sourceGroups;
+    return sourceGroups.filter(
+      (group) => transactionGroupVariantId(group) === operationsVariantId,
+    );
+  }, [operationsVariantId, sourceGroups]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<GroupStatus | "all">("all");
   const [investorSizeFilter, setInvestorSizeFilter] = useState<InvestorSizeFilter>("all");
@@ -81,7 +92,7 @@ export function TransactionGroupsPanel({
   });
 
   const filtered = useMemo(() => {
-    return sourceGroups.filter((group) => {
+    return variantScoped.filter((group) => {
       if (statusFilter !== "all" && group.status !== statusFilter) return false;
       if (!groupMatchesInvestorSize(group.investorCount, investorSizeFilter)) return false;
       return distributorTableSearchMatch(
@@ -92,7 +103,7 @@ export function TransactionGroupsPanel({
         String(group.legCount),
       );
     });
-  }, [investorSizeFilter, searchQuery, sourceGroups, statusFilter]);
+  }, [investorSizeFilter, searchQuery, statusFilter, variantScoped]);
 
   const sorted = useMemo(
     () => sortByDescriptor(filtered, sortDescriptor),
@@ -101,9 +112,9 @@ export function TransactionGroupsPanel({
 
   const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
-  const draftCount = sourceGroups.filter((g) => g.status === "Draft").length;
-  const submittedCount = sourceGroups.filter((g) => g.status === "Submitted").length;
-  const completedCount = sourceGroups.filter((g) => g.status === "Completed").length;
+  const draftCount = variantScoped.filter((g) => g.status === "Draft").length;
+  const submittedCount = variantScoped.filter((g) => g.status === "Submitted").length;
+  const completedCount = variantScoped.filter((g) => g.status === "Completed").length;
 
   const toolbar = (
     <DistributorTableToolbar
@@ -248,7 +259,7 @@ export function TransactionGroupsPanel({
           <DistributorMetricCard
             icon={FolderKanban}
             label="Total groups"
-            value={String(sourceGroups.length)}
+            value={String(variantScoped.length)}
             hint="Multi-leg batches"
           />
           <DistributorMetricCard

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowUpRight, Globe2, IndianRupee, Users } from "lucide-react";
-import { useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -16,8 +16,10 @@ import {
 import { DistributorGrowthBadge } from "@/components/ui/distributor-growth-badge";
 import { getDistributorBookInsights } from "@/lib/distributor-book-insights";
 import type { PortfolioChartPoint } from "@/lib/client-portfolio-chart-data";
+import { fetchDistributorClients } from "@/lib/distributor-clients-api";
 import { YOUR_CLIENTS_LIST_HREF } from "@/lib/distributor-client-routes";
 import { buildYourClientsListHref } from "@/lib/distributor-clients-list-scope";
+import type { DistributorInvestor } from "@/lib/distributor-types";
 import { formatAum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -50,12 +52,18 @@ function chartDomain(points: PortfolioChartPoint[]): [number, number] {
   return [Math.max(0, min - pad), max + pad];
 }
 
-function BookAumLineChart({ series }: { series: PortfolioChartPoint[] }) {
+function BookAumLineChart({
+  series,
+  bookAum,
+}: {
+  series: PortfolioChartPoint[];
+  bookAum: number;
+}) {
   const gradientId = useId().replace(/:/g, "");
   const domain = useMemo(() => chartDomain(series), [series]);
   const tickInterval = Math.max(0, Math.floor(series.length / 5) - 1);
 
-  if (series.length === 0) {
+  if (bookAum <= 0) {
     return (
       <p className="distributor-book-insights__chart-empty text-caption text-muted-foreground">
         No invested clients in your book yet.
@@ -104,7 +112,23 @@ function BookAumLineChart({ series }: { series: PortfolioChartPoint[] }) {
 }
 
 export function DistributorBookInsightsCard({ className }: { className?: string }) {
-  const insights = useMemo(() => getDistributorBookInsights(), []);
+  const [investors, setInvestors] = useState<DistributorInvestor[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDistributorClients({ scope: "platform", limit: 200 })
+      .then((rows) => {
+        if (!cancelled) setInvestors(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setInvestors([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const insights = useMemo(() => getDistributorBookInsights(investors), [investors]);
 
   return (
     <article className={cn("distributor-book-insights", className)}>
@@ -125,7 +149,7 @@ export function DistributorBookInsightsCard({ className }: { className?: string 
             </div>
           </div>
 
-          <BookAumLineChart series={insights.aumSeries} />
+          <BookAumLineChart series={insights.aumSeries} bookAum={insights.bookAum} />
         </Link>
 
         <div className="distributor-book-insights__side">

@@ -49,6 +49,32 @@ export type AdminFamilyGroupInvite = {
   group_status?: string;
 };
 
+export type AdminFamilyGroupInviteJourneyEvent = {
+  id: string;
+  status: string;
+  label: string;
+  message: string;
+  occurred_at: string | null;
+  state: "completed" | "current" | "upcoming" | string;
+};
+
+export type AdminFamilyGroupInviteDetail = AdminFamilyGroupInvite & {
+  invited_by_user_id: string;
+  invited_by_display_name: string | null;
+  invited_by_email_masked: string | null;
+  invitee_display_name: string | null;
+  accepted_user_id: string | null;
+  accepted_display_name: string | null;
+  accepted_at: string | null;
+  declined_at: string | null;
+  revoked_at: string | null;
+  reminder_sent_at: string | null;
+  reminder_count: number;
+  updated_at: string;
+  activity: AdminFamilyGroupActivity[];
+  journey: AdminFamilyGroupInviteJourneyEvent[];
+};
+
 export type AdminFamilyGroupActivity = {
   id: string;
   event_type: string;
@@ -94,15 +120,6 @@ export type AdminUserFamilyGroups = {
   user_id: string;
   memberships: AdminUserFamilyGroupMembership[];
   created_groups: AdminUserFamilyGroupCard[];
-};
-
-export type AdminFamilyGroupAuditLogItem = {
-  id: string;
-  user_id: string | null;
-  event_type: string;
-  ip_address: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
 };
 
 export async function fetchAdminFamilyGroups(params?: {
@@ -250,6 +267,10 @@ export async function fetchAdminFamilyGroupAnalytics(groupId: string) {
   return apiRequest<AdminFamilyGroupAnalytics>(`/admin/family-groups/${groupId}/analytics`);
 }
 
+export async function fetchAdminFamilyGroupInviteDetail(inviteId: string) {
+  return apiRequest<AdminFamilyGroupInviteDetail>(`/admin/family-groups/invites/${inviteId}`);
+}
+
 export async function fetchAdminFamilyGroupInvites(params?: {
   status?: string;
   search?: string;
@@ -264,23 +285,6 @@ export async function fetchAdminFamilyGroupInvites(params?: {
   const query = search.toString();
   return apiRequest<{ items: AdminFamilyGroupInvite[]; limit: number; offset: number }>(
     `/admin/family-groups/invites${query ? `?${query}` : ""}`,
-  );
-}
-
-export async function fetchAdminFamilyGroupAuditLogs(params?: {
-  user_id?: string;
-  event_type?: string;
-  limit?: number;
-  offset?: number;
-}) {
-  const search = new URLSearchParams();
-  if (params?.user_id) search.set("user_id", params.user_id);
-  if (params?.event_type) search.set("event_type", params.event_type);
-  if (params?.limit != null) search.set("limit", String(params.limit));
-  if (params?.offset != null) search.set("offset", String(params.offset));
-  const query = search.toString();
-  return apiRequest<{ items: AdminFamilyGroupAuditLogItem[]; limit: number; offset: number }>(
-    `/admin/family-groups/audit${query ? `?${query}` : ""}`,
   );
 }
 

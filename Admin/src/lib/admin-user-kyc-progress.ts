@@ -2,6 +2,7 @@ import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 import type { AdminUserKycDetail } from "@/lib/admin-api";
 import {
   buildAdminKycFlowSteps,
+  isAdminKycJourneyComplete,
   summarizeKycProgress,
 } from "@/lib/admin-user-kyc-steps";
 
@@ -22,6 +23,13 @@ export type KycHeroBadge = {
 export function computeAdminKycProgress(kyc: AdminUserKycDetail) {
   const steps = buildAdminKycFlowSteps(kyc);
   const summary = summarizeKycProgress(steps);
+  if (isAdminKycJourneyComplete(kyc)) {
+    return {
+      completed: summary.total,
+      total: summary.total,
+      percent: summary.total > 0 ? 100 : 0,
+    };
+  }
   return {
     completed: summary.completed,
     total: summary.total,

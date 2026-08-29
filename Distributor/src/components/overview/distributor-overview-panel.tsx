@@ -13,6 +13,7 @@ import { DistributorProfileHeroCard } from "@/components/ui/distributor-profile-
 import { DistributorOperationsWorkTimeCard } from "@/components/overview/distributor-operations-work-time-card";
 import { DistributorOperationsTeamTrackCard } from "@/components/overview/distributor-operations-team-track-card";
 import { DistributorOverviewSection } from "@/components/overview/distributor-overview-section";
+import { useDistributorOrders } from "@/contexts/distributor-orders-context";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import { useDistributorAuth } from "@/contexts/distributor-auth-context";
 import { getDistributorNavGroup } from "@/lib/distributor-navigation";
@@ -23,11 +24,18 @@ import { cn } from "@/lib/utils";
 export function DistributorOverviewPanel() {
   const { displayName, user, loading: authLoading } = useDistributorAuth();
   const { showSkeleton } = useDashboardPageReveal({ ready: !authLoading });
-  const { requests: txnRequests } = useDistributorTxnRequests();
+  const { requests: txnRequests, transactionGroups } = useDistributorTxnRequests();
+  const { bookOrders } = useDistributorOrders();
   const roleLabel = user?.role
     ? user.role.replaceAll("_", " ")
     : ZYND_MITRA_COPY.defaultRoleLabel;
   const pendingTxnRequests = txnRequests.filter((r) => r.status === "Pending").length;
+  const pendingOrders = bookOrders.filter(
+    (order) => order.status === "Pending" || order.status === "Processing",
+  ).length;
+  const openTransactionGroups = transactionGroups.filter(
+    (group) => group.status === "Submitted" || group.status === "Draft",
+  ).length;
   const operationsGroup = getDistributorNavGroup("operations");
   const distributorCode = user?.zyndClientId?.trim() ?? "";
   const experienceLabel = user?.joinedAt
@@ -93,8 +101,12 @@ export function DistributorOverviewPanel() {
                         href={item.href}
                         icon={Icon}
                         label={item.label}
-                        value="0"
-                        hint="No pending orders"
+                        value={String(pendingOrders)}
+                        hint={
+                          bookOrders.length
+                            ? `${bookOrders.length} total in book`
+                            : "No orders in book yet"
+                        }
                       />
                     );
                   }
@@ -135,8 +147,12 @@ export function DistributorOverviewPanel() {
                         href={item.href}
                         icon={FolderKanban}
                         label={item.label}
-                        value="0"
-                        hint="No open groups"
+                        value={String(openTransactionGroups)}
+                        hint={
+                          transactionGroups.length
+                            ? `${transactionGroups.length} total`
+                            : "No open groups"
+                        }
                       />
                     );
                   }

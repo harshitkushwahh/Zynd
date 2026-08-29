@@ -66,14 +66,16 @@ export type MfInvestedDayPoint = {
 
 export type MfInvestedPreview = {
   totalValueInr: number;
+  investedInr: number;
   totalReturnPct: number;
-  dayChangePct: number;
+  dayChangePct: number | null;
   dayChangePoints: MfInvestedDayPoint[];
 };
 
 /** Blurred placeholder for the MF sidebar invested card when the user has no holdings. */
 export const MF_INVESTED_LOCKED_PREVIEW: MfInvestedPreview = {
   totalValueInr: 3_81_400,
+  investedInr: 3_39_500,
   totalReturnPct: 12.4,
   dayChangePct: 0.8,
   dayChangePoints: [

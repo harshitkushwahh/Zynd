@@ -6,17 +6,16 @@ import {
   getScopedTransactionGroups,
   getScopedTxnRequests,
 } from "@/lib/distributor-operations-orders-scope";
-import type { DistributorOrder, DistributorTxnRequest } from "@/lib/distributor-types";
+import type { DistributorOrder, DistributorTransactionGroup, DistributorTxnRequest } from "@/lib/distributor-types";
 import { getDistributorOperationsVariants } from "@/lib/distributor-operations-variants";
-
-function orderChannel(order: DistributorOrder): "one-time" | "sip" | "redemption" {
-  if (order.operationChannel) return order.operationChannel;
-  if (order.orderType === "Redeem") return "redemption";
-  return "one-time";
-}
+import { orderVariantId } from "@/lib/map-distributor-order";
+import {
+  transactionGroupVariantId,
+  txnRequestVariantId,
+} from "@/lib/map-mitra-txn-recommendation";
 
 function countOrdersVariant(orders: DistributorOrder[], variantId: string): number {
-  return orders.filter((order) => orderChannel(order) === variantId).length;
+  return orders.filter((order) => orderVariantId(order) === variantId).length;
 }
 
 function countPlansVariant(
@@ -33,25 +32,15 @@ function countPlansVariant(
   return plans.filter((plan) => plan.planType === planType).length;
 }
 
-function txnRequestVariantId(request: DistributorTxnRequest): string {
-  if (request.requestType === "SIP Register") return "sip";
-  if (request.requestType === "Folio Update") return "group-transaction";
-  if (request.requestType === "Purchase" || request.requestType === "Redeem") return "one-time";
-  return "one-time";
-}
-
 function countTxnRequestsVariant(requests: DistributorTxnRequest[], variantId: string): number {
   return requests.filter((request) => txnRequestVariantId(request) === variantId).length;
 }
 
 function countTransactionGroupsVariant(
-  groups: ReturnType<typeof getScopedTransactionGroups>,
+  groups: DistributorTransactionGroup[],
   variantId: string,
 ): number {
-  if (variantId === "sip") {
-    return groups.filter((group) => /sip/i.test(group.label)).length;
-  }
-  return groups.filter((group) => !/sip/i.test(group.label)).length;
+  return groups.filter((group) => transactionGroupVariantId(group) === variantId).length;
 }
 
 export function getOperationsVariantCount(
@@ -59,16 +48,18 @@ export function getOperationsVariantCount(
   variantId: string,
   scope: DistributorOrdersListScope,
   txnRequests: DistributorTxnRequest[],
+  transactionGroups: DistributorTransactionGroup[],
+  orders: DistributorOrder[],
 ): number {
   switch (sectionId) {
     case "orders":
-      return countOrdersVariant(getScopedOrders(scope), variantId);
+      return countOrdersVariant(getScopedOrders(orders, scope), variantId);
     case "systematic-plans":
       return countPlansVariant(getScopedSystematicPlans(scope), variantId);
     case "txn-requests":
       return countTxnRequestsVariant(getScopedTxnRequests(txnRequests, scope), variantId);
     case "transaction-groups":
-      return countTransactionGroupsVariant(getScopedTransactionGroups(scope), variantId);
+      return countTransactionGroupsVariant(getScopedTransactionGroups(transactionGroups, scope), variantId);
     default:
       return 0;
   }
@@ -78,12 +69,14 @@ export function getOperationsVariantCountMap(
   sectionId: DistributorOperationsSectionId,
   scope: DistributorOrdersListScope,
   txnRequests: DistributorTxnRequest[],
+  transactionGroups: DistributorTransactionGroup[],
+  orders: DistributorOrder[],
 ): Record<string, number> {
   const variants = getDistributorOperationsVariants(sectionId);
   return Object.fromEntries(
     variants.map((variant) => [
       variant.id,
-      getOperationsVariantCount(sectionId, variant.id, scope, txnRequests),
+      getOperationsVariantCount(sectionId, variant.id, scope, txnRequests, transactionGroups, orders),
     ]),
   );
 }

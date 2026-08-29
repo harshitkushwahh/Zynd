@@ -10,8 +10,12 @@ export type SystematicPlansListScope = "your-book" | "all";
 export type TxnRequestsListScope = "your-book" | "all";
 export type TransactionGroupsListScope = "your-book" | "all";
 
-export function getOrdersForListScope(_scope: OrdersListScope): DistributorOrder[] {
-  return [];
+export function getOrdersForListScope(
+  orders: DistributorOrder[],
+  scope: OrdersListScope,
+): DistributorOrder[] {
+  if (scope === "all") return orders;
+  return orders.filter((order) => order.inDistributorBook !== false);
 }
 
 export function getSystematicPlansForListScope(
@@ -29,9 +33,10 @@ export function getTxnRequestsForListScope(
 }
 
 export function getTransactionGroupsForListScope(
+  groups: DistributorTransactionGroup[],
   _scope: TransactionGroupsListScope,
 ): DistributorTransactionGroup[] {
-  return [];
+  return groups.filter((group) => group.inDistributorBook !== false);
 }
 
 export const DUMMY_ORDERS: import("@/lib/distributor-types").DistributorOrder[] = [];

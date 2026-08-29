@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowUp } from "lucide-react";
 
 import { OverviewPortfolioFlowChart } from "@/features/dashboard/overview/components/overview-portfolio-flow-chart";
 import {
@@ -10,17 +9,13 @@ import {
 } from "@/features/dashboard/overview/lib/overview-portfolio-flow-series";
 import type { OverviewPortfolioPreview } from "@/features/dashboard/overview/lib/overview-portfolio-preview";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
+import {
+  MfReturnDirectionBadge,
+  mfReturnToneTextClass,
+} from "@/features/invest/lib/mf-return-tone-styles";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
-
-function toneClass(tone: "positive" | "negative" | "muted") {
-  return cn(
-    tone === "positive" && "text-success",
-    tone === "negative" && "text-destructive",
-    tone === "muted" && "text-muted-foreground",
-  );
-}
 
 type PortfolioSummaryCardProps = {
   data: OverviewPortfolioPreview;
@@ -58,25 +53,23 @@ export function PortfolioSummaryCard({
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <span className={cn("text-compact font-semibold tabular-nums", toneClass(totalReturn.tone))}>
+            <span
+              className={cn("text-compact font-semibold tabular-nums", mfReturnToneTextClass(totalReturn.tone))}
+            >
               {totalReturn.text}
             </span>
-            {totalReturn.tone === "positive" ? (
-              <span className="flex size-6 items-center justify-center rounded-full bg-success text-white">
-                <ArrowUp className="size-3.5" strokeWidth={2.5} aria-hidden />
-              </span>
-            ) : null}
+            <MfReturnDirectionBadge tone={totalReturn.tone} />
           </div>
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] sm:text-caption">
-          <span className={cn("font-semibold tabular-nums", toneClass(totalReturn.tone))}>
+          <span className={cn("font-semibold tabular-nums", mfReturnToneTextClass(totalReturn.tone))}>
             {formatInr(data.totalReturnInr)} ({totalReturn.text})
           </span>
           {showDayChange ? (
             <>
               <span className="text-muted-foreground">·</span>
-              <span className={cn("font-medium tabular-nums", toneClass(dayChange.tone))}>
+              <span className={cn("font-medium tabular-nums", mfReturnToneTextClass(dayChange.tone))}>
                 {dayChange.text} today · {formatInr(data.dayChangeInr)}
               </span>
             </>

@@ -23,10 +23,14 @@ import {
 } from "@/components/ui/select";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import {
-  filterPortfolioChartByPeriod,
-  PORTFOLIO_CHART_PERIODS,
-  portfolioChartPeriodSelectLabel,
-  type PortfolioChartPeriod,
+  CLIENT_PORTFOLIO_CHART_PERIODS,
+  clientPortfolioChartPeriodSelectLabel,
+  coerceClientPortfolioChartPeriod,
+  filterClientPortfolioChartByPeriod,
+  resolveClientPortfolioChartSeries,
+  resolveDefaultClientPortfolioChartPeriod,
+  resolveEnabledClientPortfolioChartPeriods,
+  type ClientPortfolioChartPeriod,
   type PortfolioChartPoint,
 } from "@/lib/client-portfolio-chart-data";
 import { formatAum } from "@/lib/format";
@@ -76,25 +80,34 @@ function renderChartTooltip(props: unknown) {
 }
 
 function yDomain(points: PortfolioChartPoint[]): [number, number] {
+  if (points.length === 0) return [0, 1];
+
   const values = points.flatMap((point) => [point.value, point.invested]);
   const min = Math.min(...values);
-  const max = Math.max(...values, 1);
-  const pad = (max - min) * 0.1 || max * 0.1;
-  return [Math.max(0, min - pad), max + pad];
+  const max = Math.max(...values);
+  const spread = max - min;
+  const relativeFloor = Math.max(Math.abs(max), Math.abs(min)) * 0.02;
+  const range = Math.max(spread, relativeFloor, 1);
+
+  return [Math.max(0, min - range * 0.12), max + range * 0.12];
 }
 
 type ClientPortfolioValueChartProps = {
   series?: PortfolioChartPoint[];
+  currentValue?: number;
+  investedAmount?: number;
   className?: string;
   hideToolbar?: boolean;
-  period?: PortfolioChartPeriod;
-  onPeriodChange?: (period: PortfolioChartPeriod) => void;
+  period?: ClientPortfolioChartPeriod;
+  onPeriodChange?: (period: ClientPortfolioChartPeriod) => void;
   refreshKey?: number;
   onRefresh?: () => void;
 };
 
-export function usePortfolioValueChartControls(initialPeriod: PortfolioChartPeriod = "1Y") {
-  const [period, setPeriod] = useState<PortfolioChartPeriod>(initialPeriod);
+export function usePortfolioValueChartControls(
+  initialPeriod: ClientPortfolioChartPeriod = "1M",
+) {
+  const [period, setPeriod] = useState<ClientPortfolioChartPeriod>(initialPeriod);
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => {
     setRefreshKey((key) => key + 1);
@@ -103,8 +116,9 @@ export function usePortfolioValueChartControls(initialPeriod: PortfolioChartPeri
 }
 
 type ClientPortfolioChartToolbarProps = {
-  period: PortfolioChartPeriod;
-  onPeriodChange: (period: PortfolioChartPeriod) => void;
+  period: ClientPortfolioChartPeriod;
+  enabledPeriods: ClientPortfolioChartPeriod[];
+  onPeriodChange: (period: ClientPortfolioChartPeriod) => void;
   onRefresh?: () => void;
   className?: string;
   layout?: "default" | "inline";
@@ -114,6 +128,7 @@ type ClientPortfolioChartToolbarProps = {
 
 export function ClientPortfolioChartToolbar({
   period,
+  enabledPeriods,
   onPeriodChange,
   onRefresh,
   className,
@@ -135,7 +150,7 @@ export function ClientPortfolioChartToolbar({
       <Select
         value={period}
         onValueChange={(value) => {
-          if (value) onPeriodChange(value as PortfolioChartPeriod);
+          if (value) onPeriodChange(value as ClientPortfolioChartPeriod);
         }}
       >
         <SelectTrigger
@@ -143,14 +158,18 @@ export function ClientPortfolioChartToolbar({
           className="distributor-client-portfolio-chart__period-trigger min-w-[7.5rem] rounded-full border-border bg-muted/40"
           aria-label="Chart period"
         >
-          <SelectValue placeholder="Period" />
+          <SelectValue placeholder="Period">
+            {clientPortfolioChartPeriodSelectLabel(period)}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent align="start">
-          {PORTFOLIO_CHART_PERIODS.map((option) => (
-            <SelectItem key={option} value={option}>
-              {portfolioChartPeriodSelectLabel(option)}
-            </SelectItem>
-          ))}
+          {CLIENT_PORTFOLIO_CHART_PERIODS.filter((option) => enabledPeriods.includes(option)).map(
+            (option) => (
+              <SelectItem key={option} value={option}>
+                {clientPortfolioChartPeriodSelectLabel(option)}
+              </SelectItem>
+            ),
+          )}
         </SelectContent>
       </Select>
 
@@ -180,6 +199,8 @@ export function ClientPortfolioChartToolbar({
 
 export function ClientPortfolioValueChart({
   series: seriesProp = [],
+  currentValue = 0,
+  investedAmount = 0,
   className,
   hideToolbar = false,
   period: periodProp,
@@ -188,7 +209,17 @@ export function ClientPortfolioValueChart({
   onRefresh: onRefreshProp,
 }: ClientPortfolioValueChartProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.portfolio;
-  const [periodInternal, setPeriodInternal] = useState<PortfolioChartPeriod>("1Y");
+  const resolvedSeries = useMemo(
+    () => resolveClientPortfolioChartSeries(seriesProp, currentValue, investedAmount),
+    [currentValue, investedAmount, seriesProp],
+  );
+  const enabledPeriods = useMemo(
+    () => resolveEnabledClientPortfolioChartPeriods(resolvedSeries),
+    [resolvedSeries],
+  );
+  const [periodInternal, setPeriodInternal] = useState<ClientPortfolioChartPeriod>(() =>
+    resolveDefaultClientPortfolioChartPeriod(resolvedSeries),
+  );
   const [refreshKeyInternal, setRefreshKeyInternal] = useState(0);
   const period = periodProp ?? periodInternal;
   const setPeriod = onPeriodChange ?? setPeriodInternal;
@@ -197,9 +228,14 @@ export function ClientPortfolioValueChart({
   const valueGradientId = useId().replace(/:/g, "");
   const investedGradientId = `${valueGradientId}-invested`;
 
+  useEffect(() => {
+    if (periodProp != null) return;
+    setPeriodInternal((current) => coerceClientPortfolioChartPeriod(current, resolvedSeries));
+  }, [periodProp, resolvedSeries]);
+
   const series = useMemo(
-    () => filterPortfolioChartByPeriod(seriesProp, period),
-    [period, refreshKey, seriesProp],
+    () => filterClientPortfolioChartByPeriod(resolvedSeries, period),
+    [period, refreshKey, resolvedSeries],
   );
   const hasChartData = series.length >= 2;
 
@@ -276,6 +312,7 @@ export function ClientPortfolioValueChart({
       {!hideToolbar ? (
         <ClientPortfolioChartToolbar
           period={period}
+          enabledPeriods={enabledPeriods}
           onPeriodChange={setPeriod}
           onRefresh={onRefresh}
         />
@@ -329,7 +366,7 @@ export function ClientPortfolioValueChart({
                     wrapperStyle={{ zIndex: 1 }}
                   />
                   <Area
-                    type="stepAfter"
+                    type="monotone"
                     dataKey="invested"
                     stroke="#8a8175"
                     strokeWidth={1.75}
@@ -343,7 +380,7 @@ export function ClientPortfolioValueChart({
                     }}
                   />
                   <Area
-                    type="stepAfter"
+                    type="monotone"
                     dataKey="value"
                     stroke="#1e3a38"
                     strokeWidth={2}

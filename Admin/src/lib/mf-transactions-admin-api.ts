@@ -35,6 +35,10 @@ export type MfTransactionOrder = {
   fp_state?: string | null;
   payment_url?: string | null;
   next_action?: string | null;
+  payment_method?: string | null;
+  fp_purchase_old_id?: string | null;
+  product_slug?: string | null;
+  amc_name?: string | null;
 };
 
 export type MfTransactionOrderEvent = {
@@ -48,6 +52,21 @@ export type MfTransactionOrderEvent = {
 export type MfTransactionOrderDetail = {
   order: MfTransactionOrder;
   events: MfTransactionOrderEvent[];
+};
+
+export type MfTransactionSipMandate = {
+  mandate_id: string;
+  status: string;
+  mandate_type: string;
+  mandate_limit?: number | null;
+  fp_mandate_id?: number | null;
+  fp_mandate_status?: string | null;
+  next_action?: string | null;
+  bank_name?: string | null;
+  bank_account_masked?: string | null;
+  bank_ifsc_code?: string | null;
+  created_at?: string | null;
+  approved_at?: string | null;
 };
 
 export type MfTransactionSipPlan = {
@@ -72,7 +91,30 @@ export type MfTransactionSipPlan = {
   user_email?: string | null;
   user_display_name?: string | null;
   user_profile_image_url?: string | null;
+  amc_name?: string | null;
   amc_logo_url?: string | null;
+  isin?: string | null;
+  mandate?: MfTransactionSipMandate | null;
+  first_installment?: Record<string, unknown> | null;
+  bank_switch?: {
+    eligible?: boolean;
+    used?: boolean;
+    in_progress?: boolean;
+    reason?: string | null;
+  } | null;
+};
+
+export type MfTransactionSipPlanEvent = {
+  from_status?: string | null;
+  to_status: string;
+  source: string;
+  payload?: Record<string, unknown> | null;
+  created_at?: string | null;
+};
+
+export type MfTransactionSipPlanDetail = {
+  plan: MfTransactionSipPlan;
+  events: MfTransactionSipPlanEvent[];
 };
 
 export type MfSipPlanCounts = {
@@ -211,6 +253,10 @@ export async function fetchMfTransactionOrders(params?: {
 
 export async function fetchMfTransactionOrderDetail(orderId: string) {
   return apiRequest<MfTransactionOrderDetail>(`/admin/mf/transactions/orders/${orderId}`);
+}
+
+export async function fetchMfTransactionSipPlanDetail(planId: string) {
+  return apiRequest<MfTransactionSipPlanDetail>(`/admin/mf/transactions/sip-plans/${planId}`);
 }
 
 export async function fetchMfTransactionSipPlans(params?: {

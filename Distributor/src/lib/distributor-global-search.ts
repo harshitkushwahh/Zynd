@@ -57,8 +57,15 @@ export function searchDistributorInvestorsInList(
   return searchDistributorInvestors(source, query);
 }
 
-export function searchDistributorOrders(_query: string, _orders: DistributorOrder[] = []): DistributorOrder[] {
-  return [];
+export function searchDistributorOrders(query: string, orders: DistributorOrder[] = []): DistributorOrder[] {
+  const normalized = normalizeQuery(query);
+  if (!normalized) return [];
+  return orders
+    .filter((order) => {
+      const haystack = `${order.orderRef} ${order.clientCode} ${order.investorEmailMasked} ${order.schemeName} ${order.orderType} ${order.status}`;
+      return includesQuery(haystack, normalized);
+    })
+    .slice(0, RESULT_LIMIT);
 }
 
 export function searchDistributorSystematicPlans(

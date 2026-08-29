@@ -1,7 +1,7 @@
-import { Mail, ScrollText, UsersRound } from "lucide-react";
+import { Mail, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type FamilyGroupsTabId = "groups" | "invites" | "audit";
+export type FamilyGroupsTabId = "groups" | "invites";
 
 export type FamilyGroupsTab = {
   id: FamilyGroupsTabId;
@@ -26,13 +26,6 @@ export const FAMILY_GROUPS_TABS: FamilyGroupsTab[] = [
     icon: Mail,
     permissions: ["family_groups.read"],
   },
-  {
-    id: "audit",
-    label: "Audit log",
-    description: "Family group lifecycle and moderation events.",
-    icon: ScrollText,
-    permissions: ["family_groups.read"],
-  },
 ];
 
 export function resolveFamilyGroupsTab(tabSlug?: string): FamilyGroupsTab {
@@ -42,4 +35,13 @@ export function resolveFamilyGroupsTab(tabSlug?: string): FamilyGroupsTab {
 
 export function familyGroupsTabHref(tab: FamilyGroupsTab) {
   return tab.id === "groups" ? "/dashboard/family-groups" : `/dashboard/family-groups/${tab.id}`;
+}
+
+export function familyGroupsGroupHref(groupId: string) {
+  return `/dashboard/family-groups/${encodeURIComponent(groupId)}`;
+}
+
+export function isFamilyGroupsTabSlug(slug?: string) {
+  if (!slug) return true;
+  return FAMILY_GROUPS_TABS.some((tab) => tab.id === slug) || slug === "audit";
 }

@@ -82,6 +82,11 @@ export const AUDIT_EVENT_LABELS: Record<string, string> = {
   risk_profile_message_sent: "Risk profile message sent",
   risk_profile_locked: "Risk profile locked",
   risk_profile_unlock_granted: "Risk profile unlock granted",
+  recommendation_basket_created: "Recommendation basket created",
+  recommendation_basket_updated: "Recommendation basket updated",
+  recommendation_basket_deleted: "Recommendation basket deleted",
+  recommendation_basket_funds_replaced: "Recommendation basket funds replaced",
+  recommendation_config_published: "Recommendation config published",
   mf_catalog_bulk_submitted: "MF catalog bulk submitted",
   mf_catalog_bulk_executed: "MF catalog bulk executed",
   family_group_created: "Family group created",
@@ -267,6 +272,16 @@ export const AUDIT_EVENT_GROUPS = [
     ],
   },
   {
+    label: "Funds For You",
+    types: [
+      "recommendation_basket_created",
+      "recommendation_basket_updated",
+      "recommendation_basket_deleted",
+      "recommendation_basket_funds_replaced",
+      "recommendation_config_published",
+    ],
+  },
+  {
     label: "Family groups",
     types: [
       "family_group_created",
@@ -285,6 +300,18 @@ export const AUDIT_EVENT_GROUPS = [
     ],
   },
 ] as const;
+
+export const RECOMMENDATION_AUDIT_GROUP_LABEL = "Funds For You";
+
+export const FAMILY_GROUP_AUDIT_GROUP_LABEL = "Family groups";
+
+export const FAMILY_GROUP_AUDIT_EVENT_TYPES = (
+  AUDIT_EVENT_GROUPS.find((group) => group.label === FAMILY_GROUP_AUDIT_GROUP_LABEL)?.types ?? []
+) as readonly string[];
+
+export const RECOMMENDATION_AUDIT_EVENT_TYPES = (
+  AUDIT_EVENT_GROUPS.find((group) => group.label === RECOMMENDATION_AUDIT_GROUP_LABEL)?.types ?? []
+) as readonly string[];
 
 export const AUDIT_EVENT_TYPES = Array.from(
   new Set(AUDIT_EVENT_GROUPS.flatMap((group) => group.types)),
@@ -330,6 +357,30 @@ export function formatAuditEvent(
     const actionType = metadata.action_type;
     if (typeof actionType === "string" && ADMIN_ACTION_TYPE_LABELS[actionType]) {
       return ADMIN_ACTION_TYPE_LABELS[actionType];
+    }
+  }
+
+  if (metadata && eventType.startsWith("recommendation_")) {
+    if (eventType === "recommendation_config_published") {
+      const version = metadata.published_version;
+      return typeof version === "number"
+        ? `Recommendation config published (v${version})`
+        : AUDIT_EVENT_LABELS[eventType];
+    }
+    if (eventType === "recommendation_basket_funds_replaced") {
+      const fundCount = metadata.fund_count;
+      if (typeof fundCount === "number") {
+        return `Recommendation basket funds replaced (${fundCount} funds)`;
+      }
+    }
+    const tier = metadata.tier;
+    const slug = metadata.slug;
+    if (typeof tier === "string" && typeof slug === "string") {
+      return `${AUDIT_EVENT_LABELS[eventType] ?? eventType} (${tier}/${slug})`;
+    }
+    const basketId = metadata.basket_id;
+    if (typeof basketId === "string") {
+      return `${AUDIT_EVENT_LABELS[eventType] ?? eventType} (${basketId.slice(0, 8)}…)`;
     }
   }
 

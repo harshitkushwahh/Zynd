@@ -77,6 +77,10 @@ export function RiskProfilePage({ tabSlug }: RiskProfilePageProps) {
       router.replace("/dashboard/risk-profile");
       return;
     }
+    if (tabSlug === "recommendation-baskets") {
+      router.replace("/dashboard/recommendations");
+      return;
+    }
 
     const urlTab = tabSlug ? visibleTabs.find((tab) => tab.id === tabSlug) : undefined;
     if (!tabSlug || !urlTab) {

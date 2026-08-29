@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight, CheckCircle2, Clock3, XCircle } from "lucide-react";
 import type { SortDescriptor } from "react-aria-components";
 
@@ -11,6 +11,7 @@ import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-ta
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
+import { DistributorSchemeWithLogo } from "@/components/workspace/distributor-scheme-with-logo";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
 import {
   getScopedTxnRequests,
@@ -20,9 +21,10 @@ import { distributorTableSearchMatch } from "@/lib/distributor-table-search-matc
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import type { DistributorTxnRequest, TxnRequestStatus } from "@/lib/distributor-types";
-import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
+import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS, DISTRIBUTOR_TABLE_SCHEME_COLUMN_CLASS } from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";
+import { txnRequestVariantId } from "@/lib/map-mitra-txn-recommendation";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { txnRequestStatusVariant } from "@/lib/status-meta";
 import { cn } from "@/lib/utils";
@@ -45,6 +47,7 @@ const REQUEST_TYPE_OPTIONS: Array<{ value: RequestTypeFilter; label: string }> =
 type TxnRequestsPanelProps = DistributorPageConfig & {
   layout?: "page" | "table";
   operationsListScope?: DistributorOrdersListScope;
+  operationsVariantId?: string;
 };
 
 export function TxnRequestsPanel({
@@ -52,8 +55,15 @@ export function TxnRequestsPanel({
   description,
   layout = "page",
   operationsListScope = "your-book",
+  operationsVariantId,
 }: TxnRequestsPanelProps) {
-  const { requests: allRequests } = useDistributorTxnRequests();
+  const { requests: allRequests, requestsLoading, requestsError, refreshRequests } =
+    useDistributorTxnRequests();
+
+  useEffect(() => {
+    void refreshRequests();
+  }, [refreshRequests]);
+
   const requests = useMemo(
     () => getScopedTxnRequests(allRequests, operationsListScope),
     [allRequests, operationsListScope],
@@ -66,8 +76,13 @@ export function TxnRequestsPanel({
     direction: "descending",
   });
 
+  const variantScoped = useMemo(() => {
+    if (!operationsVariantId) return requests;
+    return requests.filter((request) => txnRequestVariantId(request) === operationsVariantId);
+  }, [operationsVariantId, requests]);
+
   const filtered = useMemo(() => {
-    return requests.filter((request) => {
+    return variantScoped.filter((request) => {
       if (statusFilter !== "all" && request.status !== statusFilter) return false;
       if (typeFilter !== "all" && request.requestType !== typeFilter) return false;
       return distributorTableSearchMatch(
@@ -76,9 +91,11 @@ export function TxnRequestsPanel({
         request.clientCode,
         request.investorEmailMasked,
         request.requestType,
+        request.schemeName,
+        request.fundSummary,
       );
     });
-  }, [requests, searchQuery, statusFilter, typeFilter]);
+  }, [searchQuery, statusFilter, typeFilter, variantScoped]);
 
   const sorted = useMemo(
     () => sortByDescriptor(filtered, sortDescriptor),
@@ -87,9 +104,9 @@ export function TxnRequestsPanel({
 
   const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
-  const pendingCount = requests.filter((r) => r.status === "Pending").length;
-  const approvedCount = requests.filter((r) => r.status === "Approved").length;
-  const rejectedCount = requests.filter((r) => r.status === "Rejected").length;
+  const pendingCount = variantScoped.filter((r) => r.status === "Pending").length;
+  const approvedCount = variantScoped.filter((r) => r.status === "Approved").length;
+  const rejectedCount = variantScoped.filter((r) => r.status === "Rejected").length;
 
   const toolbar = (
     <DistributorTableToolbar
@@ -110,8 +127,8 @@ export function TxnRequestsPanel({
             setSearchQuery(value);
             setPage(1);
           }}
-          placeholder="Search requests…"
-          aria-label="Search txn requests"
+          placeholder="Search quick transactions…"
+          aria-label="Search quick transactions"
         />
       }
     >
@@ -138,8 +155,8 @@ export function TxnRequestsPanel({
 
   const table = wrapDistributorTableBody(
     <Table
-        aria-label="Txn requests"
-        className="min-w-[var(--table-min-width-3xl)]"
+        aria-label="Quick transactions"
+        className="w-max min-w-[var(--table-min-width-7xl)]"
         sortDescriptor={sortDescriptor}
         onSortChange={(descriptor) => {
           setSortDescriptor(descriptor);
@@ -150,6 +167,12 @@ export function TxnRequestsPanel({
         <Table.Header>
           <Table.Head id="requestRef" label="Request" isRowHeader allowsSorting />
           <Table.Head id="investorEmailMasked" label="Investor" allowsSorting />
+          <Table.Head
+            id="schemeName"
+            label="Scheme"
+            allowsSorting
+            className={DISTRIBUTOR_TABLE_SCHEME_COLUMN_CLASS}
+          />
           <Table.Head id="requestType" label="Type" allowsSorting />
           <Table.Head
             id="amount"
@@ -173,7 +196,24 @@ export function TxnRequestsPanel({
                 <p className="text-caption text-muted-foreground">{request.clientCode}</p>
               </Table.Cell>
               <Table.Cell className="text-muted-foreground">{request.investorEmailMasked}</Table.Cell>
-              <Table.Cell>{request.requestType}</Table.Cell>
+              <Table.Cell className={DISTRIBUTOR_TABLE_SCHEME_COLUMN_CLASS}>
+                {request.schemeName ? (
+                  <DistributorSchemeWithLogo
+                    schemeName={request.schemeName}
+                    amcLogoUrl={request.amcLogoUrl}
+                    amcSlug={request.amcSlug}
+                    amcName={request.amcName}
+                  />
+                ) : (
+                  "—"
+                )}
+              </Table.Cell>
+              <Table.Cell>
+                <p>{request.requestType}</p>
+                {request.fundCount != null && request.fundCount > 1 ? (
+                  <p className="text-caption text-muted-foreground">{request.fundCount} funds</p>
+                ) : null}
+              </Table.Cell>
               <Table.Cell className="text-right tabular-nums">{formatAum(request.amount)}</Table.Cell>
               <Table.Cell>
                 <StatusBadge variant={txnRequestStatusVariant(request.status)}>
@@ -196,8 +236,18 @@ export function TxnRequestsPanel({
       <DistributorTableOnlyShell
         toolbar={toolbar}
         isEmpty={sorted.length === 0}
-        emptyTitle="No txn requests match your filters"
-        emptyDescription="Adjust filters, search, or clear all to reset."
+        emptyTitle={
+          requestsLoading
+            ? "Loading quick transactions…"
+            : requestsError ?? "No quick transactions match your filters"
+        }
+        emptyDescription={
+          requestsLoading
+            ? "Fetching recommendations you sent to investors."
+            : requestsError
+              ? "Refresh the page or try again shortly."
+              : "Adjust filters, search, or clear all to reset."
+        }
       >
         {table}
       </DistributorTableOnlyShell>
@@ -209,15 +259,25 @@ export function TxnRequestsPanel({
       title={title}
       description={description}
       isEmpty={sorted.length === 0}
-      emptyTitle="No txn requests match your filters"
-      emptyDescription="Adjust filters, search, or clear all to reset."
+      emptyTitle={
+        requestsLoading
+          ? "Loading quick transactions…"
+          : requestsError ?? "No quick transactions match your filters"
+      }
+      emptyDescription={
+        requestsLoading
+          ? "Fetching recommendations you sent to investors."
+          : requestsError
+            ? "Refresh the page or try again shortly."
+            : "Adjust filters, search, or clear all to reset."
+      }
       metrics={
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <DistributorMetricCard
             icon={ArrowLeftRight}
-            label="Total requests"
-            value={String(requests.length)}
-            hint="In demo queue"
+            label="Total quick transactions"
+            value={String(variantScoped.length)}
+            hint="Sent from quick transaction"
           />
           <DistributorMetricCard
             icon={Clock3}

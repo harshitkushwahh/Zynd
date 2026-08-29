@@ -4,7 +4,11 @@ import { useMemo } from "react";
 
 import { AdminUserKycJourneyFlow } from "@/components/users/admin-user-kyc-journey-flow";
 import type { AdminUserKycDetail } from "@/lib/admin-api";
-import { buildAdminKycFlowSteps } from "@/lib/admin-user-kyc-steps";
+import {
+  buildAdminKycFlowSteps,
+  isAdminKycKraPath,
+  kycApplicableSteps,
+} from "@/lib/admin-user-kyc-steps";
 import { cn } from "@/lib/utils";
 
 type AdminUserKycJourneySectionProps = {
@@ -13,8 +17,8 @@ type AdminUserKycJourneySectionProps = {
 };
 
 export function AdminUserKycJourneySection({ kyc, className }: AdminUserKycJourneySectionProps) {
-  const steps = useMemo(() => buildAdminKycFlowSteps(kyc), [kyc]);
-  const kycCompliant = kyc.kyc_already_registered ?? false;
+  const steps = useMemo(() => kycApplicableSteps(buildAdminKycFlowSteps(kyc)), [kyc]);
+  const kycCompliant = isAdminKycKraPath(kyc);
 
   return (
     <div className={cn("admin-user-kyc-journey", className)}>

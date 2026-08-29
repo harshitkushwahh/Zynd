@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -8,14 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.admin.document_kyc_service import get_user_kyc_review
 from app.application.admin.kyc_admin_detail_helpers import (
+    KRA_SKIPPED_STEP_KEYS,
+    apply_kra_skipped_step_statuses,
     build_compliance_issues,
     build_kyc_audit_log,
     derive_esign_step_status,
 )
 from app.application.investor.investor_bank_account_service import serialize_bank_account
 from app.application.kyc.journey_state_service import journey_to_bootstrap_dict
-from app.application.mf.cas_import_service import list_user_external_holdings
 from app.application.mf.mf_cart_service import get_cart_summary
+from app.application.mf.portfolio_holdings_service import list_user_portfolio_holdings
 from app.application.mf.mf_order_service import list_user_orders, load_order_fund_metadata, serialize_order
 from app.application.mf.mf_sip_plan_service import list_user_sip_plans, serialize_sip_plan
 from app.application.mf.mf_transaction_ops_service import list_orders_admin
@@ -30,6 +33,8 @@ from app.infrastructure.persistence.investor_models import (
 from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product
 from app.infrastructure.persistence.models import KycJourneyState, User, UserKycStatus
 from app.infrastructure.persistence.mf_transaction_models import MfInvestmentAccount, MfMandate
+
+logger = logging.getLogger(__name__)
 
 KYC_STEP_LABELS: dict[str, str] = {
     "pan": "PAN verification",
@@ -212,13 +217,24 @@ def _serialize_investor_nominee(row: InvestorRelatedParty) -> dict[str, Any]:
     }
 
 
-def _incomplete_steps(step_statuses: dict[str, str] | None, overall_status: str | None) -> list[dict[str, str]]:
+def _incomplete_steps(
+    step_statuses: dict[str, str] | None,
+    overall_status: str | None,
+    *,
+    kyc_already_registered: bool = False,
+) -> list[dict[str, str]]:
     if overall_status in {"completed", "submitted"}:
         return []
     if not step_statuses:
-        return [{"key": key, "label": label} for key, label in KYC_STEP_LABELS.items()]
+        return [
+            {"key": key, "label": label}
+            for key, label in KYC_STEP_LABELS.items()
+            if not (kyc_already_registered and key in KRA_SKIPPED_STEP_KEYS)
+        ]
     incomplete: list[dict[str, str]] = []
     for key, label in KYC_STEP_LABELS.items():
+        if kyc_already_registered and key in KRA_SKIPPED_STEP_KEYS:
+            continue
         status = step_statuses.get(key, "pending")
         if status in INCOMPLETE_STEP_STATUSES:
             incomplete.append({"key": key, "label": label, "status": status})
@@ -233,6 +249,11 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     step_statuses = bootstrap.get("stepStatuses") if isinstance(bootstrap.get("stepStatuses"), dict) else {}
     step_statuses = dict(step_statuses)
     step_statuses["esign"] = derive_esign_step_status(journey, status)
+    kyc_already_registered = bool(bootstrap.get("kycAlreadyRegistered"))
+    step_statuses = apply_kra_skipped_step_statuses(
+        step_statuses,
+        kyc_already_registered=kyc_already_registered,
+    )
     overall_status = step_statuses.get("overall", "none")
 
     kyc_review = await get_user_kyc_review(db, user_id=user_id)
@@ -298,7 +319,6 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     nominee_draft = _serialize_nominee_draft(bootstrap.get("nomineeDraft"))
     signature_draft = _serialize_signature_draft(bootstrap.get("signatureDraft"))
 
-    kyc_already_registered = bool(bootstrap.get("kycAlreadyRegistered"))
     documents = kyc_review["documents"]
 
     return {
@@ -306,7 +326,11 @@ async def _build_kyc_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
         "last_completed_step": bootstrap.get("lastCompletedStep"),
         "active_step_index": bootstrap.get("activeStepIndex"),
         "step_statuses": step_statuses,
-        "incomplete_steps": _incomplete_steps(step_statuses, overall_status),
+        "incomplete_steps": _incomplete_steps(
+            step_statuses,
+            overall_status,
+            kyc_already_registered=kyc_already_registered,
+        ),
         "kyc_already_registered": kyc_already_registered,
         "readiness_code": bootstrap.get("readinessCode"),
         "readiness_reason": bootstrap.get("readinessReason"),
@@ -362,10 +386,50 @@ async def _load_fund_amc_metadata(
     return amc_names, amc_logos
 
 
+def _serialize_admin_portfolio_holding(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "holding_id": row.get("id"),
+        "isin": row.get("isin"),
+        "scheme_name": row.get("fund_name"),
+        "matched_scheme_name": row.get("fund_name"),
+        "folio_number": row.get("folio_number"),
+        "units": row.get("units"),
+        "redeemable_units": row.get("redeemable_units"),
+        "nav_value": row.get("nav"),
+        "market_value_inr": row.get("current_value_inr"),
+        "redeemable_amount_inr": row.get("redeemable_amount_inr"),
+        "invested_inr": row.get("invested_inr"),
+        "return_inr": row.get("return_inr"),
+        "return_pct": row.get("return_pct"),
+        "allocation_pct": row.get("allocation_pct"),
+        "as_of_date": row.get("nav_as_on"),
+        "amc_name": row.get("amc_name"),
+        "amc_logo_url": row.get("amc_logo_url"),
+        "source": row.get("source") or "zynd",
+    }
+
+
+async def _list_admin_user_holdings(db: AsyncSession, user_id: UUID) -> list[dict[str, Any]]:
+    try:
+        payload = await list_user_portfolio_holdings(db, user_id=user_id)
+    except Exception:
+        logger.exception("Failed to load portfolio holdings for admin user %s", user_id)
+        return []
+
+    holdings: list[dict[str, Any]] = []
+    for row in payload.get("holdings") or []:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("source") or "").lower() == "external":
+            continue
+        holdings.append(_serialize_admin_portfolio_holding(row))
+    return holdings
+
+
 async def _build_investments_detail(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     orders = await list_orders_admin(db, user_id=user_id, limit=50)
     cart = await get_cart_summary(db, user_id=user_id)
-    holdings = await list_user_external_holdings(db, user_id=user_id)
+    holdings = await _list_admin_user_holdings(db, user_id=user_id)
 
     plans = await list_user_sip_plans(db, user_id=user_id, limit=50)
     product_ids = {plan.product_id for plan in plans}

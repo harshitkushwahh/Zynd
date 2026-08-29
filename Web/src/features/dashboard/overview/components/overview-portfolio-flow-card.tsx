@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowUp, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverviewCompactCardHeader } from "@/features/dashboard/overview/components/overview-compact-card-header";
@@ -28,6 +28,10 @@ import {
   sumUpcomingHoldingOrdersInr,
 } from "@/features/invest/lib/mf-transaction-filters";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
+import {
+  MfReturnDirectionBadge,
+  mfReturnToneTextClass,
+} from "@/features/invest/lib/mf-return-tone-styles";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -36,14 +40,6 @@ type OverviewPortfolioFlowCardProps = {
   series?: readonly OverviewPortfolioFlowPoint[];
   className?: string;
 };
-
-function toneClass(tone: "positive" | "negative" | "muted") {
-  return cn(
-    tone === "positive" && "text-success",
-    tone === "negative" && "text-destructive",
-    tone === "muted" && "text-muted-foreground",
-  );
-}
 
 function PortfolioFlowProcessingBody({
   data,
@@ -136,23 +132,21 @@ function PortfolioFlowCardBody({
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <span className={cn("text-compact font-semibold tabular-nums", toneClass(totalReturn.tone))}>
+            <span
+              className={cn("text-compact font-semibold tabular-nums", mfReturnToneTextClass(totalReturn.tone))}
+            >
               {totalReturn.text}
             </span>
-            {totalReturn.tone === "positive" ? (
-              <span className="flex size-6 items-center justify-center rounded-full bg-success text-white">
-                <ArrowUp className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
-              </span>
-            ) : null}
+            <MfReturnDirectionBadge tone={totalReturn.tone} />
           </div>
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] sm:text-caption">
-          <span className={cn("font-semibold tabular-nums", toneClass(totalReturn.tone))}>
+          <span className={cn("font-semibold tabular-nums", mfReturnToneTextClass(totalReturn.tone))}>
             {formatInr(data.totalReturnInr)} ({totalReturn.text})
           </span>
           <span className="text-muted-foreground">·</span>
-          <span className={cn("font-medium tabular-nums", toneClass(dayChange.tone))}>
+          <span className={cn("font-medium tabular-nums", mfReturnToneTextClass(dayChange.tone))}>
             {dayChange.text} today · {formatInr(data.dayChangeInr)}
           </span>
         </div>

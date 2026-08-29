@@ -2100,3 +2100,72 @@ async def download_invest_risk_profile_report(
             "X-Report-Cached": "true" if from_cache else "false",
         },
     )
+
+
+from app.api.v1.invest.txn_recommendation_schemas import (
+    ApplyMitraTxnRecommendationResponse,
+    InvestorMitraTxnRecommendationResponse,
+)
+from app.application.distributor.mitra_txn_recommendation_service import (
+    MitraTxnRecommendationError,
+    apply_mitra_txn_recommendation_for_investor,
+    get_mitra_txn_recommendation_for_investor,
+)
+
+
+def _invest_mitra_txn_recommendation_http_error(exc: MitraTxnRecommendationError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
+
+
+@router.get("/txn-recommendations/{token}", response_model=InvestorMitraTxnRecommendationResponse)
+async def get_investor_mitra_txn_recommendation_route(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestorMitraTxnRecommendationResponse:
+    try:
+        payload = await get_mitra_txn_recommendation_for_investor(
+            db,
+            investor=current_user,
+            token=token,
+        )
+    except MitraTxnRecommendationError as exc:
+        raise _invest_mitra_txn_recommendation_http_error(exc) from exc
+    await db.commit()
+    return InvestorMitraTxnRecommendationResponse(**payload)
+
+
+@router.post("/txn-recommendations/{token}/apply", response_model=ApplyMitraTxnRecommendationResponse)
+async def apply_investor_mitra_txn_recommendation_route(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> ApplyMitraTxnRecommendationResponse:
+    try:
+        payload = await apply_mitra_txn_recommendation_for_investor(
+            db,
+            investor=current_user,
+            token=token,
+        )
+    except MitraTxnRecommendationError as exc:
+        raise _invest_mitra_txn_recommendation_http_error(exc) from exc
+    await db.commit()
+    rec = payload["recommendation"]
+    return ApplyMitraTxnRecommendationResponse(
+        applied=payload["applied"],
+        status=payload["status"],
+        redirect_path=payload["redirect_path"],
+        recommendation=InvestorMitraTxnRecommendationResponse(
+            **rec,
+            cart_path=payload["redirect_path"],
+            fund_path=f"/dashboard/mutual-funds/funds/{rec.get('fund_slug') or rec.get('product_id')}",
+        ),
+    )
+
+
+from app.api.v1.invest.recommendations_router import router as recommendations_router
+
+router.include_router(recommendations_router, prefix="/recommendations", tags=["recommendations"])

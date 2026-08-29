@@ -11,22 +11,30 @@ import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-ta
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
+import { DistributorSchemeWithLogo } from "@/components/workspace/distributor-scheme-with-logo";
 import type { DistributorPageConfig } from "@/lib/distributor-page-config";
 import {
   getScopedOrders,
   type DistributorOrdersListScope,
 } from "@/lib/distributor-operations-orders-scope";
+import { useDistributorOrders } from "@/contexts/distributor-orders-context";
 import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
+import { filterOrdersByVariant } from "@/lib/map-distributor-order";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DistributorOrder, OrderStatus } from "@/lib/distributor-types";
-import { DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS } from "@/lib/distributor-layout";
+import {
+  DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
+  DISTRIBUTOR_TABLE_INVESTOR_COLUMN_CLASS,
+  DISTRIBUTOR_TABLE_ORDER_REF_COLUMN_CLASS,
+  DISTRIBUTOR_TABLE_SCHEME_COLUMN_CLASS,
+} from "@/lib/distributor-layout";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatAum, formatDistributorDate } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { orderStatusVariant } from "@/lib/status-meta";
 import { cn } from "@/lib/utils";
 
-const TABLE_MIN_CLASS = "min-w-[var(--table-min-width-4xl)]";
+const TABLE_MIN_CLASS = "w-max min-w-[var(--table-min-width-7xl)]";
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: "Pending", label: "Pending" },
@@ -46,6 +54,7 @@ const ORDER_TYPE_OPTIONS: Array<{ value: OrderTypeFilter; label: string }> = [
 type OrdersPanelProps = DistributorPageConfig & {
   layout?: "page" | "table";
   operationsListScope?: DistributorOrdersListScope;
+  operationsVariantId?: string;
   /** @deprecated Use operationsListScope */
   ordersListScope?: DistributorOrdersListScope;
 };
@@ -53,10 +62,15 @@ type OrdersPanelProps = DistributorPageConfig & {
 export function OrdersPanel({
   layout = "table",
   operationsListScope,
+  operationsVariantId,
   ordersListScope,
 }: OrdersPanelProps) {
   const listScope = operationsListScope ?? ordersListScope ?? "your-book";
-  const sourceOrders = useMemo(() => getScopedOrders(listScope), [listScope]);
+  const { bookOrders, allOrders, ordersLoading } = useDistributorOrders();
+  const sourceOrders = useMemo(() => {
+    const scoped = getScopedOrders(listScope === "all" ? allOrders : bookOrders, listScope);
+    return filterOrdersByVariant(scoped, operationsVariantId);
+  }, [allOrders, bookOrders, listScope, operationsVariantId]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
@@ -146,9 +160,25 @@ export function OrdersPanel({
       pagination={pagination}
     >
       <Table.Header>
-        <Table.Head id="orderRef" label="Order" isRowHeader allowsSorting />
-        <Table.Head id="investorEmailMasked" label="Investor" allowsSorting />
-        <Table.Head id="schemeName" label="Scheme" allowsSorting />
+        <Table.Head
+          id="orderRef"
+          label="Order"
+          isRowHeader
+          allowsSorting
+          className={DISTRIBUTOR_TABLE_ORDER_REF_COLUMN_CLASS}
+        />
+        <Table.Head
+          id="investorEmailMasked"
+          label="Investor"
+          allowsSorting
+          className={DISTRIBUTOR_TABLE_INVESTOR_COLUMN_CLASS}
+        />
+        <Table.Head
+          id="schemeName"
+          label="Scheme"
+          allowsSorting
+          className={DISTRIBUTOR_TABLE_SCHEME_COLUMN_CLASS}
+        />
         <Table.Head id="orderType" label="Type" allowsSorting />
         <Table.Head
           id="amount"
@@ -167,12 +197,21 @@ export function OrdersPanel({
       <Table.Body items={pageItems}>
         {(order) => (
           <Table.Row id={order.id}>
-            <Table.Cell>
+            <Table.Cell className={DISTRIBUTOR_TABLE_ORDER_REF_COLUMN_CLASS}>
               <p className="font-mono text-caption font-medium">{order.orderRef}</p>
               <p className="text-caption text-muted-foreground">{order.clientCode}</p>
             </Table.Cell>
-            <Table.Cell className="text-muted-foreground">{order.investorEmailMasked}</Table.Cell>
-            <Table.Cell>{order.schemeName}</Table.Cell>
+            <Table.Cell className={cn("text-muted-foreground", DISTRIBUTOR_TABLE_INVESTOR_COLUMN_CLASS)}>
+              {order.investorEmailMasked}
+            </Table.Cell>
+            <Table.Cell className={DISTRIBUTOR_TABLE_SCHEME_COLUMN_CLASS}>
+              <DistributorSchemeWithLogo
+                schemeName={order.schemeName}
+                amcLogoUrl={order.amcLogoUrl}
+                amcSlug={order.amcSlug}
+                amcName={order.amcName}
+              />
+            </Table.Cell>
             <Table.Cell className="text-muted-foreground">{order.orderType}</Table.Cell>
             <Table.Cell className="text-right tabular-nums">{formatAum(order.amount)}</Table.Cell>
             <Table.Cell>
@@ -197,8 +236,16 @@ export function OrdersPanel({
     <DistributorTableOnlyShell
       toolbar={toolbar}
       isEmpty={sorted.length === 0}
-      emptyTitle="No orders match your filters"
-      emptyDescription="Adjust filters, search, or clear all to reset."
+      emptyTitle={
+        ordersLoading
+          ? "Loading orders…"
+          : "No orders match your filters"
+      }
+      emptyDescription={
+        ordersLoading
+          ? "Fetching transactions from clients in your book."
+          : "Adjust filters, search, or clear all to reset."
+      }
     >
       {table}
     </DistributorTableOnlyShell>

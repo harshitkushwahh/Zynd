@@ -6,6 +6,7 @@ import {
 import { buildClientDocumentsForInvestor, type ApiKycDocument } from "@/lib/client-documents";
 import { mapKycAuditLogFromApi, type ApiKycAuditEntry } from "@/lib/client-kyc-audit-log";
 import { buildDistributorKycSteps } from "@/lib/distributor-client-kyc-steps";
+import { resolveClientPortfolioChartSeries } from "@/lib/client-portfolio-chart-data";
 import { resolveDistributorAssetUrl } from "@/lib/distributor-asset-url";
 import type {
   DistributorClientFamilyGroup,
@@ -46,6 +47,7 @@ type ApiClientListItem = {
   mitra_client_id?: string | null;
   in_distributor_book?: boolean;
   service_model?: "pm" | "diy";
+  profile_image_url?: string | null;
 };
 
 type ApiClientDetail = {
@@ -157,10 +159,12 @@ function mapInvestment(value: string): InvestorInvestmentStatus {
 export function mapApiClientListItem(row: ApiClientListItem): DistributorInvestor {
   return {
     id: row.user_id,
+    displayName: row.display_name?.trim() || row.client_id || "Investor",
     emailMasked: row.email_masked,
     panMasked: row.pan_masked,
     clientCode: row.client_id ?? "—",
     mobileMasked: row.phone_masked ?? "—",
+    profileImageUrl: resolveDistributorAssetUrl(row.profile_image_url ?? null),
     onboardingStatus: mapOnboarding(row.onboarding_status),
     complianceStatus: mapCompliance(row.compliance_status),
     investmentStatus: mapInvestment(row.investment_status),
@@ -383,33 +387,58 @@ function mapPortfolioGrowth(
   rows: Array<Record<string, unknown>> | undefined,
 ): import("@/lib/distributor-types").DistributorClientPortfolioGrowthPoint[] {
   if (!rows?.length) return [];
-  return rows.map((row) => ({
-    label: String(row.label ?? ""),
-    value: Number(row.value ?? 0),
-    invested: Number(row.invested ?? row.value ?? 0),
-    date: row.date != null ? String(row.date) : undefined,
-  }));
+  return rows.map((row) => {
+    const value = Number(row.value ?? 0);
+    const investedRaw = row.invested;
+    const invested =
+      investedRaw != null && investedRaw !== ""
+        ? Number(investedRaw)
+        : value;
+    return {
+      label: String(row.label ?? ""),
+      value,
+      invested: Number.isFinite(invested) ? invested : 0,
+      date: row.date != null ? String(row.date) : undefined,
+    };
+  });
+}
+
+function numberOrZero(...values: unknown[]): number {
+  for (const value of values) {
+    const amount = Number(value);
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  return 0;
 }
 
 function mapHoldings(rows: Array<Record<string, unknown>> | undefined): DistributorClientHolding[] {
   if (!rows?.length) return [];
   return rows.map((row, index) => {
-    const currentValue = Number(row.current_value_inr ?? row.market_value_inr ?? 0);
-    const investedAmount = Number(row.invested_amount_inr ?? row.cost_value_inr ?? 0);
-    const redeemableValue = Number(
-      row.redeemable_value_inr ?? row.market_value_inr ?? row.current_value_inr ?? 0,
+    const currentValue = numberOrZero(row.current_value_inr, row.market_value_inr);
+    const investedAmount = numberOrZero(
+      row.invested_inr,
+      row.invested_amount_inr,
+      row.cost_value_inr,
+    );
+    const redeemableValue = numberOrZero(
+      row.redeemable_amount_inr,
+      row.redeemable_value_inr,
+      row.market_value_inr,
+      row.current_value_inr,
     );
     const units = Number(row.units ?? 0);
     const navPerUnit =
-      row.nav_value != null
-        ? Number(row.nav_value)
+      row.nav_value != null || row.nav != null
+        ? Number(row.nav_value ?? row.nav)
         : units > 0 && currentValue > 0
           ? currentValue / units
           : null;
+    const returnPct = Number(row.return_pct);
+    const returnAmount = Number(row.return_inr);
 
     return {
-      id: String(row.id ?? row.isin ?? index),
-      schemeName: String(row.matched_scheme_name ?? row.scheme_name ?? "Scheme"),
+      id: String(row.id ?? row.holding_id ?? row.isin ?? index),
+      schemeName: String(row.matched_scheme_name ?? row.scheme_name ?? row.fund_name ?? "Scheme"),
       amcName: row.amc_name != null ? String(row.amc_name) : null,
       folioNumber: row.folio_number != null ? String(row.folio_number) : null,
       isin: row.isin != null ? String(row.isin) : null,
@@ -417,9 +446,39 @@ function mapHoldings(rows: Array<Record<string, unknown>> | undefined): Distribu
       investedAmount,
       redeemableValue: redeemableValue || currentValue,
       units,
-      navPerUnit,
-      asOfDate: row.as_of_date != null ? String(row.as_of_date) : null,
+      navPerUnit: Number.isFinite(navPerUnit) ? navPerUnit : null,
+      returnAmount: Number.isFinite(returnAmount) ? returnAmount : undefined,
+      returnPct: Number.isFinite(returnPct) ? returnPct : undefined,
+      asOfDate: row.as_of_date != null ? String(row.as_of_date) : row.nav_as_on != null ? String(row.nav_as_on) : null,
     };
+  });
+}
+
+function fillHoldingInvestedFromPurchases(
+  holdings: DistributorClientHolding[],
+  purchases: DistributorOrder[],
+): DistributorClientHolding[] {
+  const spentByScheme = new Map<string, number>();
+  for (const order of purchases) {
+    if (order.orderType !== "Purchase" || order.status !== "Completed" || order.amount <= 0) {
+      continue;
+    }
+    const key = order.schemeName.trim().toLowerCase();
+    if (!key) continue;
+    spentByScheme.set(key, (spentByScheme.get(key) ?? 0) + order.amount);
+  }
+
+  return holdings.map((holding) => {
+    if (holding.investedAmount > 0) return holding;
+    const key = holding.schemeName.trim().toLowerCase();
+    const exact = spentByScheme.get(key);
+    if (exact && exact > 0) return { ...holding, investedAmount: exact };
+    for (const [name, amount] of spentByScheme) {
+      if (amount > 0 && (key.includes(name) || name.includes(key))) {
+        return { ...holding, investedAmount: amount };
+      }
+    }
+    return holding;
   });
 }
 
@@ -595,6 +654,10 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
     kycCompliant,
   );
   const investments = payload.investments ?? undefined;
+  const purchases = mapOrders(investments?.purchases, investor);
+  const holdings = fillHoldingInvestedFromPurchases(mapHoldings(investments?.holdings), purchases);
+  const investedTotal = holdings.reduce((sum, row) => sum + row.investedAmount, 0);
+  const currentTotal = holdings.reduce((sum, row) => sum + row.currentValue, 0);
 
   return {
     investor,
@@ -619,13 +682,17 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
     kycSteps,
     kycAuditLog,
     clientDocuments,
-    holdings: mapHoldings(investments?.holdings),
-    portfolioGrowth: mapPortfolioGrowth(investments?.growth),
+    holdings,
+    portfolioGrowth: resolveClientPortfolioChartSeries(
+      mapPortfolioGrowth(investments?.growth),
+      currentTotal,
+      investedTotal,
+    ),
     goals: mapGoals(payload.goals ?? []),
     familyGroups: mapFamilyGroups(payload.family_groups ?? []),
     referrals: mapReferrals(payload.referrals),
     sessions: mapSessions(payload.sessions ?? []),
-    orders: mapOrders(investments?.purchases, investor),
+    orders: purchases,
     systematicPlans: mapSips(investments?.sip_plans, investor),
     personalInfo: mapPersonalInfo(payload),
   };

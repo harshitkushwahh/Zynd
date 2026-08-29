@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.amfi_nav_fetcher import fetch_amfi_nav_history_window, parse_amfi_nav_date
+from app.infrastructure.mf.pipeline_progress import emit_pipeline_progress
 from app.application.mf.amfi_nav_parser import parse_amfi_nav_file
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
 from app.core.config import get_settings
@@ -107,17 +108,15 @@ async def run_nav_cold_start_backfill(
             backfill_to,
             days_per_window=max(settings.zynd_mf_cold_start_backfill_days_per_window, 1),
         )
-        print(
+        await emit_pipeline_progress(
             f"NAV cold-start backfill: {len(windows)} windows "
             f"from {backfill_from} to {backfill_to}",
-            flush=True,
         )
 
         for window_index, (window_from, window_to) in enumerate(windows, start=1):
-            print(
+            await emit_pipeline_progress(
                 f"NAV cold-start backfill: window {window_index}/{len(windows)} "
                 f"({window_from} .. {window_to})",
-                flush=True,
             )
             try:
                 body, file_size = await fetch_amfi_nav_history_window(window_from, window_to)
@@ -135,10 +134,9 @@ async def run_nav_cold_start_backfill(
                         archive_exc,
                     )
                 records = parse_amfi_nav_file(body)
-                print(
+                await emit_pipeline_progress(
                     f"NAV cold-start backfill: window {window_index}/{len(windows)} "
                     f"parsed={len(records)} inserted_so_far={inserted} bytes={file_size}",
-                    flush=True,
                 )
                 logger.info(
                     "Cold-start NAV window=%s..%s parsed=%s bytes=%s",

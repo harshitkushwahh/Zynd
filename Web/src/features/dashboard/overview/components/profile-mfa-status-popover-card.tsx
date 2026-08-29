@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 export type ProfileMfaStatusPopoverState = {
   complete: boolean;
   title: string;
-  detailLines: [string, string];
+  detailLines: readonly string[];
 };
 
 type ProfileMfaStatusPopoverCardProps = {
@@ -44,7 +44,7 @@ export function ProfileMfaStatusPopoverCard({
         aria-hidden
       />
 
-      <div className="flex flex-col items-center px-3.5 pb-3.5 pt-3 text-center">
+      <div className="flex min-h-[8.75rem] flex-col items-center justify-center px-3.5 py-3.5 text-center">
         <div className="relative flex size-10 items-center justify-center">
           {complete ? (
             <>
@@ -69,8 +69,10 @@ export function ProfileMfaStatusPopoverCard({
           )}
         </div>
 
-        <p className="mt-2 max-w-full pr-4 text-compact font-semibold text-foreground">{title}</p>
-        <ProfilePopoverDetailLines lines={detailLines} />
+        <p className="mt-2 max-w-[10.5rem] text-compact font-semibold leading-snug text-foreground">
+          {title}
+        </p>
+        <ProfilePopoverDetailLines lines={detailLines} className="[&_p]:text-[10px] [&_p]:leading-relaxed" />
       </div>
     </Link>
   );

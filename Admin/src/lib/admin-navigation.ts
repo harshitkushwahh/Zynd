@@ -12,6 +12,7 @@ import {
   Shield,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Target,
   TrendingUp,
   Users,
@@ -22,6 +23,7 @@ import {
   ADMIN_SETTINGS_NAV,
 } from "@/lib/admin-settings-navigation";
 import { FAMILY_GROUPS_TABS } from "@/lib/admin-family-groups-navigation";
+import { RECOMMENDATIONS_TABS } from "@/lib/admin-recommendations-navigation";
 import { RISK_PROFILE_TABS } from "@/lib/admin-risk-profile-navigation";
 import {
   USER_MANAGEMENT_TABS,
@@ -126,6 +128,14 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
       "risk_profile.tiers.manage",
       "risk_profile.users.read",
     ],
+  },
+  {
+    id: "recommendations",
+    label: "Funds For You",
+    href: "/dashboard/recommendations",
+    icon: Sparkles,
+    description: "Recommendation baskets, publish config, preview, and engine ops",
+    permissions: ["recommendations.read", "recommendations.manage", "recommendations.publish"],
   },
   {
     id: "family-groups",
@@ -250,7 +260,18 @@ export function canAccessAdminRoute(
   hasPermission: (key: string) => boolean,
 ) {
   if (!route.permissions?.length) return true;
-  return route.permissions.some((permission) => hasPermission(permission));
+  if (route.permissions.some((permission) => hasPermission(permission))) {
+    return true;
+  }
+  // Funds For You is tier-based; show the nav entry to risk-profile operators too.
+  if (route.id === "recommendations") {
+    return (
+      hasPermission("risk_profile.read") ||
+      hasPermission("risk_profile.users.read") ||
+      hasPermission("risk_profile.templates.manage")
+    );
+  }
+  return false;
 }
 
 export function getVisibleAdminRoutes(hasPermission: (key: string) => boolean) {
@@ -267,6 +288,8 @@ const ADMIN_PLATFORM_TRAILING_ROUTE_IDS = [
   "distributor-head",
   "security-config",
 ] as const;
+
+const ADMIN_RECOMMENDATION_ENGINE_ROUTE_IDS = ["recommendations"] as const;
 
 const ADMIN_PLATFORM_DROPDOWN_IDS = ["orders", "systematic-plans", "txn-requests"] as const;
 
@@ -365,6 +388,11 @@ export function getAdminSidebarNav(hasPermission: (key: string) => boolean) {
       route.id as (typeof ADMIN_PLATFORM_TRAILING_ROUTE_IDS)[number],
     ),
   );
+  const recommendationEngineRoutes = routes.filter((route) =>
+    ADMIN_RECOMMENDATION_ENGINE_ROUTE_IDS.includes(
+      route.id as (typeof ADMIN_RECOMMENDATION_ENGINE_ROUTE_IDS)[number],
+    ),
+  );
   const platformDropdowns = buildPlatformDropdowns(hasPermission);
   const administratorRoutes = routes.filter((route) =>
     ADMIN_ADMINISTRATOR_ROUTE_IDS.includes(route.id as (typeof ADMIN_ADMINISTRATOR_ROUTE_IDS)[number]),
@@ -384,6 +412,12 @@ export function getAdminSidebarNav(hasPermission: (key: string) => boolean) {
       routes: platformLeadingRoutes,
       dropdowns: platformDropdowns.length > 0 ? platformDropdowns : undefined,
       trailingRoutes: platformTrailingRoutes.length > 0 ? platformTrailingRoutes : undefined,
+    });
+  }
+  if (recommendationEngineRoutes.length > 0) {
+    groups.push({
+      label: "Recommendation engine",
+      routes: recommendationEngineRoutes,
     });
   }
   if (productRoutes.length > 0) {
@@ -436,6 +470,7 @@ export function getAdminPageTitle(pathname: string, roleKeys: string[] = []) {
   }
   if (pathname === "/dashboard/risk-profile" || pathname.startsWith("/dashboard/risk-profile/")) {
     const slug = pathname.replace("/dashboard/risk-profile", "").replace(/^\//, "").split("/")[0];
+    if (slug === "recommendation-baskets") return "Funds For You";
     const normalizedSlug = slug === "bulk" ? "questions" : slug;
     const tab = normalizedSlug
       ? RISK_PROFILE_TABS.find((item) => item.id === normalizedSlug)
@@ -443,12 +478,21 @@ export function getAdminPageTitle(pathname: string, roleKeys: string[] = []) {
     if (tab) return `Risk profile · ${tab.label}`;
     return "Risk profile";
   }
+  if (pathname === "/dashboard/recommendations" || pathname.startsWith("/dashboard/recommendations/")) {
+    const slug = pathname.replace("/dashboard/recommendations", "").replace(/^\//, "").split("/")[0];
+    const tab = slug
+      ? RECOMMENDATIONS_TABS.find((item) => item.id === slug)
+      : RECOMMENDATIONS_TABS.find((item) => item.id === "baskets");
+    if (tab) return `Funds For You · ${tab.label}`;
+    return "Funds For You";
+  }
   if (pathname === "/dashboard/family-groups" || pathname.startsWith("/dashboard/family-groups/")) {
     const slug = pathname.replace("/dashboard/family-groups", "").replace(/^\//, "").split("/")[0];
     const tab = slug
       ? FAMILY_GROUPS_TABS.find((item) => item.id === slug)
       : FAMILY_GROUPS_TABS.find((item) => item.id === "groups");
     if (tab) return `Family groups · ${tab.label}`;
+    if (slug) return "Family groups · Group";
     return "Family groups";
   }
   if (pathname === "/dashboard/users" || pathname.startsWith("/dashboard/users/")) {

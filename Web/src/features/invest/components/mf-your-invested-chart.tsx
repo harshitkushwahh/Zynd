@@ -19,8 +19,8 @@ const CHART_HEIGHT = 56;
 
 const CHART_COLORS: Record<InvestedChartTone, string> = {
   positive: "var(--zynd-emerald)",
-  negative: "hsl(var(--destructive))",
-  muted: "hsl(var(--muted-foreground))",
+  negative: "var(--zynd-accent-red)",
+  muted: "var(--muted-foreground)",
 };
 
 export function MfYourInvestedChart({ points, tone, className }: MfYourInvestedChartProps) {

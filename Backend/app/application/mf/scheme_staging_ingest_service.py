@@ -11,6 +11,7 @@ from app.application.mf.ingestion_run_service import begin_ingestion_run, finish
 from app.application.mf.scheme_row_normalizer import normalize_scheme_row, normalized_for_mongo
 from app.core.config import get_settings
 from app.infrastructure.mf.fp_oms_client import list_fund_schemes
+from app.infrastructure.mf.pipeline_progress import emit_pipeline_progress
 from app.infrastructure.mf.mongo_raw_store import store_raw_ingestion
 from app.infrastructure.mf.scheme_staging_store import (
     BATCH_STATUS_FAILED,
@@ -50,7 +51,7 @@ async def run_cybrilla_scheme_ingest(
     pages = 0
 
     async def emit_progress(message: str) -> None:
-        print(message, flush=True)
+        await emit_pipeline_progress(message)
         if progress_log is not None:
             await progress_log(message)
 

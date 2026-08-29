@@ -14,7 +14,7 @@ import { usePortfolioRedeemUnitsQuery } from "@/features/dashboard/portfolio/hoo
 import { usePortfolioUninvestedEmpty } from "@/features/dashboard/portfolio/hooks/use-portfolio-uninvested-empty";
 import { getPortfolioTabMeta } from "@/features/dashboard/portfolio/lib/portfolio-page-tab-meta";
 import type { PortfolioRedeemUnitsRow } from "@/features/dashboard/portfolio/lib/portfolio-redeem-mapper";
-import { portfolioHoldingAmcInitials } from "@/features/dashboard/portfolio/lib/portfolio-types";
+import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
@@ -152,9 +152,12 @@ export function PortfolioRedeemUnitsPanel() {
                 >
                   <Table.Cell className={cn(COL_FUND, BODY_CELL_CLASS)}>
                     <div className="flex min-w-0 items-start gap-3">
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted text-[10px] font-semibold text-muted-foreground">
-                        {portfolioHoldingAmcInitials(holding.amcName)}
-                      </div>
+                      <MfFundAmcAvatar
+                        amcLogoUrl={holding.amcLogoUrl}
+                        amcName={holding.amcName}
+                        size="sm"
+                        className="mt-0.5 shrink-0 rounded-[var(--radius-control)]"
+                      />
                       <div className="min-w-0">
                         <p className="font-medium leading-snug break-words whitespace-normal text-foreground">
                           {holding.fundName}

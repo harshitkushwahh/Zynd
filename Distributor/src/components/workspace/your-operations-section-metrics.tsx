@@ -20,6 +20,7 @@ import {
 import { DistributorMetricCard } from "@/components/dashboard/distributor-metric-card";
 import { DistributorOperationsDualRingCard } from "@/components/workspace/your-orders-dual-ring-card";
 import { DistributorOrdersMonthlyVolumeCard } from "@/components/workspace/your-orders-monthly-volume-card";
+import { useDistributorOrders } from "@/contexts/distributor-orders-context";
 import { useDistributorTxnRequests } from "@/contexts/distributor-txn-requests-context";
 import type { DistributorOperationsSectionId } from "@/lib/distributor-operations-sections";
 import { DISTRIBUTOR_METRIC_TILE_CELL_CLASS, DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS } from "@/lib/distributor-layout";
@@ -32,12 +33,12 @@ import {
 } from "@/lib/distributor-operations-orders-scope";
 import {
   getOperationsDualRingMetrics,
-  getTransactionGroupsDualRing,
   getYourOrdersDualRing,
   getYourOrdersOperationMix,
 } from "@/lib/your-operations-dual-ring";
 import {
   getTransactionGroupsMonthlyVolume,
+  getTxnRequestsMonthlyVolume,
   getYourOrdersMonthlyVolume,
   type YourOrdersMonthlyVolume,
 } from "@/lib/your-orders-metrics";
@@ -67,9 +68,13 @@ function OperationsMetricsWithInsights({
   monthlyVolume: YourOrdersMonthlyVolume;
   operationsListScope?: DistributorOrdersListScope;
 }) {
+  const { bookOrders, allOrders } = useDistributorOrders();
   const dualRing = useMemo(() => {
     if (sectionId === "orders") {
-      const orders = getScopedOrders(operationsListScope);
+      const orders = getScopedOrders(
+        operationsListScope === "all" ? allOrders : bookOrders,
+        operationsListScope,
+      );
       return getOperationsDualRingMetrics("orders", getYourOrdersOperationMix(orders));
     }
     if (sectionId === "systematic-plans") {
@@ -92,17 +97,10 @@ function OperationsMetricsWithInsights({
       return getOperationsDualRingMetrics("txn-requests");
     }
     if (sectionId === "transaction-groups") {
-      const scopedGroups = getScopedTransactionGroups(operationsListScope);
-      const mix = {
-        total: scopedGroups.length,
-        oneTime: scopedGroups.filter((g) => /lump|one.?time/i.test(g.label)).length,
-        groupTransaction: scopedGroups.filter((g) => /group/i.test(g.label)).length,
-        sips: scopedGroups.filter((g) => /sip/i.test(g.label)).length,
-      };
-      return getTransactionGroupsDualRing(mix);
+      return getOperationsDualRingMetrics("txn-requests");
     }
     return getYourOrdersDualRing(getYourOrdersOperationMix([]));
-  }, [operationsListScope, sectionId]);
+  }, [allOrders, bookOrders, operationsListScope, sectionId]);
 
   return (
     <div className={DISTRIBUTOR_YOUR_CLIENTS_METRICS_CLASS}>
@@ -118,10 +116,15 @@ export function OrdersSectionMetricTiles({
 }: {
   ordersListScope?: DistributorOrdersListScope;
 }) {
-  const scopedOrders = useMemo(() => getScopedOrders(ordersListScope), [ordersListScope]);
+  const { bookOrders, allOrders } = useDistributorOrders();
+  const scopedOrders = useMemo(
+    () =>
+      getScopedOrders(ordersListScope === "all" ? allOrders : bookOrders, ordersListScope),
+    [allOrders, bookOrders, ordersListScope],
+  );
   const mix = useMemo(() => getYourOrdersOperationMix(scopedOrders), [scopedOrders]);
   const monthlyVolume = useMemo(() => getYourOrdersMonthlyVolume(scopedOrders), [scopedOrders]);
-  const bookHint = ordersListScope === "all" ? "Platform-wide (demo)" : "In demo book";
+  const bookHint = ordersListScope === "all" ? "Across platform" : "Clients in your book";
 
   return (
     <OperationsMetricsWithInsights
@@ -183,21 +186,7 @@ function TxnRequestsSectionMetrics({
   const pendingCount = requests.filter((r) => r.status === "Pending").length;
   const approvedCount = requests.filter((r) => r.status === "Approved").length;
   const rejectedCount = requests.filter((r) => r.status === "Rejected").length;
-  const monthlyVolume = useMemo(
-    () => ({
-      title: "Monthly requests",
-      bars: [
-        { month: "Apr", count: 4, amount: 8200, isCurrent: false },
-        { month: "May", count: 3, amount: 6100, isCurrent: false },
-        { month: "Jun", count: 5, amount: 9400, isCurrent: false },
-        { month: "Jul", count: 4, amount: 7200, isCurrent: false },
-        { month: "Aug", count: requests.length, amount: 8800, isCurrent: true },
-      ],
-      currentMonthAmount: 8800,
-      currentMonthCount: requests.length,
-    }),
-    [requests.length],
-  );
+  const monthlyVolume = useMemo(() => getTxnRequestsMonthlyVolume(requests), [requests]);
 
   return (
     <OperationsMetricsWithInsights
@@ -210,9 +199,9 @@ function TxnRequestsSectionMetrics({
         variant="tile"
         tileTone="accent"
         icon={ArrowLeftRight}
-        label="Total requests"
+        label="Quick transactions"
         value={String(requests.length)}
-        hint="In demo queue"
+        hint="Sent from quick transaction"
         showTileAction={false}
       />
       <DistributorMetricCard
@@ -251,20 +240,21 @@ function TransactionGroupsSectionMetrics({
 }: {
   operationsListScope?: DistributorOrdersListScope;
 }) {
+  const { transactionGroups: allGroups } = useDistributorTxnRequests();
   const groups = useMemo(
-    () => getScopedTransactionGroups(operationsListScope),
-    [operationsListScope],
+    () => getScopedTransactionGroups(allGroups, operationsListScope),
+    [allGroups, operationsListScope],
   );
   const mix = useMemo(() => {
     const total = groups.length;
     return {
       total,
-      oneTime: groups.filter((g) => /lump|one.?time/i.test(g.label)).length,
-      groupTransaction: groups.filter((g) => /group/i.test(g.label)).length,
-      sips: groups.filter((g) => /sip/i.test(g.label)).length,
+      oneTime: groups.filter((g) => g.channel === "one-time").length,
+      groupTransaction: groups.filter((g) => g.legCount > 1).length,
+      sips: groups.filter((g) => g.channel === "sip").length,
     };
   }, [groups]);
-  const monthlyVolume = useMemo(() => getTransactionGroupsMonthlyVolume(), []);
+  const monthlyVolume = useMemo(() => getTransactionGroupsMonthlyVolume(groups), [groups]);
 
   return (
     <OperationsMetricsWithInsights

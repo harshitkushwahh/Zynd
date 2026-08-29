@@ -239,7 +239,7 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
   if (pathname.startsWith("/dashboard/mutual-funds/cart")) {
     return {
       title: copy.mutualFunds.cartTitle,
-      description: copy.mutualFunds.cartDescription,
+      description: "",
       icon: PieChart,
     };
   }

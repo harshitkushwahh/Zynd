@@ -347,9 +347,21 @@ def _compute_allocation_slices(
 def _build_flow_series(*, invested_inr: float, current_value_inr: float) -> list[dict[str, Any]]:
     if invested_inr <= 0 and current_value_inr <= 0:
         return []
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
     return [
-        {"label": "Invested", "value": round(invested_inr, 2)},
-        {"label": "Current", "value": round(current_value_inr, 2)},
+        {
+            "label": "Invested",
+            "value": round(invested_inr, 2),
+            "invested": round(invested_inr, 2),
+            "date": yesterday,
+        },
+        {
+            "label": "Current",
+            "value": round(current_value_inr, 2),
+            "invested": round(invested_inr, 2),
+            "date": today,
+        },
     ]
 
 
@@ -440,7 +452,7 @@ async def _build_portfolio_growth_series(
     user_id: uuid.UUID,
     current_value_inr: float,
     invested_inr: float,
-    months: int = 12,
+    months: int = 120,
 ) -> list[dict[str, Any]]:
     if current_value_inr <= 0 and invested_inr <= 0:
         return []
@@ -455,13 +467,6 @@ async def _build_portfolio_growth_series(
     ).all()
 
     now = datetime.now(timezone.utc)
-    start = date(now.year, now.month, 1)
-    for _ in range(max(months - 1, 0)):
-        if start.month == 1:
-            start = date(start.year - 1, 12, 1)
-        else:
-            start = date(start.year, start.month - 1, 1)
-
     timeline: list[tuple[datetime, Decimal]] = []
     for created_at, amount_inr, order_type in rows:
         if created_at is None:
@@ -472,6 +477,17 @@ async def _build_portfolio_growth_series(
         signed = -amount if order_type == MfOrderType.redemption else amount
         timeline.append((created_at, signed))
     timeline.sort(key=lambda item: item[0])
+
+    if timeline:
+        first_event = timeline[0][0].date()
+        start = date(first_event.year, first_event.month, 1)
+    else:
+        start = date(now.year, now.month, 1)
+        for _ in range(max(months - 1, 0)):
+            if start.month == 1:
+                start = date(start.year - 1, 12, 1)
+            else:
+                start = date(start.year, start.month - 1, 1)
 
     points: list[dict[str, Any]] = []
     cumulative = Decimal("0")

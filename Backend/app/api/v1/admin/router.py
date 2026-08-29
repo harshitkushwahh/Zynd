@@ -19,6 +19,7 @@ from app.api.v1.admin.product_qr_router import router as product_qr_router
 from app.api.v1.admin.referrals_router import router as referrals_router
 from app.api.v1.admin.search_router import router as search_router
 from app.api.v1.admin.zynd_logs_router import router as zynd_logs_router
+from app.api.v1.admin.recommendations_router import router as recommendations_admin_router
 from app.api.v1.admin.risk_profile_router import router as risk_profile_router
 from app.api.v1.admin.family_groups_router import router as family_groups_router
 from app.api.v1.admin.goals_router import router as goals_router
@@ -161,6 +162,7 @@ from app.infrastructure.persistence.models import (
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 router.include_router(mf_admin_router)
+router.include_router(recommendations_admin_router)
 router.include_router(risk_profile_router)
 router.include_router(family_groups_router)
 router.include_router(goals_router)
@@ -608,6 +610,7 @@ async def get_audit_logs(
     _: Annotated[User, Depends(require_permission("audit.read"))],
     user_id: Optional[str] = None,
     event_type: Optional[str] = None,
+    event_types: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> AuditLogListResponse:
@@ -631,10 +634,28 @@ async def get_audit_logs(
                 detail={"code": "invalid_event_type", "message": "Invalid audit event type."},
             ) from exc
 
+    parsed_event_types: list[AuditEventType] | None = None
+    if event_types and not parsed_event_type:
+        parsed_event_types = []
+        for raw in event_types.split(","):
+            candidate = raw.strip()
+            if not candidate:
+                continue
+            try:
+                parsed_event_types.append(AuditEventType(candidate))
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"code": "invalid_event_type", "message": "Invalid audit event type."},
+                ) from exc
+        if not parsed_event_types:
+            parsed_event_types = None
+
     items = await list_audit_logs(
         db,
         user_id=parsed_user_id,
         event_type=parsed_event_type,
+        event_types=parsed_event_types,
         limit=limit,
         offset=offset,
     )

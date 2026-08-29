@@ -84,6 +84,13 @@ export function filterLumpsumBulkCartAdds<T extends { product_id: string }>(
   return { addable, skipped: funds.length - addable.length };
 }
 
+export function filterNewLumpsumCartFunds<T extends { product_id: string }>(
+  cart: Pick<MfCart, "items">,
+  funds: T[],
+): T[] {
+  return funds.filter((fund) => !mfCartHasItem(cart, fund.product_id, "lumpsum"));
+}
+
 export function mfCartTypeLabel(investmentType: MfCartInvestmentType): string {
   return investmentType === "sip" ? "SIP" : "One-time";
 }

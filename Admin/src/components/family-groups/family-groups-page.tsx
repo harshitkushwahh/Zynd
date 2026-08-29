@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { UsersRound } from "lucide-react";
 
-import { FamilyGroupsAuditPanel } from "@/components/family-groups/family-groups-audit-panel";
 import { FamilyGroupsDirectoryPanel } from "@/components/family-groups/family-groups-directory-panel";
 import { FamilyGroupsInvitesPanel } from "@/components/family-groups/family-groups-invites-panel";
+import { AdminUserFamilyGroupDetailPage } from "@/components/users/admin-user-family-group-detail-page";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { Tabs } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
@@ -14,6 +14,7 @@ import { useAdminAuth } from "@/contexts/admin-auth-context";
 import {
   FAMILY_GROUPS_TABS,
   familyGroupsTabHref,
+  isFamilyGroupsTabSlug,
   resolveFamilyGroupsTab,
   type FamilyGroupsTabId,
 } from "@/lib/admin-family-groups-navigation";
@@ -25,6 +26,8 @@ type FamilyGroupsPageProps = {
 export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
   const router = useRouter();
   const { hasPermission } = useAdminAuth();
+  const canManage = hasPermission("family_groups.manage");
+  const isDirectoryDetail = Boolean(tabSlug) && !isFamilyGroupsTabSlug(tabSlug);
   const activeTab = resolveFamilyGroupsTab(tabSlug);
   const [activeTabId, setActiveTabId] = useState<FamilyGroupsTabId>(activeTab.id);
 
@@ -38,6 +41,11 @@ export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
   );
 
   useEffect(() => {
+    if (tabSlug === "audit") {
+      router.replace("/dashboard/zynd-logs?category=Family%20groups");
+      return;
+    }
+    if (isDirectoryDetail) return;
     const resolved = visibleTabs.find((tab) => tab.id === tabSlug) ?? visibleTabs[0] ?? activeTab;
     setActiveTabId(resolved.id);
     const href = familyGroupsTabHref(resolved);
@@ -45,7 +53,7 @@ export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
     if (href !== currentHref && tabSlug !== resolved.id) {
       router.replace(href);
     }
-  }, [activeTab, router, tabSlug, visibleTabs]);
+  }, [activeTab, isDirectoryDetail, router, tabSlug, visibleTabs]);
 
   const handleTabChange = (value: string) => {
     const nextTab = visibleTabs.find((tab) => tab.id === value);
@@ -54,7 +62,14 @@ export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
     router.push(familyGroupsTabHref(nextTab));
   };
 
-  const canManage = hasPermission("family_groups.manage");
+  if (isDirectoryDetail && tabSlug) {
+    return (
+      <AdminUserFamilyGroupDetailPage
+        groupId={tabSlug}
+        canManageFamilyGroups={canManage}
+      />
+    );
+  }
 
   return (
     <AdminSectionPageShell
@@ -76,9 +91,8 @@ export function FamilyGroupsPage({ tabSlug }: FamilyGroupsPageProps) {
         </AdminTabList>
       </Tabs>
 
-      {activeTabId === "groups" ? <FamilyGroupsDirectoryPanel canManage={canManage} /> : null}
+      {activeTabId === "groups" ? <FamilyGroupsDirectoryPanel /> : null}
       {activeTabId === "invites" ? <FamilyGroupsInvitesPanel /> : null}
-      {activeTabId === "audit" ? <FamilyGroupsAuditPanel /> : null}
     </AdminSectionPageShell>
   );
 }

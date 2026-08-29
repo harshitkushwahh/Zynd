@@ -20,17 +20,21 @@ export function AdminDataTable({
   minWidth = "default",
   minWidthClassName,
   className,
+  scrollClassName,
+  scrollStyle,
   footer,
 }: {
   children: React.ReactNode;
   minWidth?: AdminTableMinWidth;
   minWidthClassName?: string;
   className?: string;
+  scrollClassName?: string;
+  scrollStyle?: React.CSSProperties;
   footer?: React.ReactNode;
 }) {
   return (
-    <div className={cn("admin-table-shell overflow-hidden rounded-[var(--radius-card)] border border-border", className)}>
-      <div className="overflow-x-auto">
+    <div className={cn("admin-table-shell box-border w-full max-w-full overflow-hidden rounded-[var(--radius-card)] border border-border", className)}>
+      <div className={cn("overflow-x-auto", scrollClassName)} style={scrollStyle}>
         <table
           className={cn(
             "w-full text-left text-compact",
@@ -45,9 +49,15 @@ export function AdminDataTable({
   );
 }
 
-export function AdminTableHeader({ children }: { children: React.ReactNode }) {
+export function AdminTableHeader({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <thead className="border-b border-border bg-muted/30 text-caption text-muted-foreground">
+    <thead className={cn("border-b border-border bg-muted/30 text-caption text-muted-foreground", className)}>
       {children}
     </thead>
   );

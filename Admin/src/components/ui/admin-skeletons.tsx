@@ -196,6 +196,46 @@ export function AdminDetailDialogSkeleton() {
   );
 }
 
+export function AdminRecommendationsPageSkeleton({ tab = "baskets" }: { tab?: "baskets" | "publish" | "preview" }) {
+  if (tab === "publish") {
+    return <AdminCardSkeleton lines={4} />;
+  }
+
+  if (tab === "preview") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <AdminCardSkeleton lines={2} />
+        <AdminCardSkeleton lines={5} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <Skeleton key={`tier-button-${index}`} className="h-9 w-28 rounded-full" />
+        ))}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+        <div className="rounded-card border border-border bg-card p-4">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="mt-1 h-3 w-20" />
+          <div className="mt-4 space-y-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={`basket-item-${index}`} className="h-14 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+        <div className="space-y-4">
+          <AdminFormSkeleton rows={4} />
+          <AdminTableSkeleton columns={5} rows={4} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AdminPageSkeleton({
   withToolbar = false,
   withMetrics = false,

@@ -37,8 +37,11 @@ export function getDistributorOperationsPageTitle(scope: DistributorOrdersListSc
   return scope === "all" ? "All orders" : "Your operations";
 }
 
-export function getScopedOrders(scope: DistributorOrdersListScope): DistributorOrder[] {
-  return getOrdersForListScope(scope);
+export function getScopedOrders(
+  orders: DistributorOrder[],
+  scope: DistributorOrdersListScope,
+): DistributorOrder[] {
+  return getOrdersForListScope(orders, scope);
 }
 
 export function getScopedSystematicPlans(scope: DistributorOrdersListScope) {
@@ -52,8 +55,11 @@ export function getScopedTxnRequests(
   return getTxnRequestsForListScope(requests, scope);
 }
 
-export function getScopedTransactionGroups(scope: DistributorOrdersListScope) {
-  return getTransactionGroupsForListScope(scope);
+export function getScopedTransactionGroups(
+  groups: DistributorTransactionGroup[],
+  scope: DistributorOrdersListScope,
+) {
+  return getTransactionGroupsForListScope(groups, scope);
 }
 
 export function buildYourOperationsVariantHref(

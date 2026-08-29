@@ -103,8 +103,23 @@ function sumHoldingsValue(holdings: AdminUserInvestmentsDetail["holdings"]) {
   }, 0);
 }
 
-function countActiveSips(plans: AdminUserInvestmentsDetail["sip_plans"]) {
-  return plans.filter((plan) => String(plan.status ?? "").toLowerCase() === "active").length;
+function sipPlanStatus(plan: { status?: unknown }) {
+  return String(plan.status ?? "").toLowerCase();
+}
+
+function countSipsByStatus(plans: AdminUserInvestmentsDetail["sip_plans"]) {
+  let active = 0;
+  let cancelled = 0;
+  for (const plan of plans) {
+    const status = sipPlanStatus(plan);
+    if (status === "active") active += 1;
+    if (status === "cancelled" || status === "canceled") cancelled += 1;
+  }
+  return { active, cancelled, total: plans.length };
+}
+
+function formatSipBadgeLabel(count: number, label: string) {
+  return `${count} ${label}`;
 }
 
 function sumPurchaseCost(purchases: AdminUserInvestmentsDetail["purchases"]) {
@@ -123,8 +138,7 @@ function computePortfolioHeroStats(investments: AdminUserInvestmentsDetail) {
   return {
     currentValue,
     gainPct,
-    sipCount: investments.sip_plans.length,
-    activeSipCount: countActiveSips(investments.sip_plans),
+    ...countSipsByStatus(investments.sip_plans),
   };
 }
 
@@ -224,10 +238,7 @@ function UserProfileHeroPortfolioCard({
     );
   }
 
-  const sipLabel =
-    portfolioStats.sipCount === 1
-      ? "1 SIP"
-      : `${portfolioStats.sipCount} SIPs`;
+  const showSipBreakdown = portfolioStats.total > 0;
 
   return (
     <UserProfileHeroPortfolioCardShell>
@@ -251,8 +262,15 @@ function UserProfileHeroPortfolioCard({
           {formatInr(portfolioStats.currentValue)}
         </p>
         <p className="admin-user-profile-hero__portfolio-label">Invested amount</p>
-        {portfolioStats.sipCount > 0 ? (
-          <span className="admin-user-profile-hero__portfolio-sip-badge">{sipLabel}</span>
+        {showSipBreakdown ? (
+          <div className="admin-user-profile-hero__portfolio-sip-row">
+            <span className="admin-user-profile-hero__portfolio-sip-badge">
+              {formatSipBadgeLabel(portfolioStats.active, "active")}
+            </span>
+            <span className="admin-user-profile-hero__portfolio-sip-badge admin-user-profile-hero__portfolio-sip-badge--cancelled">
+              {formatSipBadgeLabel(portfolioStats.cancelled, "cancelled")}
+            </span>
+          </div>
         ) : null}
       </div>
     </UserProfileHeroPortfolioCardShell>
@@ -261,7 +279,9 @@ function UserProfileHeroPortfolioCard({
 
 function kycIconToneClass(kyc: AdminUserKycDetail | null) {
   if (!kyc) return "admin-metric-card__icon--muted";
-  if (kyc.overall_status === "completed") return "admin-metric-card__icon--success";
+  if (kyc.overall_status === "completed" || kyc.kyc_already_registered) {
+    return "admin-metric-card__icon--success";
+  }
   if (kyc.overall_status === "in_progress") return "admin-metric-card__icon--info";
   return "admin-metric-card__icon--muted";
 }

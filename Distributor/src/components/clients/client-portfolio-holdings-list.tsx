@@ -33,14 +33,30 @@ type PortfolioHoldingRow = DistributorClientHolding & {
 
 function toHoldingRows(holdings: DistributorClientHolding[]): PortfolioHoldingRow[] {
   return holdings.map((holding) => {
-    const returnsAmount = holding.currentValue - holding.investedAmount;
-    const returnsPct =
-      holding.investedAmount > 0 ? (returnsAmount / holding.investedAmount) * 100 : 0;
+    const hasCostBasis = holding.investedAmount > 0;
+    const returnsAmount = hasCostBasis
+      ? (holding.returnAmount ?? holding.currentValue - holding.investedAmount)
+      : 0;
+    const returnsPct = hasCostBasis
+      ? (holding.returnPct ?? (returnsAmount / holding.investedAmount) * 100)
+      : 0;
     return { ...holding, returnsAmount, returnsPct };
   });
 }
 
-function ReturnsCell({ amount, pct }: { amount: number; pct: number }) {
+function ReturnsCell({
+  amount,
+  pct,
+  hasCostBasis,
+}: {
+  amount: number;
+  pct: number;
+  hasCostBasis: boolean;
+}) {
+  if (!hasCostBasis) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
   const positive = amount >= 0;
   return (
     <div className="flex flex-col items-end gap-1 text-right tabular-nums">
@@ -221,7 +237,11 @@ export function ClientPortfolioHoldingsList({
               <Table.Cell className="text-right tabular-nums">{formatAum(holding.currentValue)}</Table.Cell>
               <Table.Cell className="text-right tabular-nums">{formatAum(holding.redeemableValue)}</Table.Cell>
               <Table.Cell>
-                <ReturnsCell amount={holding.returnsAmount} pct={holding.returnsPct} />
+                <ReturnsCell
+                  amount={holding.returnsAmount}
+                  pct={holding.returnsPct}
+                  hasCostBasis={holding.investedAmount > 0}
+                />
               </Table.Cell>
             </Table.Row>
           );

@@ -221,10 +221,32 @@ class DistributorClientListItemResponse(BaseModel):
     mitra_client_id: str | None = None
     in_distributor_book: bool = True
     service_model: str = "diy"
+    profile_image_url: str | None = None
 
 
 class DistributorClientListResponse(BaseModel):
     items: list[DistributorClientListItemResponse]
+
+
+class DistributorOrderListItemResponse(BaseModel):
+    order_id: UUID
+    fp_purchase_id: str | None = None
+    client_user_id: UUID
+    client_code: str | None = None
+    client_email_masked: str | None = None
+    product_name: str | None = None
+    amc_name: str | None = None
+    amc_slug: str | None = None
+    amc_logo_url: str | None = None
+    order_type: str
+    amount_inr: float
+    status: str
+    created_at: datetime | None = None
+    in_distributor_book: bool = True
+
+
+class DistributorOrderListResponse(BaseModel):
+    items: list[DistributorOrderListItemResponse]
 
 
 class DistributorClientReferralsResponse(BaseModel):

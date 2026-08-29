@@ -7,6 +7,7 @@ from app.application.family_groups.admin_service import (
     admin_force_archive_family_group,
     admin_force_remove_group_member,
     get_admin_family_group_detail,
+    get_admin_family_group_invite_detail,
     list_admin_family_group_invites,
     list_admin_family_groups,
     list_admin_user_family_groups,
@@ -123,3 +124,25 @@ async def test_list_admin_user_family_groups_user_not_found(db_session: AsyncSes
     with pytest.raises(FamilyGroupError) as exc_info:
         await list_admin_user_family_groups(db_session, user_id=uuid4())
     assert exc_info.value.code == "user_not_found"
+
+
+@pytest.mark.asyncio
+async def test_get_admin_family_group_invite_detail(db_session: AsyncSession) -> None:
+    head = await _create_user(db_session, prefix="admin-invite-head")
+    invitee = await _create_user(db_session, prefix="admin-invite-target")
+    created = await create_family_group(db_session, user=head, title="Invite Journey Family")
+    pending = await create_family_group_invite(
+        db_session,
+        group_id=created["id"],
+        inviter=head,
+        invitee_email=invitee.email,
+        intended_role=FamilyGroupMemberRole.viewer,
+    )
+
+    detail = await get_admin_family_group_invite_detail(db_session, invite_id=pending["id"])
+    assert detail["id"] == pending["id"]
+    assert detail["group_title"] == "Invite Journey Family"
+    assert detail["status"] == "pending"
+    assert detail["invited_by_user_id"] == head.id
+    assert [step["id"] for step in detail["journey"]] == ["sent", "awaiting", "expires"]
+    assert detail["journey"][1]["state"] == "current"

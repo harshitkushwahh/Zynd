@@ -1,4 +1,4 @@
-import type { DistributorOrder } from "@/lib/distributor-types";
+import type { DistributorOrder, DistributorTxnRequest } from "@/lib/distributor-types";
 
 export type YourOrdersMetricStats = {
   total: number;
@@ -76,11 +76,85 @@ export function getYourOrdersMonthlyVolume(orders: DistributorOrder[]): YourOrde
   };
 }
 
-export function getTransactionGroupsMonthlyVolume(): YourOrdersMonthlyVolume {
+function buildMonthlyBarsFromTxnRequests(
+  requests: DistributorTxnRequest[],
+): YourOrdersMonthlyBar[] {
+  const buckets = new Map<string, { count: number; amount: number; sortKey: number }>();
+
+  for (const request of requests) {
+    const created = new Date(request.createdAt);
+    const sortKey = created.getUTCFullYear() * 12 + created.getUTCMonth();
+    const month = created.toLocaleDateString("en-IN", { month: "short", timeZone: "UTC" });
+    const existing = buckets.get(month) ?? { count: 0, amount: 0, sortKey };
+    existing.count += 1;
+    existing.amount += request.amount ?? 0;
+    buckets.set(month, existing);
+  }
+
+  const now = new Date();
+  const currentSortKey = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  const currentMonth = now.toLocaleDateString("en-IN", { month: "short", timeZone: "UTC" });
+
+  return [...buckets.entries()]
+    .sort(([, a], [, b]) => a.sortKey - b.sortKey)
+    .slice(-6)
+    .map(([month, row]) => ({
+      month,
+      count: row.count,
+      amount: row.amount,
+      isCurrent: row.sortKey === currentSortKey || month === currentMonth,
+    }));
+}
+
+export function getTxnRequestsMonthlyVolume(
+  requests: DistributorTxnRequest[],
+): YourOrdersMonthlyVolume {
+  const bars = buildMonthlyBarsFromTxnRequests(requests);
+  const currentBar = bars.find((row) => row.isCurrent);
+
+  return {
+    title: "Monthly requests",
+    bars,
+    currentMonthAmount: currentBar?.amount ?? 0,
+    currentMonthCount: currentBar?.count ?? 0,
+  };
+}
+
+export function getTransactionGroupsMonthlyVolume(
+  groups: import("@/lib/distributor-types").DistributorTransactionGroup[],
+): YourOrdersMonthlyVolume {
+  const buckets = new Map<string, { count: number; amount: number; sortKey: number }>();
+
+  for (const group of groups) {
+    const created = new Date(group.createdAt);
+    const sortKey = created.getUTCFullYear() * 12 + created.getUTCMonth();
+    const month = created.toLocaleDateString("en-IN", { month: "short", timeZone: "UTC" });
+    const existing = buckets.get(month) ?? { count: 0, amount: 0, sortKey };
+    existing.count += 1;
+    existing.amount += group.totalAmount;
+    buckets.set(month, existing);
+  }
+
+  const now = new Date();
+  const currentSortKey = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  const currentMonth = now.toLocaleDateString("en-IN", { month: "short", timeZone: "UTC" });
+
+  const bars = [...buckets.entries()]
+    .sort(([, a], [, b]) => a.sortKey - b.sortKey)
+    .slice(-6)
+    .map(([month, row]) => ({
+      month,
+      count: row.count,
+      amount: row.amount,
+      isCurrent: row.sortKey === currentSortKey || month === currentMonth,
+    }));
+
+  const currentBar = bars.find((row) => row.isCurrent);
+
   return {
     title: "Monthly groups",
-    bars: [],
-    currentMonthAmount: 0,
-    currentMonthCount: 0,
+    bars,
+    currentMonthAmount: currentBar?.amount ?? 0,
+    currentMonthCount: currentBar?.count ?? 0,
   };
 }

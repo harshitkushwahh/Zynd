@@ -77,6 +77,9 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       { key: "risk_profile.tiers.manage", label: "Manage tier messages", description: "Update score bands and user-facing tier messages." },
       { key: "risk_profile.users.read", label: "View user profiles", description: "See computed risk profiles for users." },
       { key: "risk_profile.users.manage", label: "Unlock risk profiles", description: "Grant additional attempts after OTP verification." },
+      { key: "recommendations.read", label: "View recommendation baskets", description: "Read Funds For You baskets, preview, and published config." },
+      { key: "recommendations.manage", label: "Manage recommendation baskets", description: "Create and edit tier baskets and fund pools." },
+      { key: "recommendations.publish", label: "Publish recommendations", description: "Publish Funds For You configuration to investors." },
     ],
   },
   {

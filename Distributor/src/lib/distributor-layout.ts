@@ -26,6 +26,9 @@ export const DISTRIBUTOR_WORKSPACE_SPLIT_CLASS = "distributor-workspace-split";
 export const DISTRIBUTOR_WORKSPACE_SPLIT_MAIN_CLASS = "distributor-workspace-split__main";
 export const DISTRIBUTOR_SETTINGS_LAYOUT_CLASS = "distributor-settings-layout";
 export const DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS = "distributor-table-col-created-at";
+export const DISTRIBUTOR_TABLE_SCHEME_COLUMN_CLASS = "distributor-table-col-scheme";
+export const DISTRIBUTOR_TABLE_INVESTOR_COLUMN_CLASS = "distributor-table-col-investor";
+export const DISTRIBUTOR_TABLE_ORDER_REF_COLUMN_CLASS = "distributor-table-col-order-ref";
 export const DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS = "distributor-table-col-client-code";
 export const DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_WIDE_CLASS =
   "distributor-table-col-client-code distributor-table-col-client-code--wide";

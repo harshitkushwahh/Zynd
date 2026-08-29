@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.mf.catalog_health_service import get_catalog_health
 from app.application.mf.ingestion_run_service import cleanup_stale_runs
 from app.application.mf.mf_pipeline_notify_service import notify_pipeline_event
+from app.infrastructure.mf.pipeline_progress import pipeline_progress_sink
 from app.application.mf.mf_pipeline_preview_service import (
     capture_catalog_health_snapshot,
     compute_health_diff,
@@ -298,17 +299,8 @@ async def _run_staging_ingest(
     session: AsyncSession,
     *,
     triggered_by: str,
-    run: MfPipelineRunState | None = None,
 ) -> dict:
-    async def progress_log(message: str) -> None:
-        if run is not None:
-            await _append_log(run, message)
-
-    result = await run_cybrilla_scheme_ingest(
-        session,
-        triggered_by=triggered_by,
-        progress_log=progress_log if run is not None else None,
-    )
+    result = await run_cybrilla_scheme_ingest(session, triggered_by=triggered_by)
     if result.get("skipped"):
         raise RuntimeError(f"Staging ingest skipped: {result.get('reason')}")
     return result
@@ -374,7 +366,7 @@ async def _execute_step(run: MfPipelineRunState, step: MfPipelineStepState, cont
 
     if step.key == "cybrilla-scheme-ingest":
         async with AsyncSessionLocal() as session:
-            result = await _run_staging_ingest(session, triggered_by=triggered_by, run=run)
+            result = await _run_staging_ingest(session, triggered_by=triggered_by)
             context["batch_uuid"] = result.get("batch_uuid")
             await _tag_ingestion_run_pipeline(session, str(result["run_uuid"]), run.run_id)
             await session.commit()
@@ -520,9 +512,8 @@ async def _execute_pipeline_run(run: MfPipelineRunState, *, from_step_key: str |
         run.started_at = _utc_now_iso()
     run.finished_at = None
     run.error = None
-    if from_step_key:
-        context.pop("pause_reason", None)
-    elif "health_before" not in context:
+    context.pop("pause_reason", None)
+    if not from_step_key and "health_before" not in context:
         context["health_before"] = await capture_catalog_health_snapshot()
     await _append_log(
         run,
@@ -533,74 +524,78 @@ async def _execute_pipeline_run(run: MfPipelineRunState, *, from_step_key: str |
     notify_event: str | None = None
     notify_pause_reason: str | None = None
 
+    async def _progress_sink(message: str) -> None:
+        await _append_log(run, message)
+
     try:
-        skip_steps = set(context.get("skip_steps") or [])
-        for step in _iter_executable_steps(run, from_step_key=from_step_key):
-            if step.key in skip_steps:
-                await _set_step_status(
-                    run,
-                    step,
-                    MfPipelineStepStatus.skipped,
-                    error="Skipped by operator override",
-                )
-                continue
+        async with pipeline_progress_sink(_progress_sink):
+            skip_steps = set(context.get("skip_steps") or [])
+            for step in _iter_executable_steps(run, from_step_key=from_step_key):
+                if step.key in skip_steps:
+                    await _set_step_status(
+                        run,
+                        step,
+                        MfPipelineStepStatus.skipped,
+                        error="Skipped by operator override",
+                    )
+                    continue
 
-            if run._cancel_requested:
-                run.status = MfPipelineRunStatus.cancelled
-                run.error = "Cancelled by operator"
-                run.finished_at = _utc_now_iso()
-                await _append_log(run, "Pipeline cancelled — resume later from next step", level="warning")
-                notify_event = "cancelled"
-                return
+                if run._cancel_requested:
+                    run.status = MfPipelineRunStatus.cancelled
+                    run.error = "Cancelled by operator"
+                    run.finished_at = _utc_now_iso()
+                    await _append_log(run, "Pipeline cancelled — resume later from next step", level="warning")
+                    notify_event = "cancelled"
+                    return
 
-            if step.status == MfPipelineStepStatus.failed:
-                step.status = MfPipelineStepStatus.pending
-                step.error = None
+                if step.status == MfPipelineStepStatus.failed:
+                    step.status = MfPipelineStepStatus.pending
+                    step.error = None
 
-            await _set_step_status(run, step, MfPipelineStepStatus.running)
+                await _set_step_status(run, step, MfPipelineStepStatus.running)
 
-            try:
-                await _execute_step(run, step, context)
-                mapped = scheduler_job_key_for_pipeline_step(step.key)
-                if mapped and step.status == MfPipelineStepStatus.succeeded:
-                    pass
-            except MfPipelineControlledPause as exc:
-                run.status = MfPipelineRunStatus.paused
-                run.error = exc.message
-                context["pause_reason"] = exc.pause_reason
-                run.finished_at = _utc_now_iso()
-                run.context = context
-                await _append_log(run, exc.message, level="warning")
-                notify_event = "paused"
-                notify_pause_reason = exc.pause_reason
-                return
-            except Exception as exc:
-                logger.exception("MF pipeline step failed step=%s", step.key)
-                await _set_step_status(run, step, MfPipelineStepStatus.failed, error=str(exc))
-                run.status = MfPipelineRunStatus.paused
-                run.error = str(exc)
-                context.pop("pause_reason", None)
-                run.finished_at = _utc_now_iso()
-                run.context = context
-                await _append_log(
-                    run,
-                    "Pipeline paused due to error — fix the issue, then Resume or Retry step",
-                    level="warning",
-                )
-                notify_event = "failed"
-                return
+                try:
+                    await _execute_step(run, step, context)
+                    mapped = scheduler_job_key_for_pipeline_step(step.key)
+                    if mapped and step.status == MfPipelineStepStatus.succeeded:
+                        pass
+                except MfPipelineControlledPause as exc:
+                    run.status = MfPipelineRunStatus.paused
+                    run.error = exc.message
+                    context["pause_reason"] = exc.pause_reason
+                    run.finished_at = _utc_now_iso()
+                    run.context = context
+                    await _append_log(run, exc.message, level="warning")
+                    notify_event = "paused"
+                    notify_pause_reason = exc.pause_reason
+                    return
+                except Exception as exc:
+                    logger.exception("MF pipeline step failed step=%s", step.key)
+                    await _set_step_status(run, step, MfPipelineStepStatus.failed, error=str(exc))
+                    run.status = MfPipelineRunStatus.paused
+                    run.error = str(exc)
+                    context.pop("pause_reason", None)
+                    run.finished_at = _utc_now_iso()
+                    run.context = context
+                    await _append_log(
+                        run,
+                        "Pipeline paused due to error — fix the issue, then Resume or Retry step",
+                        level="warning",
+                    )
+                    notify_event = "failed"
+                    return
 
-        run.status = MfPipelineRunStatus.succeeded
-        run.finished_at = _utc_now_iso()
-        run.current_step_key = None
-        context.pop("pause_reason", None)
-        health_after = await capture_catalog_health_snapshot()
-        context["health_after"] = health_after
-        context["health_diff"] = compute_health_diff(context.get("health_before"), health_after)
-        run.context = context
-        await _append_log(run, "Pipeline completed successfully", level="success")
-        await _record_scheduler_skips(run)
-        notify_event = "completed"
+            run.status = MfPipelineRunStatus.succeeded
+            run.finished_at = _utc_now_iso()
+            run.current_step_key = None
+            context.pop("pause_reason", None)
+            health_after = await capture_catalog_health_snapshot()
+            context["health_after"] = health_after
+            context["health_diff"] = compute_health_diff(context.get("health_before"), health_after)
+            run.context = context
+            await _append_log(run, "Pipeline completed successfully", level="success")
+            await _record_scheduler_skips(run)
+            notify_event = "completed"
 
     finally:
         run.context = context
@@ -684,7 +679,7 @@ async def start_mf_pipeline_run(
 
 
 async def approve_mf_pipeline_staging(run_id: str, *, admin_user_id: UUID) -> MfPipelineRunState:
-    from app.application.mf.scheme_staging_admin_service import approve_scheme_staging_batch
+    from app.application.mf.scheme_staging_admin_service import approve_scheme_staging_batch, get_scheme_staging_batch
 
     async with AsyncSessionLocal() as session:
         run = await get_pipeline_run(session, run_id)
@@ -696,11 +691,17 @@ async def approve_mf_pipeline_staging(run_id: str, *, admin_user_id: UUID) -> Mf
         if not batch_uuid:
             raise RuntimeError("No staging batch linked to pipeline run")
 
-    await approve_scheme_staging_batch(
-        batch_uuid,
-        admin_user_id=admin_user_id,
-        auto_resume_pipeline=False,
-    )
+    batch = await get_scheme_staging_batch(batch_uuid)
+    if not batch:
+        raise RuntimeError("Staging batch not found")
+    if batch.get("status") == "validated":
+        await approve_scheme_staging_batch(
+            batch_uuid,
+            admin_user_id=admin_user_id,
+            auto_resume_pipeline=False,
+        )
+    elif batch.get("status") != "approved":
+        raise RuntimeError(f"Batch cannot be approved (status={batch.get('status')})")
     return await resume_mf_pipeline_run(run_id)
 
 

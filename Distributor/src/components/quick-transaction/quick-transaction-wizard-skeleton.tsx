@@ -47,11 +47,23 @@ function QuickTransactionAmountStepSkeleton() {
   return (
     <div className="quick-txn-wizard-skeleton__amount">
       <QuickTransactionSectionHeaderSkeleton titleWidthClassName="w-40" />
-      <Skeleton className="mt-2 h-24 w-full rounded-[var(--radius-5xl)]" />
-      <Skeleton className="mt-4 h-16 w-full rounded-[var(--radius-5xl)]" />
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Skeleton className="h-[3.25rem] w-28 rounded-[var(--radius-5xl)]" />
-        <Skeleton className="h-[3.25rem] w-36 rounded-[var(--radius-5xl)]" />
+      <div className="quick-txn-amount-layout">
+        <aside className="quick-txn-amount-aside">
+          <Skeleton className="h-36 w-full rounded-[var(--radius-card)]" />
+          <Skeleton className="h-px w-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-28 rounded-[var(--radius-control)]" />
+            <Skeleton className="h-[3.25rem] w-full rounded-[var(--radius-5xl)]" />
+            <Skeleton className="h-[3.25rem] w-full rounded-[var(--radius-5xl)]" />
+          </div>
+        </aside>
+        <div className="quick-txn-amount-main">
+          <div className="quick-txn-amount-funds-scroll space-y-0">
+            <Skeleton className="quick-txn-amount-fund-card h-32 w-full rounded-[var(--radius-5xl)]" />
+            <Skeleton className="quick-txn-amount-fund-card h-32 w-full rounded-[var(--radius-5xl)]" />
+            <Skeleton className="quick-txn-amount-fund-card h-32 w-full rounded-[var(--radius-5xl)]" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -69,7 +81,14 @@ function QuickTransactionReviewStepSkeleton() {
         <Skeleton className="h-24 rounded-[var(--radius-5xl)]" />
         <Skeleton className="h-24 rounded-[var(--radius-5xl)]" />
       </div>
-      <Skeleton className="mt-4 h-20 w-full rounded-[var(--radius-5xl)]" />
+      <div className="quick-txn-review-funds mt-4">
+        <Skeleton className="h-4 w-36 rounded-[var(--radius-control)]" />
+        <div className="quick-txn-review-funds-scroll">
+          <Skeleton className="quick-txn-review-fund h-20 w-full rounded-[var(--radius-5xl)]" />
+          <Skeleton className="quick-txn-review-fund h-20 w-full rounded-[var(--radius-5xl)]" />
+          <Skeleton className="quick-txn-review-fund h-20 w-full rounded-[var(--radius-5xl)]" />
+        </div>
+      </div>
     </div>
   );
 }

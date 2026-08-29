@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Check, Copy, Hash, Receipt } from "lucide-react";
+import { Check, Copy, Hash, Receipt, RotateCcw } from "lucide-react";
 import { getErrorMessage } from "@/lib/errors";
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";
+import { useAdminAuth } from "@/contexts/admin-auth-context";
 import { formatTimestamp } from "@/lib/format-date";
 
 import { AmcLogo } from "@/components/mf/amc-logo";
@@ -21,12 +22,14 @@ import { resolveAdminAssetUrl } from "@/lib/mf-admin-asset-url";
 import {
   buildOrderJourneyView,
   formatFailureSummary,
+  formatFpState,
   formatFriendlyStatus,
   resolveProviderStatusLabel,
   type JourneyDisplayStep,
 } from "@/lib/mf-order-journey-copy";
 import {
   fetchMfTransactionOrderDetail,
+  syncMfTransactionOrder,
   type MfTransactionOrder,
   type MfTransactionOrderDetail,
 } from "@/lib/mf-transactions-admin-api";
@@ -230,6 +233,66 @@ function orderBadgeVariant(status: string) {
   return "neutral" as const;
 }
 
+const IN_FLIGHT_ORDER_STATUSES = new Set([
+  "pending",
+  "submitted",
+  "payment_pending",
+  "processing",
+]);
+const ORDER_POLL_MS = 4000;
+
+function isInFlightOrder(status?: string | null) {
+  return IN_FLIGHT_ORDER_STATUSES.has((status ?? "").toLowerCase());
+}
+
+function OrderFact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-tiny font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 break-words text-compact text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function OrderFactsCard({ order }: { order: MfTransactionOrder }) {
+  const paymentMethod = order.payment_method
+    ? formatFriendlyStatus(order.payment_method)
+    : "—";
+  const nextAction = order.next_action ? formatFriendlyStatus(order.next_action) : "None";
+
+  return (
+    <div className="rounded-[var(--radius-card)] border border-border bg-card p-4">
+      <p className="text-compact font-semibold text-foreground">Order facts</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <OrderFact label="Payment method" value={paymentMethod} />
+        <OrderFact label="Provider state" value={formatFpState(order.fp_state)} />
+        <OrderFact label="Next action" value={nextAction} />
+        <OrderFact label="Product ID" value={order.product_id ?? "—"} />
+        <OrderFact label="Created" value={formatTimestamp(order.created_at)} />
+        <OrderFact label="Submitted" value={formatTimestamp(order.submitted_at)} />
+        <OrderFact label="Settled" value={formatTimestamp(order.settled_at)} />
+        <OrderFact
+          label="Payment link"
+          value={
+            order.payment_url ? (
+              <a
+                href={order.payment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-primary hover:underline"
+              >
+                Open payment URL
+              </a>
+            ) : (
+              "—"
+            )
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
 export function MfOrderJourneyDialog({
   open,
   orderId,
@@ -239,36 +302,72 @@ export function MfOrderJourneyDialog({
   orderId: string | null;
   onClose: () => void;
 }) {
+  const { hasPermission } = useAdminAuth();
+  const canManage = hasPermission("mf.transactions.manage");
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [polling, setPolling] = useState(false);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState<MfTransactionOrderDetail | null>(null);
+
+  const loadDetail = useCallback(async (id: string, silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
+    try {
+      const result = await fetchMfTransactionOrderDetail(id);
+      setDetail(result);
+    } catch (err) {
+      if (!silent) {
+        setError(getErrorMessage(err, "Could not load order journey."));
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!open || !orderId) {
       setDetail(null);
       setError("");
+      setPolling(false);
       return;
     }
 
-    let cancelled = false;
-    setLoading(true);
-    setError("");
+    void loadDetail(orderId);
+  }, [loadDetail, open, orderId]);
 
-    void fetchMfTransactionOrderDetail(orderId)
-      .then((result) => {
-        if (!cancelled) setDetail(result);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err, "Could not load order journey."));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+  useEffect(() => {
+    if (!open || !orderId || !isInFlightOrder(detail?.order.status)) {
+      setPolling(false);
+      return;
+    }
+
+    setPolling(true);
+    const timer = window.setInterval(() => {
+      void loadDetail(orderId, true);
+    }, ORDER_POLL_MS);
 
     return () => {
-      cancelled = true;
+      window.clearInterval(timer);
+      setPolling(false);
     };
-  }, [open, orderId]);
+  }, [detail?.order.status, loadDetail, open, orderId]);
+
+  const handleSync = async () => {
+    if (!canManage || !orderId) return;
+    setSyncing(true);
+    setError("");
+    try {
+      await syncMfTransactionOrder(orderId);
+      await loadDetail(orderId, true);
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not sync this order."));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   if (!open || !orderId) return null;
 
@@ -282,16 +381,26 @@ export function MfOrderJourneyDialog({
       open={open}
       onClose={onClose}
       title="Transaction details"
-      description="Follow the order from placement through payment and settlement."
+      description="Follow the order from placement through payment, allotment, and settlement."
       icon={Receipt}
       iconTone="info"
+      headerAside={
+        polling ? (
+          <StatusBadge variant="info" showIcon={false}>
+            Live
+          </StatusBadge>
+        ) : null
+      }
     >
       {loading ? (
         <AdminDetailDialogSkeleton />
-      ) : error ? (
+      ) : error && !order ? (
         <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
       ) : order ? (
         <div className="space-y-5">
+          {error ? (
+            <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>
+          ) : null}
           <div className="rounded-card border border-border bg-muted/15 p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-start gap-3">
@@ -300,6 +409,7 @@ export function MfOrderJourneyDialog({
                   <p className="font-medium text-foreground">{order.product_name ?? "No data"}</p>
                   <p className="mt-1 text-caption capitalize text-muted-foreground">
                     {order.order_type?.replaceAll("_", " ") ?? "Order"}
+                    {order.amc_name ? ` · ${order.amc_name}` : ""}
                   </p>
                   <div className="mt-2">
                     <StatusBadge
@@ -312,18 +422,31 @@ export function MfOrderJourneyDialog({
                   </div>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="flex flex-col items-start gap-2 sm:items-end">
                 <p className="font-heading text-h4 font-semibold tabular-nums text-foreground">
                   ₹{order.amount_inr.toLocaleString()}
                 </p>
-                <p className="mt-1 text-caption text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   Last updated {formatTimestamp(order.settled_at ?? order.submitted_at ?? order.created_at)}
                 </p>
+                {canManage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={syncing}
+                    onClick={() => void handleSync()}
+                  >
+                    <RotateCcw className={cn("size-3.5", syncing && "animate-spin")} />
+                    {syncing ? "Syncing…" : "Sync from provider"}
+                  </Button>
+                ) : null}
               </div>
             </div>
           </div>
 
           <OrderPartiesCard order={order} />
+          <OrderFactsCard order={order} />
 
           {failureSummary &&
           order.failure_code !== "payment_abandoned" &&

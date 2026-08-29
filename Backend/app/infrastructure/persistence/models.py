@@ -139,6 +139,11 @@ class AuditEventType(str, enum.Enum):
     family_group_head_transferred = "family_group_head_transferred"
     family_group_nominee_kyc_invited = "family_group_nominee_kyc_invited"
     family_group_nominee_kyc_skipped = "family_group_nominee_kyc_skipped"
+    recommendation_basket_created = "recommendation_basket_created"
+    recommendation_basket_updated = "recommendation_basket_updated"
+    recommendation_basket_deleted = "recommendation_basket_deleted"
+    recommendation_basket_funds_replaced = "recommendation_basket_funds_replaced"
+    recommendation_config_published = "recommendation_config_published"
 
 
 class DeletionEventType(str, enum.Enum):
@@ -879,4 +884,5 @@ from app.infrastructure.persistence import mf_transaction_models as _mf_transact
 from app.infrastructure.persistence import notification_models as _notification_models  # noqa: F401,E402
 from app.infrastructure.persistence import referral_models as _referral_models  # noqa: F401,E402
 from app.infrastructure.persistence import referral_reward_models as _referral_reward_models  # noqa: F401,E402
+from app.infrastructure.persistence import recommendation_models as _recommendation_models  # noqa: F401,E402
 

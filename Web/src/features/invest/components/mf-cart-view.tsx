@@ -1,17 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
-  CalendarDays,
   IndianRupee,
   Info,
   Loader2,
   ReceiptIndianRupee,
   ShoppingCart,
   Trash2,
-  Wallet,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -24,10 +22,8 @@ import {
   checkoutMfCart,
   checkoutMfSipCart,
   clearMfCartTab,
-  fetchMfCart,
   removeMfCartItem,
   upsertMfCartItem,
-  type MfCart,
   type MfCartItem,
   type MfMandateType,
   type MfPaymentMethod,
@@ -46,7 +42,7 @@ import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overl
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
 import { useAddBankAccountAction } from "@/features/invest/hooks/use-add-bank-account-action";
 import { markMfSipCartCheckoutPlans } from "@/features/invest/lib/mf-payment-session";
-import { setMfCartQueryData } from "@/features/invest/hooks/use-mf-cart-query";
+import { syncMfCartQueryData, useMfCartQuery } from "@/features/invest/hooks/use-mf-cart-query";
 import { invalidateInvestQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import {
@@ -447,9 +443,8 @@ function CartCheckoutPanel({
 export function MfCartView() {
   const queryClient = useQueryClient();
   const { openCartCheckoutPayment, openSipMandate } = useMfPaymentOverlay();
-  const [cart, setCart] = useState<MfCart | null>(null);
+  const { data: cart, isLoading, isError, error: cartQueryError } = useMfCartQuery(true);
   const [tab, setTab] = useState<CartTab>("lumpsum");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
   const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
@@ -478,27 +473,20 @@ export function MfCartView() {
     canAddAccount,
   };
 
-  const loadCart = useCallback(async () => {
-    try {
-      const next = await fetchMfCart();
-      setCart(next);
-      setMfCartQueryData(queryClient, next);
-      setError(null);
-      if (next.lumpsum_item_count === 0 && next.sip_item_count > 0) {
-        setTab("sip");
-      }
-      return next;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : copy.mutualFunds.cartLoadError);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [queryClient]);
-
   useEffect(() => {
-    void loadCart();
-  }, [loadCart]);
+    if (!cart) return;
+    if (cart.lumpsum_item_count === 0 && cart.sip_item_count > 0) {
+      setTab("sip");
+    }
+  }, [cart]);
+
+  const loadError =
+    error ??
+    (isError
+      ? cartQueryError instanceof Error
+        ? cartQueryError.message
+        : copy.mutualFunds.cartLoadError
+      : null);
 
   const lumpsumItems = cart?.lumpsum_items ?? [];
   const sipItems = cart?.sip_items ?? [];
@@ -523,8 +511,7 @@ export function MfCartView() {
           item.number_of_installments ??
           SIP_ORDER_DEFAULT_INSTALLMENTS,
       });
-      setCart(next);
-      setMfCartQueryData(queryClient, next);
+      syncMfCartQueryData(queryClient, next);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.cartUpdateFailed);
@@ -537,8 +524,7 @@ export function MfCartView() {
     setRemovingProductId(productId);
     try {
       const next = await removeMfCartItem(productId, tab);
-      setCart(next);
-      setMfCartQueryData(queryClient, next);
+      syncMfCartQueryData(queryClient, next);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.cartRemoveFailed);
@@ -552,8 +538,7 @@ export function MfCartView() {
     setClearingTab(true);
     try {
       const next = await clearMfCartTab(tab);
-      setCart(next);
-      setMfCartQueryData(queryClient, next);
+      syncMfCartQueryData(queryClient, next);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.cartClearFailed);
@@ -609,7 +594,7 @@ export function MfCartView() {
     checkingOut;
   const cartItemsDisabled = checkingOut || clearingTab;
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-6")}>
         <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
@@ -628,28 +613,6 @@ export function MfCartView() {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <PageTitle>{copy.mutualFunds.cartTitle}</PageTitle>
-          </div>
-          <div className="relative mt-1.5">
-            <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
-              <p
-                className={cn(
-                  "col-start-1 row-start-1 flex items-start gap-2 text-compact leading-snug text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
-                  tab === "lumpsum" ? "opacity-100" : "pointer-events-none invisible opacity-0",
-                )}
-              >
-                <Wallet className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {copy.mutualFunds.cartDescription}
-              </p>
-              <p
-                className={cn(
-                  "col-start-1 row-start-1 flex items-start gap-2 text-compact leading-snug text-muted-foreground transition-opacity duration-200 ease-out motion-reduce:transition-none",
-                  tab === "sip" ? "opacity-100" : "pointer-events-none invisible opacity-0",
-                )}
-              >
-                <CalendarDays className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {copy.mutualFunds.cartSipDescription}
-              </p>
-            </div>
           </div>
         </div>
       </div>
@@ -678,7 +641,7 @@ export function MfCartView() {
         </Button>
       </div>
 
-      {error ? <FieldMessage variant="error" message={error} /> : null}
+      {loadError ? <FieldMessage variant="error" message={loadError} /> : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
         <div className="grid min-w-0 [&>*]:col-start-1 [&>*]:row-start-1">
