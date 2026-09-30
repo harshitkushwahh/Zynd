@@ -18,12 +18,19 @@
 #   Set the repository variable ZYND_STRICT_PRODUCTION=true to fail the deploy
 #   instead. That is the production safety gate. Do not set it on the testing VM.
 
-name: Deploy ZYND Backend
+name: ZYND • Backend Deployment
 
 "on":
   push:
     branches:
       - main
+    paths:
+      - "Backend/**"
+      - "docker-compose.yml"
+      - "docker-compose.prod.yml"
+      - "Redis/**"
+      - ".github/workflows/zynd-backend-deploy.yml"
+      - ".github/workflows/zynd-change-detection.yml"
   workflow_dispatch:
 
 concurrency:
@@ -34,9 +41,57 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-    name: Deploy to Azure VM
-    runs-on: ubuntu-latest
+  confirm-backend-changes:
+    name: confirm-backend-changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      deploy_backend: ${{ steps.classify.outputs.deploy_backend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: classify
+        run: |
+          set -euo pipefail
+          list="${RUNNER_TEMP}/zynd-changed.txt"
+          : > "${list}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual deployment requested."
+            echo "deploy_backend=true" >> "${GITHUB_OUTPUT}"
+            {
+              echo "# ZYND backend deployment"
+              echo ""
+              echo "Manual run. Azure deployment will start."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          before="${{ github.event.before }}"
+          if [ "${before}" = "0000000000000000000000000000000000000000" ]; then
+            git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > "${list}"
+          else
+            git diff --name-only "${before}" "${{ github.sha }}" > "${list}"
+          fi
+          bash .github/scripts/zynd-classify-changes.sh "${list}" | tee "${RUNNER_TEMP}/zynd-class.env" >> "${GITHUB_OUTPUT}"
+          deploy="$(grep '^deploy_backend=' "${RUNNER_TEMP}/zynd-class.env" | tail -n 1 | cut -d= -f2-)"
+          {
+            echo "# ZYND backend deployment"
+            echo ""
+            if [ "${deploy}" = "true" ]; then
+              echo "Backend-related paths changed. Azure deployment will start."
+            else
+              echo "No deployable backend change. Azure deployment will be skipped."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  deploy-backend:
+    name: deploy-backend
+    needs: confirm-backend-changes
+    if: needs.confirm-backend-changes.outputs.deploy_backend == 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -60,7 +115,7 @@ jobs:
           rm -f "${tmp}"
           if [ -z "${fp}" ]; then
             echo "DEPLOY_KNOWN_HOSTS must be an SHA256 fingerprint or a known_hosts entry."
-            echo "Host key checking stays enabled. StrictHostKeyChecking=no is not used."
+            echo "Host key checking stays enabled."
             exit 1
           fi
           echo "::add-mask::${fp}"
@@ -163,7 +218,7 @@ jobs:
             cd /opt/zynd
             PREVIOUS_COMMIT="$(git rev-parse --short HEAD)"
 
-            section "[1/15] Validating server"
+            section "[1/15] Validate Azure VM"
             echo "Deployment started: ${DEPLOY_STARTED_AT}"
             echo "Repository: harshitkushwahh/Zynd"
             echo "Branch: main"
@@ -198,7 +253,7 @@ jobs:
             fi
             end_section
 
-            section "[2/15] Updating source"
+            section "[2/15] Validate Git repository"
             fetch_log="$(mktemp)"
             if ! git fetch --quiet origin main >"${fetch_log}" 2>&1; then
               sed -E 's#(https?://)[^[:space:]@]+@#\1***@#g' "${fetch_log}" >&2 || true
@@ -232,7 +287,7 @@ jobs:
             done < <(git status --porcelain)
             end_section
 
-            section "[3/15] Syncing environment"
+            section "[3/15] Sync Key Vault environment"
             sync_log="$(mktemp)"
             if ! sudo /usr/local/bin/zynd-sync-env >"${sync_log}" 2>&1; then
               rm -f "${sync_log}"
@@ -256,7 +311,7 @@ jobs:
             fi
             end_section
 
-            section "[4/15] Validating environment"
+            section "[4/15] Validate environment"
             require_env() {
               local key="$1"
               local line value
@@ -336,7 +391,7 @@ jobs:
             fi
             end_section
 
-            section "[5/15] Validating Docker"
+            section "[5/15] Validate Docker"
             docker version
             docker compose version
             compose config -q
@@ -344,7 +399,7 @@ jobs:
             docker system df
             end_section
 
-            section "[6/15] Checking infrastructure"
+            section "[6/15] Check infrastructure"
             mapfile -t compose_services < <(compose config --services)
             require_service() {
               local name="$1"
@@ -400,16 +455,16 @@ jobs:
             echo "Infrastructure containers were not restarted."
             end_section
 
-            section "[7/15] Building API"
+            section "[7/15] Build API"
             compose build api
             end_section
 
-            section "[8/15] Deploying API"
+            section "[8/15] Deploy API"
             compose up -d --no-deps --force-recreate api
             echo "Only the api service was recreated. Dependencies were left running."
             end_section
 
-            section "[9/15] Waiting for readiness"
+            section "[9/15] Wait for readiness"
             wait_until() {
               local label="$1"
               shift
@@ -460,7 +515,7 @@ jobs:
             wait_until "API container" api_container_ready
             end_section
 
-            section "[10/15] Local health check"
+            section "[10/15] Local API health"
             local_body=""
             local_ok=0
             for attempt in $(seq 1 30); do
@@ -481,7 +536,7 @@ jobs:
             printf '%s\n' "${local_body}"
             end_section
 
-            section "[11/15] Functional API check"
+            section "[11/15] API functional health"
             health_body="$(curl -fsS http://127.0.0.1:8000/api/v1/health)"
             printf '%s\n' "${health_body}"
             if ! printf '%s' "${health_body}" | grep -q '"status"' || ! printf '%s' "${health_body}" | grep -q 'ok' || ! printf '%s' "${health_body}" | grep -q 'ZYND API'; then
@@ -602,19 +657,43 @@ jobs:
           if [ "${DEPLOY_OUTCOME}" != "success" ]; then
             status="failed"
           fi
+          status_label="FAILED"
+          if [ "${status}" = "success" ]; then
+            status_label="SUCCESS"
+          fi
           {
-            echo "## ZYND backend deployment"
+            echo "# ZYND Backend Deployment"
             echo ""
-            echo "- Status: ${status:-unknown}"
-            echo "- Branch: main"
-            echo "- Commit: $(field deploy_commit)"
-            echo "- Previous commit: $(field previous_commit)"
-            echo "- Server: $(field hostname)"
-            echo "- Runtime: $(field app_env)"
-            echo "- API: https://api.zynd.shop"
-            echo "- Duration: $(field duration_seconds) seconds"
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| Branch | main |"
+            echo "| Commit | $(field deploy_commit) |"
+            echo "| Previous commit | $(field previous_commit) |"
+            echo "| Server | $(field hostname) |"
+            echo "| Runtime | $(field app_env) |"
+            echo "| API | https://api.zynd.shop |"
+            echo "| Status | ${status_label} |"
+            echo "| Duration | $(field duration_seconds)s |"
             echo ""
-            echo "Checks: Git, environment, Docker, Compose, PostgreSQL, MongoDB, Redis, API container, local health, /api/v1/health, HTTPS, CORS, container stability."
+            if [ "${status_label}" = "SUCCESS" ]; then
+              echo "Checks:"
+              echo ""
+              echo "- ✅ Git validation"
+              echo "- ✅ Environment validation"
+              echo "- ✅ Docker validation"
+              echo "- ✅ Compose validation"
+              echo "- ✅ PostgreSQL"
+              echo "- ✅ MongoDB"
+              echo "- ✅ Redis"
+              echo "- ✅ API container"
+              echo "- ✅ API health"
+              echo "- ✅ API functional health"
+              echo "- ✅ HTTPS"
+              echo "- ✅ CORS"
+              echo "- ✅ Stability"
+            else
+              echo "The deployment stopped before every check could pass. Diagnostics are in the deploy log."
+            fi
             echo ""
             echo "Alembic is not executed by this workflow. A development API still applies pending migrations itself during startup."
           } >> "${GITHUB_STEP_SUMMARY}"
