@@ -60,3 +60,4 @@ Backend/publicKey.pem
 production-backup/
 zynd-before-key-cleanup.bundle
 zynd-history-clean/
+Backend/zyndfinal.env
