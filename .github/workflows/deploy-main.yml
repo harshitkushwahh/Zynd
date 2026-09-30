@@ -1,69 +1,620 @@
+# ZYND backend deployment to the existing Azure VM.
+#
+# This workflow only deploys the API container. It does not deploy frontends,
+# recreate PostgreSQL, MongoDB, Redis, MinIO, or ClamAV, delete volumes, or
+# run git clean. Background workers that share the backend image are left on
+# their current containers; this matches the existing API-only deploy.
+#
+# Alembic is not invoked by this workflow. When APP_ENV=development, the API
+# process itself runs `alembic upgrade head` on startup (see
+# Backend/app/core/startup.py). When APP_ENV=production, no migration runs
+# here; apply migrations with the existing Alembic command as a separate,
+# reviewed step.
+#
+# Development runtime gate:
+#   APP_ENV, DEBUG, DEV_OTP, and DEV_SKIP_RATE_LIMITS are reported.
+#   The current testing VM is intentionally development, so those flags warn
+#   and the deploy continues.
+#   Set the repository variable ZYND_STRICT_PRODUCTION=true to fail the deploy
+#   instead. That is the production safety gate. Do not set it on the testing VM.
+
 name: Deploy ZYND Backend
 
-on:
+"on":
   push:
     branches:
       - main
+  workflow_dispatch:
 
 concurrency:
   group: zynd-production-deploy
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy to Azure VM
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Deploy to Azure VM
+      - name: Prepare SSH host verification
+        id: hostkey
+        env:
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KNOWN_HOSTS}" ]; then
+            echo "DEPLOY_KNOWN_HOSTS is empty. Refusing to connect without host key verification."
+            exit 1
+          fi
+          tmp="$(mktemp)"
+          chmod 600 "${tmp}"
+          printf '%s\n' "${KNOWN_HOSTS}" > "${tmp}"
+          fp="$(printf '%s\n' "${KNOWN_HOSTS}" | grep -oE 'SHA256:[A-Za-z0-9+/=]+' | head -n 1 || true)"
+          if [ -z "${fp}" ]; then
+            fp="$(ssh-keygen -lf "${tmp}" -E sha256 2>/dev/null | awk '{print $2}' | head -n 1 || true)"
+          fi
+          rm -f "${tmp}"
+          if [ -z "${fp}" ]; then
+            echo "DEPLOY_KNOWN_HOSTS must be an SHA256 fingerprint or a known_hosts entry."
+            echo "Host key checking stays enabled. StrictHostKeyChecking=no is not used."
+            exit 1
+          fi
+          echo "::add-mask::${fp}"
+          echo "fingerprint=${fp}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy backend on Azure VM
+        id: deploy
+        env:
+          ZYND_STRICT_PRODUCTION: ${{ vars.ZYND_STRICT_PRODUCTION }}
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ steps.hostkey.outputs.fingerprint }}
+          timeout: 30s
+          command_timeout: 25m
+          envs: ZYND_STRICT_PRODUCTION
           script: |
-            set -e
+            set -euo pipefail
+
+            DEPLOY_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            SECONDS=0
+            PREVIOUS_COMMIT=""
+            DEPLOY_COMMIT=""
+            APP_ENV_VALUE="unknown"
+            DEBUG_VALUE="unknown"
+            DEV_OTP_STATE="unknown"
+            DEV_SKIP_VALUE="unknown"
+            SUMMARY_FILE="/tmp/zynd-deploy-summary.env"
+            COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.prod.yml)
+
+            compose() {
+              docker compose "${COMPOSE_FILES[@]}" "$@"
+            }
+
+            section() {
+              echo ""
+              echo "========================================"
+              echo "$1"
+              echo "========================================"
+              echo "::group::$1"
+            }
+
+            end_section() {
+              echo "::endgroup::"
+            }
+
+            write_summary() {
+              local status="$1"
+              umask 077
+              {
+                printf 'status=%s\n' "${status}"
+                printf 'previous_commit=%s\n' "${PREVIOUS_COMMIT}"
+                printf 'deploy_commit=%s\n' "${DEPLOY_COMMIT}"
+                printf 'hostname=%s\n' "$(hostname)"
+                printf 'started_at=%s\n' "${DEPLOY_STARTED_AT}"
+                printf 'duration_seconds=%s\n' "${SECONDS}"
+                printf 'app_env=%s\n' "${APP_ENV_VALUE}"
+                printf 'debug=%s\n' "${DEBUG_VALUE}"
+                printf 'dev_otp=%s\n' "${DEV_OTP_STATE}"
+                printf 'dev_skip_rate_limits=%s\n' "${DEV_SKIP_VALUE}"
+                printf 'strict_production=%s\n' "${ZYND_STRICT_PRODUCTION:-false}"
+                printf 'api_url=%s\n' "https://api.zynd.shop"
+              } > "${SUMMARY_FILE}"
+              chmod 600 "${SUMMARY_FILE}"
+            }
+
+            diagnostics() {
+              echo "::group::Failure diagnostics"
+              echo "Previous commit: ${PREVIOUS_COMMIT:-unknown}"
+              echo "Failed deployment commit: ${DEPLOY_COMMIT:-unknown}"
+              echo "Potential rollback, not executed:"
+              echo "  cd /opt/zynd"
+              echo "  git reset --hard ${PREVIOUS_COMMIT:-<previous>}"
+              echo "  docker compose -f docker-compose.yml -f docker-compose.prod.yml build api"
+              echo "  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --force-recreate api"
+              df -h / || true
+              docker system df || true
+              if [ -f docker-compose.yml ] && [ -f docker-compose.prod.yml ]; then
+                compose ps || true
+                compose logs --tail 150 api || true
+              fi
+              docker logs --tail 150 zynd-api-1 || true
+              timeout 5 docker events --since 15m --until "$(date --iso-8601=seconds)" || true
+              echo "::endgroup::"
+            }
+
+            on_exit() {
+              local code=$?
+              trap - EXIT
+              if [ "${code}" -ne 0 ]; then
+                diagnostics || true
+                write_summary failed || true
+              fi
+              exit "${code}"
+            }
+            trap on_exit EXIT
 
             cd /opt/zynd
+            PREVIOUS_COMMIT="$(git rev-parse --short HEAD)"
 
-            echo "======================================"
-            echo "Starting ZYND deployment"
-            echo "======================================"
+            section "[1/15] Validating server"
+            echo "Deployment started: ${DEPLOY_STARTED_AT}"
+            echo "Repository: harshitkushwahh/Zynd"
+            echo "Branch: main"
+            echo "Server hostname: $(hostname)"
+            echo "Current commit before deployment: ${PREVIOUS_COMMIT}"
 
-            echo "Updating code..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            echo "Syncing environment from Azure Key Vault..."
-            sudo /usr/local/bin/zynd-sync-env
-
-            echo "Building and starting API..."
-            docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.prod.yml \
-              up -d --build --force-recreate api
-
-            echo "Waiting for API..."
-
-            for i in {1..30}; do
-              if curl -fsS http://127.0.0.1:8000/ > /dev/null; then
-                echo "API health check: OK"
-                break
+            if [ "$(whoami)" != "azureuser" ]; then
+              echo "ERROR: SSH user is '$(whoami)', expected azureuser."
+              exit 1
+            fi
+            if [ "$(pwd)" != "/opt/zynd" ] || [ ! -d /opt/zynd/.git ]; then
+              echo "ERROR: /opt/zynd is not the Git checkout."
+              exit 1
+            fi
+            for cmd in git docker curl az stat awk; do
+              if ! command -v "${cmd}" >/dev/null 2>&1; then
+                echo "ERROR: required command not found: ${cmd}"
+                exit 1
               fi
-
-              echo "API not ready yet... retrying ($i/30)"
-              sleep 2
             done
-
-            if ! curl -fsS http://127.0.0.1:8000/ > /dev/null; then
-              echo "ERROR: API health check failed."
-              docker logs --tail 100 zynd-api-1
+            if ! docker compose version >/dev/null 2>&1; then
+              echo "ERROR: docker compose is not available."
               exit 1
             fi
 
-            echo "======================================"
-            echo "ZYND deployment successful"
-            echo "======================================"
+            disk_used="$(df -P / | awk 'NR==2 {gsub("%","",$5); print $5}')"
+            echo "Root filesystem use: ${disk_used}%"
+            df -h /
+            if [ "${disk_used}" -ge 85 ]; then
+              echo "ERROR: disk use ${disk_used}% is at or above 85%. Deployment stopped before changing the server."
+              exit 1
+            fi
+            end_section
 
-            echo "Deployed commit:"
-            git log -1 --oneline
+            section "[2/15] Updating source"
+            fetch_log="$(mktemp)"
+            if ! git fetch --quiet origin main >"${fetch_log}" 2>&1; then
+              sed -E 's#(https?://)[^[:space:]@]+@#\1***@#g' "${fetch_log}" >&2 || true
+              rm -f "${fetch_log}"
+              echo "ERROR: git fetch origin main failed."
+              exit 1
+            fi
+            rm -f "${fetch_log}"
+            DEPLOY_COMMIT="$(git rev-parse --short origin/main)"
+            echo "DEPLOY_COMMIT=${DEPLOY_COMMIT}"
+            git reset --hard origin/main
+            echo "Target commit after fetch: $(git rev-parse --short HEAD)"
+
+            tracked_drift="$(git status --porcelain | grep -v '^??' || true)"
+            if [ -n "${tracked_drift}" ]; then
+              echo "ERROR: tracked files differ from origin/main after reset."
+              printf '%s\n' "${tracked_drift}"
+              exit 1
+            fi
+            while IFS= read -r line; do
+              [ -z "${line}" ] && continue
+              path="${line:3}"
+              case "${path}" in
+                Backend/.env|docker-compose.prod.yml|Backend/privateKey.pem|Backend/publicKey.pem|privateKey.pem|publicKey.pem)
+                  echo "Keeping server-side file: ${path}"
+                  ;;
+                *)
+                  echo "WARNING: untracked server file left in place: ${path}"
+                  ;;
+              esac
+            done < <(git status --porcelain)
+            end_section
+
+            section "[3/15] Syncing environment"
+            sync_log="$(mktemp)"
+            if ! sudo /usr/local/bin/zynd-sync-env >"${sync_log}" 2>&1; then
+              rm -f "${sync_log}"
+              echo "ERROR: zynd-sync-env failed. Its output was discarded so environment values stay out of the log."
+              exit 1
+            fi
+            rm -f "${sync_log}"
+            echo "Key Vault environment sync completed."
+            env_file="/opt/zynd/Backend/.env"
+            if [ ! -f "${env_file}" ] || [ ! -s "${env_file}" ]; then
+              echo "ERROR: Backend/.env is missing or empty after Key Vault sync."
+              exit 1
+            fi
+            env_owner="$(stat -c '%U' "${env_file}")"
+            env_group="$(stat -c '%G' "${env_file}")"
+            env_mode="$(stat -c '%a' "${env_file}")"
+            echo "Backend/.env owner=${env_owner} group=${env_group} mode=${env_mode} bytes=$(stat -c '%s' "${env_file}")"
+            if [ "${env_owner}" != "azureuser" ] || [ "${env_group}" != "azureuser" ] || [ "${env_mode}" != "600" ]; then
+              echo "ERROR: Backend/.env must be owned by azureuser:azureuser with mode 600."
+              exit 1
+            fi
+            end_section
+
+            section "[4/15] Validating environment"
+            require_env() {
+              local key="$1"
+              local line value
+              line="$(grep -E "^${key}=" "${env_file}" | tail -n 1 || true)"
+              if [ -z "${line}" ]; then
+                echo "ERROR: required variable is missing: ${key}"
+                return 1
+              fi
+              value="${line#*=}"
+              value="${value#"${value%%[![:space:]]*}"}"
+              value="${value%"${value##*[![:space:]]}"}"
+              value="${value#\"}"
+              value="${value%\"}"
+              value="${value#\'}"
+              value="${value%\'}"
+              if [ -z "${value}" ]; then
+                echo "ERROR: required variable is empty: ${key}"
+                return 1
+              fi
+              echo "present: ${key}"
+            }
+
+            env_missing=0
+            for key in APP_ENV DEBUG DATABASE_URL REDIS_URL SECRET_KEY CORS_ORIGINS FRONTEND_URL API_PUBLIC_URL; do
+              require_env "${key}" || env_missing=1
+            done
+            if ! grep -Eq '^(MONGO_CONN|MONGO_URL)=' "${env_file}"; then
+              echo "ERROR: required variable is missing: MONGO_CONN or MONGO_URL"
+              env_missing=1
+            else
+              echo "present: MONGO_CONN or MONGO_URL"
+            fi
+            if [ "${env_missing}" -ne 0 ]; then
+              exit 1
+            fi
+
+            env_value() {
+              local key="$1"
+              local line value
+              line="$(grep -E "^${key}=" "${env_file}" | tail -n 1 || true)"
+              value="${line#*=}"
+              value="${value#"${value%%[![:space:]]*}"}"
+              value="${value%"${value##*[![:space:]]}"}"
+              value="${value#\"}"
+              value="${value%\"}"
+              value="${value#\'}"
+              value="${value%\'}"
+              printf '%s' "${value}"
+            }
+
+            APP_ENV_VALUE="$(env_value APP_ENV)"
+            DEBUG_VALUE="$(env_value DEBUG)"
+            DEV_SKIP_VALUE="$(env_value DEV_SKIP_RATE_LIMITS)"
+            if [ -n "$(env_value DEV_OTP)" ]; then
+              DEV_OTP_STATE="set"
+            else
+              DEV_OTP_STATE="unset"
+            fi
+            echo "APP_ENV=${APP_ENV_VALUE}"
+            echo "DEBUG=${DEBUG_VALUE}"
+            echo "DEV_OTP=${DEV_OTP_STATE}"
+            echo "DEV_SKIP_RATE_LIMITS=${DEV_SKIP_VALUE:-unset}"
+
+            dev_runtime=0
+            if [ "${APP_ENV_VALUE}" != "production" ] || [ "${DEBUG_VALUE}" = "true" ] || [ "${DEV_OTP_STATE}" = "set" ] || [ "${DEV_SKIP_VALUE}" = "true" ]; then
+              dev_runtime=1
+            fi
+            if [ "${dev_runtime}" -eq 1 ]; then
+              echo "WARNING: development runtime flags are enabled on this VM."
+              echo "This is expected for the current testing server and is not a customer-production gate unless ZYND_STRICT_PRODUCTION=true."
+              if [ "${ZYND_STRICT_PRODUCTION:-false}" = "true" ]; then
+                echo "ERROR: ZYND_STRICT_PRODUCTION=true and development runtime flags are enabled."
+                exit 1
+              fi
+            else
+              echo "Runtime configuration is production."
+            fi
+            end_section
+
+            section "[5/15] Validating Docker"
+            docker version
+            docker compose version
+            compose config -q
+            echo "Compose configuration is valid."
+            docker system df
+            end_section
+
+            section "[6/15] Checking infrastructure"
+            mapfile -t compose_services < <(compose config --services)
+            require_service() {
+              local name="$1"
+              local existing
+              for existing in "${compose_services[@]}"; do
+                if [ "${existing}" = "${name}" ]; then
+                  return 0
+                fi
+              done
+              echo "ERROR: compose service not found: ${name}"
+              printf 'Configured services: %s\n' "${compose_services[*]}"
+              return 1
+            }
+            service_state() {
+              local cid
+              cid="$(compose ps -q "$1" || true)"
+              if [ -z "${cid}" ]; then
+                echo "missing"
+                return 0
+              fi
+              docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${cid}"
+            }
+            infra_failed=0
+            for svc in postgres redis clamav minio; do
+              require_service "${svc}" || infra_failed=1
+            done
+            if printf '%s\n' "${compose_services[@]}" | grep -qx mongo; then
+              MONGO_SERVICE="mongo"
+            elif printf '%s\n' "${compose_services[@]}" | grep -qx mongodb; then
+              MONGO_SERVICE="mongodb"
+            else
+              echo "ERROR: compose service not found: mongo"
+              printf 'Configured services: %s\n' "${compose_services[*]}"
+              infra_failed=1
+              MONGO_SERVICE=""
+            fi
+            require_service api || infra_failed=1
+            if [ "${infra_failed}" -ne 0 ]; then
+              exit 1
+            fi
+            for svc in postgres "${MONGO_SERVICE}" redis clamav minio; do
+              state="$(service_state "${svc}")"
+              echo "${svc}: ${state}"
+              case "${state}" in
+                running|healthy) ;;
+                *)
+                  echo "ERROR: ${svc} is ${state}. API was not recreated."
+                  exit 1
+                  ;;
+              esac
+            done
+            echo "api before deploy: $(service_state api)"
+            echo "Infrastructure containers were not restarted."
+            end_section
+
+            section "[7/15] Building API"
+            compose build api
+            end_section
+
+            section "[8/15] Deploying API"
+            compose up -d --no-deps --force-recreate api
+            echo "Only the api service was recreated. Dependencies were left running."
+            end_section
+
+            section "[9/15] Waiting for readiness"
+            wait_until() {
+              local label="$1"
+              shift
+              local attempt
+              echo "Waiting for ${label}..."
+              for attempt in $(seq 1 30); do
+                if "$@"; then
+                  echo "${label}: ready"
+                  return 0
+                fi
+                echo "${label} not ready yet (${attempt}/30)"
+                sleep 2
+              done
+              echo "ERROR: ${label} was not ready within 60 seconds."
+              return 1
+            }
+
+            redis_ready() {
+              local output
+              output="$(compose exec -T redis redis-cli ping 2>&1 || true)"
+              if printf '%s' "${output}" | grep -q PONG; then
+                return 0
+              fi
+              if printf '%s' "${output}" | grep -q NOAUTH; then
+                local state
+                state="$(service_state redis)"
+                [ "${state}" = "running" ] || [ "${state}" = "healthy" ]
+                return
+              fi
+              return 1
+            }
+
+            mongo_ready() {
+              local state
+              state="$(service_state "${MONGO_SERVICE}")"
+              [ "${state}" = "healthy" ] || [ "${state}" = "running" ]
+            }
+
+            api_container_ready() {
+              local state
+              state="$(service_state api)"
+              [ "${state}" = "healthy" ] || [ "${state}" = "running" ]
+            }
+
+            wait_until "PostgreSQL" compose exec -T postgres pg_isready -U zynd -d zynd
+            wait_until "Redis" redis_ready
+            wait_until "MongoDB" mongo_ready
+            wait_until "API container" api_container_ready
+            end_section
+
+            section "[10/15] Local health check"
+            local_body=""
+            local_ok=0
+            for attempt in $(seq 1 30); do
+              if local_body="$(curl -fsS http://127.0.0.1:8000/)"; then
+                if printf '%s' "${local_body}" | grep -q 'ZYND API'; then
+                  local_ok=1
+                  break
+                fi
+              fi
+              echo "Local API not ready yet (${attempt}/30)"
+              sleep 2
+            done
+            if [ "${local_ok}" -ne 1 ]; then
+              echo "ERROR: http://127.0.0.1:8000/ did not return ZYND API."
+              exit 1
+            fi
+            echo "Local API health: OK"
+            printf '%s\n' "${local_body}"
+            end_section
+
+            section "[11/15] Functional API check"
+            health_body="$(curl -fsS http://127.0.0.1:8000/api/v1/health)"
+            printf '%s\n' "${health_body}"
+            if ! printf '%s' "${health_body}" | grep -q '"status"' || ! printf '%s' "${health_body}" | grep -q 'ok' || ! printf '%s' "${health_body}" | grep -q 'ZYND API'; then
+              echo "ERROR: /api/v1/health did not report the ZYND API as ok."
+              exit 1
+            fi
+            redis_body="$(curl -fsS http://127.0.0.1:8000/api/v1/health/redis)"
+            printf '%s\n' "${redis_body}"
+            if ! printf '%s' "${redis_body}" | grep -q '"status":"ok"' && ! printf '%s' "${redis_body}" | grep -q '"status": "ok"'; then
+              echo "ERROR: /api/v1/health/redis did not report ok."
+              exit 1
+            fi
+            api_cid="$(compose ps -q api)"
+            api_status="$(docker inspect -f '{{.State.Status}}' "${api_cid}")"
+            if [ "${api_status}" != "running" ]; then
+              echo "ERROR: API container status is ${api_status}."
+              exit 1
+            fi
+            echo "Functional API check: OK"
+            end_section
+
+            section "[12/15] HTTPS check"
+            https_body="$(curl -fsS https://api.zynd.shop/)"
+            printf '%s\n' "${https_body}"
+            if ! printf '%s' "${https_body}" | grep -q 'ZYND API'; then
+              echo "ERROR: https://api.zynd.shop/ did not return ZYND API."
+              exit 1
+            fi
+            echo "HTTPS check: OK"
+            end_section
+
+            section "[13/15] CORS check"
+            cors_headers="$(curl -sS -D - -o /dev/null -X OPTIONS https://api.zynd.shop/api/v1/health -H 'Origin: https://zynd.shop' -H 'Access-Control-Request-Method: GET')"
+            allow_origin="$(printf '%s\n' "${cors_headers}" | awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {print $2}' | tr -d '\r')"
+            echo "Access-Control-Allow-Origin: ${allow_origin:-missing}"
+            if [ "${allow_origin}" != "https://zynd.shop" ] && [ "${allow_origin}" != "*" ]; then
+              echo "ERROR: customer origin https://zynd.shop is not allowed by CORS."
+              exit 1
+            fi
+            echo "CORS check: OK"
+            end_section
+
+            section "[14/15] Stability check"
+            echo "Waiting 8 seconds for an immediate crash to show up..."
+            sleep 8
+            api_cid="$(compose ps -q api)"
+            api_status="$(docker inspect -f '{{.State.Status}}' "${api_cid}")"
+            api_restarts="$(docker inspect -f '{{.RestartCount}}' "${api_cid}")"
+            echo "API status=${api_status} restart_count=${api_restarts}"
+            compose ps
+            if [ "${api_status}" != "running" ] || [ "${api_restarts}" -ne 0 ]; then
+              echo "ERROR: API is not stable after deployment."
+              exit 1
+            fi
+            echo "Container stability: OK"
+            end_section
+
+            section "[15/15] Deployment summary"
+            echo "========================================"
+            echo "ZYND BACKEND DEPLOYMENT SUCCESSFUL"
+            echo "========================================"
+            echo "Environment: ${APP_ENV_VALUE}"
+            echo "Branch: main"
+            echo "Commit: ${DEPLOY_COMMIT}"
+            echo "Previous Commit: ${PREVIOUS_COMMIT}"
+            echo "Server: $(hostname)"
+            echo "API: https://api.zynd.shop"
+            echo "Local API: http://127.0.0.1:8000"
+            echo "Checks:"
+            echo "  Git repository"
+            echo "  Environment"
+            echo "  Docker"
+            echo "  Compose"
+            echo "  PostgreSQL"
+            echo "  MongoDB"
+            echo "  Redis"
+            echo "  API container"
+            echo "  API health"
+            echo "  API functional check"
+            echo "  HTTPS"
+            echo "  CORS"
+            echo "  Container stability"
+            echo "Deployment duration: ${SECONDS} seconds"
+            echo "Alembic was not run by this workflow."
+            write_summary success
+            end_section
+
+      - name: Read deployment report
+        id: report
+        if: always()
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ steps.hostkey.outputs.fingerprint }}
+          timeout: 30s
+          command_timeout: 1m
+          capture_stdout: "true"
+          script: |
+            if [ -f /tmp/zynd-deploy-summary.env ]; then
+              cat /tmp/zynd-deploy-summary.env
+            else
+              echo "status=unknown"
+            fi
+
+      - name: Publish GitHub deployment summary
+        if: always()
+        env:
+          REPORT: ${{ steps.report.outputs.stdout }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+        run: |
+          set -euo pipefail
+          field() {
+            printf '%s\n' "${REPORT}" | sed -n "s/^${1}=//p" | tail -n 1
+          }
+          status="$(field status)"
+          if [ "${DEPLOY_OUTCOME}" != "success" ]; then
+            status="failed"
+          fi
+          {
+            echo "## ZYND backend deployment"
+            echo ""
+            echo "- Status: ${status:-unknown}"
+            echo "- Branch: main"
+            echo "- Commit: $(field deploy_commit)"
+            echo "- Previous commit: $(field previous_commit)"
+            echo "- Server: $(field hostname)"
+            echo "- Runtime: $(field app_env)"
+            echo "- API: https://api.zynd.shop"
+            echo "- Duration: $(field duration_seconds) seconds"
+            echo ""
+            echo "Checks: Git, environment, Docker, Compose, PostgreSQL, MongoDB, Redis, API container, local health, /api/v1/health, HTTPS, CORS, container stability."
+            echo ""
+            echo "Alembic is not executed by this workflow. A development API still applies pending migrations itself during startup."
+          } >> "${GITHUB_STEP_SUMMARY}"
