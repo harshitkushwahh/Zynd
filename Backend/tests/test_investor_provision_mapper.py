@@ -8,6 +8,7 @@ from app.application.investor.investor_provision_mapper import (
     build_investor_profile_payload,
     build_phone_payload,
     build_related_party_payload,
+    resolve_fp_bank_holder_name,
 )
 from app.infrastructure.persistence.investor_models import (
     InvestorBankAccount,
@@ -119,6 +120,41 @@ def test_build_bank_account_payload_prefers_encrypted_row_account_number() -> No
 
     assert payload["account_number"] == "123456789012"
     assert payload["primary_account_holder_name"] == "Asha Patel"
+
+
+def test_build_bank_account_payload_strips_honorific_from_holder_name() -> None:
+    user = _sample_user()
+    journey = _sample_journey(user.id)
+    bank_row = InvestorBankAccount(
+        investor_profile_id=user.id,
+        account_type="savings",
+        account_number_last4="9012",
+        ifsc_code="HDFC0001234",
+        primary_account_holder_name="Mr. Wrong Kyckart Name",
+        pan_account_holder_name="Mr. Asha Patel",
+        source=InvestorObjectSource.kyc,
+        sync_status=InvestorObjectSyncStatus.draft,
+    )
+    payload = build_bank_account_payload(profile_id="invp_test", bank_row=bank_row, journey=journey)
+
+    assert payload["primary_account_holder_name"] == "Asha Patel"
+
+
+def test_resolve_fp_bank_holder_name_ignores_kyckart_display_name() -> None:
+    user = _sample_user()
+    journey = _sample_journey(user.id)
+    bank_row = InvestorBankAccount(
+        investor_profile_id=user.id,
+        account_type="savings",
+        account_number_last4="9012",
+        ifsc_code="HDFC0001234",
+        primary_account_holder_name="WRONG KYC KART NAME",
+        pan_account_holder_name="Asha Patel",
+        source=InvestorObjectSource.kyc,
+        sync_status=InvestorObjectSyncStatus.draft,
+    )
+
+    assert resolve_fp_bank_holder_name(bank_row=bank_row, journey=journey) == "Asha Patel"
 
 
 def test_build_phone_payload_strips_plus_from_isd() -> None:

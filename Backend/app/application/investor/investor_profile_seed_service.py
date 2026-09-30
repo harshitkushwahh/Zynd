@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.investor.investor_bank_account_crypto import encrypt_account_number
 from app.application.investor.investor_bank_account_service import _find_existing_bank_account
+from app.application.kyc.bank_verification_core import holder_name_from_pan_draft
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
     InvestorBankAccount,
@@ -95,10 +96,11 @@ def _apply_bank_verification_fields(
     journey: KycJourneyState,
     bank: dict[str, Any],
     account_number: str,
-    holder: str,
+    display_holder: str,
 ) -> None:
     ciphertext, key_version = encrypt_account_number(account_number)
-    pan_holder = _str(bank.get("panAccountHolderName")) or holder
+    pan_draft = journey.pan_draft_json if isinstance(journey.pan_draft_json, dict) else {}
+    pan_holder = _str(bank.get("panAccountHolderName")) or holder_name_from_pan_draft(pan_draft)
 
     row.poa_preverify_id = _str(journey.poa_bank_preverify_id) or None
     row.pan_account_holder_name = pan_holder[:120] or None
@@ -235,7 +237,11 @@ async def _seed_bank(db: AsyncSession, profile: InvestorProfile, journey: KycJou
     )
 
     account_type = ACCOUNT_TYPE_MAP.get(_str(bank.get("accountType")), "savings")
-    holder = _str(bank.get("accountHolderName")) or "Account Holder"
+    display_holder = (
+        _str(bank.get("kyckartAccountHolderName"))
+        or _str(bank.get("accountHolderName"))
+        or "Account Holder"
+    )
 
     if existing_row:
         existing_row.ifsc_code = ifsc
@@ -245,7 +251,7 @@ async def _seed_bank(db: AsyncSession, profile: InvestorProfile, journey: KycJou
                 journey=journey,
                 bank=bank,
                 account_number=account_number,
-                holder=holder,
+                display_holder=display_holder,
             )
         return
 
@@ -255,7 +261,7 @@ async def _seed_bank(db: AsyncSession, profile: InvestorProfile, journey: KycJou
         account_type=account_type,
         account_number_last4=last4,
         ifsc_code=ifsc,
-        primary_account_holder_name=holder[:120],
+        primary_account_holder_name=display_holder[:120],
         bank_name=_str(bank.get("bankName"))[:120] or None,
         branch_name=_str(bank.get("branch"))[:120] or None,
         cancelled_cheque_file_id=_str(journey.poa_bank_proof_file_id) or None,
@@ -267,7 +273,7 @@ async def _seed_bank(db: AsyncSession, profile: InvestorProfile, journey: KycJou
         journey=journey,
         bank=bank,
         account_number=account_number,
-        holder=holder,
+        display_holder=display_holder,
     )
     db.add(row)
 

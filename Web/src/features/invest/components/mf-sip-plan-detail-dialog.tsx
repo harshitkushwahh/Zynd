@@ -27,7 +27,7 @@ import { MfSipPlanBankSwitchDialog } from "@/features/invest/components/mf-sip-p
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import {
   MfSipPlanStatusBadge,
-  mfSipPlanStatusVariantFromStatus,
+  mfSipPlanJourneyStepVariant,
 } from "@/features/invest/components/mf-sip-plan-status-badge";
 import {
   MF_JOURNEY_DIALOG_BODY_SHELL_CLASS,
@@ -107,7 +107,8 @@ function resolveMandatePaymentBank(
 }
 
 function JourneyStepRow({ step, isLast }: { step: SipPlanJourneyDisplayStep; isLast: boolean }) {
-  const isTerminal = step.isTerminal;
+  const isFailed = step.isTerminal;
+  const isSuccess = step.isSuccess === true;
 
   return (
     <div className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-start gap-3">
@@ -115,10 +116,19 @@ function JourneyStepRow({ step, isLast }: { step: SipPlanJourneyDisplayStep; isL
         <span
           className={cn(
             "relative z-10 flex size-5 shrink-0 items-center justify-center rounded-full border-2",
-            isTerminal ? "border-destructive/50 bg-destructive/10" : "border-primary/30 bg-primary/10",
+            isFailed
+              ? "border-destructive/50 bg-destructive/10"
+              : isSuccess
+                ? "border-success/50 bg-success/10"
+                : "border-primary/30 bg-primary/10",
           )}
         >
-          <span className={cn("size-2 rounded-full", isTerminal ? "bg-destructive" : "bg-primary")} />
+          <span
+            className={cn(
+              "size-2 rounded-full",
+              isFailed ? "bg-destructive" : isSuccess ? "bg-success" : "bg-primary",
+            )}
+          />
         </span>
         {!isLast ? <span className="mt-1 w-px flex-1 bg-border" aria-hidden /> : null}
       </div>
@@ -137,7 +147,7 @@ function JourneyStepRow({ step, isLast }: { step: SipPlanJourneyDisplayStep; isL
 
       <div className={cn("flex shrink-0 justify-end pt-0.5", !isLast && "pb-4")}>
         <StatusBadge
-          variant={isTerminal ? "destructive" : mfSipPlanStatusVariantFromStatus(step.event.to_status)}
+          variant={mfSipPlanJourneyStepVariant(step)}
           className="normal-case"
         >
           {step.toStatus}
@@ -376,7 +386,22 @@ function SipPlanSummaryPanel({
           </SummaryCard>
 
           {paymentBank ? (
-            <SummaryCard label={copy.mutualFunds.bankPickerPayoutLabel}>
+            <SummaryCard
+              label={copy.mutualFunds.bankPickerPayoutLabel}
+              icon={
+                onSwitchDebitBank ? (
+                  <TooltipProvider>
+                    <SipPlanActionIconButton
+                      label={copy.mySips.bankSwitch.action}
+                      icon={ArrowLeftRight}
+                      disabled={false}
+                      loading={false}
+                      onClick={onSwitchDebitBank}
+                    />
+                  </TooltipProvider>
+                ) : undefined
+              }
+            >
               <div className="space-y-2">
                 <div className="flex items-center gap-2.5">
                   <BankLogo
@@ -403,11 +428,6 @@ function SipPlanSummaryPanel({
                   <StatusBadge variant="success" className="h-5 px-2 text-[10px]">
                     {copy.mySips.bankSwitch.usedBadge}
                   </StatusBadge>
-                ) : null}
-                {onSwitchDebitBank ? (
-                  <Button type="button" size="sm" variant="outline" onClick={onSwitchDebitBank}>
-                    {copy.mySips.bankSwitch.action}
-                  </Button>
                 ) : null}
               </div>
             </SummaryCard>

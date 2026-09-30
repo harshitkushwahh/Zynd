@@ -64,7 +64,7 @@ _ORDER_TO_CHECKOUT_STATUS: dict[MfOrderStatus, MfCheckoutStatus] = {
 
 FP_PLAN_REVIEW_STATES = frozenset({"created", "under_review"})
 FP_PLAN_CONSENT_STATES = frozenset({"review_completed"})
-FP_PLAN_ACTIVE_STATES = frozenset({"active", "submitted"})
+FP_PLAN_ACTIVE_STATES = frozenset({"active", "submitted", "confirmed"})
 FP_PLAN_FAILURE_STATES = frozenset({"failed", "rejected", "expired"})
 FP_PLAN_CANCELLED_STATES = frozenset({"cancelled", "completed"})
 
@@ -83,7 +83,7 @@ def map_fp_plan_state(fp_state: str | None) -> "MfSipPlanStatus":
         return MfSipPlanStatus.active
     if normalized in FP_PLAN_CONSENT_STATES:
         return MfSipPlanStatus.consent_pending
-    if normalized in FP_PLAN_REVIEW_STATES or normalized == "confirmed":
+    if normalized in FP_PLAN_REVIEW_STATES:
         return MfSipPlanStatus.review
     return MfSipPlanStatus.review
 

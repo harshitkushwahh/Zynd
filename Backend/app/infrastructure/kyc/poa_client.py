@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.integrations.integration_runtime import is_cybrilla_poa_live
 from app.infrastructure.kyc.fp_clients import fp_get, fp_post, fp_post_multipart, poll_poa_preverification
 from app.infrastructure.kyc.stub_provider import (
     stub_poa_bank_validation,
@@ -10,12 +11,14 @@ from app.infrastructure.kyc.stub_provider import (
     stub_poa_pan_validation,
     stub_poa_readiness,
 )
-from app.core.config import get_settings
+
+
+def _use_live_poa() -> bool:
+    return is_cybrilla_poa_live()
 
 
 async def poa_check_readiness(pan_number: str) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.resolved_kyc_provider_live:
+    if not _use_live_poa():
         return await stub_poa_readiness(pan_number)
 
     created = await fp_post(
@@ -33,8 +36,7 @@ async def poa_validate_pan_name_dob(
     full_name: str,
     date_of_birth: str,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.resolved_kyc_provider_live:
+    if not _use_live_poa():
         return await stub_poa_pan_validation(
             pan_number=pan_number,
             full_name=full_name,
@@ -61,8 +63,7 @@ async def poa_verify_bank_account(
     ifsc_code: str,
     account_type: str,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.resolved_kyc_provider_live:
+    if not _use_live_poa():
         return await stub_poa_bank_validation(
             pan_number=pan_number,
             account_number=account_number,
@@ -99,8 +100,7 @@ async def poa_verify_bank_account_manual(
     account_type: str,
     proof_file_id: str,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.resolved_kyc_provider_live:
+    if not _use_live_poa():
         return await stub_poa_bank_validation_manual(
             pan_number=pan_number,
             account_number=account_number,
@@ -132,8 +132,7 @@ async def poa_verify_bank_account_manual(
 
 
 async def fetch_poa_preverification(preverify_id: str) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.resolved_kyc_provider_live:
+    if not _use_live_poa():
         return {"id": preverify_id, "status": "completed", "bank_accounts": [{"status": "verified"}]}
     return await fp_get(f"/poa/pre_verifications/{preverify_id}", use_poa=True)
 
@@ -145,8 +144,7 @@ async def upload_poa_file(
     content_type: str,
     purpose: str,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.resolved_kyc_provider_live:
+    if not _use_live_poa():
         return await stub_poa_file_upload(filename=filename)
 
     return await fp_post_multipart(

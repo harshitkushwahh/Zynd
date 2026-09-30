@@ -25,6 +25,10 @@ import { SupportFloatingWidget } from "@/features/support/components/support-flo
 import { SupportWidgetProvider } from "@/features/support/contexts/support-widget-context";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
 import { useKycOptional } from "@/contexts/kyc-context";
+import {
+  hasPendingDigilockerResume,
+  persistDigilockerReturnFromSearch,
+} from "@/features/kyc/lib/kyc-digilocker-return";
 import { ZyndGlobalLoader } from "@/components/ui/zynd-global-loader";
 import { useAuth } from "@/contexts/auth-context";
 import { SettingsNavigationProvider } from "@/contexts/settings-navigation-context";
@@ -43,6 +47,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !sessionRetrying && !user) {
+      if (hasPendingDigilockerResume() || persistDigilockerReturnFromSearch()) return;
       router.replace("/");
     }
   }, [loading, router, sessionRetrying, user]);
@@ -51,8 +56,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return;
 
     const params = new URLSearchParams(window.location.search);
+    const pendingDigilockerReturn =
+      persistDigilockerReturnFromSearch() || params.get("kyc_digilocker_return") === "1";
 
-    if (params.get("kyc_digilocker_return") === "1") {
+    if (pendingDigilockerReturn) {
       if (!digilockerReturnHandledRef.current && resumeAfterDigilocker) {
         digilockerReturnHandledRef.current = true;
         resumeAfterDigilocker();

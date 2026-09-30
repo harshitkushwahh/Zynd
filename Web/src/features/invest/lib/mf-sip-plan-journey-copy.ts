@@ -9,6 +9,7 @@ export type SipPlanJourneyDisplayStep = {
   actor: string;
   toStatus: string;
   isTerminal: boolean;
+  isSuccess?: boolean;
 };
 
 export type SipPlanJourneyView = {
@@ -49,7 +50,7 @@ function isTerminalStatus(status?: string | null) {
 
 function describePayload(
   payload: Record<string, unknown> | null | undefined,
-  options?: { mandateAbandoned?: boolean; plan?: MfSipPlan },
+  options?: { mandateAbandoned?: boolean; plan?: MfSipPlan; compact?: boolean },
 ) {
   if (!payload) return null;
 
@@ -66,6 +67,12 @@ function describePayload(
   if (options?.mandateAbandoned) return null;
 
   if (fpState) {
+    if (options?.compact) {
+      if (fpState.toLowerCase() === "active") {
+        return "Your monthly SIP is now active.";
+      }
+      return null;
+    }
     return `Provider status: ${titleCaseStatus(fpState).toLowerCase()}.`;
   }
 
@@ -101,6 +108,7 @@ function describeTransition(
   if (from === "pending" && to === "consent_pending") return "Awaiting mandate authorization";
   if (from === "consent_pending" && to === "active") return "SIP activated";
   if (from === "review" && to === "active") return "SIP activated";
+  if (from === "consent_pending" && to === "active") return "SIP activated";
   if (to === "cancelled") return options?.mandateAbandoned ? "Mandate authorization closed" : "SIP cancelled";
   if (to === "failed") return "SIP setup failed";
   if (to === "active") return "SIP activated";
@@ -108,13 +116,22 @@ function describeTransition(
   return `${titleCaseStatus(from)} to ${titleCaseStatus(to)}`;
 }
 
+function providerStatusLabel(event: MfSipPlanEvent): string | null {
+  const fpState = payloadString(event.payload?.fp_state);
+  return fpState ? titleCaseStatus(fpState) : null;
+}
+
 function toDisplayStep(
   event: MfSipPlanEvent,
-  options?: { mandateAbandoned?: boolean; isCancelStep?: boolean; plan?: MfSipPlan },
+  options?: { mandateAbandoned?: boolean; isCancelStep?: boolean; plan?: MfSipPlan; compact?: boolean },
 ): SipPlanJourneyDisplayStep {
   const mandateAbandoned = options?.mandateAbandoned ?? false;
   const isCancelStep = options?.isCancelStep ?? false;
-  let description = describePayload(event.payload, { mandateAbandoned, plan: options?.plan });
+  let description = describePayload(event.payload, {
+    mandateAbandoned,
+    plan: options?.plan,
+    compact: options?.compact,
+  });
 
   if (mandateAbandoned && !description && event.to_status === "consent_pending") {
     description = "You were redirected to authorize your UPI mandate.";
@@ -128,9 +145,55 @@ function toDisplayStep(
     }),
     description,
     actor: formatEventSource(event.source),
-    toStatus: titleCaseStatus(event.to_status),
+    toStatus: providerStatusLabel(event) ?? titleCaseStatus(event.to_status),
     isTerminal: isTerminalStatus(event.to_status),
   };
+}
+
+function pickCompactJourneyEvents(plan: MfSipPlan, events: MfSipPlanEvent[]): MfSipPlanEvent[] {
+  if (events.length === 0) return [];
+
+  const first = events[0];
+  const planStatus = plan.status?.toUpperCase() ?? "";
+
+  if (planStatus === "FAILED" || planStatus === "CANCELLED") {
+    const terminal = [...events]
+      .reverse()
+      .find((event) => {
+        const status = event.to_status?.toLowerCase();
+        return status === "failed" || status === "cancelled";
+      });
+    return terminal && terminal !== first ? [first, terminal] : [first];
+  }
+
+  const activeEvent = [...events].reverse().find(
+    (event) =>
+      event.to_status?.toLowerCase() === "active" ||
+      payloadString(event.payload?.fp_state)?.toLowerCase() === "active",
+  );
+
+  const selected: MfSipPlanEvent[] = [first];
+
+  const awaitingMandate =
+    planStatus === "CONSENT_PENDING" ||
+    plan.next_action === "authorize_mandate" ||
+    plan.next_action === "authorize_mandate_switch";
+
+  if (awaitingMandate) {
+    const consentEvent = events.find((event) => event.to_status?.toLowerCase() === "consent_pending");
+    if (consentEvent && consentEvent !== first) {
+      selected.push(consentEvent);
+    }
+    return selected;
+  }
+
+  if (activeEvent && activeEvent !== first) {
+    selected.push(activeEvent);
+  } else if (!activeEvent && events.length > 1) {
+    selected.push(events[events.length - 1]!);
+  }
+
+  return selected;
 }
 
 function pickAbandonedJourneyEvents(events: MfSipPlanEvent[]) {
@@ -155,31 +218,91 @@ function pickAbandonedJourneyEvents(events: MfSipPlanEvent[]) {
   return selected;
 }
 
+function describeFirstInstallment(plan: MfSipPlan) {
+  const first = plan.first_installment;
+  if (!first || first.status === "not_applicable") return null;
+
+  if (first.status === "paid") {
+    return {
+      title: "First installment paid",
+      description: "Your first SIP payment was received. Monthly installments will run automatically on your SIP date.",
+      toStatus: "Paid",
+      isTerminal: false,
+      isSuccess: true,
+    };
+  }
+
+  if (first.status === "failed") {
+    return {
+      title: "First installment failed",
+      description: "The first installment payment could not be completed.",
+      toStatus: "Failed",
+      isTerminal: true,
+      isSuccess: false,
+    };
+  }
+
+  return {
+    title: "First installment due",
+    description: "Pay the first installment to complete SIP setup.",
+    toStatus: "Due",
+    isTerminal: false,
+    isSuccess: false,
+  };
+}
+
+function appendFirstInstallmentStep(
+  plan: MfSipPlan,
+  steps: SipPlanJourneyDisplayStep[],
+): SipPlanJourneyDisplayStep[] {
+  const copy = describeFirstInstallment(plan);
+  if (!copy) return steps;
+
+  const step: SipPlanJourneyDisplayStep = {
+    event: {
+      from_status: plan.status,
+      to_status: plan.first_installment?.status === "paid" ? "paid" : "pending",
+      source: "CYBRILLA",
+      payload: null,
+      created_at: plan.created_at ?? null,
+    },
+    title: copy.title,
+    description: copy.description,
+    actor: "Cybrilla",
+    toStatus: copy.toStatus,
+    isTerminal: copy.isTerminal,
+    isSuccess: copy.isSuccess,
+  };
+
+  const last = steps[steps.length - 1];
+  if (
+    last &&
+    last.title === step.title &&
+    last.description === step.description &&
+    last.toStatus === step.toStatus
+  ) {
+    return steps;
+  }
+  return [...steps, step];
+}
+
 export function buildSipPlanJourneyView(plan: MfSipPlan, events: MfSipPlanEvent[]): SipPlanJourneyView {
   const mandateAbandoned = isMandateAbandoned(plan, events);
-  const displayEvents = mandateAbandoned ? pickAbandonedJourneyEvents(events) : events;
+  const displayEvents = mandateAbandoned
+    ? pickAbandonedJourneyEvents(events)
+    : pickCompactJourneyEvents(plan, events);
 
-  const steps = displayEvents
-    .map((event, index) =>
-      toDisplayStep(event, {
-        mandateAbandoned,
-        plan,
-        isCancelStep:
-          mandateAbandoned &&
-          event.to_status === "cancelled" &&
-          index === displayEvents.length - 1,
-      }),
-    )
-    .filter((step, index, all) => {
-      if (index === 0) return true;
-      const previous = all[index - 1];
-      return !(
-        step.toStatus === "Failed" &&
-        previous.toStatus === "Failed" &&
-        step.title === previous.title &&
-        step.description === previous.description
-      );
-    });
+  const steps = displayEvents.map((event, index) =>
+    toDisplayStep(event, {
+      mandateAbandoned,
+      plan,
+      compact: !mandateAbandoned,
+      isCancelStep:
+        mandateAbandoned &&
+        event.to_status === "cancelled" &&
+        index === displayEvents.length - 1,
+    }),
+  );
 
-  return { steps };
+  return { steps: appendFirstInstallmentStep(plan, steps) };
 }

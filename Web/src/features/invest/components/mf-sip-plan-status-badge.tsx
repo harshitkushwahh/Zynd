@@ -13,11 +13,38 @@ export function mfSipPlanStatusVariantFromStatus(status: string): StatusBadgeVar
   const normalized = status.trim().toUpperCase();
   if (normalized === "ACTIVE") return "success";
   if (normalized === "FAILED") return "destructive";
-  if (normalized === "CANCELLED") return "neutral";
+  if (normalized === "CANCELLED" || normalized === "CANCELED") return "destructive";
   if (normalized === "PENDING" || normalized === "REVIEW" || normalized === "CONSENT_PENDING") {
     return "warning";
   }
   return "neutral";
+}
+
+export function mfSipPlanStatusVariantFromProviderState(
+  fpState: string | null | undefined,
+): StatusBadgeVariant {
+  const normalized = fpState?.trim().toLowerCase() ?? "";
+  if (!normalized) return "neutral";
+  if (normalized === "active" || normalized === "confirmed") return "success";
+  if (["failed", "cancelled", "canceled", "rejected", "expired"].includes(normalized)) {
+    return "destructive";
+  }
+  if (["created", "under_review", "review", "review_completed", "submitted"].includes(normalized)) {
+    return "info";
+  }
+  return "neutral";
+}
+
+export function mfSipPlanJourneyStepVariant(step: {
+  event: { payload?: Record<string, unknown> | null; to_status?: string | null };
+  isSuccess?: boolean;
+  isTerminal?: boolean;
+}): StatusBadgeVariant {
+  if (step.isSuccess) return "success";
+  if (step.isTerminal) return "destructive";
+  const fpState = typeof step.event.payload?.fp_state === "string" ? step.event.payload.fp_state : null;
+  if (fpState) return mfSipPlanStatusVariantFromProviderState(fpState);
+  return mfSipPlanStatusVariantFromStatus(step.event.to_status ?? "");
 }
 
 export function mfSipPlanStatusVariant(plan: Pick<MfSipPlan, "status" | "next_action" | "bank_switch">): StatusBadgeVariant {
@@ -41,8 +68,8 @@ export function MfSipPlanStatusBadgeLegacy({ status }: { status: string }) {
       ? "success"
       : normalized === "FAILED"
         ? "destructive"
-        : normalized === "CANCELLED"
-          ? "neutral"
+        : normalized === "CANCELLED" || normalized === "CANCELED"
+          ? "destructive"
         : normalized === "PENDING" || normalized === "REVIEW" || normalized === "CONSENT_PENDING"
           ? "warning"
           : "neutral";

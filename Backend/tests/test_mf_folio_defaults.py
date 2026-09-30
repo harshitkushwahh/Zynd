@@ -73,8 +73,127 @@ def test_build_folio_defaults_includes_nominees() -> None:
         )
     ]
 
-    folio = build_folio_defaults(profile)
+    folio = build_folio_defaults(profile, fp_enabled=True)
     assert folio["communication_email_address"] == "email_1"
     assert folio["payout_bank_account"] == "bac_1"
     assert folio["nominee1"] == "relp_1"
     assert folio["nominee1_allocation_percentage"] == 100
+
+
+def test_build_folio_defaults_prefers_selected_bank() -> None:
+    user_id = uuid4()
+    preferred_id = uuid4()
+    profile = InvestorProfile(user_id=user_id)
+    profile.email_addresses = [
+        InvestorEmailAddress(
+            investor_profile_id=user_id,
+            email="user@example.com",
+            external_email_id="email_1",
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.user,
+        )
+    ]
+    profile.phone_numbers = [
+        InvestorPhoneNumber(
+            investor_profile_id=user_id,
+            isd="91",
+            number="9876543210",
+            external_phone_id="phone_1",
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.user,
+        )
+    ]
+    profile.addresses = [
+        InvestorAddress(
+            investor_profile_id=user_id,
+            line1="Line 1",
+            postal_code="560001",
+            country="IN",
+            external_address_id="addr_1",
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.kyc,
+        )
+    ]
+    profile.bank_accounts = [
+        InvestorBankAccount(
+            id=uuid4(),
+            investor_profile_id=user_id,
+            is_primary=True,
+            account_type="savings",
+            account_number_last4="1111",
+            ifsc_code="HDFC0001111",
+            primary_account_holder_name="User",
+            external_bank_account_id="bac_stub_deadbeef",
+            external_old_id=11,
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.kyc,
+        ),
+        InvestorBankAccount(
+            id=preferred_id,
+            investor_profile_id=user_id,
+            account_type="savings",
+            account_number_last4="9012",
+            ifsc_code="HDFC0001234",
+            primary_account_holder_name="User",
+            external_bank_account_id="bac_selected",
+            external_old_id=12,
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.kyc,
+        ),
+    ]
+    profile.related_parties = []
+
+    folio = build_folio_defaults(profile, fp_enabled=True, preferred_bank_account_id=preferred_id)
+    assert folio["payout_bank_account"] == "bac_selected"
+
+
+def test_build_folio_defaults_skips_stub_bank_when_fp_enabled() -> None:
+    user_id = uuid4()
+    profile = InvestorProfile(user_id=user_id)
+    profile.email_addresses = [
+        InvestorEmailAddress(
+            investor_profile_id=user_id,
+            email="user@example.com",
+            external_email_id="email_1",
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.user,
+        )
+    ]
+    profile.phone_numbers = [
+        InvestorPhoneNumber(
+            investor_profile_id=user_id,
+            isd="91",
+            number="9876543210",
+            external_phone_id="phone_1",
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.user,
+        )
+    ]
+    profile.addresses = [
+        InvestorAddress(
+            investor_profile_id=user_id,
+            line1="Line 1",
+            postal_code="560001",
+            country="IN",
+            external_address_id="addr_1",
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.kyc,
+        )
+    ]
+    profile.bank_accounts = [
+        InvestorBankAccount(
+            investor_profile_id=user_id,
+            account_type="savings",
+            account_number_last4="9012",
+            ifsc_code="HDFC0001234",
+            primary_account_holder_name="User",
+            external_bank_account_id="bac_stub_deadbeef",
+            external_old_id=12,
+            sync_status=InvestorObjectSyncStatus.active,
+            source=InvestorObjectSource.kyc,
+        )
+    ]
+    profile.related_parties = []
+
+    folio = build_folio_defaults(profile, fp_enabled=True)
+    assert "payout_bank_account" not in folio

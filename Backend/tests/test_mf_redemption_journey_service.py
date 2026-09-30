@@ -6,6 +6,8 @@ from app.application.mf.mf_redemption_journey_service import (
     map_fp_redemption_status,
     serialize_active_redemption,
 )
+from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.mf.fp_oms_client import is_missing_payout_details_error
 
 
 def test_map_fp_redemption_status() -> None:
@@ -35,6 +37,34 @@ def test_build_redemption_journey_events_from_timestamps() -> None:
     assert events[0]["to_status"] == "PENDING"
     assert any(event["payload"] and event["payload"].get("stage") == "amc_submitted" for event in events)
     assert events[-1]["to_status"] == "SUCCEEDED"
+
+
+def test_pending_redemption_awaits_consent_instead_of_processing() -> None:
+    events = build_redemption_journey_events(
+        {"state": "pending", "created_at": "2026-09-01T21:32:00+05:30"},
+        payout_details=[],
+    )
+    assert [event["to_status"] for event in events] == ["PENDING", "PENDING"]
+    assert events[0]["payload"]["reason"] == "redemption_placed"
+    assert events[1]["payload"]["stage"] == "awaiting_consent"
+
+
+def test_failed_redemption_journey_includes_cybrilla_reason() -> None:
+    events = build_redemption_journey_events(
+        {
+            "state": "failed",
+            "created_at": "2026-09-01T21:32:00+05:30",
+            "confirmed_at": "2026-09-03T13:46:00+05:30",
+            "failure_code": "missing_signature_redemption_fh_sh",
+            "failure_reason": "The first and second holders have not signed the redemption request",
+        },
+        payout_details=[],
+    )
+
+    assert events[-1]["to_status"] == "FAILED"
+    assert events[-1]["payload"]["stage"] == "failed"
+    assert events[-1]["payload"]["failure_code"] == "missing_signature_redemption_fh_sh"
+    assert "signed the redemption request" in events[-1]["payload"]["failure_reason"]
 
 
 def test_index_active_redemptions_by_folio_and_isin() -> None:
@@ -74,6 +104,14 @@ def test_list_fp_redemption_query_states_match_fp_api() -> None:
     allowed = {"pending", "confirmed", "submitted", "successful", "failed", "cancelled", "reversed"}
     assert query_states <= allowed
     assert _ACTIVE_FP_REDEMPTION_STATES <= query_states
+
+
+def test_missing_payout_details_is_not_fatal() -> None:
+    assert is_missing_payout_details_error(
+        FpClientError("no payout details found with give reference", status_code=400)
+    )
+    assert is_missing_payout_details_error(FpClientError("Not found", status_code=404))
+    assert not is_missing_payout_details_error(FpClientError("unauthorized", status_code=401))
 
 
 def test_serialize_active_redemption() -> None:

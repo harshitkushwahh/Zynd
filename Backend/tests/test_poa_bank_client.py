@@ -4,7 +4,16 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.infrastructure.kyc.poa_client import poa_verify_bank_account
+from app.infrastructure.kyc.poa_client import poa_check_readiness, poa_verify_bank_account
+
+
+@pytest.mark.asyncio
+async def test_poa_check_readiness_uses_stub_when_cybrilla_not_live() -> None:
+    with patch("app.infrastructure.kyc.poa_client._use_live_poa", return_value=False):
+        result = await poa_check_readiness("ABCPA3753D")
+    assert result["status"] == "completed"
+    assert result["readiness"]["status"] == "failed"
+    assert result["readiness"]["code"] == "kyc_unavailable"
 
 
 @pytest.mark.asyncio
@@ -17,8 +26,7 @@ async def test_poa_verify_bank_account_uses_bank_accounts_array() -> None:
             "bank_accounts": [{"status": "verified", "code": None, "reason": None}],
         }
     )
-    with patch("app.infrastructure.kyc.poa_client.get_settings") as settings_mock:
-        settings_mock.return_value.resolved_kyc_provider_live = True
+    with patch("app.infrastructure.kyc.poa_client._use_live_poa", return_value=True):
         with patch("app.infrastructure.kyc.poa_client.fp_post", new=fp_post), patch(
             "app.infrastructure.kyc.poa_client.poll_poa_preverification",
             new=poll,

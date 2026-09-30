@@ -109,7 +109,19 @@ def build_redemption_journey_events(
             )
         )
 
-    processing_at = confirmed_at or (created_at if not confirmed_at and not submitted_at else None)
+    final_status = map_fp_redemption_status(redemption.get("state"))
+    if final_status == "PENDING" and not confirmed_at:
+        events.append(
+            _event(
+                from_status="PENDING",
+                to_status="PENDING",
+                created_at=created_at,
+                source="SYSTEM",
+                payload={"stage": "awaiting_consent"},
+            )
+        )
+
+    processing_at = confirmed_at
     if processing_at:
         events.append(
             _event(
@@ -163,7 +175,6 @@ def build_redemption_journey_events(
             )
         )
 
-    final_status = map_fp_redemption_status(redemption.get("state"))
     if final_status == "SUCCEEDED" and succeeded_at:
         events.append(
             _event(
@@ -175,11 +186,18 @@ def build_redemption_journey_events(
             )
         )
     elif final_status == "FAILED":
+        failure_code = redemption.get("failure_code")
+        failure_reason = redemption.get("failure_reason") or redemption.get("remarks") or redemption.get("reason")
         events.append(
             _event(
                 from_status=events[-1]["to_status"] if events else "PROCESSING",
                 to_status="FAILED",
                 created_at=succeeded_at or submitted_at or processing_at or created_at,
+                payload={
+                    "stage": "failed",
+                    **({"failure_code": failure_code} if failure_code else {}),
+                    **({"failure_reason": failure_reason} if failure_reason else {}),
+                },
             )
         )
     elif final_status == "CANCELLED":

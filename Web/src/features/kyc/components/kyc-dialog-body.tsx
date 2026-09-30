@@ -34,7 +34,7 @@ export function KycDialogBody({
         >
           {children}
         </div>
-        <KycDialogSecurityFooter className="px-8 pb-4 pt-2 sm:px-10" />
+        <KycDialogSecurityFooter className="shrink-0 border-t border-border/40 px-8 pb-4 pt-3 sm:px-10" />
       </div>
     );
   }

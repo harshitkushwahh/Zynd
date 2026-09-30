@@ -55,6 +55,19 @@ def test_sip_plan_is_operational_excludes_cancelled_and_failed_markers() -> None
     assert sip_plan_is_operational(_plan(metadata_={"sip": {"user_cancelled": True}})) is False
 
 
+def test_resolve_first_installment_status_marks_paid_when_payment_succeeded() -> None:
+    from app.application.mf.mf_sip_first_installment_service import _resolve_first_installment_status
+
+    assert (
+        _resolve_first_installment_status(
+            fp_state="submitted",
+            fp_payment_status="SUCCESS",
+            payment_succeeded=True,
+        )
+        == "paid"
+    )
+
+
 @pytest.mark.asyncio
 async def test_resolve_sip_first_installment_pending_on_ondc_without_purchase(db_session, monkeypatch) -> None:
     from app.application.mf.mf_sip_first_installment_service import resolve_sip_first_installment
@@ -79,8 +92,6 @@ async def test_resolve_sip_first_installment_pending_on_ondc_without_purchase(db
         fp_plan_id="mfpp_test",
         idempotency_key=str(uuid4()),
     )
-    db_session.add(plan)
-    await db_session.flush()
 
     payload = await resolve_sip_first_installment(db_session, plan)
     assert payload["status"] == "pending"

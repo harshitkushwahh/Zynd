@@ -14,6 +14,7 @@ import { motion, useReducedMotion } from "motion/react";
 
 import "@/styles/zynd-recommend-funds-button.css";
 import { RecommendFundsAllocationPanel } from "@/components/dashboard/recommend-funds-allocation-panel";
+import { RecommendFundsRiskLockedBody } from "@/components/dashboard/recommend-funds-risk-locked-body";
 import { BorderGlow } from "@/components/ui/border-glow";
 import { Button } from "@/components/ui/button";
 import { Grainient } from "@/components/ui/grainient";
@@ -767,7 +768,11 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
                     />
                   ) : null}
 
-                  {contentState === "blocked" && blockCopy ? (
+                  {contentState === "blocked" && data?.block_reason === "risk_profile_required" ? (
+                    <RecommendFundsRiskLockedBody />
+                  ) : null}
+
+                  {contentState === "blocked" && blockCopy && data?.block_reason !== "risk_profile_required" ? (
                     <RecommendFundsBlockBody
                       title={blockCopy.title}
                       description={blockCopy.description}
@@ -775,11 +780,6 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
                       onAction={
                         data?.block_reason === "kyc_required"
                           ? () => kyc?.openDialog()
-                          : undefined
-                      }
-                      actionHref={
-                        data?.block_reason === "risk_profile_required"
-                          ? "/dashboard/risk-profile/assessment"
                           : undefined
                       }
                     />

@@ -268,7 +268,9 @@ class MfOrderResponse(BaseModel):
     fp_purchase_id: Optional[str] = None
     fp_purchase_old_id: Optional[int] = None
     fp_state: Optional[str] = None
+    fp_payment_status: Optional[str] = None
     payment_url: Optional[str] = None
+    payment_completed: bool = False
     next_action: Optional[str] = None
     failure_code: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -463,6 +465,8 @@ class MfSipFirstInstallmentSummary(BaseModel):
     status: Literal["not_applicable", "pending", "paid", "failed"] = "not_applicable"
     amount_inr: Optional[float] = None
     payment_url: Optional[str] = None
+    fp_state: Optional[str] = None
+    fp_payment_status: Optional[str] = None
 
 
 class MfSipPlanBankSwitchRequest(BaseModel):

@@ -136,7 +136,20 @@ async def list_invest_funds(
             )
             .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
         )
-        count_stmt = select(func.count(func.distinct(Product.id))).select_from(base.subquery())
+        count_stmt = (
+            select(func.count(func.distinct(Product.id)))
+            .select_from(Product)
+            .join(MutualFund, MutualFund.product_id == Product.id)
+            .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+            .join(ProductCategory, ProductCategory.product_id == Product.id)
+            .join(Category, Category.id == ProductCategory.category_id)
+            .where(
+                invest_visibility_sql_clause(),
+                Category.slug == category_slug,
+                Category.is_visible.is_(True),
+                product_category_effective_clause(),
+            )
+        )
     else:
         best_rank_sq = (
             select(
@@ -169,6 +182,7 @@ async def list_invest_funds(
             select(func.count(Product.id))
             .select_from(Product)
             .join(MutualFund, MutualFund.product_id == Product.id)
+            .join(FundAmc, FundAmc.id == MutualFund.amc_id)
             .where(invest_visibility_sql_clause())
         )
 
@@ -474,6 +488,7 @@ async def list_invest_fund_navs(
         await session.execute(
             select(MutualFund)
             .join(Product, Product.id == MutualFund.product_id)
+            .join(FundAmc, FundAmc.id == MutualFund.amc_id)
             .where(Product.id == product_id, invest_visibility_sql_clause())
         )
     ).first()

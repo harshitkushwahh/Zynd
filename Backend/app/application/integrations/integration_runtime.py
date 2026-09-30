@@ -157,20 +157,22 @@ def is_kyckart_live() -> bool:
     settings = get_settings()
     if settings.kyc_provider_mode == "stub":
         return False
-    if settings.kyc_provider_mode == "live":
-        return True
     finprim = get_finprim_runtime()
     kyckart = get_kyckart_runtime()
-    return bool(kyckart.configured and finprim.configured)
+    configured = bool(kyckart.configured and finprim.configured)
+    if settings.kyc_provider_mode == "live":
+        return configured
+    return configured
 
 
 def is_cybrilla_poa_live() -> bool:
     settings = get_settings()
     if settings.kyc_provider_mode == "stub":
         return False
+    configured = get_cybrilla_runtime().configured
     if settings.kyc_provider_mode == "live":
-        return True
-    return get_cybrilla_runtime().configured
+        return configured
+    return configured
 
 
 def profile_configured(settings: Settings, provider: IntegrationProvider, mode: IntegrationEnvironment) -> bool:

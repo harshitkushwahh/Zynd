@@ -151,7 +151,7 @@ async def recover_interrupted_pipeline_runs(session: AsyncSession) -> int:
         .where(MfPipelineRun.status == DbMfPipelineRunStatus.running)
         .values(
             status=DbMfPipelineRunStatus.paused,
-            error="Interrupted by server restart — resume to continue",
+            error="Interrupted by server restart - resume to continue",
             finished_at=datetime.now(timezone.utc),
         )
     )

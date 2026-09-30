@@ -528,6 +528,7 @@ async def get_user_sip_plan_journey(
         return None
 
     from app.application.investor.investor_bank_account_resolver import load_mandate_bank_account
+    from app.application.mf.mf_sip_first_installment_service import resolve_sip_first_installment
     from app.application.mf.mf_sip_plan_mandate_switch_service import (
         build_bank_switch_response,
         resolve_switch_target_mandate,
@@ -565,6 +566,7 @@ async def get_user_sip_plan_journey(
     )
     product = await session.get(Product, plan.product_id)
     amc_names, amc_logos, isins = await load_sip_plan_fund_metadata(session, [plan])
+    first_installment = await resolve_sip_first_installment(session, plan, mandate=mandate_row)
 
     return {
         "plan": serialize_sip_plan(
@@ -577,6 +579,7 @@ async def get_user_sip_plan_journey(
             amc_name=amc_names.get(plan.fund_id),
             amc_logo_url=amc_logos.get(plan.fund_id),
             isin=isins.get(plan.fund_id),
+            first_installment=first_installment,
         ),
         "events": [
             {
@@ -644,14 +647,33 @@ async def _set_sip_meta(session: AsyncSession, plan: MfSipPlan, **updates: Any) 
     await session.flush()
 
 
+_SIP_PLAN_STATUS_RANK = {
+    MfSipPlanStatus.pending: 0,
+    MfSipPlanStatus.review: 1,
+    MfSipPlanStatus.consent_pending: 2,
+    MfSipPlanStatus.active: 3,
+}
+
+
 async def _apply_plan_state(session: AsyncSession, plan: MfSipPlan, *, fp_state: str | None, source: str) -> bool:
     if plan.status in SIP_TERMINAL_STATUSES:
         return False
     mapped = map_fp_plan_state(fp_state)
-    if mapped == plan.status and fp_state == plan.fp_state:
+    fp_state_text = fp_state or plan.fp_state
+    if mapped == plan.status and fp_state_text == plan.fp_state:
         return False
+
+    current_rank = _SIP_PLAN_STATUS_RANK.get(plan.status, -1)
+    mapped_rank = _SIP_PLAN_STATUS_RANK.get(mapped, -1)
+    if mapped_rank >= 0 and current_rank >= 0 and mapped_rank < current_rank:
+        if fp_state_text and plan.fp_state != fp_state_text:
+            plan.fp_state = fp_state_text
+            await session.flush()
+            return True
+        return False
+
     previous = plan.status.value
-    plan.fp_state = fp_state or plan.fp_state
+    plan.fp_state = fp_state_text
     plan.status = mapped
     if mapped == MfSipPlanStatus.active and plan.activated_at is None:
         plan.activated_at = datetime.now(timezone.utc)

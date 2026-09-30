@@ -46,7 +46,7 @@ function RecentTransactionRowPreview({ order }: { order: MfOrder }) {
       <span
         className={cn(
           "row-span-2 flex size-9 shrink-0 items-center justify-center justify-self-start rounded-full ring-1",
-          mfOrderRowAvatarClass(order.status, order.fp_state),
+          mfOrderRowAvatarClass(order.status, order.fp_state, order.payment_completed, order.order_type),
         )}
       >
         <MfFundAmcAvatar
@@ -65,6 +65,9 @@ function RecentTransactionRowPreview({ order }: { order: MfOrder }) {
           <MfOrderStatusBadge
             status={order.status}
             fpState={order.fp_state}
+            fpPaymentStatus={order.fp_payment_status}
+            paymentCompleted={order.payment_completed}
+            orderType={order.order_type}
           />
           <p className="text-compact font-semibold tabular-nums tracking-tight text-foreground">
             {formatInr(order.amount_inr)}
@@ -96,13 +99,13 @@ function RecentTransactionRow({
       className={cn(
         "group grid w-full min-w-0 max-w-full grid-cols-[2.25rem_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-2.5 gap-y-1 rounded-[1rem] px-2 py-2 text-left",
         "transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-        mfOrderRowHoverClass(order.status, order.fp_state),
+        mfOrderRowHoverClass(order.status, order.fp_state, order.payment_completed, order.order_type),
       )}
     >
       <span
         className={cn(
           "row-span-2 flex size-9 shrink-0 items-center justify-center justify-self-start rounded-full ring-1",
-          mfOrderRowAvatarClass(order.status, order.fp_state),
+          mfOrderRowAvatarClass(order.status, order.fp_state, order.payment_completed, order.order_type),
         )}
       >
         <MfFundAmcAvatar
@@ -121,6 +124,9 @@ function RecentTransactionRow({
           <MfOrderStatusBadge
             status={order.status}
             fpState={order.fp_state}
+            fpPaymentStatus={order.fp_payment_status}
+            paymentCompleted={order.payment_completed}
+            orderType={order.order_type}
           />
           <p className="text-compact font-semibold tabular-nums tracking-tight text-foreground">
             {formatInr(order.amount_inr)}

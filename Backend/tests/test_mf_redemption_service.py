@@ -8,15 +8,17 @@ from app.application.mf.mf_fp_state import map_fp_redemption_state_to_order
 from app.application.mf.mf_redemption_service import (
     _amount_matches_multiple,
     _extract_folio_consent_contacts,
+    _is_resumable_redemption_order,
     _mask_email,
     _mask_mobile,
     _normalize_folio_mobile,
     _units_matches_multiple,
     _validate_redemption_amount,
     _validate_redemption_units,
+    is_redemption_payment_misclassified,
 )
 from app.application.mf.mf_order_errors import MfOrderError
-from app.infrastructure.persistence.mf_transaction_models import MfOrderStatus
+from app.infrastructure.persistence.mf_transaction_models import MfOrderStatus, MfOrderType
 
 
 def test_map_fp_redemption_state_to_order() -> None:
@@ -74,3 +76,95 @@ def test_validate_redemption_units_bounds() -> None:
 def test_multiple_checks() -> None:
     assert _amount_matches_multiple(Decimal("1000"), 100) is True
     assert _units_matches_multiple(10.001, 0.001) is True
+
+
+def test_resumable_redemption_matches_unconfirmed_holding() -> None:
+    from types import SimpleNamespace
+
+    holding_id = "599399301625::INF789F1AYM2"
+    order = SimpleNamespace(
+        order_type=MfOrderType.redemption,
+        status=MfOrderStatus.payment_pending,
+        metadata_={
+            "holding_id": holding_id,
+            "folio_number": "599399301625",
+            "isin": "INF789F1AYM2",
+            "fp_redemption_id": "fp-red-1",
+            "redemption_confirmed": False,
+        },
+    )
+    assert (
+        _is_resumable_redemption_order(order, holding_id=holding_id, fp_redemption_id="fp-red-1")
+        is True
+    )
+
+
+def test_submitted_redemption_is_not_payment_failure() -> None:
+    from types import SimpleNamespace
+
+    order = SimpleNamespace(
+        order_type=MfOrderType.redemption,
+        status=MfOrderStatus.failed,
+        fp_state="submitted",
+        failure_code="payment_not_completed",
+        failure_reason="Payment was not completed",
+    )
+    assert is_redemption_payment_misclassified(order) is True
+
+    genuine = SimpleNamespace(
+        order_type=MfOrderType.redemption,
+        status=MfOrderStatus.failed,
+        fp_state="failed",
+        failure_code="fp_terminal_failed",
+        failure_reason="failed",
+    )
+    assert is_redemption_payment_misclassified(genuine) is False
+
+    purchase = SimpleNamespace(
+        order_type=MfOrderType.lumpsum,
+        status=MfOrderStatus.failed,
+        fp_state="submitted",
+        failure_code="payment_not_completed",
+        failure_reason="Payment was not completed",
+    )
+    assert is_redemption_payment_misclassified(purchase) is False
+
+
+def test_resumable_redemption_rejects_confirmed_order() -> None:
+    from types import SimpleNamespace
+
+    holding_id = "599399301625::INF789F1AYM2"
+    order = SimpleNamespace(
+        order_type=MfOrderType.redemption,
+        status=MfOrderStatus.processing,
+        fp_state="confirmed",
+        metadata_={
+            "holding_id": holding_id,
+            "fp_redemption_id": "fp-red-1",
+            "redemption_confirmed": True,
+        },
+    )
+    assert (
+        _is_resumable_redemption_order(order, holding_id=holding_id, fp_redemption_id="fp-red-1")
+        is False
+    )
+
+
+def test_resumable_redemption_rejects_terminal_fp_state() -> None:
+    from types import SimpleNamespace
+
+    holding_id = "599399301625::INF789F1AYM2"
+    order = SimpleNamespace(
+        order_type=MfOrderType.redemption,
+        status=MfOrderStatus.payment_pending,
+        fp_state="failed",
+        metadata_={
+            "holding_id": holding_id,
+            "fp_redemption_id": "fp-red-1",
+            "redemption_confirmed": False,
+        },
+    )
+    assert (
+        _is_resumable_redemption_order(order, holding_id=holding_id, fp_redemption_id="fp-red-1")
+        is False
+    )

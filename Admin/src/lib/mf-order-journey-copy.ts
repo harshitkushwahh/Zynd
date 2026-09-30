@@ -53,6 +53,7 @@ function payloadString(value: unknown) {
 }
 
 function isPaymentAbandoned(order: MfTransactionOrder, events: MfTransactionOrderEvent[]) {
+  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") return false;
   if (order.failure_code === "payment_abandoned") return true;
 
   const lastEvent = events[events.length - 1];

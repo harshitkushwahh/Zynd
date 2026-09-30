@@ -44,10 +44,7 @@ export function getDigilockerAddressMissingFields(
 }
 
 export function getDigilockerPrefillMissingFields(input: DigilockerPrefillInput): string[] {
-  return [
-    ...getDigilockerAddressMissingFields(input.address),
-    ...(isDigilockerFathersNameMissing(input.personalInfo) ? ["fathersName"] : []),
-  ];
+  return getDigilockerAddressMissingFields(input.address);
 }
 
 export function isDigilockerAddressPrefillIncomplete(
@@ -58,10 +55,4 @@ export function isDigilockerAddressPrefillIncomplete(
 
 export function isDigilockerPrefillIncomplete(input: DigilockerPrefillInput): boolean {
   return getDigilockerPrefillMissingFields(input).length > 0;
-}
-
-export function isDigilockerFathersNameMissing(
-  personalInfo?: Partial<KycPersonalInfoValue> | null,
-): boolean {
-  return !personalInfo?.fathersName?.trim();
 }

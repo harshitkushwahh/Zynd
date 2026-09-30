@@ -2,6 +2,10 @@ import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui"
 import type { MfOrder } from "@/features/invest/api/invest-api";
 import { truncateHoldingFundName } from "@/features/dashboard/overview/lib/overview-holdings-preview";
 import {
+  isOrderAwaitingAllotment,
+} from "@/features/invest/lib/mf-order-payment-status";
+import { resolveCybrillaOrderStatusLabel } from "@/features/invest/lib/mf-cybrilla-status";
+import {
   OVERVIEW_BRAND_CARD_STYLES,
   resolveOverviewBrandCardTone,
 } from "@/features/dashboard/overview/lib/overview-brand-card-styles";
@@ -18,6 +22,9 @@ type MfUpcomingHoldingRowProps = {
 export function MfUpcomingHoldingRow({ order, index = 0, className }: MfUpcomingHoldingRowProps) {
   const overview = copy.dashboard.overview;
   const styles = OVERVIEW_BRAND_CARD_STYLES[resolveOverviewBrandCardTone(index)];
+  const statusLabel = isOrderAwaitingAllotment(order)
+    ? overview.holdingsUpcomingLabel
+    : resolveCybrillaOrderStatusLabel(order);
 
   return (
     <article
@@ -49,7 +56,7 @@ export function MfUpcomingHoldingRow({ order, index = 0, className }: MfUpcoming
           {formatInr(order.amount_inr)}
         </p>
         <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-200">
-          {overview.holdingsUpcomingLabel}
+          {statusLabel}
         </p>
       </div>
     </article>

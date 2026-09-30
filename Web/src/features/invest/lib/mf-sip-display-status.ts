@@ -16,8 +16,8 @@ export function resolveSipPlanDisplayStatus(plan: MfSipPlan): SipPlanDisplayStat
   if (status === "FAILED") {
     return { label: copy.mySips.statusLabelFailed, tone: "destructive" };
   }
-  if (status === "CANCELLED") {
-    return { label: copy.mySips.statusLabelCancelled, tone: "neutral" };
+  if (status === "CANCELLED" || status === "CANCELED") {
+    return { label: copy.mySips.statusLabelCancelled, tone: "destructive" };
   }
   if (
     nextAction === "authorize_mandate_switch" ||

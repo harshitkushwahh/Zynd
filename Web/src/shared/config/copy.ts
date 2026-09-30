@@ -471,6 +471,7 @@ export const copy = {
       fetchFailed: "Could not fetch name for this PAN. Try again.",
       invalidPan: "Enter a valid 10-character PAN number.",
       verifyPan: "Verify PAN",
+      editPan: "Edit PAN",
       dateOfBirthLabel: "Date of birth",
       panCategoryLabel: "PAN type",
       panCategoryIndividual: "Individual",
@@ -524,7 +525,7 @@ export const copy = {
       fathersNameDigilockerHint:
         "Father's name was fetched from Aadhaar. You can edit if needed.",
       digilockerPrefillIncomplete:
-        "Father's name could not be fetched from Aadhaar. Try DigiLocker again to complete verification.",
+        "Father's name could not be fetched from Aadhaar. You can enter it manually.",
       invalidPlaceOfBirth: "Enter a valid place of birth (2-80 characters, letters only).",
       fields: {
         fathersName: "Father's name",
@@ -716,7 +717,6 @@ export const copy = {
     signature: {
       drawTab: "Draw sign",
       uploadTab: "Upload sign",
-      drawHint: "Sign inside the box using your mouse or finger.",
       uploadTitle: "Upload signature image",
       uploadFormats: "PNG, JPG, or WEBP up to 4 MB",
       chooseImage: "Choose image",
@@ -742,7 +742,7 @@ export const copy = {
       secondsRemaining: (seconds: number) => `${seconds}s`,
       requiredTitle: "DigiLocker verification required",
       requiredDescription:
-        "Your address and father's name must be fetched from Aadhaar via DigiLocker. Manual entry is not available for this KYC path.",
+        "Your address must be fetched from Aadhaar via DigiLocker. Manual address entry is not available for this KYC path.",
       failedTitle: "DigiLocker not completed",
       failedDescription:
         "Aadhaar was not fetched. Enter your mobile number in DigiLocker, select the Aadhaar checkbox, and complete verification before returning.",
@@ -1195,6 +1195,10 @@ export const copy = {
       redeemJourneyWhatHappened: "What happened",
       redeemJourneyEmpty: "No status changes recorded yet.",
       redeemJourneyStepPlaced: "Redemption placed",
+      redeemJourneyStepAwaitingConsent: "Awaiting OTP confirmation",
+      redeemJourneyAwaitingConsentDescription:
+        "SEBI requires OTP verification on your folio registered contact before this redemption is submitted.",
+      redeemJourneyStatusAwaitingConsent: "Awaiting OTP",
       redeemJourneyStepProcessing: "Sent for processing",
       redeemJourneyStepAmcSubmitted: "Submitted to AMC",
       redeemJourneyStepUnitsRedeemed: "Units redeemed",
@@ -1214,20 +1218,31 @@ export const copy = {
       redeemJourneyOutcomeCancelled: "This redemption was cancelled before completion.",
       redeemJourneyOutcomeSubmitted: "Your order is with the AMC. Payout will follow after units are redeemed.",
       redeemJourneyOutcomeProcessing: "Your redemption is being processed.",
+      redeemJourneyOutcomePending:
+        "Waiting for OTP confirmation on your folio registered contact.",
       redeemJourneyNoActiveRedemption:
         "No redemption is in progress for this holding. Start a new redeem request when you are ready.",
       redeemJourneyStartRedeem: "Start redeem",
       redeemJourneyLoadFailed: "Unable to load redemption details.",
       redeemConsentTitle: "Confirm redemption",
+      redeemConsentVerifyTitle: "Verify OTP",
+      redeemConsentDoneTitle: "Redemption submitted",
       redeemConsentDescription:
         "SEBI requires OTP verification on your folio registered contact before we submit this redemption.",
-      redeemConsentFolioContact: "OTP will be sent to your folio registered contact:",
+      redeemConsentFolioContact: "OTP will be sent to your folio registered contact",
+      redeemConsentReviewSebi: "SEBI requires OTP verification on your folio registered contact.",
+      redeemConsentReviewPayout: "Amount is typically credited to your registered bank in 1–3 working days.",
+      redeemConsentEstimatedAmount: "Estimated amount",
       redeemConsentSendOtp: "Send OTP",
       redeemConsentResendOtp: "Resend OTP",
       redeemConsentEnterOtp: "Enter the OTP sent to your folio registered mobile.",
       redeemConsentConfirm: "Confirm redemption",
       redeemConsentOtpSent: "OTP sent to your folio registered mobile.",
       redeemConsentConfirmed: "Redemption confirmed. We will notify you when payout is initiated.",
+      redeemConsentSuccessTitle: "Redemption successful",
+      redeemConsentSuccessDescription:
+        "Amount will be credited to your registered bank account within 1–3 working days.",
+      redeemConsentDone: "Done",
       redeemConsentLoadFailed: "Unable to load redemption consent details.",
       redeemConsentOtpSendFailed: "Unable to send OTP. Try again in a moment.",
       redeemConsentConfirmFailed: "Unable to confirm redemption. Check the OTP and try again.",
@@ -2844,9 +2859,11 @@ export const copy = {
       kycRequiredTitle: "Complete KYC to unlock",
       kycRequiredDescription: "Verify your identity to see funds curated for your profile.",
       kycRequiredAction: "Complete KYC",
-      riskRequiredTitle: "Know your risk profile",
-      riskRequiredDescription: "Take the risk assessment so we can recommend the right funds.",
+      riskRequiredTitle: "To access your personalised funds",
+      riskRequiredDescription: "Complete the assessment.",
       riskRequiredAction: "Take assessment",
+      riskRequiredDummyStory:
+        "A balanced mix across equity, debt, hybrid, and gold sized to a typical growth profile.",
       noBasketsTitle: "Recommendations coming soon",
       noBasketsDescription: "We are curating fund baskets for your profile. Check back soon.",
       insufficientFundsTitle: "Recommendations unavailable",

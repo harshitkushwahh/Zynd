@@ -23,6 +23,7 @@ export type RedemptionJourneyDisplayStep = {
 export type RedemptionJourneyView = {
   steps: RedemptionJourneyDisplayStep[];
   outcomeSummary: string | null;
+  displayStatus: string;
 };
 
 function titleCaseStatus(status?: string | null) {
@@ -51,6 +52,9 @@ function describeRedemptionPayload(
   const stage = payloadString(payload.stage);
   const nav = typeof payload.nav === "number" ? payload.nav : null;
 
+  if (stage === "awaiting_consent") {
+    return journeyCopy.redeemJourneyAwaitingConsentDescription;
+  }
   if (stage === "amc_submitted") {
     return journeyCopy.redeemJourneyAmcSubmittedDescription;
   }
@@ -64,6 +68,9 @@ function describeRedemptionPayload(
   }
   if (stage === "payout_credited") {
     return journeyCopy.redeemJourneyPayoutCreditedDescription;
+  }
+  if (stage === "failed") {
+    return payloadString(payload.failure_reason) ?? journeyCopy.redeemJourneyOutcomeFailed;
   }
 
   const reason = payloadString(payload.reason);
@@ -84,10 +91,12 @@ function describeRedemptionTransition(
   const from = fromStatus?.toLowerCase();
   const to = toStatus.toLowerCase();
 
+  if (stage === "awaiting_consent") return journeyCopy.redeemJourneyStepAwaitingConsent;
   if (stage === "amc_submitted") return journeyCopy.redeemJourneyStepAmcSubmitted;
   if (stage === "units_redeemed") return journeyCopy.redeemJourneyStepUnitsRedeemed;
   if (stage === "payout_initiated") return journeyCopy.redeemJourneyStepPayoutInitiated;
   if (stage === "payout_credited") return journeyCopy.redeemJourneyStepPayoutCredited;
+  if (stage === "failed") return journeyCopy.redeemJourneyStepFailed;
 
   if (!from) {
     if (to === "pending") return journeyCopy.redeemJourneyStepPlaced;
@@ -110,13 +119,17 @@ function describeRedemptionTransition(
 
 function toDisplayStep(event: MfOrderEvent): RedemptionJourneyDisplayStep {
   const portfolioCopy = copy.dashboard.portfolio;
+  const stage = payloadString(event.payload?.stage);
 
   return {
     event,
     title: describeRedemptionTransition(event.from_status, event.to_status, event.payload, portfolioCopy),
     description: describeRedemptionPayload(event.payload, portfolioCopy),
     actor: formatEventSource(event.source),
-    toStatus: titleCaseStatus(event.to_status),
+    toStatus:
+      stage === "awaiting_consent"
+        ? portfolioCopy.redeemJourneyStatusAwaitingConsent
+        : titleCaseStatus(event.to_status),
     isTerminal: isTerminalStatus(event.to_status),
   };
 }
@@ -130,8 +143,12 @@ export function buildRedemptionJourneyView(journey: PortfolioRedeemJourney): Red
 
   if (status === "succeeded") {
     outcomeSummary = portfolioCopy.redeemJourneyOutcomeSucceeded;
+  } else if (status === "pending") {
+    outcomeSummary = portfolioCopy.redeemJourneyOutcomePending;
   } else if (status === "failed") {
-    outcomeSummary = portfolioCopy.redeemJourneyOutcomeFailed;
+    const failedEvent = journey.events.find((event) => event.to_status?.toLowerCase() === "failed");
+    outcomeSummary =
+      payloadString(failedEvent?.payload?.failure_reason) ?? portfolioCopy.redeemJourneyOutcomeFailed;
   } else if (status === "cancelled") {
     outcomeSummary = portfolioCopy.redeemJourneyOutcomeCancelled;
   } else if (status === "submitted") {
@@ -140,5 +157,17 @@ export function buildRedemptionJourneyView(journey: PortfolioRedeemJourney): Red
     outcomeSummary = portfolioCopy.redeemJourneyOutcomeProcessing;
   }
 
-  return { steps, outcomeSummary };
+  const awaitingConsent =
+    status === "pending" &&
+    steps.some((step) => payloadString(step.event.payload?.stage) === "awaiting_consent");
+  const displayStatus =
+    status === "failed"
+      ? portfolioCopy.redeemJourneyStepFailed
+      : status === "cancelled"
+        ? portfolioCopy.redeemJourneyStepCancelled
+        : awaitingConsent
+          ? portfolioCopy.redeemJourneyStatusAwaitingConsent
+          : titleCaseStatus(journey.status);
+
+  return { steps, outcomeSummary, displayStatus };
 }

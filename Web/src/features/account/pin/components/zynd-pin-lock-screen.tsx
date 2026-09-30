@@ -39,6 +39,7 @@ export function ZyndPinLockScreen() {
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [biometricReady, setBiometricReady] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [pinNonce, setPinNonce] = useState(0);
   const submittingRef = useRef(false);
   const biometricAttemptedRef = useRef(false);
 
@@ -112,6 +113,8 @@ export function ZyndPinLockScreen() {
         setPin("");
       } catch {
         setPin("");
+        setPinNonce((current) => current + 1);
+        clearUnlockError();
       } finally {
         submittingRef.current = false;
         setLoading(false);
@@ -129,33 +132,57 @@ export function ZyndPinLockScreen() {
     <>
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6 backdrop-blur-sm">
         <div className="relative w-full max-w-sm rounded-[var(--radius-2xl)] border border-border bg-card px-6 py-6">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span
-                  className={cn(
-                    "absolute right-3 top-3 inline-flex",
-                    (loading || biometricLoading) && "cursor-not-allowed",
-                  )}
-                />
-              }
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                disabled={loading || biometricLoading}
-                aria-label={copy.pin.forgotLink}
-                onClick={() => setForgotOpen(true)}
-              >
-                <CircleHelp className="size-4" strokeWidth={2.25} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="end">
-              {copy.pin.forgotLink}
-            </TooltipContent>
-          </Tooltip>
+          <div
+            className={cn(
+              "absolute right-3 top-3 flex items-center",
+              (loading || biometricLoading) && "cursor-not-allowed",
+            )}
+          >
+            {biometricReady && mode === "pin" ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    disabled={loading}
+                    aria-label={copy.pin.biometricTitle}
+                    onClick={() => {
+                      clearUnlockError();
+                      setPin("");
+                      setMode("biometric");
+                      biometricAttemptedRef.current = false;
+                    }}
+                  >
+                    <Fingerprint className="size-4" strokeWidth={2.25} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" align="end">
+                  {copy.pin.biometricTitle}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  disabled={loading || biometricLoading}
+                  aria-label={copy.pin.forgotLink}
+                  onClick={() => setForgotOpen(true)}
+                >
+                  <CircleHelp className="size-4" strokeWidth={2.25} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="end">
+                {copy.pin.forgotLink}
+              </TooltipContent>
+            </Tooltip>
+          </div>
 
           <div className="mb-4 flex flex-col items-center">
             <Image
@@ -256,38 +283,15 @@ export function ZyndPinLockScreen() {
                 )}
               >
                 <PinInput
+                  key={pinNonce}
                   value={pin}
-                  onChange={(value) => {
-                    setPin(value);
-                    if (unlockError) clearUnlockError();
-                  }}
-                  error={!!unlockError}
+                  onChange={setPin}
                   autoFocus
                 />
               </div>
 
               {loading ? (
                 <p className="text-center text-caption text-muted-foreground">{copy.mfa.verifying}</p>
-              ) : null}
-
-              <FieldMessage message={unlockError} className="text-center" />
-
-              {biometricReady ? (
-                <div className="flex flex-col items-center pt-1">
-                  <button
-                    type="button"
-                    className="auth-link"
-                    disabled={loading}
-                    onClick={() => {
-                      clearUnlockError();
-                      setPin("");
-                      setMode("biometric");
-                      biometricAttemptedRef.current = false;
-                    }}
-                  >
-                    {copy.pin.biometricTitle}
-                  </button>
-                </div>
               ) : null}
             </div>
           )}

@@ -169,7 +169,7 @@ export function KycPanNameCard({
           label={copy.kyc.pan.firstNameLabel}
           editable
           inputId="kyc-pan-first-name"
-          inputValue={panName.firstName}
+          inputValue={panName.firstName ?? ""}
           inputPlaceholder={copy.kyc.pan.firstNameLabel}
           onInputChange={onFirstNameChange}
           disabled={disabled || isFetching}
@@ -178,7 +178,7 @@ export function KycPanNameCard({
           label={copy.kyc.pan.middleNameLabel}
           editable
           inputId="kyc-pan-middle-name"
-          inputValue={middleName}
+          inputValue={middleName ?? ""}
           inputPlaceholder={copy.kyc.pan.middleNameInputPlaceholder}
           onInputChange={onMiddleNameChange}
           disabled={disabled || isFetching}
@@ -187,7 +187,7 @@ export function KycPanNameCard({
           label={copy.kyc.pan.lastNameLabel}
           editable
           inputId="kyc-pan-last-name"
-          inputValue={panName.lastName}
+          inputValue={panName.lastName ?? ""}
           inputPlaceholder={copy.kyc.pan.lastNameLabel}
           onInputChange={onLastNameChange}
           disabled={disabled || isFetching}

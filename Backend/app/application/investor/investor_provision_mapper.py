@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any
 
 from app.application.investor.investor_bank_account_crypto import read_account_number
+from app.application.kyc.bank_verification_core import holder_name_from_pan_draft
 from app.application.kyc.kyc_form_mapper import _full_name
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
@@ -37,6 +39,11 @@ FP_RELATIONSHIP_MAP = {
     "mother_in_law": "mother_in_law",
     "others": "others",
 }
+
+_FP_NAME_HONORIFIC_PREFIX_RE = re.compile(
+    r"^(?:mr|mrs|ms|miss|dr|shri|smt|sri|kumari|master|prof)\.?\s+",
+    re.IGNORECASE,
+)
 
 
 class InvestorProvisionValidationError(ValueError):
@@ -192,6 +199,47 @@ def build_investor_profile_payload(*, user: User, journey: KycJourneyState) -> d
     }
 
 
+def _sanitize_fp_account_holder_name(name: str, *, journey: KycJourneyState | None = None) -> str:
+    cleaned = _str(name)
+    while cleaned:
+        next_name = _FP_NAME_HONORIFIC_PREFIX_RE.sub("", cleaned).strip()
+        if next_name == cleaned:
+            break
+        cleaned = next_name
+    if cleaned:
+        return cleaned
+    if journey and isinstance(journey.pan_draft_json, dict):
+        pan_name = _full_name(journey.pan_draft_json)
+        if pan_name:
+            return pan_name
+    return cleaned
+
+
+def resolve_fp_bank_holder_name(
+    *,
+    bank_row: InvestorBankAccount,
+    journey: KycJourneyState | None = None,
+) -> str:
+    """Finprim bank payloads must use PAN-step name only — never Kyckart/display names."""
+    pan_draft = journey.pan_draft_json if journey and isinstance(journey.pan_draft_json, dict) else {}
+    bank_draft = journey.bank_draft_json if journey and isinstance(journey.bank_draft_json, dict) else {}
+
+    candidates = [
+        _str(bank_row.pan_account_holder_name),
+        _str(bank_draft.get("panAccountHolderName")),
+        holder_name_from_pan_draft(pan_draft),
+        _full_name(pan_draft),
+    ]
+    for candidate in candidates:
+        sanitized = _sanitize_fp_account_holder_name(candidate, journey=journey)
+        if sanitized:
+            return sanitized[:120]
+    raise InvestorProvisionValidationError(
+        "pan_name_missing",
+        "PAN holder name is unavailable for bank provisioning.",
+    )
+
+
 def build_bank_account_payload(
     *,
     profile_id: str,
@@ -205,16 +253,12 @@ def build_bank_account_payload(
     if not account_number:
         raise InvestorProvisionValidationError("bank_missing", "Full bank account number is unavailable")
 
-    holder = _str(bank_row.pan_account_holder_name) or _str(bank_row.primary_account_holder_name)
-    if not holder:
-        holder = _str(bank_draft.get("panAccountHolderName")) or _str(bank_draft.get("accountHolderName"))
-    if not holder:
-        holder = bank_row.primary_account_holder_name
+    holder = resolve_fp_bank_holder_name(bank_row=bank_row, journey=journey)
 
     payload: dict[str, Any] = {
         "profile": profile_id,
         "account_number": account_number,
-        "primary_account_holder_name": holder[:120],
+        "primary_account_holder_name": holder,
         "type": FP_BANK_TYPE_MAP.get(bank_row.account_type, bank_row.account_type),
         "ifsc_code": bank_row.ifsc_code.upper(),
     }

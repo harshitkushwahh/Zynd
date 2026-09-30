@@ -205,7 +205,7 @@ export function MfTransactionsTable({
                   id={order.tableId}
                   className={cn(
                     "transition-colors duration-200",
-                    mfOrderRowHoverClass(order.status, order.fp_state),
+                    mfOrderRowHoverClass(order.status, order.fp_state, order.payment_completed, order.order_type),
                     onOrderClick && "cursor-pointer",
                   )}
                   onAction={onOrderClick ? () => onOrderClick(order) : undefined}
@@ -223,7 +223,13 @@ export function MfTransactionsTable({
                     {formatDate(order.created_at)}
                   </Table.Cell>
                   <Table.Cell className={cn(BODY_CELL_CLASS, "overflow-visible")}>
-                    <MfOrderStatusBadge status={order.status} fpState={order.fp_state} />
+                    <MfOrderStatusBadge
+                      status={order.status}
+                      fpState={order.fp_state}
+                      fpPaymentStatus={order.fp_payment_status}
+                      paymentCompleted={order.payment_completed}
+                      orderType={order.order_type}
+                    />
                   </Table.Cell>
                 </Table.Row>
               )}

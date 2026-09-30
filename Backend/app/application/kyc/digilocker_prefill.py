@@ -70,7 +70,4 @@ def digilocker_prefill_missing_fields(
     if not str(permanent.get("state") or "").strip():
         missing.append("state")
 
-    if not str((personal_draft or {}).get("fathersName") or "").strip():
-        missing.append("fathersName")
-
     return missing

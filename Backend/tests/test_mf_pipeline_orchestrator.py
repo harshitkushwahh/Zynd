@@ -139,7 +139,7 @@ def test_run_state_hides_stale_staging_approval_after_promote():
         triggered_by="ADMIN",
         status=MfPipelineRunStatus.paused,
         current_step_key="amfi-ter-monthly",
-        error="Interrupted by server restart — resume to continue",
+        error="Interrupted by server restart - resume to continue",
         steps=[
             MfPipelineStepState(
                 key="cybrilla-scheme-promote",

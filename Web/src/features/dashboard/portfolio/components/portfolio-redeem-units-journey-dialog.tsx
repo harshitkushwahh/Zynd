@@ -103,6 +103,7 @@ function RedeemHoldingSummaryPanel({
   mode,
   amountInr,
   status,
+  statusLabel,
   orderId,
   placedAt,
   units,
@@ -111,6 +112,7 @@ function RedeemHoldingSummaryPanel({
   mode: "idle" | "active";
   amountInr?: number;
   status?: string;
+  statusLabel?: string;
   orderId?: string;
   placedAt?: string;
   units?: number;
@@ -167,9 +169,18 @@ function RedeemHoldingSummaryPanel({
               <p className="text-h4 font-semibold tabular-nums text-foreground">{formatInr(amountInr ?? 0)}</p>
             </SummaryCard>
 
-            {status ? (
+            {status || statusLabel ? (
               <SummaryCard label={copy.transactions.tableStatus}>
-                <MfOrderStatusBadge status={status} />
+                {statusLabel ? (
+                  <StatusBadge
+                    variant={statusLabel === copy.dashboard.portfolio.redeemJourneyStatusAwaitingConsent ? "warning" : mfOrderStatusVariant(status ?? statusLabel)}
+                    className="normal-case"
+                  >
+                    {statusLabel}
+                  </StatusBadge>
+                ) : (
+                  <MfOrderStatusBadge status={status ?? ""} />
+                )}
               </SummaryCard>
             ) : null}
 
@@ -374,6 +385,7 @@ export function PortfolioRedeemUnitsJourneyDialog({
                 mode="active"
                 amountInr={orderJourney.amountInr}
                 status={orderJourney.status}
+                statusLabel={orderJourney.view.displayStatus}
                 orderId={orderJourney.orderId}
                 placedAt={orderJourney.placedAt}
                 units={orderJourney.units}
