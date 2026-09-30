@@ -51,3 +51,11 @@ coverage/
 Admin/.env
 Backend/.env
 Web/.env
+# Production JWT keys
+Backend/privateKey.pem
+Backend/publicKey.pem
+
+# Local production backups / Git cleanup artifacts
+production-backup/
+zynd-before-key-cleanup.bundle
+zynd-history-clean/
