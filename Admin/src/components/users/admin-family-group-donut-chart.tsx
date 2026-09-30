@@ -106,8 +106,8 @@ export function AdminFamilyGroupDonutChart({
               cornerRadius={6}
               stroke="var(--card)"
               strokeWidth={2}
-              onClick={(entry) => {
-                const id = (entry as AdminFamilyGroupDonutSegment).id;
+              onClick={(_entry, index) => {
+                const id = chartData[index]?.id;
                 if (id && onSegmentClick) onSegmentClick(id);
               }}
             >

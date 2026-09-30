@@ -104,13 +104,15 @@ export function AdminTableCell({
   children,
   className,
   colSpan,
+  onClick,
 }: {
   children: React.ReactNode;
   className?: string;
   colSpan?: number;
+  onClick?: (event: React.MouseEvent<HTMLTableCellElement>) => void;
 }) {
   return (
-    <td className={cn("px-4 py-3 align-middle", className)} colSpan={colSpan}>
+    <td className={cn("px-4 py-3 align-middle", className)} colSpan={colSpan} onClick={onClick}>
       {children}
     </td>
   );

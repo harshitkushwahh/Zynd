@@ -9040,6 +9040,15 @@
     color: var(--destructive);
   }
 
+  .distributor-feedback-message--warning {
+    border-color: color-mix(in srgb, var(--warning) 32%, var(--border));
+    background: color-mix(in srgb, var(--warning) 8%, var(--background));
+  }
+
+  .distributor-feedback-message--warning .distributor-feedback-message__icon {
+    color: var(--warning);
+  }
+
   .distributor-feedback-message--success {
     border-color: color-mix(in srgb, var(--success) 32%, var(--border));
     background: color-mix(in srgb, var(--success) 8%, var(--background));

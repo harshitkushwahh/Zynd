@@ -716,7 +716,7 @@ export function DistributorHeadHierarchyChart({
   }
 
   if (error) {
-    return <AdminFeedbackMessage variant="warning" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage>;
+    return <AdminFeedbackMessage variant="warning">{error}</AdminFeedbackMessage>;
   }
 
   if (!overview) {

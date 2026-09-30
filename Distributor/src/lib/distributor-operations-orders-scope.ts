@@ -1,6 +1,10 @@
 import type { DistributorOperationsSectionId } from "@/lib/distributor-operations-sections";
 import { distributorOperationsSectionHref } from "@/lib/distributor-operations-variants";
-import type { DistributorOrder, DistributorTxnRequest } from "@/lib/distributor-types";
+import type {
+  DistributorOrder,
+  DistributorTransactionGroup,
+  DistributorTxnRequest,
+} from "@/lib/distributor-types";
 import { getOrdersForListScope } from "@/lib/distributor-operations-list-data";
 import { getSystematicPlansForListScope } from "@/lib/distributor-operations-list-data";
 import { getTransactionGroupsForListScope } from "@/lib/distributor-operations-list-data";

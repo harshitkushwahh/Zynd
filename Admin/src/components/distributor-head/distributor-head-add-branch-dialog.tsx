@@ -200,7 +200,7 @@ export function DistributorHeadAddBranchDialog({
               !form.name.trim() ||
               !PINCODE_PATTERN.test(pincode) ||
               !locationResolved ||
-              !form.city.trim() ||
+              !(form.city ?? "").trim() ||
               !form.state_code.trim() ||
               !form.state_name.trim() ||
               pincodeLoading ||

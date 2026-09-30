@@ -112,7 +112,7 @@ function DistributorHeadStateHeadDetailSkeleton({
 }
 
 function replaceStateHeadTabUrl(stateHeadId: string, tab: (typeof DISTRIBUTOR_HEAD_STATE_HEAD_TABS)[number]) {
-  const href = distributorHeadStateHeadTabHref(stateHeadId, tab);
+  const href = distributorHeadStateHeadTabHref(stateHeadId, tab.slug);
   if (typeof window === "undefined") return;
   if (window.location.pathname === href) return;
   // Avoid Next catch-all remounts that flash the whole detail page on tab change.

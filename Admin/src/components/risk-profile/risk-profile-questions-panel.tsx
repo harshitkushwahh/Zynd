@@ -380,7 +380,7 @@ export function RiskProfileQuestionsPanel({
         ) : null}
 
         {error || loadError ? (
-          <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
+          <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error || loadError}</AdminFeedbackMessage>
         ) : null}
         {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
 

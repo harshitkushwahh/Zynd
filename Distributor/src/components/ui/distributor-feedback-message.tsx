@@ -1,12 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CheckCircle2, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, X, XCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 type DistributorFeedbackMessageProps = {
-  variant: "error" | "success";
+  variant: "error" | "success" | "warning";
   children: ReactNode;
   onDismiss?: () => void;
   className?: string;
@@ -18,7 +18,8 @@ export function DistributorFeedbackMessage({
   onDismiss,
   className,
 }: DistributorFeedbackMessageProps) {
-  const StatusIcon = variant === "error" ? XCircle : CheckCircle2;
+  const StatusIcon =
+    variant === "error" ? XCircle : variant === "warning" ? AlertTriangle : CheckCircle2;
 
   return (
     <div
@@ -26,6 +27,7 @@ export function DistributorFeedbackMessage({
       className={cn(
         "distributor-feedback-message",
         variant === "error" && "distributor-feedback-message--error",
+        variant === "warning" && "distributor-feedback-message--warning",
         variant === "success" && "distributor-feedback-message--success",
         className,
       )}

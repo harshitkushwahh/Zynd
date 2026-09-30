@@ -157,7 +157,7 @@ export function RiskProfileAuditPanel({
         </div>
       ) : null}
 
-      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
       <AdminDataTable
         minWidth="lg"
