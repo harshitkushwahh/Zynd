@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { MfOrder } from "@/features/invest/api/invest-api";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfOrderStatusBadge } from "@/features/invest/components/mf-order-status-badge";
+import { isOrderAwaitingAllotment } from "@/features/invest/lib/mf-order-payment-status";
+import { resolveCybrillaOrderStatusLabel } from "@/features/invest/lib/mf-cybrilla-status";
 import { formatDateTime, formatInr } from "@/features/invest/lib/mf-format";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
@@ -64,7 +66,9 @@ export function PortfolioUpcomingOrderSummaryCard({
           />
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {copy.dashboard.overview.holdingsUpcomingLabel}
+              {isOrderAwaitingAllotment(order)
+                ? copy.dashboard.overview.holdingsUpcomingLabel
+                : resolveCybrillaOrderStatusLabel(order)}
             </p>
             <h1 className="mt-1 text-body font-semibold leading-snug text-foreground">
               {order.product_name ?? copy.mutualFunds.unknownFund}
@@ -88,7 +92,13 @@ export function PortfolioUpcomingOrderSummaryCard({
               </TooltipContent>
             </Tooltip>
           ) : null}
-          <MfOrderStatusBadge status={order.status} fpState={order.fp_state} />
+          <MfOrderStatusBadge
+            status={order.status}
+            fpState={order.fp_state}
+            fpPaymentStatus={order.fp_payment_status}
+            paymentCompleted={order.payment_completed}
+            orderType={order.order_type}
+          />
         </div>
       </div>
 

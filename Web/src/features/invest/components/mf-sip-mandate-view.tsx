@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   abandonMfSipMandate,
+  confirmMfSipFirstInstallmentReturn,
   confirmMfSipMandateReturn,
   fetchMfSipPlan,
   payMfSipFirstInstallment,
@@ -42,6 +43,13 @@ type MfSipMandateViewProps = {
 
 const TERMINAL_STATUSES = new Set(["ACTIVE", "FAILED", "CANCELLED"]);
 const POLL_MS = 2000;
+const FIRST_INSTALLMENT_RETURN_POLLS = 5;
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
 
 function formatSipAmount(plan: MfSipPlan | null): string {
   if (!plan) return "";
@@ -84,6 +92,18 @@ function isBankSwitchComplete(plan: MfSipPlan | null): boolean {
 function isFirstInstallmentPending(plan: MfSipPlan | null): boolean {
   if (!plan || plan.status !== "ACTIVE") return false;
   return plan.next_action === "pay_first_installment" || plan.first_installment?.status === "pending";
+}
+
+async function reconcileFirstInstallmentReturn(planId: string) {
+  let latest = await confirmMfSipFirstInstallmentReturn(planId);
+  for (let attempt = 0; attempt < FIRST_INSTALLMENT_RETURN_POLLS; attempt += 1) {
+    if (!isFirstInstallmentPending(latest)) {
+      return latest;
+    }
+    await sleep(POLL_MS);
+    latest = await confirmMfSipFirstInstallmentReturn(planId);
+  }
+  return latest;
 }
 
 function isSipSetupComplete(plan: MfSipPlan | null): boolean {
@@ -350,7 +370,7 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
 
       void (async () => {
         try {
-          const next = await fetchMfSipPlan(planId);
+          const next = await reconcileFirstInstallmentReturn(planId);
           if (!cancelled && next) {
             setPlan(next);
             if (isFirstInstallmentPending(next)) {
@@ -361,6 +381,7 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
         } catch (err) {
           if (!cancelled) {
             setError(err instanceof Error ? err.message : copy.mutualFunds.sipLoadError);
+            setFirstInstallmentRetryOffered(true);
           }
         } finally {
           if (!cancelled) {

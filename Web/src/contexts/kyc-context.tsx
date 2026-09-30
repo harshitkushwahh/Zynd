@@ -29,6 +29,10 @@ import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import type { KycRecord, KycStatus } from "@/features/kyc/lib/kyc-types";
 import { copy } from "@/shared/config/copy";
 import { getDisplayName } from "@/shared/utils/user-display";
+import {
+  hasPendingDigilockerResume,
+  persistDigilockerReturnFromSearch,
+} from "@/features/kyc/lib/kyc-digilocker-return";
 
 type KycContextValue = {
   status: KycStatus | null;
@@ -195,8 +199,15 @@ export function KycProvider({ children }: { children: ReactNode }) {
       setOverallStatus(null);
       setProfileProgress(null);
       setLegalFullName(null);
-      setDialogOpen(false);
+      if (!hasPendingDigilockerResume()) {
+        setDialogOpen(false);
+      }
       return;
+    }
+
+    persistDigilockerReturnFromSearch();
+    if (hasPendingDigilockerResume()) {
+      setDialogOpen(true);
     }
 
     if (previousUserId && previousUserId !== nextUserId) {

@@ -1,4 +1,5 @@
 import type { MfOrder } from "@/features/invest/api/invest-api";
+import { isOrderAwaitingAllotment } from "@/features/invest/lib/mf-order-payment-status";
 
 export type MfTransactionTypeFilter = "all" | "lumpsum" | "sip" | "redemption";
 export type MfTransactionStatusFilter = "all" | "processing" | "completed" | "failed";
@@ -62,10 +63,7 @@ function normalizeOrderStatus(status: string) {
 }
 
 export function isAwaitingAllotmentOrder(order: MfOrder) {
-  const status = normalizeOrderStatus(order.status);
-  if (status === "SUBMITTED") return true;
-  if (status === "PROCESSING" && order.fp_state?.toLowerCase() === "submitted") return true;
-  return false;
+  return isOrderAwaitingAllotment(order);
 }
 
 export function isUpcomingHoldingOrder(order: MfOrder) {
@@ -75,6 +73,7 @@ export function isUpcomingHoldingOrder(order: MfOrder) {
   const status = normalizeOrderStatus(order.status);
   if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(status)) return false;
   if (isAwaitingAllotmentOrder(order)) return true;
+  if (status === "SUBMITTED") return true;
   return ["PENDING", "PROCESSING", "PAYMENT_PENDING"].includes(status);
 }
 

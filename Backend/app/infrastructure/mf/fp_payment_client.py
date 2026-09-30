@@ -35,6 +35,26 @@ def is_payment_success_status(status: str | None) -> bool:
     return normalized in {"SUCCESS", "SUCCEEDED", "COMPLETED", "APPROVED"}
 
 
+def is_payment_failure_status(status: str | None) -> bool:
+    normalized = (status or "").strip().upper()
+    return normalized in {
+        "FAILED",
+        "FAILURE",
+        "CANCELLED",
+        "CANCELED",
+        "EXPIRED",
+        "REJECTED",
+        "DECLINED",
+        "TIMEOUT",
+        "TIMED_OUT",
+    }
+
+
+def is_payment_pending_status(status: str | None) -> bool:
+    normalized = (status or "").strip().upper()
+    return normalized in {"PENDING", "INITIATED", "CREATED", "IN_PROGRESS", ""}
+
+
 def extract_payment_token_url(payload: dict[str, Any]) -> str | None:
     token_url = payload.get("token_url")
     if token_url:

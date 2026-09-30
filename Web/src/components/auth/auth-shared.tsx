@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { PASSWORD_CRITERIA } from "@/lib/password-criteria";
 import { DEFAULT_COUNTRY } from "@/lib/input-rules";
 import { IndiaFlagIcon } from "@/components/auth/india-flag-icon";
-import { APP_TAGLINE } from "@/shared/config/brand";
+import { DialogBrandPanel } from "@/components/auth/dialog-brand-panel";
 import { cn } from "@/lib/utils";
 
 const SIGNUP_STEPS = [
@@ -30,25 +30,7 @@ const SIGNUP_STEPS = [
 export type SignupStepId = (typeof SIGNUP_STEPS)[number]["id"];
 
 export function AuthBrandPanel() {
-  return (
-    <div className="relative hidden overflow-hidden bg-gradient-brand md:flex md:flex-col md:justify-between md:p-8">
-      <div className="auth-brand-pattern pointer-events-none absolute inset-0 opacity-30" />
-      <div className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-primary-foreground/10 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-8 -left-10 size-36 rounded-full bg-primary-foreground/10 blur-2xl" />
-
-      <div className="relative z-10">
-        <p className="max-w-[220px] text-h2 font-semibold leading-tight text-primary-foreground">
-          Simple, secure wealth management.
-        </p>
-      </div>
-
-      <div className="relative z-10">
-        <p className="text-compact font-medium text-primary-foreground/90">
-          {APP_TAGLINE.toUpperCase()}
-        </p>
-      </div>
-    </div>
-  );
+  return <DialogBrandPanel />;
 }
 
 export function AuthProgress({

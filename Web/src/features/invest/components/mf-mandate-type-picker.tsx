@@ -26,10 +26,12 @@ export function MfMandateTypePicker({
   value,
   onChange,
   disabled,
+  compact = false,
 }: {
   value: MfMandateType;
   onChange: (value: MfMandateType) => void;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   return (
     <MfPaymentOptionToggle
@@ -37,6 +39,7 @@ export function MfMandateTypePicker({
       onChange={onChange}
       options={MANDATE_TYPE_OPTIONS}
       disabled={disabled}
+      compact={compact}
     />
   );
 }

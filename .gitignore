@@ -44,7 +44,9 @@ npm-debug.log*
 # Testing
 coverage/
 
-documents/
+# Local object-storage root (see Settings.resolved_documents_root).
+# Anchored to the repo root so application packages named "documents" stay tracked.
+/documents/
 
 Admin/.env
 Backend/.env

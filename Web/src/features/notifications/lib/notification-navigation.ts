@@ -20,9 +20,8 @@ export function buildNotificationHref(input: NotificationDeepLinkInput): string 
 
   const recommendationToken = input.metadata?.recommendation_token;
   if (typeof recommendationToken === "string" && recommendationToken) {
-    return `/dashboard/mutual-funds/recommendation/${encodeURIComponent(recommendationToken)}${
-      params.toString() ? `?${params.toString()}` : ""
-    }`;
+    params.set("mitra_recommendation", recommendationToken);
+    return `/dashboard/mutual-funds${params.toString() ? `?${params.toString()}` : ""}`;
   }
 
   const query = params.toString();

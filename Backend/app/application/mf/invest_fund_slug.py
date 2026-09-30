@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.amfi_nav_parser import slugify
 from app.application.mf.catalog_governance_service import invest_visibility_sql_clause
-from app.infrastructure.persistence.mf_models import MutualFund, Product, ProductDisplayContent
+from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product, ProductDisplayContent
 
 
 def fund_public_slug(*, name: str, seo_slug: str | None = None) -> str:
@@ -27,6 +27,7 @@ async def resolve_invest_fund_product_id(session: AsyncSession, identifier: str)
         exists = await session.scalar(
             select(Product.id)
             .join(MutualFund, MutualFund.product_id == Product.id)
+            .join(FundAmc, FundAmc.id == MutualFund.amc_id)
             .where(Product.id == product_id, invest_visibility_sql_clause())
         )
         if exists:
@@ -35,6 +36,7 @@ async def resolve_invest_fund_product_id(session: AsyncSession, identifier: str)
     seo_match = await session.scalar(
         select(Product.id)
         .join(MutualFund, MutualFund.product_id == Product.id)
+        .join(FundAmc, FundAmc.id == MutualFund.amc_id)
         .join(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
         .where(
             ProductDisplayContent.seo_slug == ref,
@@ -48,6 +50,7 @@ async def resolve_invest_fund_product_id(session: AsyncSession, identifier: str)
         await session.execute(
             select(Product.id, Product.name, ProductDisplayContent.seo_slug)
             .join(MutualFund, MutualFund.product_id == Product.id)
+            .join(FundAmc, FundAmc.id == MutualFund.amc_id)
             .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
             .where(invest_visibility_sql_clause())
         )

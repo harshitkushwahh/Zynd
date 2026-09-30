@@ -22,7 +22,6 @@ from app.application.kyc.bank_verification_core import (
     run_hybrid_bank_verification,
 )
 from app.application.kyc.journey_state_service import get_or_create_journey
-from app.application.mf.mf_folio_defaults_service import refresh_mfia_payout_bank_account
 from app.application.mf.mf_mandate_guard import (
     count_active_sips_for_bank,
     find_blocking_mandate_for_bank,
@@ -829,6 +828,8 @@ async def set_primary_bank_account(
     await db.flush()
 
     if target.external_bank_account_id:
+        from app.application.mf.mf_folio_defaults_service import refresh_mfia_payout_bank_account
+
         await refresh_mfia_payout_bank_account(db, user_id=user_id, bank=target)
 
     return await _serialize_bank_account_from_session(db, target)
@@ -888,6 +889,11 @@ async def disable_bank_account(
     await db.flush()
 
 
+def _is_stub_fp_bank_id(external_id: str | None) -> bool:
+    normalized = str(external_id or "").strip()
+    return normalized.startswith("bac_stub_")
+
+
 def _stub_bank_account_external_ids(bank_row: InvestorBankAccount) -> tuple[str, int]:
     external_id = bank_row.external_bank_account_id or f"bac_stub_{bank_row.id.hex[:24]}"
     external_old_id = bank_row.external_old_id or (bank_row.id.int % 1_000_000_000 or 1)
@@ -903,15 +909,33 @@ def _apply_stub_bank_payment_ids(bank_row: InvestorBankAccount) -> None:
     bank_row.failure_reason = None
 
 
+def _bank_has_real_fp_identity(bank_row: InvestorBankAccount) -> bool:
+    if bank_row.sync_status != InvestorObjectSyncStatus.active:
+        return False
+    if not bank_row.external_bank_account_id or bank_row.external_old_id is None:
+        return False
+    if get_settings().resolved_fp_enabled and _is_stub_fp_bank_id(bank_row.external_bank_account_id):
+        return False
+    return True
+
+
 def _bank_needs_payment_setup(row: InvestorBankAccount) -> bool:
+    if row.verification_status != InvestorBankVerificationStatus.verified:
+        return False
+    if is_bank_account_disabled(row):
+        return False
+    if get_settings().resolved_fp_enabled and _is_stub_fp_bank_id(row.external_bank_account_id):
+        return True
+    if (
+        row.sync_status == InvestorObjectSyncStatus.failed
+        and row.failure_code == "fp_bank_failed"
+        and get_settings().resolved_fp_enabled
+    ):
+        return True
     return (
-        row.verification_status == InvestorBankVerificationStatus.verified
-        and not is_bank_account_disabled(row)
-        and (
-            row.sync_status != InvestorObjectSyncStatus.active
-            or not row.external_bank_account_id
-            or row.external_old_id is None
-        )
+        row.sync_status != InvestorObjectSyncStatus.active
+        or not row.external_bank_account_id
+        or row.external_old_id is None
     )
 
 
@@ -923,7 +947,7 @@ async def _provision_bank_account_if_ready(
     journey,
 ) -> None:
     settings = get_settings()
-    if bank_row.sync_status == InvestorObjectSyncStatus.active and bank_row.external_bank_account_id and bank_row.external_old_id is not None:
+    if _bank_has_real_fp_identity(bank_row):
         return
     if bank_row.verification_status != InvestorBankVerificationStatus.verified:
         return
@@ -935,6 +959,20 @@ async def _provision_bank_account_if_ready(
         return
     if not read_account_number(bank_row):
         return
+
+    if _is_stub_fp_bank_id(bank_row.external_bank_account_id):
+        bank_row.external_bank_account_id = None
+        bank_row.external_old_id = None
+        bank_row.failure_code = None
+        bank_row.failure_reason = None
+    elif bank_row.sync_status == InvestorObjectSyncStatus.failed and bank_row.failure_code == "fp_bank_failed":
+        bank_row.failure_code = None
+        bank_row.failure_reason = None
+
+    from app.application.investor.investor_provision_mapper import resolve_fp_bank_holder_name
+
+    pan_holder = resolve_fp_bank_holder_name(bank_row=bank_row, journey=journey)
+    bank_row.pan_account_holder_name = pan_holder
 
     bank_row.sync_status = InvestorObjectSyncStatus.pending_create
     try:
@@ -964,6 +1002,8 @@ async def _provision_bank_account_if_ready(
     await db.flush()
 
     if bank_row.is_primary and bank_row.external_bank_account_id:
+        from app.application.mf.mf_folio_defaults_service import refresh_mfia_payout_bank_account
+
         await refresh_mfia_payout_bank_account(db, user_id=profile.user_id, bank=bank_row)
 
 
@@ -990,10 +1030,15 @@ async def sync_bank_account_from_kyc_journey(
     )
 
     account_type = KYC_ACCOUNT_TYPE_MAP.get(_str(bank.get("accountType")), "savings")
-    holder = _str(bank.get("accountHolderName")) or "Account Holder"
+    display_holder = (
+        _str(bank.get("kyckartAccountHolderName"))
+        or _str(bank.get("accountHolderName"))
+        or "Account Holder"
+    )
+    pan_draft = journey.pan_draft_json if isinstance(journey.pan_draft_json, dict) else {}
+    pan_holder = _str(bank.get("panAccountHolderName")) or holder_name_from_pan_draft(pan_draft)
     verification_status = _map_journey_verification_status(journey.bank_verification_status)
     ciphertext, key_version = encrypt_account_number(account_number)
-    pan_holder = _str(bank.get("panAccountHolderName")) or holder
     metadata = {
         "seededFrom": "kyc",
         "readinessVerified": bool(bank.get("readinessVerified")),
@@ -1011,7 +1056,7 @@ async def sync_bank_account_from_kyc_journey(
     if existing_row:
         row = existing_row
         row.ifsc_code = ifsc
-        row.primary_account_holder_name = holder[:120]
+        row.primary_account_holder_name = display_holder[:120]
         row.pan_account_holder_name = pan_holder[:120] or None
         row.bank_name = _str(bank.get("bankName"))[:120] or None
         row.branch_name = _str(bank.get("branch"))[:120] or None
@@ -1034,7 +1079,7 @@ async def sync_bank_account_from_kyc_journey(
             account_type=account_type,
             account_number_last4=last4,
             ifsc_code=ifsc,
-            primary_account_holder_name=holder[:120],
+            primary_account_holder_name=display_holder[:120],
             pan_account_holder_name=pan_holder[:120] or None,
             bank_name=_str(bank.get("bankName"))[:120] or None,
             branch_name=_str(bank.get("branch"))[:120] or None,

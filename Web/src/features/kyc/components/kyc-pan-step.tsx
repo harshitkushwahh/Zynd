@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PencilLine } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ type KycPanStepProps = {
   onPanVerified?: (info: {
     kycAlreadyRegistered: boolean;
     readiness?: KycPanVerifyResponse["readiness"];
+    panDraft: KycPanDraft;
   }) => void;
   onPanReset?: () => void;
   onSubmit: (details: KycPanDraft & { requiresDigilocker: boolean; kycAlreadyRegistered: boolean }) => void;
@@ -81,6 +83,7 @@ export function KycPanStep({
   const [kycAlreadyRegistered, setKycAlreadyRegistered] = useState<boolean | null>(
     initialKycAlreadyRegistered,
   );
+  const [isPanReentry, setIsPanReentry] = useState(false);
 
   useEffect(() => {
     if (initialKycAlreadyRegistered == null && initialReadinessCode == null) return;
@@ -89,16 +92,28 @@ export function KycPanStep({
   }, [initialKycAlreadyRegistered, initialReadinessCode]);
 
   useEffect(() => {
-    if (!initialDraft) return;
-    setPanNumber(initialDraft.panNumber);
-    setFirstName(initialDraft.firstName);
+    if (!initialDraft || isPanReentry) return;
+
+    const incomingPan = (initialDraft.panNumber ?? "").toUpperCase();
+    const activePan = panNumber.toUpperCase();
+    if (incomingPan && activePan && incomingPan !== activePan) return;
+
+    if (initialDraft.panNumber) {
+      setPanNumber(initialDraft.panNumber);
+    } else if (!PAN_PATTERN.test(activePan)) {
+      setPanNumber("");
+    }
+
+    setFirstName(initialDraft.firstName ?? "");
     setMiddleName(initialDraft.middleName ?? "");
-    setLastName(initialDraft.lastName);
+    setLastName(initialDraft.lastName ?? "");
     setVerifiedDraft(initialDraft);
     setIsVerified(isPanDraftVerified(initialDraft, initiallyVerified));
-  }, [initialDraft, initiallyVerified]);
+    setPanError("");
+  }, [initialDraft, initiallyVerified, isPanReentry, panNumber]);
 
   const handlePanChange = (value: string) => {
+    setIsPanReentry(true);
     setPanNumber(value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10));
     setPanError("");
     setNameError("");
@@ -111,6 +126,24 @@ export function KycPanStep({
     setRequiresDigilocker(null);
     setKycAlreadyRegistered(null);
     onPanReset?.();
+  };
+
+  const handleEditPan = () => {
+    setIsPanReentry(true);
+    setPanError("");
+    setNameError("");
+    setFetchError("");
+    setIsVerified(false);
+    setVerifiedDraft(null);
+    setFirstName("");
+    setMiddleName("");
+    setLastName("");
+    setRequiresDigilocker(null);
+    setKycAlreadyRegistered(null);
+    onPanReset?.();
+    window.requestAnimationFrame(() => {
+      document.getElementById("kyc-pan-number")?.focus();
+    });
   };
 
   const validateNames = () => {
@@ -153,12 +186,12 @@ export function KycPanStep({
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!PAN_PATTERN.test(panNumber)) {
-      setPanError(copy.kyc.pan.invalidPan);
-      return;
-    }
-
     if (!isVerified || !verifiedDraft) {
+      if (!PAN_PATTERN.test(panNumber)) {
+        setPanError(copy.kyc.pan.invalidPan);
+        return;
+      }
+
       setIsFetching(true);
       setFetchError("");
       try {
@@ -172,15 +205,17 @@ export function KycPanStep({
           return;
         }
         setVerifiedDraft(result.pan_draft);
-        setFirstName(result.pan_draft.firstName);
+        setFirstName(result.pan_draft.firstName ?? "");
         setMiddleName(result.pan_draft.middleName ?? "");
-        setLastName(result.pan_draft.lastName);
+        setLastName(result.pan_draft.lastName ?? "");
         setRequiresDigilocker(Boolean(result.requires_digilocker));
         setKycAlreadyRegistered(Boolean(result.kyc_already_registered));
         onPanVerified?.({
           kycAlreadyRegistered: Boolean(result.kyc_already_registered),
           readiness: result.readiness,
+          panDraft: result.pan_draft,
         });
+        setIsPanReentry(false);
         setIsVerified(true);
       } catch (error) {
         if (error instanceof ApiError && error.message !== "Request failed") {
@@ -227,7 +262,8 @@ export function KycPanStep({
 
       onSubmit({
         ...confirmResult.pan_draft,
-        panNumber,
+        panNumber: panNumber || confirmResult.pan_draft.panNumber || verifiedDraft.panNumber || "",
+        panMasked: confirmResult.pan_draft.panMasked ?? verifiedDraft.panMasked,
         requiresDigilocker: Boolean(digilockerRequired),
         kycAlreadyRegistered: Boolean(kycAlreadyRegistered),
       });
@@ -243,6 +279,9 @@ export function KycPanStep({
   };
 
   const nameCardFetched = isVerified || hasPanNameFields(firstName, lastName);
+  const panLocked = isVerified && !isPanReentry && !disabled && !isFetching;
+  const panDisplayValue =
+    panLocked && !panNumber && verifiedDraft?.panMasked ? verifiedDraft.panMasked : panNumber;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -269,18 +308,39 @@ export function KycPanStep({
           panCategory={verifiedDraft?.panCategory}
         />
 
-        <Input
-          id="kyc-pan-number"
-          value={panNumber}
-          onChange={(event) => handlePanChange(event.target.value)}
-          placeholder={copy.kyc.pan.numberPlaceholder}
-          autoComplete="off"
-          spellCheck={false}
-          disabled={disabled || isFetching || nameCardFetched}
-          aria-label={copy.kyc.pan.numberLabel}
-          aria-invalid={Boolean(panError)}
-          className="h-14 text-center font-mono text-h4 uppercase tracking-[0.2em]"
-        />
+        <div className="space-y-1.5">
+          <label htmlFor="kyc-pan-number" className="text-caption font-medium text-muted-foreground">
+            {copy.kyc.pan.numberLabel}
+          </label>
+
+          <div className="relative">
+            <Input
+              id="kyc-pan-number"
+              value={panDisplayValue}
+              onChange={(event) => handlePanChange(event.target.value)}
+              placeholder={copy.kyc.pan.numberPlaceholder}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={disabled || isFetching || panLocked}
+              aria-label={copy.kyc.pan.numberLabel}
+              aria-invalid={Boolean(panError)}
+              className={cn(
+                "h-14 text-center font-mono text-h4 uppercase tracking-[0.2em]",
+                panLocked && "pr-12",
+              )}
+            />
+            {panLocked ? (
+              <button
+                type="button"
+                onClick={handleEditPan}
+                className="absolute top-1/2 right-3 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-[var(--radius-control)] text-primary transition-colors hover:bg-primary/10"
+                aria-label={copy.kyc.pan.editPan}
+              >
+                <PencilLine className="size-4" strokeWidth={2} aria-hidden />
+              </button>
+            ) : null}
+          </div>
+        </div>
         {panError ? <FieldMessage message={panError} /> : null}
         {nameError ? <FieldMessage message={nameError} /> : null}
         {fetchError ? <FieldMessage message={fetchError} /> : null}

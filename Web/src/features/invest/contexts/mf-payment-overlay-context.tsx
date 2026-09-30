@@ -15,12 +15,15 @@ import { MfCartCheckoutPayView } from "@/features/invest/components/mf-cart-chec
 import { MfOrderPayView } from "@/features/invest/components/mf-order-pay-view";
 import { MfSipMandateView } from "@/features/invest/components/mf-sip-mandate-view";
 import {
+  clearMfLumpsumPaymentDismissed,
+  clearMfLumpsumPaymentSession,
   clearMfSipPaymentSession,
   clearMfSipPaymentDismissed,
   getLastMfPaymentCheckoutId,
   getLastMfPaymentOrderId,
   getLastMfPaymentPlanId,
   markMfPaymentReturnPath,
+  wasMfLumpsumPaymentDismissed,
   wasMfPaymentRedirected,
   wasMfSipFirstInstallmentRedirected,
   wasMfSipMandateRedirected,
@@ -60,6 +63,7 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
       if (options?.captureReturnPath !== false) {
         captureCurrentReturnPath();
       }
+      clearMfLumpsumPaymentDismissed(checkoutId);
       setActivePayment({ kind: "cart-checkout", checkoutId });
     },
     [],
@@ -69,6 +73,7 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
     if (options?.captureReturnPath !== false) {
       captureCurrentReturnPath();
     }
+    clearMfLumpsumPaymentDismissed(orderId);
     setActivePayment({ kind: "order", orderId });
   }, []);
 
@@ -83,6 +88,10 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
   const closePayment = useCallback(() => {
     if (activePayment?.kind === "sip-mandate") {
       clearMfSipPaymentSession(activePayment.planId);
+    } else if (activePayment?.kind === "order") {
+      clearMfLumpsumPaymentSession(activePayment.orderId);
+    } else if (activePayment?.kind === "cart-checkout") {
+      clearMfLumpsumPaymentSession(activePayment.checkoutId);
     }
     setActivePayment(null);
   }, [activePayment]);
@@ -92,12 +101,20 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
       if (current) return current;
 
       const checkoutId = getLastMfPaymentCheckoutId();
-      if (checkoutId && wasMfPaymentRedirected(checkoutId)) {
+      if (
+        checkoutId &&
+        wasMfPaymentRedirected(checkoutId) &&
+        !wasMfLumpsumPaymentDismissed(checkoutId)
+      ) {
         return { kind: "cart-checkout", checkoutId };
       }
 
       const orderId = getLastMfPaymentOrderId();
-      if (orderId && wasMfPaymentRedirected(orderId)) {
+      if (
+        orderId &&
+        wasMfPaymentRedirected(orderId) &&
+        !wasMfLumpsumPaymentDismissed(orderId)
+      ) {
         return { kind: "order", orderId };
       }
 

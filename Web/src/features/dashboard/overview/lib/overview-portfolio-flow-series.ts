@@ -36,11 +36,11 @@ export function portfolioFlowInvestingStartDate(
 
 /** Calendar days from first investment point to the latest series point. */
 export function portfolioFlowHistoryDays(points: readonly OverviewPortfolioFlowPoint[]): number {
-  const investedPoints = points.filter((point) => point.invested > 0);
-  if (investedPoints.length === 0) return 0;
-  if (investedPoints.length === 1) return 0;
+  if (points.length < 2) return 0;
 
-  const start = new Date(investedPoints[0].date);
+  const investedPoints = points.filter((point) => point.invested > 0);
+  const startSource = investedPoints[0] ?? points[0];
+  const start = new Date(startSource.date);
   const end = new Date(points[points.length - 1].date);
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86_400_000));
 }

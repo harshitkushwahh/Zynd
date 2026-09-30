@@ -98,13 +98,12 @@ import {
 import type { KycPersonalInfoValue } from "@/features/kyc/lib/kyc-personal-info";
 import {
   clearDigilockerReturnHandled,
+  clearPendingDigilockerResume,
+  markPendingDigilockerResume,
   processDigilockerReturnFromUrl,
   type DigilockerReturnResult,
 } from "@/features/kyc/lib/kyc-digilocker-return";
-import {
-  isDigilockerAddressPrefillIncomplete,
-  isDigilockerFathersNameMissing,
-} from "@/features/kyc/lib/kyc-digilocker-prefill";
+import { isDigilockerAddressPrefillIncomplete } from "@/features/kyc/lib/kyc-digilocker-prefill";
 import { copy } from "@/shared/config/copy";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -249,6 +248,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const [journeySaveError, setJourneySaveError] = useState<string | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [panReadiness, setPanReadiness] = useState<KycReadinessInfo | null>(null);
+  const [panReentryActive, setPanReentryActive] = useState(false);
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -271,6 +271,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
 
   const beginDigilockerRedirect = useCallback(async () => {
     clearDigilockerReturnHandled();
+    markPendingDigilockerResume();
     const { redirect_url: redirectUrl } = await startKycDigilocker();
     openDigilockerRedirectDialog(redirectUrl);
   }, [openDigilockerRedirectDialog]);
@@ -467,6 +468,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       const digilockerReturn = await processDigilockerReturnFromUrl();
       const payload = await fetchKycBootstrap();
       applyBootstrap(payload, digilockerReturn);
+      clearPendingDigilockerResume();
 
       const [statesResult, countriesResult, enumsResult] = await Promise.allSettled([
         fetchKycStates(),
@@ -531,6 +533,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       setCheckingKraStatus(false);
       setSubmitError(null);
       setPanReadiness(null);
+      setPanReentryActive(false);
       setCachedCoords(null);
       setShowDigilockerFailureCard(false);
       setDigilockerFailureDialogOpen(false);
@@ -720,7 +723,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       });
       updateDraft({
         pan: {
-          panNumber: details.panNumber,
+          panNumber: details.panNumber || journeyDraft.pan?.panNumber,
+          panMasked: details.panMasked ?? journeyDraft.pan?.panMasked,
+          panLast4: details.panLast4 ?? journeyDraft.pan?.panLast4,
           firstName: details.firstName,
           lastName: details.lastName,
           middleName: details.middleName,
@@ -1032,10 +1037,6 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     () => prefilledFromDigilocker && isDigilockerAddressPrefillIncomplete(currentAddressDraft),
     [currentAddressDraft, prefilledFromDigilocker],
   );
-  const digilockerFathersNameIncomplete = useMemo(
-    () => prefilledFromDigilocker && isDigilockerFathersNameMissing(currentPersonalDraft),
-    [currentPersonalDraft, prefilledFromDigilocker],
-  );
   const fathersNameFromDigilocker = useMemo(
     () => prefilledFromDigilocker && Boolean(currentPersonalDraft?.fathersName?.trim()),
     [currentPersonalDraft?.fathersName, prefilledFromDigilocker],
@@ -1169,20 +1170,51 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         {journeyStepIds.has("pan-card") ? (
           <KycJourneyStepPanel stepId="pan-card" activeStepId={activeStepId}>
             <KycPanStep
-              initialDraft={journeyDraft.pan ?? bootstrap?.pan_draft ?? null}
-              initiallyVerified={panVerified}
+              initialDraft={
+                panReentryActive ? null : journeyDraft.pan ?? bootstrap?.pan_draft ?? null
+              }
+              initiallyVerified={panVerified && !panReentryActive}
               initialKycAlreadyRegistered={bootstrap?.kyc_already_registered ?? null}
               initialReadinessCode={panReadiness?.code ?? bootstrap?.readiness_code ?? null}
               onBlocked={handlePanBlocked}
-              onPanVerified={({ kycAlreadyRegistered, readiness }) => {
+              onPanVerified={({ kycAlreadyRegistered, readiness, panDraft }) => {
+                updateDraft({ pan: panDraft });
+                setBootstrap((current) =>
+                  current
+                    ? {
+                        ...current,
+                        pan_draft: panDraft,
+                        pan_verification_status: "verified",
+                        pan_verification_failure: null,
+                        kyc_already_registered: kycAlreadyRegistered,
+                        readiness_code: readiness?.code ?? current.readiness_code,
+                        readiness_reason: readiness?.reason ?? current.readiness_reason,
+                      }
+                    : current,
+                );
                 setPanReadiness(readiness ?? null);
                 syncKycRegistrationFromPan({
                   kycAlreadyRegistered,
                   readiness,
                   panVerified: true,
                 });
+                setPanReentryActive(false);
               }}
-              onPanReset={() => setPanReadiness(null)}
+              onPanReset={() => {
+                setPanReadiness(null);
+                setPanReentryActive(true);
+                updateDraft({ pan: undefined });
+                setBootstrap((current) =>
+                  current
+                    ? {
+                        ...current,
+                        pan_draft: null,
+                        pan_verification_status: null,
+                        pan_verification_failure: null,
+                      }
+                    : current,
+                );
+              }}
               onSubmit={handlePanSubmit}
               disabled={saving}
             />
@@ -1218,11 +1250,6 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               enumOptions={enumOptions}
               nationalityOptions={nationalityOptions}
               fathersNameFromDigilocker={fathersNameFromDigilocker}
-              digilockerFathersNameIncomplete={digilockerFathersNameIncomplete}
-              onRetryDigilocker={() => {
-                setDigilockerFailureDialogOpen(true);
-              }}
-              retryingDigilocker={digilockerRetrying}
               saving={saving}
               onSubmit={handlePersonalSubmit}
             />
@@ -1366,7 +1393,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     <>
       <DialogTitle className="sr-only">{copy.kyc.pageTitle}</DialogTitle>
       {!kycAllowed ? (
-        <KycDialogLayout onClose={() => handleOpenChange(false)}>
+        <KycDialogLayout onClose={() => handleOpenChange(false)} activeStepId={activeStepId}>
           <KycDialogChrome
             title={copy.kyc.pageTitle}
             onClose={() => handleOpenChange(false)}
@@ -1381,11 +1408,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
           </KycDialogBody>
         </KycDialogLayout>
       ) : (
-        <KycDialogLayout
-          activeStepId={activeStepId}
-          hidePanelVisual={loadingBootstrap || Boolean(bootstrapError)}
-          onClose={() => handleOpenChange(false)}
-        >
+        <KycDialogLayout onClose={() => handleOpenChange(false)} activeStepId={activeStepId}>
           <KycDialogChrome
             activeStepIndex={activeStepIndex}
             maxReachableStepIndex={maxReachableStepIndex}

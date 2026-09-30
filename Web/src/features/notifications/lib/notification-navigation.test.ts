@@ -38,6 +38,6 @@ describe("buildNotificationHref", () => {
         notification_type: "invest.mitra_txn_recommendation",
         metadata: { recommendation_token: "abc123" },
       }),
-    ).toBe("/dashboard/mutual-funds/recommendation/abc123");
+    ).toBe("/dashboard/mutual-funds?mitra_recommendation=abc123");
   });
 });

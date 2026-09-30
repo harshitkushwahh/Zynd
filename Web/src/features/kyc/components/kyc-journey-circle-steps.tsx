@@ -43,7 +43,7 @@ function JourneyScrollFade({
     <div
       aria-hidden
       className={cn(
-        "pointer-events-none absolute top-0 z-10 h-9 w-10 transition-opacity duration-300 sm:w-12",
+        "pointer-events-none absolute inset-y-0 z-10 w-12 transition-opacity duration-300 sm:w-14",
         side === "left" ? "left-0" : "right-0",
         visible ? "opacity-100" : "opacity-0",
       )}
@@ -52,8 +52,8 @@ function JourneyScrollFade({
         className={cn(
           "absolute inset-0",
           side === "left"
-            ? "bg-gradient-to-r from-card via-card/85 to-transparent"
-            : "bg-gradient-to-l from-card via-card/85 to-transparent",
+            ? "bg-gradient-to-r from-popover from-15% via-popover/92 via-50% to-transparent"
+            : "bg-gradient-to-l from-popover from-15% via-popover/92 via-50% to-transparent",
         )}
       />
     </div>
@@ -122,7 +122,7 @@ export function KycJourneyCircleSteps({
   return (
     <nav
       aria-label="KYC steps"
-      className={cn("relative w-full border-b border-border/40 pb-4", className)}
+      className={cn("relative w-full overflow-hidden border-b border-border/40 pb-4", className)}
     >
       <JourneyScrollFade side="left" visible={showLeftFade} />
       <JourneyScrollFade side="right" visible={showRightFade} />

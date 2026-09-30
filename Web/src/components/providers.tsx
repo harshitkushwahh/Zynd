@@ -18,6 +18,7 @@ import { PushDeviceRegistration } from "@/features/notifications/components/web-
 import { ReferralAttributionCapture } from "@/features/referral/components/referral-attribution-capture";
 import { FamilyInviteCapture } from "@/features/family-groups/components/family-invite-capture";
 import { FamilyInviteHandler } from "@/features/family-groups/hooks/use-family-invite-handler";
+import { MitraTxnRecommendationHandler } from "@/features/recommendations/hooks/use-mitra-txn-recommendation-handler";
 import { DocumentTitleSync } from "@/components/document-title-sync";
 import { getQueryClient } from "@/lib/query-client";
 
@@ -41,6 +42,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
                           <ReferralAttributionCapture />
                           <FamilyInviteCapture />
                           <FamilyInviteHandler />
+                          <MitraTxnRecommendationHandler />
                           <NotificationDeepLinkHandler />
                         </Suspense>
                         {children}

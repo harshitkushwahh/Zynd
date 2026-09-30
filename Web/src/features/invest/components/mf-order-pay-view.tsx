@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import {
+  abandonMfOrderPayment,
   fetchMfOrder,
   type MfOrder,
   type MfPaymentReconcileOutcome,
@@ -22,8 +23,10 @@ import {
 } from "@/features/invest/lib/mf-payment-poll";
 import {
   clearLastMfPaymentSession,
+  clearMfLumpsumPaymentSession,
   clearMfPaymentRedirect,
   getLastMfPaymentOrderId,
+  markMfLumpsumPaymentDismissed,
   markMfPaymentRedirect,
   wasMfPaymentRedirected,
 } from "@/features/invest/lib/mf-payment-session";
@@ -64,6 +67,7 @@ function resolveOrderPayMessage(args: {
   redirecting: boolean;
   returnedFromPayment: boolean;
   returnConfirming: boolean;
+  gatewayReturnHandled: boolean;
   longRunning: boolean;
   paymentOutcome: MfPaymentReconcileOutcome | null;
 }): string {
@@ -74,6 +78,7 @@ function resolveOrderPayMessage(args: {
     redirecting,
     returnedFromPayment,
     returnConfirming,
+    gatewayReturnHandled,
     longRunning,
     paymentOutcome,
   } = args;
@@ -85,17 +90,26 @@ function resolveOrderPayMessage(args: {
   }
   if (phase === "success") return copy.mutualFunds.orderPaySuccess;
   if (redirecting) return copy.mutualFunds.orderPayRedirecting;
-  if (returnConfirming || (returnedFromPayment && phase === "waiting")) {
+  if (returnConfirming || (returnedFromPayment && phase === "waiting" && !gatewayReturnHandled)) {
     if (paymentOutcome === "unclear") return copy.mutualFunds.orderPayReturnUnclear;
     return longRunning
       ? copy.mutualFunds.orderPayReturnStillProcessing
       : copy.mutualFunds.orderPayReturnConfirming;
+  }
+  if (returnedFromPayment && gatewayReturnHandled && phase === "waiting") {
+    return copy.mutualFunds.orderPayAbandoned;
   }
   if (order?.next_action === "wait_review" || order?.fp_state === "under_review") {
     return copy.mutualFunds.orderPayUnderReview;
   }
   if (order?.next_action === "wait_payment_setup" || order?.status === "PAYMENT_PENDING") {
     return copy.mutualFunds.orderPayPendingSetup;
+  }
+  if (
+    order?.next_action === "wait_processing" ||
+    (order?.status === "PENDING" && !returnedFromPayment)
+  ) {
+    return copy.mutualFunds.orderPayProcessing;
   }
   return copy.mutualFunds.orderPayPolling;
 }
@@ -111,6 +125,7 @@ async function syncOrderPaymentReturn(orderId: string) {
 
 export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   const router = useRouter();
+  const initialGatewayReturn = wasMfPaymentRedirected(orderId);
   const [order, setOrder] = useState<MfOrder | null>(null);
   const [paymentOutcome, setPaymentOutcome] = useState<MfPaymentReconcileOutcome | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,10 +134,12 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   const [returnConfirming, setReturnConfirming] = useState(false);
   const [longRunning, setLongRunning] = useState(false);
   const [returnRetryToken, setReturnRetryToken] = useState(0);
+  const [returnedFromGateway, setReturnedFromGateway] = useState(initialGatewayReturn);
+  const [gatewayReturnHandled, setGatewayReturnHandled] = useState(!initialGatewayReturn);
   const redirectedRef = useRef(false);
   const pollAttemptsRef = useRef(0);
-  const reconcilePollingRef = useRef(wasMfPaymentRedirected(orderId));
-  const returnedFromPayment = wasMfPaymentRedirected(orderId);
+  const reconcilePollingRef = useRef(initialGatewayReturn);
+  const returnedFromPayment = returnedFromGateway;
 
   useInvestCacheInvalidation(`order-${orderId}`, order?.status === "SUCCEEDED");
 
@@ -150,9 +167,13 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   }, [orderId]);
 
   useEffect(() => {
-    function handlePageShow() {
+    function handlePageShow(event: PageTransitionEvent) {
       if (!wasMfPaymentRedirected(orderId)) return;
+      setReturnedFromGateway(true);
       setRedirecting(false);
+      if (event.persisted) {
+        setGatewayReturnHandled(false);
+      }
       setReturnRetryToken((token) => token + 1);
     }
 
@@ -161,7 +182,7 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   }, [orderId]);
 
   useEffect(() => {
-    if (!wasMfPaymentRedirected(orderId)) {
+    if (!returnedFromGateway) {
       void loadOrder();
       return;
     }
@@ -178,15 +199,15 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
       setPaymentOutcome(status.outcome);
       const next = pickOrderFromPaymentStatus(status);
       if (next) setOrder(next);
-      clearMfPaymentRedirect(orderId);
       setReturnConfirming(false);
+      setGatewayReturnHandled(true);
       setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [loadOrder, orderId, returnRetryToken]);
+  }, [loadOrder, orderId, returnRetryToken, returnedFromGateway]);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +254,7 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   }, [loadOrder, orderId, returnConfirming, returnRetryToken]);
 
   useEffect(() => {
+    if (!gatewayReturnHandled || returnedFromGateway) return;
     if (!order?.payment_url || order.next_action !== "pay_upi") return;
     if (TERMINAL_STATUSES.has(order.status)) return;
     if (redirectedRef.current || wasMfPaymentRedirected(orderId)) return;
@@ -241,7 +263,34 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
     setRedirecting(true);
     markMfPaymentRedirect({ orderId });
     window.location.href = order.payment_url;
-  }, [order, orderId]);
+  }, [gatewayReturnHandled, order, orderId, returnedFromGateway]);
+
+  const canRetryPayment =
+    returnedFromGateway &&
+    gatewayReturnHandled &&
+    !redirecting &&
+    !returnConfirming &&
+    Boolean(order?.payment_url) &&
+    order?.next_action === "pay_upi" &&
+    !TERMINAL_STATUSES.has(order?.status ?? "");
+
+  const canLeaveAfterReturn =
+    returnedFromGateway &&
+    gatewayReturnHandled &&
+    !redirecting &&
+    !returnConfirming;
+
+  function handleManualPayment() {
+    if (!order?.payment_url) return;
+    clearMfPaymentRedirect(orderId);
+    clearMfLumpsumPaymentDismissed(orderId);
+    redirectedRef.current = false;
+    setReturnedFromGateway(false);
+    setGatewayReturnHandled(true);
+    setRedirecting(true);
+    markMfPaymentRedirect({ orderId });
+    window.location.href = order.payment_url;
+  }
 
   const phase = resolveOrderPayPhase({
     loading,
@@ -258,6 +307,7 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
     redirecting,
     returnedFromPayment,
     returnConfirming,
+    gatewayReturnHandled,
     longRunning,
     paymentOutcome,
   });
@@ -280,6 +330,13 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
         : copy.mutualFunds.orderPayTitle;
 
   function dismissPaymentDialog() {
+    if (paymentOutcome === "success" || order?.status === "SUCCEEDED") {
+      clearLastMfPaymentSession();
+    } else if (order && !TERMINAL_STATUSES.has(order.status)) {
+      markMfLumpsumPaymentDismissed(orderId);
+      void abandonMfOrderPayment(orderId);
+    }
+    clearMfLumpsumPaymentSession(orderId);
     if (onClose) {
       onClose();
       return;
@@ -294,17 +351,24 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
       title={title}
       message={message}
       terminalLines={terminalLines}
+      allowDismiss={canLeaveAfterReturn || phase === "success" || phase === "error" || longRunning}
       onDismiss={dismissPaymentDialog}
       primaryLabel={
-        phase === "success" || phase === "error" || longRunning
-          ? copy.mutualFunds.backToBrowse
-          : undefined
+        canRetryPayment
+          ? copy.mutualFunds.orderPayUpiCta
+          : canLeaveAfterReturn || phase === "success" || phase === "error" || longRunning
+            ? copy.mutualFunds.backToBrowse
+            : undefined
       }
       onPrimaryAction={
-        phase === "success" || phase === "error" || longRunning
-          ? dismissPaymentDialog
-          : undefined
+        canRetryPayment
+          ? handleManualPayment
+          : canLeaveAfterReturn || phase === "success" || phase === "error" || longRunning
+            ? dismissPaymentDialog
+            : undefined
       }
+      secondaryLabel={canRetryPayment ? copy.mutualFunds.backToBrowse : undefined}
+      onSecondaryAction={canRetryPayment ? dismissPaymentDialog : undefined}
     />
   );
 }

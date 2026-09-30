@@ -259,10 +259,7 @@ export function KycSignatureStep({ initialValue, onSubmit }: KycSignatureStepPro
           {copy.kyc.signature.loadingPreview}
         </div>
       ) : activeTab === "draw" ? (
-        <div className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">{copy.kyc.signature.drawHint}</p>
-          <KycSignaturePad value={drawnSignature} onChange={handleDrawnChange} disabled={isBusy} />
-        </div>
+        <KycSignaturePad value={drawnSignature} onChange={handleDrawnChange} disabled={isBusy} />
       ) : (
         <div className="space-y-4">
           <input

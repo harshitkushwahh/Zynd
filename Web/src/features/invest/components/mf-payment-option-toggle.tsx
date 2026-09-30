@@ -18,6 +18,7 @@ type MfPaymentOptionToggleProps<TValue extends string> = {
   onChange: (value: TValue) => void;
   options: readonly MfPaymentOption<TValue>[];
   disabled?: boolean;
+  compact?: boolean;
 };
 
 export function MfPaymentOptionToggle<TValue extends string>({
@@ -26,6 +27,7 @@ export function MfPaymentOptionToggle<TValue extends string>({
   onChange,
   options,
   disabled = false,
+  compact = false,
 }: MfPaymentOptionToggleProps<TValue>) {
   return (
     <div className={cn(label ? "space-y-1.5" : undefined)}>
@@ -44,7 +46,8 @@ export function MfPaymentOptionToggle<TValue extends string>({
               aria-pressed={isActive}
               onClick={() => onChange(option.id)}
               className={cn(
-                "flex gap-2 rounded-[var(--radius-card)] border px-2.5 py-2 text-left transition-colors",
+                "flex gap-2 rounded-[var(--radius-card)] border text-left transition-colors",
+                compact ? "px-2 py-1.5" : "px-2.5 py-2",
                 option.subtitle ? "items-start" : "items-center",
                 isActive
                   ? "border-primary/40 bg-primary/5"
@@ -54,7 +57,8 @@ export function MfPaymentOptionToggle<TValue extends string>({
             >
               <div
                 className={cn(
-                  "flex size-7 shrink-0 items-center justify-center rounded-full ring-1",
+                  "flex shrink-0 items-center justify-center rounded-full ring-1",
+                  compact ? "size-6" : "size-7",
                   isActive
                     ? "bg-primary/10 text-primary ring-primary/25"
                     : "bg-muted/40 text-muted-foreground ring-border/60",

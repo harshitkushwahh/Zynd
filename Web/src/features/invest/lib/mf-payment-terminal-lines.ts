@@ -50,6 +50,14 @@ export function resolvePaymentTerminalLines(args: ResolvePaymentTerminalLinesArg
     return lines;
   }
 
+  if (
+    args.nextAction === "wait_processing" ||
+    (args.status === "PENDING" && !args.returnedFromPayment)
+  ) {
+    lines.push(terminal.orderPayTerminalSetup);
+    return lines;
+  }
+
   if (args.nextAction === "pay_upi") {
     lines.push(terminal.orderPayTerminalReady);
     lines.push(terminal.orderPayTerminalRedirect);

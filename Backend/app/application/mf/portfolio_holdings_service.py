@@ -37,7 +37,7 @@ from app.infrastructure.mf.fp_oms_client import (
     list_mf_transactions,
 )
 from app.infrastructure.persistence.investor_models import InvestorBankAccount, InvestorRelatedParty
-from app.infrastructure.persistence.mf_models import FundAmc, FundNavMetrics, MutualFund
+from app.infrastructure.persistence.mf_models import FundAmc, FundNavMetrics, MutualFund, SchemeNav
 from app.infrastructure.persistence.mf_transaction_models import (
     MfInvestmentAccount,
     MfOrder,
@@ -48,6 +48,26 @@ from app.infrastructure.persistence.mf_transaction_models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_active_portfolio_holding(row: dict[str, Any]) -> bool:
+    """Display filter for dashboard/portfolio lists — not a DB delete.
+
+    Fully redeemed folios (0 units, 0 value) stay in Cybrilla/transaction history;
+    they are only omitted from summary and holdings list responses.
+    """
+    redeemable_units = float(row.get("redeemable_units") or 0)
+    if redeemable_units > 0:
+        return True
+    units = float(row.get("units") or 0)
+    if units > 0:
+        return True
+    current_value = float(row.get("current_value_inr") or 0)
+    return current_value > 0.005
+
+
+def _filter_active_portfolio_holdings(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row for row in holdings if _is_active_portfolio_holding(row)]
 
 ALLOCATION_SLICE_META: dict[str, dict[str, str]] = {
     "equity": {"label": "Equity", "color": "bg-sky-500"},
@@ -83,7 +103,19 @@ def build_portfolio_holding_id(*, folio_number: str, isin: str) -> str:
     return f"{folio_number}::{isin}"
 
 
+_REDEEM_UNITS_HIDDEN_ACTIVE_STATUSES = frozenset({"PROCESSING", "SUBMITTED", "SUCCEEDED"})
+
+
+def holding_hidden_from_redeem_units(active_redemption: dict[str, Any] | None) -> bool:
+    if not active_redemption:
+        return False
+    return str(active_redemption.get("status") or "").upper() in _REDEEM_UNITS_HIDDEN_ACTIVE_STATUSES
+
+
 def parse_holding_id(holding_id: str) -> tuple[str, str] | None:
+    from urllib.parse import unquote
+
+    holding_id = unquote(str(holding_id or "")).strip()
     if "::" not in holding_id:
         return None
     folio_number, isin = holding_id.split("::", 1)
@@ -365,16 +397,64 @@ def _build_flow_series(*, invested_inr: float, current_value_inr: float) -> list
     ]
 
 
-def _month_end_date(year: int, month: int) -> date:
-    if month == 12:
-        next_month = date(year + 1, 1, 1)
-    else:
-        next_month = date(year, month + 1, 1)
-    return next_month - timedelta(days=1)
+def _nav_on_or_before(nav_rows: list[tuple[date, Decimal]], target: date) -> Decimal | None:
+    chosen: Decimal | None = None
+    for nav_date, nav_value in nav_rows:
+        if nav_date <= target:
+            chosen = nav_value
+        else:
+            break
+    return chosen
 
 
-def _month_label(year: int, month: int) -> str:
-    return date(year, month, 1).strftime("%b %y")
+async def _load_nav_histories_by_fund(
+    session: AsyncSession,
+    *,
+    fund_ids: set[int],
+    from_date: date,
+    to_date: date,
+) -> dict[int, list[tuple[date, Decimal]]]:
+    if not fund_ids:
+        return {}
+
+    rows = (
+        await session.execute(
+            select(SchemeNav.fund_id, SchemeNav.nav_date, SchemeNav.nav_value)
+            .where(
+                SchemeNav.fund_id.in_(fund_ids),
+                SchemeNav.nav_date >= from_date,
+                SchemeNav.nav_date <= to_date,
+            )
+            .order_by(SchemeNav.fund_id, SchemeNav.nav_date)
+        )
+    ).all()
+
+    result: dict[int, list[tuple[date, Decimal]]] = {fund_id: [] for fund_id in fund_ids}
+    for fund_id, nav_date, nav_value in rows:
+        result[fund_id].append((nav_date, Decimal(str(nav_value))))
+    return result
+
+
+def _day_chart_label(value: date) -> str:
+    return value.strftime("%d %b")
+
+
+def _iter_calendar_days(start: date, end: date):
+    cursor = start
+    while cursor <= end:
+        yield cursor
+        cursor += timedelta(days=1)
+
+
+def _downsample_growth_points(points: list[dict[str, Any]], *, max_points: int = 400) -> list[dict[str, Any]]:
+    if len(points) <= max_points:
+        return points
+
+    step = max(1, (len(points) - 1) // (max_points - 1))
+    sampled = [points[index] for index in range(0, len(points), step)]
+    if sampled[-1] is not points[-1]:
+        sampled.append(points[-1])
+    return sampled
 
 
 async def _load_return_1d_by_isin(session: AsyncSession, *, isins: set[str]) -> dict[str, float]:
@@ -454,85 +534,123 @@ async def _build_portfolio_growth_series(
     invested_inr: float,
     months: int = 120,
 ) -> list[dict[str, Any]]:
+    del months  # retained for API compatibility; daily NAV history replaces monthly synthesis.
+
     if current_value_inr <= 0 and invested_inr <= 0:
         return []
 
     rows = (
         await session.execute(
-            select(MfOrder.created_at, MfOrder.amount_inr, MfOrder.order_type).where(
+            select(
+                MfOrder.settled_at,
+                MfOrder.created_at,
+                MfOrder.amount_inr,
+                MfOrder.order_type,
+                MfOrder.fund_id,
+            ).where(
                 MfOrder.user_id == user_id,
                 MfOrder.status == MfOrderStatus.succeeded,
             )
         )
     ).all()
 
-    now = datetime.now(timezone.utc)
-    timeline: list[tuple[datetime, Decimal]] = []
-    for created_at, amount_inr, order_type in rows:
-        if created_at is None:
+    events: list[tuple[date, int, Decimal, MfOrderType]] = []
+    for settled_at, created_at, amount_inr, order_type, fund_id in rows:
+        event_dt = settled_at or created_at
+        if event_dt is None:
             continue
         amount = Decimal(str(amount_inr or 0))
         if amount <= 0:
             continue
-        signed = -amount if order_type == MfOrderType.redemption else amount
-        timeline.append((created_at, signed))
-    timeline.sort(key=lambda item: item[0])
+        events.append((event_dt.date(), fund_id, amount, order_type))
+    events.sort(key=lambda item: item[0])
 
-    if timeline:
-        first_event = timeline[0][0].date()
-        start = date(first_event.year, first_event.month, 1)
-    else:
-        start = date(now.year, now.month, 1)
-        for _ in range(max(months - 1, 0)):
-            if start.month == 1:
-                start = date(start.year - 1, 12, 1)
-            else:
-                start = date(start.year, start.month - 1, 1)
+    if not events:
+        return _build_flow_series(invested_inr=invested_inr, current_value_inr=current_value_inr)
 
+    first_date = events[0][0]
+    today = date.today()
+    fund_ids = {fund_id for _, fund_id, _, _ in events}
+    nav_by_fund = await _load_nav_histories_by_fund(
+        session,
+        fund_ids=fund_ids,
+        from_date=first_date - timedelta(days=14),
+        to_date=today,
+    )
+
+    unit_deltas: dict[date, dict[int, Decimal]] = {}
+    invested_deltas: dict[date, Decimal] = {}
+    for event_date, fund_id, amount, order_type in events:
+        nav = _nav_on_or_before(nav_by_fund.get(fund_id, []), event_date)
+        if order_type == MfOrderType.redemption:
+            invested_deltas[event_date] = invested_deltas.get(event_date, Decimal("0")) - amount
+            if nav is not None and nav > 0:
+                unit_deltas.setdefault(event_date, {})[fund_id] = (
+                    unit_deltas.get(event_date, {}).get(fund_id, Decimal("0")) - (amount / nav)
+                )
+            continue
+
+        invested_deltas[event_date] = invested_deltas.get(event_date, Decimal("0")) + amount
+        if nav is not None and nav > 0:
+            unit_deltas.setdefault(event_date, {})[fund_id] = (
+                unit_deltas.get(event_date, {}).get(fund_id, Decimal("0")) + (amount / nav)
+            )
+
+    cumulative_units: dict[int, Decimal] = {fund_id: Decimal("0") for fund_id in fund_ids}
+    cumulative_invested = Decimal("0")
+    value_ratio = Decimal(str(current_value_inr / invested_inr)) if invested_inr > 0 else Decimal("1")
     points: list[dict[str, Any]] = []
-    cumulative = Decimal("0")
-    event_index = 0
-    cursor_year, cursor_month = start.year, start.month
-    end_year, end_month = now.year, now.month
 
-    value_ratio = (current_value_inr / invested_inr) if invested_inr > 0 else 1.0
+    for day in _iter_calendar_days(first_date, today):
+        if day in invested_deltas:
+            cumulative_invested += invested_deltas[day]
+        if day in unit_deltas:
+            for fund_id, delta in unit_deltas[day].items():
+                cumulative_units[fund_id] = cumulative_units.get(fund_id, Decimal("0")) + delta
 
-    while (cursor_year, cursor_month) <= (end_year, end_month):
-        month_end = datetime(
-            *_month_end_date(cursor_year, cursor_month).timetuple()[:3],
-            23,
-            59,
-            59,
-            tzinfo=timezone.utc,
-        )
-        while event_index < len(timeline) and timeline[event_index][0] <= month_end:
-            cumulative += timeline[event_index][1]
-            event_index += 1
+        if cumulative_invested <= 0:
+            continue
 
-        invested_value = float(max(cumulative, Decimal("0")))
-        estimated_value = invested_value * value_ratio if invested_value > 0 else 0.0
-        if cursor_month == end_month and cursor_year == end_year and current_value_inr > 0:
-            estimated_value = current_value_inr
-            invested_value = invested_inr
+        portfolio_value = Decimal("0")
+        has_nav = False
+        for fund_id, units in cumulative_units.items():
+            if units <= 0:
+                continue
+            nav = _nav_on_or_before(nav_by_fund.get(fund_id, []), day)
+            if nav is None or nav <= 0:
+                continue
+            portfolio_value += units * nav
+            has_nav = True
+
+        if has_nav:
+            estimated_value = portfolio_value
+        else:
+            estimated_value = cumulative_invested * value_ratio
 
         points.append(
             {
-                "label": _month_label(cursor_year, cursor_month),
-                "value": round(estimated_value, 2),
-                "date": month_end.date().isoformat(),
-                "invested": round(invested_value, 2),
+                "label": _day_chart_label(day),
+                "value": round(float(estimated_value), 2),
+                "date": day.isoformat(),
+                "invested": round(float(cumulative_invested), 2),
             }
         )
 
-        if cursor_month == 12:
-            cursor_year += 1
-            cursor_month = 1
-        else:
-            cursor_month += 1
-
     if len(points) < 2:
         return _build_flow_series(invested_inr=invested_inr, current_value_inr=current_value_inr)
-    return points
+
+    computed_last = points[-1]["value"]
+    if computed_last > 0 and current_value_inr > 0:
+        scale = current_value_inr / computed_last
+        if abs(scale - 1.0) > 0.001:
+            for point in points[:-1]:
+                point["value"] = round(point["value"] * scale, 2)
+
+    points[-1]["value"] = round(current_value_inr, 2)
+    points[-1]["invested"] = round(invested_inr, 2)
+    points[-1]["label"] = "Current"
+
+    return _downsample_growth_points(points)
 
 
 async def _merge_external_holdings(
@@ -597,7 +715,7 @@ async def _merge_external_holdings(
 
 
 async def _portfolio_cache_key(user_id: uuid.UUID, kind: str, settings: Settings) -> str:
-    return f"portfolio:{kind}:v1:{user_id}"
+    return f"portfolio:{kind}:v3:{user_id}"
 
 
 async def _get_cached_portfolio(key: str, *, settings: Settings) -> Any | None:
@@ -628,10 +746,13 @@ async def invalidate_user_portfolio_cache(user_id: uuid.UUID) -> None:
         return
     client = await get_redis(settings.redis_cache_db, settings)
     patterns = [
-        f"portfolio:summary:v1:{user_id}",
-        f"portfolio:holdings:v1:{user_id}",
+        f"portfolio:summary:v3:{user_id}",
+        f"portfolio:holdings:v3:{user_id}",
+        f"portfolio:summary:v2:{user_id}",
+        f"portfolio:holdings:v2:{user_id}",
         f"portfolio:redeem_units:v1:{user_id}",
-        f"portfolio:holding_detail:v1:{user_id}:*",
+        f"portfolio:redeem_units:v2:{user_id}",
+        f"portfolio:holding_detail:v2:{user_id}:*",
     ]
     for pattern in patterns:
         if pattern.endswith("*"):
@@ -885,6 +1006,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
             isins = {str(row.get("isin") or "").upper() for row in external_holdings}
             return_1d_by_isin = await _load_return_1d_by_isin(session, isins=isins)
             _apply_holding_day_change(external_holdings, return_1d_by_isin=return_1d_by_isin)
+            external_holdings = _filter_active_portfolio_holdings(external_holdings)
             day_change_inr, day_change_pct = _compute_portfolio_day_change(
                 external_holdings,
                 return_1d_by_isin=return_1d_by_isin,
@@ -966,6 +1088,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
 
     return_1d_by_isin = await _load_return_1d_by_isin(session, isins=isins)
     _apply_holding_day_change(holdings, return_1d_by_isin=return_1d_by_isin)
+    holdings = _filter_active_portfolio_holdings(holdings)
     day_change_inr, day_change_pct = _compute_portfolio_day_change(holdings, return_1d_by_isin=return_1d_by_isin)
 
     if holdings:
@@ -1040,6 +1163,7 @@ async def list_user_portfolio_holdings(session: AsyncSession, *, user_id: uuid.U
             isins = {str(row.get("isin") or "").upper() for row in external_holdings}
             return_1d_by_isin = await _load_return_1d_by_isin(session, isins=isins)
             _apply_holding_day_change(external_holdings, return_1d_by_isin=return_1d_by_isin)
+            external_holdings = _filter_active_portfolio_holdings(external_holdings)
             current_value = sum(float(row.get("current_value_inr") or 0) for row in external_holdings)
             payload = {
                 "status": "ready",
@@ -1081,6 +1205,7 @@ async def list_user_portfolio_holdings(session: AsyncSession, *, user_id: uuid.U
         isins |= external_isins
     return_1d_by_isin = await _load_return_1d_by_isin(session, isins=isins)
     _apply_holding_day_change(holdings, return_1d_by_isin=return_1d_by_isin)
+    holdings = _filter_active_portfolio_holdings(holdings)
 
     status = "ready" if holdings else ("processing" if processing else "empty")
     payload = {
@@ -1284,7 +1409,7 @@ async def get_user_portfolio_holding_detail(
 
 async def list_user_redeemable_holdings(session: AsyncSession, *, user_id: uuid.UUID) -> dict[str, Any]:
     settings = get_settings()
-    cache_key = f"portfolio:redeem_units:v1:{user_id}"
+    cache_key = f"portfolio:redeem_units:v2:{user_id}"
     cached = await _get_cached_portfolio(cache_key, settings=settings)
     if cached is not None:
         return cached
@@ -1314,10 +1439,13 @@ async def list_user_redeemable_holdings(session: AsyncSession, *, user_id: uuid.
     items: list[dict[str, Any]] = []
     for row in redeemable:
         holding_id = str(row["id"])
+        active = active_by_holding.get(holding_id)
+        if holding_hidden_from_redeem_units(active):
+            continue
         items.append(
             {
                 **row,
-                "active_redemption": active_by_holding.get(holding_id),
+                "active_redemption": active,
             }
         )
 
@@ -1328,6 +1456,32 @@ async def list_user_redeemable_holdings(session: AsyncSession, *, user_id: uuid.
     }
     await _set_cached_portfolio(cache_key, payload, settings=settings)
     return payload
+
+
+async def _find_local_redemption_by_fp_id(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    fp_redemption_id: str,
+) -> MfOrder | None:
+    orders = list(
+        (
+            await session.execute(
+                select(MfOrder)
+                .where(
+                    MfOrder.user_id == user_id,
+                    MfOrder.order_type == MfOrderType.redemption,
+                )
+                .order_by(MfOrder.created_at.desc())
+                .limit(50)
+            )
+        ).scalars()
+    )
+    for order in orders:
+        meta = order.metadata_ if isinstance(order.metadata_, dict) else {}
+        if str(meta.get("fp_redemption_id") or "") == fp_redemption_id:
+            return order
+    return None
 
 
 async def get_user_redemption_journey(
@@ -1351,5 +1505,20 @@ async def get_user_redemption_journey(
     journey = await get_fp_redemption_journey(fp_redemption_id)
     if journey is None:
         return {"status": "not_found", "journey": None}
+
+    local = await _find_local_redemption_by_fp_id(
+        session,
+        user_id=user_id,
+        fp_redemption_id=fp_redemption_id,
+    )
+    if local is not None:
+        meta = local.metadata_ if isinstance(local.metadata_, dict) else {}
+        if float(journey.get("amount_inr") or 0) <= 0:
+            journey["amount_inr"] = float(local.amount_inr)
+        if float(journey.get("units") or 0) <= 0 and meta.get("units") is not None:
+            try:
+                journey["units"] = float(meta["units"])
+            except (TypeError, ValueError):
+                pass
 
     return {"status": "ready", "journey": journey}

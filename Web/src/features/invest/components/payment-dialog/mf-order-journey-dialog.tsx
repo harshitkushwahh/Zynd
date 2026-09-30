@@ -144,7 +144,13 @@ function OrderJourneySummaryPanel({ order }: { order: MfOrder }) {
             {copy.transactions.journeyLatestStatus}
           </p>
           <div className="mt-2">
-            <MfOrderStatusBadge status={order.status} fpState={order.fp_state} />
+            <MfOrderStatusBadge
+              status={order.status}
+              fpState={order.fp_state}
+              fpPaymentStatus={order.fp_payment_status}
+              paymentCompleted={order.payment_completed}
+              orderType={order.order_type}
+            />
           </div>
         </div>
 

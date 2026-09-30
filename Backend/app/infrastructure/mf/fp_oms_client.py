@@ -326,6 +326,37 @@ def extract_fp_state(payload: dict[str, Any]) -> str | None:
     return str(state) if state is not None else None
 
 
+def extract_fp_object(payload: dict[str, Any]) -> dict[str, Any]:
+    return _extract_fp_object(payload)
+
+
+def extract_fp_redemption_failure(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    obj = _extract_fp_object(payload)
+    code: str | None = None
+    reason: str | None = None
+
+    for key in ("failure_code", "code", "error_code"):
+        value = obj.get(key)
+        if value is not None and str(value).strip():
+            code = str(value).strip()
+            break
+
+    for key in ("failure_reason", "reason", "message", "remarks", "failure_message"):
+        value = obj.get(key)
+        if value is not None and str(value).strip():
+            reason = str(value).strip()
+            break
+
+    error = obj.get("error")
+    if isinstance(error, dict):
+        if not code and error.get("code") is not None:
+            code = str(error["code"]).strip() or None
+        if not reason and error.get("message") is not None:
+            reason = str(error["message"]).strip() or None
+
+    return code, reason
+
+
 async def create_mf_purchase(
     *,
     fp_mfia_id: str,
@@ -779,11 +810,24 @@ async def get_mf_redemption(fp_redemption_id: str) -> dict[str, Any]:
     return await fp_mf_get(f"/v2/mf_redemptions/{fp_redemption_id}")
 
 
+def is_missing_payout_details_error(exc: FpClientError) -> bool:
+    message = (exc.message or "").strip().lower()
+    if exc.status_code == 404:
+        return True
+    return "no payout details" in message
+
+
 async def get_mf_payout_details(*, fp_redemption_id: str) -> dict[str, Any]:
     if not is_finprim_enabled():
         return {"object": "list", "data": []}
 
-    return await fp_mf_get("/v2/mf_payout_details", params={"mf_redemption": fp_redemption_id})
+    try:
+        return await fp_mf_get("/v2/mf_payout_details", params={"mf_redemption": fp_redemption_id})
+    except FpClientError as exc:
+        if is_missing_payout_details_error(exc):
+            logger.info("No payout details yet for redemption=%s", fp_redemption_id)
+            return {"object": "list", "data": []}
+        raise
 
 
 async def create_mf_redemption(

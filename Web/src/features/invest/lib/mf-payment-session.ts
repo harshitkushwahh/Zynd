@@ -1,4 +1,5 @@
 const REDIRECT_KEY_PREFIX = "mf-payment-redirected-";
+const LUMPSUM_DISMISSED_PREFIX = "mf-lumpsum-payment-dismissed-";
 const SIP_MANDATE_REDIRECT_PREFIX = "mf-sip-mandate-redirected-";
 const SIP_FIRST_INSTALLMENT_REDIRECT_PREFIX = "mf-sip-first-installment-redirected-";
 const LAST_ORDER_KEY = "mf-payment-last-order-id";
@@ -31,6 +32,26 @@ export function wasMfPaymentRedirected(id: string) {
 export function clearMfPaymentRedirect(id: string) {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(`${REDIRECT_KEY_PREFIX}${id}`);
+}
+
+export function markMfLumpsumPaymentDismissed(id: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(`${LUMPSUM_DISMISSED_PREFIX}${id}`, "1");
+}
+
+export function wasMfLumpsumPaymentDismissed(id: string) {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(`${LUMPSUM_DISMISSED_PREFIX}${id}`) === "1";
+}
+
+export function clearMfLumpsumPaymentDismissed(id: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(`${LUMPSUM_DISMISSED_PREFIX}${id}`);
+}
+
+export function clearMfLumpsumPaymentSession(id: string) {
+  clearMfPaymentRedirect(id);
+  clearMfLumpsumPaymentDismissed(id);
 }
 
 export function markMfSipMandateRedirect(planId: string) {
@@ -190,10 +211,12 @@ export function clearLastMfPaymentSession() {
   const planId = getLastMfPaymentPlanId();
   if (orderId) {
     clearMfPaymentRedirect(orderId);
+    clearMfLumpsumPaymentDismissed(orderId);
     sessionStorage.removeItem(LAST_ORDER_KEY);
   }
   if (checkoutId) {
     clearMfPaymentRedirect(checkoutId);
+    clearMfLumpsumPaymentDismissed(checkoutId);
     sessionStorage.removeItem(LAST_CHECKOUT_KEY);
   }
   if (planId) {

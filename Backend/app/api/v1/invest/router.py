@@ -143,6 +143,7 @@ from app.application.mf.mf_redemption_service import (
     get_redemption_order,
     send_redemption_consent_otp,
     serialize_redemption_order,
+    sync_redemption_order_from_fp,
 )
 from app.application.mf.return_calculator_service import (
     cached_compute_lumpsum_calculator,
@@ -197,6 +198,7 @@ from app.application.mf.mf_sip_plan_service import (
     serialize_sip_plan,
 )
 from app.application.mf.mf_order_service import (
+    TERMINAL_STATUSES,
     create_lumpsum_order,
     get_user_order,
     get_user_order_journey,
@@ -220,7 +222,7 @@ from app.application.mf.mf_payment_flow_service import (
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.infrastructure.persistence.mf_models import Product
-from app.infrastructure.persistence.mf_transaction_models import MfCheckout, MfMandate
+from app.infrastructure.persistence.mf_transaction_models import MfCheckout, MfMandate, MfOrderType
 from app.infrastructure.persistence.models import User
 
 router = APIRouter(prefix="/invest", tags=["invest"])
@@ -1158,6 +1160,7 @@ async def get_mf_sip_plan_journey(
     payload = await get_user_sip_plan_journey(db, user_id=current_user.id, plan_id=plan_id)
     if not payload:
         raise HTTPException(status_code=404, detail="SIP plan not found")
+    await db.commit()
     return MfSipPlanJourneyResponse(**payload)
 
 
@@ -1257,6 +1260,27 @@ async def pay_mf_sip_first_installment(
     return MfSipFirstInstallmentSummary(**payload)
 
 
+@router.post("/sip/plans/{plan_id}/confirm-first-installment-return", response_model=MfSipPlanResponse)
+async def confirm_mf_sip_first_installment_return(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSipPlanResponse:
+    from app.application.mf.mf_sip_first_installment_service import confirm_sip_first_installment_return
+    from app.infrastructure.persistence.mf_transaction_models import MfMandate
+
+    plan = await get_user_sip_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SIP plan not found")
+    mandate_row = await db.get(MfMandate, plan.mf_mandate_id) if plan.mf_mandate_id else None
+    await confirm_sip_first_installment_return(db, plan, mandate=mandate_row)
+    product = await db.get(Product, plan.product_id)
+    await db.commit()
+    return await _sip_plan_response(
+        db, plan, product_name=product.name if product else None, user_id=current_user.id
+    )
+
+
 @router.post("/sip/plans/{plan_id}/confirm-mandate-return", response_model=MfSipPlanResponse)
 async def confirm_mf_sip_mandate_return(
     plan_id: UUID,
@@ -1305,7 +1329,18 @@ async def list_mf_orders(
     current_user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(default=50, ge=1, le=100),
 ) -> MfOrderListResponse:
+    from app.application.mf.mf_sip_installment_order_service import sync_user_sip_installment_orders
+
+    synced = await sync_user_sip_installment_orders(db, user_id=current_user.id)
     orders = await list_user_orders(db, user_id=current_user.id, limit=limit)
+    redemption_synced = False
+    for order in orders:
+        if order.order_type == MfOrderType.redemption and order.status not in TERMINAL_STATUSES:
+            await sync_redemption_order_from_fp(db, order)
+            redemption_synced = True
+    if synced or redemption_synced:
+        await db.commit()
+        orders = await list_user_orders(db, user_id=current_user.id, limit=limit)
     product_ids = {order.product_id for order in orders}
     products = {
         row.id: row.name

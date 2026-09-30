@@ -31,7 +31,7 @@ def test_digilocker_prefill_missing_fields_detects_gaps() -> None:
     )
     assert "line1" in missing
     assert "state" in missing
-    assert "fathersName" in missing
+    assert "fathersName" not in missing
 
 
 def test_digilocker_prefill_missing_fields_complete() -> None:

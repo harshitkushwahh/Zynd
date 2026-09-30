@@ -14,8 +14,9 @@ import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui"
 import {
   portfolioHoldingDetailHref,
   portfolioUpcomingHoldingDetailHref,
-  portfolioUpcomingHoldingSlug,
 } from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
+import { isOrderAwaitingAllotment } from "@/features/invest/lib/mf-order-payment-status";
+import { resolveCybrillaOrderStatusLabel } from "@/features/invest/lib/mf-cybrilla-status";
 import {
   type PortfolioHoldingItem,
 } from "@/features/dashboard/portfolio/lib/portfolio-types";
@@ -159,14 +160,15 @@ function HoldingReturnsCell({ holding }: { holding: PortfolioHoldingTableRow }) 
   );
 }
 
-function UpcomingMetricCell() {
+function UpcomingMetricCell({ order }: { order: MfOrder }) {
   const overview = copy.dashboard.overview;
+  const label = isOrderAwaitingAllotment(order)
+    ? overview.holdingsUpcomingLabel
+    : resolveCybrillaOrderStatusLabel(order);
 
   return (
     <div className="text-right">
-      <p className="text-caption font-semibold uppercase tracking-wide text-warning">
-        {overview.holdingsUpcomingLabel}
-      </p>
+      <p className="text-caption font-semibold uppercase tracking-wide text-warning">{label}</p>
     </div>
   );
 }
@@ -209,7 +211,7 @@ export function PortfolioHoldingsTable({
 
     const upcomingRows: PortfolioUpcomingTableRow[] = upcomingOrders.map((order) => ({
       kind: "upcoming",
-      tableId: `upcoming:${portfolioUpcomingHoldingSlug(order)}`,
+      tableId: `upcoming:${order.order_id}`,
       order,
     }));
 
@@ -338,7 +340,7 @@ export function PortfolioHoldingsTable({
                     )}
                   </Table.Cell>
                   <Table.Cell className={BODY_CELL_CLASS}>
-                    {row.kind === "holding" ? <HoldingReturnsCell holding={row} /> : <UpcomingMetricCell />}
+                    {row.kind === "holding" ? <HoldingReturnsCell holding={row} /> : <UpcomingMetricCell order={row.order} />}
                   </Table.Cell>
                   <Table.Cell className={cn(BODY_CELL_CLASS, "text-right")}>
                     {row.kind === "holding" ? (
@@ -346,7 +348,7 @@ export function PortfolioHoldingsTable({
                         {row.allocationPct.toFixed(1)}%
                       </p>
                     ) : (
-                      <UpcomingMetricCell />
+                      <UpcomingMetricCell order={row.order} />
                     )}
                   </Table.Cell>
                 </Table.Row>

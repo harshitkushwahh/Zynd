@@ -23,6 +23,12 @@ def test_resolve_mf_purchase_scheme_prefers_isin_over_numeric_id() -> None:
     assert fallback == "2188"
 
 
+def test_resolve_mf_purchase_scheme_prefers_holding_isin() -> None:
+    primary, fallback = resolve_mf_purchase_scheme(_fund(), stored_scheme="INF174KA1MR1")
+    assert primary == "INF174KA1MR1"
+    assert fallback == "INF209K01PF4"
+
+
 def test_resolve_mf_purchase_scheme_uses_div_reinvestment_fallback() -> None:
     primary, fallback = resolve_mf_purchase_scheme(
         _fund(isin_div_reinvestment="INF209K01PF5"),

@@ -17,6 +17,7 @@ type KycTestimonial = {
 type KycTestimonialCarouselProps = {
   testimonials: readonly KycTestimonial[];
   className?: string;
+  tone?: "brand" | "surface";
 };
 
 const SWIPE_THRESHOLD_PX = 40;
@@ -31,11 +32,25 @@ function testimonialInitials(name: string): string {
     .join("");
 }
 
-function KycTestimonialAvatar({ testimonial }: { testimonial: KycTestimonial }) {
+function KycTestimonialAvatar({
+  testimonial,
+  tone,
+}: {
+  testimonial: KycTestimonial;
+  tone: "brand" | "surface";
+}) {
   const initials = testimonialInitials(testimonial.name);
+  const isSurface = tone === "surface";
 
   return (
-    <div className="relative size-14 shrink-0 overflow-hidden rounded-full border border-primary-foreground/25 bg-primary-foreground/15">
+    <div
+      className={cn(
+        "relative size-14 shrink-0 overflow-hidden rounded-full border",
+        isSurface
+          ? "border-border bg-muted"
+          : "border-primary-foreground/25 bg-primary-foreground/15",
+      )}
+    >
       {testimonial.avatarSrc ? (
         <Image
           src={testimonial.avatarSrc}
@@ -45,7 +60,12 @@ function KycTestimonialAvatar({ testimonial }: { testimonial: KycTestimonial }) 
           className="object-cover"
         />
       ) : (
-        <span className="flex size-full items-center justify-center text-compact font-semibold text-primary-foreground">
+        <span
+          className={cn(
+            "flex size-full items-center justify-center text-compact font-semibold",
+            isSurface ? "text-foreground" : "text-primary-foreground",
+          )}
+        >
           {initials}
         </span>
       )}
@@ -53,7 +73,11 @@ function KycTestimonialAvatar({ testimonial }: { testimonial: KycTestimonial }) 
   );
 }
 
-export function KycTestimonialCarousel({ testimonials, className }: KycTestimonialCarouselProps) {
+export function KycTestimonialCarousel({
+  testimonials,
+  className,
+  tone = "brand",
+}: KycTestimonialCarouselProps) {
   const count = testimonials.length;
   const [activeIndex, setActiveIndex] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
@@ -95,6 +119,7 @@ export function KycTestimonialCarousel({ testimonials, className }: KycTestimoni
   if (count === 0) return null;
 
   const slideOffsetPercent = count > 0 ? (activeIndex / count) * 100 : 0;
+  const isSurface = tone === "surface";
 
   return (
     <div
@@ -147,18 +172,40 @@ export function KycTestimonialCarousel({ testimonials, className }: KycTestimoni
               className="shrink-0 grow-0"
               style={{ width: `${100 / count}%` }}
             >
-              <KycTestimonialAvatar testimonial={testimonial} />
-              <p className="mt-4 max-w-[280px] text-compact font-medium leading-relaxed text-primary-foreground">
+              <KycTestimonialAvatar testimonial={testimonial} tone={tone} />
+              <p
+                className={cn(
+                  "mt-4 w-full min-w-0 text-compact font-medium leading-relaxed",
+                  isSurface ? "text-foreground" : "text-primary-foreground",
+                )}
+              >
                 &ldquo;{testimonial.quote}&rdquo;
               </p>
               <div className="mt-4 flex items-end justify-between gap-3 pr-1">
                 <div className="min-w-0">
-                  <p className="truncate text-caption font-semibold text-primary-foreground">
+                  <p
+                    className={cn(
+                      "truncate text-caption font-semibold",
+                      isSurface ? "text-foreground" : "text-primary-foreground",
+                    )}
+                  >
                     {testimonial.name}
                   </p>
-                  <p className="truncate text-caption text-primary-foreground/75">{testimonial.role}</p>
+                  <p
+                    className={cn(
+                      "truncate text-caption",
+                      isSurface ? "text-muted-foreground" : "text-primary-foreground/75",
+                    )}
+                  >
+                    {testimonial.role}
+                  </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-0.5 text-primary-foreground/90">
+                <div
+                  className={cn(
+                    "flex shrink-0 items-center gap-0.5",
+                    isSurface ? "text-foreground/80" : "text-primary-foreground/90",
+                  )}
+                >
                   {Array.from({ length: 5 }).map((_, starIndex) => (
                     <Star key={starIndex} className="size-3 fill-current" strokeWidth={0} />
                   ))}
@@ -186,8 +233,13 @@ export function KycTestimonialCarousel({ testimonials, className }: KycTestimoni
                   className={cn(
                     "rounded-full transition-all duration-500 ease-out",
                     isActive
-                      ? "size-2 bg-primary-foreground"
-                      : "size-1.5 bg-primary-foreground/35 hover:bg-primary-foreground/55",
+                      ? cn("size-2", isSurface ? "bg-foreground" : "bg-primary-foreground")
+                      : cn(
+                          "size-1.5",
+                          isSurface
+                            ? "bg-muted-foreground/35 hover:bg-muted-foreground/55"
+                            : "bg-primary-foreground/35 hover:bg-primary-foreground/55",
+                        ),
                   )}
                 />
               );
@@ -199,7 +251,12 @@ export function KycTestimonialCarousel({ testimonials, className }: KycTestimoni
               type="button"
               onClick={() => goTo(activeIndex - 1)}
               onPointerDown={(event) => event.stopPropagation()}
-              className="flex size-8 items-center justify-center rounded-full border border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground transition-colors hover:bg-primary-foreground/20"
+              className={cn(
+                "flex size-8 items-center justify-center rounded-full border transition-colors",
+                isSurface
+                  ? "border-border bg-muted text-foreground hover:bg-muted/80"
+                  : "border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20",
+              )}
               aria-label={copy.kyc.brandPanel.previousTestimonial}
             >
               <ChevronLeft className="size-4" />
@@ -208,7 +265,12 @@ export function KycTestimonialCarousel({ testimonials, className }: KycTestimoni
               type="button"
               onClick={() => goTo(activeIndex + 1)}
               onPointerDown={(event) => event.stopPropagation()}
-              className="flex size-8 items-center justify-center rounded-full border border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground transition-colors hover:bg-primary-foreground/20"
+              className={cn(
+                "flex size-8 items-center justify-center rounded-full border transition-colors",
+                isSurface
+                  ? "border-border bg-muted text-foreground hover:bg-muted/80"
+                  : "border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20",
+              )}
               aria-label={copy.kyc.brandPanel.nextTestimonial}
             >
               <ChevronRight className="size-4" />

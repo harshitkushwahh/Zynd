@@ -1,4 +1,6 @@
-import { MitraTxnRecommendationPage } from "@/features/recommendations/components/mitra-txn-recommendation-page";
+import { redirect } from "next/navigation";
+
+import { MITRA_RECOMMENDATION_QUERY_PARAM } from "@/features/recommendations/hooks/use-mitra-txn-recommendation-handler";
 
 type PageProps = {
   params: Promise<{ token: string }>;
@@ -6,5 +8,5 @@ type PageProps = {
 
 export default async function MutualFundsRecommendationPage({ params }: PageProps) {
   const { token } = await params;
-  return <MitraTxnRecommendationPage token={token} />;
+  redirect(`/dashboard/mutual-funds?${MITRA_RECOMMENDATION_QUERY_PARAM}=${encodeURIComponent(token)}`);
 }

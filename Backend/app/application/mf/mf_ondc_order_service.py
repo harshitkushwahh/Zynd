@@ -186,9 +186,39 @@ async def _load_order_bank_old_id(session: AsyncSession, order: MfOrder) -> int 
     return await _load_primary_bank_old_id(session, user_id=order.user_id)
 
 
-async def _ensure_fp_mfia(session: AsyncSession, *, user_id, mfia) -> str | None:
+def _parse_checkout_preferred_bank_id(metadata: dict[str, Any]) -> uuid.UUID | None:
+    bank_id = metadata.get("investor_bank_account_id")
+    if not bank_id:
+        return None
+    try:
+        return uuid.UUID(str(bank_id))
+    except ValueError:
+        return None
+
+
+async def _load_order_preferred_bank_id(session: AsyncSession, order: MfOrder) -> uuid.UUID | None:
+    if not order.checkout_id:
+        return None
+    checkout = await session.get(MfCheckout, order.checkout_id)
+    if not checkout or not isinstance(checkout.metadata_, dict):
+        return None
+    return _parse_checkout_preferred_bank_id(checkout.metadata_)
+
+
+async def _ensure_fp_mfia(
+    session: AsyncSession,
+    *,
+    user_id,
+    mfia,
+    preferred_bank_account_id: uuid.UUID | None = None,
+) -> str | None:
     if mfia.fp_mfia_id and mfia.status == MfInvestmentAccountStatus.active:
-        folio_ready = await ensure_mfia_folio_defaults(session, user_id=user_id, mfia=mfia)
+        folio_ready = await ensure_mfia_folio_defaults(
+            session,
+            user_id=user_id,
+            mfia=mfia,
+            preferred_bank_account_id=preferred_bank_account_id,
+        )
         return mfia.fp_mfia_id if folio_ready else None
 
     profile = await session.get(InvestorProfile, user_id)
@@ -213,7 +243,12 @@ async def _ensure_fp_mfia(session: AsyncSession, *, user_id, mfia) -> str | None
     mfia.status = MfInvestmentAccountStatus.active
     await session.flush()
 
-    if not await ensure_mfia_folio_defaults(session, user_id=user_id, mfia=mfia):
+    if not await ensure_mfia_folio_defaults(
+        session,
+        user_id=user_id,
+        mfia=mfia,
+        preferred_bank_account_id=preferred_bank_account_id,
+    ):
         return None
     return fp_mfia_id
 
@@ -280,10 +315,16 @@ async def _sync_checkout_payment_url(session: AsyncSession, order: MfOrder, *, t
         await session.flush()
 
 
-async def submit_pending_order(session: AsyncSession, order: MfOrder, *, user_ip: str | None = None) -> bool:
+async def submit_pending_order(
+    session: AsyncSession,
+    order: MfOrder,
+    *,
+    user_ip: str | None = None,
+    force: bool = False,
+) -> bool:
     if order.status != MfOrderStatus.pending:
         return False
-    if should_skip_retry(order.metadata_):
+    if not force and should_skip_retry(order.metadata_):
         return False
 
     if order.checkout_id:
@@ -293,11 +334,66 @@ async def submit_pending_order(session: AsyncSession, order: MfOrder, *, user_ip
 
     mfia = await get_or_create_mf_investment_account(session, user_id=order.user_id)
     order.mf_investment_account_id = mfia.id
-    fp_mfia_id = await _ensure_fp_mfia(session, user_id=order.user_id, mfia=mfia)
+    preferred_bank_id = await _load_order_preferred_bank_id(session, order)
+    fp_mfia_id = await _ensure_fp_mfia(
+        session,
+        user_id=order.user_id,
+        mfia=mfia,
+        preferred_bank_account_id=preferred_bank_id,
+    )
     fund = await session.get(MutualFund, order.fund_id)
     scheme = _purchase_scheme(order, fund)
-    if not fp_mfia_id or not scheme:
-        return False
+    if not scheme:
+        previous = order.status.value
+        order.status = MfOrderStatus.failed
+        order.failure_code = "invalid_scheme"
+        order.failure_reason = "This fund is not available for purchase right now."
+        await _record_order_event(
+            session,
+            order,
+            from_status=previous,
+            to_status=order.status.value,
+            source="WORKER",
+            payload={"error": "missing_scheme"},
+        )
+        await session.flush()
+        return True
+    if not fp_mfia_id:
+        mfia_metadata = mfia.metadata_ if isinstance(mfia.metadata_, dict) else {}
+        error_message = str(
+            mfia_metadata.get("folio_defaults_last_error")
+            or "Investment account setup is still in progress"
+        )
+        order.metadata_, terminal = bump_transient_retry(
+            order.metadata_,
+            error_code="mfia_not_ready",
+            error_message=error_message,
+        )
+        if terminal:
+            previous = order.status.value
+            order.status = MfOrderStatus.failed
+            order.failure_code = "investor_setup_incomplete"
+            order.failure_reason = (
+                "We couldn't finish setting up your investment account. "
+                "Please check your KYC and bank details, then try again."
+            )
+            await _record_order_event(
+                session,
+                order,
+                from_status=previous,
+                to_status=order.status.value,
+                source="WORKER",
+                payload={"error": error_message},
+            )
+        await session.flush()
+        return terminal
+
+    meta = dict(order.metadata_ or {})
+    ops = meta.get("ops")
+    if isinstance(ops, dict) and ops.get("last_error_code") == "mfia_not_ready":
+        meta.pop("ops", None)
+        order.metadata_ = meta
+        await session.flush()
 
     try:
         result = await create_mf_purchase(
@@ -376,7 +472,14 @@ async def submit_pending_cart_checkout(
 
     user_id = checkout.user_id
     mfia = await get_or_create_mf_investment_account(session, user_id=user_id)
-    fp_mfia_id = await _ensure_fp_mfia(session, user_id=user_id, mfia=mfia)
+    metadata = checkout.metadata_ if isinstance(checkout.metadata_, dict) else {}
+    preferred_bank_id = _parse_checkout_preferred_bank_id(metadata)
+    fp_mfia_id = await _ensure_fp_mfia(
+        session,
+        user_id=user_id,
+        mfia=mfia,
+        preferred_bank_account_id=preferred_bank_id,
+    )
     if not fp_mfia_id:
         return False
 
@@ -629,6 +732,7 @@ async def _refresh_payment_link(session: AsyncSession, order: MfOrder) -> bool:
         fp_state = (order.fp_state or "").lower()
         if ondc.get("payment_created") and not ondc.get("purchase_confirmed") and fp_state == "pending":
             await _confirm_purchase(session, order)
+            await _set_ondc_metadata(session, order, payment_success=True)
             changed = True
         if order.fp_purchase_id:
             purchase_payload = await get_mf_purchase(order.fp_purchase_id)
@@ -733,8 +837,21 @@ async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout
                 and ondc_checkout.get("payment_created")
                 and not ondc_checkout.get("purchases_confirmed")
             ):
-                await _confirm_cart_purchases(session, checkout, open_orders)
-                changed = True
+                payment_id = checkout.fp_payment_id or ondc_checkout.get("fp_payment_id")
+                if payment_id is not None:
+                    payment_payload = await get_payment(int(payment_id))
+                    if is_payment_success_status(extract_payment_status(payment_payload)):
+                        await _confirm_cart_purchases(session, checkout, open_orders)
+                        await _set_checkout_ondc_metadata(
+                            session,
+                            checkout,
+                            purchases_confirmed=True,
+                            payment_success=True,
+                        )
+                        changed = True
+                    else:
+                        await _refresh_cart_payment_link(session, checkout)
+                        changed = True
 
         if any(
             order.status == MfOrderStatus.submitted or (order.fp_state or "").lower() == "submitted"
@@ -772,10 +889,10 @@ async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout
     return changed
 
 
-async def advance_ondc_order(session: AsyncSession, order: MfOrder) -> bool:
+async def advance_ondc_order(session: AsyncSession, order: MfOrder, *, force: bool = False) -> bool:
     if order.status in TERMINAL_STATUSES or not order.fp_purchase_id:
         return False
-    if should_skip_retry(order.metadata_):
+    if not force and should_skip_retry(order.metadata_):
         return False
 
     if order.checkout_id:
@@ -816,11 +933,17 @@ async def advance_ondc_order(session: AsyncSession, order: MfOrder) -> bool:
 
             ondc = _ondc_metadata(order)
             if fp_state == "pending" and ondc.get("payment_created") and not ondc.get("purchase_confirmed"):
-                await _confirm_purchase(session, order)
-                changed = True
+                if await _refresh_payment_link(session, order):
+                    changed = True
                 payload = await get_mf_purchase(order.fp_purchase_id)
                 fp_state = (extract_fp_state(payload) or fp_state).lower()
-                if await _apply_fp_state(session, order, fp_state=fp_state, source="WORKER", payload={"stage": "confirm"}):
+                if await _apply_fp_state(
+                    session,
+                    order,
+                    fp_state=fp_state,
+                    source="WORKER",
+                    payload={"stage": "payment_poll"},
+                ):
                     changed = True
 
         if fp_state == "submitted" or order.status == MfOrderStatus.submitted:

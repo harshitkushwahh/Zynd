@@ -91,7 +91,24 @@ async def search_invest_funds(
         )
     )
 
-    total = int(await session.scalar(select(func.count()).select_from(base.subquery())) or 0)
+    count_stmt = (
+        select(func.count(func.distinct(Product.id)))
+        .select_from(Product)
+        .join(MutualFund, MutualFund.product_id == Product.id)
+        .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+        .where(
+            invest_visibility_sql_clause(),
+            or_(
+                Product.invest_search_vector.op("@@")(ts_query),
+                Product.name.ilike(like_pattern),
+                MutualFund.scheme_name.ilike(like_pattern),
+                MutualFund.isin_growth.ilike(like_pattern),
+                FundAmc.name.ilike(like_pattern),
+            ),
+        )
+    )
+
+    total = int(await session.scalar(count_stmt) or 0)
     rows = (
         await session.execute(
             base.order_by(FundCompositeRank.rank_position.asc().nullslast(), Product.name)

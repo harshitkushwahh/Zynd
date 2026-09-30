@@ -922,13 +922,18 @@ export function MfInvestPaymentCard({
 
   const showFamilyGoalLink = interactive && canInvest;
   const spaciousAmountLayout = relaxedAmountSpacing || (!showFundName && hasFundForUi);
+  const isSipCard = mode === "sip" && showSip;
 
   const paymentCard = (
     <div
       className={cn(
         MF_INVEST_PAYMENT_CARD_CLASS,
         "flex w-full min-w-0 flex-col overflow-x-hidden",
-        showPaymentSection ? "min-h-[26rem]" : "min-h-[20rem]",
+        showPaymentSection
+          ? isSipCard
+            ? "min-h-[25.5rem]"
+            : "min-h-[26rem]"
+          : "min-h-[20rem]",
         !showFundName && sticky && "lg:sticky lg:top-6",
         !showFundName && !hasFundForUi && "border-dashed",
         !showFundName && className,
@@ -937,13 +942,19 @@ export function MfInvestPaymentCard({
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col px-4 pb-4",
-          spaciousAmountLayout ? "pt-5" : "pt-3.5",
+          spaciousAmountLayout ? (isSipCard ? "pt-4" : "pt-5") : isSipCard ? "pt-3" : "pt-3.5",
         )}
       >
         <div
           className={cn(
             "flex flex-col",
-            spaciousAmountLayout ? "gap-12" : "gap-6",
+            spaciousAmountLayout
+              ? isSipCard
+                ? "gap-10"
+                : "gap-12"
+              : isSipCard
+                ? "gap-5"
+                : "gap-6",
             showSip ? null : "pt-1",
           )}
         >
@@ -961,9 +972,14 @@ export function MfInvestPaymentCard({
           </div>
         </div>
 
-        <div className="mt-auto flex flex-col space-y-3.5 pt-3.5">
-          {mode === "sip" && showSip ? (
-            <div className="grid grid-cols-[minmax(0,1fr)_6.75rem] gap-2">
+        <div
+          className={cn(
+            "mt-auto flex flex-col",
+            isSipCard ? "space-y-3 pt-3" : "space-y-3.5 pt-3.5",
+          )}
+        >
+          {isSipCard ? (
+            <div className="grid grid-cols-[minmax(0,1fr)_6.75rem] gap-2 [&_button]:min-h-9 [&_button]:py-1.5">
               <MfSipDayPicker
                 compact
                 maxDay={SIP_MAX_INSTALLMENT_DAY}
@@ -995,6 +1011,7 @@ export function MfInvestPaymentCard({
                   value={mandateType}
                   onChange={setMandateType}
                   disabled={!interactive || submitting}
+                  compact
                 />
                 {interactive && canInvest ? (
                   <MfBankAccountPicker

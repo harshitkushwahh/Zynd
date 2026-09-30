@@ -20,6 +20,8 @@ from app.infrastructure.mf.fp_oms_client import extract_fp_state, get_mf_purchas
 from app.infrastructure.mf.fp_payment_client import (
     extract_payment_status,
     get_payment,
+    is_payment_failure_status,
+    is_payment_pending_status,
     is_payment_success_status,
 )
 from app.infrastructure.persistence.mf_transaction_models import (
@@ -28,13 +30,36 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfCheckoutType,
     MfOrder,
     MfOrderStatus,
+    MfOrderType,
 )
-from app.application.mf.mf_fp_state import map_fp_purchase_state, map_fp_purchase_state_to_checkout
+from app.application.mf.mf_fp_state import (
+    FP_FAILURE_STATES,
+    FP_PROCESSING_STATES,
+    FP_SUBMITTED_STATES,
+    FP_SUCCESS_STATES,
+    map_fp_purchase_state,
+    map_fp_purchase_state_to_checkout,
+)
 
 PaymentReconcileOutcome = Literal["success", "failed", "pending", "unclear"]
 
 # Local cancellation reasons that can be reversed when Cybrilla payment succeeded.
 _REPAIRABLE_CANCEL_FAILURE_CODES = frozenset({None, "payment_abandoned", "payment_expired"})
+
+
+def _metadata_payment_succeeded(order: MfOrder) -> bool:
+    ondc = _ondc_metadata(order)
+    if not ondc.get("payment_success"):
+        return False
+    fp_payment_status = ondc.get("fp_payment_status")
+    return bool(fp_payment_status and is_payment_success_status(str(fp_payment_status)))
+
+
+def _is_sip_first_installment_order(order: MfOrder) -> bool:
+    if order.order_type != MfOrderType.sip or order.checkout_id is not None:
+        return False
+    metadata = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    return metadata.get("sip_installment") == "first"
 
 
 def _ondc_gateway_enabled() -> bool:
@@ -103,6 +128,46 @@ def _payment_amc_order_ids(payment_payload: dict[str, Any] | None) -> set[int]:
     return covered
 
 
+def _purchase_state_ahead_of_payment(fp_state: str | None) -> bool:
+    normalized = (fp_state or "").strip().lower()
+    return normalized in FP_SUBMITTED_STATES | FP_PROCESSING_STATES | FP_SUCCESS_STATES
+
+
+def _target_status_without_payment(
+    *,
+    fp_state: str | None,
+    fp_payment_status: str | None,
+    payment_id: int | None,
+) -> MfOrderStatus:
+    normalized_fp = (fp_state or "").strip().lower()
+
+    if is_payment_failure_status(fp_payment_status):
+        return MfOrderStatus.failed
+    if normalized_fp in FP_FAILURE_STATES:
+        return MfOrderStatus.failed
+
+    if _purchase_state_ahead_of_payment(fp_state):
+        if payment_id is None:
+            return MfOrderStatus.failed
+        if is_payment_pending_status(fp_payment_status):
+            return MfOrderStatus.payment_pending
+        return MfOrderStatus.failed
+
+    return map_fp_purchase_state(fp_state)
+
+
+def _store_fp_payment_status(order: MfOrder, fp_payment_status: str | None) -> None:
+    if fp_payment_status is None:
+        return
+    metadata = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    ondc = metadata.get("ondc")
+    if not isinstance(ondc, dict):
+        ondc = {}
+    ondc["fp_payment_status"] = fp_payment_status
+    metadata["ondc"] = ondc
+    order.metadata_ = metadata
+
+
 def payment_covers_order(payment_payload: dict[str, Any] | None, order: MfOrder) -> bool:
     if order.fp_purchase_old_id is None:
         return False
@@ -121,8 +186,15 @@ async def fetch_order_fp_truth(
     payment_id = _resolve_order_payment_id(order, checkout)
     payment_payload = await _fetch_fp_payment(payment_id)
     fp_payment_status = extract_payment_status(payment_payload) if payment_payload else None
+    if fp_payment_status is None:
+        stored_status = _ondc_metadata(order).get("fp_payment_status")
+        if stored_status is not None:
+            fp_payment_status = str(stored_status)
     covers_order = payment_covers_order(payment_payload, order)
     payment_succeeded = is_payment_success_status(fp_payment_status) and covers_order
+    if not payment_succeeded and _metadata_payment_succeeded(order):
+        payment_succeeded = True
+        covers_order = True
 
     fp_state = order.fp_state
     if order.fp_purchase_id:
@@ -134,12 +206,24 @@ async def fetch_order_fp_truth(
 
     if payment_succeeded:
         target_status = map_fp_purchase_state(fp_state)
-    elif order.status in {
-        MfOrderStatus.submitted,
-        MfOrderStatus.processing,
-        MfOrderStatus.succeeded,
-    }:
-        target_status = MfOrderStatus.cancelled
+        if target_status in {MfOrderStatus.submitted, MfOrderStatus.payment_pending}:
+            target_status = MfOrderStatus.processing
+    elif is_payment_failure_status(fp_payment_status) or (fp_state or "").strip().lower() in FP_FAILURE_STATES:
+        target_status = MfOrderStatus.failed
+    elif not payment_succeeded and (
+        order.status
+        in {
+            MfOrderStatus.submitted,
+            MfOrderStatus.processing,
+            MfOrderStatus.succeeded,
+        }
+        or _purchase_state_ahead_of_payment(fp_state)
+    ):
+        target_status = _target_status_without_payment(
+            fp_state=fp_state,
+            fp_payment_status=fp_payment_status,
+            payment_id=payment_id,
+        )
     elif order.failure_code in _REPAIRABLE_CANCEL_FAILURE_CODES or order.status == MfOrderStatus.cancelled:
         target_status = MfOrderStatus.cancelled
     else:
@@ -162,6 +246,9 @@ async def apply_order_fp_truth(
     checkout: MfCheckout | None = None,
     truth: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if order.order_type == MfOrderType.redemption:
+        return {"changed": False}
+
     if truth is None:
         truth = await fetch_order_fp_truth(order, checkout=checkout)
 
@@ -182,6 +269,14 @@ async def apply_order_fp_truth(
         if truth["payment_succeeded"]:
             order.failure_code = None
             order.failure_reason = None
+        elif target == MfOrderStatus.failed and not order.failure_code:
+            fp_payment_status = truth.get("fp_payment_status")
+            if is_payment_failure_status(fp_payment_status):
+                order.failure_code = "payment_failed"
+                order.failure_reason = f"Payment {fp_payment_status}".strip()
+            else:
+                order.failure_code = "payment_not_completed"
+                order.failure_reason = "Payment was not completed"
         elif target == MfOrderStatus.cancelled and not order.failure_code:
             order.failure_code = "payment_abandoned"
             order.failure_reason = "Payment was not completed"
@@ -200,6 +295,9 @@ async def apply_order_fp_truth(
             },
         )
         changed = True
+
+    _store_fp_payment_status(order, truth.get("fp_payment_status"))
+    if changed or truth.get("fp_payment_status") is not None:
         await session.flush()
 
     return {
@@ -392,7 +490,37 @@ async def reconcile_order_payment(
     order: MfOrder,
     *,
     user_ip: str | None = None,
+    force: bool = False,
 ) -> dict[str, Any]:
+    if order.order_type == MfOrderType.redemption:
+        return {
+            "outcome": "pending",
+            "fp_payment_status": None,
+            "repaired": False,
+            "advanced": False,
+        }
+
+    if _is_sip_first_installment_order(order):
+        from app.application.mf.mf_sip_installment_order_service import resync_sip_first_installment_order
+
+        changed = await resync_sip_first_installment_order(session, order)
+        fp_payment_status = _ondc_metadata(order).get("fp_payment_status")
+        if isinstance(fp_payment_status, str):
+            fp_payment_status = fp_payment_status
+        else:
+            fp_payment_status = None
+        return {
+            "outcome": classify_order_payment_outcome(
+                order,
+                fp_payment_status=fp_payment_status,
+                repaired=changed,
+            ),
+            "fp_payment_status": fp_payment_status,
+            "repaired": changed,
+            "advanced": False,
+            "truth_changed": changed,
+        }
+
     if not _ondc_gateway_enabled():
         return {
             "outcome": "pending",
@@ -416,8 +544,14 @@ async def reconcile_order_payment(
     if order.status not in TERMINAL_STATUSES:
         if order.fp_purchase_id and await sync_order_from_fp(session, order):
             advanced = True
-        if await advance_ondc_order(session, order):
+        if await advance_ondc_order(session, order, force=force):
             advanced = True
+
+    truth = await fetch_order_fp_truth(order, checkout=checkout)
+    applied = await apply_order_fp_truth(session, order, checkout=checkout, truth=truth)
+    fp_payment_status = truth.get("fp_payment_status") or fp_payment_status
+    if applied.get("changed"):
+        advanced = True
 
     outcome = classify_order_payment_outcome(order, fp_payment_status=fp_payment_status, repaired=repaired)
     return {
@@ -425,6 +559,7 @@ async def reconcile_order_payment(
         "fp_payment_status": fp_payment_status,
         "repaired": repaired,
         "advanced": advanced,
+        "truth_changed": applied.get("changed", False),
     }
 
 

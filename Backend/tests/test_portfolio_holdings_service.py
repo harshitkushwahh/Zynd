@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
+
 from app.application.mf.portfolio_holdings_service import (
+    _downsample_growth_points,
     _extract_folio_meta,
+    _nav_on_or_before,
     build_portfolio_holding_id,
+    holding_hidden_from_redeem_units,
     parse_holdings_report,
     parse_holding_id,
     parse_investment_account_returns,
@@ -11,8 +17,35 @@ from app.application.mf.portfolio_holdings_service import (
     _apply_holding_day_change,
     _compute_allocation_slices,
     _compute_portfolio_day_change,
+    _filter_active_portfolio_holdings,
+    _is_active_portfolio_holding,
     _portfolio_slice_for_sebi,
 )
+
+
+def test_nav_on_or_before_uses_latest_nav_up_to_target() -> None:
+    nav_rows = [
+        (date(2026, 8, 1), Decimal("100")),
+        (date(2026, 8, 5), Decimal("101")),
+        (date(2026, 8, 10), Decimal("102")),
+    ]
+
+    assert _nav_on_or_before(nav_rows, date(2026, 8, 4)) == Decimal("100")
+    assert _nav_on_or_before(nav_rows, date(2026, 8, 7)) == Decimal("101")
+    assert _nav_on_or_before(nav_rows, date(2026, 8, 10)) == Decimal("102")
+    assert _nav_on_or_before(nav_rows, date(2026, 8, 11)) == Decimal("102")
+    assert _nav_on_or_before([], date(2026, 8, 1)) is None
+
+
+def test_downsample_growth_points_keeps_last_point() -> None:
+    points = [
+        {"label": f"Day {index}", "value": float(index), "date": f"2026-08-{index + 1:02d}", "invested": 100.0}
+        for index in range(20)
+    ]
+
+    sampled = _downsample_growth_points(points, max_points=5)
+    assert len(sampled) <= 5
+    assert sampled[-1] == points[-1]
 
 
 def test_portfolio_slice_for_sebi_maps_equity_debt_hybrid_other() -> None:
@@ -26,6 +59,13 @@ def test_portfolio_slice_for_sebi_maps_equity_debt_hybrid_other() -> None:
 def test_build_portfolio_holding_id() -> None:
     holding_id = build_portfolio_holding_id(folio_number="12345/67", isin="INF109K01Y46")
     assert holding_id == "12345/67::INF109K01Y46"
+
+
+def test_submitted_redemption_leaves_redeem_units_table() -> None:
+    assert holding_hidden_from_redeem_units({"status": "SUBMITTED"}) is True
+    assert holding_hidden_from_redeem_units({"status": "PROCESSING"}) is True
+    assert holding_hidden_from_redeem_units({"status": "PENDING"}) is False
+    assert holding_hidden_from_redeem_units(None) is False
 
 
 def test_parse_holdings_report_flattens_folios_and_schemes() -> None:
@@ -217,3 +257,16 @@ def test_extract_folio_meta_resolves_bank_name_from_ifsc() -> None:
     assert meta["redeem_bank_label"] == "Kotak Mahindra Bank ....9725"
     assert meta["redeem_bank_name"] == "Kotak Mahindra Bank"
     assert meta["redeem_bank_ifsc"] == "KKBK0000591"
+
+
+def test_filter_active_portfolio_holdings_hides_fully_redeemed() -> None:
+    holdings = [
+        {"isin": "INF1", "units": 10, "redeemable_units": 10, "current_value_inr": 500},
+        {"isin": "INF2", "units": 0, "redeemable_units": 0, "current_value_inr": 0},
+    ]
+
+    filtered = _filter_active_portfolio_holdings(holdings)
+
+    assert len(filtered) == 1
+    assert filtered[0]["isin"] == "INF1"
+    assert _is_active_portfolio_holding(holdings[1]) is False

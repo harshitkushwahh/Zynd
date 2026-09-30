@@ -273,7 +273,7 @@ async def test_ensure_kyc_form_already_exists_without_recoverable_id(db_session)
 
 
 @pytest.mark.asyncio
-async def test_ensure_kyc_form_does_not_create_when_stored_form_failed(db_session) -> None:
+async def test_ensure_kyc_form_creates_new_when_stored_form_failed(db_session) -> None:
     user = User(
         id=uuid4(),
         email=f"failed-bound-{uuid4()}@example.com",
@@ -286,11 +286,14 @@ async def test_ensure_kyc_form_does_not_create_when_stored_form_failed(db_sessio
     journey = KycJourneyState(
         user_id=user.id,
         kyc_already_registered=False,
-        readiness_code="kyc_incomplete",
+        readiness_code="kyc_unavailable",
         pan_verification_status="verified",
         external_kyc_form_id="kycf_failed_bound",
+        kyc_form_status="failed",
+        kyc_form_type="fresh",
+        kyc_form_failure_reason="previous attempt failed",
         pan_draft_json={
-            "panNumber": "EPBPS6369E",
+            "panNumber": "ONJPK4703G",
             "firstName": "TEST",
             "lastName": "USER",
             "fullName": "TEST USER",
@@ -303,8 +306,8 @@ async def test_ensure_kyc_form_does_not_create_when_stored_form_failed(db_sessio
     failed_form = {
         "id": "kycf_failed_bound",
         "status": "failed",
-        "type": "modify",
-        "reason": "ineligible_for_kyc_modification",
+        "type": "fresh",
+        "reason": "previous attempt failed",
     }
 
     with patch(
@@ -312,16 +315,99 @@ async def test_ensure_kyc_form_does_not_create_when_stored_form_failed(db_sessio
         new=AsyncMock(return_value=failed_form),
     ) as fetch_mock, patch(
         "app.application.kyc.kyc_form_service.create_kyc_form",
-        new=AsyncMock(),
-    ) as create_mock:
-        with pytest.raises(KycError) as exc:
-            await ensure_kyc_form(db_session, user=user, journey=journey)
+        new=AsyncMock(
+            return_value={
+                "id": "kycf_fresh_esign",
+                "status": "under_review",
+                "type": "fresh",
+            }
+        ),
+    ) as create_mock, patch(
+        "app.application.kyc.kyc_form_service.poll_kyc_form_until_created",
+        new=AsyncMock(
+            return_value={
+                "id": "kycf_fresh_esign",
+                "status": "created",
+                "type": "fresh",
+            }
+        ),
+    ):
+        form = await ensure_kyc_form(db_session, user=user, journey=journey)
 
     fetch_mock.assert_awaited_once_with("kycf_failed_bound")
-    create_mock.assert_not_awaited()
-    assert exc.value.code == "kyc_form_create_failed"
-    assert journey.external_kyc_form_id == "kycf_failed_bound"
-    assert journey.kyc_form_failure_reason == "ineligible_for_kyc_modification"
+    create_mock.assert_awaited_once()
+    assert create_mock.await_args.kwargs["form_type"] == "fresh"
+    assert form["id"] == "kycf_fresh_esign"
+    assert journey.external_kyc_form_id == "kycf_fresh_esign"
+    assert journey.kyc_form_status == "created"
+
+
+@pytest.mark.asyncio
+async def test_ensure_kyc_form_creates_new_when_stored_form_expired(db_session) -> None:
+    user = User(
+        id=uuid4(),
+        email=f"expired-bound-{uuid4()}@example.com",
+        role=UserRole.user,
+        status=UserStatus.active,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    journey = KycJourneyState(
+        user_id=user.id,
+        kyc_already_registered=False,
+        readiness_code="kyc_unavailable",
+        pan_verification_status="verified",
+        external_kyc_form_id="kycf_expired_bound",
+        kyc_form_status="expired",
+        kyc_form_type="fresh",
+        pan_draft_json={
+            "panNumber": "ONJPK4703G",
+            "firstName": "TEST",
+            "lastName": "USER",
+            "fullName": "TEST USER",
+            "dateOfBirth": "1985-01-01",
+        },
+    )
+    db_session.add(journey)
+    await db_session.flush()
+
+    expired_form = {
+        "id": "kycf_expired_bound",
+        "status": "expired",
+        "type": "fresh",
+        "reason": "form expired",
+    }
+
+    with patch(
+        "app.application.kyc.kyc_form_service.fetch_kyc_form",
+        new=AsyncMock(return_value=expired_form),
+    ) as fetch_mock, patch(
+        "app.application.kyc.kyc_form_service.create_kyc_form",
+        new=AsyncMock(
+            return_value={
+                "id": "kycf_fresh_retry",
+                "status": "under_review",
+                "type": "fresh",
+            }
+        ),
+    ) as create_mock, patch(
+        "app.application.kyc.kyc_form_service.poll_kyc_form_until_created",
+        new=AsyncMock(
+            return_value={
+                "id": "kycf_fresh_retry",
+                "status": "created",
+                "type": "fresh",
+            }
+        ),
+    ):
+        form = await ensure_kyc_form(db_session, user=user, journey=journey)
+
+    fetch_mock.assert_awaited_once_with("kycf_expired_bound")
+    create_mock.assert_awaited_once()
+    assert create_mock.await_args.kwargs["form_type"] == "fresh"
+    assert form["id"] == "kycf_fresh_retry"
+    assert journey.external_kyc_form_id == "kycf_fresh_retry"
 
 
 @pytest.mark.asyncio
@@ -377,3 +463,123 @@ async def test_ensure_kyc_form_binds_already_exists_failed_form(db_session) -> N
     fetch_mock.assert_awaited_once_with("kycf_from_error")
     assert exc.value.code == "kyc_form_create_failed"
     assert journey.external_kyc_form_id == "kycf_from_error"
+
+
+def _new_to_kyc_journey(user: User, **overrides: object) -> KycJourneyState:
+    payload = {
+        "user_id": user.id,
+        "kyc_already_registered": False,
+        "readiness_code": "kyc_unavailable",
+        "pan_verification_status": "verified",
+        "pan_draft_json": {
+            "panNumber": "ONJPK4703G",
+            "firstName": "TEST",
+            "lastName": "USER",
+            "fullName": "TEST USER",
+            "dateOfBirth": "1985-01-01",
+        },
+    }
+    payload.update(overrides)
+    return KycJourneyState(**payload)
+
+
+@pytest.mark.asyncio
+async def test_ensure_kyc_form_retries_modify_when_fresh_poll_fails_already_exists(
+    db_session,
+) -> None:
+    user = User(
+        id=uuid4(),
+        email=f"fresh-exists-{uuid4()}@example.com",
+        role=UserRole.user,
+        status=UserStatus.active,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    journey = _new_to_kyc_journey(user)
+    db_session.add(journey)
+    await db_session.flush()
+
+    with patch(
+        "app.application.kyc.kyc_form_service.create_kyc_form",
+        new=AsyncMock(
+            side_effect=[
+                {"id": "kycf_fresh_fail", "status": "under_review", "type": "fresh"},
+                {"id": "kycf_modify_ok", "status": "under_review", "type": "modify"},
+            ]
+        ),
+    ) as create_mock, patch(
+        "app.application.kyc.kyc_form_service.poll_kyc_form_until_created",
+        new=AsyncMock(
+            side_effect=[
+                {
+                    "id": "kycf_fresh_fail",
+                    "status": "failed",
+                    "type": "fresh",
+                    "reason": "An ongoing KYC Form already exists for this PAN",
+                },
+                {
+                    "id": "kycf_modify_ok",
+                    "status": "created",
+                    "type": "modify",
+                },
+            ]
+        ),
+    ):
+        form = await ensure_kyc_form(db_session, user=user, journey=journey)
+
+    assert create_mock.await_count == 2
+    assert create_mock.await_args_list[0].kwargs["form_type"] == "fresh"
+    assert create_mock.await_args_list[1].kwargs["form_type"] == "modify"
+    assert form["id"] == "kycf_modify_ok"
+    assert journey.external_kyc_form_id == "kycf_modify_ok"
+
+
+@pytest.mark.asyncio
+async def test_ensure_kyc_form_retries_modify_when_fresh_poll_fails_ineligible(
+    db_session,
+) -> None:
+    user = User(
+        id=uuid4(),
+        email=f"fresh-ineligible-{uuid4()}@example.com",
+        role=UserRole.user,
+        status=UserStatus.active,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    journey = _new_to_kyc_journey(user)
+    db_session.add(journey)
+    await db_session.flush()
+
+    with patch(
+        "app.application.kyc.kyc_form_service.create_kyc_form",
+        new=AsyncMock(
+            side_effect=[
+                {"id": "kycf_fresh_fail", "status": "under_review", "type": "fresh"},
+                {"id": "kycf_modify_ok", "status": "under_review", "type": "modify"},
+            ]
+        ),
+    ) as create_mock, patch(
+        "app.application.kyc.kyc_form_service.poll_kyc_form_until_created",
+        new=AsyncMock(
+            side_effect=[
+                {
+                    "id": "kycf_fresh_fail",
+                    "status": "failed",
+                    "type": "fresh",
+                    "reason": "ineligible_for_fresh_kyc",
+                },
+                {
+                    "id": "kycf_modify_ok",
+                    "status": "created",
+                    "type": "modify",
+                },
+            ]
+        ),
+    ):
+        form = await ensure_kyc_form(db_session, user=user, journey=journey)
+
+    assert create_mock.await_count == 2
+    assert create_mock.await_args_list[1].kwargs["form_type"] == "modify"
+    assert form["id"] == "kycf_modify_ok"

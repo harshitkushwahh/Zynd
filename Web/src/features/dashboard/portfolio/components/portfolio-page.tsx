@@ -20,7 +20,6 @@ import { PortfolioSipsPanel } from "@/features/dashboard/portfolio/components/po
 import { PortfolioSummaryCard } from "@/features/dashboard/portfolio/components/portfolio-summary-card";
 import { PortfolioUninvestedEmptyState } from "@/features/dashboard/portfolio/components/portfolio-uninvested-empty-state";
 import { PortfolioTransactionsPanel } from "@/features/dashboard/portfolio/components/portfolio-transactions-panel";
-import { PortfolioUpcomingSipsPanel } from "@/features/dashboard/portfolio/components/portfolio-upcoming-sips-panel";
 import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
 import { useMfSipPlansQuery } from "@/features/invest/hooks/use-mf-sip-plans-query";
 import {
@@ -230,10 +229,6 @@ function PortfolioOverviewPanel() {
           />
         </div>
       </div>
-
-      {summary?.upcoming_sips?.length ? (
-        <PortfolioUpcomingSipsPanel upcomingSips={summary.upcoming_sips} className="mt-4" />
-      ) : null}
 
       {hasHoldings || hasUpcoming ? (
         <PortfolioHoldingsTable

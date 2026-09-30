@@ -16,8 +16,15 @@ from app.application.mf.mf_fp_state import (
 )
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import get_mf_purchase, list_mf_purchases_for_plan
-from app.infrastructure.mf.fp_payment_client import create_netbanking_payment, extract_payment_token_url
+from app.infrastructure.mf.fp_oms_client import extract_fp_state, get_mf_purchase, list_mf_purchases_for_plan
+from app.infrastructure.mf.fp_payment_client import (
+    create_netbanking_payment,
+    extract_payment_status,
+    extract_payment_token_url,
+    get_payment,
+    is_payment_failure_status,
+    is_payment_success_status,
+)
 from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfSipPlan, MfSipPlanStatus
 
 logger = logging.getLogger(__name__)
@@ -94,11 +101,81 @@ def _pending_first_installment_payload(*, amount_inr: float) -> dict[str, Any]:
     }
 
 
+def _payment_amc_order_ids(payment_payload: dict[str, Any] | None) -> set[int]:
+    if not payment_payload:
+        return set()
+    amc_order_ids = payment_payload.get("amc_order_ids") or []
+    data = payment_payload.get("data")
+    if isinstance(data, dict) and not amc_order_ids:
+        amc_order_ids = data.get("amc_order_ids") or []
+    covered: set[int] = set()
+    for raw in amc_order_ids:
+        try:
+            covered.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return covered
+
+
+async def _fetch_first_installment_payment_status(
+    fp_payment_id: Any,
+) -> tuple[str | None, dict[str, Any] | None]:
+    if fp_payment_id is None:
+        return None, None
+    try:
+        payment_id = int(fp_payment_id)
+    except (TypeError, ValueError):
+        return None, None
+    try:
+        payload = await get_payment(payment_id)
+    except Exception:
+        logger.warning("Unable to fetch first installment payment id=%s", fp_payment_id, exc_info=True)
+        return None, None
+    return extract_payment_status(payload), payload
+
+
+def _payment_covers_first_installment(
+    payment_payload: dict[str, Any] | None,
+    fp_purchase_old_id: Any,
+) -> bool:
+    if fp_purchase_old_id is None:
+        return False
+    try:
+        old_id = int(fp_purchase_old_id)
+    except (TypeError, ValueError):
+        return False
+    return old_id in _payment_amc_order_ids(payment_payload)
+
+
+def _resolve_first_installment_status(
+    *,
+    fp_state: str | None,
+    fp_payment_status: str | None,
+    payment_succeeded: bool,
+) -> FirstInstallmentStatus:
+    if payment_succeeded:
+        return "paid"
+    if is_payment_failure_status(fp_payment_status):
+        return "failed"
+    return classify_first_installment_state(fp_state)
+
+
+async def confirm_sip_first_installment_return(
+    session: AsyncSession,
+    plan: MfSipPlan,
+    *,
+    mandate: MfMandate | None = None,
+) -> dict[str, Any]:
+    """Reconcile Cybrilla payment truth after the investor returns from PG."""
+    return await resolve_sip_first_installment(session, plan, mandate=mandate, force_reconcile=True)
+
+
 async def resolve_sip_first_installment(
     session: AsyncSession,
     plan: MfSipPlan,
     *,
     mandate: MfMandate | None = None,
+    force_reconcile: bool = False,
 ) -> dict[str, Any]:
     """Return first-installment status for an active SIP plan."""
     del mandate
@@ -106,7 +183,7 @@ async def resolve_sip_first_installment(
         return {"status": "not_applicable"}
 
     cached = _first_installment_meta(plan)
-    if cached.get("status") == "paid":
+    if cached.get("status") == "paid" and not force_reconcile:
         return {
             "status": "paid",
             "amount_inr": cached.get("amount_inr") or float(plan.amount_inr),
@@ -121,7 +198,32 @@ async def resolve_sip_first_installment(
         return {"status": "not_applicable"}
 
     fp_state = installment.get("state")
-    status = classify_first_installment_state(str(fp_state) if fp_state is not None else None)
+    fp_purchase_id = cached.get("fp_purchase_id") or installment.get("fp_purchase_id")
+    fp_purchase_old_id = cached.get("fp_purchase_old_id") or installment.get("fp_purchase_old_id")
+    if fp_purchase_id:
+        try:
+            purchase = await get_mf_purchase(str(fp_purchase_id))
+            obj = purchase.get("data") if isinstance(purchase.get("data"), dict) else purchase
+            fp_state = obj.get("state") or fp_state
+        except FpClientError:
+            logger.warning(
+                "Unable to refresh first installment purchase plan=%s purchase=%s",
+                plan.id,
+                fp_purchase_id,
+                exc_info=True,
+            )
+
+    fp_payment_status, payment_payload = await _fetch_first_installment_payment_status(
+        cached.get("fp_payment_id"),
+    )
+    payment_succeeded = _payment_covers_first_installment(payment_payload, fp_purchase_old_id) and (
+        is_payment_success_status(fp_payment_status)
+    )
+    status = _resolve_first_installment_status(
+        fp_state=str(fp_state) if fp_state is not None else None,
+        fp_payment_status=fp_payment_status,
+        payment_succeeded=payment_succeeded,
+    )
     raw = installment.get("raw") if isinstance(installment.get("raw"), dict) else {}
     amount = raw.get("amount")
     try:
@@ -135,9 +237,22 @@ async def resolve_sip_first_installment(
             plan,
             status="paid",
             amount_inr=amount_inr,
-            fp_purchase_id=installment.get("fp_purchase_id"),
-            fp_purchase_old_id=installment.get("fp_purchase_old_id"),
+            fp_purchase_id=fp_purchase_id,
+            fp_purchase_old_id=fp_purchase_old_id,
             fp_state=fp_state,
+            fp_payment_status=fp_payment_status,
+            payment_url=None,
+        )
+    elif status == "failed":
+        await _set_first_installment_meta(
+            session,
+            plan,
+            status="failed",
+            amount_inr=amount_inr,
+            fp_purchase_id=fp_purchase_id,
+            fp_purchase_old_id=fp_purchase_old_id,
+            fp_state=fp_state,
+            fp_payment_status=fp_payment_status,
             payment_url=None,
         )
     elif status == "pending":
@@ -146,17 +261,33 @@ async def resolve_sip_first_installment(
             plan,
             status="pending",
             amount_inr=amount_inr,
-            fp_purchase_id=installment.get("fp_purchase_id"),
-            fp_purchase_old_id=installment.get("fp_purchase_old_id"),
+            fp_purchase_id=fp_purchase_id,
+            fp_purchase_old_id=fp_purchase_old_id,
             fp_state=fp_state,
+            fp_payment_status=fp_payment_status,
             payment_url=None,
         )
+
+    await _sync_first_installment_order(session, plan, installment=installment)
 
     return {
         "status": status,
         "amount_inr": amount_inr,
         "payment_url": None,
+        "fp_state": str(fp_state) if fp_state is not None else cached.get("fp_state"),
+        "fp_payment_status": fp_payment_status or cached.get("fp_payment_status"),
     }
+
+
+async def _sync_first_installment_order(
+    session: AsyncSession,
+    plan: MfSipPlan,
+    *,
+    installment: dict[str, Any] | None,
+) -> None:
+    from app.application.mf.mf_sip_installment_order_service import sync_sip_first_installment_order
+
+    await sync_sip_first_installment_order(session, plan, installment=installment)
 
 
 async def initiate_sip_first_installment_payment(

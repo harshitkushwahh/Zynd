@@ -16,6 +16,10 @@ from app.application.mf.mf_ondc_order_service import (
     submit_pending_order,
 )
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event
+from app.application.mf.mf_redemption_service import (
+    repair_redemption_payment_misclassify,
+    sync_redemption_order_from_fp,
+)
 from app.core.config import get_settings
 from app.infrastructure.mf.fp_payment_client import is_payment_success_status
 from app.infrastructure.persistence.mf_transaction_models import (
@@ -24,6 +28,7 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfCheckoutType,
     MfOrder,
     MfOrderStatus,
+    MfOrderType,
 )
 
 _ABANDONABLE_ORDER_STATUSES = {
@@ -47,15 +52,22 @@ async def advance_order_for_payment(
     *,
     user_ip: str | None = None,
 ) -> bool:
+    if order.order_type == MfOrderType.redemption:
+        repaired = await repair_redemption_payment_misclassify(session, order)
+        synced = await sync_redemption_order_from_fp(session, order)
+        return repaired or synced
+
     if not _ondc_gateway_enabled():
         return False
 
     if order.status == MfOrderStatus.pending:
-        if await submit_pending_order(session, order, user_ip=user_ip):
+        if await submit_pending_order(session, order, user_ip=user_ip, force=True):
             pass
 
-    result = await reconcile_order_payment(session, order, user_ip=user_ip)
-    return bool(result.get("repaired") or result.get("advanced"))
+    result = await reconcile_order_payment(session, order, user_ip=user_ip, force=True)
+    return bool(
+        result.get("repaired") or result.get("advanced") or result.get("truth_changed")
+    )
 
 
 async def advance_checkout_for_payment(
@@ -140,6 +152,8 @@ async def confirm_checkout_payment_return(
 
 
 async def abandon_unpaid_order_payment(session: AsyncSession, order: MfOrder) -> bool:
+    if order.order_type == MfOrderType.redemption:
+        return False
     if order.status not in _ABANDONABLE_ORDER_STATUSES:
         return False
 

@@ -340,6 +340,18 @@ async def load_order_product_slugs(
     return slugs
 
 
+def order_payment_completed(order: MfOrder) -> bool:
+    if order.order_type == MfOrderType.redemption:
+        return True
+    if order.status == MfOrderStatus.succeeded:
+        return True
+    metadata = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    ondc = metadata.get("ondc")
+    if isinstance(ondc, dict) and ondc.get("payment_success"):
+        return True
+    return False
+
+
 def serialize_order(
     order: MfOrder,
     *,
@@ -352,6 +364,13 @@ def serialize_order(
 ) -> dict:
     payment_url = checkout.token_url if checkout else None
     metadata = checkout.metadata_ if checkout and isinstance(checkout.metadata_, dict) else {}
+    order_metadata = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    order_ondc = order_metadata.get("ondc")
+    fp_payment_status = (
+        order_ondc.get("fp_payment_status")
+        if isinstance(order_ondc, dict)
+        else None
+    )
     payload = {
         "order_id": str(order.id),
         "checkout_id": str(order.checkout_id) if order.checkout_id else None,
@@ -368,7 +387,9 @@ def serialize_order(
         "fp_purchase_id": order.fp_purchase_id,
         "fp_purchase_old_id": order.fp_purchase_old_id,
         "fp_state": order.fp_state,
+        "fp_payment_status": fp_payment_status,
         "payment_url": payment_url,
+        "payment_completed": order_payment_completed(order),
         "next_action": _derive_next_action(status=order.status.value, payment_url=payment_url),
         "failure_code": order.failure_code,
         "failure_reason": order.failure_reason,

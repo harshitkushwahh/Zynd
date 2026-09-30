@@ -351,7 +351,9 @@ export type MfOrder = {
   fp_purchase_id: string | null;
   fp_purchase_old_id: number | null;
   fp_state: string | null;
+  fp_payment_status?: string | null;
   payment_url: string | null;
+  payment_completed?: boolean;
   next_action: string | null;
   failure_code: string | null;
   failure_reason: string | null;
@@ -610,6 +612,8 @@ export type MfSipFirstInstallment = {
   status: "not_applicable" | "pending" | "paid" | "failed";
   amount_inr: number | null;
   payment_url: string | null;
+  fp_state?: string | null;
+  fp_payment_status?: string | null;
 };
 
 export type MfSipPlan = {
@@ -751,6 +755,12 @@ export function abandonMfSipMandate(planId: string) {
 
 export function payMfSipFirstInstallment(planId: string) {
   return apiRequest<MfSipFirstInstallment>(`/invest/sip/plans/${planId}/first-installment/pay`, {
+    method: "POST",
+  });
+}
+
+export function confirmMfSipFirstInstallmentReturn(planId: string) {
+  return apiRequest<MfSipPlan>(`/invest/sip/plans/${planId}/confirm-first-installment-return`, {
     method: "POST",
   });
 }

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.identity.otp_app_service import (
@@ -21,8 +21,16 @@ from app.application.mf.investment_constraints import extract_investment_constra
 from app.application.mf.mf_fp_state import map_fp_redemption_state_to_order
 from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, get_or_create_mf_investment_account
-from app.application.mf.mf_scheme_resolution import mutual_fund_isin_equals
+from app.application.mf.mf_scheme_resolution import (
+    is_scheme_unavailable_for_transaction,
+    mutual_fund_isin_equals,
+    resolve_mf_purchase_scheme,
+)
 from app.application.mf.mf_investment_account_service import ensure_fp_mfia, ensure_mfia_old_id
+from app.application.mf.mf_redemption_journey_service import (
+    index_active_redemptions,
+    list_fp_redemptions_for_mfia,
+)
 from app.application.mf.portfolio_holdings_service import (
     build_portfolio_holding_id,
     invalidate_user_portfolio_cache,
@@ -33,6 +41,8 @@ from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
     create_mf_redemption,
+    extract_fp_object,
+    extract_fp_redemption_failure,
     extract_fp_state,
     get_fund_scheme_by_isin,
     get_holdings_report,
@@ -62,6 +72,63 @@ def _fp_redemption_id(order: MfOrder) -> str | None:
     meta = _order_meta(order)
     value = meta.get("fp_redemption_id")
     return str(value) if value else None
+
+
+_PAYMENT_MISCLASSIFY_FAILURE_CODES = frozenset(
+    {"payment_not_completed", "payment_abandoned", "payment_failed"}
+)
+_LIVE_REDEMPTION_FP_STATES = frozenset(
+    {
+        "pending",
+        "created",
+        "review_completed",
+        "confirmed",
+        "processing",
+        "review",
+        "under_review",
+        "submitted",
+    }
+)
+
+
+def _maybe_mark_redemption_submitted(order: MfOrder) -> None:
+    if order.status == MfOrderStatus.submitted and order.submitted_at is None:
+        order.submitted_at = datetime.now(timezone.utc)
+
+
+def is_redemption_payment_misclassified(order: MfOrder) -> bool:
+    if order.order_type != MfOrderType.redemption:
+        return False
+    if order.status not in {MfOrderStatus.failed, MfOrderStatus.cancelled}:
+        return False
+    fp_state = (order.fp_state or "").strip().lower()
+    if fp_state not in _LIVE_REDEMPTION_FP_STATES:
+        return False
+    code = (order.failure_code or "").strip()
+    reason = (order.failure_reason or "").strip().lower()
+    return code in _PAYMENT_MISCLASSIFY_FAILURE_CODES or "payment was not completed" in reason
+
+
+async def repair_redemption_payment_misclassify(session: AsyncSession, order: MfOrder) -> bool:
+    if not is_redemption_payment_misclassified(order):
+        return False
+
+    previous = order.status.value
+    order.status = map_fp_redemption_state_to_order(order.fp_state)
+    order.failure_code = None
+    order.failure_reason = None
+    _maybe_mark_redemption_submitted(order)
+    await _record_order_event(
+        session,
+        order,
+        from_status=previous,
+        to_status=order.status.value,
+        source="SYSTEM",
+        payload={"repair": "redemption_payment_misclassify", "fp_state": order.fp_state},
+    )
+    await session.flush()
+    await invalidate_user_portfolio_cache(order.user_id)
+    return True
 
 
 def _normalize_folio_mobile(raw: str | None) -> str | None:
@@ -192,7 +259,7 @@ async def _load_holding_row(
     *,
     user_id: uuid.UUID,
     holding_id: str,
-) -> tuple[MfInvestmentAccount, str, str, dict[str, Any], str, str]:
+) -> tuple[MfInvestmentAccount, str, str, dict[str, Any], str, dict[str, Any] | None]:
     parsed = parse_holding_id(holding_id)
     if parsed is None:
         raise MfOrderError(code="invalid_holding_id", message="Invalid holding id", status_code=400)
@@ -219,16 +286,69 @@ async def _load_holding_row(
 
     fp_redemptions = await list_fp_redemptions_for_mfia(fp_mfia_id=fp_mfia_id)
     active = index_active_redemptions(fp_redemptions)
-    if active.get(build_portfolio_holding_id(folio_number=folio_number, isin=isin)):
-        raise MfOrderError(
-            code="active_redemption_exists",
-            message="A redemption is already in progress for this holding",
-            status_code=409,
-        )
+    active_row = active.get(build_portfolio_holding_id(folio_number=folio_number, isin=isin))
+    return mfia, folio_number, isin, row, fp_mfia_id, active_row
 
-    _product, fund = await _load_fund_context(session, isin=isin)
-    scheme = fund.fp_scheme_id or isin
-    return mfia, folio_number, isin, row, scheme, fp_mfia_id
+
+_TERMINAL_REDEMPTION_FP_STATES = frozenset({"failed", "cancelled", "rejected", "expired"})
+
+
+def _is_resumable_redemption_order(
+    order: MfOrder,
+    *,
+    holding_id: str,
+    fp_redemption_id: str | None,
+) -> bool:
+    if order.order_type != MfOrderType.redemption or order.status in TERMINAL_STATUSES:
+        return False
+    fp_state = (getattr(order, "fp_state", None) or "").strip().lower()
+    if fp_state in _TERMINAL_REDEMPTION_FP_STATES:
+        return False
+    meta = _order_meta(order)
+    if meta.get("redemption_confirmed"):
+        return False
+    order_holding = str(meta.get("holding_id") or "")
+    order_fp_id = str(meta.get("fp_redemption_id") or "")
+    if fp_redemption_id and order_fp_id and order_fp_id == fp_redemption_id:
+        return True
+    if order_holding and order_holding == holding_id:
+        return True
+    parsed = parse_holding_id(holding_id)
+    if parsed is None:
+        return False
+    folio_number, isin = parsed
+    return str(meta.get("folio_number") or "") == folio_number and str(meta.get("isin") or "").upper() == isin
+
+
+async def find_resumable_redemption_order(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    holding_id: str,
+    fp_redemption_id: str | None = None,
+) -> MfOrder | None:
+    orders = list(
+        (
+            await session.execute(
+                select(MfOrder)
+                .where(
+                    MfOrder.user_id == user_id,
+                    MfOrder.order_type == MfOrderType.redemption,
+                    MfOrder.status.not_in(list(TERMINAL_STATUSES)),
+                )
+                .order_by(MfOrder.created_at.desc())
+                .limit(50)
+            )
+        ).scalars()
+    )
+    for order in orders:
+        if _is_resumable_redemption_order(
+            order,
+            holding_id=holding_id,
+            fp_redemption_id=fp_redemption_id,
+        ):
+            return order
+    return None
 
 
 async def _load_redemption_constraints(isin: str) -> dict[str, Any] | None:
@@ -256,12 +376,29 @@ async def create_redemption_order(
             raise MfOrderError(code="idempotency_conflict", message="Idempotency key already used", status_code=409)
         return existing
 
-    mfia, folio_number, isin, row, scheme_id, fp_mfia_id = await _load_holding_row(
+    mfia, folio_number, isin, row, fp_mfia_id, active_row = await _load_holding_row(
         session,
         user_id=user_id,
         holding_id=holding_id,
     )
+    if active_row:
+        existing_active = await find_resumable_redemption_order(
+            session,
+            user_id=user_id,
+            holding_id=holding_id,
+            fp_redemption_id=str(active_row.get("fp_redemption_id") or "") or None,
+        )
+        if existing_active:
+            return existing_active
+        raise MfOrderError(
+            code="active_redemption_exists",
+            message="A redemption is already in progress for this holding",
+            status_code=409,
+        )
     product, fund = await _load_fund_context(session, isin=isin)
+    scheme_id, fallback_scheme = resolve_mf_purchase_scheme(fund, stored_scheme=isin)
+    if not scheme_id:
+        raise MfOrderError(code="scheme_not_ready", message="Scheme is not synced for redemptions yet")
     constraints = await _load_redemption_constraints(isin)
 
     redeemable_units = float(row.get("redeemable_units") or 0)
@@ -317,27 +454,56 @@ async def create_redemption_order(
             "user_ip": user_ip,
             "consent_otp_sent": False,
             "redemption_confirmed": False,
+            "scheme": scheme_id,
         },
     )
     session.add(order)
     await session.flush()
 
-    try:
-        fp_result = await create_mf_redemption(
-            fp_mfia_id=fp_mfia_id,
-            folio_number=folio_number,
-            scheme=scheme_id,
-            source_ref_id=str(order.id),
-            amount_inr=fp_amount,
-            units=fp_units,
-            user_ip=user_ip,
-        )
-    except FpClientError as exc:
+    fp_result: dict[str, Any] | None = None
+    last_fp_error: FpClientError | None = None
+    for candidate in (scheme_id, fallback_scheme):
+        if not candidate:
+            continue
+        try:
+            fp_result = await create_mf_redemption(
+                fp_mfia_id=fp_mfia_id,
+                folio_number=folio_number,
+                scheme=candidate,
+                source_ref_id=str(order.id),
+                amount_inr=fp_amount,
+                units=fp_units,
+                user_ip=user_ip,
+            )
+            if candidate != scheme_id:
+                scheme_id = candidate
+                order.fp_scheme_id = candidate
+                order.metadata_ = {**_order_meta(order), "scheme": candidate}
+            break
+        except FpClientError as exc:
+            last_fp_error = exc
+            if is_scheme_unavailable_for_transaction(exc) and fallback_scheme and candidate != fallback_scheme:
+                logger.warning(
+                    "Redemption rejected for scheme=%s holding=%s; retrying with fallback scheme=%s",
+                    candidate,
+                    holding_id,
+                    fallback_scheme,
+                )
+                continue
+            break
+
+    if fp_result is None:
+        exc = last_fp_error or FpClientError("FinPrim redemption failed")
+        code = exc.code or "fp_redemption_failed"
+        message = exc.message
+        if is_scheme_unavailable_for_transaction(exc):
+            code = "scheme_not_available"
+            message = "This fund is not available for redemption right now. Try again later."
         order.status = MfOrderStatus.failed
-        order.failure_code = exc.code or "fp_redemption_failed"
-        order.failure_reason = exc.message
+        order.failure_code = code
+        order.failure_reason = message
         await session.flush()
-        raise MfOrderError(code=exc.code or "fp_redemption_failed", message=exc.message, status_code=exc.status_code) from exc
+        raise MfOrderError(code=code, message=message, status_code=exc.status_code) from exc
 
     fp_redemption_id = fp_result.get("fp_redemption_id")
     if not fp_redemption_id:
@@ -353,7 +519,7 @@ async def create_redemption_order(
         **(_order_meta(order)),
         "fp_redemption_id": fp_redemption_id,
     }
-    order.submitted_at = datetime.now(timezone.utc)
+    _maybe_mark_redemption_submitted(order)
     await session.flush()
 
     await _record_order_event(session, order, from_status=None, to_status=order.status.value)
@@ -500,6 +666,7 @@ async def confirm_redemption_order(
     order.fp_state = str(result.get("state") or order.fp_state)
     order.status = map_fp_redemption_state_to_order(order.fp_state)
     order.metadata_ = {**meta, "redemption_confirmed": True}
+    _maybe_mark_redemption_submitted(order)
     await session.flush()
 
     await _record_order_event(
@@ -522,7 +689,9 @@ async def apply_redemption_fp_state(
     source: str,
     payload: dict[str, Any] | None = None,
 ) -> bool:
-    if order.order_type != MfOrderType.redemption or order.status in TERMINAL_STATUSES:
+    if order.order_type != MfOrderType.redemption:
+        return False
+    if order.status in TERMINAL_STATUSES and not is_redemption_payment_misclassified(order):
         return False
 
     mapped = map_fp_redemption_state_to_order(fp_state)
@@ -534,9 +703,16 @@ async def apply_redemption_fp_state(
     order.status = mapped
     if mapped == MfOrderStatus.succeeded:
         order.settled_at = datetime.now(timezone.utc)
-    elif mapped == MfOrderStatus.failed:
-        order.failure_code = order.failure_code or "fp_terminal_failed"
-        order.failure_reason = order.failure_reason or str(fp_state)
+        order.failure_code = None
+        order.failure_reason = None
+    elif mapped in {MfOrderStatus.failed, MfOrderStatus.cancelled}:
+        fp_code, fp_reason = extract_fp_redemption_failure(payload or {})
+        order.failure_code = fp_code or order.failure_code or "fp_terminal_failed"
+        order.failure_reason = fp_reason or order.failure_reason or str(fp_state)
+    elif mapped not in TERMINAL_STATUSES:
+        order.failure_code = None
+        order.failure_reason = None
+    _maybe_mark_redemption_submitted(order)
 
     await _record_order_event(
         session,
@@ -551,7 +727,9 @@ async def apply_redemption_fp_state(
 
 
 async def sync_redemption_order_from_fp(session: AsyncSession, order: MfOrder) -> bool:
-    if order.order_type != MfOrderType.redemption or order.status in TERMINAL_STATUSES:
+    if order.order_type != MfOrderType.redemption:
+        return False
+    if order.status in TERMINAL_STATUSES and not is_redemption_payment_misclassified(order):
         return False
     if should_skip_retry(order.metadata_):
         return False
@@ -572,8 +750,15 @@ async def sync_redemption_order_from_fp(session: AsyncSession, order: MfOrder) -
             await session.flush()
         return False
 
+    fp_object = extract_fp_object(payload)
     fp_state = extract_fp_state(payload) or order.fp_state
-    return await apply_redemption_fp_state(session, order, fp_state=fp_state, source="WORKER", payload={"stage": "sync"})
+    return await apply_redemption_fp_state(
+        session,
+        order,
+        fp_state=fp_state,
+        source="WORKER",
+        payload={**fp_object, "stage": "sync"},
+    )
 
 
 async def sync_open_redemption_orders(session: AsyncSession, *, batch_size: int = 50) -> dict[str, int]:
@@ -583,7 +768,10 @@ async def sync_open_redemption_orders(session: AsyncSession, *, batch_size: int 
                 select(MfOrder)
                 .where(
                     MfOrder.order_type == MfOrderType.redemption,
-                    MfOrder.status.not_in(list(TERMINAL_STATUSES)),
+                    or_(
+                        MfOrder.status.not_in(list(TERMINAL_STATUSES)),
+                        MfOrder.failure_code.in_(list(_PAYMENT_MISCLASSIFY_FAILURE_CODES)),
+                    ),
                 )
                 .order_by(MfOrder.updated_at)
                 .limit(batch_size)
