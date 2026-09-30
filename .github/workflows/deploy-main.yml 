@@ -1,0 +1,69 @@
+name: Deploy ZYND Backend
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: zynd-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Azure VM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /opt/zynd
+
+            echo "======================================"
+            echo "Starting ZYND deployment"
+            echo "======================================"
+
+            echo "Updating code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "Syncing environment from Azure Key Vault..."
+            sudo /usr/local/bin/zynd-sync-env
+
+            echo "Building and starting API..."
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              up -d --build --force-recreate api
+
+            echo "Waiting for API..."
+
+            for i in {1..30}; do
+              if curl -fsS http://127.0.0.1:8000/ > /dev/null; then
+                echo "API health check: OK"
+                break
+              fi
+
+              echo "API not ready yet... retrying ($i/30)"
+              sleep 2
+            done
+
+            if ! curl -fsS http://127.0.0.1:8000/ > /dev/null; then
+              echo "ERROR: API health check failed."
+              docker logs --tail 100 zynd-api-1
+              exit 1
+            fi
+
+            echo "======================================"
+            echo "ZYND deployment successful"
+            echo "======================================"
+
+            echo "Deployed commit:"
+            git log -1 --oneline

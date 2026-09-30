@@ -50,6 +50,7 @@ coverage/
 
 Admin/.env
 Backend/.env
+Backend/zyndfinal.env
 Web/.env
 # Production JWT keys
 Backend/privateKey.pem
