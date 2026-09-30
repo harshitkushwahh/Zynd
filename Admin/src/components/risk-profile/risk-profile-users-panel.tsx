@@ -171,7 +171,7 @@ export function RiskProfileUsersPanel({
       ) : null}
 
       {error || loadError ? (
-        <AdminFeedbackMessage variant="destructive" onDismiss={() => { setError(""); setLoadError(""); }}>{error || loadError}</AdminFeedbackMessage>
+        <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error || loadError}</AdminFeedbackMessage>
       ) : null}
 
       <AdminDataTable

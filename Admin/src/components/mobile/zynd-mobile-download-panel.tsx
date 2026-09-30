@@ -8,7 +8,8 @@ import {
   AndroidStoreLogo,
   AppleStoreLogo,
 } from "@/components/mobile/mobile-store-logos";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ADMIN_NAV_ROUTES } from "@/lib/admin-navigation";
 import { env } from "@/lib/env";
 
@@ -61,17 +62,15 @@ function PlatformDownloadCard({
         </ol>
       </div>
 
-      <Button asChild className="mt-4 w-fit" size="sm">
-        <a
-          href={storeUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5"
-        >
-          View on {storeLabel}
-          <ArrowUpRight className="size-4" />
-        </a>
-      </Button>
+      <a
+        href={storeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(buttonVariants({ size: "sm" }), "mt-4 w-fit gap-1.5")}
+      >
+        View on {storeLabel}
+        <ArrowUpRight className="size-4" />
+      </a>
     </article>
   );
 }

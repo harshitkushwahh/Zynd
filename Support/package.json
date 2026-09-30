@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 9999",
-    "build": "next build",
+    "build": "NEXT_TELEMETRY_DISABLED=1 next build",
     "start": "next start --port 9999",
     "lint": "eslint"
   },

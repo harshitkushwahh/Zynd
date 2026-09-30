@@ -33,7 +33,7 @@ const TABLE_COLUMN_COUNT = 6;
 
 export function GoalTemplatesPanel() {
   const [templates, setTemplates] = useState<AdminGoalTemplate[]>([]);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -102,10 +102,12 @@ export function GoalTemplatesPanel() {
   return (
     <div className="space-y-4">
       <AdminSectionTitle
-        title="Goal templates"
-        description="Predefined goal types seeded at startup. Users pick these when creating personal goals."
         icon={Target}
-      />
+        variant="section"
+        description="Predefined goal types seeded at startup. Users pick these when creating personal goals."
+      >
+        Goal templates
+      </AdminSectionTitle>
 
       {error ? (
         <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>
@@ -132,9 +134,9 @@ export function GoalTemplatesPanel() {
         <AdminTableBody>
           <AdminTableRows
             loading={loading}
-            empty={!loading && templates.length === 0}
+            isEmpty={!loading && templates.length === 0}
             emptyMessage="No goal templates found."
-            columnCount={TABLE_COLUMN_COUNT}
+            colSpan={TABLE_COLUMN_COUNT}
           >
             {paginated.items.map((template) => {
               const draft = draftFor(template);
@@ -194,7 +196,7 @@ export function GoalTemplatesPanel() {
                         checked={draft.is_active ?? template.is_active}
                         onCheckedChange={(checked) => updateDraft(template.id, { is_active: checked })}
                       />
-                      <StatusBadge variant={(draft.is_active ?? template.is_active) ? "success" : "muted"} showIcon={false}>
+                      <StatusBadge variant={(draft.is_active ?? template.is_active) ? "success" : "neutral"} showIcon={false}>
                         {(draft.is_active ?? template.is_active) ? "Active" : "Inactive"}
                       </StatusBadge>
                     </div>
@@ -207,10 +209,15 @@ export function GoalTemplatesPanel() {
       </AdminDataTable>
 
       <AdminTablePagination
-        page={page}
+        page={paginated.page}
+        totalPages={paginated.totalPages}
+        hasPrevious={paginated.hasPrevious}
+        hasNext={paginated.hasNext}
+        totalCount={templates.length}
+        currentPageCount={paginated.items.length}
         pageSize={ADMIN_TABLE_PAGE_SIZE}
-        totalItems={templates.length}
-        onPageChange={setPage}
+        onPrevious={() => setPage((value) => Math.max(0, value - 1))}
+        onNext={() => setPage((value) => value + 1)}
       />
     </div>
   );

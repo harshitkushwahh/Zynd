@@ -1,6 +1,14 @@
 {
   "name": "zynd",
   "private": true,
+  "allowScripts": {
+    "@firebase/util": true,
+    "esbuild": true,
+    "fsevents": true,
+    "protobufjs": true,
+    "sharp": true,
+    "unrs-resolver": true
+  },
   "workspaces": [
     "Web",
     "Admin",

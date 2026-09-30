@@ -17,7 +17,7 @@ const adminAuthButtonVariants = cva("admin-auth-button", {
   },
 });
 
-type AdminAuthButtonProps = ComponentProps<typeof Button> &
+type AdminAuthButtonProps = Omit<ComponentProps<typeof Button>, "variant"> &
   VariantProps<typeof adminAuthButtonVariants>;
 
 export function AdminAuthButton({

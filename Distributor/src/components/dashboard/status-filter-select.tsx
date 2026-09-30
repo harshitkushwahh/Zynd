@@ -30,11 +30,11 @@ export function StatusFilterSelect<T extends string>({
   onValueChange,
 }: StatusFilterSelectProps<T>) {
   return (
-    <DistributorOptionBox
+    <DistributorOptionBox<T | "all">
       value={value}
       onValueChange={(next) => {
-        if (!next) return;
-        onValueChange(next as T | "all");
+        if (next == null) return;
+        onValueChange(next);
       }}
     >
       <DistributorOptionBoxTrigger>

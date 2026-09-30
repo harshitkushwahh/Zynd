@@ -110,7 +110,7 @@ function ManageRolesDialog({
         />
       }
     >
-      {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
       <div className="space-y-3">
         {roles.map((role) => {
