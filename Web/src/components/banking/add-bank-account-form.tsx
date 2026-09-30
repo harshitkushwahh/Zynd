@@ -147,7 +147,11 @@ export function AddBankAccountForm({
           current ? { ...current, bankVerified: true, readinessVerified: true } : current,
         );
         setIsComplete(true);
-        onSuccess({ ...result, verification_status: "verified", bank_verified: true });
+        onSuccess({
+          ...result,
+          verification_status: "verified",
+          readiness_verified: true,
+        });
         return;
       }
     }
