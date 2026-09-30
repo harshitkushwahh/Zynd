@@ -78,15 +78,15 @@ function isRedemptionAwaitingConsent(order: Pick<MfOrder, "status" | "fp_state">
   return normalized === "PAYMENT_PENDING" || normalized === "PENDING" || fpState === "pending";
 }
 
-function isRedemptionOrderFailed(
-  order: Pick<MfOrder, "status" | "fp_state" | "failure_reason">,
-) {
+function isRedemptionOrderFailed(order: Pick<MfOrder, "status" | "fp_state">) {
   if (isTerminalRedemptionFpFailure(order)) return true;
   const status = order.status?.trim().toUpperCase() ?? "";
   return (status === "FAILED" || status === "CANCELLED") && !isLiveRedemptionFpState(order);
 }
 
-function redemptionFailureLabel(order: Pick<MfOrder, "fp_state" | "failure_reason">) {
+function redemptionFailureLabel(
+  order: Pick<MfOrder, "fp_state"> & { failure_reason?: string | null },
+) {
   const reason = order.failure_reason?.trim();
   if (reason && reason.toLowerCase() !== redemptionFpState(order)) {
     return reason;

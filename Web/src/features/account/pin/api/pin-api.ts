@@ -1,8 +1,37 @@
 import { apiRequest } from "@/lib/api-client";
 import type { OtpSendResponse } from "@/features/auth/api/types";
-import type { PinVerifyResponse } from "@/features/account/pin/api/pin-api";
 
-export type { PinVerifyResponse };
+export type PinVerifyResponse = {
+  unlocked: boolean;
+  expires_in: number;
+};
+
+export type RegistrationResponseJSON = {
+  id: string;
+  rawId: string;
+  type: string;
+  authenticatorAttachment?: string;
+  clientExtensionResults: AuthenticationExtensionsClientOutputs;
+  response: {
+    clientDataJSON: string;
+    attestationObject: string;
+    transports?: string[];
+  };
+};
+
+export type AuthenticationResponseJSON = {
+  id: string;
+  rawId: string;
+  type: string;
+  authenticatorAttachment?: string;
+  clientExtensionResults: AuthenticationExtensionsClientOutputs;
+  response: {
+    clientDataJSON: string;
+    authenticatorData: string;
+    signature: string;
+    userHandle?: string;
+  };
+};
 
 export type PinOkResponse = {
   ok: boolean;

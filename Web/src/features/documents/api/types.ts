@@ -20,6 +20,10 @@ export type UserDocument = {
   created_at: string;
 };
 
+export type DocumentListResponse = {
+  documents: UserDocument[];
+};
+
 export type DocumentDownloadResponse = {
   download_url: string;
   expires_in: number;

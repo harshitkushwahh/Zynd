@@ -23,6 +23,7 @@ import {
 } from "@/features/invest/lib/mf-payment-poll";
 import {
   clearLastMfPaymentSession,
+  clearMfLumpsumPaymentDismissed,
   clearMfLumpsumPaymentSession,
   clearMfPaymentRedirect,
   getLastMfPaymentOrderId,

@@ -1716,6 +1716,7 @@ export const copy = {
     sipCorpusBreakdown: "Corpus breakdown",
     sipChartTitle: "Growth projection",
     sipChartDescription: "How your invested amount and estimated returns may grow over time",
+    sipChartValue: "Estimated value",
     sipChartInvested: "Invested",
     sipChartGain: "Estimated gains",
     sipChartEmpty: "Not enough data to plot this projection",

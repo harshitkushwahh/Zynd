@@ -1,6 +1,6 @@
 "use client";
 
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { fetchFamilyGroups } from "@/features/family-groups/api/family-groups-api";
 import { fetchGoalTemplates, fetchMyGoals } from "@/features/goals/api/goals-api";
@@ -20,36 +20,32 @@ function resolveGoalsError(error: unknown) {
 export function useGoalsDashboardQuery() {
   const queryClient = useQueryClient();
 
-  const [goalsQuery, templatesQuery, familyGoalsQuery] = useQueries({
-    queries: [
-      {
-        queryKey: queryKeys.goals.me(true),
-        queryFn: () => fetchMyGoals(true),
-        staleTime: GOALS_DASHBOARD_STALE_MS,
-        placeholderData: keepPreviousQueryData,
-        refetchOnMount: (query) => query.state.data === undefined,
-      },
-      {
-        queryKey: queryKeys.goals.templates(),
-        queryFn: fetchGoalTemplates,
-        staleTime: GOALS_DASHBOARD_STALE_MS,
-        placeholderData: keepPreviousQueryData,
-        refetchOnMount: (query) => query.state.data === undefined,
-      },
-      {
-        queryKey: queryKeys.goals.familyDashboard(),
-        queryFn: async () => {
-          const groupsResponse = await queryClient.ensureQueryData({
-            queryKey: queryKeys.family.list(),
-            queryFn: fetchFamilyGroups,
-          });
-          return buildDashboardFamilyGoals(groupsResponse.items);
-        },
-        staleTime: GOALS_DASHBOARD_STALE_MS,
-        placeholderData: keepPreviousQueryData,
-        refetchOnMount: (query) => query.state.data === undefined,
-      },
-    ],
+  const goalsQuery = useQuery({
+    queryKey: queryKeys.goals.me(true),
+    queryFn: () => fetchMyGoals(true),
+    staleTime: GOALS_DASHBOARD_STALE_MS,
+    placeholderData: keepPreviousQueryData,
+    refetchOnMount: (query) => query.state.data === undefined,
+  });
+  const templatesQuery = useQuery({
+    queryKey: queryKeys.goals.templates(),
+    queryFn: fetchGoalTemplates,
+    staleTime: GOALS_DASHBOARD_STALE_MS,
+    placeholderData: keepPreviousQueryData,
+    refetchOnMount: (query) => query.state.data === undefined,
+  });
+  const familyGoalsQuery = useQuery({
+    queryKey: queryKeys.goals.familyDashboard(),
+    queryFn: async () => {
+      const groupsResponse = await queryClient.ensureQueryData({
+        queryKey: queryKeys.family.list(),
+        queryFn: fetchFamilyGroups,
+      });
+      return buildDashboardFamilyGoals(groupsResponse.items);
+    },
+    staleTime: GOALS_DASHBOARD_STALE_MS,
+    placeholderData: keepPreviousQueryData,
+    refetchOnMount: (query) => query.state.data === undefined,
   });
 
   const isPending =

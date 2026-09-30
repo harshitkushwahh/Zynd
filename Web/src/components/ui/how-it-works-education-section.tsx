@@ -115,7 +115,7 @@ function HowItWorksStepContent({
 
 type HowItWorksEducationSectionProps = {
   title: string;
-  steps: HowItWorksStep[];
+  steps: readonly HowItWorksStep[];
   id?: string;
   className?: string;
   radiusClassName?: string;

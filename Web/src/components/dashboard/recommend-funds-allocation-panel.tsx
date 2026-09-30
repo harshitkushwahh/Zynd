@@ -67,7 +67,6 @@ function RecommendFundsAllocationDonut({
   selectedId,
   onSelect,
 }: RecommendFundsAllocationDonutProps) {
-  const activeIndex = selectedId ? slices.findIndex((slice) => slice.id === selectedId) : -1;
   const hasSelection = selectedId !== null;
 
   return (
@@ -89,7 +88,6 @@ function RecommendFundsAllocationDonut({
             paddingAngle={2}
             stroke="rgb(255 255 255 / 22%)"
             strokeWidth={2}
-            activeIndex={activeIndex >= 0 ? activeIndex : undefined}
             isAnimationActive={false}
             onClick={(_, index) => {
               const slice = slices[index];

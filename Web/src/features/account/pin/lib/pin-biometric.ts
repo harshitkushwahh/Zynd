@@ -3,6 +3,8 @@ import {
   fetchPinBiometricUnlockOptions,
   verifyPinBiometricRegister,
   verifyPinBiometricUnlock,
+  type AuthenticationResponseJSON,
+  type RegistrationResponseJSON,
 } from "@/features/account/pin/api/pin-api";
 import {
   clearLocalPinBiometricCredentialId,
@@ -40,11 +42,14 @@ function prepareCreationOptions(
       ...options.user,
       id: base64URLToArrayBuffer(options.user.id),
     },
-    excludeCredentials: options.excludeCredentials?.map((credential) => ({
-      ...credential,
-      id: base64URLToArrayBuffer(credential.id),
-    })),
-  };
+    excludeCredentials: options.excludeCredentials?.map(
+      (credential): PublicKeyCredentialDescriptor => ({
+        type: "public-key",
+        id: base64URLToArrayBuffer(credential.id),
+        transports: credential.transports as AuthenticatorTransport[] | undefined,
+      }),
+    ),
+  } as PublicKeyCredentialCreationOptions;
 }
 
 function prepareRequestOptions(
@@ -53,11 +58,14 @@ function prepareRequestOptions(
   return {
     ...options,
     challenge: base64URLToArrayBuffer(options.challenge),
-    allowCredentials: options.allowCredentials?.map((credential) => ({
-      ...credential,
-      id: base64URLToArrayBuffer(credential.id),
-    })),
-  };
+    allowCredentials: options.allowCredentials?.map(
+      (credential): PublicKeyCredentialDescriptor => ({
+        type: "public-key",
+        id: base64URLToArrayBuffer(credential.id),
+        transports: credential.transports as AuthenticatorTransport[] | undefined,
+      }),
+    ),
+  } as PublicKeyCredentialRequestOptions;
 }
 
 function attestationToJson(credential: PublicKeyCredential): RegistrationResponseJSON {

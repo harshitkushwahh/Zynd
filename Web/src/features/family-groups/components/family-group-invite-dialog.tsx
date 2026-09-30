@@ -277,7 +277,7 @@ export function FamilyGroupInviteDialog({
 
               <div className="space-y-2">
                 <Label htmlFor="family-invite-badge">{copy.familyGroups.invite.badgeLabel}</Label>
-                <Select value={badgeKey} onValueChange={setBadgeKey}>
+                <Select value={badgeKey} onValueChange={(value) => setBadgeKey(value ?? "")}>
                   <SelectTrigger id="family-invite-badge" className="h-9 w-full bg-background" disabled={atCapacity}>
                     <SelectValue placeholder={copy.familyGroups.invite.badgePlaceholder} />
                   </SelectTrigger>

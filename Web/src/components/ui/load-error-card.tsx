@@ -1,7 +1,7 @@
 "use client";
 
-import type { LucideIcon, ReactNode } from "react";
-import { AlertCircle } from "lucide-react";
+import type { ReactNode } from "react";
+import { AlertCircle, type LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

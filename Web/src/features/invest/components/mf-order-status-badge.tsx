@@ -26,7 +26,7 @@ export function mfOrderStatusVariant(
     fp_payment_status: fpPaymentStatus ?? null,
     status,
     payment_completed: paymentCompleted,
-    order_type: orderType ?? undefined,
+    order_type: orderType ?? "",
   });
 }
 

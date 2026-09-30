@@ -144,7 +144,7 @@ function buildSliceEntries(
           label: goal.title,
           value: 0,
           fill: covered
-            ? goalSummarySliceColor(goal.template?.slug ?? "family", "family")
+            ? goalSummarySliceColor(null, "family")
             : "color-mix(in srgb, var(--muted-foreground) 28%, transparent)",
           covered,
           progress,

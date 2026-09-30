@@ -128,7 +128,7 @@ export function MfCalculatorProjectionChart({
           {interactive ? (
             <Tooltip
               content={(props) => (
-                <ChartTooltip {...(props as ChartTooltipProps)} labels={labels} />
+                <ChartTooltip {...(props as unknown as ChartTooltipProps)} labels={labels} />
               )}
               cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
             />

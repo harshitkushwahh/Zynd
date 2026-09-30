@@ -3,7 +3,7 @@ import { copy } from "@/shared/config/copy";
 
 export function getRiskProfileErrorMessage(
   error: unknown,
-  fallback = copy.riskProfile.errors.loadFailed,
+  fallback: string = copy.riskProfile.errors.loadFailed,
 ): string {
   if (error instanceof ApiError) {
     if (error.code === "risk_profile_locked") {

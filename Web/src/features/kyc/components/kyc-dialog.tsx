@@ -706,7 +706,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   };
 
   const handlePanSubmit = async (details: {
-    panNumber: string;
+    panNumber?: string;
+    panMasked?: string;
+    panLast4?: string;
     firstName: string;
     lastName: string;
     middleName: string;
