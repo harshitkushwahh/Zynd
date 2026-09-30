@@ -104,7 +104,7 @@ export function buildPodiumSlots(entries: ReferralLeaderboardEntry[]): ReferralL
   const byRank = Object.fromEntries(entries.map((entry) => [entry.rank, entry]));
   const displayOrder: Array<1 | 2 | 3> = [2, 1, 3];
 
-  return displayOrder.flatMap((rank) => {
+  return displayOrder.flatMap((rank): ReferralLeaderboardPodiumSlot[] => {
     const entry = byRank[rank];
     if (entry) {
       return [{ kind: "entry" as const, entry }];

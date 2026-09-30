@@ -24,7 +24,7 @@ type BorderGlowProps = {
   glowIntensity?: number;
   coneSpread?: number;
   animated?: boolean;
-  colors?: string[];
+  colors?: readonly string[];
   fillOpacity?: number;
 };
 
@@ -72,7 +72,7 @@ const GRADIENT_KEYS = [
 ];
 const COLOR_MAP = [0, 1, 2, 0, 1, 2, 1];
 
-function buildGradientVars(colors: string[]) {
+function buildGradientVars(colors: readonly string[]) {
   const vars: Record<string, string> = {};
 
   for (let i = 0; i < 7; i += 1) {

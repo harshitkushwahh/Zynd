@@ -230,7 +230,8 @@ export function MfFamilyGoalLinkPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen} className={className}>
+    <div className={className}>
+    <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           disabled={disabled}
           render={
@@ -330,5 +331,6 @@ export function MfFamilyGoalLinkPicker({
           ) : null}
         </PopoverContent>
       </Popover>
+    </div>
   );
 }

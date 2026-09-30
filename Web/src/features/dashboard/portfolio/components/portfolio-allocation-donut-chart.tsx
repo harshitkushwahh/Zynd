@@ -45,7 +45,6 @@ export function PortfolioAllocationDonutChart({
   selectedId,
   onSelect,
 }: PortfolioAllocationDonutChartProps) {
-  const activeIndex = selectedId ? slices.findIndex((slice) => slice.id === selectedId) : -1;
   const hasSelection = selectedId !== null;
 
   return (
@@ -66,7 +65,6 @@ export function PortfolioAllocationDonutChart({
           paddingAngle={2}
           stroke="var(--card)"
           strokeWidth={2}
-          activeIndex={activeIndex >= 0 ? activeIndex : undefined}
           onClick={(_, index) => {
             const slice = slices[index];
             if (slice) onSelect(slice.id);

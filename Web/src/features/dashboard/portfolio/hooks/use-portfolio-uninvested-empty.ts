@@ -20,7 +20,7 @@ export function usePortfolioUninvestedEmpty() {
   const hasInvestments = holdings.length > 0;
   const isProcessing =
     !hasInvestments &&
-    Boolean(summary) &&
+    summary != null &&
     (summary.status === "processing" || hasPendingOrders);
 
   return {

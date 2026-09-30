@@ -476,6 +476,7 @@ export type MfCheckoutOrderLine = {
   status: string;
   line_index: number;
   fp_state: string | null;
+  next_action?: string | null;
 };
 
 export type MfCheckout = {

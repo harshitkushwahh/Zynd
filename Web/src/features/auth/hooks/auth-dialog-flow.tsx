@@ -300,6 +300,9 @@ function useAuthDialogFlowState(onClose: () => void) {
         setStep("oauth-link");
         return;
       }
+      if (result.next !== "authenticated") {
+        return;
+      }
       completeAuth(result.user);
       clearReferralCode();
       finishAuth();

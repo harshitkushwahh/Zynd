@@ -125,7 +125,13 @@ export function GoalFamilyGroupSelect({
             aria-hidden
           />
         ) : null}
-        <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+        <Select
+          value={value}
+          onValueChange={(next) => {
+            if (next) onValueChange(next);
+          }}
+          disabled={disabled}
+        >
           <SelectTrigger
             id={id}
             className={cn(isTemplateDialog && "h-10 !w-full pl-10")}

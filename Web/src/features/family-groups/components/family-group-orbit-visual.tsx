@@ -63,7 +63,7 @@ function OrbitTooltipContent({
   sideOffset = 10,
   align = "center",
   alignOffset = 0,
-  collisionBoundary = "viewport",
+  collisionBoundary,
   collisionPadding = 16,
   children,
   ...props
@@ -330,7 +330,6 @@ function OrbitMemberTooltip({
         side="top"
         align="center"
         sideOffset={10}
-        collisionBoundary="viewport"
         collisionPadding={16}
         className="max-w-none px-3.5 py-3"
       >
@@ -462,7 +461,6 @@ function OrbitEmptySlot({
         side="top"
         align="center"
         sideOffset={10}
-        collisionBoundary="viewport"
         collisionPadding={16}
         className="max-w-[14rem] px-3 py-2 text-center text-[11px] leading-relaxed"
       >

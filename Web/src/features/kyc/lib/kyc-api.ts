@@ -15,8 +15,8 @@ export type KycPanDraft = {
   firstName: string;
   lastName: string;
   middleName: string;
-  dateOfBirth: string;
-  panCategory: string;
+  dateOfBirth?: string;
+  panCategory?: string;
   fullName?: string;
 };
 
@@ -152,6 +152,7 @@ export type KycPanConfirmNamesResponse = {
   block_type?: string;
   failure?: { field: string; code?: string; reason?: string };
   pan_draft?: KycPanDraft;
+  requires_digilocker?: boolean;
 };
 
 export async function confirmKycPanNames(body: {

@@ -71,7 +71,9 @@ export function KycJsonLottie({
         if (!holdOnComplete || loop) return;
         const instance = lottieRef.current;
         if (!instance) return;
-        instance.goToAndStop(Math.max(instance.getDuration(true) - 1, 0), true);
+        const duration = instance.getDuration?.(true);
+        if (duration == null) return;
+        instance.goToAndStop(Math.max(duration - 1, 0), true);
       }}
       className={cn("size-[5.5rem] shrink-0", className)}
     />

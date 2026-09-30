@@ -23,10 +23,11 @@ function forEachNotificationsListCache(
 ) {
   for (const query of queryClient.getQueryCache().findAll({ queryKey: ["notifications", "list"] })) {
     if (!isNotificationsListKey(query.queryKey)) continue;
+    const params = query.queryKey[2];
 
     queryClient.setQueryData<NotificationListResponse>(query.queryKey, (current) => {
       if (!current) return current;
-      return updater(current, query.queryKey[2]) ?? current;
+      return updater(current, params) ?? current;
     });
   }
 }

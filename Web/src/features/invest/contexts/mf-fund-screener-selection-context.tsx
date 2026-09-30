@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 
-import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import type { MfFundScreenerDragPayload } from "@/features/invest/lib/mf-fund-screener-drag";
 import { resolveScreenerCartLumpsumAmount } from "@/features/invest/lib/mf-cart-amount";
 import { MF_CART_MAX_ITEMS } from "@/features/invest/lib/mf-cart-limits";
@@ -27,8 +26,8 @@ type MfFundScreenerSelectionContextValue = {
   remainingSelectionSlots: number;
   isSelectionFull: boolean;
   isSelected: (productId: string) => boolean;
-  toggleFund: (fund: InvestFundSummary | MfFundScreenerSelectionItem) => ScreenerQueueAddResult;
-  addFund: (fund: InvestFundSummary | MfFundScreenerSelectionItem) => ScreenerQueueAddResult;
+  toggleFund: (fund: MfFundScreenerDragPayload) => ScreenerQueueAddResult;
+  addFund: (fund: MfFundScreenerDragPayload) => ScreenerQueueAddResult;
   removeFund: (productId: string) => void;
   clearSelection: () => void;
 };
@@ -37,7 +36,7 @@ const MfFundScreenerSelectionContext =
   createContext<MfFundScreenerSelectionContextValue | null>(null);
 
 export function toMfFundScreenerSelectionItem(
-  fund: InvestFundSummary | MfFundScreenerSelectionItem,
+  fund: MfFundScreenerDragPayload,
 ): MfFundScreenerSelectionItem {
   return {
     product_id: fund.product_id,
@@ -65,7 +64,7 @@ export function MfFundScreenerSelectionProvider({ children }: { children: ReactN
     [selectedById],
   );
 
-  const addFund = useCallback((fund: InvestFundSummary | MfFundScreenerSelectionItem): ScreenerQueueAddResult => {
+  const addFund = useCallback((fund: MfFundScreenerDragPayload): ScreenerQueueAddResult => {
     const item = toMfFundScreenerSelectionItem(fund);
     let result: ScreenerQueueAddResult = "full";
 
@@ -95,7 +94,7 @@ export function MfFundScreenerSelectionProvider({ children }: { children: ReactN
   }, []);
 
   const toggleFund = useCallback(
-    (fund: InvestFundSummary | MfFundScreenerSelectionItem): ScreenerQueueAddResult => {
+    (fund: MfFundScreenerDragPayload): ScreenerQueueAddResult => {
       const productId = fund.product_id;
       let result: ScreenerQueueAddResult = "full";
 

@@ -3,6 +3,7 @@
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { useMemo } from "react";
 
+import { DASHBOARD_NAV_ITEM_CLASS } from "@/components/dashboard/dashboard-layout";
 import {
   HoverCard,
   HoverCardContent,

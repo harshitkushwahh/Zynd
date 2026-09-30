@@ -388,7 +388,7 @@ export function FamilyGroupMemberRow({
                         <Label htmlFor={`${panelId}-badge`}>{copy.familyGroups.governance.badgeLabel}</Label>
                         <Select
                           value={badgeKey || "none"}
-                          onValueChange={(value) => setBadgeKey(value === "none" ? "" : value)}
+                          onValueChange={(value) => setBadgeKey(!value || value === "none" ? "" : value)}
                         >
                           <SelectTrigger id={`${panelId}-badge`} className="h-9 w-full">
                             <SelectValue placeholder={copy.familyGroups.invite.badgePlaceholder} />
@@ -482,6 +482,7 @@ export function FamilyGroupMemberRow({
       <ConfirmDialog
         open={transferOpen}
         onOpenChange={setTransferOpen}
+        variant="info"
         title={copy.familyGroups.governance.transferHeadConfirmTitle}
         description={copy.familyGroups.governance.transferHeadConfirmDescription(member.display_name)}
         confirmLabel={copy.familyGroups.governance.transferHeadAction}

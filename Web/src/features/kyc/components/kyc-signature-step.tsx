@@ -52,6 +52,7 @@ export function KycSignatureStep({ initialValue, onSubmit }: KycSignatureStepPro
       return;
     }
 
+    const draft = initialValue;
     let cancelled = false;
 
     async function hydrate() {
@@ -59,11 +60,11 @@ export function KycSignatureStep({ initialValue, onSubmit }: KycSignatureStepPro
       setError("");
 
       try {
-        const src = await resolveSignatureImageSrc(initialValue);
+        const src = await resolveSignatureImageSrc(draft);
         if (cancelled || !src) return;
 
-        setActiveTab(initialValue.mode);
-        if (initialValue.mode === "draw") {
+        setActiveTab(draft.mode);
+        if (draft.mode === "draw") {
           setDrawnSignature(src);
         } else {
           setUploadedSignature(src);
@@ -71,10 +72,10 @@ export function KycSignatureStep({ initialValue, onSubmit }: KycSignatureStepPro
         }
 
         hydratedRef.current = {
-          mode: initialValue.mode,
+          mode: draft.mode,
           src,
-          documentId: initialValue.documentId,
-          dataUrl: initialValue.dataUrl,
+          documentId: draft.documentId,
+          dataUrl: draft.dataUrl,
         };
       } catch {
         if (!cancelled) {

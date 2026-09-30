@@ -228,7 +228,7 @@ function OrderJourneyTimelinePanel({
           <div className="rounded-2xl border border-border/60 bg-muted/10 px-3 py-4 sm:px-4">
             {journey.steps.map((step, index) => (
               <JourneyStepRow
-                key={`${step.event.created_at ?? "event"}-${index}`}
+                key={`${step.event?.created_at ?? "event"}-${index}`}
                 step={step}
                 isLast={index === journey.steps.length - 1}
               />
