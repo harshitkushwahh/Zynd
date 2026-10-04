@@ -2,7 +2,7 @@
 # 1. Change detection
 # 2. Security and quality
 # 3. Validation of the areas that changed
-# 4. Azure backend deployment, only after the earlier stages succeed
+# 4. Bluehost VPS backend deployment, only after the earlier stages succeed
 #
 # Frontend apps stay on Vercel. This pipeline never deploys them.
 # Alembic is not invoked here. A development API still migrates on its own startup.
@@ -146,11 +146,11 @@ jobs:
             echo ""
             echo "Next stage: security and quality."
             if [ "${EVENT_NAME}" = "pull_request" ] || [ "${EVENT_NAME}" = "schedule" ]; then
-              echo "This run does not deploy to Azure."
+              echo "This run does not deploy to the Bluehost VPS."
             elif [ "${DEPLOY}" = "true" ]; then
-              echo "Azure deployment is stage 4, after security and validation."
+              echo "Bluehost VPS deployment is stage 4, after security and validation."
             else
-              echo "Azure deployment will be skipped. Frontend publishing stays on Vercel."
+              echo "Bluehost VPS deployment will be skipped. Frontend publishing stays on Vercel."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
           echo "Deployment decision: ${decision}"
@@ -301,45 +301,23 @@ jobs:
     if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.result == 'success' && needs.security-scan.result == 'success' && (needs.validate-changes.result == 'success' || needs.validate-changes.result == 'skipped') && needs.detect-changes.outputs.deploy_backend == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      BLUEHOST_HOST: 50.6.205.51
+      BLUEHOST_USER: root
+      # drone-ssh negotiates the server's ECDSA host key, so the ED25519 fingerprint never matches.
+      BLUEHOST_HOST_FINGERPRINT: SHA256:hCKPABfkojXf2K9g9rIwugDS53zFSajJCDbGoYONEM8
 
     steps:
-      - name: Prepare SSH host verification
-        id: hostkey
-        env:
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          if [ -z "${KNOWN_HOSTS}" ]; then
-            echo "DEPLOY_KNOWN_HOSTS is empty. Refusing to connect without host key verification."
-            exit 1
-          fi
-          tmp="$(mktemp)"
-          chmod 600 "${tmp}"
-          printf '%s\n' "${KNOWN_HOSTS}" > "${tmp}"
-          fp="$(printf '%s\n' "${KNOWN_HOSTS}" | grep -oE 'SHA256:[A-Za-z0-9+/=]+' | head -n 1 || true)"
-          if [ -z "${fp}" ]; then
-            fp="$(ssh-keygen -lf "${tmp}" -E sha256 2>/dev/null | awk '{print $2}' | head -n 1 || true)"
-          fi
-          rm -f "${tmp}"
-          if [ -z "${fp}" ]; then
-            echo "DEPLOY_KNOWN_HOSTS must be an SHA256 fingerprint or a known_hosts entry."
-            echo "Host key checking stays enabled."
-            exit 1
-          fi
-          echo "::add-mask::${fp}"
-          echo "fingerprint=${fp}" >> "${GITHUB_OUTPUT}"
-
-      - name: Deploy backend on Azure VM
+      - name: Deploy backend on Bluehost VPS
         id: deploy
         env:
           ZYND_STRICT_PRODUCTION: ${{ vars.ZYND_STRICT_PRODUCTION }}
         uses: appleboy/ssh-action@v1.2.2
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
+          host: ${{ env.BLUEHOST_HOST }}
+          username: ${{ env.BLUEHOST_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
-          fingerprint: ${{ steps.hostkey.outputs.fingerprint }}
+          fingerprint: ${{ env.BLUEHOST_HOST_FINGERPRINT }}
           timeout: 30s
           command_timeout: 25m
           envs: ZYND_STRICT_PRODUCTION
@@ -427,22 +405,22 @@ jobs:
             cd /opt/zynd
             PREVIOUS_COMMIT="$(git rev-parse --short HEAD)"
 
-            section "[1/15] Validate Azure VM"
+            section "[1/15] Validate Bluehost VPS"
             echo "Deployment started: ${DEPLOY_STARTED_AT}"
             echo "Repository: harshitkushwahh/Zynd"
             echo "Branch: main"
             echo "Server hostname: $(hostname)"
             echo "Current commit before deployment: ${PREVIOUS_COMMIT}"
 
-            if [ "$(whoami)" != "azureuser" ]; then
-              echo "ERROR: SSH user is '$(whoami)', expected azureuser."
+            if [ "$(whoami)" != "root" ]; then
+              echo "ERROR: SSH user is '$(whoami)', expected root."
               exit 1
             fi
             if [ "$(pwd)" != "/opt/zynd" ] || [ ! -d /opt/zynd/.git ]; then
               echo "ERROR: /opt/zynd is not the Git checkout."
               exit 1
             fi
-            for cmd in git docker curl az stat awk; do
+            for cmd in git docker curl stat awk; do
               if ! command -v "${cmd}" >/dev/null 2>&1; then
                 echo "ERROR: required command not found: ${cmd}"
                 exit 1
@@ -496,26 +474,18 @@ jobs:
             done < <(git status --porcelain)
             end_section
 
-            section "[3/15] Sync Key Vault environment"
-            sync_log="$(mktemp)"
-            if ! sudo /usr/local/bin/zynd-sync-env >"${sync_log}" 2>&1; then
-              rm -f "${sync_log}"
-              echo "ERROR: zynd-sync-env failed. Its output was discarded so environment values stay out of the log."
-              exit 1
-            fi
-            rm -f "${sync_log}"
-            echo "Key Vault environment sync completed."
+            section "[3/15] Check server environment file"
             env_file="/opt/zynd/Backend/.env"
             if [ ! -f "${env_file}" ] || [ ! -s "${env_file}" ]; then
-              echo "ERROR: Backend/.env is missing or empty after Key Vault sync."
+              echo "ERROR: Backend/.env is missing or empty on the server."
               exit 1
             fi
             env_owner="$(stat -c '%U' "${env_file}")"
             env_group="$(stat -c '%G' "${env_file}")"
             env_mode="$(stat -c '%a' "${env_file}")"
             echo "Backend/.env owner=${env_owner} group=${env_group} mode=${env_mode} bytes=$(stat -c '%s' "${env_file}")"
-            if [ "${env_owner}" != "azureuser" ] || [ "${env_group}" != "azureuser" ] || [ "${env_mode}" != "600" ]; then
-              echo "ERROR: Backend/.env must be owned by azureuser:azureuser with mode 600."
+            if [ "${env_owner}" != "root" ] || [ "${env_group}" != "root" ] || [ "${env_mode}" != "600" ]; then
+              echo "ERROR: Backend/.env must be owned by root:root with mode 600."
               exit 1
             fi
             end_section
@@ -882,11 +852,10 @@ jobs:
         if: always()
         uses: appleboy/ssh-action@v1.2.2
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
+          host: ${{ env.BLUEHOST_HOST }}
+          username: ${{ env.BLUEHOST_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
-          fingerprint: ${{ steps.hostkey.outputs.fingerprint }}
+          fingerprint: ${{ env.BLUEHOST_HOST_FINGERPRINT }}
           timeout: 30s
           command_timeout: 1m
           capture_stdout: "true"
