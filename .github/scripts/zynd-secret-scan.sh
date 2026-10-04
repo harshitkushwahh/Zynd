@@ -6,7 +6,6 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 fail=0
-known_private_key="Backend/privateKey.pem"
 
 note() {
   printf '%s\n' "$1"
@@ -35,17 +34,9 @@ done < <(git ls-files)
 
 while IFS= read -r path; do
   [ -z "${path}" ] && continue
-  case "${path}" in
-    "${known_private_key}"|Backend/publicKey.pem) continue ;;
-  esac
   note "tracked key file: ${path}"
   fail=1
 done < <(git ls-files '*.pem' '*.p12' '*.pfx' 'id_rsa' 'id_rsa.*' '*.key')
-
-if git ls-files --error-unmatch "${known_private_key}" >/dev/null 2>&1; then
-  note "known tracked key remains: ${known_private_key}"
-  note "This existing JWT key is reported and not treated as a new leak. Its contents are not printed."
-fi
 
 scan_pattern() {
   local name="$1"
@@ -57,9 +48,6 @@ scan_pattern() {
   fi
   while IFS= read -r path; do
     [ -z "${path}" ] && continue
-    if [ "${path}" = "${known_private_key}" ]; then
-      continue
-    fi
     note "pattern ${name}: ${path}"
     fail=1
   done <<< "${matches}"
