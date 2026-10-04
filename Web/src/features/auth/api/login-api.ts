@@ -9,12 +9,19 @@ import type {
   OtpSendResponse,
 } from "@/features/auth/api/types";
 
+function persistIfAuthenticated(result: LoginFlowResponse) {
+  if (result.next === "authenticated") {
+    return storeAuthResponse(result);
+  }
+  return result;
+}
+
 export async function login(
   email: string,
   password: string,
   turnstileToken?: string | null
 ): Promise<LoginFlowResponse> {
-  return apiRequest<LoginFlowResponse>("/auth/login", {
+  const result = await apiRequest<LoginFlowResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({
       email,
@@ -23,10 +30,11 @@ export async function login(
       device_fingerprint: getDeviceFingerprint(),
     }),
   });
+  return persistIfAuthenticated(result);
 }
 
 export async function loginWithGoogle(idToken: string): Promise<LoginFlowResponse> {
-  return apiRequest<LoginFlowResponse>("/auth/google", {
+  const result = await apiRequest<LoginFlowResponse>("/auth/google", {
     method: "POST",
     body: JSON.stringify({
       id_token: idToken,
@@ -34,13 +42,14 @@ export async function loginWithGoogle(idToken: string): Promise<LoginFlowRespons
       referral_code: readReferralCode(),
     }),
   });
+  return persistIfAuthenticated(result);
 }
 
 export async function loginWithApple(
   idToken: string,
   profile?: AppleLoginProfile
 ): Promise<LoginFlowResponse> {
-  return apiRequest<LoginFlowResponse>("/auth/apple", {
+  const result = await apiRequest<LoginFlowResponse>("/auth/apple", {
     method: "POST",
     body: JSON.stringify({
       id_token: idToken,
@@ -51,6 +60,7 @@ export async function loginWithApple(
       referral_code: readReferralCode(),
     }),
   });
+  return persistIfAuthenticated(result);
 }
 
 export async function verifyMfaLogin(payload: {
