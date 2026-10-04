@@ -39,7 +39,7 @@ def main() -> int:
         print("Expected only zynd-pipeline.yml, found: " + ", ".join(sorted(names)))
         failed = True
     if "deploy-main.yml" in names:
-        print("deploy-main.yml would start a second Azure deployment.")
+        print("deploy-main.yml would start a second backend deployment.")
         failed = True
 
     for path in files:
