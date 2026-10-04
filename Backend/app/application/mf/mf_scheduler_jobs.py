@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -303,11 +304,34 @@ def build_scheduled_jobs() -> list[ScheduledMfJob]:
     return sorted(jobs, key=lambda job: (job.run_sequence, job.name))
 
 
+def scheduler_timezone() -> ZoneInfo:
+    name = (get_settings().zynd_mf_scheduler_timezone or "").strip() or "Asia/Kolkata"
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        logger.warning("Unknown ZYND_MF_SCHEDULER_TIMEZONE=%r; falling back to Asia/Kolkata", name)
+        return ZoneInfo("Asia/Kolkata")
+
+
+def last_scheduled_time(cron_expr: str, *, now: datetime | None = None) -> datetime:
+    """Most recent cron fire time at or before ``now``.
+
+    Cron expressions are interpreted in the scheduler timezone (IST by default),
+    so ``0 21 * * *`` means 21:00 IST. The returned datetime is UTC-aware.
+    """
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    local_now = current.astimezone(scheduler_timezone())
+    prev_local = croniter(cron_expr, local_now).get_prev(datetime)
+    return prev_local.astimezone(timezone.utc)
+
+
 def job_due(cron_expr: str, *, now: datetime | None = None) -> bool:
     current = now or datetime.now(timezone.utc)
-    itr = croniter(cron_expr, current)
-    prev_run = itr.get_prev(datetime)
-    delta = (current - prev_run).total_seconds()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    delta = (current - last_scheduled_time(cron_expr, now=current)).total_seconds()
     return delta < 60
 
 

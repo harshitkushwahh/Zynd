@@ -663,7 +663,6 @@ export function AddInvestorWizard() {
   const handlePanChange = (value: string) => {
     setPan(value);
     setPanVerified(false);
-    setPanName(null);
     setMiddleName("");
     setReadiness(null);
     setRequiresDigilocker(null);
@@ -675,7 +674,14 @@ export function AddInvestorWizard() {
   };
 
   const updatePanName = (patch: Partial<AddInvestorPanName>) => {
-    setPanName((current) => (current ? { ...current, ...patch } : null));
+    setPanName((current) => ({
+      firstName: "",
+      lastName: "",
+      dateOfBirth: "",
+      panCategory: "individual",
+      ...current,
+      ...patch,
+    }));
   };
 
   const handleVerifyPan = async () => {
@@ -686,7 +692,30 @@ export function AddInvestorWizard() {
     setPanError("");
     setPanLoading(true);
     try {
-      const result = await verifyClientKycPan(clientUserId, pan);
+      const identity = panName ?? {
+        firstName: "",
+        lastName: "",
+        dateOfBirth: "",
+        panCategory: "individual",
+      };
+      if (identity.firstName.trim().length < 2 || identity.lastName.trim().length < 2) {
+        setPanError("Enter the first and last name as they appear on the PAN card.");
+        setPanLoading(false);
+        return;
+      }
+      if (!identity.dateOfBirth) {
+        setPanError("Enter the date of birth from the PAN card.");
+        setPanLoading(false);
+        return;
+      }
+      const result = await verifyClientKycPan(clientUserId, {
+        pan_number: pan,
+        first_name: identity.firstName.trim(),
+        middle_name: middleName.trim(),
+        last_name: identity.lastName.trim(),
+        date_of_birth: identity.dateOfBirth,
+        pan_category: identity.panCategory === "corporate" ? "corporate" : "individual",
+      });
       if (result.blocked) {
         setPanError(result.message || "This PAN cannot be used for KYC.");
         setPanVerified(false);
@@ -1181,6 +1210,8 @@ export function AddInvestorWizard() {
                   onMiddleNameChange={setMiddleName}
                   onFirstNameChange={(value) => updatePanName({ firstName: value })}
                   onLastNameChange={(value) => updatePanName({ lastName: value })}
+                  onDateOfBirthChange={(value) => updatePanName({ dateOfBirth: value })}
+                  onPanCategoryChange={(value) => updatePanName({ panCategory: value })}
                   panVerified={panVerified}
                   panLoading={panLoading}
                   panError={panError}

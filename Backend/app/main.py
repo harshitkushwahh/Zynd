@@ -45,8 +45,10 @@ async def lifespan(_: FastAPI):
 
     logger = logging.getLogger(__name__)
 
-    # Re-read .env on each process start (uvicorn --reload does not watch .env).
-    load_dotenv(_BACKEND_ROOT / ".env", override=True)
+    # Fill in keys that are not already in the process environment.
+    # override=False keeps Docker Compose's DATABASE_URL ahead of the .env file,
+    # which is the same precedence Settings() uses for a manual Alembic run.
+    load_dotenv(_BACKEND_ROOT / ".env", override=False)
     get_settings.cache_clear()
     runtime_settings = get_settings()
 

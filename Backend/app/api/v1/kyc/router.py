@@ -163,7 +163,16 @@ async def post_kyc_pan_verify(
 ) -> KycPanVerifyResponse:
     require_entry_gate(current_user)
     try:
-        result = await verify_pan(db, user=current_user, pan_number=body.pan_number)
+        result = await verify_pan(
+            db,
+            user=current_user,
+            pan_number=body.pan_number,
+            first_name=body.first_name,
+            middle_name=body.middle_name,
+            last_name=body.last_name,
+            date_of_birth=body.date_of_birth,
+            pan_category=body.pan_category,
+        )
     except KycError as exc:
         raise _handle_kyc_error(exc) from exc
     await db.commit()

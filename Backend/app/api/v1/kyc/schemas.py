@@ -13,6 +13,11 @@ class KycEligibilityResponse(BaseModel):
 
 class KycPanVerifyRequest(BaseModel):
     pan_number: str = Field(min_length=10, max_length=10)
+    first_name: str = Field(min_length=2, max_length=80)
+    middle_name: str = Field(default="", max_length=80)
+    last_name: str = Field(min_length=2, max_length=80)
+    date_of_birth: str = Field(min_length=8, max_length=10)
+    pan_category: Literal["individual", "corporate"] = "individual"
 
 
 class KycPanFailure(BaseModel):

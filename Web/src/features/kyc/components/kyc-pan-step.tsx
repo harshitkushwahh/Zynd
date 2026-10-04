@@ -67,6 +67,10 @@ export function KycPanStep({
   const [firstName, setFirstName] = useState(initialDraft?.firstName ?? "");
   const [middleName, setMiddleName] = useState(initialDraft?.middleName ?? "");
   const [lastName, setLastName] = useState(initialDraft?.lastName ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(initialDraft?.dateOfBirth ?? "");
+  const [panCategory, setPanCategory] = useState<"individual" | "corporate">(
+    initialDraft?.panCategory === "corporate" ? "corporate" : "individual",
+  );
   const [panError, setPanError] = useState("");
   const [nameError, setNameError] = useState("");
   const [fetchError, setFetchError] = useState("");
@@ -107,6 +111,8 @@ export function KycPanStep({
     setFirstName(initialDraft.firstName ?? "");
     setMiddleName(initialDraft.middleName ?? "");
     setLastName(initialDraft.lastName ?? "");
+    setDateOfBirth(initialDraft.dateOfBirth ?? "");
+    setPanCategory(initialDraft.panCategory === "corporate" ? "corporate" : "individual");
     setVerifiedDraft(initialDraft);
     setIsVerified(isPanDraftVerified(initialDraft, initiallyVerified));
     setPanError("");
@@ -192,10 +198,23 @@ export function KycPanStep({
         return;
       }
 
+      if (!validateNames()) return;
+      if (!dateOfBirth) {
+        setNameError(copy.kyc.pan.requiredField);
+        return;
+      }
+
       setIsFetching(true);
       setFetchError("");
       try {
-        const result = await verifyKycPan(panNumber);
+        const result = await verifyKycPan({
+          pan_number: panNumber,
+          first_name: firstName.trim(),
+          middle_name: middleName.trim(),
+          last_name: lastName.trim(),
+          date_of_birth: dateOfBirth,
+          pan_category: panCategory,
+        });
         if (result.blocked) {
           onBlocked(result);
           return;
@@ -208,6 +227,8 @@ export function KycPanStep({
         setFirstName(result.pan_draft.firstName ?? "");
         setMiddleName(result.pan_draft.middleName ?? "");
         setLastName(result.pan_draft.lastName ?? "");
+        setDateOfBirth(result.pan_draft.dateOfBirth ?? dateOfBirth);
+        setPanCategory(result.pan_draft.panCategory === "corporate" ? "corporate" : "individual");
         setRequiresDigilocker(Boolean(result.requires_digilocker));
         setKycAlreadyRegistered(Boolean(result.kyc_already_registered));
         onPanVerified?.({
@@ -278,7 +299,7 @@ export function KycPanStep({
     }
   };
 
-  const nameCardFetched = isVerified || hasPanNameFields(firstName, lastName);
+  const nameCardFetched = isVerified;
   const panLocked = isVerified && !isPanReentry && !disabled && !isFetching;
   const panDisplayValue =
     panLocked && !panNumber && verifiedDraft?.panMasked ? verifiedDraft.panMasked : panNumber;
@@ -286,28 +307,6 @@ export function KycPanStep({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
-        <KycPanNameCard
-          isFetched={nameCardFetched}
-          isFetching={isFetching}
-          panName={nameCardFetched ? { firstName, lastName } : null}
-          middleName={middleName}
-          onFirstNameChange={(value) => {
-            setFirstName(normalizePersonNameInput(value));
-            setNameError("");
-          }}
-          onMiddleNameChange={(value) => {
-            setMiddleName(normalizePersonNameInput(value));
-            setNameError("");
-          }}
-          onLastNameChange={(value) => {
-            setLastName(normalizePersonNameInput(value));
-            setNameError("");
-          }}
-          disabled={disabled}
-          dateOfBirth={verifiedDraft?.dateOfBirth}
-          panCategory={verifiedDraft?.panCategory}
-        />
-
         <div className="space-y-1.5">
           <label htmlFor="kyc-pan-number" className="text-caption font-medium text-muted-foreground">
             {copy.kyc.pan.numberLabel}
@@ -342,6 +341,33 @@ export function KycPanStep({
           </div>
         </div>
         {panError ? <FieldMessage message={panError} /> : null}
+
+        <KycPanNameCard
+          isFetched={nameCardFetched}
+          isFetching={isFetching}
+          panName={{ firstName, lastName }}
+          middleName={middleName}
+          onFirstNameChange={(value) => {
+            setFirstName(normalizePersonNameInput(value));
+            setNameError("");
+          }}
+          onMiddleNameChange={(value) => {
+            setMiddleName(normalizePersonNameInput(value));
+            setNameError("");
+          }}
+          onLastNameChange={(value) => {
+            setLastName(normalizePersonNameInput(value));
+            setNameError("");
+          }}
+          disabled={disabled}
+          dateOfBirth={dateOfBirth}
+          onDateOfBirthChange={(value) => {
+            setDateOfBirth(value);
+            setNameError("");
+          }}
+          panCategory={panCategory}
+          onPanCategoryChange={setPanCategory}
+        />
         {nameError ? <FieldMessage message={nameError} /> : null}
         {fetchError ? <FieldMessage message={fetchError} /> : null}
       </div>

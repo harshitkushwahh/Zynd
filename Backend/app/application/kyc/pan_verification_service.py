@@ -15,8 +15,8 @@ from app.application.investor.investor_identity_uniqueness_service import (
 from app.application.kyc.journey_state_service import get_or_create_journey, save_journey_state
 from app.application.kyc.kyc_notification_service import notify_kyc_initiated
 from app.application.kyc.master_data import TERMINAL_READINESS_CODES
+from app.infrastructure.kyc.date_utils import normalize_kyc_date_of_birth
 from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.kyc.kyckart_client import KyckartError, kyckart_pan_to_name_dob
 from app.infrastructure.kyc.poa_client import poa_check_readiness, poa_validate_pan_name_dob
 from app.infrastructure.persistence.models import User
 
@@ -61,10 +61,43 @@ def _field_failure(preverify: dict[str, Any], field: str) -> dict[str, Any] | No
     return None
 
 
-async def verify_pan(db: AsyncSession, *, user: User, pan_number: str) -> dict[str, Any]:
+async def verify_pan(
+    db: AsyncSession,
+    *,
+    user: User,
+    pan_number: str,
+    first_name: str,
+    last_name: str,
+    date_of_birth: str,
+    middle_name: str = "",
+    pan_category: str = "individual",
+) -> dict[str, Any]:
     pan = pan_number.upper().strip()
     if len(pan) != 10:
         raise KycError("Enter a valid 10-character PAN number.", "invalid_pan", 400)
+
+    category = (pan_category or "individual").strip().lower()
+    if category not in {"individual", "corporate"}:
+        raise KycError("Select an individual or corporate PAN type.", "invalid_pan_category", 400)
+    if category == "corporate":
+        return {
+            "success": False,
+            "blocked": True,
+            "blockType": "corporate_pan",
+            "message": "Corporate PAN cards cannot be used for individual KYC on Zynd.",
+        }
+
+    first = first_name.strip()
+    middle = middle_name.strip()
+    last = last_name.strip()
+    if len(first) < 2 or len(last) < 2:
+        raise KycError("Enter the first and last name as they appear on the PAN card.", "invalid_name", 400)
+    if middle and len(middle) < 2:
+        raise KycError("Enter a valid middle name, or leave it blank.", "invalid_name", 400)
+    try:
+        dob = normalize_kyc_date_of_birth(date_of_birth)
+    except ValueError as exc:
+        raise KycError("Enter a valid date of birth.", "invalid_date_of_birth", 400) from exc
 
     try:
         await assert_pan_not_used_by_other_user(db, pan_number=pan, user_id=user.id)
@@ -73,17 +106,14 @@ async def verify_pan(db: AsyncSession, *, user: User, pan_number: str) -> dict[s
 
     notify_kyc_initiated(user=user)
 
-    try:
-        kyckart = await kyckart_pan_to_name_dob(pan)
-    except KyckartError as exc:
-        raise KycError(exc.message, exc.code, exc.status_code) from exc
-    if kyckart.get("panCategory") == "corporate":
-        return {
-            "success": False,
-            "blocked": True,
-            "blockType": "corporate_pan",
-            "message": "Corporate PAN cards cannot be used for individual KYC on Zynd.",
-        }
+    identity = {
+        "firstName": first,
+        "lastName": last,
+        "middleName": middle,
+        "dateOfBirth": dob,
+        "panCategory": category,
+        "fullName": _compose_full_name(first_name=first, middle_name=middle, last_name=last),
+    }
 
     try:
         readiness_result = await poa_check_readiness(pan)
@@ -107,8 +137,8 @@ async def verify_pan(db: AsyncSession, *, user: User, pan_number: str) -> dict[s
             "message": readiness_reason or "Investor is not eligible to proceed with KYC.",
         }
 
-    full_name = str(kyckart.get("fullName") or "").strip()
-    dob = str(kyckart.get("dateOfBirth") or "").strip()
+    full_name = str(identity["fullName"]).strip()
+    dob = str(identity["dateOfBirth"]).strip()
 
     try:
         pan_validation = await poa_validate_pan_name_dob(
@@ -127,11 +157,11 @@ async def verify_pan(db: AsyncSession, *, user: User, pan_number: str) -> dict[s
                 payload={
                     "panDraftJson": {
                         "panNumber": pan,
-                        "firstName": kyckart.get("firstName"),
-                        "lastName": kyckart.get("lastName"),
-                        "middleName": "",
+                        "firstName": identity["firstName"],
+                        "lastName": identity["lastName"],
+                        "middleName": identity["middleName"],
                         "dateOfBirth": dob,
-                        "panCategory": kyckart.get("panCategory"),
+                        "panCategory": identity["panCategory"],
                         "fullName": full_name,
                     },
                     "panVerificationStatus": "failed",
@@ -151,11 +181,11 @@ async def verify_pan(db: AsyncSession, *, user: User, pan_number: str) -> dict[s
     pan_draft = _normalize_pan_name_draft(
         {
             "panNumber": pan,
-            "firstName": kyckart.get("firstName"),
-            "lastName": kyckart.get("lastName"),
-            "middleName": "",
+            "firstName": identity["firstName"],
+            "lastName": identity["lastName"],
+            "middleName": identity["middleName"],
             "dateOfBirth": dob,
-            "panCategory": kyckart.get("panCategory"),
+            "panCategory": identity["panCategory"],
             "fullName": full_name,
         }
     )

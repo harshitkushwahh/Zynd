@@ -1,10 +1,9 @@
 "use client";
 
-import { CheckCircle2, Loader2, PencilLine, UserRound } from "lucide-react";
+import { CheckCircle2, PencilLine } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import type { AddInvestorPanName, AddInvestorReadiness } from "@/lib/add-investor/add-investor-journey";
-import { formatDistributorDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type AddInvestorPanNameCardProps = {
@@ -16,6 +15,8 @@ type AddInvestorPanNameCardProps = {
   onFirstNameChange: (value: string) => void;
   onMiddleNameChange: (value: string) => void;
   onLastNameChange: (value: string) => void;
+  onDateOfBirthChange: (value: string) => void;
+  onPanCategoryChange: (value: "individual" | "corporate") => void;
   disabled?: boolean;
 };
 
@@ -31,10 +32,6 @@ function PanReadinessBadge({ readiness }: { readiness: AddInvestorReadiness }) {
       {isKra ? "KRA compliant" : readiness.label}
     </span>
   );
-}
-
-function PanTypeBadge({ panCategory }: { panCategory: string }) {
-  return <span className="add-investor-pan-name-card__badge add-investor-pan-name-card__badge--type">{panCategory}</span>;
 }
 
 type PanNameFieldProps = {
@@ -84,29 +81,16 @@ export function AddInvestorPanNameCard({
   onFirstNameChange,
   onMiddleNameChange,
   onLastNameChange,
+  onDateOfBirthChange,
+  onPanCategoryChange,
   disabled,
 }: AddInvestorPanNameCardProps) {
-  const showPending = !isFetched || !panName;
-
-  if (showPending) {
-    return (
-      <div className="add-investor-pan-name-card add-investor-pan-name-card--pending">
-        <div className="add-investor-pan-name-card__pending-icon" aria-hidden>
-          {isFetching ? (
-            <Loader2 className="size-4 animate-spin" strokeWidth={2} />
-          ) : (
-            <UserRound className="size-4" strokeWidth={2} />
-          )}
-        </div>
-        <div className="add-investor-pan-name-card__pending-body">
-          <p className="add-investor-pan-name-card__pending-title">Name from registry</p>
-          <p className="add-investor-pan-name-card__pending-desc">
-            {isFetching ? "Fetching investor name from Kyckart…" : "Will appear after PAN verification."}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const names = panName ?? {
+    firstName: "",
+    lastName: "",
+    dateOfBirth: "",
+    panCategory: "individual",
+  };
 
   return (
     <div className="add-investor-pan-name-card add-investor-pan-name-card--fetched">
@@ -115,7 +99,7 @@ export function AddInvestorPanNameCard({
           <CheckCircle2 className="size-4" strokeWidth={2} />
         </div>
         <div className="add-investor-pan-name-card__header-body">
-          <p className="add-investor-pan-name-card__header-title">Name from registry</p>
+          <p className="add-investor-pan-name-card__header-title">Name as on PAN</p>
         </div>
       </div>
 
@@ -123,7 +107,7 @@ export function AddInvestorPanNameCard({
         <PanNameField
           label="First name"
           inputId="add-investor-first-name"
-          value={panName.firstName}
+          value={names.firstName}
           placeholder="First name"
           onChange={onFirstNameChange}
           disabled={disabled || isFetching}
@@ -139,25 +123,51 @@ export function AddInvestorPanNameCard({
         <PanNameField
           label="Last name"
           inputId="add-investor-last-name"
-          value={panName.lastName}
+          value={names.lastName}
           placeholder="Last name"
           onChange={onLastNameChange}
           disabled={disabled || isFetching}
         />
       </div>
 
-      <div className="add-investor-pan-name-card__meta">
-        <div className="add-investor-pan-name-card__meta-item">
-          <span className="add-investor-pan-name-card__meta-label">Date of birth</span>
-          <span className="add-investor-pan-name-card__meta-value">
-            {formatDistributorDate(panName.dateOfBirth)}
-          </span>
+      <div className="add-investor-pan-name-card__grid add-investor-pan-name-card__grid--names">
+        <div className="add-investor-pan-name-card__field">
+          <label className="add-investor-pan-name-card__field-label" htmlFor="add-investor-dob">
+            Date of birth
+          </label>
+          <Input
+            id="add-investor-dob"
+            type="date"
+            value={names.dateOfBirth}
+            onChange={(event) => onDateOfBirthChange(event.target.value)}
+            disabled={disabled || isFetching}
+            className="add-investor-pan-name-card__field-input"
+          />
         </div>
-        <div className="add-investor-pan-name-card__badge-row">
-          <PanTypeBadge panCategory={panName.panCategory} />
-          {readiness ? <PanReadinessBadge readiness={readiness} /> : null}
+        <div className="add-investor-pan-name-card__field">
+          <label className="add-investor-pan-name-card__field-label" htmlFor="add-investor-pan-category">
+            PAN type
+          </label>
+          <select
+            id="add-investor-pan-category"
+            value={names.panCategory === "corporate" ? "corporate" : "individual"}
+            onChange={(event) =>
+              onPanCategoryChange(event.target.value === "corporate" ? "corporate" : "individual")
+            }
+            disabled={disabled || isFetching}
+            className="add-investor-pan-name-card__field-input"
+          >
+            <option value="individual">Individual</option>
+            <option value="corporate">Corporate</option>
+          </select>
         </div>
       </div>
+
+      {isFetched && readiness ? (
+        <div className="add-investor-pan-name-card__badge-row">
+          <PanReadinessBadge readiness={readiness} />
+        </div>
+      ) : null}
     </div>
   );
 }

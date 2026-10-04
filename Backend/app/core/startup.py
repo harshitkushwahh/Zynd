@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,9 +20,14 @@ def run_dev_migrations(settings: Settings) -> None:
         return
 
     logger.info("Applying pending Alembic migrations (development startup)...")
+    # The child loads Settings() again. Pin DATABASE_URL to the URL this process
+    # already resolved so a .env file cannot replace the Docker environment.
+    child_env = os.environ.copy()
+    child_env["DATABASE_URL"] = settings.database_url
     subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=_BACKEND_ROOT,
+        env=child_env,
         check=True,
     )
 

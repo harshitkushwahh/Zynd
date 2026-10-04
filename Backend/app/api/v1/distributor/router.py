@@ -766,6 +766,11 @@ async def post_distributor_client_kyc_pan_verify(
             actor=actor,
             client_user_id=client_user_id,
             pan_number=body.pan_number,
+            first_name=body.first_name,
+            middle_name=body.middle_name,
+            last_name=body.last_name,
+            date_of_birth=body.date_of_birth,
+            pan_category=body.pan_category,
         )
     except DistributorClientBookError as exc:
         raise _client_book_http_error(exc) from exc

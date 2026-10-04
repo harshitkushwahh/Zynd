@@ -10,7 +10,6 @@ from app.application.kyc.bank_verification_core import (
     validate_ifsc_format,
 )
 from app.application.distributor.partner_onboarding_service import PartnerOnboardingError
-from app.infrastructure.kyc.kyckart_client import KyckartError, kyckart_pan_to_name_dob
 from app.infrastructure.persistence.partner_onboarding_draft_store import (
     get_partner_onboarding_draft,
     update_partner_onboarding_draft,
@@ -47,25 +46,14 @@ async def verify_partner_onboarding_pan(
     if not _PAN_PATTERN.fullmatch(normalized):
         raise PartnerOnboardingError("Enter a valid PAN.", "invalid_pan", 400)
 
-    try:
-        kyckart = await kyckart_pan_to_name_dob(normalized)
-    except KyckartError as exc:
-        raise PartnerOnboardingError(exc.message, exc.code, exc.status_code) from exc
-
-    if kyckart.get("panCategory") == "corporate":
+    if normalized[3] == "C":
         raise PartnerOnboardingError(
             "Corporate PAN cards cannot be used for Zynd Mitra onboarding.",
             "corporate_pan",
             400,
         )
 
-    verified_name = str(kyckart.get("fullName") or "").strip()
-    if not verified_name:
-        raise PartnerOnboardingError(
-            "Could not fetch PAN holder name.",
-            "kyckart_incomplete",
-            502,
-        )
+    verified_name = str(draft.get("pan_verified_name") or "").strip()
 
     await update_partner_onboarding_draft(
         onboarding_token,

@@ -55,35 +55,34 @@ async def test_verify_pan_notifies_when_user_starts_kyc(
         "app.application.kyc.pan_verification_service.notify_kyc_initiated",
         _capture,
     )
+    async def _allow_pan(*_args, **_kwargs):
+        return None
+
     monkeypatch.setattr(
         "app.application.kyc.pan_verification_service.assert_pan_not_used_by_other_user",
-        lambda *_args, **_kwargs: None,
+        _allow_pan,
     )
-    monkeypatch.setattr(
-        "app.application.kyc.pan_verification_service.kyckart_pan_to_name_dob",
-        lambda _pan: {
-            "panCategory": "individual",
-            "fullName": "Test User",
-            "dateOfBirth": "1990-01-01",
-            "firstName": "Test",
-            "lastName": "User",
-        },
-    )
-    monkeypatch.setattr(
-        "app.application.kyc.pan_verification_service.poa_check_readiness",
-        lambda _pan: {
+    async def _readiness(_pan):
+        return {
             "id": "readiness-1",
             "readiness": {"status": "failed", "code": "kyc_unavailable", "reason": "Fresh KYC"},
-        },
-    )
-    monkeypatch.setattr(
-        "app.application.kyc.pan_verification_service.poa_validate_pan_name_dob",
-        lambda **_kwargs: {
+        }
+
+    async def _validate(**_kwargs):
+        return {
             "id": "pan-1",
             "pan": {"status": "verified"},
             "name": {"status": "verified"},
             "date_of_birth": {"status": "verified"},
-        },
+        }
+
+    monkeypatch.setattr(
+        "app.application.kyc.pan_verification_service.poa_check_readiness",
+        _readiness,
+    )
+    monkeypatch.setattr(
+        "app.application.kyc.pan_verification_service.poa_validate_pan_name_dob",
+        _validate,
     )
 
     user = User(
@@ -96,7 +95,14 @@ async def test_verify_pan_notifies_when_user_starts_kyc(
     db_session.add(user)
     await db_session.flush()
 
-    result = await verify_pan(db_session, user=user, pan_number="ABCDE1234F")
+    result = await verify_pan(
+        db_session,
+        user=user,
+        pan_number="ABCDE1234F",
+        first_name="Test",
+        last_name="User",
+        date_of_birth="1990-01-01",
+    )
 
     assert result["success"] is True
     assert notified == [user.email]

@@ -139,10 +139,17 @@ export async function fetchKycBootstrap() {
   return apiRequest<KycBootstrapResponse>("/kyc/journey/bootstrap");
 }
 
-export async function verifyKycPan(panNumber: string) {
+export async function verifyKycPan(body: {
+  pan_number: string;
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+  date_of_birth: string;
+  pan_category: "individual" | "corporate";
+}) {
   return apiRequest<KycPanVerifyResponse>("/kyc/pan/verify", {
     method: "POST",
-    body: JSON.stringify({ pan_number: panNumber }),
+    body: JSON.stringify(body),
   });
 }
 

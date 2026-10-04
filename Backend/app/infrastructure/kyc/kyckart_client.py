@@ -9,7 +9,7 @@ from app.application.integrations.provider_log_recorder import record_provider_a
 from app.application.integrations.integration_runtime import get_kyckart_runtime, is_kyckart_live
 from app.core.config import get_settings
 from app.infrastructure.kyc.date_utils import normalize_kyc_date_of_birth
-from app.infrastructure.kyc.stub_provider import stub_kyckart_bank_holder_name, stub_kyckart_pan_to_name_dob
+from app.infrastructure.kyc.stub_provider import stub_kyckart_pan_to_name_dob
 from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 
 
@@ -267,53 +267,5 @@ async def kyckart_pan_to_name_dob(pan_number: str) -> dict[str, Any]:
 
 
 async def kyckart_bank_account_holder_name(*, account_number: str, ifsc_code: str) -> dict[str, Any]:
-    if not is_kyckart_live():
-        return await stub_kyckart_bank_holder_name(
-            account_number=account_number,
-            ifsc_code=ifsc_code,
-        )
-
-    settings = get_settings()
-    runtime = get_kyckart_runtime()
-    base_url = runtime.base_url.rstrip("/")
-    path = settings.kyckart_bank_verification_path.strip() or "/api/bank/pennyLessV4"
-    body = {
-        "accountNumber": account_number,
-        "ifsc": ifsc_code.upper(),
-    }
-
-    async def runner() -> httpx.Response:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            return await client.post(
-                f"{base_url}{path}",
-                headers={"x-api-key": runtime.api_key, "Content-Type": "application/json"},
-                json=body,
-            )
-
-    try:
-        payload = await _run_logged_kyckart_request(
-            method="POST",
-            path=path,
-            request_body=body,
-            runner=runner,
-        )
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
-            raise KyckartError(
-                "Bank account lookup is not enabled on your Kyckart API plan.",
-                "kyckart_bank_not_configured",
-                502,
-            ) from exc
-        raise KyckartError(
-            "Bank verification service is temporarily unavailable. Try again.",
-            "kyckart_unavailable",
-            502,
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise KyckartError(
-            "Bank verification service is temporarily unavailable. Try again.",
-            "kyckart_unavailable",
-            502,
-        ) from exc
-
-    return parse_kyckart_bank_payload(payload)
+    _ = (account_number, ifsc_code)
+    return {"accountHolderName": "", "name": ""}
