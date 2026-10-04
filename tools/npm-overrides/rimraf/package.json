@@ -1,0 +1,7 @@
+{
+  "name": "rimraf",
+  "version": "4.4.1",
+  "private": true,
+  "description": "Callback-compatible fs.rm stand-in for packages that still call rimraf v2 and v3.",
+  "main": "index.js"
+}

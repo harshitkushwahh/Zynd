@@ -1,0 +1,28 @@
+{
+  "name": "tar7",
+  "version": "7.5.22",
+  "private": true,
+  "description": "tar for node",
+  "license": "BlueOak-1.0.0",
+  "main": "./dist/commonjs/index.js",
+  "types": "./dist/commonjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/commonjs/index.d.ts",
+        "default": "./dist/commonjs/index.js"
+      }
+    }
+  },
+  "dependencies": {
+    "@isaacs/fs-minipass": "^4.0.0",
+    "chownr": "^3.0.0",
+    "minipass": "^7.1.2",
+    "minizlib": "^3.1.0",
+    "yallist": "^5.0.0"
+  }
+}
