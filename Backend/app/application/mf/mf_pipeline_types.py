@@ -113,7 +113,8 @@ class MfPipelineRunState:
             "health_summary": self.health_summary,
             "error": self.error,
             "can_resume": self.status
-            in {MfPipelineRunStatus.paused, MfPipelineRunStatus.failed, MfPipelineRunStatus.cancelled},
+            in {MfPipelineRunStatus.paused, MfPipelineRunStatus.failed, MfPipelineRunStatus.cancelled}
+            and pause_reason != PAUSE_REASON_JOB_STILL_RUNNING,
             "pause_reason": pause_reason,
             "staging_batch_uuid": staging_batch_uuid,
             "can_approve_staging": awaiting_staging,
@@ -122,6 +123,16 @@ class MfPipelineRunState:
             "auto_resume": auto_resume_enabled,
             "auto_resume_pending": awaiting_staging and auto_resume_enabled,
         }
+
+
+PAUSE_REASON_JOB_STILL_RUNNING = "job_still_running"
+JOB_STILL_RUNNING_MESSAGE = (
+    "NAV backfill is still running. Resume is hidden so this pipeline does not skip that step. "
+    "It keeps waiting while that job is active. If the log stops moving, Resume appears and "
+    "continues from the last finished window."
+)
+INTERRUPTED_PIPELINE_MESSAGE = "Interrupted by server restart - resume to continue"
+BACKFILL_STOPPED_MESSAGE = "The backfill stopped. Resume continues it from the last finished window."
 
 
 class MfPipelineControlledPause(Exception):

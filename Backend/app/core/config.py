@@ -295,6 +295,9 @@ class Settings(BaseSettings):
     zynd_mf_scheme_sync_batch_size: int = 100
     zynd_mf_scheme_staging_enabled: bool = True
     zynd_mf_scheme_promote_auto: bool = False
+    # HMAC secret the nightly scheduler uses to accept a validated scheme batch.
+    # Admin-started batches still require the approve click.
+    zynd_mf_scheduler_accept_key: str = ""
     zynd_mf_ops_alert_emails: str = ""
     zynd_mf_pipeline_audit_enabled: bool = True
     zynd_mf_pipeline_manual_window_enabled: bool = True

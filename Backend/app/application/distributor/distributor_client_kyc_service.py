@@ -47,11 +47,11 @@ async def verify_distributor_client_kyc_pan(
     actor: User,
     client_user_id: UUID,
     pan_number: str,
-    first_name: str,
-    last_name: str,
     date_of_birth: str,
+    full_name: str = "",
+    first_name: str = "",
     middle_name: str = "",
-    pan_category: str = "individual",
+    last_name: str = "",
 ) -> dict:
     client_user = await _load_investor_client(db, client_user_id)
     await assert_actor_can_access_client(db, actor=actor, client_user=client_user)
@@ -59,11 +59,11 @@ async def verify_distributor_client_kyc_pan(
         db,
         user=client_user,
         pan_number=pan_number,
+        full_name=full_name,
         first_name=first_name,
         middle_name=middle_name,
         last_name=last_name,
         date_of_birth=date_of_birth,
-        pan_category=pan_category,
     )
 
 
@@ -72,15 +72,17 @@ async def confirm_distributor_client_kyc_pan_names(
     *,
     actor: User,
     client_user_id: UUID,
-    first_name: str,
-    middle_name: str,
-    last_name: str,
+    full_name: str = "",
+    first_name: str = "",
+    middle_name: str = "",
+    last_name: str = "",
 ) -> dict:
     client_user = await _load_investor_client(db, client_user_id)
     await assert_actor_can_access_client(db, actor=actor, client_user=client_user)
     return await confirm_pan_names(
         db,
         user=client_user,
+        full_name=full_name,
         first_name=first_name,
         middle_name=middle_name,
         last_name=last_name,

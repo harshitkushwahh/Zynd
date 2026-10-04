@@ -72,6 +72,39 @@ async def cleanup_stale_runs(session: AsyncSession, *, threshold_hours: int) -> 
     return count
 
 
+# A live download updates progress well inside this window. The fetch timeout is 60s.
+INGESTION_RUNNING_FRESH_MINUTES = 5
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def progress_is_fresh(
+    *,
+    last_progress_at: datetime | None,
+    activity_at: datetime | None,
+    started_at: datetime | None,
+    now: datetime | None = None,
+    fresh_minutes: int = INGESTION_RUNNING_FRESH_MINUTES,
+) -> bool:
+    """True when a running ingestion has reported progress recently.
+
+    `started_at` is only a fallback for a job that has not logged a window yet.
+    A long backfill stays fresh from its latest log, not from when it began.
+    """
+    current = now or datetime.now(timezone.utc)
+    marks = [mark for mark in (last_progress_at, activity_at) if mark is not None]
+    if not marks and started_at is not None:
+        marks = [started_at]
+    if not marks:
+        return False
+    latest = max(_as_utc(mark) for mark in marks)
+    return current - latest < timedelta(minutes=fresh_minutes)
+
+
 async def has_running_job(session: AsyncSession, job_name: str) -> bool:
     row = await session.scalar(
         select(IngestionRunLog.id)
@@ -82,6 +115,70 @@ async def has_running_job(session: AsyncSession, job_name: str) -> bool:
         .limit(1)
     )
     return row is not None
+
+
+async def latest_running_job(session: AsyncSession, job_name: str) -> IngestionRunLog | None:
+    return await session.scalar(
+        select(IngestionRunLog)
+        .where(
+            IngestionRunLog.job_name == job_name,
+            IngestionRunLog.status == IngestionRunStatus.running,
+        )
+        .order_by(desc(IngestionRunLog.started_at))
+        .limit(1)
+    )
+
+
+async def running_job_is_fresh(
+    session: AsyncSession,
+    job_name: str,
+    *,
+    activity_at: datetime | None,
+) -> bool:
+    row = await latest_running_job(session, job_name)
+    if row is None:
+        return False
+    last_progress_at = None
+    raw = (row.metadata_ or {}).get("last_progress_at")
+    if raw:
+        try:
+            last_progress_at = datetime.fromisoformat(str(raw))
+        except ValueError:
+            last_progress_at = None
+    return progress_is_fresh(
+        last_progress_at=last_progress_at,
+        activity_at=activity_at,
+        started_at=row.started_at,
+    )
+
+
+async def abandon_running_jobs(
+    session: AsyncSession,
+    job_name: str,
+    *,
+    reason: str,
+    resume_from: str | None = None,
+) -> int:
+    rows = list(
+        await session.scalars(
+            select(IngestionRunLog).where(
+                IngestionRunLog.job_name == job_name,
+                IngestionRunLog.status == IngestionRunStatus.running,
+            )
+        )
+    )
+    now = datetime.now(timezone.utc)
+    for row in rows:
+        metadata = dict(row.metadata_ or {})
+        if resume_from and not metadata.get("resume_from"):
+            metadata["resume_from"] = resume_from
+            row.metadata_ = metadata
+        row.status = IngestionRunStatus.failed
+        row.finished_at = now
+        row.error_message = reason
+    if rows:
+        logger.warning("Abandoned %s running %s ingestion run(s): %s", len(rows), job_name, reason)
+    return len(rows)
 
 
 async def latest_run_for_job(

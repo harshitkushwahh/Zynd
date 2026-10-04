@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+import re
+from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,11 +14,62 @@ from app.application.mf.amfi_nav_parser import parse_amfi_nav_file
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
 from app.core.config import get_settings
 from app.infrastructure.mf.mongo_raw_store import store_raw_ingestion
-from app.infrastructure.persistence.mf_models import IngestionRunStatus, MutualFund, SchemeNav
+from app.infrastructure.persistence.mf_models import IngestionRunLog, IngestionRunStatus, MutualFund, SchemeNav
 
 logger = logging.getLogger(__name__)
 
 MIN_AVG_NAV_ROWS_PER_FUND = 50
+_WINDOW_START_RE = re.compile(
+    r"window \d+/\d+ \((\d{4}-\d{2}-\d{2}) \.\. (\d{4}-\d{2}-\d{2})\)"
+)
+
+
+def cold_start_resume_date_from_logs(messages: list[str]) -> date | None:
+    """Date to retry after an interrupted backfill.
+
+    The last window that only logged its start is retried. A window that also
+    logged a parsed line is treated as finished, so the next day is used.
+    """
+    current: tuple[date, date] | None = None
+    current_parsed = False
+    for message in messages:
+        match = _WINDOW_START_RE.search(message)
+        if match and "parsed=" not in message:
+            current = (date.fromisoformat(match.group(1)), date.fromisoformat(match.group(2)))
+            current_parsed = False
+            continue
+        if current is not None and "parsed=" in message:
+            current_parsed = True
+    if current is None:
+        return None
+    if current_parsed:
+        return current[1] + timedelta(days=1)
+    return current[0]
+
+
+def _touch_run_progress(run, *, resume_from: date) -> None:
+    metadata = dict(run.metadata_ or {})
+    metadata["last_progress_at"] = datetime.now(timezone.utc).isoformat()
+    metadata["resume_from"] = resume_from.isoformat()
+    run.metadata_ = metadata
+
+
+async def _incomplete_resume_from(session: AsyncSession) -> date | None:
+    row = await session.scalar(
+        select(IngestionRunLog)
+        .where(IngestionRunLog.job_name == "nav-cold-start-backfill")
+        .order_by(desc(IngestionRunLog.started_at))
+        .limit(1)
+    )
+    if row is None or row.status != IngestionRunStatus.failed:
+        return None
+    raw = (row.metadata_ or {}).get("resume_from")
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(str(raw))
+    except ValueError:
+        return None
 
 
 def _build_date_windows(from_date: date, to_date: date, *, days_per_window: int) -> list[tuple[date, date]]:
@@ -75,6 +127,9 @@ async def run_nav_cold_start_backfill(
     if await has_running_job(session, "nav-cold-start-backfill"):
         return {"skipped": 1, "reason": "already_running"}
 
+    if from_date is None:
+        from_date = await _incomplete_resume_from(session)
+
     if not force:
         needed, stats = await needs_cold_start_backfill(session)
         if not needed:
@@ -114,6 +169,8 @@ async def run_nav_cold_start_backfill(
         )
 
         for window_index, (window_from, window_to) in enumerate(windows, start=1):
+            _touch_run_progress(run, resume_from=window_from)
+            await session.commit()
             await emit_pipeline_progress(
                 f"NAV cold-start backfill: window {window_index}/{len(windows)} "
                 f"({window_from} .. {window_to})",
@@ -182,6 +239,7 @@ async def run_nav_cold_start_backfill(
                     inserted += ins
                     skipped += sk
 
+                _touch_run_progress(run, resume_from=window_to + timedelta(days=1))
                 await session.commit()
                 logger.info(
                     "Cold-start NAV window committed window=%s..%s cumulative_inserted=%s",
@@ -233,6 +291,7 @@ async def run_nav_cold_start_backfill(
             records_inserted=inserted,
             records_skipped=skipped,
             error_message=str(exc),
+            metadata=dict(run.metadata_ or {}),
         )
         raise
 

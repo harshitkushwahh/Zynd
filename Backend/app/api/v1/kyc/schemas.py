@@ -11,23 +11,36 @@ class KycEligibilityResponse(BaseModel):
     reasons: list[str]
 
 
+_PAN_PATTERN = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+
+
 class KycPanVerifyRequest(BaseModel):
     pan_number: str = Field(min_length=10, max_length=10)
-    first_name: str = Field(min_length=2, max_length=80)
+    full_name: str = Field(default="", max_length=160)
+    first_name: str = Field(default="", max_length=80)
     middle_name: str = Field(default="", max_length=80)
-    last_name: str = Field(min_length=2, max_length=80)
+    last_name: str = Field(default="", max_length=80)
     date_of_birth: str = Field(min_length=8, max_length=10)
-    pan_category: Literal["individual", "corporate"] = "individual"
+
+    @field_validator("pan_number")
+    @classmethod
+    def validate_pan_number(cls, value: str) -> str:
+        pan = value.strip().upper()
+        if not _PAN_PATTERN.fullmatch(pan):
+            raise ValueError("Enter a valid PAN number, for example ABCDE1234F.")
+        return pan
 
 
 class KycPanFailure(BaseModel):
     field: str
+    status: Optional[str] = None
     code: Optional[str] = None
     reason: Optional[str] = None
 
 
 class KycPanConfirmNamesRequest(BaseModel):
-    first_name: str = Field(min_length=2, max_length=80)
+    full_name: str = Field(default="", max_length=160)
+    first_name: str = Field(default="", max_length=80)
     middle_name: str = Field(default="", max_length=80)
     last_name: str = Field(default="", max_length=80)
 

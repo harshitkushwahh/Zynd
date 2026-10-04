@@ -10,12 +10,8 @@ import { normalizePanInput } from "@/lib/add-investor/add-investor-demo";
 type AddInvestorPanPanelProps = {
   pan: string;
   onPanChange: (value: string) => void;
-  middleName: string;
-  onMiddleNameChange: (value: string) => void;
-  onFirstNameChange: (value: string) => void;
-  onLastNameChange: (value: string) => void;
+  onFullNameChange: (value: string) => void;
   onDateOfBirthChange: (value: string) => void;
-  onPanCategoryChange: (value: "individual" | "corporate") => void;
   panVerified: boolean;
   panLoading: boolean;
   panError: string;
@@ -27,12 +23,8 @@ type AddInvestorPanPanelProps = {
 export function AddInvestorPanPanel({
   pan,
   onPanChange,
-  middleName,
-  onMiddleNameChange,
-  onFirstNameChange,
-  onLastNameChange,
+  onFullNameChange,
   onDateOfBirthChange,
-  onPanCategoryChange,
   panVerified,
   panLoading,
   panError,
@@ -66,12 +58,8 @@ export function AddInvestorPanPanel({
           isFetching={panLoading}
           panName={panName}
           readiness={readiness}
-          middleName={middleName}
-          onMiddleNameChange={onMiddleNameChange}
-          onFirstNameChange={onFirstNameChange}
-          onLastNameChange={onLastNameChange}
+          onFullNameChange={onFullNameChange}
           onDateOfBirthChange={onDateOfBirthChange}
-          onPanCategoryChange={onPanCategoryChange}
           disabled={disabled}
         />
 

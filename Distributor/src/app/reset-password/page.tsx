@@ -75,14 +75,20 @@ function ResetPasswordForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const [backupCode, setBackupCode] = useState("");
-  const [requiresMfa, setRequiresMfa] = useState(false);
+  const [verifyMethod, setVerifyMethod] = useState<"authenticator" | "backup" | null>(null);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const confirmMismatch = confirmPassword.length > 0 && password !== confirmPassword;
-  const canSubmit = isPasswordValid(password) && passwordsMatch && !isSubmitting;
+  const verificationReady =
+    verifyMethod === "authenticator"
+      ? totpCode.replace(/\D/g, "").length === 6
+      : verifyMethod === "backup"
+        ? backupCode.trim().length >= 8
+        : true;
+  const canSubmit = isPasswordValid(password) && passwordsMatch && verificationReady && !isSubmitting;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -103,14 +109,13 @@ function ResetPasswordForm() {
     setError("");
     try {
       await resetDistributorPassword(token, password, {
-        totpCode: totpCode || undefined,
-        backupCode: backupCode || undefined,
+        totpCode: verifyMethod === "authenticator" ? totpCode : undefined,
+        backupCode: verifyMethod === "backup" ? backupCode.trim() : undefined,
       });
       setDone(true);
     } catch (err) {
       if (err instanceof ApiError && err.code === "mfa_required_for_reset") {
-        setRequiresMfa(true);
-        setError("Enter your authenticator code or a backup code to finish resetting.");
+        setVerifyMethod("authenticator");
         return;
       }
       if (err instanceof ApiError && err.code === "distributor_partner_pending_review") {
@@ -170,10 +175,18 @@ function ResetPasswordForm() {
 
   return (
     <ResetPasswordShell
-      title="Reset password"
-      subtitle="Choose a new password for your Zynd Mitra console account."
+      title={verifyMethod ? "Confirm it's you" : "Reset password"}
+      subtitle={
+        verifyMethod === "backup"
+          ? "Enter one unused backup code. The authenticator code is not required."
+          : verifyMethod === "authenticator"
+            ? "Enter the 6-digit code from your authenticator app."
+            : "Choose a new password for your Zynd Mitra console account."
+      }
     >
       <form onSubmit={handleSubmit} className="distributor-login-page__fields">
+        {verifyMethod ? null : (
+        <>
         <div className="space-y-1">
           <Label htmlFor="reset-password" className="text-caption text-muted-foreground">
             New password
@@ -245,34 +258,72 @@ function ResetPasswordForm() {
             <p className="text-caption text-destructive">Passwords do not match.</p>
           ) : null}
         </div>
+        </>
+        )}
 
-        {requiresMfa ? (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="reset-totp" className="text-caption text-muted-foreground">
-                Authenticator code
-              </Label>
-              <Input
-                id="reset-totp"
-                type="text"
-                inputMode="numeric"
-                value={totpCode}
-                onChange={(event) => setTotpCode(event.target.value)}
-                className="auth-input-underline distributor-login-page__input"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="reset-backup" className="text-caption text-muted-foreground">
-                Backup code
-              </Label>
-              <Input
-                id="reset-backup"
-                type="text"
-                value={backupCode}
-                onChange={(event) => setBackupCode(event.target.value)}
-                className="auth-input-underline distributor-login-page__input"
-              />
-            </div>
+        {verifyMethod === "authenticator" ? (
+          <div className="space-y-1">
+            <Label htmlFor="reset-totp" className="text-caption text-muted-foreground">
+              Authenticator code
+            </Label>
+            <Input
+              id="reset-totp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={totpCode}
+              onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="auth-input-underline distributor-login-page__input"
+            />
+          </div>
+        ) : null}
+
+        {verifyMethod === "backup" ? (
+          <div className="space-y-1">
+            <Label htmlFor="reset-backup" className="text-caption text-muted-foreground">
+              Backup code
+            </Label>
+            <Input
+              id="reset-backup"
+              type="text"
+              autoComplete="one-time-code"
+              value={backupCode}
+              onChange={(event) => setBackupCode(event.target.value.toUpperCase())}
+              className="auth-input-underline distributor-login-page__input"
+            />
+          </div>
+        ) : null}
+
+        {verifyMethod ? (
+          <div className="flex flex-col items-start gap-2">
+            <button
+              type="button"
+              className="text-caption font-medium text-primary"
+              onClick={() => {
+                setError("");
+                if (verifyMethod === "authenticator") {
+                  setTotpCode("");
+                  setVerifyMethod("backup");
+                  return;
+                }
+                setBackupCode("");
+                setVerifyMethod("authenticator");
+              }}
+            >
+              {verifyMethod === "backup" ? "Use authenticator app instead" : "Use a backup code instead"}
+            </button>
+            <button
+              type="button"
+              className="text-caption font-medium text-primary"
+              onClick={() => {
+                setError("");
+                setTotpCode("");
+                setBackupCode("");
+                setVerifyMethod(null);
+              }}
+            >
+              Edit password
+            </button>
           </div>
         ) : null}
 
@@ -288,7 +339,7 @@ function ResetPasswordForm() {
           disabled={!canSubmit}
           className="distributor-login-page__submit w-full"
         >
-          {isSubmitting ? "Updating…" : "Update password"}
+          {isSubmitting ? "Updating…" : verifyMethod ? "Update password" : "Continue"}
         </DistributorActionButton>
       </form>
     </ResetPasswordShell>

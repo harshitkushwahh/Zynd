@@ -130,18 +130,19 @@ export function mapBootstrapPanDraft(
   if (singleNameOnly) {
     lastName = "";
   }
+  const middleName = String(raw.middleName ?? raw.middle_name ?? "").trim();
   const panName: AddInvestorPanName = {
+    fullName: fullName || [firstName, middleName, lastName].filter(Boolean).join(" "),
     firstName,
     lastName,
     dateOfBirth: String(raw.dateOfBirth ?? raw.date_of_birth ?? ""),
-    panCategory: String(raw.panCategory ?? raw.pan_category ?? ""),
     singleNameOnly,
   };
-  const hasName = Boolean(panName.firstName.trim() && (panName.lastName.trim() || singleNameOnly));
+  const hasName = panName.fullName.trim().length >= 2;
   return {
     pan: String(raw.panNumber ?? raw.pan_number ?? "").toUpperCase(),
     panName: hasName ? panName : null,
-    middleName: String(raw.middleName ?? raw.middle_name ?? ""),
+    middleName,
   };
 }
 

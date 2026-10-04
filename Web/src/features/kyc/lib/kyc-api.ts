@@ -69,12 +69,19 @@ export type KycBootstrapResponse = {
   step_statuses?: KycStepStatuses | null;
 };
 
+export type KycPanFailure = {
+  field: "pan" | "name" | "date_of_birth" | string;
+  status?: string;
+  code?: string;
+  reason?: string;
+};
+
 export type KycPanVerifyResponse = {
   success: boolean;
   blocked: boolean;
   block_type?: string;
   message?: string;
-  failure?: { field: string; code?: string; reason?: string };
+  failure?: KycPanFailure;
   pan_draft?: KycPanDraft;
   kyc_already_registered?: boolean;
   readiness?: { status?: string; code?: string; reason?: string };
@@ -141,11 +148,8 @@ export async function fetchKycBootstrap() {
 
 export async function verifyKycPan(body: {
   pan_number: string;
-  first_name: string;
-  middle_name: string;
-  last_name: string;
+  full_name: string;
   date_of_birth: string;
-  pan_category: "individual" | "corporate";
 }) {
   return apiRequest<KycPanVerifyResponse>("/kyc/pan/verify", {
     method: "POST",
@@ -157,16 +161,12 @@ export type KycPanConfirmNamesResponse = {
   success: boolean;
   blocked: boolean;
   block_type?: string;
-  failure?: { field: string; code?: string; reason?: string };
+  failure?: KycPanFailure;
   pan_draft?: KycPanDraft;
   requires_digilocker?: boolean;
 };
 
-export async function confirmKycPanNames(body: {
-  first_name: string;
-  middle_name: string;
-  last_name: string;
-}) {
+export async function confirmKycPanNames(body: { full_name: string }) {
   return apiRequest<KycPanConfirmNamesResponse>("/kyc/pan/confirm-names", {
     method: "POST",
     body: JSON.stringify(body),

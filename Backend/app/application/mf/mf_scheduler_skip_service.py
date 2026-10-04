@@ -75,11 +75,30 @@ async def is_scheduler_job_skipped_today(session: AsyncSession, job_name: str) -
 
 
 async def count_stuck_ingestion_runs(session: AsyncSession, *, threshold_hours: int) -> int:
+    from app.application.mf.ingestion_run_service import progress_is_fresh
+
     cutoff = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
+    now = datetime.now(timezone.utc)
     rows = await session.scalars(
-        select(IngestionRunLog.id).where(
+        select(IngestionRunLog).where(
             IngestionRunLog.status == IngestionRunStatus.running,
             IngestionRunLog.started_at < cutoff,
         )
     )
-    return len(list(rows))
+    stuck = 0
+    for row in rows:
+        raw = (row.metadata_ or {}).get("last_progress_at")
+        if raw:
+            try:
+                progress_at = datetime.fromisoformat(str(raw))
+            except ValueError:
+                progress_at = None
+            if progress_at is not None and progress_is_fresh(
+                last_progress_at=progress_at,
+                activity_at=None,
+                started_at=None,
+                now=now,
+            ):
+                continue
+        stuck += 1
+    return stuck

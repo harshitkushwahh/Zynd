@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.mf.ingestion_run_service import abandon_running_jobs, has_running_job, running_job_is_fresh
 from app.application.mf.mf_pipeline_types import (
+    INTERRUPTED_PIPELINE_MESSAGE,
+    JOB_STILL_RUNNING_MESSAGE,
     MfPipelineLogLine,
     MfPipelineRunState,
     MfPipelineRunStatus,
     MfPipelineStepState,
     MfPipelineStepStatus,
+    PAUSE_REASON_JOB_STILL_RUNNING,
 )
+from app.application.mf.nav_cold_start_backfill_service import cold_start_resume_date_from_logs
 from app.infrastructure.persistence.mf_models import MfPipelineRun, MfPipelineRunStatus as DbMfPipelineRunStatus
 
 MAX_STORED_LOG_LINES = 500
@@ -145,17 +150,84 @@ async def get_latest_resumable_pipeline_run(session: AsyncSession) -> MfPipeline
     return state_from_row(row) if row else None
 
 
+def latest_pipeline_activity(run: MfPipelineRunState) -> datetime | None:
+    if not run.logs:
+        return None
+    try:
+        return datetime.fromisoformat(run.logs[-1].timestamp)
+    except ValueError:
+        return None
+
+
+async def latest_cold_start_resume_date(
+    session: AsyncSession,
+    *,
+    exclude_run_id: str | None = None,
+) -> date | None:
+    rows = await session.scalars(select(MfPipelineRun).order_by(desc(MfPipelineRun.updated_at)).limit(8))
+    for row in rows:
+        if exclude_run_id and str(row.run_uuid) == exclude_run_id:
+            continue
+        cursor = cold_start_resume_date_from_logs(
+            [line.get("message", "") for line in (row.logs or []) if isinstance(line, dict)]
+        )
+        if cursor is not None:
+            return cursor
+    return None
+
+
+def _cold_start_resume_from(run: MfPipelineRunState) -> str | None:
+    if run.current_step_key != "nav-cold-start-backfill":
+        return None
+    cursor = cold_start_resume_date_from_logs([line.message for line in run.logs])
+    return cursor.isoformat() if cursor else None
+
+
 async def recover_interrupted_pipeline_runs(session: AsyncSession) -> int:
-    result = await session.execute(
-        update(MfPipelineRun)
-        .where(MfPipelineRun.status == DbMfPipelineRunStatus.running)
-        .values(
-            status=DbMfPipelineRunStatus.paused,
-            error="Interrupted by server restart - resume to continue",
-            finished_at=datetime.now(timezone.utc),
+    """Pause pipelines whose worker died.
+
+    A step whose ingestion job is still reporting progress is paused without a
+    Resume button. Clicking Resume while that job is live used to skip the step.
+    A stale running row is closed so a later Resume can continue the step.
+    """
+    rows = list(
+        await session.scalars(
+            select(MfPipelineRun).where(MfPipelineRun.status == DbMfPipelineRunStatus.running)
         )
     )
-    return result.rowcount or 0
+    now = datetime.now(timezone.utc)
+    recovered = 0
+    for row in rows:
+        run = state_from_row(row)
+        waiting = False
+        step_key = run.current_step_key
+        if step_key and await has_running_job(session, step_key):
+            fresh = await running_job_is_fresh(
+                session,
+                step_key,
+                activity_at=latest_pipeline_activity(run),
+            )
+            if fresh:
+                waiting = True
+            else:
+                await abandon_running_jobs(
+                    session,
+                    step_key,
+                    reason="Orphaned by server restart",
+                    resume_from=_cold_start_resume_from(run),
+                )
+        run.status = MfPipelineRunStatus.paused
+        run.finished_at = now.isoformat()
+        if waiting:
+            run.error = JOB_STILL_RUNNING_MESSAGE
+            run.context["pause_reason"] = PAUSE_REASON_JOB_STILL_RUNNING
+        else:
+            run.error = INTERRUPTED_PIPELINE_MESSAGE
+            if run.context.get("pause_reason") == PAUSE_REASON_JOB_STILL_RUNNING:
+                run.context.pop("pause_reason", None)
+        await save_pipeline_run(session, run)
+        recovered += 1
+    return recovered
 
 
 async def get_pipeline_run_metrics(session: AsyncSession) -> dict[str, float | int | str | None]:

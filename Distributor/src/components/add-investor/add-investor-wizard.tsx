@@ -63,7 +63,9 @@ import {
   isAddInvestorPersonalDraftValid,
   isAddInvestorComplianceComplete,
   isAddInvestorPanNameValid,
+  normalizeAddInvestorFullName,
   normalizeAddInvestorPersonalDraft,
+  splitAddInvestorFullName,
   type AddInvestorAddressDraft,
   type AddInvestorBankDraft,
   type AddInvestorPanName,
@@ -138,6 +140,8 @@ const ADD_INVESTOR_STEP_LABELS: Record<AddInvestorStepId, string> = {
   esign: "E-sign",
   review: "Review",
 };
+
+const PAN_FORMAT = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
 export function AddInvestorWizard() {
   const router = useRouter();
@@ -674,14 +678,28 @@ export function AddInvestorWizard() {
   };
 
   const updatePanName = (patch: Partial<AddInvestorPanName>) => {
+    setPanVerified(false);
+    setPanError("");
     setPanName((current) => ({
+      fullName: "",
       firstName: "",
       lastName: "",
       dateOfBirth: "",
-      panCategory: "individual",
       ...current,
       ...patch,
     }));
+  };
+
+  const handleFullNameChange = (value: string) => {
+    const cleaned = value.replace(/[^A-Za-z\s.'-]/g, "").slice(0, 160);
+    const split = splitAddInvestorFullName(cleaned);
+    setMiddleName(split.middleName);
+    updatePanName({
+      fullName: cleaned,
+      firstName: split.firstName,
+      lastName: split.lastName,
+      singleNameOnly: split.singleNameOnly,
+    });
   };
 
   const handleVerifyPan = async () => {
@@ -689,44 +707,37 @@ export function AddInvestorWizard() {
       setPanError("Complete investor onboarding before verifying PAN.");
       return;
     }
+    if (!PAN_FORMAT.test(pan)) {
+      setPanError("Enter a valid PAN, for example ABCDE1234F.");
+      return;
+    }
+    if (!isAddInvestorPanNameValid(panName)) {
+      setPanError("Enter the name exactly as it appears on the PAN card.");
+      return;
+    }
+    if (!panName?.dateOfBirth) {
+      setPanError("Enter the date of birth from the PAN card.");
+      return;
+    }
     setPanError("");
     setPanLoading(true);
     try {
-      const identity = panName ?? {
-        firstName: "",
-        lastName: "",
-        dateOfBirth: "",
-        panCategory: "individual",
-      };
-      if (identity.firstName.trim().length < 2 || identity.lastName.trim().length < 2) {
-        setPanError("Enter the first and last name as they appear on the PAN card.");
-        setPanLoading(false);
-        return;
-      }
-      if (!identity.dateOfBirth) {
-        setPanError("Enter the date of birth from the PAN card.");
-        setPanLoading(false);
-        return;
-      }
       const result = await verifyClientKycPan(clientUserId, {
         pan_number: pan,
-        first_name: identity.firstName.trim(),
-        middle_name: middleName.trim(),
-        last_name: identity.lastName.trim(),
-        date_of_birth: identity.dateOfBirth,
-        pan_category: identity.panCategory === "corporate" ? "corporate" : "individual",
+        full_name: normalizeAddInvestorFullName(panName.fullName),
+        date_of_birth: panName.dateOfBirth,
       });
       if (result.blocked) {
-        setPanError(result.message || "This PAN cannot be used for KYC.");
+        setPanError(
+          result.failure?.reason || result.message || "This PAN cannot be used for KYC.",
+        );
         setPanVerified(false);
-        setPanName(null);
         setReadiness(null);
         return;
       }
       if (!result.success || !result.pan_draft) {
         setPanError(result.failure?.reason || "Could not verify PAN. Check the number and try again.");
         setPanVerified(false);
-        setPanName(null);
         setReadiness(null);
         return;
       }
@@ -743,10 +754,10 @@ export function AddInvestorWizard() {
         lastName = "";
       }
       setPanName({
+        fullName: fullName || normalizeAddInvestorFullName(panName.fullName),
         firstName,
         lastName,
-        dateOfBirth: draft.dateOfBirth ?? "",
-        panCategory: draft.panCategory ?? "",
+        dateOfBirth: draft.dateOfBirth ?? panName.dateOfBirth,
         singleNameOnly,
       });
       setMiddleName(draft.middleName ?? "");
@@ -768,7 +779,6 @@ export function AddInvestorWizard() {
           : "Could not verify PAN.",
       );
       setPanVerified(false);
-      setPanName(null);
       setReadiness(null);
     } finally {
       setPanLoading(false);
@@ -778,20 +788,14 @@ export function AddInvestorWizard() {
   const handlePanContinue = async () => {
     if (!panVerified || !panName || !clientUserId || panLoading) return;
     if (!isAddInvestorPanNameValid(panName)) {
-      setPanError(
-        panName.singleNameOnly
-          ? "Enter a valid first name from the PAN registry."
-          : "Enter valid first and last names from the PAN registry.",
-      );
+      setPanError("Enter the name exactly as it appears on the PAN card.");
       return;
     }
     setPanError("");
     setPanLoading(true);
     try {
       const confirmResult = await confirmClientKycPanNames(clientUserId, {
-        first_name: panName.firstName.trim(),
-        middle_name: middleName.trim(),
-        last_name: panName.lastName.trim(),
+        full_name: normalizeAddInvestorFullName(panName.fullName),
       });
       if (confirmResult.blocked) {
         setPanError(confirmResult.failure?.reason || "Could not confirm PAN name details.");
@@ -1206,12 +1210,8 @@ export function AddInvestorWizard() {
                 <AddInvestorPanPanel
                   pan={pan}
                   onPanChange={handlePanChange}
-                  middleName={middleName}
-                  onMiddleNameChange={setMiddleName}
-                  onFirstNameChange={(value) => updatePanName({ firstName: value })}
-                  onLastNameChange={(value) => updatePanName({ lastName: value })}
+                  onFullNameChange={handleFullNameChange}
                   onDateOfBirthChange={(value) => updatePanName({ dateOfBirth: value })}
-                  onPanCategoryChange={(value) => updatePanName({ panCategory: value })}
                   panVerified={panVerified}
                   panLoading={panLoading}
                   panError={panError}

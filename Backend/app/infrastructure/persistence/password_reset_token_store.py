@@ -43,6 +43,16 @@ async def create_reset_token(user_id: str) -> str:
     return token
 
 
+async def peek_reset_token(token: str) -> str | None:
+    """Return the user id for a reset link without using it up."""
+    settings = get_settings()
+    redis = await get_redis(settings.redis_cache_db)
+    user_id = await redis.get(f"reset:{token}")
+    if not user_id:
+        return None
+    return user_id
+
+
 async def consume_reset_token(token: str) -> str | None:
     settings = get_settings()
     redis = await get_redis(settings.redis_cache_db)

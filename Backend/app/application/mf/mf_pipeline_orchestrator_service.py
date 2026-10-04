@@ -3,14 +3,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_health_service import get_catalog_health
-from app.application.mf.ingestion_run_service import cleanup_stale_runs
+from app.application.mf.ingestion_run_service import (
+    abandon_running_jobs,
+    cleanup_stale_runs,
+    has_running_job,
+    running_job_is_fresh,
+)
 from app.application.mf.mf_pipeline_notify_service import notify_pipeline_event
 from app.infrastructure.mf.pipeline_progress import pipeline_progress_sink
 from app.application.mf.mf_pipeline_preview_service import (
@@ -23,14 +28,20 @@ from app.application.mf.mf_pipeline_store import (
     get_latest_resumable_pipeline_run,
     get_pipeline_run,
     get_running_pipeline_run,
+    latest_cold_start_resume_date,
+    latest_pipeline_activity,
     recover_interrupted_pipeline_runs,
     save_pipeline_run,
 )
+from app.application.mf.nav_cold_start_backfill_service import cold_start_resume_date_from_logs
 from app.application.mf.mf_pipeline_types import (
+    BACKFILL_STOPPED_MESSAGE,
     BOOTSTRAP_AFTER_INGEST_JOBS,
     FULL_PIPELINE_SEQUENTIAL_JOBS,
     HEALTH_REPAIR_JOBS,
+    JOB_STILL_RUNNING_MESSAGE,
     MAX_MIN_AMOUNTS_BATCHES,
+    PAUSE_REASON_JOB_STILL_RUNNING,
     MfPipelineControlledPause,
     MfPipelineLogLine,
     MfPipelineRunState,
@@ -75,8 +86,37 @@ def _pipeline_triggered_by(run: MfPipelineRunState) -> str:
 
 
 def _job_step_was_skipped(result: dict) -> bool:
-    """True when a scheduler job bailed out early (not record-level skip counts)."""
+    """True when a scheduler job bailed out early (not record-level skip counts).
+
+    `already_running` is not a skip. The step is still in progress, and marking
+    it skipped lets the pipeline walk past a live NAV backfill.
+    """
+    if result.get("reason") == "already_running":
+        return False
     return bool(result.get("reason")) and bool(result.get("skipped"))
+
+
+def _step_is_complete(step: MfPipelineStepState) -> bool:
+    if step.status == MfPipelineStepStatus.succeeded:
+        return True
+    if step.status != MfPipelineStepStatus.skipped:
+        return False
+    return (step.result or {}).get("reason") != "already_running"
+
+
+async def _cold_start_job_kwargs(
+    session: AsyncSession,
+    run: MfPipelineRunState,
+    step: MfPipelineStepState,
+) -> dict | None:
+    if step.key != "nav-cold-start-backfill":
+        return None
+    cursor = cold_start_resume_date_from_logs([line.message for line in run.logs])
+    if cursor is None:
+        cursor = await latest_cold_start_resume_date(session, exclude_run_id=run.run_id)
+    if cursor is None or cursor > date.today():
+        return None
+    return {"from_date": cursor}
 
 
 def _capture_ingestion_link(step: MfPipelineStepState, result: dict | None) -> None:
@@ -234,6 +274,16 @@ async def _check_blockers(*, auto_cleanup_stale: bool = False, except_run_id: st
         if running and (except_run_id is None or running.run_id != except_run_id):
             raise RuntimeError("Another MF pipeline run is already in progress")
 
+        waiting = await get_latest_resumable_pipeline_run(session)
+        if (
+            waiting
+            and waiting.context.get("pause_reason") == PAUSE_REASON_JOB_STILL_RUNNING
+            and waiting.run_id != except_run_id
+        ):
+            raise RuntimeError(
+                "NAV backfill is still running. Wait for it to finish before starting another pipeline."
+            )
+
         stuck = await cleanup_stale_runs(session, threshold_hours=0) if auto_cleanup_stale else 0
         if auto_cleanup_stale:
             await session.commit()
@@ -263,12 +313,19 @@ async def clear_stuck_ingestion_runs(*, threshold_hours: int | None = None) -> i
     return cleaned
 
 
-async def _run_job_step(session: AsyncSession, job_name: str, *, triggered_by: str) -> dict:
+async def _run_job_step(
+    session: AsyncSession,
+    job_name: str,
+    *,
+    triggered_by: str,
+    job_kwargs: dict | None = None,
+) -> dict:
     return await run_job_once(
         session,
         job_name,
         triggered_by=triggered_by,
         skip_dependency_check=True,
+        job_kwargs=job_kwargs,
     )
 
 
@@ -347,11 +404,7 @@ def _iter_executable_steps(run: MfPipelineRunState, *, from_step_key: str | None
         if start_index is None:
             raise ValueError(f"Unknown pipeline step: {from_step_key}")
         steps = steps[start_index:]
-    return [
-        step
-        for step in steps
-        if step.status not in {MfPipelineStepStatus.succeeded, MfPipelineStepStatus.skipped}
-    ]
+    return [step for step in steps if not _step_is_complete(step)]
 
 
 async def _execute_step(run: MfPipelineRunState, step: MfPipelineStepState, context: dict) -> None:
@@ -469,10 +522,18 @@ async def _execute_step(run: MfPipelineRunState, step: MfPipelineStepState, cont
         return
 
     async with AsyncSessionLocal() as session:
-        result = await _run_job_step(session, step.key, triggered_by=triggered_by)
+        job_kwargs = await _cold_start_job_kwargs(session, run, step)
+        result = await _run_job_step(session, step.key, triggered_by=triggered_by, job_kwargs=job_kwargs)
         if result.get("run_uuid"):
             await _tag_ingestion_run_pipeline(session, str(result["run_uuid"]), run.run_id)
         await session.commit()
+    if result.get("reason") == "already_running":
+        step.status = MfPipelineStepStatus.pending
+        step.error = None
+        raise MfPipelineControlledPause(
+            pause_reason=PAUSE_REASON_JOB_STILL_RUNNING,
+            message=JOB_STILL_RUNNING_MESSAGE,
+        )
     if _job_step_was_skipped(result):
         await _set_step_status(
             run,
@@ -512,14 +573,15 @@ async def _execute_pipeline_run(run: MfPipelineRunState, *, from_step_key: str |
         run.started_at = _utc_now_iso()
     run.finished_at = None
     run.error = None
+    resuming = bool(from_step_key or context.pop("resuming", False))
     context.pop("pause_reason", None)
     if not from_step_key and "health_before" not in context:
         context["health_before"] = await capture_catalog_health_snapshot()
     await _append_log(
         run,
-        f"{'Resuming' if from_step_key else 'Starting'} MF pipeline ({run.mode})",
+        f"{'Resuming' if resuming else 'Starting'} MF pipeline ({run.mode})",
     )
-    await notify_pipeline_event(run, event="resumed" if from_step_key else "started")
+    await notify_pipeline_event(run, event="resumed" if resuming else "started")
 
     notify_event: str | None = None
     notify_pause_reason: str | None = None
@@ -705,6 +767,43 @@ async def approve_mf_pipeline_staging(run_id: str, *, admin_user_id: UUID) -> Mf
     return await resume_mf_pipeline_run(run_id)
 
 
+async def _release_stale_backfill(session: AsyncSession, run: MfPipelineRunState) -> None:
+    step_key = run.current_step_key
+    if not step_key or not await has_running_job(session, step_key):
+        return
+    if await running_job_is_fresh(session, step_key, activity_at=latest_pipeline_activity(run)):
+        raise RuntimeError(JOB_STILL_RUNNING_MESSAGE)
+    cursor = cold_start_resume_date_from_logs([line.message for line in run.logs])
+    await abandon_running_jobs(
+        session,
+        step_key,
+        reason="Stopped after the pipeline lost its worker",
+        resume_from=cursor.isoformat() if cursor and step_key == "nav-cold-start-backfill" else None,
+    )
+
+
+async def reconcile_job_still_running(session: AsyncSession, run: MfPipelineRunState) -> bool:
+    """Turn a waiting pipeline back into a resumable one once the job goes quiet."""
+    if run.status != MfPipelineRunStatus.paused:
+        return False
+    if run.context.get("pause_reason") != PAUSE_REASON_JOB_STILL_RUNNING:
+        return False
+    step_key = run.current_step_key
+    if step_key and await has_running_job(session, step_key):
+        if await running_job_is_fresh(session, step_key, activity_at=latest_pipeline_activity(run)):
+            return False
+        cursor = cold_start_resume_date_from_logs([line.message for line in run.logs])
+        await abandon_running_jobs(
+            session,
+            step_key,
+            reason="Stopped after the pipeline lost its worker",
+            resume_from=cursor.isoformat() if cursor and step_key == "nav-cold-start-backfill" else None,
+        )
+    run.context.pop("pause_reason", None)
+    run.error = BACKFILL_STOPPED_MESSAGE
+    return True
+
+
 async def resume_mf_pipeline_run(run_id: str) -> MfPipelineRunState:
     _assert_execution_not_active(run_id)
     async with _pipeline_lock:
@@ -717,6 +816,13 @@ async def resume_mf_pipeline_run(run_id: str) -> MfPipelineRunState:
                 raise RuntimeError("Pipeline run is already in progress")
             if run.status == MfPipelineRunStatus.succeeded:
                 raise RuntimeError("Pipeline run already completed successfully")
+            if run.context.get("pause_reason") == PAUSE_REASON_JOB_STILL_RUNNING:
+                await _release_stale_backfill(session, run)
+                run.context.pop("pause_reason", None)
+                run.error = None
+            run.context["resuming"] = True
+            await save_pipeline_run(session, run)
+            await session.commit()
 
     await _mark_run_running(run)
     await _launch_execution(run)
@@ -748,9 +854,18 @@ async def retry_mf_pipeline_step(run_id: str, step_key: str) -> MfPipelineRunSta
     return run
 
 
+async def _load_reconciled_run(session: AsyncSession, run: MfPipelineRunState | None) -> MfPipelineRunState | None:
+    if run is None:
+        return None
+    if await reconcile_job_still_running(session, run):
+        await save_pipeline_run(session, run)
+        await session.commit()
+    return run
+
+
 async def get_mf_pipeline_run(run_id: str) -> MfPipelineRunState | None:
     async with AsyncSessionLocal() as session:
-        return await get_pipeline_run(session, run_id)
+        return await _load_reconciled_run(session, await get_pipeline_run(session, run_id))
 
 
 async def get_active_mf_pipeline_run() -> MfPipelineRunState | None:
@@ -758,7 +873,7 @@ async def get_active_mf_pipeline_run() -> MfPipelineRunState | None:
         running = await get_running_pipeline_run(session)
         if running:
             return running
-        return await get_latest_resumable_pipeline_run(session)
+        return await _load_reconciled_run(session, await get_latest_resumable_pipeline_run(session))
 
 
 async def cancel_mf_pipeline_run(run_id: str) -> MfPipelineRunState | None:

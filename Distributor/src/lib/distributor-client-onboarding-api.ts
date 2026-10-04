@@ -142,11 +142,8 @@ export async function verifyClientKycPan(
   clientUserId: string,
   body: {
     pan_number: string;
-    first_name: string;
-    middle_name: string;
-    last_name: string;
+    full_name: string;
     date_of_birth: string;
-    pan_category: "individual" | "corporate";
   },
 ) {
   return apiRequest<ClientKycPanVerifyResponse>(
@@ -160,7 +157,7 @@ export async function verifyClientKycPan(
 
 export async function confirmClientKycPanNames(
   clientUserId: string,
-  body: { first_name: string; middle_name: string; last_name: string },
+  body: { full_name: string },
 ) {
   return apiRequest<ClientKycPanConfirmNamesResponse>(
     `/distributor/clients/${encodeURIComponent(clientUserId)}/kyc/pan/confirm-names`,

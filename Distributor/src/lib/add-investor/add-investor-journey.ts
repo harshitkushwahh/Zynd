@@ -228,20 +228,41 @@ export const ADD_INVESTOR_BANK_ACCOUNT_TYPE_OPTIONS = [
 ] as const;
 
 export type AddInvestorPanName = {
+  fullName: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
-  panCategory: string;
   /** True when the PAN registry returned a single-word name (no surname). */
   singleNameOnly?: boolean;
 };
 
+const ADD_INVESTOR_PAN_NAME_PATTERN = /^[A-Za-z][A-Za-z\s.'-]*$/;
+
+export function normalizeAddInvestorFullName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+export function splitAddInvestorFullName(value: string): {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  singleNameOnly: boolean;
+} {
+  const parts = normalizeAddInvestorFullName(value).split(" ").filter(Boolean);
+  if (parts.length <= 1) {
+    return { firstName: parts[0] ?? "", middleName: "", lastName: "", singleNameOnly: parts.length === 1 };
+  }
+  return {
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(" "),
+    lastName: parts[parts.length - 1],
+    singleNameOnly: false,
+  };
+}
+
 export function isAddInvestorPanNameValid(panName: AddInvestorPanName | null | undefined): boolean {
-  const first = panName?.firstName.trim() ?? "";
-  if (first.length < 2) return false;
-  const last = panName?.lastName.trim() ?? "";
-  if (last.length >= 2) return true;
-  return last.length === 0 && Boolean(panName?.singleNameOnly);
+  const name = normalizeAddInvestorFullName(panName?.fullName ?? "");
+  return name.replace(/\s/g, "").length >= 2 && name.length <= 160 && ADD_INVESTOR_PAN_NAME_PATTERN.test(name);
 }
 
 export type AddInvestorReadiness = {

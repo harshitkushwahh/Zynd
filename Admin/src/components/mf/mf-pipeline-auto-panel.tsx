@@ -687,7 +687,8 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
 
   const isRunning = run?.status === "running" || run?.status === "pending";
   const awaitingStaging = Boolean(run?.can_approve_staging && run.staging_batch_uuid && !isRunning);
-  const showResume = Boolean(run?.can_resume && !isRunning && !awaitingStaging);
+  const waitingOnJob = run?.pause_reason === "job_still_running";
+  const showResume = Boolean(run?.can_resume && !isRunning && !awaitingStaging && !waitingOnJob);
   const failedStep = run?.steps.find((step) => step.status === "failed") ?? null;
   const maintenanceWindow = preview?.flags.maintenance_window;
   const startBlocked = preview ? !preview.can_start : false;
@@ -713,7 +714,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
           {canRun ? (
             <PipelineModeSelect
               value={mode}
-              disabled={starting || isRunning || showResume || awaitingStaging}
+              disabled={starting || isRunning || showResume || awaitingStaging || waitingOnJob}
               onValueChange={setMode}
             />
           ) : null}
@@ -739,7 +740,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
               </Button>
               <Button
                 size="sm"
-                disabled={starting || isRunning || showResume || awaitingStaging || startBlocked}
+                disabled={starting || isRunning || showResume || awaitingStaging || waitingOnJob || startBlocked}
                 onClick={() => handleStartRequest()}
               >
                 {starting ? (
@@ -911,7 +912,9 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
               </p>
             ) : null}
             {run.error && !awaitingStaging ? (
-              <AdminFeedbackMessage variant="destructive">{run.error}</AdminFeedbackMessage>
+              <AdminFeedbackMessage variant={waitingOnJob ? "warning" : "destructive"}>
+                {run.error}
+              </AdminFeedbackMessage>
             ) : null}
             {run.can_resume && failedStep && canRun ? (
               <div className="flex flex-wrap items-center gap-2">

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
@@ -29,6 +31,18 @@ from app.infrastructure.mf.scheme_staging_store import (
 from app.infrastructure.persistence.mf_models import IngestionRunStatus
 
 logger = logging.getLogger(__name__)
+
+SCHEDULER_TRIGGER = "SCHEDULER"
+
+
+def scheduler_accept_marker(batch_uuid: str, secret: str) -> str:
+    """Fingerprint of the scheduler accept key for this batch. The secret is not stored."""
+    digest = hmac.new(secret.encode("utf-8"), batch_uuid.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"scheduler:{digest[:16]}"
+
+
+def scheduler_can_accept(*, triggered_by: str, secret: str) -> bool:
+    return triggered_by == SCHEDULER_TRIGGER and bool(secret.strip())
 
 
 def _batch_ready_for_promote(batch: dict, *, auto_promote: bool) -> tuple[bool, str | None]:
@@ -67,6 +81,21 @@ async def run_cybrilla_scheme_promote(
         batch,
         auto_promote=settings.zynd_mf_scheme_promote_auto,
     )
+    accept_key = settings.zynd_mf_scheduler_accept_key.strip()
+    if not ready and reason == "pending_approval" and scheduler_can_accept(triggered_by=triggered_by, secret=accept_key):
+        marker = scheduler_accept_marker(batch_uuid, accept_key)
+        approved_at = datetime.now(timezone.utc)
+        await update_batch(
+            batch_uuid,
+            status=BATCH_STATUS_APPROVED,
+            approved_by=marker,
+            approved_at=approved_at,
+        )
+        batch["status"] = BATCH_STATUS_APPROVED
+        batch["approved_by"] = marker
+        batch["approved_at"] = approved_at
+        ready = True
+        logger.info("Scheduler accepted scheme batch %s", batch_uuid)
     if not ready and not force:
         return {"skipped": 1, "reason": reason, "batch_uuid": batch_uuid}
 

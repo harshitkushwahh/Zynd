@@ -55,6 +55,29 @@ async def poa_validate_pan_name_dob(
     return await poll_poa_preverification(str(created["id"]))
 
 
+async def poa_fetch_readiness(preverify_id: str, *, pan_number: str) -> dict[str, Any]:
+    if not _use_live_poa():
+        return {**await stub_poa_readiness(pan_number), "id": preverify_id}
+    return await poll_poa_preverification(preverify_id)
+
+
+async def poa_fetch_pan_validation(
+    preverify_id: str,
+    *,
+    pan_number: str,
+    full_name: str,
+    date_of_birth: str,
+) -> dict[str, Any]:
+    if not _use_live_poa():
+        result = await stub_poa_pan_validation(
+            pan_number=pan_number,
+            full_name=full_name,
+            date_of_birth=date_of_birth,
+        )
+        return {**result, "id": preverify_id}
+    return await poll_poa_preverification(preverify_id)
+
+
 async def poa_verify_bank_account(
     *,
     pan_number: str,

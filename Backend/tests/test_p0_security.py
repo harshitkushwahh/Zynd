@@ -62,7 +62,10 @@ async def test_refresh_token_reuse_revokes_family(db_session: AsyncSession) -> N
 
 
 @pytest.mark.asyncio
-async def test_reset_password_requires_mfa_when_enrolled(db_session: AsyncSession) -> None:
+async def test_reset_password_requires_mfa_when_enrolled(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     await ensure_retention_seed(db_session)
     user = User(
         email=f"reset-mfa-{uuid4()}@example.com",
@@ -96,6 +99,33 @@ async def test_reset_password_requires_mfa_when_enrolled(db_session: AsyncSessio
             ip="127.0.0.1",
         )
     assert exc.value.code == "mfa_required_for_reset"
+
+    with pytest.raises(AuthError) as invalid_code:
+        await reset_password(
+            db_session,
+            token=token,
+            new_password="NewPassword1!",
+            totp_code="000000",
+            ip="127.0.0.1",
+        )
+    assert invalid_code.value.code == "invalid_mfa_code"
+
+    async def _allow_password(_password: str) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.application.auth.token_lifecycle_service.ensure_password_not_pwned",
+        _allow_password,
+    )
+
+    result = await reset_password(
+        db_session,
+        token=token,
+        new_password="NewPassword1!",
+        totp_code=pyotp.TOTP(secret).now(),
+        ip="127.0.0.1",
+    )
+    assert result["ok"] is True
 
 
 @pytest.mark.asyncio

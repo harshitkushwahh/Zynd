@@ -11,6 +11,7 @@ import {
   confirmKycPanNames,
   verifyKycPan,
   type KycPanDraft,
+  type KycPanFailure,
   type KycPanVerifyResponse,
 } from "@/features/kyc/lib/kyc-api";
 import { isDigilockerRequired } from "@/features/kyc/lib/kyc-pan-readiness";
@@ -21,8 +22,13 @@ import { cn } from "@/lib/utils";
 
 const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
-function hasPanNameFields(firstName: string, lastName: string) {
-  return firstName.trim().length >= 2 && lastName.trim().length >= 2;
+function draftFullName(draft: KycPanDraft | null | undefined) {
+  if (!draft) return "";
+  if (draft.fullName?.trim()) return draft.fullName.trim();
+  return [draft.firstName, draft.middleName, draft.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 function isPanDraftVerified(
@@ -30,10 +36,14 @@ function isPanDraftVerified(
   initiallyVerified: boolean,
 ) {
   if (initiallyVerified) return true;
-  return Boolean(
-    (draft?.panNumber || draft?.panMasked) &&
-      hasPanNameFields(draft?.firstName ?? "", draft?.lastName ?? ""),
-  );
+  return Boolean((draft?.panNumber || draft?.panMasked) && draftFullName(draft).length >= 2);
+}
+
+function panFailureMessage(failure: KycPanFailure) {
+  const fallback =
+    copy.kyc.pan.mismatch[failure.field as keyof typeof copy.kyc.pan.mismatch] ??
+    copy.kyc.pan.verificationFailedDescription;
+  return failure.reason?.trim() || fallback;
 }
 
 type KycPanStepProps = {
@@ -64,16 +74,12 @@ export function KycPanStep({
   onSubmit,
 }: KycPanStepProps) {
   const [panNumber, setPanNumber] = useState(initialDraft?.panNumber ?? "");
-  const [firstName, setFirstName] = useState(initialDraft?.firstName ?? "");
-  const [middleName, setMiddleName] = useState(initialDraft?.middleName ?? "");
-  const [lastName, setLastName] = useState(initialDraft?.lastName ?? "");
+  const [fullName, setFullName] = useState(() => draftFullName(initialDraft));
   const [dateOfBirth, setDateOfBirth] = useState(initialDraft?.dateOfBirth ?? "");
-  const [panCategory, setPanCategory] = useState<"individual" | "corporate">(
-    initialDraft?.panCategory === "corporate" ? "corporate" : "individual",
-  );
   const [panError, setPanError] = useState("");
   const [nameError, setNameError] = useState("");
   const [fetchError, setFetchError] = useState("");
+  const [panFailure, setPanFailure] = useState<KycPanFailure | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [isVerified, setIsVerified] = useState(() =>
     isPanDraftVerified(initialDraft, initiallyVerified),
@@ -108,11 +114,8 @@ export function KycPanStep({
       setPanNumber("");
     }
 
-    setFirstName(initialDraft.firstName ?? "");
-    setMiddleName(initialDraft.middleName ?? "");
-    setLastName(initialDraft.lastName ?? "");
+    setFullName(draftFullName(initialDraft));
     setDateOfBirth(initialDraft.dateOfBirth ?? "");
-    setPanCategory(initialDraft.panCategory === "corporate" ? "corporate" : "individual");
     setVerifiedDraft(initialDraft);
     setIsVerified(isPanDraftVerified(initialDraft, initiallyVerified));
     setPanError("");
@@ -124,11 +127,9 @@ export function KycPanStep({
     setPanError("");
     setNameError("");
     setFetchError("");
+    setPanFailure(null);
     setIsVerified(false);
     setVerifiedDraft(null);
-    setFirstName("");
-    setMiddleName("");
-    setLastName("");
     setRequiresDigilocker(null);
     setKycAlreadyRegistered(null);
     onPanReset?.();
@@ -139,11 +140,9 @@ export function KycPanStep({
     setPanError("");
     setNameError("");
     setFetchError("");
+    setPanFailure(null);
     setIsVerified(false);
     setVerifiedDraft(null);
-    setFirstName("");
-    setMiddleName("");
-    setLastName("");
     setRequiresDigilocker(null);
     setKycAlreadyRegistered(null);
     onPanReset?.();
@@ -152,41 +151,24 @@ export function KycPanStep({
     });
   };
 
-  const validateNames = () => {
-    const firstError = validateKycPersonName(
-      firstName,
-      copy.kyc.pan.requiredField,
-      copy.kyc.pan.invalidName,
-    );
-    if (firstError) {
-      setNameError(firstError);
+  const validateName = () => {
+    const error = validateKycPersonName(fullName, copy.kyc.pan.requiredField, copy.kyc.pan.invalidName);
+    if (error) {
+      setNameError(error);
       return false;
     }
-
-    if (middleName.trim()) {
-      const middleError = validateKycPersonName(
-        middleName,
-        copy.kyc.pan.requiredField,
-        copy.kyc.pan.invalidName,
-      );
-      if (middleError) {
-        setNameError(middleError);
-        return false;
-      }
-    }
-
-    const lastError = validateKycPersonName(
-      lastName,
-      copy.kyc.pan.requiredField,
-      copy.kyc.pan.invalidName,
-    );
-    if (lastError) {
-      setNameError(lastError);
-      return false;
-    }
-
     setNameError("");
     return true;
+  };
+
+  const markDetailsEdited = () => {
+    setNameError("");
+    setFetchError("");
+    setPanFailure(null);
+    if (isVerified) {
+      setIsVerified(false);
+      setIsPanReentry(true);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -198,7 +180,7 @@ export function KycPanStep({
         return;
       }
 
-      if (!validateNames()) return;
+      if (!validateName()) return;
       if (!dateOfBirth) {
         setNameError(copy.kyc.pan.requiredField);
         return;
@@ -206,16 +188,18 @@ export function KycPanStep({
 
       setIsFetching(true);
       setFetchError("");
+      setPanFailure(null);
       try {
         const result = await verifyKycPan({
           pan_number: panNumber,
-          first_name: firstName.trim(),
-          middle_name: middleName.trim(),
-          last_name: lastName.trim(),
+          full_name: fullName.trim().replace(/\s+/g, " "),
           date_of_birth: dateOfBirth,
-          pan_category: panCategory,
         });
         if (result.blocked) {
+          if (result.block_type === "pan_verification" && result.failure) {
+            setPanFailure(result.failure);
+            return;
+          }
           onBlocked(result);
           return;
         }
@@ -224,11 +208,8 @@ export function KycPanStep({
           return;
         }
         setVerifiedDraft(result.pan_draft);
-        setFirstName(result.pan_draft.firstName ?? "");
-        setMiddleName(result.pan_draft.middleName ?? "");
-        setLastName(result.pan_draft.lastName ?? "");
+        setFullName(draftFullName(result.pan_draft) || fullName);
         setDateOfBirth(result.pan_draft.dateOfBirth ?? dateOfBirth);
-        setPanCategory(result.pan_draft.panCategory === "corporate" ? "corporate" : "individual");
         setRequiresDigilocker(Boolean(result.requires_digilocker));
         setKycAlreadyRegistered(Boolean(result.kyc_already_registered));
         onPanVerified?.({
@@ -250,18 +231,20 @@ export function KycPanStep({
       return;
     }
 
-    if (!validateNames()) return;
+    if (!validateName()) return;
 
     setIsFetching(true);
     setFetchError("");
     try {
       const confirmResult = await confirmKycPanNames({
-        first_name: firstName.trim(),
-        middle_name: middleName.trim(),
-        last_name: lastName.trim(),
+        full_name: fullName.trim().replace(/\s+/g, " "),
       });
 
       if (confirmResult.blocked) {
+        if (confirmResult.block_type === "pan_verification" && confirmResult.failure) {
+          setPanFailure(confirmResult.failure);
+          return;
+        }
         onBlocked({
           success: false,
           blocked: true,
@@ -299,7 +282,6 @@ export function KycPanStep({
     }
   };
 
-  const nameCardFetched = isVerified;
   const panLocked = isVerified && !isPanReentry && !disabled && !isFetching;
   const panDisplayValue =
     panLocked && !panNumber && verifiedDraft?.panMasked ? verifiedDraft.panMasked : panNumber;
@@ -341,34 +323,27 @@ export function KycPanStep({
           </div>
         </div>
         {panError ? <FieldMessage message={panError} /> : null}
+        {panFailure?.field === "pan" ? <FieldMessage message={panFailureMessage(panFailure)} /> : null}
 
         <KycPanNameCard
-          isFetched={nameCardFetched}
-          isFetching={isFetching}
-          panName={{ firstName, lastName }}
-          middleName={middleName}
-          onFirstNameChange={(value) => {
-            setFirstName(normalizePersonNameInput(value));
-            setNameError("");
+          fullName={fullName}
+          onFullNameChange={(value) => {
+            setFullName(normalizePersonNameInput(value));
+            markDetailsEdited();
           }}
-          onMiddleNameChange={(value) => {
-            setMiddleName(normalizePersonNameInput(value));
-            setNameError("");
-          }}
-          onLastNameChange={(value) => {
-            setLastName(normalizePersonNameInput(value));
-            setNameError("");
-          }}
-          disabled={disabled}
           dateOfBirth={dateOfBirth}
           onDateOfBirthChange={(value) => {
             setDateOfBirth(value);
-            setNameError("");
+            markDetailsEdited();
           }}
-          panCategory={panCategory}
-          onPanCategoryChange={setPanCategory}
+          nameInvalid={Boolean(nameError) || panFailure?.field === "name"}
+          dateOfBirthInvalid={panFailure?.field === "date_of_birth"}
+          disabled={disabled || isFetching}
         />
         {nameError ? <FieldMessage message={nameError} /> : null}
+        {panFailure && panFailure.field !== "pan" ? (
+          <FieldMessage message={panFailureMessage(panFailure)} />
+        ) : null}
         {fetchError ? <FieldMessage message={fetchError} /> : null}
       </div>
 

@@ -35,6 +35,7 @@ from app.infrastructure.persistence.password_reset_token_store import (
     consume_reset_token,
     create_reset_token,
     get_active_password_reset_token,
+    peek_reset_token,
 )
 from app.infrastructure.notifications.email_service import smtp_configured
 from app.infrastructure.security.hibp_service import (
@@ -279,7 +280,7 @@ async def reset_password(
     backup_code: str | None = None,
     ip: str | None = None,
 ) -> dict[str, bool]:
-    user_id = await consume_reset_token(token)
+    user_id = await peek_reset_token(token)
     if not user_id:
         raise AuthError("Invalid or expired reset link.", "invalid_reset_token", 400)
     result = await db.execute(select(User).where(User.id == UUID(user_id)))
@@ -326,6 +327,10 @@ async def reset_password(
         raise AuthError(str(exc), "password_pwned", 400) from exc
     except HibpUnavailableError as exc:
         raise AuthError(str(exc), "hibp_unavailable", 503) from exc
+
+    consumed_user_id = await consume_reset_token(token)
+    if not consumed_user_id:
+        raise AuthError("Invalid or expired reset link.", "invalid_reset_token", 400)
 
     user.password_hash = hash_password(new_password)
     user.password_changed_at = utcnow()

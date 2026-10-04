@@ -20,10 +20,12 @@ DEV_SUPER_ADMIN_ROLE_KEY = "super_admin"
 async def ensure_dev_admin_seed(
     db: AsyncSession,
     settings: Settings | None = None,
-) -> None:
+    *,
+    force: bool = False,
+) -> dict[str, str | bool]:
     settings = settings or get_settings()
-    if settings.app_env != "development":
-        return
+    if settings.app_env != "development" and not force:
+        return {"skipped": True, "email": DEV_ADMIN_EMAIL}
 
     validate_password_strength(DEV_ADMIN_PASSWORD)
 
@@ -32,6 +34,7 @@ async def ensure_dev_admin_seed(
     now = datetime.now(timezone.utc)
     result = await db.execute(select(User).where(User.email == DEV_ADMIN_EMAIL))
     admin = result.scalar_one_or_none()
+    created = admin is None
 
     if admin is None:
         admin = User(
@@ -55,3 +58,10 @@ async def ensure_dev_admin_seed(
             admin.password_hash = hash_password(DEV_ADMIN_PASSWORD)
 
     await set_admin_user_roles(db, user_id=admin.id, role_keys=[DEV_SUPER_ADMIN_ROLE_KEY])
+    return {
+        "skipped": False,
+        "created": created,
+        "email": DEV_ADMIN_EMAIL,
+        "account_role": UserRole.admin.value,
+        "team_role": DEV_SUPER_ADMIN_ROLE_KEY,
+    }

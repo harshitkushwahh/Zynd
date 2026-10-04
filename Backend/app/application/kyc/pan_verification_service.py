@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import re
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +19,43 @@ from app.application.kyc.kyc_notification_service import notify_kyc_initiated
 from app.application.kyc.master_data import TERMINAL_READINESS_CODES
 from app.infrastructure.kyc.date_utils import normalize_kyc_date_of_birth
 from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.kyc.poa_client import poa_check_readiness, poa_validate_pan_name_dob
-from app.infrastructure.persistence.models import User
+from app.infrastructure.kyc.poa_client import (
+    poa_check_readiness,
+    poa_fetch_pan_validation,
+    poa_fetch_readiness,
+    poa_validate_pan_name_dob,
+)
+from app.infrastructure.persistence.models import KycJourneyState, User
+
+logger = logging.getLogger(__name__)
+
+PAN_PATTERN = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+_PAN_NAME_PATTERN = re.compile(r"^[A-Z][A-Z .'-]*$")
+
+
+def normalize_pan_number(pan_number: str) -> str:
+    pan = (pan_number or "").upper().strip()
+    if not PAN_PATTERN.fullmatch(pan):
+        raise KycError(
+            "Enter a valid PAN number, for example ABCDE1234F.",
+            "invalid_pan",
+            400,
+        )
+    return pan
+
+
+def _normalize_full_name(full_name: str) -> str:
+    name = " ".join((full_name or "").split())
+    if len(name.replace(" ", "")) < 2 or not _PAN_NAME_PATTERN.fullmatch(name.upper()):
+        raise KycError("Enter your name exactly as it appears on the PAN card.", "invalid_name", 400)
+    return name
+
+
+def _split_full_name(full_name: str) -> tuple[str, str, str]:
+    parts = full_name.split()
+    if len(parts) == 1:
+        return parts[0], "", ""
+    return parts[0], " ".join(parts[1:-1]), parts[-1]
 
 
 def _compose_full_name(*, first_name: str, middle_name: str, last_name: str) -> str:
@@ -52,13 +89,59 @@ def _normalize_pan_name_draft(pan_draft: dict[str, Any]) -> dict[str, Any]:
 
 def _field_failure(preverify: dict[str, Any], field: str) -> dict[str, Any] | None:
     block = preverify.get(field) or {}
-    if block.get("status") == "failed":
+    status = block.get("status")
+    if status and status != "verified":
         return {
             "field": field,
-            "code": block.get("code"),
-            "reason": block.get("reason") or f"{field} verification failed.",
+            "status": status,
+            "code": block.get("code") or status,
+            "reason": block.get("reason") or f"{field.replace('_', ' ').capitalize()} does not match PAN records.",
         }
     return None
+
+
+def _same_pan_inputs(journey: KycJourneyState, *, pan: str, full_name: str, dob: str) -> tuple[bool, bool]:
+    """Return (same_pan, same_pan_name_dob) against the last stored PAN pre-verification inputs."""
+    draft = journey.pan_draft_json or {}
+    same_pan = str(draft.get("panNumber") or "").upper().strip() == pan
+    same_all = (
+        same_pan
+        and _normalize_name_key(str(draft.get("fullName") or "")) == _normalize_name_key(full_name)
+        and str(draft.get("dateOfBirth") or "").strip() == dob
+    )
+    return same_pan, same_all
+
+
+async def _resolve_readiness(journey: KycJourneyState, *, pan: str, same_pan: bool) -> dict[str, Any]:
+    existing_id = journey.poa_readiness_preverify_id
+    if same_pan and existing_id:
+        try:
+            return await poa_fetch_readiness(existing_id, pan_number=pan)
+        except FpClientError:
+            logger.warning("kyc_readiness_preverify_reuse_failed id=%s", existing_id)
+    return await poa_check_readiness(pan)
+
+
+async def _resolve_pan_validation(
+    journey: KycJourneyState,
+    *,
+    pan: str,
+    full_name: str,
+    dob: str,
+    same_inputs: bool,
+) -> dict[str, Any]:
+    existing_id = journey.poa_pan_preverify_id
+    if same_inputs and existing_id:
+        try:
+            return await poa_fetch_pan_validation(
+                existing_id,
+                pan_number=pan,
+                full_name=full_name,
+                date_of_birth=dob,
+            )
+        except FpClientError:
+            logger.warning("kyc_pan_preverify_reuse_failed id=%s", existing_id)
+    return await poa_validate_pan_name_dob(pan_number=pan, full_name=full_name, date_of_birth=dob)
 
 
 async def verify_pan(
@@ -66,20 +149,14 @@ async def verify_pan(
     *,
     user: User,
     pan_number: str,
-    first_name: str,
-    last_name: str,
     date_of_birth: str,
+    full_name: str = "",
+    first_name: str = "",
     middle_name: str = "",
-    pan_category: str = "individual",
+    last_name: str = "",
 ) -> dict[str, Any]:
-    pan = pan_number.upper().strip()
-    if len(pan) != 10:
-        raise KycError("Enter a valid 10-character PAN number.", "invalid_pan", 400)
-
-    category = (pan_category or "individual").strip().lower()
-    if category not in {"individual", "corporate"}:
-        raise KycError("Select an individual or corporate PAN type.", "invalid_pan_category", 400)
-    if category == "corporate":
+    pan = normalize_pan_number(pan_number)
+    if pan[3] == "C":
         return {
             "success": False,
             "blocked": True,
@@ -87,13 +164,10 @@ async def verify_pan(
             "message": "Corporate PAN cards cannot be used for individual KYC on Zynd.",
         }
 
-    first = first_name.strip()
-    middle = middle_name.strip()
-    last = last_name.strip()
-    if len(first) < 2 or len(last) < 2:
-        raise KycError("Enter the first and last name as they appear on the PAN card.", "invalid_name", 400)
-    if middle and len(middle) < 2:
-        raise KycError("Enter a valid middle name, or leave it blank.", "invalid_name", 400)
+    name = _normalize_full_name(
+        full_name or _compose_full_name(first_name=first_name, middle_name=middle_name, last_name=last_name)
+    )
+    first, middle, last = _split_full_name(name)
     try:
         dob = normalize_kyc_date_of_birth(date_of_birth)
     except ValueError as exc:
@@ -111,12 +185,14 @@ async def verify_pan(
         "lastName": last,
         "middleName": middle,
         "dateOfBirth": dob,
-        "panCategory": category,
-        "fullName": _compose_full_name(first_name=first, middle_name=middle, last_name=last),
+        "fullName": name,
     }
 
+    journey = await get_or_create_journey(db, user.id)
+    same_pan, same_inputs = _same_pan_inputs(journey, pan=pan, full_name=name, dob=dob)
+
     try:
-        readiness_result = await poa_check_readiness(pan)
+        readiness_result = await _resolve_readiness(journey, pan=pan, same_pan=same_pan)
     except FpClientError as exc:
         raise KycError(exc.message, exc.code, exc.status_code) from exc
     readiness = readiness_result.get("readiness") or {}
@@ -138,13 +214,14 @@ async def verify_pan(
         }
 
     full_name = str(identity["fullName"]).strip()
-    dob = str(identity["dateOfBirth"]).strip()
 
     try:
-        pan_validation = await poa_validate_pan_name_dob(
-            pan_number=pan,
+        pan_validation = await _resolve_pan_validation(
+            journey,
+            pan=pan,
             full_name=full_name,
-            date_of_birth=dob,
+            dob=dob,
+            same_inputs=same_inputs,
         )
     except FpClientError as exc:
         raise KycError(exc.message, exc.code, exc.status_code) from exc
@@ -161,7 +238,6 @@ async def verify_pan(
                         "lastName": identity["lastName"],
                         "middleName": identity["middleName"],
                         "dateOfBirth": dob,
-                        "panCategory": identity["panCategory"],
                         "fullName": full_name,
                     },
                     "panVerificationStatus": "failed",
@@ -185,7 +261,6 @@ async def verify_pan(
             "lastName": identity["lastName"],
             "middleName": identity["middleName"],
             "dateOfBirth": dob,
-            "panCategory": identity["panCategory"],
             "fullName": full_name,
         }
     )
@@ -226,9 +301,10 @@ async def confirm_pan_names(
     db: AsyncSession,
     *,
     user: User,
-    first_name: str,
-    middle_name: str,
-    last_name: str,
+    full_name: str = "",
+    first_name: str = "",
+    middle_name: str = "",
+    last_name: str = "",
 ) -> dict[str, Any]:
     journey = await get_or_create_journey(db, user.id)
     if journey.pan_verification_status != "verified":
@@ -240,21 +316,11 @@ async def confirm_pan_names(
     if not pan or not dob:
         raise KycError("PAN details are incomplete.", "pan_incomplete", 400)
 
-    first = first_name.strip()
-    middle = middle_name.strip()
-    last = last_name.strip()
-    if len(first) < 2:
-        raise KycError("Enter a valid first name.", "invalid_name", 400)
-
     stored_full = str(pan_draft.get("fullName") or "").strip()
-    single_name_pan = bool(pan_draft.get("singleNameOnly")) or _pan_name_is_single_word(stored_full)
-    if last:
-        if len(last) < 2:
-            raise KycError("Enter a valid last name.", "invalid_name", 400)
-    elif not single_name_pan:
-        raise KycError("Enter valid first and last names.", "invalid_name", 400)
-
-    full_name = _compose_full_name(first_name=first, middle_name=middle, last_name=last)
+    full_name = _normalize_full_name(
+        full_name or _compose_full_name(first_name=first_name, middle_name=middle_name, last_name=last_name)
+    )
+    first, middle, last = _split_full_name(full_name)
     needs_revalidation = _normalize_name_key(full_name) != _normalize_name_key(stored_full)
 
     poa_pan_preverify_id = journey.poa_pan_preverify_id

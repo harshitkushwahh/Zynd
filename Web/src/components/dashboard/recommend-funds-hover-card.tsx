@@ -14,7 +14,9 @@ import { motion, useReducedMotion } from "motion/react";
 
 import "@/styles/zynd-recommend-funds-button.css";
 import { RecommendFundsAllocationPanel } from "@/components/dashboard/recommend-funds-allocation-panel";
+import { RecommendFundsKycUnlockOverlay } from "@/components/dashboard/recommend-funds-kyc-unlock-overlay";
 import { RecommendFundsRiskLockedBody } from "@/components/dashboard/recommend-funds-risk-locked-body";
+import { RECOMMEND_FUNDS_GRAINIENT_PROPS } from "@/components/dashboard/recommend-funds-theme";
 import { BorderGlow } from "@/components/ui/border-glow";
 import { Button } from "@/components/ui/button";
 import { Grainient } from "@/components/ui/grainient";
@@ -64,31 +66,6 @@ const RECOMMEND_FUNDS_BORDER_GLOW_PROPS = {
   coneSpread: 34,
   fillOpacity: 0.72,
   animated: false,
-} as const;
-
-const RECOMMEND_FUNDS_GRAINIENT_PROPS = {
-  color1: "#6D28D9",
-  color2: "#5B21B6",
-  color3: "#3B0764",
-  timeSpeed: 0.18,
-  colorBalance: 0.28,
-  warpStrength: 0.75,
-  warpFrequency: 4.0,
-  warpSpeed: 1.4,
-  warpAmplitude: 60.0,
-  blendAngle: 18.0,
-  blendSoftness: 0.04,
-  rotationAmount: 360.0,
-  noiseScale: 1.8,
-  grainAmount: 0.06,
-  grainScale: 2.2,
-  grainAnimated: false,
-  contrast: 1.2,
-  gamma: 1.05,
-  saturation: 1.08,
-  centerX: 0.0,
-  centerY: 0.0,
-  zoom: 0.52,
 } as const;
 
 type RecommendFundsHoverCardProps = {
@@ -508,13 +485,17 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
   const [isExpanded, setIsExpanded] = useState(false);
   const [grainientPrimed, setGrainientPrimed] = useState(false);
   const [grainientReady, setGrainientReady] = useState(false);
+  const [kycOverlayOpen, setKycOverlayOpen] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expandFrameRef = useRef<number | null>(null);
   const isExpandedRef = useRef(isExpanded);
   isExpandedRef.current = isExpanded;
 
-  const queryEnabled = isPresent && !authLoading && Boolean(user);
+  // Fetch as soon as the user is known so a KYC-locked account can open the
+  // overlay directly instead of flashing the hover popover first.
+  const queryEnabled = !authLoading && Boolean(user);
   const { data, isLoading, isError, refetch, isFetching } = useFundsForYouQuery(queryEnabled);
+  const kycLocked = Boolean(data && !data.eligible && data.block_reason === "kyc_required");
   const cartEnabled = Boolean(user?.fund_movement_eligible);
   const { data: cart } = useMfCartQuery(cartEnabled);
   const cartLoaded = cartEnabled && cart !== undefined;
@@ -538,7 +519,7 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
   );
 
   const contentState = useMemo(() => {
-    if (authLoading || (queryEnabled && (isLoading || (isFetching && !data)))) {
+    if (authLoading || (queryEnabled && isPresent && (isLoading || (isFetching && !data)))) {
       return "loading" as const;
     }
 
@@ -555,9 +536,21 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
     }
 
     return "success" as const;
-  }, [authLoading, data, isError, isFetching, isLoading, queryEnabled, user]);
+  }, [authLoading, data, isError, isFetching, isLoading, isPresent, queryEnabled, user]);
 
   const blockCopy = data?.block_reason ? resolveBlockStateCopy(data.block_reason) : null;
+
+  const openKycOverlay = useCallback(() => {
+    setKycOverlayOpen(true);
+  }, []);
+
+  const closeKycOverlay = useCallback(() => {
+    setKycOverlayOpen(false);
+  }, []);
+
+  const handleCompleteKyc = useCallback(() => {
+    kyc?.openDialog();
+  }, [kyc]);
 
   const clearCloseTimer = useCallback(() => {
     if (closeTimerRef.current) {
@@ -576,6 +569,11 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
   const handleOpen = useCallback(() => {
     clearCloseTimer();
     clearExpandFrame();
+    if (kycLocked) {
+      // KYC-locked accounts open the full-page unlock overlay on click; hovering
+      // should not take over the screen.
+      return;
+    }
     setGrainientPrimed(true);
     setIsPresent(true);
     expandFrameRef.current = requestAnimationFrame(() => {
@@ -584,7 +582,7 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
         setIsExpanded(true);
       });
     });
-  }, [clearCloseTimer, clearExpandFrame]);
+  }, [clearCloseTimer, clearExpandFrame, kycLocked]);
 
   const beginClose = useCallback(() => {
     clearCloseTimer();
@@ -615,6 +613,15 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
     },
     [handleOpen, scheduleClose],
   );
+
+  const handleTriggerClick = useCallback(() => {
+    if (!kycLocked) return;
+    clearCloseTimer();
+    clearExpandFrame();
+    setIsExpanded(false);
+    setIsPresent(false);
+    setKycOverlayOpen(true);
+  }, [clearCloseTimer, clearExpandFrame, kycLocked]);
 
   const handlePanelAnimationComplete = useCallback(() => {
     if (!isExpandedRef.current) {
@@ -687,13 +694,22 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
       <Popover open={isPresent} onOpenChange={handleOpenChange} modal={false}>
         <PopoverTrigger
           nativeButton={false}
-          onClick={(event) => event.preventDefault()}
+          onClick={(event) => {
+            event.preventDefault();
+            handleTriggerClick();
+          }}
           onMouseEnter={handleOpen}
           onMouseLeave={scheduleClose}
           render={<div className="recommend-funds-popover-trigger inline-block" />}
         >
           {trigger}
         </PopoverTrigger>
+
+        <RecommendFundsKycUnlockOverlay
+          open={kycOverlayOpen}
+          onClose={closeKycOverlay}
+          onCompleteKyc={handleCompleteKyc}
+        />
 
         {isPresent ? (
           <PopoverContent
@@ -779,7 +795,10 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
                       actionLabel={blockCopy.actionLabel}
                       onAction={
                         data?.block_reason === "kyc_required"
-                          ? () => kyc?.openDialog()
+                          ? () => {
+                              beginClose();
+                              openKycOverlay();
+                            }
                           : undefined
                       }
                     />

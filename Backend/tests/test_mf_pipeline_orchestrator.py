@@ -4,15 +4,19 @@ import uuid
 
 import pytest
 
+from app.application.mf.ingestion_run_service import progress_is_fresh
 from app.application.mf.mf_pipeline_orchestrator_service import (
     INGESTION_TRIGGERED_BY_MAX_LEN,
     _build_step_plan,
     _check_blockers,
+    _iter_executable_steps,
     _job_step_was_skipped,
     _pipeline_triggered_by,
+    _step_is_complete,
     start_mf_pipeline_run,
 )
 from app.application.mf.mf_pipeline_types import (
+    PAUSE_REASON_JOB_STILL_RUNNING,
     MfPipelineControlledPause,
     MfPipelineRunState,
     MfPipelineRunStatus,
@@ -21,6 +25,7 @@ from app.application.mf.mf_pipeline_types import (
     NAV_ANALYTICS_ONLY_JOBS,
     PIPELINE_MODES,
 )
+from app.application.mf.nav_cold_start_backfill_service import cold_start_resume_date_from_logs
 
 
 def test_pipeline_modes_include_phase_b():
@@ -31,7 +36,7 @@ def test_pipeline_modes_include_phase_b():
 
 
 def test_job_step_was_skipped_distinguishes_bailout_from_record_counts():
-    assert _job_step_was_skipped({"skipped": 1, "reason": "already_running"}) is True
+    assert _job_step_was_skipped({"skipped": 1, "reason": "already_running"}) is False
     assert _job_step_was_skipped({"skipped": 1, "reason": "not_needed", "nav_count": 3_000_000}) is True
     assert _job_step_was_skipped({"skipped": 59969, "run_uuid": "abc", "processed": 61921}) is False
     assert _job_step_was_skipped({"skipped": 4999, "inserted": 100, "run_uuid": "abc"}) is False
@@ -162,6 +167,85 @@ def test_run_state_hides_stale_staging_approval_after_promote():
     assert payload["auto_resume_pending"] is False
     assert payload["staging_batch_uuid"] is None
     assert payload["can_resume"] is True
+
+
+def test_run_state_hides_resume_while_backfill_is_still_running():
+    run = MfPipelineRunState(
+        run_id="run-3",
+        mode="full",
+        triggered_by="ADMIN",
+        status=MfPipelineRunStatus.paused,
+        error="NAV backfill is still running.",
+        steps=[
+            MfPipelineStepState(
+                key="nav-cold-start-backfill",
+                label="nav cold start backfill",
+                status=MfPipelineStepStatus.pending,
+            )
+        ],
+        context={"pause_reason": PAUSE_REASON_JOB_STILL_RUNNING},
+    )
+    payload = run.to_dict()
+    assert payload["can_resume"] is False
+    assert payload["pause_reason"] == PAUSE_REASON_JOB_STILL_RUNNING
+
+
+def test_already_running_skip_is_not_a_finished_step():
+    skipped = MfPipelineStepState(
+        key="nav-cold-start-backfill",
+        label="nav cold start backfill",
+        status=MfPipelineStepStatus.skipped,
+        result={"skipped": 1, "reason": "already_running"},
+    )
+    done = MfPipelineStepState(
+        key="nav-metrics-compute",
+        label="nav metrics compute",
+        status=MfPipelineStepStatus.succeeded,
+    )
+    assert _step_is_complete(skipped) is False
+    assert _step_is_complete(done) is True
+    run = MfPipelineRunState(
+        run_id="run-4",
+        mode="full",
+        triggered_by="ADMIN",
+        steps=[skipped, done],
+    )
+    assert [step.key for step in _iter_executable_steps(run)] == ["nav-cold-start-backfill"]
+
+
+def test_cold_start_resume_date_retries_the_open_window():
+    messages = [
+        "NAV cold-start backfill: window 48/84 (2017-10-30 .. 2018-01-27)",
+        "NAV cold-start backfill: window 48/84 parsed=0 inserted_so_far=0 bytes=10",
+        "NAV cold-start backfill: window 49/84 (2018-01-28 .. 2018-04-27)",
+    ]
+    assert cold_start_resume_date_from_logs(messages).isoformat() == "2018-01-28"
+
+
+def test_cold_start_resume_date_advances_after_a_parsed_window():
+    messages = [
+        "NAV cold-start backfill: window 49/84 (2018-01-28 .. 2018-04-27)",
+        "NAV cold-start backfill: window 49/84 parsed=12 inserted_so_far=0 bytes=10",
+    ]
+    assert cold_start_resume_date_from_logs(messages).isoformat() == "2018-04-28"
+
+
+def test_progress_is_fresh_uses_latest_activity_not_start_time():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+    assert progress_is_fresh(
+        last_progress_at=None,
+        activity_at=now - timedelta(minutes=1),
+        started_at=now - timedelta(hours=6),
+        now=now,
+    )
+    assert not progress_is_fresh(
+        last_progress_at=None,
+        activity_at=now - timedelta(minutes=10),
+        started_at=now - timedelta(minutes=1),
+        now=now,
+    )
 
 
 @pytest.mark.asyncio
