@@ -11,6 +11,7 @@ from app.application.messaging.streams import (
     STREAM_NOTIFICATIONS_EMAIL,
     STREAM_SECURITY,
 )
+from app.core.redis import REDIS_TRANSIENT_ERRORS, wait_for_redis_retry
 from app.infrastructure.messaging.redis_event_bus import RedisEventBus
 from app.workers.event_dispatcher import dispatch_event
 
@@ -24,6 +25,18 @@ _WORKER_STREAMS = [
 ]
 
 
+async def _ensure_consumer_groups(bus: RedisEventBus, *, group: str) -> None:
+    attempt = 0
+    while True:
+        try:
+            for stream in _WORKER_STREAMS:
+                await bus.ensure_consumer_group(stream, group=group)
+            return
+        except REDIS_TRANSIENT_ERRORS as exc:
+            attempt += 1
+            await wait_for_redis_retry(attempt, what="consumer group setup", error=exc)
+
+
 async def run_event_worker(
     *,
     group: str = DEFAULT_CONSUMER_GROUP,
@@ -33,17 +46,25 @@ async def run_event_worker(
     consumer = consumer_name or f"worker-{socket.gethostname()}"
     bus = RedisEventBus()
     try:
-        for stream in _WORKER_STREAMS:
-            await bus.ensure_consumer_group(stream, group=group)
+        await _ensure_consumer_groups(bus, group=group)
 
         logger.info("Event worker started group=%s consumer=%s streams=%s", group, consumer, _WORKER_STREAMS)
+        redis_failures = 0
         while True:
-            messages = await bus.read_group(
-                group=group,
-                consumer=consumer,
-                streams=_WORKER_STREAMS,
-                block_ms=block_ms,
-            )
+            try:
+                messages = await bus.read_group(
+                    group=group,
+                    consumer=consumer,
+                    streams=_WORKER_STREAMS,
+                    block_ms=block_ms,
+                )
+            except REDIS_TRANSIENT_ERRORS as exc:
+                redis_failures += 1
+                await wait_for_redis_retry(redis_failures, what="event stream XREADGROUP", error=exc)
+                continue
+            if redis_failures:
+                logger.info("Redis connection restored for event worker")
+                redis_failures = 0
             for stream, message_id, event in messages:
                 try:
                     await dispatch_event(event)

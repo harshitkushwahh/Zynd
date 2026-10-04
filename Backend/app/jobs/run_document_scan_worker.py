@@ -10,6 +10,7 @@ from app.application.documents.document_scan_service import (
 )
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
+from app.core.redis import REDIS_TRANSIENT_ERRORS, wait_for_redis_retry
 from app.infrastructure.queue.document_scan_queue import pop_document_scan_job
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,17 @@ async def run_document_scan_worker(*, block_seconds: int | None = None) -> None:
     block_seconds = block_seconds or settings.documents_scan_worker_block_seconds
     logger.info("Document scan worker started queue=%s", settings.documents_scan_queue_key)
 
+    redis_failures = 0
     while True:
-        job = await pop_document_scan_job(block_seconds=block_seconds, settings=settings)
+        try:
+            job = await pop_document_scan_job(block_seconds=block_seconds, settings=settings)
+        except REDIS_TRANSIENT_ERRORS as exc:
+            redis_failures += 1
+            await wait_for_redis_retry(redis_failures, what="document scan BRPOP", error=exc)
+            continue
+        if redis_failures:
+            logger.info("Redis connection restored for document scan worker")
+            redis_failures = 0
         if not job:
             continue
 
