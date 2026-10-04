@@ -16,7 +16,8 @@
     "Distributor",
     "Mobile",
     "packages/*",
-    "tools/npm-overrides/tar/tar7"
+    "tools/npm-overrides/tar/tar7",
+    "tools/npm-overrides/braces"
   ],
   "overrides": {
     "uuid": "11.1.1",
@@ -27,6 +28,31 @@
     "test-exclude": "8.0.0",
     "@babel/plugin-proposal-class-properties": "npm:@babel/plugin-transform-class-properties@7.29.7",
     "@babel/plugin-proposal-nullish-coalescing-operator": "npm:@babel/plugin-transform-nullish-coalescing-operator@7.29.7",
-    "@babel/plugin-proposal-optional-chaining": "npm:@babel/plugin-transform-optional-chaining@7.29.7"
+    "@babel/plugin-proposal-optional-chaining": "npm:@babel/plugin-transform-optional-chaining@7.29.7",
+    "@grpc/grpc-js": "1.14.5",
+    "brace-expansion": "1.1.21",
+    "braces": "file:tools/npm-overrides/braces",
+    "node-forge": "file:tools/npm-overrides/node-forge",
+    "browserslist": "4.29.3",
+    "fast-uri": "4.2.1",
+    "image-size": "2.0.4",
+    "ip-address": "10.7.3",
+    "nanoid": "3.3.19",
+    "postcss": "8.5.28",
+    "sharp": "0.35.5",
+    "undici": "6.29.0",
+    "js-yaml": "4.3.2",
+    "cosmiconfig": {
+      "js-yaml": "3.15.2"
+    },
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "3.15.2"
+    },
+    "@dotenvx/dotenvx": {
+      "undici": "7.30.0"
+    },
+    "shadcn": {
+      "undici": "7.30.0"
+    }
   }
 }
