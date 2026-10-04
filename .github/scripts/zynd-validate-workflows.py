@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate ZYND GitHub workflow YAML without printing secret material."""
+"""Validate the single ZYND pipeline without printing secret material."""
 
 from __future__ import annotations
 
@@ -34,22 +34,12 @@ def job_runners(jobs: dict) -> list[str]:
 def main() -> int:
     failed = False
     files = sorted(WORKFLOWS.glob("*.yml"))
-    if not files:
-        print("No workflow files found.")
-        return 1
     names = {path.name for path in files}
-    if "deploy-main.yml" in names:
-        print("deploy-main.yml is present and would start a second Azure deployment.")
+    if names != {"zynd-pipeline.yml"}:
+        print("Expected only zynd-pipeline.yml, found: " + ", ".join(sorted(names)))
         failed = True
-    required = {
-        "zynd-change-detection.yml",
-        "zynd-backend-deploy.yml",
-        "zynd-security.yml",
-        "zynd-pr-validation.yml",
-    }
-    missing = required - names
-    if missing:
-        print("Missing workflow files: " + ", ".join(sorted(missing)))
+    if "deploy-main.yml" in names:
+        print("deploy-main.yml would start a second Azure deployment.")
         failed = True
 
     for path in files:
@@ -69,26 +59,46 @@ def main() -> int:
             failed = True
         jobs = data.get("jobs") or {}
         runners = job_runners(jobs)
-        if not runners:
-            print(f"{path.name} has no job runner.")
+        if runners != ["ubuntu-24.04"] * len(runners) or not runners:
+            print(f"{path.name} runners={','.join(runners)}")
             failed = True
-        for runner in runners:
-            if runner != "ubuntu-24.04":
-                print(f"{path.name} runner is {runner}")
+        expected = ["detect-changes", "security-scan", "validate-changes", "deploy-backend"]
+        if list(jobs) != expected:
+            print(f"Job order is {list(jobs)}")
+            failed = True
+        if jobs.get("security-scan", {}).get("needs") != "detect-changes":
+            print("Security must follow change detection.")
+            failed = True
+        validate_needs = jobs.get("validate-changes", {}).get("needs")
+        if validate_needs != ["detect-changes", "security-scan"]:
+            print(f"Validation needs={validate_needs}")
+            failed = True
+        deploy_needs = jobs.get("deploy-backend", {}).get("needs")
+        if deploy_needs != ["detect-changes", "security-scan", "validate-changes"]:
+            print(f"Deploy needs={deploy_needs}")
+            failed = True
+        deploy_if = str(jobs.get("deploy-backend", {}).get("if") or "")
+        required_if = (
+            "needs.detect-changes.outputs.deploy_backend == 'true'",
+            "needs.security-scan.result == 'success'",
+            "github.event_name == 'push'",
+            "github.event_name == 'workflow_dispatch'",
+        )
+        for piece in required_if:
+            if piece not in deploy_if:
+                print(f"Deploy condition is missing: {piece}")
                 failed = True
-        print(f"ok {path.name} jobs={len(jobs)} runners={','.join(runners)}")
+        print(f"ok {path.name} jobs={len(jobs)}")
 
-    deploy = yaml.safe_load((WORKFLOWS / "zynd-backend-deploy.yml").read_text())
-    group = (deploy.get("concurrency") or {}).get("group")
-    if group != "zynd-production-deploy":
-        print("Backend deploy concurrency group changed.")
+    pipeline = (WORKFLOWS / "zynd-pipeline.yml").read_text()
+    if "zynd-production-deploy" not in pipeline:
+        print("Production concurrency group is missing.")
         failed = True
-    if (deploy.get("concurrency") or {}).get("cancel-in-progress") is not False:
-        print("Backend deploy must not cancel an in-progress production deploy.")
+    if "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" not in pipeline:
+        print("Pull requests must be the only runs that cancel an in-progress pipeline.")
         failed = True
-    deploy_job = (deploy.get("jobs") or {}).get("deploy-backend") or {}
-    if deploy_job.get("if") != "needs.confirm-backend-changes.outputs.deploy_backend == 'true'":
-        print("Backend deploy job is not gated on the path confirmation.")
+    if "--no-deps --force-recreate api" not in pipeline:
+        print("API deploy command changed.")
         failed = True
     return 1 if failed else 0
 

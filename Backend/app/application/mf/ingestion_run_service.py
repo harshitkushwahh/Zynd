@@ -135,7 +135,19 @@ async def check_job_dependencies(
     for dep in depends_on:
         latest = await latest_run_for_job(session, dep, since=cutoff)
         if latest is None:
-            return False, f"dependency_not_run:{dep}"
+            # No recent run. Upstream data may still be present from an older
+            # run (for example a scheme promote approved by an admin last week
+            # while ZYND_MF_SCHEME_PROMOTE_AUTO=false). Only block when the
+            # dependency has never produced a successful run at all, otherwise
+            # a manual-approval step would silently stall every daily job.
+            ever = await latest_run_for_job(session, dep)
+            if ever is None:
+                return False, f"dependency_never_run:{dep}"
+            if ever.status == IngestionRunStatus.running:
+                return False, f"dependency_running:{dep}"
+            if ever.status != IngestionRunStatus.succeeded:
+                return False, f"dependency_failed:{dep}"
+            continue
         if latest.status == IngestionRunStatus.running:
             return False, f"dependency_running:{dep}"
         if latest.status != IngestionRunStatus.succeeded:

@@ -138,12 +138,22 @@ export async function discardClientOnboardingDraft(onboardingToken: string) {
   );
 }
 
-export async function verifyClientKycPan(clientUserId: string, panNumber: string) {
+export async function verifyClientKycPan(
+  clientUserId: string,
+  body: {
+    pan_number: string;
+    first_name: string;
+    middle_name: string;
+    last_name: string;
+    date_of_birth: string;
+    pan_category: "individual" | "corporate";
+  },
+) {
   return apiRequest<ClientKycPanVerifyResponse>(
     `/distributor/clients/${encodeURIComponent(clientUserId)}/kyc/pan/verify`,
     {
       method: "POST",
-      body: JSON.stringify({ pan_number: panNumber }),
+      body: JSON.stringify(body),
     },
   );
 }

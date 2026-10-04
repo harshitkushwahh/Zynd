@@ -108,9 +108,6 @@ async def test_partner_onboarding_submits_for_ho_review(
     monkeypatch.setenv("DOCUMENT_SCAN_DISPATCH_MODE", "sync")
     get_settings.cache_clear()
 
-    async def stub_pan(_pan: str) -> dict[str, str]:
-        return {"fullName": "New Mitra", "dateOfBirth": "1990-01-01", "panCategory": "individual"}
-
     async def stub_hybrid_bank_verification(**kwargs) -> HybridBankVerificationOutcome:
         _ = kwargs
         return HybridBankVerificationOutcome(
@@ -136,10 +133,6 @@ async def test_partner_onboarding_submits_for_ho_review(
             account_type_label="Savings",
         )
 
-    monkeypatch.setattr(
-        "app.application.distributor.partner_verification_service.kyckart_pan_to_name_dob",
-        stub_pan,
-    )
     monkeypatch.setattr(
         "app.application.distributor.partner_verification_service.run_hybrid_bank_verification",
         stub_hybrid_bank_verification,
@@ -298,16 +291,9 @@ async def test_partner_onboarding_manual_bank_verify(
     monkeypatch.setenv("DEV_OTP", "123456")
     get_settings.cache_clear()
 
-    async def stub_pan(_pan: str) -> dict[str, str]:
-        return {"fullName": "New Mitra", "dateOfBirth": "1990-01-01", "panCategory": "individual"}
-
     async def stub_ifsc(ifsc: str) -> tuple[str, str, str]:
         return ifsc, "HDFC Bank", "Mumbai"
 
-    monkeypatch.setattr(
-        "app.application.distributor.partner_verification_service.kyckart_pan_to_name_dob",
-        stub_pan,
-    )
     monkeypatch.setattr(
         "app.application.distributor.partner_verification_service.resolve_ifsc_details",
         stub_ifsc,

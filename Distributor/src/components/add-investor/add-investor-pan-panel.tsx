@@ -14,6 +14,8 @@ type AddInvestorPanPanelProps = {
   onMiddleNameChange: (value: string) => void;
   onFirstNameChange: (value: string) => void;
   onLastNameChange: (value: string) => void;
+  onDateOfBirthChange: (value: string) => void;
+  onPanCategoryChange: (value: "individual" | "corporate") => void;
   panVerified: boolean;
   panLoading: boolean;
   panError: string;
@@ -29,6 +31,8 @@ export function AddInvestorPanPanel({
   onMiddleNameChange,
   onFirstNameChange,
   onLastNameChange,
+  onDateOfBirthChange,
+  onPanCategoryChange,
   panVerified,
   panLoading,
   panError,
@@ -44,18 +48,6 @@ export function AddInvestorPanPanel({
       <h3 className="add-investor-onboarding-wizard__title">PAN verification</h3>
 
       <div className="add-investor-pan-panel__form">
-        <AddInvestorPanNameCard
-          isFetched={panVerified}
-          isFetching={panLoading}
-          panName={panName}
-          readiness={readiness}
-          middleName={middleName}
-          onMiddleNameChange={onMiddleNameChange}
-          onFirstNameChange={onFirstNameChange}
-          onLastNameChange={onLastNameChange}
-          disabled={disabled}
-        />
-
         <Input
           id="add-investor-pan"
           value={pan}
@@ -67,6 +59,20 @@ export function AddInvestorPanPanel({
           aria-label="PAN number"
           aria-invalid={Boolean(panError)}
           className="add-investor-pan-panel__input font-mono uppercase"
+        />
+
+        <AddInvestorPanNameCard
+          isFetched={panVerified}
+          isFetching={panLoading}
+          panName={panName}
+          readiness={readiness}
+          middleName={middleName}
+          onMiddleNameChange={onMiddleNameChange}
+          onFirstNameChange={onFirstNameChange}
+          onLastNameChange={onLastNameChange}
+          onDateOfBirthChange={onDateOfBirthChange}
+          onPanCategoryChange={onPanCategoryChange}
+          disabled={disabled}
         />
 
         {panError ? <p className="add-investor-pan-panel__error">{panError}</p> : null}

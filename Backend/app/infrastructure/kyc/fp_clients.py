@@ -169,19 +169,12 @@ class FpTokenService:
             assert self._poa_token is not None
             return self._poa_token.value
         runtime = get_cybrilla_runtime()
-        import logging as _logging
-        _log = _logging.getLogger(__name__)
-        _log.info(
-            "[KYC_TOKEN] Fetching POA token | token_base_url=%r | auth_tenant=%r | client_id=%r | base_url=%r | configured=%s",
-            runtime.resolved_token_base_url, runtime.auth_tenant, runtime.client_id, runtime.base_url, runtime.configured,
-        )
         token, expires_at = await self._fetch_token(
             token_base_url=runtime.resolved_token_base_url,
             auth_tenant=runtime.auth_tenant,
             client_id=runtime.client_id,
             client_secret=runtime.client_secret,
         )
-        _log.info("[KYC_TOKEN] POA token fetched OK | token_prefix=%r", token[:20])
         self._poa_token = _CachedToken(value=token, expires_at=expires_at)
         return token
 
@@ -367,13 +360,8 @@ async def _fp_request_with_auth_retry(
 async def fp_get(path: str, *, use_poa: bool = False) -> dict[str, Any]:
     base, tenant = _fp_runtime(use_poa=use_poa)
 
-    import logging as _logging
-    _log = _logging.getLogger(__name__)
-    _log.info("[FP_GET] base=%r | tenant=%r | path=%r | use_poa=%s", base, tenant, path, use_poa)
-
     async def runner(token: str) -> httpx.Response:
         full_url = f"{base.rstrip('/')}{path}"
-        _log.info("[FP_GET] Full URL=%r | token_prefix=%r", full_url, token[:20] if token else "EMPTY")
         async with httpx.AsyncClient(timeout=30.0) as client:
             return await client.get(
                 full_url,

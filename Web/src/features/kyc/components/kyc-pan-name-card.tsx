@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, PencilLine, UserRound } from "lucide-react";
+import { CheckCircle2, PencilLine } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { copy } from "@/shared/config/copy";
@@ -20,8 +20,10 @@ type KycPanNameCardProps = {
   onMiddleNameChange: (value: string) => void;
   onLastNameChange: (value: string) => void;
   disabled?: boolean;
-  dateOfBirth?: string;
-  panCategory?: string;
+  dateOfBirth: string;
+  onDateOfBirthChange: (value: string) => void;
+  panCategory: "individual" | "corporate";
+  onPanCategoryChange: (value: "individual" | "corporate") => void;
 };
 
 type PanNameFieldProps = {
@@ -100,42 +102,11 @@ export function KycPanNameCard({
   onLastNameChange,
   disabled,
   dateOfBirth,
+  onDateOfBirthChange,
   panCategory,
+  onPanCategoryChange,
 }: KycPanNameCardProps) {
-  const showPending = !isFetched || !panName;
-
-  if (showPending) {
-    return (
-      <div
-        className={cn(
-          "flex items-center gap-3 rounded-[var(--radius-card)] px-3 py-2.5 transition-colors",
-          "border border-dashed border-primary/25 bg-gradient-to-br from-primary/[0.04] via-card to-muted/20 shadow-zynd-low",
-        )}
-      >
-        <div
-          className={cn(
-            "relative flex size-9 shrink-0 items-center justify-center rounded-full",
-            "bg-primary/[0.08] text-primary ring-1 ring-inset ring-primary/20",
-          )}
-        >
-          {isFetching ? (
-            <Loader2 className="size-4 animate-spin" strokeWidth={2} />
-          ) : (
-            <UserRound className="size-4" strokeWidth={2} />
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1 text-left leading-tight">
-          <p className="text-caption font-semibold tracking-tight text-foreground">
-            {isFetching ? copy.kyc.pan.nameFetchingTitle : copy.kyc.pan.namePendingTitle}
-          </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-            {isFetching ? copy.kyc.pan.nameFetchingDescription : copy.kyc.pan.namePendingDescription}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const names = panName ?? { firstName: "", lastName: "" };
 
   return (
     <div
@@ -156,10 +127,18 @@ export function KycPanNameCard({
 
         <div className="min-w-0 pt-0.5">
           <p className="text-caption font-semibold tracking-tight text-foreground">
-            {copy.kyc.pan.nameFetchedTitle}
+            {isFetching
+              ? copy.kyc.pan.nameFetchingTitle
+              : isFetched
+                ? copy.kyc.pan.nameFetchedTitle
+                : copy.kyc.pan.namePendingTitle}
           </p>
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-            {copy.kyc.pan.nameFetchedDescription}
+            {isFetching
+              ? copy.kyc.pan.nameFetchingDescription
+              : isFetched
+                ? copy.kyc.pan.nameFetchedDescription
+                : copy.kyc.pan.namePendingDescription}
           </p>
         </div>
       </div>
@@ -169,7 +148,7 @@ export function KycPanNameCard({
           label={copy.kyc.pan.firstNameLabel}
           editable
           inputId="kyc-pan-first-name"
-          inputValue={panName.firstName ?? ""}
+          inputValue={names.firstName}
           inputPlaceholder={copy.kyc.pan.firstNameLabel}
           onInputChange={onFirstNameChange}
           disabled={disabled || isFetching}
@@ -187,30 +166,51 @@ export function KycPanNameCard({
           label={copy.kyc.pan.lastNameLabel}
           editable
           inputId="kyc-pan-last-name"
-          inputValue={panName.lastName ?? ""}
+          inputValue={names.lastName}
           inputPlaceholder={copy.kyc.pan.lastNameLabel}
           onInputChange={onLastNameChange}
           disabled={disabled || isFetching}
         />
       </div>
 
-      {dateOfBirth || panCategory ? (
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-2">
-          {dateOfBirth ? (
-            <PanNameField label={copy.kyc.pan.dateOfBirthLabel} value={dateOfBirth} />
-          ) : null}
-          {panCategory ? (
-            <PanNameField
-              label={copy.kyc.pan.panCategoryLabel}
-              value={
-                panCategory === "corporate"
-                  ? copy.kyc.pan.panCategoryCorporate
-                  : copy.kyc.pan.panCategoryIndividual
-              }
-            />
-          ) : null}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-2">
+        <div className="min-w-0 space-y-1">
+          <label
+            htmlFor="kyc-pan-dob"
+            className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground"
+          >
+            {copy.kyc.pan.dateOfBirthLabel}
+          </label>
+          <Input
+            id="kyc-pan-dob"
+            type="date"
+            value={dateOfBirth}
+            onChange={(event) => onDateOfBirthChange(event.target.value)}
+            disabled={disabled || isFetching}
+            className={cn(fieldShellClassName, "bg-background font-medium shadow-zynd-low")}
+          />
         </div>
-      ) : null}
+        <div className="min-w-0 space-y-1">
+          <label
+            htmlFor="kyc-pan-category"
+            className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground"
+          >
+            {copy.kyc.pan.panCategoryLabel}
+          </label>
+          <select
+            id="kyc-pan-category"
+            value={panCategory}
+            onChange={(event) =>
+              onPanCategoryChange(event.target.value === "corporate" ? "corporate" : "individual")
+            }
+            disabled={disabled || isFetching}
+            className={cn(fieldShellClassName, "bg-background font-medium shadow-zynd-low")}
+          >
+            <option value="individual">{copy.kyc.pan.panCategoryIndividual}</option>
+            <option value="corporate">{copy.kyc.pan.panCategoryCorporate}</option>
+          </select>
+        </div>
+      </div>
     </div>
   );
 }

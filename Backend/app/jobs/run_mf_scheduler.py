@@ -4,9 +4,16 @@ import argparse
 import asyncio
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from app.application.mf.mf_scheduler_jobs import build_scheduled_jobs, job_due, list_jobs_for_cli, run_job_once
+from app.application.mf.ingestion_run_service import latest_run_for_job
+from app.application.mf.mf_scheduler_jobs import (
+    build_scheduled_jobs,
+    last_scheduled_time,
+    list_jobs_for_cli,
+    run_job_once,
+    scheduler_timezone,
+)
 from app.application.mf.mf_scheduler_skip_service import is_scheduler_job_skipped_today
 from app.application.mf.mf_job_runner_service import execute_mf_job
 from app.application.mf.nav_cold_start_backfill_service import needs_cold_start_backfill, run_nav_cold_start_backfill
@@ -16,20 +23,55 @@ from app.core.database import AsyncSessionLocal
 logger = logging.getLogger(__name__)
 
 
-async def _run_due_jobs() -> list[dict]:
+async def _job_is_due(
+    session,
+    job,
+    *,
+    now: datetime,
+    fired: dict[str, datetime],
+    catch_up: timedelta,
+) -> tuple[bool, datetime]:
+    """Decide whether ``job`` should run on this tick.
+
+    A job is due when its most recent cron fire time is within the catch-up
+    window and nothing has run it for that fire time yet. Restarts and long
+    upstream jobs therefore cannot make a daily job silently miss its slot.
+    """
+    scheduled_at = last_scheduled_time(job.cron, now=now)
+    if now - scheduled_at > catch_up:
+        return False, scheduled_at
+    if fired.get(job.name) == scheduled_at:
+        return False, scheduled_at
+    if await latest_run_for_job(session, job.name, since=scheduled_at) is not None:
+        fired[job.name] = scheduled_at
+        return False, scheduled_at
+    return True, scheduled_at
+
+
+async def _run_due_jobs(fired: dict[str, datetime] | None = None) -> list[dict]:
     results: list[dict] = []
-    now = datetime.now(timezone.utc)
+    settings = get_settings()
+    catch_up = timedelta(minutes=max(settings.zynd_mf_scheduler_catch_up_minutes, 1))
+    fired = fired if fired is not None else {}
     async with AsyncSessionLocal() as session:
         for job in build_scheduled_jobs():
             if not job.enabled:
                 continue
-            if not job_due(job.cron, now=now):
+            now = datetime.now(timezone.utc)
+            due, scheduled_at = await _job_is_due(session, job, now=now, fired=fired, catch_up=catch_up)
+            if not due:
                 continue
+            fired[job.name] = scheduled_at
             if await is_scheduler_job_skipped_today(session, job.name):
                 logger.info("MF scheduler skipping job=%s (manual/pipeline already ran today IST)", job.name)
                 results.append({"job": job.name, "ok": True, "skipped": True, "reason": "manual_run_today"})
                 continue
-            logger.info("MF scheduler running job=%s cron=%s", job.name, job.cron)
+            logger.info(
+                "MF scheduler running job=%s cron=%s scheduled_at=%s",
+                job.name,
+                job.cron,
+                scheduled_at.isoformat(timespec="minutes"),
+            )
             try:
                 result = await execute_mf_job(session, job.name, triggered_by="SCHEDULER")
                 await session.commit()
@@ -70,13 +112,27 @@ async def run_scheduler_loop() -> None:
     tick = max(settings.zynd_mf_scheduler_tick_seconds, 15)
     auto_resume_tick = max(settings.zynd_mf_pipeline_auto_resume_poll_seconds, tick)
     ticks_since_auto_resume = auto_resume_tick
-    logger.info("MF scheduler started (tick=%ss)", tick)
+    fired: dict[str, datetime] = {}
+    logger.info(
+        "MF scheduler started (tick=%ss timezone=%s catch_up=%smin)",
+        tick,
+        scheduler_timezone().key,
+        settings.zynd_mf_scheduler_catch_up_minutes,
+    )
+    for job in build_scheduled_jobs():
+        logger.info(
+            "MF scheduler job=%s cron=%s enabled=%s depends_on=%s",
+            job.name,
+            job.cron,
+            job.enabled,
+            ",".join(job.depends_on) or "-",
+        )
     startup_result = await _maybe_run_cold_start_on_startup()
     if startup_result:
         logger.info("MF scheduler startup cold-start result: %s", startup_result)
     while True:
         try:
-            results = await _run_due_jobs()
+            results = await _run_due_jobs(fired)
             if results:
                 logger.info("MF scheduler tick results: %s", results)
             ticks_since_auto_resume += tick

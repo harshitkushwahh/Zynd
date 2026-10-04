@@ -152,17 +152,6 @@ async def test_verify_pan_requires_digilocker_for_kyc_incomplete(db_session) -> 
     await db_session.flush()
 
     with patch(
-        "app.application.kyc.pan_verification_service.kyckart_pan_to_name_dob",
-        new=AsyncMock(
-            return_value={
-                "fullName": "SANGITA SEN",
-                "firstName": "SANGITA",
-                "lastName": "SEN",
-                "dateOfBirth": "1985-01-01",
-                "panCategory": "individual",
-            }
-        ),
-    ), patch(
         "app.application.kyc.pan_verification_service.poa_check_readiness",
         new=AsyncMock(
             return_value={
@@ -185,7 +174,14 @@ async def test_verify_pan_requires_digilocker_for_kyc_incomplete(db_session) -> 
             }
         ),
     ):
-        result = await verify_pan(db_session, user=user, pan_number="RHOPS9606E")
+        result = await verify_pan(
+            db_session,
+            user=user,
+            pan_number=f"ABCPX{uuid4().int % 10000:04d}F",
+            first_name="SANGITA",
+            last_name="SEN",
+            date_of_birth="1985-01-01",
+        )
 
     assert result["success"] is True
     assert result["kycAlreadyRegistered"] is False

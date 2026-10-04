@@ -1,51 +1,47 @@
-# ZYND backend deployment to the existing Azure VM.
+# One ZYND pipeline. Stages run in order:
+# 1. Change detection
+# 2. Security and quality
+# 3. Validation of the areas that changed
+# 4. Azure backend deployment, only after the earlier stages succeed
 #
-# This workflow only deploys the API container. It does not deploy frontends,
-# recreate PostgreSQL, MongoDB, Redis, MinIO, or ClamAV, delete volumes, or
-# run git clean. Background workers that share the backend image are left on
-# their current containers; this matches the existing API-only deploy.
-#
-# Alembic is not invoked by this workflow. When APP_ENV=development, the API
-# process itself runs `alembic upgrade head` on startup (see
-# Backend/app/core/startup.py). When APP_ENV=production, no migration runs
-# here; apply migrations with the existing Alembic command as a separate,
-# reviewed step.
-#
-# Development runtime gate:
-#   APP_ENV, DEBUG, DEV_OTP, and DEV_SKIP_RATE_LIMITS are reported.
-#   The current testing VM is intentionally development, so those flags warn
-#   and the deploy continues.
-#   Set the repository variable ZYND_STRICT_PRODUCTION=true to fail the deploy
-#   instead. That is the production safety gate. Do not set it on the testing VM.
+# Frontend apps stay on Vercel. This pipeline never deploys them.
+# Alembic is not invoked here. A development API still migrates on its own startup.
 
-name: ZYND • Backend Deployment
+name: ZYND • Pipeline
 
 "on":
   push:
     branches:
       - main
-    paths:
-      - "Backend/**"
-      - "docker-compose.yml"
-      - "docker-compose.prod.yml"
-      - "Redis/**"
-      - ".github/workflows/zynd-backend-deploy.yml"
-      - ".github/workflows/zynd-change-detection.yml"
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "17 3 * * 1"
   workflow_dispatch:
 
 concurrency:
-  group: zynd-production-deploy
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('zynd-pipeline-{0}', github.ref) || 'zynd-production-deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  confirm-backend-changes:
-    name: confirm-backend-changes
+  detect-changes:
+    name: "Stage 1 • Change detection"
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
+      backend_changed: ${{ steps.classify.outputs.backend_changed }}
+      web_changed: ${{ steps.classify.outputs.web_changed }}
+      admin_changed: ${{ steps.classify.outputs.admin_changed }}
+      distributor_changed: ${{ steps.classify.outputs.distributor_changed }}
+      support_changed: ${{ steps.classify.outputs.support_changed }}
+      shared_changed: ${{ steps.classify.outputs.shared_changed }}
+      infrastructure_changed: ${{ steps.classify.outputs.infrastructure_changed }}
+      workflow_changed: ${{ steps.classify.outputs.workflow_changed }}
+      documentation_changed: ${{ steps.classify.outputs.documentation_changed }}
       deploy_backend: ${{ steps.classify.outputs.deploy_backend }}
     steps:
       - name: Checkout
@@ -53,44 +49,256 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Classify changed paths
-        id: classify
+      - name: Collect changed paths
+        id: files
         run: |
           set -euo pipefail
           list="${RUNNER_TEMP}/zynd-changed.txt"
-          : > "${list}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual deployment requested."
-            echo "deploy_backend=true" >> "${GITHUB_OUTPUT}"
-            {
-              echo "# ZYND backend deployment"
-              echo ""
-              echo "Manual run. Azure deployment will start."
-            } >> "${GITHUB_STEP_SUMMARY}"
-            exit 0
-          fi
-          before="${{ github.event.before }}"
-          if [ "${before}" = "0000000000000000000000000000000000000000" ]; then
-            git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > "${list}"
-          else
-            git diff --name-only "${before}" "${{ github.sha }}" > "${list}"
-          fi
-          bash .github/scripts/zynd-classify-changes.sh "${list}" | tee "${RUNNER_TEMP}/zynd-class.env" >> "${GITHUB_OUTPUT}"
-          deploy="$(grep '^deploy_backend=' "${RUNNER_TEMP}/zynd-class.env" | tail -n 1 | cut -d= -f2-)"
-          {
-            echo "# ZYND backend deployment"
-            echo ""
-            if [ "${deploy}" = "true" ]; then
-              echo "Backend-related paths changed. Azure deployment will start."
+          event_name="${{ github.event_name }}"
+          if [ "${event_name}" = "pull_request" ]; then
+            git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > "${list}"
+          elif [ "${event_name}" = "schedule" ]; then
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              git diff --name-only HEAD~1 HEAD > "${list}"
             else
-              echo "No deployable backend change. Azure deployment will be skipped."
+              git diff-tree --no-commit-id --name-only -r HEAD > "${list}"
             fi
+          elif [ "${event_name}" = "workflow_dispatch" ]; then
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              git diff --name-only HEAD~1 HEAD > "${list}"
+            else
+              git diff-tree --no-commit-id --name-only -r HEAD > "${list}"
+            fi
+          else
+            before="${{ github.event.before }}"
+            if [ "${before}" = "0000000000000000000000000000000000000000" ]; then
+              git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > "${list}"
+            else
+              git diff --name-only "${before}" "${{ github.sha }}" > "${list}"
+            fi
+          fi
+          echo "list=${list}" >> "${GITHUB_OUTPUT}"
+
+      - name: Classify changes
+        id: classify
+        run: |
+          set -euo pipefail
+          bash .github/scripts/zynd-classify-changes.sh "${{ steps.files.outputs.list }}" >> "${GITHUB_OUTPUT}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy_backend=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Publish change summary
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          BACKEND: ${{ steps.classify.outputs.backend_changed }}
+          WEB: ${{ steps.classify.outputs.web_changed }}
+          ADMIN: ${{ steps.classify.outputs.admin_changed }}
+          DISTRIBUTOR: ${{ steps.classify.outputs.distributor_changed }}
+          SUPPORT: ${{ steps.classify.outputs.support_changed }}
+          MOBILE: ${{ steps.classify.outputs.mobile_changed }}
+          SHARED: ${{ steps.classify.outputs.shared_changed }}
+          INFRA: ${{ steps.classify.outputs.infrastructure_changed }}
+          WORKFLOW: ${{ steps.classify.outputs.workflow_changed }}
+          DOCS: ${{ steps.classify.outputs.documentation_changed }}
+          DEPLOY: ${{ steps.classify.outputs.deploy_backend }}
+        run: |
+          set -euo pipefail
+          mark() {
+            if [ "$1" = "true" ]; then
+              printf 'CHANGED'
+            else
+              printf 'unchanged'
+            fi
+          }
+          if [ "${DEPLOY}" = "true" ]; then
+            decision="BACKEND DEPLOYMENT REQUIRED"
+          else
+            decision="BACKEND DEPLOYMENT NOT REQUIRED"
+          fi
+          short="${SHA:0:7}"
+          {
+            echo "# Stage 1 • Change detection"
+            echo ""
+            echo '```'
+            echo "ZYND CHANGE DETECTION"
+            echo "====================="
+            echo ""
+            echo "Commit: ${short}"
+            echo "Branch: ${BRANCH}"
+            echo ""
+            echo "Backend:        $(mark "${BACKEND}")"
+            echo "Customer Web:   $(mark "${WEB}")"
+            echo "Admin:          $(mark "${ADMIN}")"
+            echo "Distributor:    $(mark "${DISTRIBUTOR}")"
+            echo "Support:        $(mark "${SUPPORT}")"
+            echo "Mobile:         $(mark "${MOBILE}")"
+            echo "Shared package: $(mark "${SHARED}")"
+            echo "Infrastructure: $(mark "${INFRA}")"
+            echo "Workflows:      $(mark "${WORKFLOW}")"
+            echo "Documentation:  $(mark "${DOCS}")"
+            echo ""
+            echo "Deployment decision:"
+            echo "${decision}"
+            echo '```'
+            echo ""
+            echo "Next stage: security and quality."
+            if [ "${EVENT_NAME}" = "pull_request" ] || [ "${EVENT_NAME}" = "schedule" ]; then
+              echo "This run does not deploy to Azure."
+            elif [ "${DEPLOY}" = "true" ]; then
+              echo "Azure deployment is stage 4, after security and validation."
+            else
+              echo "Azure deployment will be skipped. Frontend publishing stays on Vercel."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "Deployment decision: ${decision}"
+
+  security-scan:
+    name: "Stage 2 • Security & quality"
+    needs: detect-changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Scan for tracked secrets
+        run: bash .github/scripts/zynd-secret-scan.sh
+
+      - name: Validate workflow files
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check pyyaml
+          python3 .github/scripts/zynd-validate-workflows.py
+
+      - name: Compile backend Python
+        run: python3 -m compileall -q Backend/app Backend/alembic
+
+      - name: Audit Python requirements
+        id: pip_audit
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check pip-audit
+          python3 -m pip_audit -r Backend/requirements.txt
+
+      - name: Audit npm lockfile
+        id: npm_audit
+        continue-on-error: true
+        run: npm audit --package-lock-only --audit-level=high
+
+      - name: Publish security summary
+        if: always()
+        env:
+          PIP_AUDIT: ${{ steps.pip_audit.outcome }}
+          NPM_AUDIT: ${{ steps.npm_audit.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# Stage 2 • Security and quality"
+            echo ""
+            echo "| Check | Result |"
+            echo "|-------|--------|"
+            echo "| Tracked secret scan | completed in this job |"
+            echo "| Workflow syntax | completed in this job |"
+            echo "| Backend compileall | completed in this job |"
+            echo "| pip-audit | ${PIP_AUDIT} |"
+            echo "| npm audit | ${NPM_AUDIT} |"
+            echo ""
+            echo "Dependency audits are reported and do not fail the branch by themselves."
+            echo "Secret values are not included in this summary."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  validate-changes:
+    name: "Stage 3 • Validate changed areas"
+    needs:
+      - detect-changes
+      - security-scan
+    if: >-
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.security-scan.result == 'success' &&
+      (
+        needs.detect-changes.outputs.backend_changed == 'true' ||
+        needs.detect-changes.outputs.web_changed == 'true' ||
+        needs.detect-changes.outputs.admin_changed == 'true' ||
+        needs.detect-changes.outputs.distributor_changed == 'true' ||
+        needs.detect-changes.outputs.support_changed == 'true' ||
+        needs.detect-changes.outputs.shared_changed == 'true' ||
+        needs.detect-changes.outputs.infrastructure_changed == 'true'
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Compile backend Python
+        if: needs.detect-changes.outputs.backend_changed == 'true'
+        run: python3 -m compileall -q Backend/app Backend/alembic
+
+      - name: Validate Compose service map
+        if: needs.detect-changes.outputs.infrastructure_changed == 'true'
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check pyyaml
+          python3 .github/scripts/zynd-validate-compose.py
+
+      - name: Setup Node
+        if: >-
+          needs.detect-changes.outputs.web_changed == 'true' ||
+          needs.detect-changes.outputs.admin_changed == 'true' ||
+          needs.detect-changes.outputs.distributor_changed == 'true' ||
+          needs.detect-changes.outputs.support_changed == 'true' ||
+          needs.detect-changes.outputs.shared_changed == 'true'
+        uses: actions/setup-node@v4.2.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install workspaces
+        if: >-
+          needs.detect-changes.outputs.web_changed == 'true' ||
+          needs.detect-changes.outputs.admin_changed == 'true' ||
+          needs.detect-changes.outputs.distributor_changed == 'true' ||
+          needs.detect-changes.outputs.support_changed == 'true' ||
+          needs.detect-changes.outputs.shared_changed == 'true'
+        run: npm ci
+
+      - name: Typecheck customer web
+        if: needs.detect-changes.outputs.web_changed == 'true' || needs.detect-changes.outputs.shared_changed == 'true'
+        run: npm exec --workspace zynd-web -- tsc --noEmit --pretty false
+
+      - name: Typecheck admin
+        if: needs.detect-changes.outputs.admin_changed == 'true' || needs.detect-changes.outputs.shared_changed == 'true'
+        run: npm exec --workspace zynd-admin -- tsc --noEmit --pretty false
+
+      - name: Typecheck Mitra
+        if: needs.detect-changes.outputs.distributor_changed == 'true' || needs.detect-changes.outputs.shared_changed == 'true'
+        run: npm exec --workspace zynd-distributor -- tsc --noEmit --pretty false
+
+      - name: Typecheck support
+        if: needs.detect-changes.outputs.support_changed == 'true' || needs.detect-changes.outputs.shared_changed == 'true'
+        run: npm exec --workspace zynd-support -- tsc --noEmit --pretty false
+
+      - name: Publish validation summary
+        run: |
+          {
+            echo "# Stage 3 • Validate changed areas"
+            echo ""
+            echo "Checked only the areas marked changed in stage 1."
+            echo "This stage does not deploy."
           } >> "${GITHUB_STEP_SUMMARY}"
 
   deploy-backend:
-    name: deploy-backend
-    needs: confirm-backend-changes
-    if: needs.confirm-backend-changes.outputs.deploy_backend == 'true'
+    name: "Stage 4 • Backend deployment"
+    needs:
+      - detect-changes
+      - security-scan
+      - validate-changes
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.result == 'success' && needs.security-scan.result == 'success' && (needs.validate-changes.result == 'success' || needs.validate-changes.result == 'skipped') && needs.detect-changes.outputs.deploy_backend == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -459,9 +667,29 @@ jobs:
             compose build api
             end_section
 
-            section "[8/15] Deploy API"
+            section "[8/15] Deploy API and backend workers"
             compose up -d --no-deps --force-recreate api
-            echo "Only the api service was recreated. Dependencies were left running."
+            echo "api recreated. Infrastructure dependencies were left running."
+
+            # Background workers run the same Backend image as the API. If they are
+            # not recreated here they keep running the previous build forever
+            # (the MF scheduler was stuck on stale code this way).
+            worker_services=""
+            for worker in mf-scheduler mf-order-worker mf-cas-worker event-worker outbox-relay document-scan-worker deletion-cron; do
+              if printf '%s\n' "${compose_services[@]}" | grep -qx "${worker}"; then
+                worker_services="${worker_services} ${worker}"
+              fi
+            done
+            if [ -n "${worker_services}" ]; then
+              echo "Recreating backend workers:${worker_services}"
+              # shellcheck disable=SC2086
+              compose up -d --no-deps --force-recreate ${worker_services}
+              for worker in ${worker_services}; do
+                echo "${worker}: $(service_state "${worker}")"
+              done
+            else
+              echo "No backend worker services defined in compose; skipping."
+            fi
             end_section
 
             section "[9/15] Wait for readiness"
@@ -590,6 +818,30 @@ jobs:
             if [ "${api_status}" != "running" ] || [ "${api_restarts}" -ne 0 ]; then
               echo "ERROR: API is not stable after deployment."
               exit 1
+            fi
+            workers_unstable=0
+            for worker in ${worker_services}; do
+              worker_cid="$(compose ps -q "${worker}" || true)"
+              if [ -z "${worker_cid}" ]; then
+                echo "ERROR: ${worker} container is missing after deployment."
+                workers_unstable=1
+                continue
+              fi
+              worker_status="$(docker inspect -f '{{.State.Status}}' "${worker_cid}")"
+              worker_restarts="$(docker inspect -f '{{.RestartCount}}' "${worker_cid}")"
+              echo "${worker} status=${worker_status} restart_count=${worker_restarts}"
+              if [ "${worker_status}" != "running" ] || [ "${worker_restarts}" -ne 0 ]; then
+                echo "ERROR: ${worker} is not stable after deployment."
+                compose logs --tail 60 "${worker}" || true
+                workers_unstable=1
+              fi
+            done
+            if [ "${workers_unstable}" -ne 0 ]; then
+              exit 1
+            fi
+            if printf '%s' "${worker_services}" | grep -q mf-scheduler; then
+              echo "MF scheduler startup log:"
+              compose logs --tail 40 mf-scheduler | grep -E "MF scheduler (started|job=)" || true
             fi
             echo "Container stability: OK"
             end_section

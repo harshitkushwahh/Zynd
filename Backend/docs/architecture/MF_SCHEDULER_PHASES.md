@@ -30,6 +30,10 @@ Daily (before scheme sync):
   18:30  nav-cold-start-backfill Phase 4 — historical NAV if below threshold
 ```
 
+Cron expressions are evaluated in `ZYND_MF_SCHEDULER_TIMEZONE` (default `Asia/Kolkata`), so `0 21 * * *` fires at 21:00 IST. A slot is not lost if the loop is busy with a long job or the worker restarts: any slot within the last `ZYND_MF_SCHEDULER_CATCH_UP_MINUTES` (default 180) that has no `ingestion_run_log` row is run on the next tick.
+
+The dependency guard blocks a job only when its upstream job is `running`, its latest run `failed`, or it has **never** succeeded. An upstream that simply has no run in the last `ZYND_MF_DEPENDENCY_LOOKBACK_HOURS` (for example `cybrilla-scheme-promote` with `ZYND_MF_SCHEME_PROMOTE_AUTO=false`, which only runs when an admin approves a batch) does not stall the daily NAV chain.
+
 ## Phase 0 — Foundation ✅
 
 **Status:** Done

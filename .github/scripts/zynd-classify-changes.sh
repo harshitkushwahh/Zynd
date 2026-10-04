@@ -74,7 +74,7 @@ while IFS= read -r path || [ -n "${path}" ]; do
         Backend/*) backend_changed=true ;;
       esac
       ;;
-    .github/workflows/zynd-backend-deploy.yml|.github/workflows/zynd-change-detection.yml)
+    .github/workflows/zynd-pipeline.yml)
       workflow_changed=true
       deploy_backend=true
       ;;
