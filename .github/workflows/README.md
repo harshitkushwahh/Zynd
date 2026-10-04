@@ -81,6 +81,7 @@ SSH uses `appleboy/ssh-action@v1.2.2` and `DEPLOY_KNOWN_HOSTS`. Host key checkin
 | `DEPLOY_HOST` | secret | Azure VM |
 | `DEPLOY_USER` | secret | SSH user |
 | `DEPLOY_SSH_KEY` | secret | SSH private key |
+| `DEPLOY_SSH_PASSPHRASE` | secret | Passphrase for `DEPLOY_SSH_KEY`. Leave empty for an unencrypted key. |
 | `DEPLOY_KNOWN_HOSTS` | secret | SHA256 fingerprint or known_hosts line |
 | `ZYND_STRICT_PRODUCTION` | variable | Leave unset on the testing VM. `true` fails the deploy when development runtime flags are enabled. |
 

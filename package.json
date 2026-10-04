@@ -15,30 +15,18 @@
     "Support",
     "Distributor",
     "Mobile",
-    "packages/*"
+    "packages/*",
+    "tools/npm-overrides/tar/tar7"
   ],
   "overrides": {
     "uuid": "11.1.1",
-    "@expo/cli": {
-      "glob": "13.0.6"
-    },
-    "@expo/config": {
-      "glob": "13.0.6"
-    },
-    "@expo/config-plugins": {
-      "glob": "13.0.6"
-    },
-    "@expo/metro-config": {
-      "glob": "13.0.6"
-    },
-    "cacache": {
-      "glob": "13.0.6"
-    },
-    "sucrase": {
-      "glob": "13.0.6"
-    },
-    "rimraf@3.0.2": {
-      "glob": "7.2.3"
-    }
+    "glob": "13.0.6",
+    "rimraf": "file:tools/npm-overrides/rimraf",
+    "@xmldom/xmldom": "0.9.12",
+    "tar": "file:tools/npm-overrides/tar/tar7",
+    "test-exclude": "8.0.0",
+    "@babel/plugin-proposal-class-properties": "npm:@babel/plugin-transform-class-properties@7.29.7",
+    "@babel/plugin-proposal-nullish-coalescing-operator": "npm:@babel/plugin-transform-nullish-coalescing-operator@7.29.7",
+    "@babel/plugin-proposal-optional-chaining": "npm:@babel/plugin-transform-optional-chaining@7.29.7"
   }
 }
