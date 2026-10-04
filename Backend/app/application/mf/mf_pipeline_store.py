@@ -136,6 +136,39 @@ async def get_running_pipeline_run(session: AsyncSession) -> MfPipelineRunState 
     return state_from_row(row) if row else None
 
 
+async def list_running_pipeline_runs(session: AsyncSession) -> list[MfPipelineRunState]:
+    rows = await session.scalars(
+        select(MfPipelineRun)
+        .where(MfPipelineRun.status == DbMfPipelineRunStatus.running)
+        .order_by(MfPipelineRun.started_at.asc())
+    )
+    return [state_from_row(row) for row in rows]
+
+
+async def pipeline_cancel_requested(session: AsyncSession, run_id: str) -> bool:
+    return bool(
+        await session.scalar(
+            select(MfPipelineRun.cancel_requested).where(MfPipelineRun.run_uuid == uuid.UUID(run_id))
+        )
+    )
+
+
+def pipeline_run_awaits_worker(run: MfPipelineRunState) -> bool:
+    """True when the API queued the run and no step is mid-execution."""
+    if run.status != MfPipelineRunStatus.running:
+        return False
+    if not run.current_step_key:
+        return True
+    step = next((item for item in run.steps if item.key == run.current_step_key), None)
+    if step is None:
+        return True
+    return step.status in {
+        MfPipelineStepStatus.pending,
+        MfPipelineStepStatus.succeeded,
+        MfPipelineStepStatus.skipped,
+    }
+
+
 async def get_latest_resumable_pipeline_run(session: AsyncSession) -> MfPipelineRunState | None:
     row = await session.scalar(
         select(MfPipelineRun)
@@ -183,12 +216,20 @@ def _cold_start_resume_from(run: MfPipelineRunState) -> str | None:
     return cursor.isoformat() if cursor else None
 
 
-async def recover_interrupted_pipeline_runs(session: AsyncSession) -> int:
+async def recover_interrupted_pipeline_runs(
+    session: AsyncSession,
+    *,
+    leave_queued: bool = False,
+) -> int:
     """Pause pipelines whose worker died.
 
     A step whose ingestion job is still reporting progress is paused without a
     Resume button. Clicking Resume while that job is live used to skip the step.
     A stale running row is closed so a later Resume can continue the step.
+
+    When ``leave_queued`` is true, runs that the API handed to the scheduler
+    but that have not started a step stay ``running`` so the worker can claim
+    them. Mid-step work is still paused because this process just started.
     """
     rows = list(
         await session.scalars(
@@ -199,6 +240,8 @@ async def recover_interrupted_pipeline_runs(session: AsyncSession) -> int:
     recovered = 0
     for row in rows:
         run = state_from_row(row)
+        if leave_queued and pipeline_run_awaits_worker(run):
+            continue
         waiting = False
         step_key = run.current_step_key
         if step_key and await has_running_job(session, step_key):
@@ -216,6 +259,13 @@ async def recover_interrupted_pipeline_runs(session: AsyncSession) -> int:
                     reason="Orphaned by server restart",
                     resume_from=_cold_start_resume_from(run),
                 )
+        elif step_key:
+            await abandon_running_jobs(
+                session,
+                step_key,
+                reason="Orphaned by server restart",
+                resume_from=_cold_start_resume_from(run),
+            )
         run.status = MfPipelineRunStatus.paused
         run.finished_at = now.isoformat()
         if waiting:

@@ -61,7 +61,7 @@ Production deploys use the concurrency group `zynd-production-deploy` and are no
 
 Stage 4 keeps the existing checks: server, git, server env file, Docker, Compose, infrastructure, API build, API recreate, Postgres, Redis, Mongo, local health, `/api/v1/health`, `/api/v1/health/redis`, HTTPS, CORS, and container stability.
 
-Phase 8 also recreates the backend worker services that exist in the compose config (`mf-scheduler`, `mf-order-worker`, `mf-cas-worker`, `event-worker`, `outbox-relay`, `document-scan-worker`, `deletion-cron`) with `--no-deps`, because they run the same Backend image as the API. Infrastructure containers (Postgres, Redis, Mongo, MinIO, ClamAV) are never restarted. Phase 14 fails the deploy if any recreated worker is not `running` with a zero restart count.
+Phase 8 also recreates the backend worker services that exist in the compose config (`mf-scheduler`, `mf-order-worker`, `mf-cas-worker`, `event-worker`, `outbox-relay`, `document-scan-worker`, `deletion-cron`) with `--no-deps`, because they run the same Backend image as the API. `mf-scheduler` is left running when an ingestion job or admin pipeline is live, so a deploy does not kill that work. Infrastructure containers (Postgres, Redis, Mongo, MinIO, ClamAV) are never restarted. Phase 14 fails the deploy if any recreated worker is not `running` with a zero restart count.
 
 ```bash
 docker compose \

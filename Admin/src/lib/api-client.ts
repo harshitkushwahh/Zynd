@@ -8,6 +8,7 @@ export {
   apiRequest,
   getAccessToken,
   isAuthFailure,
+  isBackendConnectionError,
   refreshSession,
   setAccessToken,
   type ApiErrorBody,

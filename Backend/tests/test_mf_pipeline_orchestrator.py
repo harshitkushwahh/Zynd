@@ -9,12 +9,15 @@ from app.application.mf.mf_pipeline_orchestrator_service import (
     INGESTION_TRIGGERED_BY_MAX_LEN,
     _build_step_plan,
     _check_blockers,
+    _execution_tasks,
     _iter_executable_steps,
     _job_step_was_skipped,
     _pipeline_triggered_by,
+    _queue_or_launch,
     _step_is_complete,
     start_mf_pipeline_run,
 )
+from app.application.mf.mf_pipeline_store import pipeline_run_awaits_worker
 from app.application.mf.mf_pipeline_types import (
     PAUSE_REASON_JOB_STILL_RUNNING,
     MfPipelineControlledPause,
@@ -307,6 +310,64 @@ async def test_check_blockers_allows_same_run_id(monkeypatch):
 
     with pytest.raises(RuntimeError, match="already in progress"):
         await _check_blockers(except_run_id="other-run")
+
+
+def test_queued_pipeline_awaits_worker():
+    run = MfPipelineRunState(
+        run_id="queued-run",
+        mode="full",
+        triggered_by="TEST",
+        status=MfPipelineRunStatus.running,
+        steps=[MfPipelineStepState(key="amfi-ter-monthly", label="TER")],
+    )
+    assert pipeline_run_awaits_worker(run) is True
+
+
+def test_mid_step_pipeline_does_not_await_worker():
+    run = MfPipelineRunState(
+        run_id="mid-run",
+        mode="full",
+        triggered_by="TEST",
+        status=MfPipelineRunStatus.running,
+        current_step_key="amfi-ter-monthly",
+        steps=[
+            MfPipelineStepState(
+                key="amfi-ter-monthly",
+                label="TER",
+                status=MfPipelineStepStatus.running,
+            )
+        ],
+    )
+    assert pipeline_run_awaits_worker(run) is False
+
+
+@pytest.mark.asyncio
+async def test_queue_or_launch_does_not_start_in_api_process(monkeypatch):
+    logged: list[str] = []
+
+    async def fake_append(run, message, *, level="info"):
+        _ = run
+        _ = level
+        logged.append(message)
+
+    monkeypatch.setattr(
+        "app.application.mf.mf_pipeline_orchestrator_service.pipeline_executes_in_this_process",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.mf_pipeline_orchestrator_service._append_log",
+        fake_append,
+    )
+    run = MfPipelineRunState(
+        run_id="queue-run",
+        mode="full",
+        triggered_by="TEST",
+        status=MfPipelineRunStatus.running,
+    )
+    await _queue_or_launch(run)
+    assert logged == ["Queued for MF scheduler"]
+    existing = _execution_tasks.get(run.run_id)
+    assert existing is None or existing.done()
 
 
 def test_controlled_pause_carries_reason():

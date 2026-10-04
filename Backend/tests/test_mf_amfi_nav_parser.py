@@ -30,6 +30,20 @@ def test_parse_amfi_nav_line_skips_header() -> None:
     assert parse_amfi_nav_line("Open Ended Schemes (Equity Scheme)") is None
 
 
+def test_parse_amfi_nav_history_plan_option_line() -> None:
+    line = (
+        "148921;Aditya Birla Sun Life Multi-Cap Fund-Direct Growth;Direct Plan;GROWTH;"
+        "INF209KB1Y49;;14.11;03-Jul-2023"
+    )
+    parsed = parse_amfi_nav_line(line)
+    assert parsed is not None
+    assert parsed["scheme_code"] == "148921"
+    assert parsed["scheme_name"] == "Aditya Birla Sun Life Multi-Cap Fund-Direct Growth"
+    assert parsed["isin_growth"] == "INF209KB1Y49"
+    assert parsed["nav_value"] == parsed["nav_value"].__class__("14.11")
+    assert parsed["nav_date_raw"] == "03-Jul-2023"
+
+
 def test_parse_amfi_nav_history_line_valid() -> None:
     line = (
         "112077;UTI MMF - Regular Plan - Growth Option;INF789F01PX8;;3234.0129;;;08-Apr-2026"

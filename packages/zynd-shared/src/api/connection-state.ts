@@ -54,12 +54,17 @@ export function markBackendConnectionReady(): void {
 }
 
 export function isBackendConnectionStatus(status: number): boolean {
-  return status === 502 || status === 504;
+  return status === 502 || status === 503 || status === 504;
 }
 
 export function isBackendConnectionError(error: unknown): boolean {
   if (error instanceof ApiError) {
-    return error.code === "network_error" || error.status === 502 || error.status === 504;
+    return (
+      error.code === "network_error" ||
+      error.status === 502 ||
+      error.status === 503 ||
+      error.status === 504
+    );
   }
 
   return error instanceof TypeError;
