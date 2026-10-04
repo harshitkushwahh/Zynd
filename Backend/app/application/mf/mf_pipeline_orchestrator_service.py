@@ -30,6 +30,8 @@ from app.application.mf.mf_pipeline_store import (
     get_running_pipeline_run,
     latest_cold_start_resume_date,
     latest_pipeline_activity,
+    list_running_pipeline_runs,
+    pipeline_cancel_requested,
     recover_interrupted_pipeline_runs,
     save_pipeline_run,
 )
@@ -71,7 +73,20 @@ logger = logging.getLogger(__name__)
 
 _pipeline_lock = asyncio.Lock()
 _execution_tasks: dict[str, asyncio.Task] = {}
+_execute_in_this_process = False
 INGESTION_TRIGGERED_BY_MAX_LEN = 64
+
+
+def enable_pipeline_worker() -> None:
+    """Run queued admin pipelines in this process (the MF scheduler)."""
+    global _execute_in_this_process
+    _execute_in_this_process = True
+
+
+def pipeline_executes_in_this_process() -> bool:
+    if _execute_in_this_process:
+        return True
+    return bool(get_settings().zynd_mf_pipeline_execute_in_api)
 
 
 def _utc_now_iso() -> str:
@@ -593,6 +608,7 @@ async def _execute_pipeline_run(run: MfPipelineRunState, *, from_step_key: str |
         async with pipeline_progress_sink(_progress_sink):
             skip_steps = set(context.get("skip_steps") or [])
             for step in _iter_executable_steps(run, from_step_key=from_step_key):
+                await _sync_cancel_requested(run)
                 if step.key in skip_steps:
                     await _set_step_status(
                         run,
@@ -675,6 +691,8 @@ async def _mark_run_running(run: MfPipelineRunState) -> None:
     run.status = MfPipelineRunStatus.running
     run.error = None
     run.finished_at = None
+    if not run.started_at:
+        run.started_at = _utc_now_iso()
     async with AsyncSessionLocal() as session:
         await save_pipeline_run(session, run)
         await session.commit()
@@ -686,18 +704,54 @@ def _assert_execution_not_active(run_id: str) -> None:
         raise RuntimeError("Pipeline run is already in progress")
 
 
+async def _sync_cancel_requested(run: MfPipelineRunState) -> None:
+    async with AsyncSessionLocal() as session:
+        if await pipeline_cancel_requested(session, run.run_id):
+            run._cancel_requested = True
+
+
 async def _launch_execution(run: MfPipelineRunState, *, from_step_key: str | None = None) -> None:
     _assert_execution_not_active(run.run_id)
     task = asyncio.create_task(_execute_pipeline_run(run, from_step_key=from_step_key))
     _execution_tasks[run.run_id] = task
 
 
+async def _queue_or_launch(run: MfPipelineRunState, *, from_step_key: str | None = None) -> None:
+    if pipeline_executes_in_this_process():
+        await _launch_execution(run, from_step_key=from_step_key)
+        return
+    await _append_log(run, "Queued for MF scheduler")
+
+
 async def initialize_pipeline_orchestrator() -> None:
+    logger.info("MF pipeline execution stays on the MF scheduler; API will only queue runs")
+
+
+async def initialize_pipeline_worker() -> None:
+    enable_pipeline_worker()
     async with AsyncSessionLocal() as session:
-        recovered = await recover_interrupted_pipeline_runs(session)
+        recovered = await recover_interrupted_pipeline_runs(session, leave_queued=True)
         await session.commit()
         if recovered:
             logger.warning("Recovered %s interrupted MF pipeline run(s) as paused", recovered)
+    claimed = await claim_unattached_pipeline_runs()
+    if claimed:
+        logger.info("Claimed %s queued MF pipeline run(s)", claimed)
+
+
+async def claim_unattached_pipeline_runs() -> int:
+    if not pipeline_executes_in_this_process():
+        return 0
+    async with AsyncSessionLocal() as session:
+        runs = await list_running_pipeline_runs(session)
+    claimed = 0
+    for run in runs:
+        existing = _execution_tasks.get(run.run_id)
+        if existing is not None and not existing.done():
+            continue
+        await _launch_execution(run, from_step_key=run.current_step_key)
+        claimed += 1
+    return claimed
 
 
 async def start_mf_pipeline_run(
@@ -736,7 +790,7 @@ async def start_mf_pipeline_run(
             await session.commit()
 
     await _mark_run_running(run)
-    await _launch_execution(run)
+    await _queue_or_launch(run)
     return run
 
 
@@ -825,7 +879,7 @@ async def resume_mf_pipeline_run(run_id: str) -> MfPipelineRunState:
             await session.commit()
 
     await _mark_run_running(run)
-    await _launch_execution(run)
+    await _queue_or_launch(run)
     return run
 
 
@@ -850,7 +904,7 @@ async def retry_mf_pipeline_step(run_id: str, step_key: str) -> MfPipelineRunSta
             await session.commit()
 
     await _mark_run_running(run)
-    await _launch_execution(run, from_step_key=step_key)
+    await _queue_or_launch(run, from_step_key=step_key)
     return run
 
 

@@ -646,7 +646,23 @@ jobs:
             # not recreated here they keep running the previous build forever
             # (the MF scheduler was stuck on stale code this way).
             worker_services=""
+            skip_scheduler=0
+            if printf '%s\n' "${compose_services[@]}" | grep -qx mf-scheduler; then
+              set +e
+              scheduler_guard="$(compose exec -T api python -m app.jobs.check_mf_worker_recreate 2>/dev/null)"
+              guard_code=$?
+              set -e
+              printf '%s\n' "${scheduler_guard}"
+              if [ "${guard_code}" -eq 10 ] || [ "${guard_code}" -ne 0 ]; then
+                skip_scheduler=1
+                echo "Leaving mf-scheduler running so a live ingestion or pipeline is not killed."
+              fi
+            fi
             for worker in mf-scheduler mf-order-worker mf-cas-worker event-worker outbox-relay document-scan-worker deletion-cron; do
+              if [ "${worker}" = "mf-scheduler" ] && [ "${skip_scheduler}" -eq 1 ]; then
+                echo "mf-scheduler: skipped (live work)"
+                continue
+              fi
               if printf '%s\n' "${compose_services[@]}" | grep -qx "${worker}"; then
                 worker_services="${worker_services} ${worker}"
               fi
@@ -660,6 +676,9 @@ jobs:
               done
             else
               echo "No backend worker services defined in compose; skipping."
+            fi
+            if [ "${skip_scheduler}" -eq 1 ]; then
+              echo "mf-scheduler: $(service_state mf-scheduler) (not recreated)"
             fi
             end_section
 

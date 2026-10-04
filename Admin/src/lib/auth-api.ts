@@ -1,4 +1,4 @@
-import { apiRequest, refreshSession, setAccessToken } from "@/lib/api-client";
+import { apiRequest, isBackendConnectionError, refreshSession, setAccessToken } from "@/lib/api-client";
 
 export type AdminUser = {
   id: string;
@@ -66,7 +66,10 @@ export async function bootstrapAdminSession() {
     assertAdminUser(user);
     assertAdminConsoleAccess(rbac.role_keys);
     return { user, permissions: rbac.permissions, roleKeys: rbac.role_keys, soleSuperAdmin: rbac.sole_super_admin ?? false, reason: null };
-  } catch {
+  } catch (error) {
+    if (isBackendConnectionError(error)) {
+      return { user: null, permissions: [], roleKeys: [] as string[], soleSuperAdmin: false, reason: "network" as const };
+    }
     setAccessToken(null);
     return { user: null, permissions: [], roleKeys: [] as string[], soleSuperAdmin: false, reason: "expired" as const };
   }

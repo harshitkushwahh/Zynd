@@ -62,6 +62,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [roleKeys, setRoleKeys] = useState<string[]>([]);
   const [soleSuperAdmin, setSoleSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionRetrying, setSessionRetrying] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +73,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       setPermissions(result.permissions);
       setRoleKeys(result.roleKeys);
       setSoleSuperAdmin(result.soleSuperAdmin);
+      setSessionRetrying(result.reason === "network");
       setLoading(false);
     });
 
@@ -79,6 +81,32 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!sessionRetrying) return;
+
+    const intervalId = window.setInterval(() => {
+      void bootstrapAdminSession().then((result) => {
+        if (result.user) {
+          setUser(result.user);
+          setPermissions(result.permissions);
+          setRoleKeys(result.roleKeys);
+          setSoleSuperAdmin(result.soleSuperAdmin);
+          setSessionRetrying(false);
+          return;
+        }
+        if (result.reason === "expired") {
+          setUser(null);
+          setPermissions([]);
+          setRoleKeys([]);
+          setSoleSuperAdmin(false);
+          setSessionRetrying(false);
+        }
+      });
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [sessionRetrying]);
 
   const signIn = useCallback(async (email: string, password: string, turnstileToken?: string | null) => {
     const result = await adminLogin(email, password, turnstileToken);

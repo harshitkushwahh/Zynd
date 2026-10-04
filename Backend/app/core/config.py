@@ -361,6 +361,8 @@ class Settings(BaseSettings):
     zynd_mf_raw_bucket: str = "zynd-mf-raw"
     zynd_mf_raw_archive_object_storage_enabled: bool = True
     zynd_mf_scheduler_tick_seconds: int = 60
+    zynd_mf_pipeline_claim_seconds: int = 5
+    zynd_mf_pipeline_execute_in_api: bool = False
     zynd_mf_scheduler_timezone: str = "Asia/Kolkata"
     zynd_mf_scheduler_catch_up_minutes: int = 180
     zynd_mf_catalog_lifecycle_enabled: bool = True

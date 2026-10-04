@@ -1,6 +1,9 @@
 /** Default Zynd mark when a client has no profile photo. */
 export const ZYND_DISTRIBUTOR_LOGO_SRC = "/favicon/favicon.svg";
 
+/** Square Zynd mark for the sidebar (public/favicon). */
+export const ZYND_DISTRIBUTOR_FAVICON_SRC = "/favicon/favicon-96x96.png";
+
 /** Horizontal Zynd Distributor lockup for auth shells. */
 export const ZYND_DISTRIBUTOR_LOGO_HORIZONTAL_SRC = "/zyndd-h.png";
 

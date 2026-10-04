@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.amfi_nav_fetcher import fetch_amfi_nav_history_window, parse_amfi_nav_date
 from app.infrastructure.mf.pipeline_progress import emit_pipeline_progress
-from app.application.mf.amfi_nav_parser import parse_amfi_nav_file
+from app.application.mf.amfi_nav_parser import parse_amfi_nav_line
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
 from app.core.config import get_settings
 from app.infrastructure.mf.mongo_raw_store import store_raw_ingestion
@@ -190,23 +190,26 @@ async def run_nav_cold_start_backfill(
                         window_to,
                         archive_exc,
                     )
-                records = parse_amfi_nav_file(body)
-                await emit_pipeline_progress(
-                    f"NAV cold-start backfill: window {window_index}/{len(windows)} "
-                    f"parsed={len(records)} inserted_so_far={inserted} bytes={file_size}",
-                )
-                logger.info(
-                    "Cold-start NAV window=%s..%s parsed=%s bytes=%s",
-                    window_from,
-                    window_to,
-                    len(records),
-                    file_size,
-                )
-
+                parsed = 0
                 chunk: list[dict] = []
                 chunk_size = max(settings.zynd_mf_nav_write_chunk_size, 1)
 
-                for record in records:
+                async def _flush_chunk() -> None:
+                    nonlocal inserted, skipped
+                    if not chunk:
+                        return
+                    ins, sk = await _upsert_nav_chunk(session, chunk)
+                    inserted += ins
+                    skipped += sk
+                    chunk.clear()
+                    _touch_run_progress(run, resume_from=window_from)
+                    await session.commit()
+
+                for line in body.splitlines():
+                    record = parse_amfi_nav_line(line)
+                    if record is None:
+                        continue
+                    parsed += 1
                     processed += 1
                     nav_date = parse_amfi_nav_date(record["nav_date_raw"])
                     if not nav_date:
@@ -229,15 +232,21 @@ async def run_nav_cold_start_backfill(
                         }
                     )
                     if len(chunk) >= chunk_size:
-                        ins, sk = await _upsert_nav_chunk(session, chunk)
-                        inserted += ins
-                        skipped += sk
-                        chunk.clear()
+                        await _flush_chunk()
 
-                if chunk:
-                    ins, sk = await _upsert_nav_chunk(session, chunk)
-                    inserted += ins
-                    skipped += sk
+                await _flush_chunk()
+                del body
+                await emit_pipeline_progress(
+                    f"NAV cold-start backfill: window {window_index}/{len(windows)} "
+                    f"parsed={parsed} inserted_so_far={inserted} bytes={file_size}",
+                )
+                logger.info(
+                    "Cold-start NAV window=%s..%s parsed=%s bytes=%s",
+                    window_from,
+                    window_to,
+                    parsed,
+                    file_size,
+                )
 
                 _touch_run_progress(run, resume_from=window_to + timedelta(days=1))
                 await session.commit()

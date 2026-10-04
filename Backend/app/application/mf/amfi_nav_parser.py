@@ -12,6 +12,32 @@ def slugify(value: str) -> str:
     return slug or "unknown"
 
 
+def _is_isin(raw: str) -> bool:
+    return raw.upper().startswith("INF")
+
+
+def _is_decimal(raw: str) -> bool:
+    if not raw:
+        return False
+    try:
+        Decimal(raw)
+    except InvalidOperation:
+        return False
+    return True
+
+
+def _is_history_plan_option_row(parts: list[str]) -> bool:
+    """True for code;name;plan;option;isin;isin_reinv;nav;date.
+
+    The older history file keeps the ISIN in column 2 and the NAV in column 4.
+    """
+    if _is_isin(parts[2]):
+        return False
+    if _is_isin(parts[4]) or _is_isin(parts[5]):
+        return True
+    return _is_decimal(parts[6]) and not _is_decimal(parts[4])
+
+
 def _looks_like_nav_date(raw: str) -> bool:
     raw = raw.strip()
     if not raw:
@@ -49,7 +75,14 @@ def parse_amfi_nav_line(line: str) -> dict | None:
         scheme_name = parts[3]
         nav_raw = parts[6]
         nav_date_raw = parts[7]
-    # History report (DownloadNAVHistoryReport): code;name;isin;isin_reinv;nav;rep;sale;date
+    # Current history report: code;name;plan;option;isin;isin_reinv;nav;date
+    elif len(parts) >= 8 and _looks_like_nav_date(parts[7]) and _is_history_plan_option_row(parts):
+        scheme_name = parts[1]
+        isin_payout = parts[4]
+        isin_reinvest = parts[5]
+        nav_raw = parts[6]
+        nav_date_raw = parts[7]
+    # Older history report: code;name;isin;isin_reinv;nav;repurchase;sale;date
     elif len(parts) >= 8 and _looks_like_nav_date(parts[7]):
         scheme_name = parts[1]
         isin_payout = parts[2]

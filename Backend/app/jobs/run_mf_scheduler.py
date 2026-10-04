@@ -127,15 +127,30 @@ async def run_scheduler_loop() -> None:
             job.enabled,
             ",".join(job.depends_on) or "-",
         )
+    from app.application.mf.mf_pipeline_orchestrator_service import (
+        claim_unattached_pipeline_runs,
+        initialize_pipeline_worker,
+    )
+
+    await initialize_pipeline_worker()
     startup_result = await _maybe_run_cold_start_on_startup()
     if startup_result:
         logger.info("MF scheduler startup cold-start result: %s", startup_result)
+    claim_every = max(settings.zynd_mf_pipeline_claim_seconds, 1)
+    sleep_for = min(tick, claim_every)
+    seconds_since_jobs = tick
     while True:
         try:
-            results = await _run_due_jobs(fired)
-            if results:
-                logger.info("MF scheduler tick results: %s", results)
-            ticks_since_auto_resume += tick
+            claimed = await claim_unattached_pipeline_runs()
+            if claimed:
+                logger.info("MF scheduler claimed %s pipeline run(s)", claimed)
+            seconds_since_jobs += sleep_for
+            if seconds_since_jobs >= tick:
+                seconds_since_jobs = 0
+                results = await _run_due_jobs(fired)
+                if results:
+                    logger.info("MF scheduler tick results: %s", results)
+            ticks_since_auto_resume += sleep_for
             if ticks_since_auto_resume >= auto_resume_tick:
                 ticks_since_auto_resume = 0
                 from app.application.mf.mf_pipeline_auto_resume_service import try_auto_resume_latest_eligible
@@ -143,7 +158,7 @@ async def run_scheduler_loop() -> None:
                 await try_auto_resume_latest_eligible(source="scheduler_poll")
         except Exception:
             logger.exception("MF scheduler tick failed")
-        await asyncio.sleep(tick)
+        await asyncio.sleep(sleep_for)
 
 
 async def main() -> int:

@@ -82,6 +82,7 @@ export async function refreshSession(): Promise<SessionRefreshResult> {
         if (!response.ok) {
           if (isBackendConnectionStatus(response.status)) {
             markBackendConnectionWaiting();
+            return { ok: false, reason: "network" };
           }
           setAccessToken(null);
           return { ok: false, reason: "expired" };

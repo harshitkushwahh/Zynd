@@ -100,6 +100,9 @@ def main() -> int:
     if "--no-deps --force-recreate api" not in pipeline:
         print("API deploy command changed.")
         failed = True
+    if "check_mf_worker_recreate" not in pipeline:
+        print("Deploy must skip mf-scheduler recreate while ingestion is live.")
+        failed = True
     return 1 if failed else 0
 
 
