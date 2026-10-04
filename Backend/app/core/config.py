@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     redis_session_db: int = 1
     redis_cache_db: int = 2
     redis_event_stream_db: int = 3
+    # Request/response clients (API, caches, rate limits). Blocking worker
+    # clients (BRPOP / XREADGROUP) never apply a read timeout; the command's
+    # own server-side block time bounds the wait instead.
+    redis_socket_timeout_seconds: float = 5.0
+    redis_socket_connect_timeout_seconds: float = 5.0
+    redis_health_check_interval_seconds: int = 30
+    redis_max_connections: int = 50
 
     secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"

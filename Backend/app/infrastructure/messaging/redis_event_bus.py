@@ -20,11 +20,22 @@ class RedisEventBus(EventBus):
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
         self._client: redis.Redis | None = None
+        self._blocking_client: redis.Redis | None = None
 
     async def _get_client(self) -> redis.Redis:
         if self._client is None:
-            self._client = await get_redis(self._settings.redis_event_stream_db)
+            self._client = await get_redis(self._settings.redis_event_stream_db, self._settings)
         return self._client
+
+    async def _get_blocking_client(self) -> redis.Redis:
+        # XREADGROUP with ``block`` must not be cut short by the socket read timeout.
+        if self._blocking_client is None:
+            self._blocking_client = await get_redis(
+                self._settings.redis_event_stream_db,
+                self._settings,
+                blocking=True,
+            )
+        return self._blocking_client
 
     def _stream_name(self, stream: str) -> str:
         return f"{self._settings.event_stream_prefix}.{stream}"
@@ -55,7 +66,7 @@ class RedisEventBus(EventBus):
         count: int = 10,
         block_ms: int = 5000,
     ) -> list[tuple[str, str, DomainEvent]]:
-        client = await self._get_client()
+        client = await self._get_blocking_client()
         stream_names = [self._stream_name(stream) for stream in streams]
         response = await client.xreadgroup(
             groupname=group,
@@ -83,6 +94,7 @@ class RedisEventBus(EventBus):
         await client.xack(self._stream_name(stream), group, message_id)
 
     async def close(self) -> None:
-        if self._client is not None:
-            await self._client.aclose()
-            self._client = None
+        # Clients are shared through app.core.redis; drop our references and let
+        # close_redis() shut the pools down so other users are not disconnected.
+        self._client = None
+        self._blocking_client = None

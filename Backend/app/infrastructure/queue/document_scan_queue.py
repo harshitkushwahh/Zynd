@@ -39,7 +39,7 @@ async def pop_document_scan_job(
     settings: Settings | None = None,
 ) -> tuple[str, dict] | None:
     settings = settings or get_settings()
-    client = await get_redis(settings.redis_document_worker_db, settings)
+    client = await get_redis(settings.redis_document_worker_db, settings, blocking=True)
     result = await client.brpop(settings.documents_scan_queue_key, timeout=block_seconds)
     if not result:
         return None

@@ -9,6 +9,7 @@ from app.application.notifications.push_dispatch_service import (
     process_push_dispatch_job,
 )
 from app.core.config import get_settings
+from app.core.redis import REDIS_TRANSIENT_ERRORS, wait_for_redis_retry
 from app.infrastructure.queue.push_dispatch_queue import pop_push_dispatch_job
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,17 @@ async def run_push_dispatch_worker(*, block_seconds: int | None = None) -> None:
     block_seconds = block_seconds or settings.notifications_push_worker_block_seconds
     logger.info("Push dispatch worker started queue=%s", settings.notifications_push_queue_key)
 
+    redis_failures = 0
     while True:
-        job = await pop_push_dispatch_job(block_seconds=block_seconds, settings=settings)
+        try:
+            job = await pop_push_dispatch_job(block_seconds=block_seconds, settings=settings)
+        except REDIS_TRANSIENT_ERRORS as exc:
+            redis_failures += 1
+            await wait_for_redis_retry(redis_failures, what="push dispatch BRPOP", error=exc)
+            continue
+        if redis_failures:
+            logger.info("Redis connection restored for push dispatch worker")
+            redis_failures = 0
         if not job:
             continue
 
