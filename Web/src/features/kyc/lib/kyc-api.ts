@@ -402,6 +402,7 @@ export async function fetchKycBankPreverifyStatus(preverifyId: string) {
   return apiRequest<{
     status?: string;
     bank_verified: boolean;
+    readiness_verified?: boolean;
     code?: string;
     reason?: string;
   }>(`/kyc/bank/preverify/${encodeURIComponent(preverifyId)}`);

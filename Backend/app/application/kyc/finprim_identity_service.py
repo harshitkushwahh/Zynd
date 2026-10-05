@@ -154,12 +154,16 @@ async def start_digilocker(db: AsyncSession, *, user: User) -> dict[str, Any]:
     journey.external_kyc_status = "started"
     journey.digilocker_failure_reason = None
     if kyc_request_id:
+        from app.application.kyc.journey_gate_service import ensure_journey_kyc_form_type_recorded
+
+        form_type = ensure_journey_kyc_form_type_recorded(journey)
         append_kyc_partner_ref(
             journey,
             kind="kyc_request",
             external_id=kyc_request_id,
             status="started",
             pan=pan,
+            extra={"form_type": form_type},
         )
     redirect_url = str(result.get("redirectUrl") or "").strip()
     if document_id:

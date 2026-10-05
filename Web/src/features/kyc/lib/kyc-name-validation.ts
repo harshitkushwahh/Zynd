@@ -28,8 +28,8 @@ export function normalizePlaceOfBirthInput(value: string) {
 
 export function validateKycPersonName(
   value: string,
-  requiredMessage = copy.kyc.nominee.requiredField,
-  invalidFormatMessage = copy.kyc.nominee.invalidFullName,
+  requiredMessage: string = copy.kyc.nominee.requiredField,
+  invalidFormatMessage: string = copy.kyc.nominee.invalidFullName,
 ) {
   const trimmed = value.trim();
 
@@ -49,7 +49,7 @@ export function validateKycPersonName(
 
 export function validateOptionalKycPersonName(
   value: string,
-  invalidFormatMessage = copy.kyc.nominee.invalidFullName,
+  invalidFormatMessage: string = copy.kyc.nominee.invalidFullName,
 ) {
   if (!value.trim()) return undefined;
   return validateKycPersonName(value, invalidFormatMessage, invalidFormatMessage);

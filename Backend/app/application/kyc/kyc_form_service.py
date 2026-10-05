@@ -167,12 +167,17 @@ async def _clear_bound_kyc_form(db: AsyncSession, journey: Any) -> None:
             str(journey.external_kyc_form_id),
             reason="journey_unbound",
         )
+    from app.application.kyc.journey_gate_service import ensure_journey_kyc_form_type_recorded
+
+    ensure_journey_kyc_form_type_recorded(journey)
+    finprim_kyc_request = bool(str(journey.external_kyc_request_id or "").strip())
+
     journey.external_kyc_form_id = None
-    journey.kyc_form_status = None
-    journey.kyc_form_type = None
     journey.kyc_form_failure_reason = None
     journey.proof_details_status = None
-    journey.esign_details_status = None
+    if not finprim_kyc_request:
+        journey.kyc_form_status = None
+        journey.esign_details_status = None
     await db.flush()
     await db.commit()
 

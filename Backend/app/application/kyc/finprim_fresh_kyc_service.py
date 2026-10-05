@@ -10,6 +10,7 @@ from app.application.kyc.finprim_kyc_request_mapper import (
     kyc_request_fields_needed,
     kyc_request_status,
 )
+from app.application.kyc.journey_gate_service import ensure_journey_kyc_form_type_recorded
 from app.application.kyc.journey_state_service import get_or_create_status
 from app.application.kyc.kyc_form_mapper import data_url_to_file
 from app.application.kyc.kyc_partner_refs import append_kyc_partner_ref, latest_partner_ref_id
@@ -79,6 +80,15 @@ _FINPRIM_KYC_REQUEST_SUBMITTED = frozenset(
 _ESIGN_PENDING = frozenset({"pending", "initiated", "in_progress", "created"})
 
 
+def _kyc_form_type_partner_extra(journey: Any) -> dict[str, str]:
+    return {"form_type": ensure_journey_kyc_form_type_recorded(journey)}
+
+
+def _mark_journey_awaiting_fresh_esign(journey: Any) -> None:
+    ensure_journey_kyc_form_type_recorded(journey)
+    journey.kyc_form_status = "awaiting_esign"
+
+
 async def _apply_finprim_esign_payload(
     db: AsyncSession,
     *,
@@ -94,6 +104,8 @@ async def _apply_finprim_esign_payload(
     if finprim_esign_complete(esign):
         from app.application.kyc.journey_state_service import mark_kyc_submitted
 
+        ensure_journey_kyc_form_type_recorded(journey)
+        journey.kyc_form_status = "submitted"
         mark_kyc_submitted(user=user, status=status, journey=journey)
         await db.flush()
         return _fresh_submit_response(
@@ -106,6 +118,7 @@ async def _apply_finprim_esign_payload(
     redirect_url = finprim_esign_redirect_url(esign)
     esign_status = str(esign.get("status") or "").lower()
     if redirect_url and esign_status in _ESIGN_PENDING | {""}:
+        _mark_journey_awaiting_fresh_esign(journey)
         return _fresh_submit_response(
             next_action="esign_redirect",
             message="Complete eSign to submit your KYC.",
@@ -264,6 +277,7 @@ async def submit_fresh_kyc_via_finprim(
             external_id=str(journey.external_kyc_request_id or ""),
             status=finprim_kyc_status,
             pan=pan,
+            extra=_kyc_form_type_partner_extra(journey),
         )
 
         esign = await create_finprim_esign(
@@ -289,6 +303,8 @@ async def submit_fresh_kyc_via_finprim(
     status = await get_or_create_status(db, user.id)
     status.review_step_status = KycStepStatus.saved
     status.signature_step_status = KycStepStatus.saved
+    if redirect_url or not finprim_esign_complete(esign):
+        _mark_journey_awaiting_fresh_esign(journey)
     await db.flush()
 
     if redirect_url:
@@ -304,6 +320,8 @@ async def submit_fresh_kyc_via_finprim(
     if finprim_esign_complete(esign):
         from app.application.kyc.journey_state_service import mark_kyc_submitted
 
+        ensure_journey_kyc_form_type_recorded(journey)
+        journey.kyc_form_status = "submitted"
         mark_kyc_submitted(user=user, status=status, journey=journey)
         await db.flush()
         return _fresh_submit_response(
@@ -314,6 +332,8 @@ async def submit_fresh_kyc_via_finprim(
             kyc_request_status_value=finprim_kyc_status,
         )
 
+    _mark_journey_awaiting_fresh_esign(journey)
+    await db.flush()
     return _fresh_submit_response(
         next_action="processing",
         message="Preparing eSign. Try again in a few seconds.",
@@ -370,6 +390,8 @@ async def continue_fresh_kyc_finprim_esign(
     if finprim_esign_complete(esign):
         from app.application.kyc.journey_state_service import mark_kyc_submitted
 
+        ensure_journey_kyc_form_type_recorded(journey)
+        journey.kyc_form_status = "submitted"
         mark_kyc_submitted(user=user, status=status, journey=journey)
         await db.flush()
         return _fresh_submit_response(
@@ -380,6 +402,8 @@ async def continue_fresh_kyc_finprim_esign(
         )
 
     if redirect_url:
+        _mark_journey_awaiting_fresh_esign(journey)
+        await db.flush()
         return _fresh_submit_response(
             next_action="esign_redirect",
             message="Complete eSign to submit your KYC.",
@@ -389,6 +413,7 @@ async def continue_fresh_kyc_finprim_esign(
             kyc_request_status_value=finprim_kyc_status,
         )
 
+    _mark_journey_awaiting_fresh_esign(journey)
     await db.flush()
     return _fresh_submit_response(
         next_action="processing",

@@ -43,7 +43,7 @@ export function AdminUserConsentsSection({ userId }: AdminUserConsentsSectionPro
     <section className="space-y-3 rounded-[var(--radius-card)] border border-border p-4">
       <h3 className="text-caption font-semibold text-foreground">Consent history</h3>
       {loading ? <p className="text-caption text-muted-foreground">Loading…</p> : null}
-      {error ? <AdminFeedbackMessage variant="error">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
       {!loading && !error && records.length === 0 ? (
         <p className="text-caption text-muted-foreground">No consent records for this user.</p>
       ) : null}

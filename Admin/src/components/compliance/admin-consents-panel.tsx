@@ -76,7 +76,7 @@ export function AdminConsentsPanel() {
 
   return (
     <div className="space-y-6">
-      {error ? <AdminFeedbackMessage variant="error">{error}</AdminFeedbackMessage> : null}
+      {error ? <AdminFeedbackMessage variant="destructive">{error}</AdminFeedbackMessage> : null}
 
       <div className="overflow-x-auto rounded-[var(--radius-card)] border border-border">
         <table className="min-w-full text-left text-caption">

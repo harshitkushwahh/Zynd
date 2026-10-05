@@ -70,6 +70,18 @@ def resolve_kyc_form_type(journey: KycJourneyState | None) -> str:
     return "fresh"
 
 
+def ensure_journey_kyc_form_type_recorded(journey: KycJourneyState | None) -> str:
+    """Persist Cybrilla-style form type (fresh/modify) on the journey for audit."""
+    if journey is None:
+        return "fresh"
+    existing = str(journey.kyc_form_type or "").strip()
+    if existing:
+        return existing
+    resolved = resolve_kyc_form_type(journey)
+    journey.kyc_form_type = resolved
+    return resolved
+
+
 def requires_digilocker_for_readiness(
     *,
     kyc_already_registered: bool,

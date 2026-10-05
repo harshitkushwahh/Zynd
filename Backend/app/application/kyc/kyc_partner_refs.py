@@ -46,8 +46,16 @@ def append_kyc_partner_ref(
     refs: list[dict[str, Any]] = list(journey.kyc_partner_external_refs_json or [])
     for row in refs:
         if row.get("kind") == kind and row.get("external_id") == clean_id:
+            changed = False
             if status and row.get("status") != status:
                 row["status"] = status
+                changed = True
+            if extra:
+                for key, value in extra.items():
+                    if value is not None and row.get(key) != value:
+                        row[key] = value
+                        changed = True
+            if changed:
                 row["updated_at"] = _now_iso()
                 journey.kyc_partner_external_refs_json = refs
             return

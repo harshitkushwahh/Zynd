@@ -34,3 +34,4 @@ async def test_fetch_journey_kyc_form_clears_missing_partner_form(db_session) ->
 
     assert form is None
     assert journey.external_kyc_form_id is None
+    assert journey.kyc_form_type == "fresh"
