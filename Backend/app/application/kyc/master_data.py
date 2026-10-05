@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.kyc.identity_document_father import resolve_fathers_name_from_identity_data
+
 FINPRIM_GENDER_OPTIONS = [
     {"label": "Male", "value": "male"},
     {"label": "Female", "value": "female"},
@@ -61,8 +63,9 @@ def map_identity_document_to_drafts(document: dict[str, Any]) -> dict[str, Any]:
     pincode = str(data.get("pincode") or "").strip()
     country = str(data.get("country") or "in").strip()
     state_name = str(data.get("state_name") or data.get("state") or "").strip()
-    father_name = str(data.get("father_name") or "").strip()
-    return {
+    fathers_name = resolve_fathers_name_from_identity_data(data)
+    care_of = str(data.get("care_of") or data.get("careOf") or "").strip()
+    mapped: dict[str, Any] = {
         "addressPrefill": {
             "permanent": {
                 "line1": line_1,
@@ -74,6 +77,9 @@ def map_identity_document_to_drafts(document: dict[str, Any]) -> dict[str, Any]:
             },
             "sameAsPermanent": True,
         },
-        "fathersName": father_name,
+        "fathersName": fathers_name,
         "aadhaarLast4": str(data.get("number") or "")[-4:],
     }
+    if care_of:
+        mapped["careOf"] = care_of
+    return mapped

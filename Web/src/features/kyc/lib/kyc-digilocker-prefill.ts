@@ -1,3 +1,4 @@
+import { canonicalizeIndianState } from "@/features/kyc/lib/indian-states";
 import type { KycAddressFormValue } from "@/features/kyc/lib/kyc-address";
 import type { KycPersonalInfoValue } from "@/features/kyc/lib/kyc-personal-info";
 
@@ -10,15 +11,16 @@ export function resolveStateOption(candidate: string, options: string[]): string
   const trimmed = candidate.trim();
   if (!trimmed) return "";
 
-  const exact = options.find((option) => option.toLowerCase() === trimmed.toLowerCase());
+  const canonical = canonicalizeIndianState(trimmed);
+  const exact = options.find((option) => option.toLowerCase() === canonical.toLowerCase());
   if (exact) return exact;
 
   const partial = options.find((option) => {
     const lower = option.toLowerCase();
-    const candidateLower = trimmed.toLowerCase();
+    const candidateLower = canonical.toLowerCase();
     return lower.includes(candidateLower) || candidateLower.includes(lower);
   });
-  return partial ?? trimmed;
+  return partial ?? canonical;
 }
 
 export function getDigilockerAddressMissingFields(

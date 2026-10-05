@@ -46,6 +46,7 @@ function DialogContent({
   closeTone = "default",
   overlayClassName,
   centeredLayout = false,
+  layoutWrapperClassName,
   motion = "default",
   ...props
 }: DialogPrimitive.Popup.Props & {
@@ -53,6 +54,8 @@ function DialogContent({
   closeTone?: "default" | "on-brand";
   overlayClassName?: string;
   centeredLayout?: boolean;
+  /** Classes on the full-screen flex wrapper around centered-layout popups (e.g. z-index above overlay). */
+  layoutWrapperClassName?: string;
   motion?: "default" | "fade";
 }) {
   const popupMotionClass =
@@ -72,7 +75,12 @@ function DialogContent({
     return (
       <DialogPortal>
         <DialogOverlay className={overlayClassName} />
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className={cn(
+            "pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4",
+            layoutWrapperClassName,
+          )}
+        >
           <DialogPrimitive.Popup
             data-slot="dialog-content"
             className={cn("pointer-events-auto", popupClassName)}

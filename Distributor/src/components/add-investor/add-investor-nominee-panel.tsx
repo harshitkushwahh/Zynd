@@ -9,6 +9,7 @@ import {
   ADD_INVESTOR_NOMINEE_DOCUMENT_TYPES,
   ADD_INVESTOR_NOMINEE_RELATIONSHIPS,
   ADD_INVESTOR_NOMINEE_SOURCE_OF_WEALTH,
+  formatNomineeDobDisplay,
   getTotalNomineeShare,
   MAX_ADD_INVESTOR_NOMINEES,
   redistributeEqualNomineeShares,
@@ -23,6 +24,8 @@ type NomineeView = "list" | "add" | "edit";
 type AddInvestorNomineePanelProps = {
   nominees: AddInvestorNomineeRecord[];
   onNomineesChange: (nominees: AddInvestorNomineeRecord[]) => void;
+  nominationOptedOut?: boolean;
+  onNominationOptedOutChange?: (optedOut: boolean) => void;
   onSubWizardActiveChange?: (active: boolean) => void;
   nomineeOptions?: AddInvestorNomineeOptions;
 };
@@ -94,7 +97,12 @@ function NomineeListCard({
             </StatusBadge>
           </div>
           <p className="add-investor-nominee-panel__card-meta">
-            Age {nominee.core.age} · {nominee.core.sharePercent}% share
+            {nominee.core.dateOfBirth
+              ? `DOB ${formatNomineeDobDisplay(nominee.core.dateOfBirth)}`
+              : nominee.core.age
+                ? `Age ${nominee.core.age}`
+                : "DOB —"}{" "}
+            · {nominee.core.sharePercent}% share
           </p>
         </div>
         <div className="add-investor-nominee-panel__card-actions">
@@ -118,6 +126,8 @@ function NomineeListCard({
 export function AddInvestorNomineePanel({
   nominees,
   onNomineesChange,
+  nominationOptedOut = false,
+  onNominationOptedOutChange,
   onSubWizardActiveChange,
   nomineeOptions,
 }: AddInvestorNomineePanelProps) {
@@ -187,10 +197,22 @@ export function AddInvestorNomineePanel({
           </div>
           <h3 className="add-investor-nominee-panel__hero-title">No nominees added yet</h3>
           <p className="add-investor-nominee-panel__hero-copy">
-            Nominee details are optional. Tap a slot below to add up to 3 nominees, or continue
-            without adding one. Share is split equally when you save each nominee.
+            Add up to 3 nominees, or opt-out of nominations. Address, phone, email, and KYC IDs
+            are optional. Date of birth is required so we can tell if the nominee is a minor.
           </p>
           <NomineeSlotIndicators nominees={nominees} onSlotClick={handleSlotClick} />
+          <label className="mt-4 flex items-start gap-2.5 text-left text-caption text-foreground">
+            <input
+              type="checkbox"
+              checked={nominationOptedOut}
+              onChange={(event) => onNominationOptedOutChange?.(event.target.checked)}
+              className="mt-0.5 size-4 rounded border-border"
+            />
+            <span>
+              Opt-out of nominations. I / We do not wish to appoint a nominee and understand that
+              legal heirs will need to follow the SEBI / AMFI transmission process.
+            </span>
+          </label>
         </div>
       ) : (
         <>

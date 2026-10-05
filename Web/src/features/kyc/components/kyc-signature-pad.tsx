@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   fillSignatureCanvasPaper,
   isCanvasBlank,
   KYC_SIGNATURE_INK_COLOR,
 } from "@/features/kyc/lib/kyc-signature";
-import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
+
+export type KycSignaturePadHandle = {
+  flush: () => string;
+  clear: () => void;
+};
 
 type KycSignaturePadProps = {
   value: string;
@@ -30,7 +33,8 @@ function getCanvasPoint(canvas: HTMLCanvasElement, event: PointerEvent): Point {
   };
 }
 
-export function KycSignaturePad({ value, onChange, disabled }: KycSignaturePadProps) {
+export const KycSignaturePad = forwardRef<KycSignaturePadHandle, KycSignaturePadProps>(
+  function KycSignaturePad({ value, onChange, disabled }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
@@ -53,14 +57,32 @@ export function KycSignaturePad({ value, onChange, disabled }: KycSignaturePadPr
     image.src = value;
   }, [value]);
 
-  const syncCanvasValue = () => {
+  const readCanvasValue = () => {
     const canvas = canvasRef.current;
     if (!canvas || isCanvasBlank(canvas)) {
-      onChange("");
-      return;
+      return "";
     }
-    onChange(canvas.toDataURL("image/png"));
+    return canvas.toDataURL("image/png");
   };
+
+  const syncCanvasValue = () => {
+    onChange(readCanvasValue());
+  };
+
+  useImperativeHandle(ref, () => ({
+    flush: () => {
+      const next = readCanvasValue();
+      onChange(next);
+      return next;
+    },
+    clear: () => {
+      const canvas = canvasRef.current;
+      const context = canvas?.getContext("2d");
+      if (!canvas || !context) return;
+      fillSignatureCanvasPaper(canvas);
+      onChange("");
+    },
+  }));
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled) return;
@@ -101,43 +123,27 @@ export function KycSignaturePad({ value, onChange, disabled }: KycSignaturePadPr
     syncCanvasValue();
   };
 
-  const handleClear = () => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-
-    fillSignatureCanvasPaper(canvas);
-    onChange("");
-  };
-
   return (
-    <div className="space-y-3">
-      <div
+    <div
+      className={cn(
+        "overflow-hidden rounded-[var(--radius-card)] border border-border/80 bg-white shadow-zynd-low",
+        disabled && "opacity-60",
+      )}
+    >
+      <canvas
+        ref={canvasRef}
+        width={640}
+        height={220}
         className={cn(
-          "overflow-hidden rounded-[var(--radius-card)] border border-border/80 bg-white shadow-zynd-low",
-          disabled && "opacity-60",
+          "h-44 w-full touch-none bg-white",
+          disabled ? "cursor-not-allowed" : "cursor-crosshair",
         )}
-      >
-        <canvas
-          ref={canvasRef}
-          width={640}
-          height={220}
-          className={cn(
-            "h-44 w-full touch-none bg-white",
-            disabled ? "cursor-not-allowed" : "cursor-crosshair",
-          )}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={endStroke}
-          onPointerLeave={endStroke}
-        />
-      </div>
-
-      <div className="flex justify-end">
-        <Button type="button" variant="outline" size="sm" onClick={handleClear} disabled={disabled}>
-          {copy.kyc.signature.clearPad}
-        </Button>
-      </div>
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endStroke}
+        onPointerLeave={endStroke}
+      />
     </div>
   );
-}
+},
+);

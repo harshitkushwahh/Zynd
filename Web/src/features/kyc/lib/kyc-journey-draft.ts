@@ -28,6 +28,8 @@ export type KycJourneyDraft = {
   address?: KycAddressFormValue;
   personalInfo?: KycPersonalInfoValue;
   nominees?: KycNomineeRecord[];
+  /** True after the user confirms SEBI nomination opt-out (persisted on journey). */
+  nominationOptedOut?: boolean;
   bank?: KycBankFormValue & { accountDetails: KycBankAccountDetails };
   signature?: KycSignatureDraft;
 };

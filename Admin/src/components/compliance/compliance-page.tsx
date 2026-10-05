@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { AdminKycReviewPanel } from "@/components/admin-kyc-review-panel";
+import { AdminConsentsPanel } from "@/components/compliance/admin-consents-panel";
 import { AdminAccountsPanel } from "@/components/compliance/admin-accounts-panel";
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
@@ -48,6 +49,7 @@ export function CompliancePage({ tabSlug }: CompliancePageProps) {
   const canReadDocuments = hasPermission("documents.read");
   const canManageAdminAccounts =
     hasRole(SUPER_ADMIN_ROLE_KEY) && hasPermission("admin.accounts.manage");
+  const canReadConsents = hasPermission("consents.read");
   const isSuperAdmin = hasRole(SUPER_ADMIN_ROLE_KEY);
 
   const activeTab = resolveComplianceTab(tabSlug, hasPermission, hasRole);
@@ -229,6 +231,12 @@ export function CompliancePage({ tabSlug }: CompliancePageProps) {
                   hasDownload={hasPermission("documents.download")}
                   hasVerify={hasPermission("documents.verify")}
                 />
+              </TabsContent>
+            ) : null}
+
+            {canReadConsents ? (
+              <TabsContent value="consents" keepMounted={keepMounted("consents")} className="mt-0">
+                <AdminConsentsPanel />
               </TabsContent>
             ) : null}
 

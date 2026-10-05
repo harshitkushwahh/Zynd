@@ -7,8 +7,12 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.errors import KycError
-from app.application.kyc.journey_gate_service import requires_digilocker, requires_digilocker_for_readiness
-from app.application.investor.investor_early_provision_service import ensure_investor_profile_after_pan_confirm
+from app.application.kyc.journey_gate_service import (
+    derive_kyc_already_registered,
+    requires_digilocker_for_readiness,
+    requires_full_kyc_submission,
+)
+from app.infrastructure.kyc.cybrilla_terminal_log import log_kyc_step
 from app.application.kyc.user_name_sync_service import sync_user_name_from_verified_kyc
 from app.application.investor.investor_identity_uniqueness_service import (
     InvestorIdentityConflictError,
@@ -46,7 +50,7 @@ def normalize_pan_number(pan_number: str) -> str:
 
 def _normalize_full_name(full_name: str) -> str:
     name = " ".join((full_name or "").split())
-    if len(name.replace(" ", "")) < 2 or not _PAN_NAME_PATTERN.fullmatch(name.upper()):
+    if len(name.replace(" ", "")) < 1 or not _PAN_NAME_PATTERN.fullmatch(name.upper()):
         raise KycError("Enter your name exactly as it appears on the PAN card.", "invalid_name", 400)
     return name
 
@@ -253,7 +257,17 @@ async def verify_pan(
                 "failure": failure,
             }
 
-    kyc_already_registered = readiness_status == "verified"
+    kyc_already_registered = derive_kyc_already_registered(
+        readiness_status=readiness_status,
+        readiness_code=readiness_code,
+    )
+    log_kyc_step(
+        "pan_verify_readiness",
+        readiness_status=readiness_status,
+        readiness_code=readiness_code,
+        kyc_already_registered=kyc_already_registered,
+        preverify_id=readiness_result.get("id"),
+    )
     pan_draft = _normalize_pan_name_draft(
         {
             "panNumber": pan,
@@ -279,6 +293,13 @@ async def verify_pan(
             "lastCompletedStep": "pan",
         },
     )
+    log_kyc_step(
+        "pan_verify_saved",
+        pan_preverify_id=pan_validation.get("id"),
+        readiness_preverify_id=readiness_result.get("id"),
+    )
+
+    journey = await get_or_create_journey(db, user.id)
 
     return {
         "success": True,
@@ -294,6 +315,7 @@ async def verify_pan(
             kyc_already_registered=kyc_already_registered,
             readiness_code=readiness_code,
         ),
+        "requiresFullKycSubmission": requires_full_kyc_submission(journey),
     }
 
 
@@ -370,7 +392,6 @@ async def confirm_pan_names(
         },
     )
 
-    await ensure_investor_profile_after_pan_confirm(db, user=user, journey=journey)
     await sync_user_name_from_verified_kyc(db, user=user, journey=journey)
 
     return {
@@ -378,5 +399,9 @@ async def confirm_pan_names(
         "blocked": False,
         "panDraft": updated_draft,
         "kycAlreadyRegistered": journey.kyc_already_registered,
-        "requiresDigilocker": requires_digilocker(journey),
+        "requiresDigilocker": requires_digilocker_for_readiness(
+            kyc_already_registered=bool(journey.kyc_already_registered),
+            readiness_code=journey.readiness_code,
+        ),
+        "requiresFullKycSubmission": requires_full_kyc_submission(journey),
     }

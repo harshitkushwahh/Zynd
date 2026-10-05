@@ -177,7 +177,9 @@ async def build_provider_status(provider: IntegrationProvider) -> dict[str, Any]
 
     notes: list[str] = []
     if provider == "finprim" and not settings.fp_enabled:
-        notes.append("FP_ENABLED is false — FinPrim calls use stub responses until enabled in .env.")
+        notes.append(
+            "FP_ENABLED is false — live FinPrim HTTP is off (KYC returns 503; MF may use local fallback IDs)."
+        )
 
     return {
         "id": provider,

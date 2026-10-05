@@ -32,6 +32,11 @@ const LOCATION_OPTIONS: PositionOptions = {
 
 const MAX_ACCURACY_METERS = 5000;
 
+/** Cybrilla POA kyc_forms reject coordinates with more than 6 decimal places. */
+export function roundKycGeoCoordinate(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
 function mapBrowserGeolocationError(error: GeolocationPositionError): KycGeolocationError {
   switch (error.code) {
     case error.PERMISSION_DENIED:
@@ -43,9 +48,25 @@ function mapBrowserGeolocationError(error: GeolocationPositionError): KycGeoloca
   }
 }
 
+async function geolocationPermissionDenied(): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+    return false;
+  }
+  try {
+    const status = await navigator.permissions.query({ name: "geolocation" });
+    return status.state === "denied";
+  } catch {
+    return false;
+  }
+}
+
 export async function requestKycGeolocation(): Promise<KycGeolocationResult> {
   if (typeof navigator === "undefined" || !navigator.geolocation) {
     throw new KycGeolocationError(copy.kyc.location.unsupported, "unsupported");
+  }
+
+  if (await geolocationPermissionDenied()) {
+    throw new KycGeolocationError(copy.kyc.location.denied, "denied");
   }
 
   const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -66,8 +87,8 @@ export async function requestKycGeolocation(): Promise<KycGeolocationResult> {
   }
 
   return {
-    latitude: coords.latitude,
-    longitude: coords.longitude,
+    latitude: roundKycGeoCoordinate(coords.latitude),
+    longitude: roundKycGeoCoordinate(coords.longitude),
     accuracy: coords.accuracy,
   };
 }

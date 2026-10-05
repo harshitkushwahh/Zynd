@@ -3,6 +3,7 @@ import type { KycAddressFields, KycAddressFormValue } from "@/features/kyc/lib/k
 import type { KycPersonalInfoValue } from "@/features/kyc/lib/kyc-personal-info";
 import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import { formatSettingsKycProfile } from "@/features/kyc/lib/settings-kyc-display";
+import { normalizeFathersNameFromDigilocker } from "@/features/kyc/lib/kyc-name-validation";
 
 export type SettingsKycAddress = {
   permanent: string;
@@ -75,12 +76,14 @@ function mapContactDraft(raw: Record<string, unknown> | null | undefined): KycAd
 
 function mapPersonalDraft(raw: Record<string, unknown> | null | undefined): KycPersonalInfoValue | null {
   if (!raw) return null;
+  const fathersRaw = String(raw.fathersName ?? "");
   return {
-    fathersName: String(raw.fathersName ?? ""),
+    fathersName: fathersRaw ? normalizeFathersNameFromDigilocker(fathersRaw) : fathersRaw,
     gender: String(raw.gender ?? ""),
     incomeSlab: String(raw.incomeSlab ?? ""),
     occupation: String(raw.occupation ?? ""),
     maritalStatus: String(raw.maritalStatus ?? ""),
+    spouseName: String(raw.spouseName ?? ""),
     pepExposed: String(raw.pepExposed ?? ""),
     placeOfBirth: String(raw.placeOfBirth ?? ""),
     nationality: String(raw.nationality ?? ""),

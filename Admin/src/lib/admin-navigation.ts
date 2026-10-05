@@ -89,6 +89,7 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
       "deletion.execute",
       "admin_actions.approve",
       "documents.read",
+      "consents.read",
       "admin.accounts.manage",
     ],
   },

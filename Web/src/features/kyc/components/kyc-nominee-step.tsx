@@ -15,7 +15,13 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { KycNomineeWizard } from "@/features/kyc/components/kyc-nominee-wizard";
 import type { KycMasterDataOption } from "@/features/kyc/lib/kyc-api";
 import {
+  KYC_NOMINEE_RELATIONSHIP_OPTIONS,
+  lookupKycEnumLabel,
+} from "@/features/kyc/lib/kyc-master-data-options";
+import {
+  formatNomineeDobDisplay,
   MAX_KYC_NOMINEES,
+  nomineeContinueRequiresOptOutDialog,
   type KycNomineeRecord,
 } from "@/features/kyc/lib/kyc-nominee";
 import { copy } from "@/shared/config/copy";
@@ -27,6 +33,9 @@ type KycNomineeStepProps = {
   sourceOfWealthOptions?: KycMasterDataOption[];
   documentTypeOptions?: KycMasterDataOption[];
   saving?: boolean;
+  /** Set when user already confirmed SEBI nomination opt-out (server consent + journey draft). */
+  nominationOptedOut?: boolean;
+  onRequestOptOut: () => void;
   onSubmit: (nominees: KycNomineeRecord[]) => void;
 };
 
@@ -106,13 +115,16 @@ function NomineeListCard({
               {nominee.core.fullName}
             </p>
             <StatusBadge variant="neutral" showIcon={false} className="h-5 px-2 text-[10px]">
-              {nominee.core.relationship}
+              {lookupKycEnumLabel(nominee.core.relationship, KYC_NOMINEE_RELATIONSHIP_OPTIONS)}
             </StatusBadge>
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {nominee.type === "minor"
               ? copy.kyc.nominee.types.minor
               : copy.kyc.nominee.types.individual}
+            {nominee.core.dateOfBirth
+              ? ` · ${formatNomineeDobDisplay(nominee.core.dateOfBirth)}`
+              : ""}
           </p>
         </div>
 
@@ -154,13 +166,14 @@ export function KycNomineeStep({
   sourceOfWealthOptions,
   documentTypeOptions,
   saving = false,
+  nominationOptedOut = false,
+  onRequestOptOut,
   onSubmit,
 }: KycNomineeStepProps) {
   const [nominees, setNominees] = useState<KycNomineeRecord[]>(initialNominees);
   const [view, setView] = useState<NomineeView>("list");
   const [editingNominee, setEditingNominee] = useState<KycNomineeRecord | undefined>();
   const [hasUnsavedDraft, setHasUnsavedDraft] = useState(false);
-
   const canAddMore = nominees.length < MAX_KYC_NOMINEES;
 
   const handleAddClick = () => {
@@ -197,6 +210,10 @@ export function KycNomineeStep({
   };
 
   const handleContinue = () => {
+    if (nomineeContinueRequiresOptOutDialog(nominees.length, nominationOptedOut)) {
+      onRequestOptOut();
+      return;
+    }
     onSubmit(nominees);
   };
 
@@ -300,7 +317,9 @@ export function KycNomineeStep({
       ) : null}
 
       <Button type="button" size="lg" className="w-full" disabled={saving} onClick={handleContinue}>
-        {copy.kyc.continue}
+        {nomineeContinueRequiresOptOutDialog(nominees.length, nominationOptedOut)
+          ? copy.kyc.nominee.optOut.action
+          : copy.kyc.continue}
       </Button>
     </div>
   );

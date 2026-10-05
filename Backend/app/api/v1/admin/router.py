@@ -16,6 +16,7 @@ from app.api.v1.admin.mf_integrations_router import router as mf_integrations_ro
 from app.api.v1.admin.mf_router import router as mf_admin_router
 from app.api.v1.admin.mf_transactions_router import router as mf_transactions_router
 from app.api.v1.admin.product_qr_router import router as product_qr_router
+from app.api.v1.admin.consents_router import router as consents_admin_router
 from app.api.v1.admin.referrals_router import router as referrals_router
 from app.api.v1.admin.search_router import router as search_router
 from app.api.v1.admin.zynd_logs_router import router as zynd_logs_router
@@ -176,6 +177,7 @@ router.include_router(zynd_logs_router)
 router.include_router(search_router)
 router.include_router(referrals_router)
 router.include_router(product_qr_router)
+router.include_router(consents_admin_router)
 
 
 async def _require_user_by_reference(db: AsyncSession, reference: str) -> User:

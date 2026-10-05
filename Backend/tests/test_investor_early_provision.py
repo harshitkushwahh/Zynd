@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
@@ -9,11 +8,7 @@ from sqlalchemy import select
 from app.application.investor.investor_nominee_sync_service import sync_nominees_from_kyc_draft
 from app.application.investor.investor_provision_mapper import build_early_investor_profile_payload
 from app.application.kyc.pan_verification_service import confirm_pan_names
-from app.infrastructure.persistence.investor_models import (
-    InvestorProfile,
-    InvestorProfileStatus,
-    InvestorRelatedParty,
-)
+from app.infrastructure.persistence.investor_models import InvestorProfile, InvestorRelatedParty
 from app.infrastructure.persistence.models import KycJourneyState, User
 
 
@@ -38,7 +33,7 @@ def test_build_early_investor_profile_payload_uses_pan_defaults() -> None:
 
 
 @pytest.mark.asyncio
-async def test_confirm_pan_names_creates_local_investor_profile(db_session) -> None:
+async def test_confirm_pan_names_does_not_create_investor_profile(db_session) -> None:
     user = User(email="pan-early@example.com", first_name="Test", last_name="User")
     db_session.add(user)
     await db_session.flush()
@@ -60,25 +55,21 @@ async def test_confirm_pan_names_creates_local_investor_profile(db_session) -> N
     db_session.add(journey)
     await db_session.flush()
 
-    with patch("app.application.investor.investor_early_provision_service.get_settings") as settings_mock:
-        settings_mock.return_value.resolved_fp_enabled = False
-        result = await confirm_pan_names(
-            db_session,
-            user=user,
-            first_name="POOJA",
-            middle_name="",
-            last_name="DHAMELIYA",
-        )
+    result = await confirm_pan_names(
+        db_session,
+        user=user,
+        first_name="POOJA",
+        middle_name="",
+        last_name="DHAMELIYA",
+    )
 
     assert result["success"] is True
     profile = await db_session.scalar(select(InvestorProfile).where(InvestorProfile.user_id == user.id))
-    assert profile is not None
-    assert profile.external_profile_id is not None
-    assert profile.status == InvestorProfileStatus.active
+    assert profile is None
 
 
 @pytest.mark.asyncio
-async def test_sync_nominees_from_kyc_draft_creates_related_party_rows(db_session) -> None:
+async def test_sync_nominees_from_kyc_draft_stays_local_without_profile(db_session) -> None:
     user = User(email=f"nominee-{uuid4()}@example.com", first_name="Test", last_name="User")
     db_session.add(user)
     await db_session.flush()
@@ -116,26 +107,8 @@ async def test_sync_nominees_from_kyc_draft_creates_related_party_rows(db_sessio
     db_session.add(journey)
     await db_session.flush()
 
-    create_party = AsyncMock(return_value={"id": "relp_test_001", "raw": {"id": "relp_test_001"}})
-    patch_party = AsyncMock(return_value={"id": "relp_test_001", "raw": {"id": "relp_test_001"}})
+    profile = await sync_nominees_from_kyc_draft(db_session, user=user, journey=journey)
 
-    with (
-        patch("app.application.investor.investor_nominee_sync_service.get_settings") as settings_mock,
-        patch(
-            "app.application.investor.investor_early_provision_service.create_investor_profile",
-            new=AsyncMock(return_value={"id": "invp_test_001", "old_id": 1}),
-        ),
-        patch("app.application.investor.investor_early_provision_service.get_settings") as early_settings,
-        patch("app.application.investor.investor_nominee_sync_service.create_related_party", new=create_party),
-        patch("app.application.investor.investor_nominee_sync_service.patch_related_party", new=patch_party),
-    ):
-        settings_mock.return_value.resolved_fp_enabled = True
-        early_settings.return_value.resolved_fp_enabled = True
-        profile = await sync_nominees_from_kyc_draft(db_session, user=user, journey=journey)
-
-    assert profile.external_profile_id == "invp_test_001"
+    assert profile is None
     parties = list((await db_session.execute(select(InvestorRelatedParty))).scalars())
-    assert len(parties) == 1
-    assert parties[0].external_related_party_id == "relp_test_001"
-    create_party.assert_awaited_once()
-    patch_party.assert_awaited_once()
+    assert parties == []

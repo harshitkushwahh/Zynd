@@ -3,23 +3,22 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.integrations.integration_runtime import is_cybrilla_poa_live
-from app.infrastructure.kyc.fp_clients import fp_get, fp_post, fp_post_multipart, poll_poa_preverification
-from app.infrastructure.kyc.stub_provider import (
-    stub_poa_bank_validation,
-    stub_poa_bank_validation_manual,
-    stub_poa_file_upload,
-    stub_poa_pan_validation,
-    stub_poa_readiness,
-)
+from app.infrastructure.kyc.cybrilla_terminal_log import log_poa_operation
+from app.infrastructure.kyc.fp_clients import FpClientError, fp_get, fp_post, fp_post_multipart, poll_poa_preverification
 
 
-def _use_live_poa() -> bool:
-    return is_cybrilla_poa_live()
+def _require_live_poa() -> None:
+    if not is_cybrilla_poa_live():
+        raise FpClientError(
+            "Cybrilla POA is not configured. Set FP_POA_* credentials.",
+            "poa_not_configured",
+            503,
+        )
 
 
 async def poa_check_readiness(pan_number: str) -> dict[str, Any]:
-    if not _use_live_poa():
-        return await stub_poa_readiness(pan_number)
+    _require_live_poa()
+    log_poa_operation("check_readiness", live=True, pan=pan_number)
 
     created = await fp_post(
         "/poa/pre_verifications",
@@ -27,7 +26,15 @@ async def poa_check_readiness(pan_number: str) -> dict[str, Any]:
         use_poa=True,
     )
     preverify_id = str(created["id"])
-    return await poll_poa_preverification(preverify_id)
+    result = await poll_poa_preverification(preverify_id)
+    log_poa_operation(
+        "check_readiness_result",
+        live=True,
+        preverify_id=preverify_id,
+        readiness_status=(result.get("readiness") or {}).get("status"),
+        readiness_code=(result.get("readiness") or {}).get("code"),
+    )
+    return result
 
 
 async def poa_validate_pan_name_dob(
@@ -36,12 +43,8 @@ async def poa_validate_pan_name_dob(
     full_name: str,
     date_of_birth: str,
 ) -> dict[str, Any]:
-    if not _use_live_poa():
-        return await stub_poa_pan_validation(
-            pan_number=pan_number,
-            full_name=full_name,
-            date_of_birth=date_of_birth,
-        )
+    _require_live_poa()
+    log_poa_operation("validate_pan_name_dob", live=True, pan=pan_number)
 
     created = await fp_post(
         "/poa/pre_verifications",
@@ -52,12 +55,21 @@ async def poa_validate_pan_name_dob(
         },
         use_poa=True,
     )
-    return await poll_poa_preverification(str(created["id"]))
+    result = await poll_poa_preverification(str(created["id"]))
+    log_poa_operation(
+        "validate_pan_name_dob_result",
+        live=True,
+        preverify_id=result.get("id"),
+        pan_status=(result.get("pan") or {}).get("status") if isinstance(result.get("pan"), dict) else None,
+    )
+    return result
 
 
 async def poa_fetch_readiness(preverify_id: str, *, pan_number: str) -> dict[str, Any]:
-    if not _use_live_poa():
-        return {**await stub_poa_readiness(pan_number), "id": preverify_id}
+    _require_live_poa()
+    payload = await fetch_poa_preverification(preverify_id)
+    if str(payload.get("status") or "") == "completed":
+        return payload
     return await poll_poa_preverification(preverify_id)
 
 
@@ -68,13 +80,10 @@ async def poa_fetch_pan_validation(
     full_name: str,
     date_of_birth: str,
 ) -> dict[str, Any]:
-    if not _use_live_poa():
-        result = await stub_poa_pan_validation(
-            pan_number=pan_number,
-            full_name=full_name,
-            date_of_birth=date_of_birth,
-        )
-        return {**result, "id": preverify_id}
+    _require_live_poa()
+    payload = await fetch_poa_preverification(preverify_id)
+    if str(payload.get("status") or "") == "completed":
+        return payload
     return await poll_poa_preverification(preverify_id)
 
 
@@ -86,13 +95,14 @@ async def poa_verify_bank_account(
     ifsc_code: str,
     account_type: str,
 ) -> dict[str, Any]:
-    if not _use_live_poa():
-        return await stub_poa_bank_validation(
-            pan_number=pan_number,
-            account_number=account_number,
-            ifsc_code=ifsc_code,
-            account_type=account_type,
-        )
+    _require_live_poa()
+    log_poa_operation(
+        "verify_bank_hybrid",
+        live=True,
+        pan=pan_number,
+        ifsc=ifsc_code,
+        account_type=account_type,
+    )
 
     created = await fp_post(
         "/poa/pre_verifications",
@@ -111,7 +121,9 @@ async def poa_verify_bank_account(
         },
         use_poa=True,
     )
-    return await poll_poa_preverification(str(created["id"]))
+    result = await poll_poa_preverification(str(created["id"]))
+    log_poa_operation("verify_bank_hybrid_result", live=True, preverify_id=result.get("id"))
+    return result
 
 
 async def poa_verify_bank_account_manual(
@@ -123,14 +135,8 @@ async def poa_verify_bank_account_manual(
     account_type: str,
     proof_file_id: str,
 ) -> dict[str, Any]:
-    if not _use_live_poa():
-        return await stub_poa_bank_validation_manual(
-            pan_number=pan_number,
-            account_number=account_number,
-            ifsc_code=ifsc_code,
-            account_type=account_type,
-            proof_file_id=proof_file_id,
-        )
+    _require_live_poa()
+    log_poa_operation("verify_bank_manual", live=True, pan=pan_number, ifsc=ifsc_code)
 
     created = await fp_post(
         "/poa/pre_verifications",
@@ -151,12 +157,13 @@ async def poa_verify_bank_account_manual(
         },
         use_poa=True,
     )
-    return await poll_poa_preverification(str(created["id"]))
+    result = await poll_poa_preverification(str(created["id"]))
+    log_poa_operation("verify_bank_manual_result", live=True, preverify_id=result.get("id"))
+    return result
 
 
 async def fetch_poa_preverification(preverify_id: str) -> dict[str, Any]:
-    if not _use_live_poa():
-        return {"id": preverify_id, "status": "completed", "bank_accounts": [{"status": "verified"}]}
+    _require_live_poa()
     return await fp_get(f"/poa/pre_verifications/{preverify_id}", use_poa=True)
 
 
@@ -167,8 +174,8 @@ async def upload_poa_file(
     content_type: str,
     purpose: str,
 ) -> dict[str, Any]:
-    if not _use_live_poa():
-        return await stub_poa_file_upload(filename=filename)
+    _require_live_poa()
+    log_poa_operation("upload_file", live=True, filename=filename, purpose=purpose)
 
     return await fp_post_multipart(
         "/poa/files",

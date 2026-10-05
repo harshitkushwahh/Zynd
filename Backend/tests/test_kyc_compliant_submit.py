@@ -15,8 +15,33 @@ def test_requires_full_kyc_submission_for_new_users() -> None:
 
 
 def test_requires_full_kyc_submission_for_kra_registered() -> None:
-    journey = KycJourneyState(user_id=None, kyc_already_registered=True, readiness_code=None)
+    journey = KycJourneyState(
+        user_id=None,
+        kyc_already_registered=True,
+        readiness_code=None,
+        poa_readiness_preverify_id="pv_ready",
+    )
     assert requires_full_kyc_submission(journey) is False
+
+
+def test_requires_full_kyc_submission_for_new_to_kyc_code() -> None:
+    journey = KycJourneyState(
+        user_id=None,
+        kyc_already_registered=False,
+        readiness_code="kyc_unavailable",
+        poa_readiness_preverify_id="pv_ready",
+    )
+    assert requires_full_kyc_submission(journey) is True
+
+
+def test_requires_full_kyc_without_stored_readiness_preverify() -> None:
+    journey = KycJourneyState(
+        user_id=None,
+        kyc_already_registered=True,
+        readiness_code=None,
+        poa_readiness_preverify_id=None,
+    )
+    assert requires_full_kyc_submission(journey) is True
 
 
 def test_step_index_skips_signature_for_kra_registered() -> None:
@@ -42,6 +67,7 @@ async def test_submit_compliant_kyc_marks_completed(db_session) -> None:
     journey = KycJourneyState(
         user_id=user.id,
         kyc_already_registered=True,
+        poa_readiness_preverify_id="pv_readiness_test",
         pan_verification_status="verified",
         pan_draft_json={
             "panNumber": "ABCPA3753D",

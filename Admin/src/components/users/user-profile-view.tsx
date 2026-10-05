@@ -25,6 +25,7 @@ import { UserRiskDetailSection } from "@/components/users/user-risk-detail-secti
 import { UserFamilyGroupsDetailSection } from "@/components/users/user-family-groups-detail-section";
 import { UserGoalsDetailSection } from "@/components/users/user-goals-detail-section";
 import { UserKycDetailSection } from "@/components/users/user-kyc-detail-section";
+import { AdminUserConsentsSection } from "@/components/users/admin-user-consents-section";
 import { UserReferralsDetailSection } from "@/components/users/user-referrals-detail-section";
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";
 import {
@@ -500,10 +501,13 @@ export function UserProfileView({
 
                   {canReadKyc && profileDetail?.kyc ? (
                     <TabsContent value="kyc" keepMounted={keepMounted("kyc")} className="mt-0">
-                      <UserKycDetailSection
-                        kyc={profileDetail.kyc}
-                        hasDownload={canDownloadDocs}
-                      />
+                      <div className="space-y-6">
+                        <UserKycDetailSection
+                          kyc={profileDetail.kyc}
+                          hasDownload={canDownloadDocs}
+                        />
+                        <AdminUserConsentsSection userId={clientId} />
+                      </div>
                     </TabsContent>
                   ) : null}
 

@@ -4,9 +4,12 @@ export type KycPersonalInfoValue = {
   incomeSlab: string;
   occupation: string;
   maritalStatus: string;
+  spouseName: string;
   pepExposed: string;
   placeOfBirth: string;
   nationality: string;
+  /** Set by backend after spouse is PATCHed to Finprim — user cannot revert to unmarried. */
+  maritalStatusLocked?: boolean;
 };
 
 export const DEFAULT_KYC_NATIONALITY = "India";
@@ -18,6 +21,7 @@ export function createEmptyPersonalInfo(): KycPersonalInfoValue {
     incomeSlab: "",
     occupation: "",
     maritalStatus: "",
+    spouseName: "",
     pepExposed: "",
     placeOfBirth: "",
     nationality: DEFAULT_KYC_NATIONALITY,
@@ -52,6 +56,10 @@ export const KYC_MARITAL_STATUS_OPTIONS = [
   "Divorced",
   "Widowed",
 ] as const;
+
+export function isMarriedMaritalStatus(value: string | null | undefined): boolean {
+  return value?.trim().toLowerCase() === "married";
+}
 
 export const KYC_PEP_OPTIONS = ["No", "Yes"] as const;
 

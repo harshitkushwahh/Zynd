@@ -12,15 +12,19 @@ async def test_lookup_ifsc_falls_back_when_gateway_ifsc_route_unavailable() -> N
     with patch("app.infrastructure.kyc.fp_clients.get_settings") as settings_mock:
         settings_mock.return_value.resolved_kyc_provider_live = True
         with patch(
-            "app.infrastructure.kyc.fp_clients.fp_get",
-            new=AsyncMock(
-                side_effect=FpClientError(
-                    "Gateway: URL not available. Please contact administrator",
-                    status_code=404,
-                )
-            ),
+            "app.application.integrations.integration_runtime.is_finprim_enabled",
+            return_value=True,
         ):
-            result = await lookup_ifsc("HDFC0001234")
+            with patch(
+                "app.infrastructure.kyc.fp_clients.fp_get",
+                new=AsyncMock(
+                    side_effect=FpClientError(
+                        "Gateway: URL not available. Please contact administrator",
+                        status_code=404,
+                    )
+                ),
+            ):
+                result = await lookup_ifsc("HDFC0001234")
 
     assert result["ifsc_code"] == "HDFC0001234"
     assert result["bank_name"] == ""
@@ -65,6 +69,33 @@ async def test_lookup_ifsc_uses_ifsc_codes_route() -> None:
     fp_get.assert_awaited_once_with("/api/onb/ifsc_codes/HDFC0001234")
     assert result["bank_name"] == "HDFC BANK"
     assert result["branch"] == "PARK STREET"
+    assert result.get("lookup_fallback") is False
+
+@pytest.mark.asyncio
+async def test_lookup_ifsc_uses_finprim_when_kyckart_not_live_but_finprim_enabled() -> None:
+    with patch("app.infrastructure.kyc.fp_clients.get_settings") as settings_mock:
+        settings_mock.return_value.resolved_kyc_provider_live = False
+        fp_get = AsyncMock(
+            return_value={
+                "ifsc_code": "ICIC0000611",
+                "bank_name": "ICICI",
+                "branch_name": "gudivada",
+                "city": "gudivada",
+                "district": "KRISHNA",
+                "state": "ANDHRA PRADESH",
+            }
+        )
+        with patch(
+            "app.application.integrations.integration_runtime.is_finprim_enabled",
+            return_value=True,
+        ):
+            with patch("app.infrastructure.kyc.fp_clients.fp_get", new=fp_get):
+                result = await lookup_ifsc("ICIC0000611")
+
+    fp_get.assert_awaited_once_with("/api/onb/ifsc_codes/ICIC0000611")
+    assert result["branch_name"] == "gudivada"
+    assert "gudivada" in result["branch"]
+
 
 @pytest.mark.asyncio
 async def test_lookup_ifsc_raises_for_other_fp_errors() -> None:

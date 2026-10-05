@@ -3,6 +3,14 @@ import { DEFAULT_KYC_COUNTRY } from "@/features/kyc/lib/indian-states";
 export const MAX_KYC_NOMINEES = 3;
 export const MINOR_AGE_THRESHOLD = 18;
 
+/** Empty nominee list with no prior SEBI opt-out consent — show the opt-out dialog. */
+export function nomineeContinueRequiresOptOutDialog(
+  nomineeCount: number,
+  nominationOptedOut: boolean,
+): boolean {
+  return nomineeCount === 0 && !nominationOptedOut;
+}
+
 export type KycNomineeType = "minor" | "individual";
 export type KycNomineeWizardStep = "basic" | "contact" | "address";
 
@@ -190,12 +198,47 @@ export function formatNomineeDobForDateInput(value: string) {
   return `${year}-${month}-${day}`;
 }
 
+export function formatNomineeDobDisplay(value: string) {
+  const parsed = parseNomineeDob(value);
+  if (!parsed) return value.trim();
+
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${parsed.getFullYear()}`;
+}
+
+export function formatNomineeDobIso(value: string) {
+  return formatNomineeDobForDateInput(value);
+}
+
 export function formatNomineeDobInput(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 8);
 
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+export function isFutureNomineeDob(dateOfBirth: string) {
+  const parsed = parseNomineeDob(dateOfBirth);
+  if (!parsed) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsed.setHours(0, 0, 0, 0);
+  return parsed.getTime() > today.getTime();
+}
+
+export function getNomineeAgeFromDob(dateOfBirth: string): number | null {
+  const parsed = parseNomineeDob(dateOfBirth);
+  if (!parsed) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - parsed.getFullYear();
+  const monthDiff = today.getMonth() - parsed.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < parsed.getDate())) {
+    age -= 1;
+  }
+  return age;
 }
 
 export function isMinorNomineeDob(dateOfBirth: string) {

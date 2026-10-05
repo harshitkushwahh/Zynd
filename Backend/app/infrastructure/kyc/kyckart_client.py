@@ -9,7 +9,6 @@ from app.application.integrations.provider_log_recorder import record_provider_a
 from app.application.integrations.integration_runtime import get_kyckart_runtime, is_kyckart_live
 from app.core.config import get_settings
 from app.infrastructure.kyc.date_utils import normalize_kyc_date_of_birth
-from app.infrastructure.kyc.stub_provider import stub_kyckart_pan_to_name_dob
 from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 
 
@@ -234,7 +233,13 @@ async def _run_logged_kyckart_request(
 
 async def kyckart_pan_to_name_dob(pan_number: str) -> dict[str, Any]:
     if not is_kyckart_live():
-        return await stub_kyckart_pan_to_name_dob(pan_number)
+        from app.infrastructure.kyc.fp_clients import FpClientError
+
+        raise FpClientError(
+            "Kyckart is not configured for PAN lookup.",
+            "kyckart_not_configured",
+            503,
+        )
 
     runtime = get_kyckart_runtime()
     base_url = runtime.base_url.rstrip("/")

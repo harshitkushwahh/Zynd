@@ -3,6 +3,7 @@ import {
   KYC_PERSON_NAME_LIMITS,
   validateKycPersonName as validatePersonName,
 } from "@/features/kyc/lib/kyc-name-validation";
+import { validateKycNomineeDocument } from "@/features/kyc/lib/kyc-nominee-document";
 
 export const KYC_NOMINEE_LIMITS = {
   fullName: KYC_PERSON_NAME_LIMITS,
@@ -29,35 +30,50 @@ export function validateKycPersonName(value: string) {
   return validatePersonName(value);
 }
 
-export function validateKycNomineeEmail(value: string) {
+export function validateKycNomineeEmail(value: string, required = false) {
   const trimmed = value.trim();
 
-  if (!trimmed) return copy.kyc.nominee.requiredField;
+  if (!trimmed) return required ? copy.kyc.nominee.requiredField : undefined;
   if (!EMAIL_PATTERN.test(trimmed)) return copy.kyc.nominee.invalidEmail;
 
   return undefined;
 }
 
-export function validateKycNomineeMobile(value: string) {
+export function validateKycNomineeMobile(value: string, required = false) {
   const digits = value.replace(/\D/g, "");
 
-  if (!digits) return copy.kyc.nominee.requiredField;
+  if (!digits) return required ? copy.kyc.nominee.requiredField : undefined;
   if (!MOBILE_PATTERN.test(digits)) return copy.kyc.nominee.invalidMobile;
 
   return undefined;
 }
 
-export function validateKycNomineeAddress(fields: {
-  line1: string;
-  line2: string;
-  city: string;
-  pincode: string;
-}) {
+export function validateOptionalKycNomineeDocument(documentType: string, documentNumber: string) {
+  const type = documentType.trim();
+  const number = documentNumber.trim();
+  if (!type && !number) return undefined;
+  return validateKycNomineeDocument(type, number);
+}
+
+export function validateKycNomineeAddress(
+  fields: {
+    line1: string;
+    line2: string;
+    city: string;
+    pincode: string;
+  },
+  required = false,
+) {
   const errors: Record<string, string> = {};
   const line1 = fields.line1.trim();
   const line2 = fields.line2.trim();
   const city = fields.city.trim();
   const pincode = fields.pincode.trim();
+  const hasAny = Boolean(line1 || line2 || city || pincode);
+
+  if (!hasAny && !required) {
+    return errors;
+  }
 
   if (!line1) {
     errors.line1 = copy.kyc.nominee.requiredField;

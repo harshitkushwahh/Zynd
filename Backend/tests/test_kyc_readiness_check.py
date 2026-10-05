@@ -54,6 +54,7 @@ async def test_check_kra_readiness_pending_keeps_submitted(db_session) -> None:
         pan_draft_json={"panNumber": "ABCPA1234F"},
         kyc_form_status="submitted",
         external_kyc_form_id="form_stub_1",
+        poa_readiness_preverify_id=None,
     )
     status = UserKycStatus(user_id=user.id, overall_status=KycOverallStatus.submitted)
     db_session.add(journey)
@@ -65,6 +66,7 @@ async def test_check_kra_readiness_pending_keeps_submitted(db_session) -> None:
         new=AsyncMock(
             return_value={
                 "id": "pv_pending_1",
+                "status": "completed",
                 "readiness": {
                     "status": "failed",
                     "code": "kyc_unavailable",
@@ -106,6 +108,7 @@ async def test_check_kra_readiness_verified_marks_completed(db_session) -> None:
         new=AsyncMock(
             return_value={
                 "id": "pv_verified_1",
+                "status": "completed",
                 "readiness": {"status": "verified", "code": None, "reason": None},
             }
         ),
@@ -144,3 +147,46 @@ async def test_check_kra_readiness_completed_short_circuits(db_session) -> None:
     mock_readiness.assert_not_called()
     assert result["kraVerified"] is True
     assert result["overallStatus"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_check_kra_readiness_reuses_completed_preverify_without_new_post(db_session) -> None:
+    user = _user()
+    db_session.add(user)
+    await db_session.flush()
+
+    journey = KycJourneyState(
+        user_id=user.id,
+        pan_draft_json={"panNumber": "ABCPA1234F"},
+        kyc_form_status="submitted",
+        external_kyc_form_id="form_stub_3",
+        poa_readiness_preverify_id="pv_cached_1",
+        readiness_code="kyc_unavailable",
+    )
+    status = UserKycStatus(user_id=user.id, overall_status=KycOverallStatus.submitted)
+    db_session.add(journey)
+    db_session.add(status)
+    await db_session.flush()
+
+    with patch(
+        "app.application.kyc.readiness_check_service.fetch_poa_preverification",
+        new=AsyncMock(
+            return_value={
+                "id": "pv_cached_1",
+                "status": "completed",
+                "readiness": {
+                    "status": "failed",
+                    "code": "kyc_unavailable",
+                    "reason": "No KYC record available for this investor at KRA.",
+                },
+            }
+        ),
+    ), patch(
+        "app.application.kyc.readiness_check_service.poa_check_readiness",
+        new=AsyncMock(),
+    ) as mock_create:
+        result = await check_kra_readiness_status(db_session, user=user)
+
+    mock_create.assert_not_called()
+    assert result["kraVerified"] is False
+    assert journey.poa_readiness_preverify_id == "pv_cached_1"

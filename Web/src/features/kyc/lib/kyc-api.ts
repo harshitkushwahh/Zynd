@@ -41,6 +41,7 @@ export type KycBootstrapResponse = {
   contact_draft: Record<string, unknown> | null;
   personal_draft: Record<string, unknown> | null;
   nominee_draft: Record<string, unknown>[] | null;
+  nomination_opted_out?: boolean;
   bank_draft: Record<string, unknown> | null;
   kyc_already_registered: boolean | null;
   readiness_code: string | null;
@@ -52,6 +53,8 @@ export type KycBootstrapResponse = {
   digilocker_failure_reason: string | null;
   bank_verification_status: string | null;
   bank_verification_failure: { field: string; code?: string; reason?: string } | null;
+  poa_readiness_preverify_id: string | null;
+  poa_pan_preverify_id: string | null;
   poa_bank_preverify_id: string | null;
   poa_bank_proof_file_id: string | null;
   signature_draft: Record<string, unknown> | null;
@@ -67,6 +70,24 @@ export type KycBootstrapResponse = {
     accuracyMeters?: number;
   } | null;
   step_statuses?: KycStepStatuses | null;
+  kyc_flow_mode?: KycFlowMode | null;
+  requires_address_step_digilocker?: boolean | null;
+  requires_pan_step_digilocker?: boolean | null;
+  requires_digilocker?: boolean | null;
+  poa_kyc_form_id?: string | null;
+  proof_fetch_url?: string | null;
+  requires_poa_proof_fetch?: boolean | null;
+};
+
+export type KycFlowMode = "repeat_kra" | "fresh_kyc" | "kra_update";
+
+export type KycPoaFormStatus = {
+  form_id: string | null;
+  form_status: string | null;
+  proof_details_status: string | null;
+  proof_fetch_url: string | null;
+  partner_fields_needed: string[] | null;
+  needs_digilocker: boolean;
 };
 
 export type KycPanFailure = {
@@ -148,7 +169,10 @@ export async function fetchKycBootstrap() {
 
 export async function verifyKycPan(body: {
   pan_number: string;
-  full_name: string;
+  full_name?: string;
+  first_name: string;
+  middle_name?: string;
+  last_name?: string;
   date_of_birth: string;
 }) {
   return apiRequest<KycPanVerifyResponse>("/kyc/pan/verify", {
@@ -166,15 +190,28 @@ export type KycPanConfirmNamesResponse = {
   requires_digilocker?: boolean;
 };
 
-export async function confirmKycPanNames(body: { full_name: string }) {
+export async function confirmKycPanNames(body: {
+  full_name?: string;
+  first_name: string;
+  middle_name?: string;
+  last_name?: string;
+}) {
   return apiRequest<KycPanConfirmNamesResponse>("/kyc/pan/confirm-names", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
+export async function resetKycJourneyDrafts() {
+  return apiRequest<{ ok: boolean }>("/kyc/journey/reset-drafts", { method: "POST" });
+}
+
 export async function startKycDigilocker() {
-  return apiRequest<{ redirect_url: string }>("/kyc/kyc-request/start", {
+  return apiRequest<{
+    redirect_url: string;
+    inline_complete?: boolean;
+    identity_document_id?: string;
+  }>("/kyc/kyc-request/start", {
     method: "POST",
   });
 }
@@ -190,11 +227,35 @@ export async function fetchKycIdentityDocument(documentId: string) {
   }>(`/kyc/identity-document/${encodeURIComponent(documentId)}`);
 }
 
+export async function startPoaKycForm() {
+  return apiRequest<KycPoaFormStatus>("/kyc/poa-form/start", { method: "POST" });
+}
+
+export async function fetchPoaKycFormStatus() {
+  return apiRequest<KycPoaFormStatus>("/kyc/poa-form/status");
+}
+
+export async function syncPoaKycForm() {
+  return apiRequest<{
+    success: boolean;
+    needs_digilocker: boolean;
+    form_id?: string | null;
+    proof_fetch_url?: string | null;
+  requires_poa_proof_fetch?: boolean | null;
+  }>("/kyc/poa-form/sync", { method: "POST" });
+}
+
+export async function retryPoaKycProof() {
+  return apiRequest<KycPoaFormStatus>("/kyc/poa-form/retry-proof", { method: "POST" });
+}
+
 export async function saveKycJourneyState(body: {
   pan_draft_json?: Record<string, unknown>;
   contact_draft_json?: Record<string, unknown>;
   personal_draft_json?: Record<string, unknown>;
   nominee_draft_json?: Record<string, unknown>[];
+  record_nomination_opt_out?: boolean;
+  revoke_nomination_opt_out?: boolean;
   bank_draft_json?: Record<string, unknown>;
   signature_draft_json?: Record<string, unknown>;
   geolocation_json?: {
@@ -262,6 +323,19 @@ export async function fetchKycPincode(pincode: string) {
     state_name: string;
     country_ansi_code: string;
   }>(`/kyc/master-data/pincode/${encodeURIComponent(pincode)}`);
+}
+
+export async function fetchKycIfsc(ifscCode: string) {
+  return apiRequest<{
+    ifsc_code: string;
+    bank_name: string;
+    branch: string;
+    branch_name: string;
+    city: string;
+    district: string;
+    state: string;
+    branch_address: string;
+  }>(`/kyc/master-data/ifsc/${encodeURIComponent(ifscCode.trim().toUpperCase())}`);
 }
 
 export async function verifyKycBankHybrid(body: {
@@ -341,6 +415,10 @@ export type KycReadinessCheckResponse = {
   nameUpdated?: boolean;
 };
 
-export async function checkKycReadiness() {
-  return apiRequest<KycReadinessCheckResponse>("/kyc/readiness/check", { method: "POST" });
+export async function checkKycReadiness(options?: { forceRefresh?: boolean }) {
+  const query =
+    options?.forceRefresh === true ? "?force_refresh=true" : "";
+  return apiRequest<KycReadinessCheckResponse>(`/kyc/readiness/check${query}`, {
+    method: "POST",
+  });
 }

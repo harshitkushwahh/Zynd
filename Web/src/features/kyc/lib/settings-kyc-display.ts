@@ -34,6 +34,7 @@ export function formatSettingsPersonalInfo(
     incomeSlab: lookupKycEnumLabel(personalInfo.incomeSlab, KYC_INCOME_SLAB_OPTIONS),
     occupation: lookupKycEnumLabel(personalInfo.occupation, KYC_OCCUPATION_OPTIONS),
     maritalStatus: lookupKycEnumLabel(personalInfo.maritalStatus, KYC_MARITAL_STATUS_OPTIONS),
+    spouseName: personalInfo.spouseName?.trim() ?? "",
     pepExposed: lookupKycEnumLabel(personalInfo.pepExposed, KYC_PEP_OPTIONS),
     placeOfBirth: titleCaseWords(personalInfo.placeOfBirth),
     nationality: personalInfo.nationality.trim() || titleCaseWords(personalInfo.nationality),

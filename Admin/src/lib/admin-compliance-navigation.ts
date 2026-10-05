@@ -1,6 +1,7 @@
 import {
   ClipboardList,
   FileCheck2,
+  ScrollText,
   Shield,
   ShieldCheck,
   Trash2,
@@ -14,6 +15,7 @@ export type ComplianceTabKey =
   | "account-deletions"
   | "admin-actions"
   | "kyc-review"
+  | "consents"
   | "admin-accounts";
 
 export type ComplianceTab = {
@@ -56,6 +58,13 @@ export const COMPLIANCE_TABS: ComplianceTab[] = [
     label: "KYC review",
     icon: FileCheck2,
     permissions: ["documents.read"],
+  },
+  {
+    key: "consents",
+    slug: "consents",
+    label: "Consents",
+    icon: ScrollText,
+    permissions: ["consents.read"],
   },
   {
     key: "admin-accounts",

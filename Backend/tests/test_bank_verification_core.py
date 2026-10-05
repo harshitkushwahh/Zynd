@@ -24,6 +24,7 @@ async def test_resolve_ifsc_details_rejects_unknown_ifsc() -> None:
             await resolve_ifsc_details("KKBK0000591")
 
     assert exc_info.value.code == "invalid_ifsc"
+    assert exc_info.value.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -35,7 +36,7 @@ async def test_resolve_ifsc_details_rejects_invalid_format() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_hybrid_bank_verification_calls_poa_when_ifsc_lookup_has_no_bank_name() -> None:
+async def test_run_hybrid_bank_verification_prefers_ifsc_metadata_over_poa() -> None:
     poa_verify = AsyncMock(
         return_value={
             "id": "pv_test",
@@ -46,7 +47,7 @@ async def test_run_hybrid_bank_verification_calls_poa_when_ifsc_lookup_has_no_ba
                     "status": "verified",
                     "value": {
                         "bank_name": "Kotak Mahindra Bank",
-                        "branch_name": "Mumbai Main",
+                        "branch_name": "Connaught Place, New Delhi",
                     },
                 }
             ],
@@ -54,28 +55,57 @@ async def test_run_hybrid_bank_verification_calls_poa_when_ifsc_lookup_has_no_ba
     )
     with patch(
         "app.application.kyc.bank_verification_core.lookup_ifsc",
-        new=AsyncMock(return_value={"ifsc_code": "KKBK0000591", "bank_name": "", "branch": ""}),
+        new=AsyncMock(
+            return_value={
+                "ifsc_code": "ICIC0000611",
+                "bank_name": "ICICI Bank",
+                "branch": "gudivada, KRISHNA, ANDHRA PRADESH",
+                "branch_name": "gudivada",
+            }
+        ),
     ), patch(
         "app.application.kyc.bank_verification_core.poa_verify_bank_account",
         new=poa_verify,
-    ), patch(
-        "app.application.kyc.bank_verification_core.kyckart_bank_account_holder_name",
-        new=AsyncMock(return_value={"accountHolderName": "HARSHIT KUSHWAH"}),
     ):
         outcome = await run_hybrid_bank_verification(
             pan_draft={"fullName": "HARSHIT KUSHWAH"},
             pan_number="ABCPA3753D",
             account_number="0846929725",
             account_type="Savings",
-            ifsc_code="KKBK0000591",
+            ifsc_code="ICIC0000611",
             kyc_already_registered=True,
         )
 
     poa_verify.assert_awaited_once()
     assert outcome.bank_verified is True
-    assert outcome.kyckart_holder_name == "HARSHIT KUSHWAH"
-    assert outcome.bank_name == "Kotak Mahindra Bank"
-    assert outcome.branch == "Mumbai Main"
+    assert outcome.bank_name == "ICICI Bank"
+    assert outcome.branch == "gudivada, KRISHNA, ANDHRA PRADESH"
+    assert outcome.ifsc_code == "ICIC0000611"
+
+
+@pytest.mark.asyncio
+async def test_run_hybrid_bank_verification_rejects_unknown_ifsc_before_poa() -> None:
+    poa_verify = AsyncMock()
+    with patch(
+        "app.application.kyc.bank_verification_core.lookup_ifsc",
+        new=AsyncMock(return_value={"ifsc_code": "KKBK0000591", "bank_name": "", "branch": ""}),
+    ), patch(
+        "app.application.kyc.bank_verification_core.poa_verify_bank_account",
+        new=poa_verify,
+    ):
+        with pytest.raises(BankVerificationError) as exc_info:
+            await run_hybrid_bank_verification(
+                pan_draft={"fullName": "HARSHIT KUSHWAH"},
+                pan_number="ABCPA3753D",
+                account_number="0846929725",
+                account_type="Savings",
+                ifsc_code="KKBK0000591",
+                kyc_already_registered=True,
+            )
+
+    assert exc_info.value.code == "invalid_ifsc"
+    assert exc_info.value.status_code == 404
+    poa_verify.assert_not_awaited()
 
 
 def test_format_bank_verification_failure_low_confidence_uses_cybrilla_message() -> None:

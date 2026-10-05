@@ -31,13 +31,20 @@ const REKYC_READINESS_CODES = new Set([
   "kyc_rejected",
 ]);
 
+const FRESH_INVESTOR_READINESS_CODES = new Set(["kyc_unavailable"]);
+
 export function requiresFullKycSubmission(input: {
   kyc_already_registered?: boolean | null;
   readiness_code?: string | null;
+  poa_readiness_preverify_id?: string | null;
 }): boolean {
-  if (!input.kyc_already_registered) return true;
   const code = (input.readiness_code ?? "").toLowerCase();
-  return REKYC_READINESS_CODES.has(code);
+  if (FRESH_INVESTOR_READINESS_CODES.has(code) || REKYC_READINESS_CODES.has(code)) {
+    return true;
+  }
+  if (!input.kyc_already_registered) return true;
+  if (!input.poa_readiness_preverify_id) return true;
+  return false;
 }
 
 export function getKycJourneySteps(requiresFullKyc: boolean): KycJourneyStep[] {

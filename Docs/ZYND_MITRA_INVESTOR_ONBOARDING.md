@@ -114,10 +114,11 @@ flowchart TB
 | `kyc_underprocess` | Block — show “KYC is currently under process.” |
 | `kyc_deactivated` | Block — no investment, fresh, or modify |
 
-DigiLocker rules (backend `requires_digilocker_for_readiness`):
+DigiLocker / eSign (full KYC path):
 
-- Required: `kyc_unavailable`, `kyc_incomplete`
-- Skipped: KRA registered, `kyc_legacy`, `kyc_onhold`, `kyc_rejected`
+- After PAN, investors complete **FinPrim Identity Document DigiLocker** (Aadhaar address + father’s name prefilled into journey DB) before the address step.
+- Applies to **fresh** (`kyc_unavailable`) and **modify / re-KYC** (`kyc_incomplete`, `kyc_legacy`, `kyc_onhold`, `kyc_rejected`). KRA-compliant short path skips this step.
+- At **review submit**, Cybrilla **kyc_form** still runs `proof_details` + **eSign**; early DigiLocker persists identity in `kyc_journey_states` so investors are not re-prompted mid-journey for address data.
 
 ---
 

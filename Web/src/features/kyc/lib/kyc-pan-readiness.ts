@@ -1,5 +1,6 @@
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 import type { KycBootstrapResponse } from "@/features/kyc/lib/kyc-api";
+import { requiresFullKycSubmission } from "@/features/kyc/lib/kyc-journey";
 import { copy } from "@/shared/config/copy";
 
 export type KycReadinessInfo = {
@@ -83,27 +84,53 @@ export function isRekycReadinessCode(code: string | null | undefined): boolean {
 export function isDigilockerRequired(
   kycAlreadyRegistered: boolean | null | undefined,
   readinessCode: string | null | undefined,
+  poaReadinessPreverifyId?: string | null,
 ): boolean {
-  if (kycAlreadyRegistered) return false;
-  const normalized = (readinessCode ?? "").toLowerCase();
-  if (normalized === "kyc_incomplete") return true;
-  if (isRekycReadinessCode(readinessCode)) return false;
-  return true;
+  return requiresFullKycSubmission({
+    kyc_already_registered: kycAlreadyRegistered,
+    readiness_code: readinessCode,
+    poa_readiness_preverify_id: poaReadinessPreverifyId,
+  });
 }
 
-export function isDigilockerComplete(input: {
-  external_kyc_status?: string | null;
-} | null | undefined): boolean {
-  return input?.external_kyc_status === "returned_success";
+export function isDigilockerComplete(
+  input:
+    | {
+        external_kyc_status?: string | null;
+        external_identity_document_id?: string | null;
+        contact_draft?: Record<string, unknown> | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!input) return false;
+  if (input.external_kyc_status === "returned_failed") return false;
+  if (!input.external_identity_document_id?.trim()) return false;
+  return input.external_kyc_status === "returned_success";
 }
 
 export function shouldBlockAddressStep(input: {
   kyc_already_registered?: boolean | null;
   readiness_code?: string | null;
   external_kyc_status?: string | null;
+  external_identity_document_id?: string | null;
+  contact_draft?: Record<string, unknown> | null;
+  poa_readiness_preverify_id?: string | null;
+  requires_address_step_digilocker?: boolean | null;
+  requires_digilocker?: boolean | null;
 } | null | undefined): boolean {
   if (!input) return false;
-  return isDigilockerRequired(input.kyc_already_registered, input.readiness_code) && !isDigilockerComplete(input);
+  const digilockerRequired =
+    input.requires_address_step_digilocker != null
+      ? Boolean(input.requires_address_step_digilocker)
+      : input.requires_digilocker != null
+        ? Boolean(input.requires_digilocker)
+        : isDigilockerRequired(
+            input.kyc_already_registered,
+            input.readiness_code,
+            input.poa_readiness_preverify_id,
+          );
+  return digilockerRequired && !isDigilockerComplete(input);
 }
 
 export function capReachableStepIndex(
@@ -113,12 +140,36 @@ export function capReachableStepIndex(
     kyc_already_registered?: boolean | null;
     readiness_code?: string | null;
     external_kyc_status?: string | null;
+    external_identity_document_id?: string | null;
+    contact_draft?: Record<string, unknown> | null;
+    poa_readiness_preverify_id?: string | null;
   } | null | undefined,
 ): number {
   if (!shouldBlockAddressStep(input)) return serverIndex;
   const addressIndex = steps.findIndex((step) => step.id === "address");
-  if (addressIndex <= 0) return serverIndex;
-  return Math.min(serverIndex, addressIndex - 1);
+  if (addressIndex < 0) return serverIndex;
+  return Math.min(serverIndex, addressIndex);
+}
+
+const PHASE1_COMPLETE_STEPS = new Set([
+  "personal",
+  "nominee",
+  "bank",
+  "signature",
+  "review",
+]);
+
+/** Review / eSign resume only when DigiLocker + phase-1 drafts are actually done. */
+export function shouldFocusReviewAfterPartnerReturn(
+  payload: KycBootstrapResponse,
+  options: { esignReturnActive: boolean; pendingEsignResume: boolean },
+): boolean {
+  if (!options.esignReturnActive && !options.pendingEsignResume) return false;
+  if (shouldBlockAddressStep(payload)) return false;
+  const lastStep = payload.last_completed_step;
+  if (!lastStep || !PHASE1_COMPLETE_STEPS.has(lastStep)) return false;
+  if (!payload.contact_draft || !payload.personal_draft) return false;
+  return true;
 }
 
 export function shouldShowDigilockerFailureAlert(

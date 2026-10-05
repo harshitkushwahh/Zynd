@@ -8,7 +8,6 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from app.infrastructure.kyc.fp_clients import FpClientError, lookup_ifsc
-from app.infrastructure.kyc.kyckart_client import KyckartError, kyckart_bank_account_holder_name
 from app.infrastructure.kyc.poa_client import poa_verify_bank_account
 
 
@@ -56,7 +55,7 @@ def validate_ifsc_format(ifsc_code: str) -> str:
     return code
 
 
-async def resolve_ifsc_details(ifsc_code: str, *, require_bank_name: bool = True) -> tuple[str, str, str]:
+async def fetch_ifsc_master_data(ifsc_code: str) -> dict[str, str]:
     code = validate_ifsc_format(ifsc_code)
     try:
         payload = await lookup_ifsc(code)
@@ -65,22 +64,39 @@ async def resolve_ifsc_details(ifsc_code: str, *, require_bank_name: bool = True
             raise BankVerificationError(
                 "IFSC code not found. Check the code and try again.",
                 "invalid_ifsc",
-                400,
+                404,
             ) from exc
         raise BankVerificationError(exc.message, exc.code, exc.status_code) from exc
 
     if payload.get("lookup_fallback"):
-        return code, "", ""
+        raise BankVerificationError(
+            "IFSC lookup is temporarily unavailable. Try again in a moment.",
+            "ifsc_lookup_unavailable",
+            503,
+        )
 
-    bank_name = str(payload.get("bank_name") or payload.get("bankName") or "").strip()
-    branch = str(payload.get("branch") or payload.get("branch_name") or "").strip()
-    if require_bank_name and not bank_name:
+    from app.application.kyc.bank_ifsc_lookup import normalize_ifsc_lookup_payload
+
+    normalized = normalize_ifsc_lookup_payload(code, payload)
+    if not normalized["bank_name"]:
         raise BankVerificationError(
             "IFSC code not found. Check the code and try again.",
             "invalid_ifsc",
-            400,
+            404,
         )
-    return code, bank_name, branch
+    return normalized
+
+
+async def resolve_ifsc_details(ifsc_code: str, *, require_bank_name: bool = True) -> tuple[str, str, str]:
+    try:
+        data = await fetch_ifsc_master_data(ifsc_code)
+    except BankVerificationError:
+        if require_bank_name:
+            raise
+        code = validate_ifsc_format(ifsc_code)
+        return code, "", ""
+
+    return data["ifsc_code"], data["bank_name"], data["branch"]
 
 
 def extract_bank_metadata_from_poa(poa_result: dict[str, Any]) -> tuple[str, str]:
@@ -286,24 +302,11 @@ async def run_hybrid_bank_verification(
 ) -> HybridBankVerificationOutcome:
     account_no = account_number.strip()
     poa_account_type = map_account_type(account_type)
-    ifsc, bank_name, branch = await resolve_ifsc_details(ifsc_code, require_bank_name=False)
+    ifsc, bank_name, branch = await resolve_ifsc_details(ifsc_code, require_bank_name=True)
+    ifsc_metadata_resolved = bool(bank_name.strip())
 
     kyckart_holder_name = ""
     kyckart_lookup_error: str | None = None
-    try:
-        holder = await kyckart_bank_account_holder_name(
-            account_number=account_no,
-            ifsc_code=ifsc,
-        )
-        kyckart_holder_name = str(holder.get("accountHolderName") or holder.get("name") or "").strip()
-    except KyckartError as exc:
-        kyckart_lookup_error = exc.message
-        logger.info(
-            "kyckart_bank_lookup_skipped account_last4=%s code=%s",
-            account_no[-4:],
-            exc.code,
-        )
-
     pan_holder_name, kyckart_display_name = resolve_bank_holder_names(
         pan_draft,
         kyckart_holder_name=kyckart_holder_name,
@@ -355,10 +358,13 @@ async def run_hybrid_bank_verification(
     }
     requires_proof_upload = bank_code == "bank_account_proof_required"
 
-    if not bank_name or not branch:
+    if not ifsc_metadata_resolved:
         poa_bank_name, poa_branch = extract_bank_metadata_from_poa(poa_result)
         bank_name = bank_name or poa_bank_name
         branch = branch or poa_branch
+    elif not branch:
+        _, poa_branch = extract_bank_metadata_from_poa(poa_result)
+        branch = poa_branch
 
     failure: dict[str, Any] | None = None
     if not bank_verified:

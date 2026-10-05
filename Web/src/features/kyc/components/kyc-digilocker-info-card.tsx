@@ -1,14 +1,13 @@
 "use client";
 
-import Image from "next/image";
-
 import { Button } from "@/components/ui/button";
-import digiImage from "../../../../public/digi.png";
+import { KycDigilockerImage } from "@/features/kyc/components/kyc-digilocker-image";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type KycDigilockerInfoCardProps = {
   variant?: "required" | "failed";
+  layout?: "inline" | "prominent";
   description?: string | null;
   onRetry?: () => void;
   retrying?: boolean;
@@ -17,16 +16,53 @@ type KycDigilockerInfoCardProps = {
 
 export function KycDigilockerInfoCard({
   variant = "failed",
+  layout = "inline",
   description,
   onRetry,
   retrying = false,
   className,
 }: KycDigilockerInfoCardProps) {
   const isRequired = variant === "required";
+  const isProminent = layout === "prominent";
   const title = isRequired ? copy.kyc.digilocker.requiredTitle : copy.kyc.digilocker.failedTitle;
   const body =
     description?.trim() ||
     (isRequired ? copy.kyc.digilocker.requiredDescription : copy.kyc.digilocker.failedDescription);
+  const actionLabel = isRequired
+    ? copy.kyc.digilocker.requiredAction
+    : copy.kyc.digilocker.retry;
+
+  if (isProminent) {
+    return (
+      <div
+        className={cn(
+          "flex flex-col items-center gap-4 rounded-[1.75rem] border border-dashed px-6 pb-8 pt-6 text-center",
+          isRequired
+            ? "border-primary/30 bg-gradient-to-b from-primary/[0.06] via-card to-muted/20"
+            : "border-warning/35 bg-gradient-to-b from-warning/[0.06] via-card to-muted/20",
+          className,
+        )}
+      >
+        <KycDigilockerImage variant="address" />
+
+        <div className="max-w-sm space-y-2">
+          <p className="text-body font-semibold tracking-tight text-foreground">{title}</p>
+          <p className="text-caption leading-relaxed text-muted-foreground">{body}</p>
+          {!isRequired ? (
+            <p className="text-caption font-medium leading-relaxed text-foreground">
+              {copy.kyc.digilocker.aadhaarCheckboxHint}
+            </p>
+          ) : null}
+        </div>
+
+        {onRetry ? (
+          <Button type="button" className="w-full max-w-sm" disabled={retrying} onClick={onRetry}>
+            {retrying ? copy.kyc.digilocker.retrying : actionLabel}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -39,21 +75,7 @@ export function KycDigilockerInfoCard({
       )}
     >
       <div className="flex items-start gap-3">
-        <div
-          className={cn(
-            "relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-inset",
-            isRequired
-              ? "bg-primary/[0.08] ring-primary/20"
-              : "bg-warning/10 ring-warning/25",
-          )}
-        >
-          <Image
-            src={digiImage}
-            alt={copy.kyc.digilocker.title}
-            className="size-8 object-contain"
-            priority
-          />
-        </div>
+        <KycDigilockerImage variant="compact" />
 
         <div className="min-w-0 flex-1 text-left leading-tight">
           <p className="text-caption font-semibold tracking-tight text-foreground">{title}</p>
@@ -68,7 +90,7 @@ export function KycDigilockerInfoCard({
 
       {onRetry ? (
         <Button type="button" className="w-full" disabled={retrying} onClick={onRetry}>
-          {retrying ? copy.kyc.digilocker.retrying : copy.kyc.digilocker.retry}
+          {retrying ? copy.kyc.digilocker.retrying : actionLabel}
         </Button>
       ) : null}
     </div>

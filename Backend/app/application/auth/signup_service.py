@@ -278,5 +278,15 @@ async def signup_complete(
     access_token, refresh_token, _ = await create_authenticated_session(
         db, user=user, device=device, settings=settings, ip=ip
     )
+    from app.application.consent.consent_service import ConsentAcceptContext, record_acceptance
+    from app.domain.consent.keys import PLATFORM_SIGNUP_LEGAL
+
+    await record_acceptance(
+        db,
+        user=user,
+        definition_key=PLATFORM_SIGNUP_LEGAL,
+        context=ConsentAcceptContext(source="signup", ip=ip, user_agent=user_agent),
+    )
+
     await delete_signup_draft(signup_token)
     return user, access_token, refresh_token

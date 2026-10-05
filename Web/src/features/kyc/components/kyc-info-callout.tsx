@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -8,9 +9,11 @@ type KycInfoCalloutProps = {
   title: string;
   description: string;
   className?: string;
+  /** Optional control aligned inside the callout (e.g. DigiLocker retry). */
+  action?: ReactNode;
 };
 
-export function KycInfoCallout({ title, description, className }: KycInfoCalloutProps) {
+export function KycInfoCallout({ title, description, className, action }: KycInfoCalloutProps) {
   return (
     <div
       role="status"
@@ -26,6 +29,7 @@ export function KycInfoCallout({ title, description, className }: KycInfoCallout
         <p className="text-caption font-semibold tracking-tight text-foreground">{title}</p>
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{description}</p>
       </div>
+      {action ? <div className="shrink-0 self-center">{action}</div> : null}
     </div>
   );
 }

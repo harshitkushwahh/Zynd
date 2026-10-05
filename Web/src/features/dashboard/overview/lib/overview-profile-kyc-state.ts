@@ -46,6 +46,7 @@ export function buildOverviewKycProfileProgress(
   const requiresFullKyc = requiresFullKycSubmission({
     kyc_already_registered: payload.kyc_already_registered,
     readiness_code: payload.readiness_code,
+    poa_readiness_preverify_id: payload.poa_readiness_preverify_id,
   });
   const steps = getKycJourneySteps(requiresFullKyc);
   const totalSteps = Math.max(steps.length, 1);

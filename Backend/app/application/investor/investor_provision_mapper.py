@@ -72,6 +72,8 @@ def _fp_isd(isd: str) -> str:
 def _fp_address_nature(local_nature: str) -> str:
     if local_nature == "business_location":
         return "business_location"
+    if local_nature == "correspondence":
+        return "correspondence"
     return "residential"
 
 

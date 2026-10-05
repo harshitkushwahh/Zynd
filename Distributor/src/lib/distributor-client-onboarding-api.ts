@@ -55,6 +55,7 @@ export type ClientKycPanVerifyResponse = {
   kyc_already_registered?: boolean;
   readiness?: KycReadinessInfo;
   requires_digilocker?: boolean;
+  requires_full_kyc_submission?: boolean;
 };
 
 export type ClientKycPanConfirmNamesResponse = {
@@ -63,7 +64,9 @@ export type ClientKycPanConfirmNamesResponse = {
   block_type?: string;
   failure?: { field: string; code?: string; reason?: string };
   pan_draft?: KycPanDraft;
+  kyc_already_registered?: boolean;
   requires_digilocker?: boolean;
+  requires_full_kyc_submission?: boolean;
 };
 
 export async function startClientOnboarding(email: string) {
@@ -181,6 +184,7 @@ export type ClientKycBootstrapResponse = {
   kyc_already_registered: boolean | null;
   readiness_code: string | null;
   readiness_reason: string | null;
+  poa_readiness_preverify_id?: string | null;
   pan_verification_status: string | null;
   pan_verification_failure: { field: string; code?: string; reason?: string } | null;
   external_identity_document_id: string | null;
@@ -199,11 +203,37 @@ export type ClientKycBootstrapResponse = {
   esign_details_status: string | null;
   geolocation_draft: Record<string, unknown> | null;
   client_id?: string | null;
+  kyc_flow_mode?: string | null;
+  requires_pan_step_digilocker?: boolean | null;
+  requires_digilocker?: boolean | null;
+  proof_fetch_url?: string | null;
 };
 
 export async function fetchClientKycBootstrap(clientUserId: string) {
   return apiRequest<ClientKycBootstrapResponse>(
     `/distributor/clients/${encodeURIComponent(clientUserId)}/kyc/bootstrap`,
+  );
+}
+
+export async function startClientKycDigilocker(clientUserId: string) {
+  return apiRequest<{
+    redirect_url: string;
+    inline_complete?: boolean;
+    identity_document_id?: string;
+  }>(`/distributor/clients/${encodeURIComponent(clientUserId)}/kyc/kyc-request/start`, {
+    method: "POST",
+  });
+}
+
+export async function fetchClientKycIdentityDocument(clientUserId: string, documentId: string) {
+  return apiRequest<{
+    success: boolean;
+    fetch_status?: string;
+    reason?: string;
+    contact_draft?: Record<string, unknown>;
+    personal_draft?: Record<string, unknown>;
+  }>(
+    `/distributor/clients/${encodeURIComponent(clientUserId)}/kyc/identity-document/${encodeURIComponent(documentId)}`,
   );
 }
 
@@ -295,6 +325,8 @@ export async function saveClientKycJourneyState(
       | "signature"
       | "review";
     middle_name?: string;
+    record_nomination_opt_out?: boolean;
+    revoke_nomination_opt_out?: boolean;
   },
 ) {
   return apiRequest<ClientKycJourneyStateResponse>(

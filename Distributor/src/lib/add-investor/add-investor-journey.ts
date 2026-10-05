@@ -121,21 +121,15 @@ const REVIEW_STEP: AddInvestorJourneyStep = {
   phase: "compliance",
 };
 
-const COMPLIANCE_TAIL_NEW_TO_KYC: AddInvestorJourneyStep[] = [
+/** Full KYC: DigiLocker proof + eSign run at review submit via kyc_form (not mid-journey). */
+const NEW_TO_KYC_COMPLIANCE: AddInvestorJourneyStep[] = [
+  PAN_STEP,
+  ADDRESS_STEP,
+  PERSONAL_INFO_STEP,
   NOMINEE_STEP,
   BANK_STEP,
   SIGNATURE_STEP,
-  ESIGN_STEP,
   REVIEW_STEP,
-];
-
-/** New-to-KYC: DigiLocker first; signature upload after bank; e-sign before review. */
-const NEW_TO_KYC_COMPLIANCE: AddInvestorJourneyStep[] = [
-  PAN_STEP,
-  DIGILOCKER_STEP,
-  ADDRESS_STEP,
-  PERSONAL_INFO_STEP,
-  ...COMPLIANCE_TAIL_NEW_TO_KYC,
 ];
 
 /** KRA registered: skip DigiLocker, signature upload, and e-sign. */
@@ -148,7 +142,31 @@ const KRA_COMPLIANCE: AddInvestorJourneyStep[] = [
   REVIEW_STEP,
 ];
 
-/** @param requiresDigilocker true when investor is new to KYC (not KRA compliant). */
+const REKYC_READINESS_CODES = new Set([
+  "kyc_incomplete",
+  "kyc_legacy",
+  "kyc_onhold",
+  "kyc_rejected",
+]);
+
+const FRESH_INVESTOR_READINESS_CODES = new Set(["kyc_unavailable"]);
+
+/** Mirrors backend requires_full_kyc_submission (fresh, modify, or incomplete preverify). */
+export function requiresFullKycSubmission(input: {
+  kyc_already_registered?: boolean | null;
+  readiness_code?: string | null;
+  poa_readiness_preverify_id?: string | null;
+}): boolean {
+  const code = (input.readiness_code ?? "").toLowerCase();
+  if (FRESH_INVESTOR_READINESS_CODES.has(code) || REKYC_READINESS_CODES.has(code)) {
+    return true;
+  }
+  if (!input.kyc_already_registered) return true;
+  if (!input.poa_readiness_preverify_id) return true;
+  return false;
+}
+
+/** @param requiresDigilocker legacy name: true when full kyc_form submission path (not KRA short submit). */
 export function buildAddInvestorJourneySteps(requiresDigilocker: boolean): AddInvestorJourneyStep[] {
   const complianceSteps = requiresDigilocker ? NEW_TO_KYC_COMPLIANCE : KRA_COMPLIANCE;
   return [ONBOARDING_STEP, ...complianceSteps];
@@ -185,12 +203,17 @@ export type AddInvestorPersonalDraft = {
   fathersName: string;
   gender: string;
   maritalStatus: string;
+  spouseName: string;
   occupation: string;
   incomeSlab: string;
   pepExposed: string;
   placeOfBirth: string;
   countryOfOrigin: string;
 };
+
+export function isAddInvestorMarried(status: string | null | undefined): boolean {
+  return status?.trim().toLowerCase() === "married";
+}
 
 export type AddInvestorBankDraft = {
   accountHolderName: string;
@@ -313,6 +336,7 @@ export function emptyPersonalDraft(): AddInvestorPersonalDraft {
     fathersName: "",
     gender: "",
     maritalStatus: "",
+    spouseName: "",
     occupation: "",
     incomeSlab: "",
     pepExposed: "not_applicable",
@@ -329,6 +353,9 @@ export function normalizeAddInvestorPersonalDraft(
     fathersName: personal?.fathersName ?? defaults.fathersName,
     gender: personal?.gender ?? defaults.gender,
     maritalStatus: personal?.maritalStatus ?? defaults.maritalStatus,
+    spouseName: isAddInvestorMarried(personal?.maritalStatus ?? defaults.maritalStatus)
+      ? (personal?.spouseName ?? defaults.spouseName)
+      : "",
     occupation: personal?.occupation ?? defaults.occupation,
     incomeSlab: personal?.incomeSlab ?? defaults.incomeSlab,
     pepExposed: personal?.pepExposed ?? defaults.pepExposed,
@@ -343,6 +370,7 @@ export function isAddInvestorPersonalDraftValid(personal: AddInvestorPersonalDra
     normalized.fathersName.trim().length > 1 &&
     Boolean(normalized.gender) &&
     Boolean(normalized.maritalStatus) &&
+    (!isAddInvestorMarried(normalized.maritalStatus) || normalized.spouseName.trim().length > 1) &&
     Boolean(normalized.occupation) &&
     Boolean(normalized.incomeSlab) &&
     Boolean(normalized.pepExposed) &&
@@ -385,10 +413,8 @@ export function isAddInvestorComplianceComplete(input: {
   ) {
     return false;
   }
-  if (input.requiresDigilocker) {
-    if (!input.digilockerDone || !input.signatureUploaded || !input.esignDone) {
-      return false;
-    }
+  if (input.requiresDigilocker && !input.signatureUploaded) {
+    return false;
   }
   if (!isAddInvestorAddressFieldsValid(input.address.permanent)) {
     return false;

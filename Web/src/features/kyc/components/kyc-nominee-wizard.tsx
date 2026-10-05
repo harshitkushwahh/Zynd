@@ -25,7 +25,9 @@ import {
   createEmptyNomineeGuardian,
   createEmptyNomineeIdentity,
   formatNomineeDobForDateInput,
+  formatNomineeDobIso,
   getNomineeTypeFromDob,
+  isFutureNomineeDob,
   isNomineeWizardDirty,
   KYC_NOMINEE_WIZARD_STEPS,
   normalizeNomineeSharePercentInput,
@@ -38,10 +40,10 @@ import {
   normalizeNomineeDocumentNumber,
   normalizePersonNameInput,
   validateKycNomineeAddress,
-  validateKycNomineeDocument,
   validateKycNomineeEmail,
   validateKycNomineeMobile,
   validateKycPersonName,
+  validateOptionalKycNomineeDocument,
 } from "@/features/kyc/lib/kyc-nominee-validation";
 import { DEFAULT_KYC_COUNTRY } from "@/features/kyc/lib/indian-states";
 import type { KycMasterDataOption } from "@/features/kyc/lib/kyc-api";
@@ -80,7 +82,7 @@ function validateCore(
   if (!core.sourceOfWealth) errors.sourceOfWealth = copy.kyc.nominee.requiredField;
   if (!core.dateOfBirth.trim()) {
     errors.dateOfBirth = copy.kyc.nominee.requiredField;
-  } else if (!parseNomineeDob(core.dateOfBirth)) {
+  } else if (!parseNomineeDob(core.dateOfBirth) || isFutureNomineeDob(core.dateOfBirth)) {
     errors.dateOfBirth = copy.kyc.nominee.invalidDob;
   }
   if (!core.sharePercent.trim()) {
@@ -112,31 +114,20 @@ function validateWizardStep(
     if (draft.type === "minor" && draft.guardian) {
       const guardianNameError = validateKycPersonName(draft.guardian.name);
       if (guardianNameError) errors.guardianName = guardianNameError;
-      if (!draft.guardian.sourceOfWealth) {
-        errors.guardianSourceOfWealth = copy.kyc.nominee.requiredField;
-      }
-      if (!draft.guardian.documentType) {
-        errors.guardianDocumentType = copy.kyc.nominee.requiredField;
-      } else {
-        const guardianDocumentError = validateKycNomineeDocument(
-          draft.guardian.documentType,
-          draft.guardian.documentNumber,
-        );
-        if (guardianDocumentError) {
-          errors.guardianDocumentNumber = guardianDocumentError;
-        }
+      const guardianDocumentError = validateOptionalKycNomineeDocument(
+        draft.guardian.documentType,
+        draft.guardian.documentNumber,
+      );
+      if (guardianDocumentError) {
+        errors.guardianDocumentNumber = guardianDocumentError;
       }
     } else {
-      if (!draft.identity.documentType) {
-        errors.documentType = copy.kyc.nominee.requiredField;
-      } else {
-        const documentError = validateKycNomineeDocument(
-          draft.identity.documentType,
-          draft.identity.documentNumber,
-        );
-        if (documentError) {
-          errors.documentNumber = documentError;
-        }
+      const documentError = validateOptionalKycNomineeDocument(
+        draft.identity.documentType,
+        draft.identity.documentNumber,
+      );
+      if (documentError) {
+        errors.documentNumber = documentError;
       }
     }
   }
@@ -318,11 +309,16 @@ export function KycNomineeWizard({
       return;
     }
 
-    const type = getNomineeTypeFromDob(core.dateOfBirth);
+    const normalizedCore = {
+      ...core,
+      dateOfBirth: formatNomineeDobIso(core.dateOfBirth) || core.dateOfBirth,
+    };
+    setCore(normalizedCore);
+    const type = getNomineeTypeFromDob(normalizedCore.dateOfBirth);
     setDraft((current) => ({
       ...current,
       type,
-      core,
+      core: normalizedCore,
       guardian: type === "minor" ? current.guardian ?? createEmptyNomineeGuardian() : undefined,
       identity: current.identity ?? createEmptyNomineeIdentity(),
       contact: current.contact ?? createEmptyNomineeContact(),
@@ -350,7 +346,10 @@ export function KycNomineeWizard({
     onSave({
       id: editingNominee?.id ?? crypto.randomUUID(),
       type: nomineeType,
-      core,
+      core: {
+        ...core,
+        dateOfBirth: formatNomineeDobIso(core.dateOfBirth) || core.dateOfBirth,
+      },
       identity: draft.identity,
       contact: draft.contact,
       address: draft.address,
@@ -527,7 +526,7 @@ export function KycNomineeWizard({
 
             <KycSelectField
               id="guardian-document-type"
-              label={`${copy.kyc.nominee.fields.documentType} *`}
+              label={copy.kyc.nominee.fields.documentType}
               value={guardian.documentType}
               options={documentTypeSelectOptions}
               placeholder={copy.kyc.nominee.placeholders.select}
@@ -555,7 +554,7 @@ export function KycNomineeWizard({
 
             <KycSelectField
               id="guardian-source-of-wealth"
-              label={`${copy.kyc.nominee.fields.guardianSourceOfWealth} *`}
+              label={copy.kyc.nominee.fields.guardianSourceOfWealth}
               value={guardian.sourceOfWealth}
               options={sourceOfWealthSelectOptions}
               placeholder={copy.kyc.nominee.placeholders.select}
@@ -583,7 +582,7 @@ export function KycNomineeWizard({
           <>
             <KycSelectField
               id="nominee-document-type"
-              label={`${copy.kyc.nominee.fields.documentType} *`}
+              label={copy.kyc.nominee.fields.documentType}
               value={draft.identity.documentType}
               options={documentTypeSelectOptions}
               placeholder={copy.kyc.nominee.placeholders.select}
@@ -622,7 +621,7 @@ export function KycNomineeWizard({
         {activeStep === "contact" && nomineeType === "minor" ? (
           <>
             <div className="space-y-2">
-              <Label htmlFor="guardian-email">{copy.kyc.nominee.fields.guardianEmail} *</Label>
+              <Label htmlFor="guardian-email">{copy.kyc.nominee.fields.guardianEmail}</Label>
               <Input
                 id="guardian-email"
                 type="email"
@@ -636,7 +635,7 @@ export function KycNomineeWizard({
 
             <KycMobileField
               id="guardian-mobile"
-              label={`${copy.kyc.nominee.fields.guardianMobile} *`}
+              label={copy.kyc.nominee.fields.guardianMobile}
               value={guardian.mobile}
               placeholder={copy.kyc.nominee.placeholders.mobile}
               hasError={Boolean(errors.guardianMobile)}
@@ -649,7 +648,7 @@ export function KycNomineeWizard({
         {activeStep === "contact" && nomineeType === "individual" ? (
           <>
             <div className="space-y-2">
-              <Label htmlFor="nominee-email-contact">{copy.kyc.nominee.fields.email} *</Label>
+              <Label htmlFor="nominee-email-contact">{copy.kyc.nominee.fields.email}</Label>
               <Input
                 id="nominee-email-contact"
                 type="email"
@@ -663,7 +662,7 @@ export function KycNomineeWizard({
 
             <KycMobileField
               id="nominee-mobile-contact"
-              label={`${copy.kyc.nominee.fields.mobile} *`}
+              label={copy.kyc.nominee.fields.mobile}
               value={draft.contact.mobile}
               placeholder={copy.kyc.nominee.placeholders.mobile}
               hasError={Boolean(errors.mobile)}
@@ -676,7 +675,7 @@ export function KycNomineeWizard({
         {activeStep === "address" ? (
           <>
             <p className="text-compact font-medium text-foreground">
-              {copy.kyc.nominee.fields.nomineeAddress} *
+              {copy.kyc.nominee.fields.nomineeAddress}
             </p>
 
             <div className="space-y-2">
