@@ -13,6 +13,11 @@ export const KYC_BANK_ACCOUNT_TYPES: readonly KycBankAccountType[] = [
 ] as const;
 
 export const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+/** Legacy flows stored the field label "Branch" when only the bank name was inferred from IFSC. */
+export function isKycBankBranchPlaceholder(branch: string | null | undefined): boolean {
+  return branch?.trim().toLowerCase() === "branch";
+}
 export const ACCOUNT_NUMBER_MIN_LENGTH = 9;
 export const ACCOUNT_NUMBER_MAX_LENGTH = 18;
 export const ACCOUNT_NUMBER_PATTERN = /^\d{9,18}$/;
@@ -46,13 +51,26 @@ export type KycBankVerificationResult = {
   failureReason?: string;
 };
 
-export function validateKycBankForm(form: KycBankFormValue) {
-  const errors: Partial<Record<keyof KycBankFormValue, string>> = {};
+export function bankAccountNumberOnFile(form: KycBankFormValue) {
+  if (form.accountNumber.trim()) {
+    return false;
+  }
+  return Boolean(form.accountNumberLast4?.trim() || form.accountNumberMasked?.trim());
+}
 
-  if (!form.accountNumber.trim()) {
-    errors.accountNumber = copy.kyc.bank.requiredField;
-  } else if (!ACCOUNT_NUMBER_PATTERN.test(form.accountNumber)) {
-    errors.accountNumber = copy.kyc.bank.invalidAccountNumber;
+export function validateKycBankForm(
+  form: KycBankFormValue,
+  options?: { accountNumberOnFile?: boolean },
+) {
+  const errors: Partial<Record<keyof KycBankFormValue, string>> = {};
+  const accountOnFile = options?.accountNumberOnFile ?? bankAccountNumberOnFile(form);
+
+  if (!accountOnFile) {
+    if (!form.accountNumber.trim()) {
+      errors.accountNumber = copy.kyc.bank.requiredField;
+    } else if (!ACCOUNT_NUMBER_PATTERN.test(form.accountNumber)) {
+      errors.accountNumber = copy.kyc.bank.invalidAccountNumber;
+    }
   }
 
   if (!form.accountType) {

@@ -149,6 +149,7 @@ function PersonalIdentityPanel({ kyc }: { kyc: AdminUserKycDetail }) {
         <KycField label="Father's name" value={kyc.personal?.fathers_name} />
         <KycField label="Gender" value={formatKycLabel(kyc.personal?.gender)} />
         <KycField label="Marital status" value={formatKycLabel(kyc.personal?.marital_status)} />
+        <KycField label="Spouse name" value={kyc.personal?.spouse_name} />
         <KycField label="Occupation" value={formatKycLabel(kyc.personal?.occupation)} />
         <KycField label="Income slab" value={formatKycLabel(kyc.personal?.income_slab)} />
         <KycField label="Place of birth" value={formatKycLabel(kyc.personal?.place_of_birth)} />

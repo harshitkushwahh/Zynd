@@ -471,6 +471,30 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "notes": "Phase 5 admin moderation actions.",
     },
     {
+        "permission": "consents.read",
+        "status": "enforced",
+        "routes": [
+            "GET /admin/consents/definitions",
+            "GET /admin/consents/stats",
+        ],
+        "notes": "Consent catalog and acceptance statistics.",
+    },
+    {
+        "permission": "consents.manage",
+        "status": "enforced",
+        "routes": [
+            "POST /admin/consents/definitions/{consent_key}/versions",
+            "POST /admin/consents/versions/{version_id}/publish",
+        ],
+        "notes": "Draft and publish consent versions (maker-checker when enabled).",
+    },
+    {
+        "permission": "consents.records.read",
+        "status": "enforced",
+        "routes": ["GET /admin/consents/users/{user_ref}/records"],
+        "notes": "Per-user consent acceptance audit trail.",
+    },
+    {
         "permission": "referrals.read",
         "status": "enforced",
         "routes": [

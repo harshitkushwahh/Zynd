@@ -7,11 +7,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status
 from app.application.kyc.kyc_completion_service import on_kyc_completed
-from app.infrastructure.kyc.poa_client import poa_check_readiness
+from app.infrastructure.kyc.poa_client import fetch_poa_preverification, poa_check_readiness
 from app.infrastructure.persistence.models import KycOverallStatus, User
 
 
-async def check_kra_readiness_status(db: AsyncSession, *, user: User) -> dict[str, Any]:
+async def _resolve_kra_readiness_result(
+    journey,
+    *,
+    pan: str,
+    force_refresh: bool,
+) -> dict[str, Any]:
+    """Reuse stored POA pre-verification when possible to avoid Cybrilla rate limits."""
+    existing_id = journey.poa_readiness_preverify_id
+    if not force_refresh and existing_id:
+        payload = await fetch_poa_preverification(existing_id)
+        status = str(payload.get("status") or "")
+        if status == "completed":
+            return payload
+        if status in {"accepted", "pending"}:
+            return payload
+
+    result = await poa_check_readiness(pan)
+    journey.poa_readiness_preverify_id = result.get("id") or journey.poa_readiness_preverify_id
+    return result
+
+
+async def check_kra_readiness_status(
+    db: AsyncSession,
+    *,
+    user: User,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
     journey = await get_or_create_journey(db, user.id)
     status = await get_or_create_status(db, user.id)
 
@@ -41,7 +67,21 @@ async def check_kra_readiness_status(db: AsyncSession, *, user: User) -> dict[st
     if not pan:
         raise KycError("PAN details are missing from your KYC journey.", "pan_missing", 400)
 
-    readiness_result = await poa_check_readiness(pan)
+    readiness_result = await _resolve_kra_readiness_result(journey, pan=pan, force_refresh=force_refresh)
+    if str(readiness_result.get("status") or "") != "completed":
+        stored_code = journey.readiness_code
+        return {
+            "kraVerified": False,
+            "nameUpdated": False,
+            "overallStatus": status.overall_status.value,
+            "readiness": {
+                "status": "verified" if journey.kyc_already_registered else ("failed" if stored_code else None),
+                "code": stored_code,
+                "reason": journey.readiness_reason,
+            },
+            "message": "KYC verification is still pending at the KRA.",
+        }
+
     readiness = readiness_result.get("readiness") or {}
     readiness_status = readiness.get("status")
     readiness_code = readiness.get("code")
@@ -49,7 +89,7 @@ async def check_kra_readiness_status(db: AsyncSession, *, user: User) -> dict[st
 
     journey.readiness_code = readiness_code
     journey.readiness_reason = readiness_reason
-    journey.poa_readiness_preverify_id = readiness_result.get("id")
+    journey.poa_readiness_preverify_id = readiness_result.get("id") or journey.poa_readiness_preverify_id
 
     kra_verified = readiness_status == "verified"
     name_updated = False

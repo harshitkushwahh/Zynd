@@ -24,6 +24,8 @@ function bootstrap(overrides: Partial<KycBootstrapResponse> = {}): KycBootstrapR
     digilocker_failure_reason: null,
     bank_verification_status: null,
     bank_verification_failure: null,
+    poa_readiness_preverify_id: null,
+    poa_pan_preverify_id: null,
     poa_bank_preverify_id: null,
     poa_bank_proof_file_id: null,
     signature_draft: null,

@@ -25,21 +25,25 @@ import { SupportFloatingWidget } from "@/features/support/components/support-flo
 import { SupportWidgetProvider } from "@/features/support/contexts/support-widget-context";
 import { useZyndPinOptional } from "@/contexts/zynd-pin-context";
 import { useKycOptional } from "@/contexts/kyc-context";
+import { persistDigilockerReturnFromSearch } from "@/features/kyc/lib/kyc-digilocker-return";
 import {
-  hasPendingDigilockerResume,
-  persistDigilockerReturnFromSearch,
-} from "@/features/kyc/lib/kyc-digilocker-return";
+  hasKycPartnerReturnInUrl,
+  reconcileKycPartnerReturnUrlOnDashboardLoad,
+} from "@/features/kyc/lib/kyc-partner-embed";
+import { clearKycPartnerPopupWindowName } from "@/features/kyc/lib/kyc-partner-popup";
 import { ZyndGlobalLoader } from "@/components/ui/zynd-global-loader";
 import { useAuth } from "@/contexts/auth-context";
 import { SettingsNavigationProvider } from "@/contexts/settings-navigation-context";
 import { copy } from "@/shared/config/copy";
 import { ZyndErrorBoundary } from "@/shared/components/zynd-error-boundary";
+import { ConsentReacceptDialog } from "@/features/consent/components/consent-reaccept-dialog";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading, sessionRetrying } = useAuth();
   const pinContext = useZyndPinOptional();
   const kyc = useKycOptional();
+  const kycReady = Boolean(kyc);
   const resumeAfterDigilocker = kyc?.resumeAfterDigilocker;
   const resumeAfterKycSubmission = kyc?.resumeAfterKycSubmission;
   const digilockerReturnHandledRef = useRef(false);
@@ -47,19 +51,29 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !sessionRetrying && !user) {
-      if (hasPendingDigilockerResume() || persistDigilockerReturnFromSearch()) return;
+      if (hasKycPartnerReturnInUrl()) {
+        return;
+      }
       router.replace("/");
     }
   }, [loading, router, sessionRetrying, user]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    clearKycPartnerPopupWindowName();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !kycReady) return;
+    if (!reconcileKycPartnerReturnUrlOnDashboardLoad()) return;
 
     const params = new URLSearchParams(window.location.search);
-    const pendingDigilockerReturn =
-      persistDigilockerReturnFromSearch() || params.get("kyc_digilocker_return") === "1";
+    const digilockerReturnInUrl =
+      params.get("kyc_digilocker_return") === "1" ||
+      Boolean(params.get("identity_document") && params.get("status"));
 
-    if (pendingDigilockerReturn) {
+    if (digilockerReturnInUrl) {
+      persistDigilockerReturnFromSearch();
       if (!digilockerReturnHandledRef.current && resumeAfterDigilocker) {
         digilockerReturnHandledRef.current = true;
         resumeAfterDigilocker();
@@ -67,16 +81,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (
-      params.get("kyc_proof_return") === "1" ||
-      params.get("kyc_esign_return") === "1"
-    ) {
-      if (!kycSubmissionReturnHandledRef.current && resumeAfterKycSubmission) {
-        kycSubmissionReturnHandledRef.current = true;
-        resumeAfterKycSubmission();
-      }
+    if (!kycSubmissionReturnHandledRef.current && resumeAfterKycSubmission) {
+      kycSubmissionReturnHandledRef.current = true;
+      resumeAfterKycSubmission();
     }
-  }, [resumeAfterDigilocker, resumeAfterKycSubmission]);
+  }, [kycReady, resumeAfterDigilocker, resumeAfterKycSubmission]);
 
   const showInitialAuthLoader = loading && !user;
   const showReconnectLoader = sessionRetrying && !user;
@@ -111,6 +120,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           onOpenChange={(open) => (open ? kyc.openDialog() : kyc.closeDialog())}
         />
       ) : null}
+      {user ? <ConsentReacceptDialog context="login" enabled={!loading} /> : null}
         <div
         className={cn(
           "flex h-full min-h-0 flex-col",

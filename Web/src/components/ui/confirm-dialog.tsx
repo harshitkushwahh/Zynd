@@ -22,6 +22,10 @@ type ConfirmDialogProps = {
   onConfirm?: () => void;
   loading?: boolean;
   contentClassName?: string;
+  overlayClassName?: string;
+  showCloseButton?: boolean;
+  /** When true, only the confirm action is shown (dismiss via close icon or overlay if enabled). */
+  hideCancelButton?: boolean;
 };
 
 const variantConfig: Record<
@@ -69,6 +73,9 @@ export function ConfirmDialog({
   onConfirm,
   loading = false,
   contentClassName,
+  overlayClassName,
+  showCloseButton = false,
+  hideCancelButton = false,
 }: ConfirmDialogProps) {
   const isInfo = variant === "info";
 
@@ -81,12 +88,17 @@ export function ConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn("z-[60] max-w-sm gap-0 overflow-hidden p-0", contentClassName)}
-        overlayClassName="z-[60]"
-        showCloseButton={false}
+        overlayClassName={cn("z-[60]", overlayClassName)}
+        showCloseButton={showCloseButton}
       >
         <DialogTitle className="sr-only">{title ?? description}</DialogTitle>
 
-        <div className="flex flex-col items-center px-6 py-6 text-center">
+        <div
+          className={cn(
+            "flex flex-col items-center px-6 py-6 text-center",
+            showCloseButton && "pt-8",
+          )}
+        >
           <ConfirmDialogIcon variant={variant} />
 
           {!isInfo && title ? (
@@ -106,26 +118,33 @@ export function ConfirmDialog({
             {description}
           </p>
 
-          <div className={cn("mt-6 flex w-full gap-2", isInfo ? "justify-center" : "flex-col-reverse sm:flex-row sm:justify-center")}>
+          <div
+            className={cn(
+              "mt-6 flex w-full min-w-0 gap-2",
+              isInfo ? "justify-center" : "flex-col",
+            )}
+          >
             {isInfo ? (
               <Button type="button" className="min-w-[7rem]" onClick={handleDone} disabled={loading}>
                 {doneLabel}
               </Button>
             ) : (
               <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="sm:min-w-[7rem]"
-                  onClick={() => onOpenChange(false)}
-                  disabled={loading}
-                >
-                  {cancelLabel}
-                </Button>
+                {!hideCancelButton ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-auto min-h-10 w-full min-w-0 whitespace-normal px-4 py-2.5 text-center"
+                    onClick={() => onOpenChange(false)}
+                    disabled={loading}
+                  >
+                    {cancelLabel}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant={variant === "destructive" ? "destructive" : "default"}
-                  className="sm:min-w-[7rem]"
+                  className="h-auto min-h-10 w-full min-w-0 whitespace-normal px-4 py-2.5 text-center"
                   onClick={() => {
                     onConfirm?.();
                   }}

@@ -7,7 +7,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.bootstrap_redaction import redact_bootstrap_drafts
+from app.application.kyc.errors import KycError
+from app.application.consent.consent_service import (
+    ConsentAcceptContext,
+    record_acceptance,
+    record_revocation,
+)
+from app.domain.consent.keys import KYC_NOMINATION_OPT_OUT
 from app.application.kyc.journey_gate_service import requires_digilocker, requires_full_kyc_submission
+from app.application.kyc.kyc_flow_mode import flow_mode_bootstrap_fields
+from app.application.kyc.kyc_partner_refs import latest_kyc_form_proof_fetch_url
+from app.application.kyc.path_a_proof import requires_poa_kyc_form_proof_fetch
 from app.application.kyc.kyc_notification_service import notify_kyc_under_review
 from app.infrastructure.persistence.models import (
     KycJourneyState,
@@ -63,9 +73,9 @@ def _step_index(
 
 
 def _digilocker_complete(journey: KycJourneyState | None) -> bool:
-    if journey is None:
-        return False
-    return journey.external_kyc_status == "returned_success"
+    from app.application.kyc.path_a_proof import path_a_digilocker_proof_satisfied
+
+    return path_a_digilocker_proof_satisfied(journey)
 
 
 def resolve_active_step_index(journey: KycJourneyState | None, *, step: str | None = None) -> int:
@@ -126,6 +136,7 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
             "contactDraft": None,
             "personalDraft": None,
             "nomineeDraft": None,
+            "nominationOptedOut": False,
             "bankDraft": None,
             "kycAlreadyRegistered": None,
             "readinessCode": None,
@@ -133,10 +144,13 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
             "panVerificationStatus": None,
             "panVerificationFailure": None,
             "externalIdentityDocumentId": None,
+            "externalIdentityDocumentJson": None,
             "externalKycStatus": None,
             "digilockerFailureReason": None,
             "bankVerificationStatus": None,
             "bankVerificationFailure": None,
+            "poaReadinessPreverifyId": None,
+            "poaPanPreverifyId": None,
             "poaBankPreverifyId": None,
             "poaBankProofFileId": None,
             "signatureDraft": None,
@@ -148,7 +162,12 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
             "esignDetailsStatus": None,
             "geolocationDraft": None,
             "stepStatuses": None,
+            **flow_mode_bootstrap_fields(None),
+            "requiresDigilocker": False,
+            "proofFetchUrl": None,
+            "requiresPoaProofFetch": False,
         }
+    proof_fetch_url = latest_kyc_form_proof_fetch_url(journey) if journey else None
     raw_payload = {
         "lastCompletedStep": journey.last_completed_step,
         "activeStepIndex": resolve_active_step_index(journey),
@@ -156,6 +175,7 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
         "contactDraft": journey.contact_draft_json,
         "personalDraft": journey.personal_draft_json,
         "nomineeDraft": journey.nominee_draft_json,
+        "nominationOptedOut": False,
         "bankDraft": journey.bank_draft_json,
         "kycAlreadyRegistered": journey.kyc_already_registered,
         "readinessCode": journey.readiness_code,
@@ -163,10 +183,13 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
         "panVerificationStatus": journey.pan_verification_status,
         "panVerificationFailure": journey.pan_verification_failure_json,
         "externalIdentityDocumentId": journey.external_identity_document_id,
+        "externalIdentityDocumentJson": journey.external_identity_document_json,
         "externalKycStatus": journey.external_kyc_status,
         "digilockerFailureReason": journey.digilocker_failure_reason,
         "bankVerificationStatus": journey.bank_verification_status,
         "bankVerificationFailure": journey.bank_verification_failure_json,
+        "poaReadinessPreverifyId": journey.poa_readiness_preverify_id,
+        "poaPanPreverifyId": journey.poa_pan_preverify_id,
         "poaBankPreverifyId": journey.poa_bank_preverify_id,
         "poaBankProofFileId": journey.poa_bank_proof_file_id,
         "signatureDraft": journey.signature_draft_json,
@@ -188,8 +211,69 @@ def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycSt
             "review": status.review_step_status.value if status else "pending",
             "overall": status.overall_status.value if status else "none",
         },
+        **flow_mode_bootstrap_fields(journey),
+        "requiresDigilocker": requires_digilocker(journey),
+        "proofFetchUrl": proof_fetch_url,
+        "requiresPoaProofFetch": requires_poa_kyc_form_proof_fetch(
+            journey,
+            fetch_url=proof_fetch_url,
+        ),
     }
     return redact_bootstrap_drafts(raw_payload)
+
+
+async def reset_kyc_journey_drafts(
+    db: AsyncSession,
+    *,
+    user: User,
+) -> tuple[KycJourneyState, UserKycStatus]:
+    """Clear all in-progress KYC journey drafts and verification state (e.g. after PAN removal)."""
+    journey = await get_or_create_journey(db, user.id)
+    status = await get_or_create_status(db, user.id)
+
+    journey.last_completed_step = None
+    journey.pan_draft_json = None
+    journey.contact_draft_json = None
+    journey.personal_draft_json = None
+    journey.kyc_already_registered = None
+    journey.readiness_code = None
+    journey.readiness_reason = None
+    journey.pan_verification_status = None
+    journey.pan_verification_failure_json = None
+    journey.external_kyc_request_id = None
+    journey.external_identity_document_id = None
+    journey.external_kyc_status = None
+    journey.digilocker_failure_reason = None
+    journey.poa_readiness_preverify_id = None
+    journey.poa_pan_preverify_id = None
+    journey.nominee_draft_json = None
+    journey.bank_draft_json = None
+    journey.poa_bank_preverify_id = None
+    journey.poa_bank_proof_file_id = None
+    journey.bank_verification_status = None
+    journey.bank_verification_failure_json = None
+    journey.signature_draft_json = None
+    journey.external_kyc_form_id = None
+    journey.kyc_form_status = None
+    journey.kyc_form_type = None
+    journey.kyc_form_failure_reason = None
+    journey.proof_details_status = None
+    journey.esign_details_status = None
+    journey.geolocation_json = None
+
+    status.pan_step_status = KycStepStatus.pending
+    status.digilocker_step_status = KycStepStatus.pending
+    status.address_step_status = KycStepStatus.pending
+    status.personal_step_status = KycStepStatus.pending
+    status.nominee_step_status = KycStepStatus.pending
+    status.bank_step_status = KycStepStatus.pending
+    status.signature_step_status = KycStepStatus.pending
+    status.review_step_status = KycStepStatus.pending
+    if status.overall_status not in {KycOverallStatus.completed}:
+        status.overall_status = KycOverallStatus.in_progress
+
+    await db.flush()
+    return journey, status
 
 
 async def find_journey_by_identity_document(
@@ -217,21 +301,97 @@ async def save_journey_state(
     if "panDraftJson" in payload:
         journey.pan_draft_json = payload["panDraftJson"]
     if "contactDraftJson" in payload:
-        journey.contact_draft_json = payload["contactDraftJson"]
+        from app.application.kyc.path_a_proof import path_a_digilocker_proof_satisfied
+
+        if requires_digilocker(journey) and not path_a_digilocker_proof_satisfied(journey):
+            raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
+        from app.application.kyc.pincode_address_service import normalize_contact_draft_pincodes
+
+        contact_draft = payload["contactDraftJson"]
+        if isinstance(contact_draft, dict):
+            contact_draft = await normalize_contact_draft_pincodes(contact_draft)
+        journey.contact_draft_json = contact_draft
         status.address_step_status = KycStepStatus.saved
     if "personalDraftJson" in payload:
-        journey.personal_draft_json = payload["personalDraftJson"]
+        from app.application.kyc.personal_draft import normalize_personal_draft, validate_personal_draft
+
+        personal_draft = payload["personalDraftJson"]
+        if isinstance(personal_draft, dict):
+            prior = journey.personal_draft_json if isinstance(journey.personal_draft_json, dict) else {}
+            from app.application.kyc.personal_draft import MARITAL_STATUS_LOCKED_KEY, is_marital_status_locked
+
+            locked = is_marital_status_locked(prior)
+            validate_personal_draft(personal_draft, journey_marital_locked=locked)
+            personal_draft = normalize_personal_draft(personal_draft)
+            if locked:
+                personal_draft[MARITAL_STATUS_LOCKED_KEY] = True
+        journey.personal_draft_json = personal_draft
         status.personal_step_status = KycStepStatus.saved
         status.overall_status = KycOverallStatus.phase1_complete
+    consent_ctx_raw = payload.get("consentContext")
+    consent_ctx = None
+    if isinstance(consent_ctx_raw, dict):
+        consent_ctx = ConsentAcceptContext(
+            source=str(consent_ctx_raw.get("source") or "kyc_journey"),
+            ip=consent_ctx_raw.get("ip"),
+            user_agent=consent_ctx_raw.get("userAgent"),
+        )
+
+    if payload.get("revokeNominationOptOut") and consent_ctx:
+        await record_revocation(
+            db,
+            user=user,
+            definition_key=KYC_NOMINATION_OPT_OUT,
+            context=consent_ctx,
+        )
+
     if "nomineeDraftJson" in payload:
-        journey.nominee_draft_json = payload["nomineeDraftJson"]
+        nominee_draft = payload["nomineeDraftJson"]
+        if payload.get("recordNominationOptOut"):
+            if nominee_draft:
+                raise KycError(
+                    "Nomination opt-out requires an empty nominee list.",
+                    "nomination_opt_out_requires_empty_nominees",
+                    400,
+                )
+            if consent_ctx:
+                await record_acceptance(
+                    db,
+                    user=user,
+                    definition_key=KYC_NOMINATION_OPT_OUT,
+                    context=consent_ctx,
+                )
+        elif nominee_draft and consent_ctx:
+            await record_revocation(
+                db,
+                user=user,
+                definition_key=KYC_NOMINATION_OPT_OUT,
+                context=consent_ctx,
+            )
+
+        journey.nominee_draft_json = nominee_draft
         status.nominee_step_status = (
             KycStepStatus.skipped
-            if not payload["nomineeDraftJson"]
+            if not nominee_draft
             else KycStepStatus.saved
         )
+
+    if payload.get("recordNominationOptOut") and "nomineeDraftJson" not in payload and consent_ctx:
+        await record_acceptance(
+            db,
+            user=user,
+            definition_key=KYC_NOMINATION_OPT_OUT,
+            context=consent_ctx,
+        )
     if "bankDraftJson" in payload:
-        journey.bank_draft_json = payload["bankDraftJson"]
+        bank_draft = payload["bankDraftJson"]
+        if isinstance(bank_draft, dict):
+            incoming_number = str(bank_draft.get("accountNumber") or "").strip()
+            if not incoming_number and isinstance(journey.bank_draft_json, dict):
+                preserved = str(journey.bank_draft_json.get("accountNumber") or "").strip()
+                if preserved:
+                    bank_draft = {**bank_draft, "accountNumber": preserved}
+        journey.bank_draft_json = bank_draft
         status.bank_step_status = KycStepStatus.saved
         status.overall_status = KycOverallStatus.phase2_complete
     if "bankVerificationStatus" in payload:
@@ -259,7 +419,19 @@ async def save_journey_state(
     if "esignDetailsStatus" in payload:
         journey.esign_details_status = payload["esignDetailsStatus"]
     if "geolocationJson" in payload:
-        journey.geolocation_json = payload["geolocationJson"]
+        from app.application.kyc.geolocation_service import round_kyc_geo_coordinate
+
+        geo = payload["geolocationJson"] or {}
+        if isinstance(geo, dict):
+            lat = geo.get("latitude")
+            lon = geo.get("longitude")
+            if lat is not None and lon is not None:
+                geo = {
+                    **geo,
+                    "latitude": round_kyc_geo_coordinate(float(lat)),
+                    "longitude": round_kyc_geo_coordinate(float(lon)),
+                }
+        journey.geolocation_json = geo
     if "kycAlreadyRegistered" in payload:
         journey.kyc_already_registered = payload["kycAlreadyRegistered"]
     if "readinessCode" in payload:
@@ -274,6 +446,8 @@ async def save_journey_state(
         journey.external_kyc_request_id = payload["externalKycRequestId"]
     if "externalIdentityDocumentId" in payload:
         journey.external_identity_document_id = payload["externalIdentityDocumentId"]
+    if "externalIdentityDocumentJson" in payload:
+        journey.external_identity_document_json = payload["externalIdentityDocumentJson"]
     if "externalKycStatus" in payload:
         journey.external_kyc_status = payload["externalKycStatus"]
     if "digilockerFailureReason" in payload:
@@ -285,6 +459,11 @@ async def save_journey_state(
 
     last_step = payload.get("lastCompletedStep")
     if last_step:
+        if last_step == "address" and requires_digilocker(journey):
+            from app.application.kyc.path_a_proof import path_a_digilocker_proof_satisfied
+
+            if not path_a_digilocker_proof_satisfied(journey):
+                raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
         journey.last_completed_step = last_step
         if last_step == "pan":
             status.pan_step_status = KycStepStatus.verified

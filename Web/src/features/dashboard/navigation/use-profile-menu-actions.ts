@@ -50,7 +50,7 @@ export function useProfileMenuActions() {
 
     setCheckingKraStatus(true);
     try {
-      const result = await checkKycReadiness();
+      const result = await checkKycReadiness({ forceRefresh: true });
       kyc.applyReadinessCheck(result);
       await kyc.refreshFromBootstrap();
       if (!result.kra_verified) {

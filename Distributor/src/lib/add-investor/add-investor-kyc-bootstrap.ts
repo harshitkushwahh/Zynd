@@ -1,6 +1,7 @@
 import {
   addInvestorStepIndex,
   buildAddInvestorJourneySteps,
+  requiresFullKycSubmission,
   emptyAddressDraft,
   emptyBankDraft,
   emptyPersonalDraft,
@@ -42,8 +43,6 @@ export type AddInvestorComplianceHydration = Partial<AddInvestorComplianceSnapsh
   stepId?: AddInvestorStepId;
 };
 
-const REKYC_READINESS_CODES = new Set(["kyc_incomplete", "kyc_legacy", "kyc_onhold", "kyc_rejected"]);
-
 function mapAddressFields(raw: Record<string, unknown> | undefined): AddInvestorAddressFields {
   return {
     line1: String(raw?.line1 ?? raw?.line_1 ?? ""),
@@ -82,6 +81,7 @@ export function mapBootstrapPersonalDraft(
     fathersName: String(raw.fathersName ?? raw.father_name ?? ""),
     gender: String(raw.gender ?? ""),
     maritalStatus: String(raw.maritalStatus ?? raw.marital_status ?? ""),
+    spouseName: String(raw.spouseName ?? raw.spouse_name ?? ""),
     occupation: String(raw.occupation ?? ""),
     incomeSlab: String(raw.incomeSlab ?? raw.income_slab ?? ""),
     pepExposed: String(raw.pepExposed ?? raw.pep_exposed ?? "not_applicable"),
@@ -149,13 +149,13 @@ export function mapBootstrapPanDraft(
 export function resolveRequiresDigilockerFromBootstrap(
   bootstrap: ClientKycBootstrapResponse,
 ): boolean | null {
-  if (bootstrap.kyc_already_registered === true) return false;
-  if (bootstrap.kyc_already_registered === false) return true;
-  const code = (bootstrap.readiness_code ?? "").toLowerCase();
-  if (code === "kyc_incomplete") return true;
-  if (REKYC_READINESS_CODES.has(code)) return false;
-  if (bootstrap.pan_verification_status === "verified") return true;
-  return null;
+  if (bootstrap.pan_verification_status !== "verified") return null;
+  if (bootstrap.kyc_already_registered == null && !bootstrap.readiness_code) return null;
+  return requiresFullKycSubmission({
+    kyc_already_registered: bootstrap.kyc_already_registered,
+    readiness_code: bootstrap.readiness_code,
+    poa_readiness_preverify_id: bootstrap.poa_readiness_preverify_id ?? null,
+  });
 }
 
 export function hydrationFromClientKycBootstrap(

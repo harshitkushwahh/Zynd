@@ -11,6 +11,7 @@ import { KycSelectField } from "@/features/kyc/components/kyc-select-field";
 import {
   createEmptyPersonalInfo,
   DEFAULT_KYC_NATIONALITY,
+  isMarriedMaritalStatus,
   type KycPersonalInfoValue,
 } from "@/features/kyc/lib/kyc-personal-info";
 import { KYC_PERSONAL_INFO_FALLBACK_OPTIONS } from "@/features/kyc/lib/kyc-master-data-options";
@@ -119,14 +120,29 @@ export function KycPersonalInfoStep({
   const genderOptions = enumOptions?.gender ?? KYC_PERSONAL_INFO_FALLBACK_OPTIONS.gender;
   const incomeOptions = enumOptions?.incomeSlab ?? KYC_PERSONAL_INFO_FALLBACK_OPTIONS.incomeSlab;
   const occupationOptions = enumOptions?.occupation ?? KYC_PERSONAL_INFO_FALLBACK_OPTIONS.occupation;
-  const maritalOptions = enumOptions?.maritalStatus ?? KYC_PERSONAL_INFO_FALLBACK_OPTIONS.maritalStatus;
+  const maritalStatusLocked = Boolean(form.maritalStatusLocked);
+  const maritalOptions = (enumOptions?.maritalStatus ?? KYC_PERSONAL_INFO_FALLBACK_OPTIONS.maritalStatus).filter(
+    (option) => !maritalStatusLocked || isMarriedMaritalStatus(option.value),
+  );
   const pepOptions = enumOptions?.pepExposed ?? KYC_PERSONAL_INFO_FALLBACK_OPTIONS.pepExposed;
   const nationalitySelectOptions =
     nationalityOptions ?? [{ label: DEFAULT_KYC_NATIONALITY, value: DEFAULT_KYC_NATIONALITY }];
 
   const updateField = (field: PersonalInfoFieldKey, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: undefined }));
+    if (field === "maritalStatus" && maritalStatusLocked && !isMarriedMaritalStatus(value)) {
+      return;
+    }
+    setForm((current) => {
+      if (field === "maritalStatus" && !isMarriedMaritalStatus(value)) {
+        return { ...current, maritalStatus: value, spouseName: "" };
+      }
+      return { ...current, [field]: value };
+    });
+    setErrors((current) => ({
+      ...current,
+      [field]: undefined,
+      ...(field === "maritalStatus" && !isMarriedMaritalStatus(value) ? { spouseName: undefined } : {}),
+    }));
   };
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -138,7 +154,10 @@ export function KycPersonalInfoStep({
       return;
     }
 
-    onSubmit(form);
+    onSubmit({
+      ...form,
+      spouseName: isMarriedMaritalStatus(form.maritalStatus) ? form.spouseName.trim() : "",
+    });
   };
 
   return (
@@ -205,6 +224,12 @@ export function KycPersonalInfoStep({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
+            {maritalStatusLocked ? (
+              <KycInfoCallout
+                title={copy.kyc.personalInfo.fields.maritalStatus}
+                description={copy.kyc.personalInfo.maritalStatusLockedHint}
+              />
+            ) : null}
             <KycSelectField
               id="kyc-marital-status"
               label={copy.kyc.personalInfo.fields.maritalStatus}
@@ -212,10 +237,43 @@ export function KycPersonalInfoStep({
               options={maritalOptions}
               placeholder={copy.kyc.personalInfo.placeholders.select}
               hasError={Boolean(errors.maritalStatus)}
+              disabled={maritalStatusLocked}
               onChange={(value) => updateField("maritalStatus", value)}
             />
             {errors.maritalStatus ? <FieldMessage message={errors.maritalStatus} /> : null}
           </div>
+          {isMarriedMaritalStatus(form.maritalStatus) ? (
+            <div className="space-y-2">
+              <Label htmlFor="kyc-spouse-name">{copy.kyc.personalInfo.fields.spouseName}</Label>
+              <Input
+                id="kyc-spouse-name"
+                value={form.spouseName}
+                onChange={(event) =>
+                  updateField("spouseName", normalizePersonNameInput(event.target.value))
+                }
+                placeholder={copy.kyc.personalInfo.placeholders.spouseName}
+                maxLength={KYC_PERSON_NAME_LIMITS.max}
+                aria-invalid={Boolean(errors.spouseName)}
+              />
+              {errors.spouseName ? <FieldMessage message={errors.spouseName} /> : null}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <KycSelectField
+                id="kyc-pep-exposed"
+                label={copy.kyc.personalInfo.fields.pepExposed}
+                value={form.pepExposed}
+                options={pepOptions}
+                placeholder={copy.kyc.personalInfo.placeholders.select}
+                hasError={Boolean(errors.pepExposed)}
+                onChange={(value) => updateField("pepExposed", value)}
+              />
+              {errors.pepExposed ? <FieldMessage message={errors.pepExposed} /> : null}
+            </div>
+          )}
+        </div>
+
+        {isMarriedMaritalStatus(form.maritalStatus) ? (
           <div className="space-y-2">
             <KycSelectField
               id="kyc-pep-exposed"
@@ -228,7 +286,7 @@ export function KycPersonalInfoStep({
             />
             {errors.pepExposed ? <FieldMessage message={errors.pepExposed} /> : null}
           </div>
-        </div>
+        ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">

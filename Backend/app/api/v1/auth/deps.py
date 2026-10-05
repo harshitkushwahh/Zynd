@@ -20,6 +20,7 @@ from app.application.auth.auth_client_policy import (
 )
 from app.application.auth.errors import AuthError
 from app.application.auth.user_service import get_user_by_id
+from app.application.integrations.provider_log_recorder import set_provider_log_user_id
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.infrastructure.persistence.models import AuditEventType, AuditLog, User, UserRole, UserStatus
@@ -130,6 +131,7 @@ async def get_current_user(
             status_code=403,
             detail={"code": "contact_support", "message": "Unable to continue. Contact support."},
         )
+    set_provider_log_user_id(user.id)
     return user
 
 

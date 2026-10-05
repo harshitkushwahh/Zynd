@@ -22,6 +22,7 @@ function mapPersonalDraft(personal: AddInvestorPersonalDraft): Record<string, un
     fathersName: personal.fathersName,
     gender: personal.gender,
     maritalStatus: personal.maritalStatus,
+    spouseName: personal.spouseName,
     occupation: personal.occupation,
     incomeSlab: personal.incomeSlab,
     pepExposed: personal.pepExposed,
@@ -43,7 +44,7 @@ function mapNomineeDraft(nominees: AddInvestorNomineeRecord[]): Record<string, u
     type: nominee.type,
     core: {
       ...nominee.core,
-      dateOfBirth: ageToDateOfBirth(nominee.core.age),
+      dateOfBirth: nominee.core.dateOfBirth || ageToDateOfBirth(nominee.core.age),
     },
     contact: nominee.contact,
     identity: nominee.identity,
@@ -80,6 +81,7 @@ export async function persistAddInvestorKycBeforeSubmit(input: {
   address: AddInvestorAddressDraft;
   personal: AddInvestorPersonalDraft;
   nominees: AddInvestorNomineeRecord[];
+  nominationOptedOut?: boolean;
   bank: AddInvestorBankDraft;
   signatureDataUrl: string;
   signatureMode: AddInvestorSignatureTab | null;
@@ -100,6 +102,11 @@ export async function persistAddInvestorKycBeforeSubmit(input: {
   await saveClientKycJourneyState(clientUserId, {
     nominee_draft_json: mapNomineeDraft(input.nominees),
     last_completed_step: "nominee",
+    ...(input.nominationOptedOut && input.nominees.length === 0
+      ? { record_nomination_opt_out: true }
+      : input.nominees.length > 0
+        ? { revoke_nomination_opt_out: true }
+        : {}),
   });
 
   await saveClientKycJourneyState(clientUserId, {

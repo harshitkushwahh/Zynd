@@ -51,6 +51,9 @@ class KycPanConfirmNamesResponse(BaseModel):
     block_type: Optional[str] = None
     failure: Optional[KycPanFailure] = None
     pan_draft: Optional[dict[str, Any]] = None
+    kyc_already_registered: Optional[bool] = None
+    requires_digilocker: Optional[bool] = None
+    requires_full_kyc_submission: Optional[bool] = None
 
 
 class KycReadinessInfo(BaseModel):
@@ -69,6 +72,7 @@ class KycPanVerifyResponse(BaseModel):
     kyc_already_registered: Optional[bool] = None
     readiness: Optional[KycReadinessInfo] = None
     requires_digilocker: Optional[bool] = None
+    requires_full_kyc_submission: Optional[bool] = None
 
 
 class KycStepStatuses(BaseModel):
@@ -92,6 +96,7 @@ class KycBootstrapResponse(BaseModel):
     contact_draft: Optional[dict[str, Any]] = None
     personal_draft: Optional[dict[str, Any]] = None
     nominee_draft: Optional[list[dict[str, Any]] | dict[str, Any]] = None
+    nomination_opted_out: bool = False
     bank_draft: Optional[dict[str, Any]] = None
     kyc_already_registered: Optional[bool] = None
     readiness_code: Optional[str] = None
@@ -103,6 +108,8 @@ class KycBootstrapResponse(BaseModel):
     digilocker_failure_reason: Optional[str] = None
     bank_verification_status: Optional[str] = None
     bank_verification_failure: Optional[dict[str, Any]] = None
+    poa_readiness_preverify_id: Optional[str] = None
+    poa_pan_preverify_id: Optional[str] = None
     poa_bank_preverify_id: Optional[str] = None
     poa_bank_proof_file_id: Optional[str] = None
     signature_draft: Optional[dict[str, Any]] = None
@@ -115,6 +122,49 @@ class KycBootstrapResponse(BaseModel):
     geolocation_draft: Optional[dict[str, Any]] = None
     step_statuses: Optional[KycStepStatuses] = None
     client_id: Optional[str] = None
+    kyc_flow_mode: Optional[str] = None
+    requires_address_step_digilocker: Optional[bool] = None
+    requires_pan_step_digilocker: Optional[bool] = None
+    requires_digilocker: Optional[bool] = None
+    poa_kyc_form_id: Optional[str] = None
+    proof_fetch_url: Optional[str] = None
+    requires_poa_proof_fetch: Optional[bool] = None
+
+
+class KycDigilockerStartResponse(BaseModel):
+    redirect_url: str = ""
+    inline_complete: bool = False
+    identity_document_id: str = ""
+
+
+class KycIdentityDocumentResponse(BaseModel):
+    success: bool
+    fetch_status: Optional[str] = None
+    reason: Optional[str] = None
+    aadhaar_not_selected: bool = False
+    contact_draft: Optional[dict[str, Any]] = None
+    personal_draft: Optional[dict[str, Any]] = None
+    aadhaar_last4: Optional[str] = None
+
+
+class KycPoaFormConfigResponse(BaseModel):
+    fresh_forms_enabled: bool = True
+
+
+class KycPoaFormStatusResponse(BaseModel):
+    form_id: Optional[str] = None
+    form_status: Optional[str] = None
+    proof_details_status: Optional[str] = None
+    proof_fetch_url: Optional[str] = None
+    partner_fields_needed: Optional[list[str]] = None
+    needs_digilocker: bool = False
+
+
+class KycPoaFormSyncResponse(BaseModel):
+    success: bool = True
+    needs_digilocker: bool = False
+    form_id: Optional[str] = None
+    proof_fetch_url: Optional[str] = None
 
 
 class KycGeolocationDraft(BaseModel):
@@ -130,6 +180,8 @@ class KycJourneyStateRequest(BaseModel):
     contact_draft_json: Optional[dict[str, Any]] = None
     personal_draft_json: Optional[dict[str, Any]] = None
     nominee_draft_json: Optional[list[dict[str, Any]]] = None
+    record_nomination_opt_out: bool = False
+    revoke_nomination_opt_out: bool = False
     bank_draft_json: Optional[dict[str, Any]] = None
     signature_draft_json: Optional[dict[str, Any]] = None
     geolocation_json: Optional[KycGeolocationDraft] = None
@@ -143,20 +195,6 @@ class KycJourneyStateResponse(BaseModel):
     success: bool = True
     last_completed_step: Optional[str] = None
     active_step_index: int = 0
-
-
-class KycDigilockerStartResponse(BaseModel):
-    redirect_url: str
-
-
-class KycIdentityDocumentResponse(BaseModel):
-    success: bool
-    fetch_status: Optional[str] = None
-    reason: Optional[str] = None
-    aadhaar_not_selected: bool = False
-    contact_draft: Optional[dict[str, Any]] = None
-    personal_draft: Optional[dict[str, Any]] = None
-    aadhaar_last4: Optional[str] = None
 
 
 class KycMasterDataOption(BaseModel):
@@ -178,6 +216,17 @@ class KycPincodeResponse(BaseModel):
     district: str
     state_name: str
     country_ansi_code: str
+
+
+class KycIfscResponse(BaseModel):
+    ifsc_code: str
+    bank_name: str
+    branch: str
+    branch_name: str = ""
+    city: str = ""
+    district: str = ""
+    state: str = ""
+    branch_address: str = ""
 
 
 class KycStateItem(BaseModel):

@@ -5,19 +5,33 @@ from uuid import uuid4
 
 import pytest
 
-from app.application.kyc.digilocker_service import start_digilocker
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_gate_service import (
+    derive_kyc_already_registered,
     is_rekyc_modification,
     is_rekyc_readiness_code,
     require_digilocker_or_kra_skip,
-    requires_digilocker,
-    requires_digilocker_for_readiness,
     resolve_kyc_form_type,
 )
 from app.application.kyc.kyc_form_service import ensure_kyc_form
 from app.application.kyc.pan_verification_service import verify_pan
 from app.infrastructure.persistence.models import KycJourneyState, User, UserRole, UserStatus
+
+
+def test_derive_kyc_already_registered_respects_readiness_code() -> None:
+    assert derive_kyc_already_registered(readiness_status="verified", readiness_code=None) is True
+    assert (
+        derive_kyc_already_registered(readiness_status="verified", readiness_code="kyc_unavailable")
+        is False
+    )
+    assert (
+        derive_kyc_already_registered(readiness_status="failed", readiness_code="kyc_unavailable")
+        is False
+    )
+    assert (
+        derive_kyc_already_registered(readiness_status="verified", readiness_code="kyc_incomplete")
+        is False
+    )
 
 
 def test_is_rekyc_readiness_code_matches_modification_codes() -> None:
@@ -52,11 +66,12 @@ def test_resolve_kyc_form_type_maps_cybrilla_rules() -> None:
     assert resolve_kyc_form_type(registered) == "modify"
 
 
-def test_require_digilocker_required_for_kyc_incomplete() -> None:
+def test_require_digilocker_blocks_rekyc_until_path_a_complete() -> None:
     journey = KycJourneyState(
         user_id=None,
-        kyc_already_registered=False,
+        kyc_already_registered=True,
         readiness_code="kyc_incomplete",
+        poa_readiness_preverify_id="pv_1",
         external_kyc_status=None,
     )
     with pytest.raises(KycError) as exc:
@@ -64,26 +79,15 @@ def test_require_digilocker_required_for_kyc_incomplete() -> None:
     assert exc.value.code == "digilocker_required"
 
 
-def test_require_digilocker_skipped_for_other_rekyc_modification() -> None:
+def test_require_digilocker_skipped_for_kra_compliant() -> None:
     journey = KycJourneyState(
         user_id=None,
-        kyc_already_registered=False,
-        readiness_code="kyc_legacy",
+        kyc_already_registered=True,
+        readiness_code=None,
+        poa_readiness_preverify_id="pv_ready",
         external_kyc_status=None,
     )
     require_digilocker_or_kra_skip(journey)
-
-
-def test_require_digilocker_still_required_for_new_investors() -> None:
-    journey = KycJourneyState(
-        user_id=None,
-        kyc_already_registered=False,
-        readiness_code="kyc_unavailable",
-        external_kyc_status=None,
-    )
-    with pytest.raises(KycError) as exc:
-        require_digilocker_or_kra_skip(journey)
-    assert exc.value.code == "digilocker_required"
 
 
 @pytest.mark.asyncio
@@ -141,7 +145,7 @@ async def test_ensure_kyc_form_uses_modify_for_kyc_incomplete(db_session) -> Non
 
 
 @pytest.mark.asyncio
-async def test_verify_pan_requires_digilocker_for_kyc_incomplete(db_session) -> None:
+async def test_verify_pan_full_submission_for_kyc_incomplete(db_session) -> None:
     user = User(
         id=uuid4(),
         email=f"rekyc-pan-{uuid4()}@example.com",
@@ -185,67 +189,6 @@ async def test_verify_pan_requires_digilocker_for_kyc_incomplete(db_session) -> 
 
     assert result["success"] is True
     assert result["kycAlreadyRegistered"] is False
-    assert result["requiresDigilocker"] is True
+    assert result["requiresDigilocker"] is False
+    assert result["requiresFullKycSubmission"] is True
     assert result["readiness"]["code"] == "kyc_incomplete"
-
-
-@pytest.mark.asyncio
-async def test_start_digilocker_allows_kyc_incomplete(db_session) -> None:
-    user = User(
-        id=uuid4(),
-        email=f"rekyc-dl-{uuid4()}@example.com",
-        role=UserRole.user,
-        status=UserStatus.active,
-    )
-    db_session.add(user)
-    await db_session.flush()
-
-    journey = KycJourneyState(
-        user_id=user.id,
-        pan_verification_status="verified",
-        kyc_already_registered=False,
-        readiness_code="kyc_incomplete",
-        pan_draft_json={"panNumber": "RHOPS9606E", "fullName": "SANGITA SEN", "dateOfBirth": "1985-01-01"},
-    )
-    db_session.add(journey)
-    await db_session.flush()
-
-    with patch(
-        "app.application.kyc.digilocker_service.create_kyc_request_and_identity_document",
-        new=AsyncMock(
-            return_value={
-                "kycRequestId": "kycr_test",
-                "identityDocumentId": "idd_test",
-                "redirectUrl": "https://example.com/digilocker",
-            }
-        ),
-    ):
-        result = await start_digilocker(db_session, user=user)
-
-    assert result["redirectUrl"] == "https://example.com/digilocker"
-
-
-@pytest.mark.asyncio
-async def test_start_digilocker_rejects_kyc_legacy(db_session) -> None:
-    user = User(
-        id=uuid4(),
-        email=f"rekyc-dl-legacy-{uuid4()}@example.com",
-        role=UserRole.user,
-        status=UserStatus.active,
-    )
-    db_session.add(user)
-    await db_session.flush()
-
-    journey = KycJourneyState(
-        user_id=user.id,
-        pan_verification_status="verified",
-        kyc_already_registered=False,
-        readiness_code="kyc_legacy",
-        pan_draft_json={"panNumber": "RHOPS9606E", "fullName": "SANGITA SEN", "dateOfBirth": "1985-01-01"},
-    )
-    db_session.add(journey)
-    await db_session.flush()
-
-    with pytest.raises(KycError) as exc:
-        await start_digilocker(db_session, user=user)
-    assert exc.value.code == "digilocker_not_required"

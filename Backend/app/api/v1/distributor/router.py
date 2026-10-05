@@ -59,6 +59,8 @@ from app.api.v1.kyc.schemas import (
     KycBankVerifyRequest,
     KycBankVerifyResponse,
     KycBootstrapResponse,
+    KycDigilockerStartResponse,
+    KycIdentityDocumentResponse,
     KycBankPreverifyStatusResponse,
     KycFormSubmitRequest,
     KycFormSubmitResponse,
@@ -97,7 +99,9 @@ from app.application.distributor.distributor_client_kyc_service import (
     confirm_distributor_client_kyc_pan_names,
     get_distributor_client_kyc_bank_preverify_status,
     get_distributor_client_kyc_bootstrap,
+    load_distributor_client_identity_document,
     save_distributor_client_kyc_journey_state,
+    start_distributor_client_digilocker,
     submit_distributor_client_kyc,
     verify_distributor_client_kyc_bank_hybrid,
     verify_distributor_client_kyc_pan,
@@ -155,7 +159,7 @@ from app.application.distributor.partner_verification_service import (
 )
 from app.application.risk_profile.errors import RiskProfileError
 from app.core.database import get_db
-from app.infrastructure.kyc.fp_clients import list_countries, list_states, lookup_pincode
+from app.infrastructure.kyc.fp_clients import FpClientError, list_countries, list_states, lookup_pincode
 from app.infrastructure.persistence.models import User
 
 router = APIRouter(prefix="/distributor", tags=["distributor"])
@@ -794,6 +798,7 @@ async def post_distributor_client_kyc_pan_verify(
         kyc_already_registered=result.get("kycAlreadyRegistered"),
         readiness=KycReadinessInfo(**result["readiness"]) if result.get("readiness") else None,
         requires_digilocker=result.get("requiresDigilocker"),
+        requires_full_kyc_submission=result.get("requiresFullKycSubmission"),
     )
 
 
@@ -822,6 +827,7 @@ async def get_distributor_client_kyc_bootstrap_route(
         contact_draft=payload["contactDraft"],
         personal_draft=payload["personalDraft"],
         nominee_draft=payload["nomineeDraft"],
+        nomination_opted_out=bool(payload.get("nominationOptedOut")),
         bank_draft=payload["bankDraft"],
         kyc_already_registered=payload["kycAlreadyRegistered"],
         readiness_code=payload["readinessCode"],
@@ -845,6 +851,12 @@ async def get_distributor_client_kyc_bootstrap_route(
         geolocation_draft=payload["geolocationDraft"],
         step_statuses=KycStepStatuses(**step_statuses) if step_statuses else None,
         client_id=payload.get("clientId"),
+        kyc_flow_mode=payload.get("kycFlowMode"),
+        requires_address_step_digilocker=payload.get("requiresAddressStepDigilocker"),
+        requires_pan_step_digilocker=payload.get("requiresPanStepDigilocker"),
+        requires_digilocker=payload.get("requiresDigilocker"),
+        poa_kyc_form_id=payload.get("poaKycFormId"),
+        proof_fetch_url=payload.get("proofFetchUrl"),
     )
 
 
@@ -882,7 +894,60 @@ async def post_distributor_client_kyc_pan_confirm_names(
     return KycPanConfirmNamesResponse(
         success=True,
         pan_draft=result.get("panDraft"),
+        kyc_already_registered=result.get("kycAlreadyRegistered"),
+        requires_digilocker=result.get("requiresDigilocker"),
+        requires_full_kyc_submission=result.get("requiresFullKycSubmission"),
     )
+
+
+@router.post(
+    "/clients/{client_user_id}/kyc/kyc-request/start",
+    response_model=KycDigilockerStartResponse,
+)
+async def post_distributor_client_kyc_digilocker_start(
+    client_user_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycDigilockerStartResponse:
+    try:
+        result = await start_distributor_client_digilocker(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+        )
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    except FpClientError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "digilocker_unavailable",
+                "message": exc.message or "DigiLocker is temporarily unavailable. Try again later.",
+            },
+        ) from exc
+    return KycDigilockerStartResponse(**result)
+
+
+@router.get(
+    "/clients/{client_user_id}/kyc/identity-document/{document_id}",
+    response_model=KycIdentityDocumentResponse,
+)
+async def get_distributor_client_kyc_identity_document(
+    client_user_id: UUID,
+    document_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycIdentityDocumentResponse:
+    try:
+        result = await load_distributor_client_identity_document(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+            document_id=document_id,
+        )
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    return KycIdentityDocumentResponse(**result)
 
 
 @router.post("/clients/{client_user_id}/kyc/bank/verify-hybrid", response_model=KycBankVerifyResponse)
@@ -952,6 +1017,7 @@ def _kyc_form_submit_response(result: dict[str, object]) -> KycFormSubmitRespons
 async def post_distributor_client_kyc_journey_state(
     client_user_id: UUID,
     body: KycJourneyStateRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
 ) -> KycJourneyStateResponse:
@@ -959,6 +1025,13 @@ async def post_distributor_client_kyc_journey_state(
         body.geolocation_json.model_dump(by_alias=True) if body.geolocation_json is not None else None
     )
     try:
+        consent_context = None
+        if body.record_nomination_opt_out or body.revoke_nomination_opt_out:
+            consent_context = {
+                "source": "distributor_nominee",
+                "ip": get_client_ip(request),
+                "userAgent": request.headers.get("user-agent"),
+            }
         result = await save_distributor_client_kyc_journey_state(
             db,
             actor=actor,
@@ -972,6 +1045,9 @@ async def post_distributor_client_kyc_journey_state(
             geolocation_json=geolocation_json,
             last_completed_step=body.last_completed_step,
             middle_name=body.middle_name,
+            record_nomination_opt_out=body.record_nomination_opt_out,
+            revoke_nomination_opt_out=body.revoke_nomination_opt_out,
+            consent_context=consent_context,
         )
     except DistributorClientBookError as exc:
         raise _client_book_http_error(exc) from exc
@@ -1059,7 +1135,13 @@ async def get_distributor_kyc_pincode(
 ) -> KycPincodeResponse:
     if not pincode.isdigit() or len(pincode) != 6:
         raise HTTPException(status_code=400, detail={"code": "invalid_pincode", "message": "Invalid pincode."})
-    payload = await lookup_pincode(pincode)
+    try:
+        payload = await lookup_pincode(pincode)
+    except FpClientError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
     return KycPincodeResponse(
         code=str(payload.get("code") or pincode),
         city=str(payload.get("city") or ""),

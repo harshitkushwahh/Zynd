@@ -26,11 +26,15 @@ import {
   createEmptyNomineeGuardian,
   createEmptyNomineeIdentity,
   equalNomineeSharePercent,
-  getNomineeTypeFromAge,
+  formatNomineeDobDisplay,
+  formatNomineeDobInput,
+  formatNomineeDobIso,
+  getNomineeAgeFromDob,
+  getNomineeTypeFromDob,
   isAddInvestorNomineeAddressValid,
-  normalizeNomineeAgeInput,
   normalizeNomineeShareInput,
-  parseNomineeAge,
+  parseNomineeDob,
+  resolveNomineeType,
   type AddInvestorNomineeRecord,
   type AddInvestorNomineeWizardStep,
 } from "@/lib/add-investor/add-investor-nominee";
@@ -55,7 +59,7 @@ const WIZARD_STEP_LABELS: Record<AddInvestorNomineeWizardStep, string> = {
 
 function getWizardStepLabel(
   step: AddInvestorNomineeWizardStep,
-  nomineeType: ReturnType<typeof getNomineeTypeFromAge>,
+  nomineeType: ReturnType<typeof getNomineeTypeFromDob>,
 ) {
   if (step === "contact" && nomineeType === "minor") {
     return "Guardian";
@@ -73,7 +77,7 @@ function getWizardSteps() {
 
 function validateDetailsStep(
   core: ReturnType<typeof createEmptyNomineeCore>,
-  type: ReturnType<typeof getNomineeTypeFromAge>,
+  type: ReturnType<typeof getNomineeTypeFromDob>,
   existingNominees: AddInvestorNomineeRecord[],
   editingId?: string,
 ) {
@@ -82,8 +86,8 @@ function validateDetailsStep(
   if (core.fullName.trim().length < 2) {
     errors.fullName = "Enter nominee name";
   }
-  if (parseNomineeAge(core.age) === null) {
-    errors.age = "Enter a valid age";
+  if (!parseNomineeDob(core.dateOfBirth)) {
+    errors.dateOfBirth = "Enter a valid date of birth";
   }
   if (!core.relationship) {
     errors.relationship = "Select relationship";
@@ -116,16 +120,16 @@ function validateContactStep(
 ) {
   const errors: ErrorMap = {};
 
-  if (!isValidEmail(contact.email)) {
+  if (contact.email.trim() && !isValidEmail(contact.email)) {
     errors.email = "Enter a valid email";
   }
-  if (contact.mobile.replace(/\D/g, "").length !== 10) {
+  if (contact.mobile.trim() && contact.mobile.replace(/\D/g, "").length !== 10) {
     errors.mobile = "Enter a valid 10-digit mobile";
   }
-  if (!identity.documentType) {
+  if (identity.documentNumber.trim() && !identity.documentType) {
     errors.documentType = "Select document type";
   }
-  if (identity.documentNumber.trim().length < 3) {
+  if (identity.documentType && identity.documentNumber.trim().length < 3) {
     errors.documentNumber = "Enter document number";
   }
 
@@ -138,20 +142,17 @@ function validateGuardianStep(guardian: ReturnType<typeof createEmptyNomineeGuar
   if (guardian.name.trim().length < 2) {
     errors.guardianName = "Enter guardian name";
   }
-  if (!isValidEmail(guardian.email)) {
+  if (guardian.email.trim() && !isValidEmail(guardian.email)) {
     errors.guardianEmail = "Enter a valid email";
   }
-  if (guardian.mobile.replace(/\D/g, "").length !== 10) {
+  if (guardian.mobile.trim() && guardian.mobile.replace(/\D/g, "").length !== 10) {
     errors.guardianMobile = "Enter a valid 10-digit mobile";
   }
-  if (!guardian.documentType) {
+  if (guardian.documentNumber.trim() && !guardian.documentType) {
     errors.guardianDocumentType = "Select document type";
   }
-  if (guardian.documentNumber.trim().length < 3) {
+  if (guardian.documentType && guardian.documentNumber.trim().length < 3) {
     errors.guardianDocumentNumber = "Enter document number";
-  }
-  if (!guardian.sourceOfWealth) {
-    errors.guardianSourceOfWealth = "Select source of wealth";
   }
 
   return errors;
@@ -162,7 +163,7 @@ function NomineeWizardSteps({
   nomineeType,
 }: {
   activeStep: AddInvestorNomineeWizardStep;
-  nomineeType: ReturnType<typeof getNomineeTypeFromAge>;
+  nomineeType: ReturnType<typeof getNomineeTypeFromDob>;
 }) {
   const steps = getWizardSteps();
   const activeIndex = steps.indexOf(activeStep);
@@ -222,7 +223,7 @@ export function AddInvestorNomineeWizard({
   });
   const [errors, setErrors] = useState<ErrorMap>({});
 
-  const nomineeType = getNomineeTypeFromAge(draft.core.age);
+  const nomineeType = resolveNomineeType(draft.core);
   const guardian = draft.guardian ?? createEmptyNomineeGuardian();
   const contact = draft.contact ?? createEmptyNomineeContact();
   const identity = draft.identity ?? createEmptyNomineeIdentity();
@@ -233,13 +234,21 @@ export function AddInvestorNomineeWizard({
     const nextCore = {
       ...draft.core,
       [field]:
-        field === "age"
-          ? normalizeNomineeAgeInput(value)
+        field === "dateOfBirth"
+          ? parseNomineeDob(value)
+            ? formatNomineeDobIso(value) || formatNomineeDobInput(value)
+            : formatNomineeDobInput(value)
           : field === "sharePercent"
             ? normalizeNomineeShareInput(value)
             : value,
     };
-    const nextType = getNomineeTypeFromAge(nextCore.age);
+    if (field === "dateOfBirth") {
+      const iso = formatNomineeDobIso(nextCore.dateOfBirth);
+      const age = getNomineeAgeFromDob(nextCore.dateOfBirth);
+      nextCore.dateOfBirth = iso || nextCore.dateOfBirth;
+      nextCore.age = age === null ? "" : String(age);
+    }
+    const nextType = resolveNomineeType(nextCore);
     setDraft((current) => ({
       ...current,
       type: nextType,
@@ -390,7 +399,7 @@ export function AddInvestorNomineeWizard({
 
       <div className="add-investor-nominee-wizard__steps-bar">
         <NomineeWizardSteps activeStep={activeStep} nomineeType={nomineeType} />
-        {parseNomineeAge(draft.core.age) !== null ? (
+        {parseNomineeDob(draft.core.dateOfBirth) || draft.core.age ? (
           <StatusBadge variant={nomineeType === "minor" ? "warning" : "neutral"}>
             {nomineeType === "minor" ? "Minor" : "Adult"}
           </StatusBadge>
@@ -412,15 +421,32 @@ export function AddInvestorNomineeWizard({
 
           <div className="add-investor-nominee-wizard__row">
             <Field>
-              <FieldLabel htmlFor="add-investor-nominee-age">Age</FieldLabel>
-              <Input
-                id="add-investor-nominee-age"
-                inputMode="numeric"
-                value={draft.core.age}
-                onChange={(event) => updateCore("age", event.target.value)}
-                placeholder="Years"
-              />
-              {errors.age ? <p className="text-caption text-destructive">{errors.age}</p> : null}
+              <FieldLabel htmlFor="add-investor-nominee-dob">Date of birth</FieldLabel>
+              <div className="relative">
+                <Input
+                  id="add-investor-nominee-dob"
+                  inputMode="numeric"
+                  value={
+                    parseNomineeDob(draft.core.dateOfBirth)
+                      ? formatNomineeDobDisplay(draft.core.dateOfBirth)
+                      : draft.core.dateOfBirth
+                  }
+                  onChange={(event) => updateCore("dateOfBirth", event.target.value)}
+                  placeholder="dd/mm/yyyy"
+                  maxLength={10}
+                />
+                <input
+                  type="date"
+                  aria-label="Open calendar"
+                  className="absolute inset-y-0 right-2 w-8 cursor-pointer bg-transparent opacity-0"
+                  value={formatNomineeDobIso(draft.core.dateOfBirth)}
+                  max={formatNomineeDobIso(new Date().toISOString().slice(0, 10))}
+                  onChange={(event) => updateCore("dateOfBirth", event.target.value)}
+                />
+              </div>
+              {errors.dateOfBirth ? (
+                <p className="text-caption text-destructive">{errors.dateOfBirth}</p>
+              ) : null}
             </Field>
             <Field>
               <FieldLabel htmlFor="add-investor-nominee-share">Share (%)</FieldLabel>

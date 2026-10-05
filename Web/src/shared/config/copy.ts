@@ -384,6 +384,13 @@ export const copy = {
       confirm: "Exit verification",
       cancel: "Continue KYC",
     },
+    panResetConfirm: {
+      title: "Remove PAN and clear KYC draft?",
+      description:
+        "Changing or removing your PAN clears your saved KYC progress, including address, nominee, bank verification, and signature. You will need to verify your PAN again and complete each step.",
+      confirm: "Remove PAN and clear draft",
+      cancel: "Keep current PAN",
+    },
     mfaGate: {
       title: "Verify your contact details first",
       description:
@@ -466,10 +473,13 @@ export const copy = {
       firstNameLabel: "First name",
       middleNameLabel: "Middle name",
       lastNameLabel: "Last name",
+      firstNamePlaceholder: "Harshit",
+      middleNamePlaceholder: "optional",
+      lastNamePlaceholder: "optional",
       fullNameLabel: "Name",
       fullNamePlaceholder: "harshit kushwah",
       requiredField: "This field is required.",
-      invalidName: "Enter a valid name using letters only (2-80 characters).",
+      invalidName: "Enter a valid name using letters only (1-80 characters).",
       fetching: "Verifying PAN...",
       fetchFailed: "Could not verify this PAN. Check the details and try again.",
       invalidPan: "Enter a valid PAN, for example ABCDE1234F.",
@@ -500,6 +510,10 @@ export const copy = {
       permanentTab: "Permanent address",
       correspondenceTab: "Correspondence address",
       sameAsPermanent: "Correspondence address is same as permanent address",
+      pincodeMismatchTitle: "Use the correct pincode details",
+      pincodeMismatchDescription: (city: string, state: string) =>
+        `City, state, or country did not match this pincode. We updated them to ${city}, ${state}, India.`,
+      pincodeNotFound: "This pincode could not be verified. Check the number and try again.",
       requiredField: "This field is required.",
       invalidPincode: "Enter a valid 6-digit pincode.",
       invalidLine1: "Address line 1 must be 3-120 characters.",
@@ -532,18 +546,23 @@ export const copy = {
       digilockerPrefillIncomplete:
         "Father's name could not be fetched from Aadhaar. You can enter it manually.",
       invalidPlaceOfBirth: "Enter a valid place of birth (2-80 characters, letters only).",
+      invalidSpouseName: "Enter a valid name using letters only (2-80 characters).",
+      maritalStatusLockedHint:
+        "Marital status stays Married because spouse details were already sent for eSign.",
       fields: {
         fathersName: "Father's name",
         gender: "Gender",
         incomeSlab: "Income slab",
         occupation: "Occupation",
         maritalStatus: "Marital status",
+        spouseName: "Spouse name",
         pepExposed: "Politically exposed (PEP)",
         placeOfBirth: "Place of birth",
         nationality: "Nationality",
       },
       placeholders: {
         fathersName: "As per official records",
+        spouseName: "As per official records",
         select: "Select",
         placeOfBirth: "City, state / country",
       },
@@ -562,10 +581,28 @@ export const copy = {
       unsavedBanner:
         "You have unsaved nominee details. Finish adding your nominee or use Continue below.",
       requiredField: "This field is required.",
-      invalidDob: "Select a valid date of birth.",
+      invalidDob: "Enter a valid date of birth (dd/mm/yyyy).",
+      openCalendar: "Open calendar",
+      optOut: {
+        action: "Skip nominee",
+        title: "Opt-out of nominations",
+        description:
+          "If you do not appoint a nominee, transmission of units on demise follows the SEBI-prescribed legal heir process.",
+        illustrationAlt: "Nomination opt-out illustration",
+        declarationTitle: "Nomination opt-out declaration",
+        declaration:
+          "I / We hereby confirm that I / We do not wish to appoint any nominee(s) in my / our mutual fund folio(s) and understand the issues involved in non-appointment of nominee(s). In the event of my / our demise, my / our legal heir(s) would need to follow the procedure prescribed by SEBI / AMFI for transmission of units.",
+        acknowledge: "I have read and understood the nomination opt-out declaration.",
+        acknowledgeRequired: "Confirm that you have read the nomination opt-out declaration.",
+        pinLabel: "Enter your Zynd PIN to confirm",
+        confirm: "Confirm opt-out",
+        addInstead: "Add a nominee instead",
+        pinRequired: "Enter your Zynd PIN.",
+        pinInvalid: "Incorrect PIN. Try again.",
+      },
       invalidShare: "Enter a share between 1 and 100.",
       shareExceedsTotal: "Total nominee share cannot exceed 100%.",
-      invalidFullName: "Enter a valid name using letters only (2-80 characters).",
+      invalidFullName: "Enter a valid name using letters only (1-80 characters).",
       invalidEmail: "Enter a valid email address.",
       invalidMobile: "Enter a valid 10-digit Indian mobile number.",
       invalidDocumentNumber: "Enter a valid number for the selected document type.",
@@ -628,15 +665,16 @@ export const copy = {
         select: "Select",
       },
       hints: {
-        guardianIdentity: "Provide one identity document for Guardian (choose any one).",
-        nomineeIdentity: "Provide one identity document for Nominee (choose any one).",
+        guardianIdentity: "Guardian identity details are optional. Provide one document if available.",
+        nomineeIdentity: "Nominee identity details are optional. Provide one document if available.",
       },
       list: {
         introTitle: "Who should receive your holdings?",
         introDescription:
-          "Add up to 3 nominees with share allocation. This step is optional — you can continue without adding one.",
+          "Add up to 3 nominees with share allocation. To continue without a nominee, use Opt-out of nominations.",
         emptyTitle: "No nominees added yet",
-        emptyDescription: "Tap below to add your first nominee and assign their share percentage.",
+        emptyDescription:
+          "Add a nominee and assign their share, or opt-out of nominations as prescribed by SEBI.",
         slotsLabel: (count: number, max: number) => `${count} of ${max} nominees`,
         totalShare: (share: number) => `${share}% allocated`,
         shareLabel: (share: string) => `${share}% share`,
@@ -669,20 +707,22 @@ export const copy = {
       requiredField: "This field is required.",
       invalidAccountNumber: "Account number must be 9-18 digits.",
       invalidIfsc: "Enter a valid 11-character IFSC code.",
+      ifscNotFound: "IFSC code not found. Check the code and try again.",
+      ifscLookupFailed: "Could not fetch bank details for this IFSC. Try again.",
       fetchFailed: "Could not fetch bank account details. Try again.",
       verifyFailed: "Bank verification failed. Try again.",
       fetching: "Fetching account details...",
       verifying: "Verifying bank account...",
       verify: "Verify",
-      namePendingTitle: "Name as per bank account",
-      namePendingDescription: "Will be fetched when you continue.",
+      detailsPendingTitle: "Bank account details",
+      detailsPendingDescription: "Enter your account number, account type, and IFSC code below.",
+      fetchingBranchTitle: "Fetching branch details",
+      fetchingBranchDescription: "Looking up bank and branch for your IFSC code.",
       manualPendingTitle: "Bank verification needs your help",
       manualPendingDescription:
         "Upload a bank statement below. After verification, you will continue through signature and eSign.",
-      nameFetchingTitle: "Fetching account details",
-      nameFetchingDescription: "This usually takes a few seconds.",
-      nameFetchedTitle: "Name as per bank account",
-      nameFetchedDescription: "Confirm your bank details before verifying.",
+      reviewBeforeVerifyTitle: "Review your bank details",
+      reviewBeforeVerifyDescription: "Confirm the bank and branch, then verify your account.",
       verifyingTitle: "Verifying bank account",
       verifyingDescription: "Matching your account with bank records.",
       verifiedTitle: "Bank account verified",
@@ -703,6 +743,7 @@ export const copy = {
       badges: {
         panVerified: "PAN verified",
         bankVerified: "Bank verified",
+        accountVerified: "Account verified",
         readinessVerified: "Readiness verified",
         readinessPending: "Readiness pending",
       },
@@ -739,6 +780,13 @@ export const copy = {
       saveFailed: "Could not save your signature. Try again.",
       restoreFailed: "Could not restore your saved signature. Upload it again.",
     },
+    kraProof: {
+      title: "Link KRA KYC form",
+      description:
+        "One quick DigiLocker step links your KRA registration form so we can open Aadhaar eSign. Uses sandbox Finprim when KYC_DIGILOCKER_SANDBOX is enabled.",
+      redirecting: "Redirecting to DigiLocker",
+      secondsRemaining: (seconds: number) => `${seconds}s`,
+    },
     digilocker: {
       title: "DigiLocker",
       description:
@@ -748,7 +796,9 @@ export const copy = {
       requiredTitle: "DigiLocker verification required",
       requiredDescription:
         "Your address must be fetched from Aadhaar via DigiLocker. Manual address entry is not available for this KYC path.",
-      failedTitle: "DigiLocker not completed",
+      requiredAction: "Continue with DigiLocker",
+      failedTitle: "DigiLocker Not Completed",
+      failedIllustrationAlt: "DigiLocker Not Completed",
       failedDescription:
         "Aadhaar was not fetched. Enter your mobile number in DigiLocker, select the Aadhaar checkbox, and complete verification before returning.",
       aadhaarCheckboxHint: "Make sure the Aadhaar checkbox is selected before you continue in DigiLocker.",
@@ -756,17 +806,39 @@ export const copy = {
       retrying: "Starting DigiLocker…",
       cancel: "Close",
     },
+    partnerEmbed: {
+      digilockerTitle: "DigiLocker verification",
+      esignTitle: "Aadhaar eSign",
+      waitingInPopup: "Complete verification in the popup window",
+      submittingApplication: "Submitting your KYC application…",
+      close: "Close verification",
+      popupHint: "Keep this window open until verification finishes and you return to Zynd.",
+      popupBlockedHint:
+        "Your browser blocked the verification popup. Allow popups for this site, then open it again.",
+      reopenPopup: "Open verification window",
+      openFullWindow: "Continue in this tab",
+      finishingTitle: "Finishing verification",
+      finishingDescription:
+        "Returning you to Zynd. If this window stays open, Zynd will reload automatically.",
+    },
     esign: {
       title: "Aadhaar eSign",
       description:
         "You will be redirected to complete Aadhaar-based eSign. Keep this window open until verification finishes.",
       redirecting: "Redirecting to eSign",
       secondsRemaining: (seconds: number) => `${seconds}s`,
+      incompleteTitle: "eSign Not Completed",
+      incompleteIllustrationAlt: "Aadhaar eSign Not Completed",
+      incompleteDescription:
+        "Your KYC is saved, but Aadhaar eSign was not finished. Complete eSign to submit your application to the KRA.",
+      retry: "Complete eSign again",
+      retrying: "Preparing eSign…",
+      dismiss: "Continue later",
     },
     location: {
       title: "Allow geolocation",
       description:
-        "We need your device geolocation to complete Aadhaar eSign. Disable VPN or mock location apps, then allow location access in your browser.",
+        "We need your device location to submit KYC and complete Aadhaar eSign. Allow location in your browser without it you cannot submit. Disable VPN or mock location apps if location fails.",
       enable: "Enable location",
       requesting: "Getting location…",
       cancel: "Close",
@@ -790,22 +862,25 @@ export const copy = {
       fullName: "Full name",
       signatureMethod: "Signature method",
       nominee: {
-        emptyTitle: "No nominee added yet",
+        emptyTitle: "Opted out of nominations",
         emptyDescription:
-          "Nominees are optional, but adding one helps ensure your holdings go to the right person.",
-        emptySummary: "Optional - tap to add a nominee",
+          "You confirmed that you do not wish to appoint a nominee. You can still add one before submitting.",
+        emptySummary: "Opted out of nominations",
+        noneTitle: "No nominee added",
+        noneDescription: "Add a nominee before you submit, or go back to the nominee step to opt out.",
+        noneSummary: "No nominee added",
         addNominee: "Add nominee",
       },
-      kycVerifiedBadge: "✅ KYC verified",
+      kycVerifiedBadge: "KYC verified",
       pan: {
         verifiedTitle: "PAN verified",
         verifiedDescription: "Details fetched from your PAN card and DigiLocker.",
-        verifiedBadge: "✅ PAN verified",
+        verifiedBadge: "PAN verified",
       },
       bank: {
         verifiedTitle: "Bank account verified",
         verifiedDescription: "Your account is ready for investments and transfers.",
-        verifiedBadge: "✅ Bank verified",
+        verifiedBadge: "Bank verified",
       },
       sections: {
         pan: "PAN details",
@@ -821,6 +896,25 @@ export const copy = {
     confirm: "Confirm",
     cancel: "Cancel",
     done: "Done",
+  },
+  consent: {
+    reaccept: {
+      title: "Updated terms require your confirmation",
+      description:
+        "We updated our legal terms. Review the documents below and confirm to continue using Zynd.",
+      documentsHeading: "Review documents",
+      termsLabel: "Terms & Conditions",
+      privacyLabel: "Privacy Policy",
+      tariffLabel: "Tariff Rates",
+      openDocument: (title: string) => `Open ${title}`,
+      acknowledge:
+        "I have read and agree to the updated Terms & Conditions, Privacy Policy, and Tariff Rates.",
+      confirm: "I agree and continue",
+      saving: "Saving…",
+      saveFailed: "Unable to save your consent. Try again.",
+      acknowledgeRequired: "Confirm that you agree to the updated terms to continue.",
+      versionLabel: (label: string) => `Version ${label}`,
+    },
   },
   mfa: {
     fundEligibilityEmailTitle: "Verify your email to move funds",

@@ -178,6 +178,7 @@ class AdminUserKycPersonalResponse(BaseModel):
     income_slab: Optional[str] = None
     occupation: Optional[str] = None
     marital_status: Optional[str] = None
+    spouse_name: Optional[str] = None
     pep_exposed: Optional[str] = None
     place_of_birth: Optional[str] = None
     nationality: Optional[str] = None

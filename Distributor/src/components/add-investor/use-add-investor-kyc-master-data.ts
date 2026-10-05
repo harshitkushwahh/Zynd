@@ -57,10 +57,15 @@ export function useAddInvestorKycMasterData() {
                 pep_exposed: [...ADD_INVESTOR_PERSONAL_OPTIONS.pepExposed],
               };
 
-        const states =
+        const providerStates =
           statesResult.status === "fulfilled"
             ? statesResult.value.map((item) => item.name).filter(Boolean)
-            : [...ADD_INVESTOR_INDIAN_STATES];
+            : [];
+        const knownStates = new Set(ADD_INVESTOR_INDIAN_STATES.map((state) => state.toLowerCase()));
+        const extraStates = providerStates.filter((name) => !knownStates.has(name.toLowerCase()));
+        const states = extraStates.length
+          ? [...ADD_INVESTOR_INDIAN_STATES, ...extraStates]
+          : [...ADD_INVESTOR_INDIAN_STATES];
 
         const countries =
           countriesResult.status === "fulfilled"
@@ -99,7 +104,7 @@ export function useAddInvestorKycMasterData() {
             documentTypes: nominee.document_types,
           },
           bankAccountTypes: ADD_INVESTOR_BANK_ACCOUNT_TYPE_OPTIONS,
-          states: states.length > 0 ? states : [...ADD_INVESTOR_INDIAN_STATES],
+          states,
           countries,
         });
       } catch (loadError) {

@@ -1,6 +1,8 @@
-"""Hooks run when KYC reaches completed status."""
+"""Hooks run when KYC reaches completed / KRA-verified status."""
 
 from __future__ import annotations
+
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,10 +10,13 @@ from app.application.investor.investor_bank_account_service import (
     sync_bank_account_from_kyc_journey,
 )
 from app.application.investor.investor_profile_seed_service import seed_investor_drafts_from_kyc
+from app.application.investor.investor_provision_service import provision_investor_after_kyc_verified
 from app.application.kyc.kyc_notification_service import notify_kyc_completed
 from app.application.kyc.user_name_sync_service import sync_user_name_from_verified_kyc
 from app.application.referral.referral_attribution_service import advance_referral_kyc_verified
 from app.infrastructure.persistence.models import KycJourneyState, User
+
+logger = logging.getLogger(__name__)
 
 
 async def on_kyc_completed(
@@ -23,6 +28,11 @@ async def on_kyc_completed(
     name_updated = await sync_user_name_from_verified_kyc(db, user=user, journey=journey)
     await seed_investor_drafts_from_kyc(db, user=user, journey=journey)
     await sync_bank_account_from_kyc_journey(db, user_id=user.id, journey=journey)
+    try:
+        async with db.begin_nested():
+            await provision_investor_after_kyc_verified(db, user_id=user.id)
+    except Exception:
+        logger.exception("Post-KYC investor provision failed user=%s", user.id)
     referral = await advance_referral_kyc_verified(db, referee=user)
     notify_kyc_completed(user=user)
     return {

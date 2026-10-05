@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { KycDigilockerInfoCard } from "@/features/kyc/components/kyc-digilocker-info-card";
 import { KycInfoCallout } from "@/features/kyc/components/kyc-info-callout";
 import { KycSelectField } from "@/features/kyc/components/kyc-select-field";
 import {
@@ -20,6 +22,12 @@ import {
 import { DEFAULT_KYC_COUNTRY, INDIAN_STATES } from "@/features/kyc/lib/indian-states";
 import { fetchKycPincode } from "@/features/kyc/lib/kyc-api";
 import { resolveStateOption } from "@/features/kyc/lib/kyc-digilocker-prefill";
+import {
+  addressHadValues,
+  addressMatchesPincode,
+  applyPincodeToAddress,
+} from "@/features/kyc/lib/kyc-pincode";
+import { ApiError } from "@/lib/api-client";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -208,7 +216,14 @@ export function KycAddressStep({
     permanent: Partial<Record<AddressFieldKey, string>>;
     correspondence: Partial<Record<AddressFieldKey, string>>;
   }>({ permanent: {}, correspondence: {} });
-  const pincodeEnrichedRef = useRef(false);
+  const [pincodeNotice, setPincodeNotice] = useState<{
+    permanent: string;
+    correspondence: string;
+  }>({ permanent: "", correspondence: "" });
+  const pincodeEnrichedRef = useRef<{ permanent?: string; correspondence?: string }>({});
+  const lookupRequestRef = useRef(0);
+  const formRef = useRef(form);
+  formRef.current = form;
 
   const digilockerLockedFields: Partial<Record<AddressFieldKey, boolean>> | undefined =
     digilockerFieldsLocked
@@ -240,44 +255,87 @@ export function KycAddressStep({
   }, [initialValue, stateOptions]);
 
   const applyPincodeLookup = async (pincode: string, type: "permanent" | "correspondence") => {
+    if (pincode.length !== 6) return "skipped" as const;
+
+    const requestId = ++lookupRequestRef.current;
     try {
       const result = await fetchKycPincode(pincode);
-      setForm((current) => ({
+      if (requestId !== lookupRequestRef.current) return "skipped" as const;
+
+      const current = formRef.current;
+      const currentAddress = current[type];
+      const match = addressMatchesPincode(currentAddress, result, stateOptions);
+      const nextAddress = applyPincodeToAddress(currentAddress, result, stateOptions);
+      const hadMismatch = addressHadValues(currentAddress) && !match.matched;
+      const nextForm = {
         ...current,
-        [type]: {
-          ...current[type],
-          city: result.city || current[type].city,
-          state: resolveStateOption(result.state_name || current[type].state, stateOptions),
-          country: DEFAULT_KYC_COUNTRY,
-        },
-      }));
-    } catch {
-      // User can still enter city/state manually.
+        [type]: nextAddress,
+        correspondence:
+          current.sameAsPermanent && type === "permanent" ? { ...nextAddress } : current.correspondence,
+      };
+
+      formRef.current = nextForm;
+      pincodeEnrichedRef.current[type] = pincode;
+      setForm(nextForm);
+
+      if (hadMismatch && (match.expectedCity || match.expectedState)) {
+        setPincodeNotice((notices) => ({
+          ...notices,
+          [type]: copy.kyc.address.pincodeMismatchDescription(
+            nextAddress.city || match.expectedCity,
+            nextAddress.state || match.expectedState,
+          ),
+        }));
+        return "corrected" as const;
+      }
+
+      setPincodeNotice((notices) => ({ ...notices, [type]: "" }));
+      return "matched" as const;
+    } catch (error) {
+      if (requestId !== lookupRequestRef.current) return "skipped" as const;
+      const notFound = error instanceof ApiError && (error.status === 404 || error.code === "invalid_pincode");
+      if (notFound) {
+        setErrors((current) => ({
+          ...current,
+          [type]: {
+            ...current[type],
+            pincode: copy.kyc.address.pincodeNotFound,
+          },
+        }));
+        return "invalid" as const;
+      }
+      return "failed" as const;
     }
   };
 
   useEffect(() => {
-    if (!prefilledFromDigilocker || pincodeEnrichedRef.current) return;
     const pincode = initialValue?.permanent.pincode ?? "";
     if (pincode.length !== 6) return;
+    if (pincodeEnrichedRef.current.permanent === pincode) return;
 
-    pincodeEnrichedRef.current = true;
     void applyPincodeLookup(pincode, "permanent");
-  }, [initialValue?.permanent.pincode, prefilledFromDigilocker]);
+  }, [initialValue?.permanent.pincode, prefilledFromDigilocker, stateOptions]);
 
   const updateAddress = (
     type: "permanent" | "correspondence",
     field: AddressFieldKey,
     value: string
   ) => {
-    setForm((current) => ({
-      ...current,
-      [type]: {
-        ...current[type],
-        [field]: value,
-        country: DEFAULT_KYC_COUNTRY,
-      },
-    }));
+    setForm((current) => {
+      const next = {
+        ...current,
+        [type]: {
+          ...current[type],
+          [field]: value,
+          country: DEFAULT_KYC_COUNTRY,
+        },
+      };
+      if (current.sameAsPermanent && type === "permanent") {
+        next.correspondence = { ...next.permanent };
+      }
+      formRef.current = next;
+      return next;
+    });
     setErrors((current) => ({
       ...current,
       [type]: {
@@ -285,6 +343,13 @@ export function KycAddressStep({
         [field]: undefined,
       },
     }));
+    if (field === "pincode") {
+      setPincodeNotice((notices) => ({ ...notices, [type]: "" }));
+      pincodeEnrichedRef.current[type] = undefined;
+      if (value.length === 6) {
+        void applyPincodeLookup(value, type);
+      }
+    }
   };
 
   const handleSameAsPermanentChange = (checked: boolean) => {
@@ -299,7 +364,7 @@ export function KycAddressStep({
     }
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (digilockerPrefillIncomplete) {
@@ -321,9 +386,31 @@ export function KycAddressStep({
       return;
     }
 
+    const permanentLookup = await applyPincodeLookup(formRef.current.permanent.pincode, "permanent");
+    if (permanentLookup === "invalid") {
+      setActiveTab("permanent");
+      return;
+    }
+    if (permanentLookup === "corrected") {
+      setActiveTab("permanent");
+      return;
+    }
+
+    if (!formRef.current.sameAsPermanent) {
+      const correspondenceLookup = await applyPincodeLookup(
+        formRef.current.correspondence.pincode,
+        "correspondence",
+      );
+      if (correspondenceLookup === "invalid" || correspondenceLookup === "corrected") {
+        setActiveTab("correspondence");
+        return;
+      }
+    }
+
+    const latest = formRef.current;
     onSubmit({
-      ...form,
-      correspondence: form.sameAsPermanent ? { ...form.permanent } : form.correspondence,
+      ...latest,
+      correspondence: latest.sameAsPermanent ? { ...latest.permanent } : latest.correspondence,
     });
   };
 
@@ -334,15 +421,14 @@ export function KycAddressStep({
 
   if (digilockerBlocked) {
     return (
-      <div className="flex min-h-[12rem] flex-col items-center justify-center gap-4 rounded-[1.75rem] border border-dashed border-primary/20 bg-muted/20 px-6 py-8 text-center">
-        <p className="max-w-sm text-caption leading-relaxed text-muted-foreground">
-          {copy.kyc.digilocker.requiredDescription}
-        </p>
-        {onRetryDigilocker ? (
-          <Button type="button" variant="outline" disabled={retryingDigilocker} onClick={onRetryDigilocker}>
-            {copy.kyc.digilocker.failedTitle}
-          </Button>
-        ) : null}
+      <div className="mt-3 w-full">
+        <KycDigilockerInfoCard
+          variant="required"
+          layout="prominent"
+          className="mx-auto w-full max-w-lg"
+          onRetry={onRetryDigilocker}
+          retrying={retryingDigilocker}
+        />
       </div>
     );
   }
@@ -372,6 +458,25 @@ export function KycAddressStep({
         <KycInfoCallout
           title={copy.kyc.address.digilockerPrefillTitle}
           description={copy.kyc.address.digilockerPrefillHint}
+          action={
+            onRetryDigilocker ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-9 rounded-[var(--radius-control)] border-info/20 bg-background/80"
+                disabled={retryingDigilocker}
+                aria-label={copy.kyc.digilocker.retry}
+                title={copy.kyc.digilocker.retry}
+                onClick={onRetryDigilocker}
+              >
+                <RefreshCw
+                  className={cn("size-4", retryingDigilocker && "animate-spin")}
+                  aria-hidden
+                />
+              </Button>
+            ) : undefined
+          }
         />
       ) : null}
 
@@ -412,6 +517,20 @@ export function KycAddressStep({
         onChange={(field, value) => updateAddress(activeTab, field, value)}
         onPincodeBlur={(pincode) => void applyPincodeLookup(pincode, activeTab)}
       />
+
+      {pincodeNotice[activeTab] ? (
+        <div
+          role="status"
+          className="rounded-[var(--radius-card)] border border-warning/25 bg-warning/[0.06] px-4 py-3"
+        >
+          <p className="text-caption font-semibold text-foreground">
+            {copy.kyc.address.pincodeMismatchTitle}
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            {pincodeNotice[activeTab]}
+          </p>
+        </div>
+      ) : null}
 
       {activeTab === "permanent" ? (
         <label className="flex cursor-pointer items-start gap-3 rounded-[var(--radius-card)] border border-border bg-muted/20 px-4 py-3">

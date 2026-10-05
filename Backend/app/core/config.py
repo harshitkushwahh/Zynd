@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.encryption_keys import parse_versioned_keys
@@ -234,8 +234,15 @@ class Settings(BaseSettings):
     documents_cdn_base_url: str = ""
     documents_public_cache_max_age_seconds: int = 2_592_000
 
-    # KYC integrations — use stub when keys are absent in development
-    kyc_provider_mode: Literal["auto", "stub", "live"] = "auto"
+    # KYC integrations: auto = live when credentials configured; disabled = force off; live = require credentials
+    kyc_provider_mode: Literal["auto", "disabled", "live"] = "auto"
+
+    @field_validator("kyc_provider_mode", mode="before")
+    @classmethod
+    def _normalize_kyc_provider_mode(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip().lower() == "stub":
+            return "disabled"
+        return value
     kyckart_base_url: str = ""
     kyckart_api_key: str = ""
     kyckart_base_url_test: str = ""
@@ -248,16 +255,19 @@ class Settings(BaseSettings):
     fp_poa_client_secret: str = ""
     fp_poa_base_url: str = "https://api.cybrilla.com"
     fp_poa_auth_tenant: str = "cybrillapoa"
+    fp_poa_api_tenant: str = ""
     fp_poa_token_base_url_test: str = ""
     fp_poa_client_id_test: str = ""
     fp_poa_client_secret_test: str = ""
     fp_poa_base_url_test: str = ""
     fp_poa_auth_tenant_test: str = ""
+    fp_poa_api_tenant_test: str = ""
     fp_poa_token_base_url_live: str = ""
     fp_poa_client_id_live: str = ""
     fp_poa_client_secret_live: str = ""
     fp_poa_base_url_live: str = ""
     fp_poa_auth_tenant_live: str = ""
+    fp_poa_api_tenant_live: str = ""
     fp_base_url: str = ""
     fp_tenant: str = ""
     fp_client_id: str = ""
@@ -268,22 +278,44 @@ class Settings(BaseSettings):
     fp_client_secret_test: str = ""
     fp_webhook_secret_test: str = ""
     fp_webhook_callback_url_test: str = ""
-    digilocker_fp_tenant_test: str = ""
     fp_base_url_live: str = ""
     fp_tenant_live: str = ""
     fp_client_id_live: str = ""
     fp_client_secret_live: str = ""
     fp_webhook_secret_live: str = ""
     fp_webhook_callback_url_live: str = ""
-    digilocker_fp_tenant_live: str = ""
     fp_enabled: bool = False
     fp_token_cache_minutes: int = 25
     fp_webhook_secret: str = ""
     fp_webhook_callback_url: str = ""
-    digilocker_fp_tenant: str = ""
-    kyc_digilocker_callback_url: str = ""
     kyc_proof_callback_url: str = ""
+    digilocker_fp: str = ""
+    kyc_digilocker_callback_url: str = ""
+    kyc_digilocker_web_redirect_origin: str = ""
+    kyc_digilocker_web_redirect_path: str = "/dashboard/kyc"
+    kyc_partner_embed_enabled: bool = True
+    kyc_partner_embed_return_path: str = "/dashboard/kyc/embed-return"
+    # When true, FinPrim DigiLocker uses TEST credentials (*_TEST) — sandbox DigiLocker OAuth.
+    # When false, uses the active FinPrim integration mode (production DigiLocker when live).
+    kyc_digilocker_sandbox: bool = False
+    digilocker_fp_base_url: str = ""
+    digilocker_fp_token_base_url: str = ""
+    digilocker_fp_tenant: str = ""
+    digilocker_fp_client_id: str = ""
+    digilocker_fp_client_secret: str = ""
+    digilocker_fp_client_id_live: str = ""
+    digilocker_fp_client_secret_live: str = ""
+    digilocker_fp_tenant_test: str = ""
+    digilocker_fp_tenant_live: str = ""
+    # Multiplus parity: KYC REST on s.finprim.com (kyc_requests) — often same creds as DIGILOCKER_FP_*.
+    kyc_tenant_base_url: str = ""
+    kyc_tenant_token_base_url: str = ""
+    kyc_tenant_tenant: str = ""
+    kyc_tenant_client_id: str = ""
+    kyc_tenant_client_secret: str = ""
     kyc_esign_callback_url: str = ""
+    kyc_esign_sandbox: bool = False
+    fp_poa_kyc_forms_fresh_enabled: bool = True
     kyc_auto_kra_check_enabled: bool = True
 
     # Mutual fund ingestion — Cybrilla scheme sync + AMFI NAV overlay
@@ -502,35 +534,69 @@ class Settings(BaseSettings):
         return f"{self.resolved_api_public_url}/webhooks/finprim"
 
     @property
-    def resolved_digilocker_fp_tenant(self) -> str:
-        from app.application.integrations.integration_runtime import get_finprim_runtime
+    def resolved_kyc_form_live(self) -> bool:
+        from app.application.integrations.integration_runtime import is_cybrilla_poa_live
 
-        runtime = get_finprim_runtime()
-        return runtime.digilocker_tenant.strip() or runtime.tenant.strip()
+        return is_cybrilla_poa_live()
+
+    @staticmethod
+    def _normalize_finprim_postback_host(url: str) -> str:
+        """Finprim sandbox often whitelists localhost, not 127.0.0.1."""
+        return url.replace("://127.0.0.1:", "://localhost:")
 
     @property
     def resolved_kyc_digilocker_callback_url(self) -> str:
-        if self.kyc_digilocker_callback_url.strip():
-            return self.kyc_digilocker_callback_url.rstrip("/")
-        return f"{self.resolved_api_public_url}/kyc/public/digilocker-callback"
+        default = self._normalize_finprim_postback_host(
+            f"{self.resolved_api_public_url}/kyc/public/digilocker-callback",
+        )
+        configured = (self.digilocker_fp or self.kyc_digilocker_callback_url).strip().rstrip("/")
+        if not configured:
+            return default
+        if "digilocker-callback" in configured:
+            return self._normalize_finprim_postback_host(configured)
+        # DIGILOCKER_FP must be the public API postback — not the Web app (common misconfig).
+        web_origin = self.frontend_url.rstrip("/")
+        if configured == web_origin or configured.startswith(f"{web_origin}/"):
+            return default
+        return self._normalize_finprim_postback_host(configured)
+
+    @property
+    def resolved_kyc_digilocker_web_redirect_origin(self) -> str:
+        if self.kyc_digilocker_web_redirect_origin.strip():
+            return self.kyc_digilocker_web_redirect_origin.rstrip("/")
+        return self.frontend_url.rstrip("/")
+
+    @property
+    def resolved_kyc_digilocker_web_redirect_path(self) -> str:
+        if self.kyc_partner_embed_enabled:
+            path = self.kyc_partner_embed_return_path.strip() or "/dashboard/kyc/embed-return"
+        else:
+            path = self.kyc_digilocker_web_redirect_path.strip() or "/dashboard/kyc"
+        return path if path.startswith("/") else f"/{path}"
+
+    def resolved_kyc_digilocker_web_return_url(self) -> str:
+        return f"{self.resolved_kyc_digilocker_web_redirect_origin}{self.resolved_kyc_digilocker_web_redirect_path}"
 
     @property
     def resolved_kyc_proof_callback_url(self) -> str:
         if self.kyc_proof_callback_url.strip():
             return self.kyc_proof_callback_url.rstrip("/")
-        return f"{self.resolved_api_public_url}/kyc/public/proof-callback"
+        return f"{self.resolved_api_public_url}/kyc/public/poa-proof-callback"
 
     @property
     def resolved_kyc_esign_callback_url(self) -> str:
         if self.kyc_esign_callback_url.strip():
             return self.kyc_esign_callback_url.rstrip("/")
-        return f"{self.resolved_api_public_url}/kyc/public/esign-callback"
+        return (
+            f"{self.resolved_api_public_url}/kyc/public/poa-esign-callback"
+            f"?kyc_esign_return=1"
+        )
 
     @property
     def resolved_api_public_url(self) -> str:
         if self.api_public_url.strip():
-            return self.api_public_url.rstrip("/")
-        host = "127.0.0.1" if self.api_host in {"0.0.0.0", "::"} else self.api_host
+            return self._normalize_finprim_postback_host(self.api_public_url.rstrip("/"))
+        host = "localhost" if self.api_host in {"0.0.0.0", "::", "127.0.0.1"} else self.api_host
         return f"http://{host}:{self.api_port}{self.api_prefix}"
 
     @property
@@ -612,6 +678,32 @@ class Settings(BaseSettings):
             return self
 
         object.__setattr__(self, "clamav_fail_open", True)
+        return self
+
+    @model_validator(mode="after")
+    def default_kyc_digilocker_sandbox_for_development(self) -> "Settings":
+        import os
+
+        if self.app_env != "development":
+            return self
+        if "KYC_DIGILOCKER_SANDBOX" in os.environ:
+            return self
+        if "kyc_digilocker_sandbox" in self.model_fields_set:
+            return self
+        object.__setattr__(self, "kyc_digilocker_sandbox", True)
+        return self
+
+    @model_validator(mode="after")
+    def default_kyc_esign_sandbox_for_development(self) -> "Settings":
+        import os
+
+        if self.app_env != "development":
+            return self
+        if "KYC_ESIGN_SANDBOX" in os.environ:
+            return self
+        if "kyc_esign_sandbox" in self.model_fields_set:
+            return self
+        object.__setattr__(self, "kyc_esign_sandbox", True)
         return self
 
     @model_validator(mode="after")

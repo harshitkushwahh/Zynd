@@ -449,6 +449,7 @@ export type AdminUserKycPersonal = {
   income_slab: string | null;
   occupation: string | null;
   marital_status: string | null;
+  spouse_name: string | null;
   pep_exposed: string | null;
   place_of_birth: string | null;
   nationality: string | null;
@@ -836,6 +837,87 @@ export async function verifyAdminDocument(documentId: string) {
   return apiRequest(`/admin/documents/${encodeURIComponent(documentId)}/verify`, {
     method: "POST",
   });
+}
+
+export type AdminConsentDefinition = {
+  id: string;
+  key: string;
+  title: string;
+  description?: string | null;
+  channel: string;
+  acceptance_mode: string;
+  reaccept_policy: string;
+  is_active: boolean;
+  published_version?: {
+    id: string;
+    version_label: string;
+    summary_text?: string | null;
+    document_url?: string | null;
+    published_at?: string | null;
+  } | null;
+  versions: Array<{
+    id: string;
+    version_label: string;
+    version_number: number;
+    status: string;
+    summary_text?: string | null;
+    document_url?: string | null;
+    published_at?: string | null;
+  }>;
+};
+
+export type AdminConsentStatsItem = {
+  consent_key: string;
+  title: string;
+  version_label: string;
+  consent_version_id: string;
+  acceptance_count: number;
+};
+
+export type AdminUserConsentRecord = {
+  id: string;
+  consent_key?: string | null;
+  consent_title?: string | null;
+  version_label?: string | null;
+  consent_version_id: string;
+  action: string;
+  source: string;
+  ip_address?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export async function fetchAdminConsentDefinitions() {
+  return apiRequest<AdminConsentDefinition[]>("/admin/consents/definitions");
+}
+
+export async function fetchAdminConsentStats(consentKey?: string) {
+  const query = consentKey ? `?consent_key=${encodeURIComponent(consentKey)}` : "";
+  return apiRequest<AdminConsentStatsItem[]>(`/admin/consents/stats${query}`);
+}
+
+export async function fetchAdminUserConsentRecords(userId: string) {
+  return apiRequest<AdminUserConsentRecord[]>(
+    `/admin/consents/users/${adminUserRefPath(userId)}/records`,
+  );
+}
+
+export async function createAdminConsentDraftVersion(
+  consentKey: string,
+  body: {
+    version_label: string;
+    summary_text?: string;
+    body_markdown?: string;
+    document_url?: string;
+  },
+) {
+  return apiRequest<{ id: string; version_label: string; status: string }>(
+    `/admin/consents/definitions/${encodeURIComponent(consentKey)}/versions`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export async function rejectAdminKycDocument(documentId: string, reason: string) {

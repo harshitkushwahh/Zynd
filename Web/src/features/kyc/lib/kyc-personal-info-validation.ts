@@ -1,4 +1,5 @@
 import type { KycPersonalInfoValue } from "@/features/kyc/lib/kyc-personal-info";
+import { isMarriedMaritalStatus } from "@/features/kyc/lib/kyc-personal-info";
 import {
   validateKycPersonName,
   validateKycPlaceOfBirth,
@@ -22,6 +23,17 @@ export function validateKycPersonalInfo(values: KycPersonalInfoValue) {
   if (!values.incomeSlab.trim()) errors.incomeSlab = copy.kyc.personalInfo.requiredField;
   if (!values.occupation.trim()) errors.occupation = copy.kyc.personalInfo.requiredField;
   if (!values.maritalStatus.trim()) errors.maritalStatus = copy.kyc.personalInfo.requiredField;
+  if (values.maritalStatusLocked && !isMarriedMaritalStatus(values.maritalStatus)) {
+    errors.maritalStatus = copy.kyc.personalInfo.maritalStatusLockedHint;
+  }
+  if (isMarriedMaritalStatus(values.maritalStatus)) {
+    const spouseNameError = validateKycPersonName(
+      values.spouseName,
+      copy.kyc.personalInfo.requiredField,
+      copy.kyc.personalInfo.invalidSpouseName,
+    );
+    if (spouseNameError) errors.spouseName = spouseNameError;
+  }
   if (!values.pepExposed.trim()) errors.pepExposed = copy.kyc.personalInfo.requiredField;
   if (!values.nationality.trim()) errors.nationality = copy.kyc.personalInfo.requiredField;
 

@@ -4,6 +4,9 @@ import base64
 import re
 from typing import Any
 
+from app.application.kyc.geolocation_service import round_kyc_geo_coordinate
+from app.application.kyc.identity_document_father import normalize_fathers_name_value
+
 ACCOUNT_TYPE_MAP = {
     "Savings": "savings",
     "Current": "current",
@@ -42,9 +45,58 @@ INCOME_SLAB_MAP = {
 
 PEP_MAP = {
     "not_applicable": "no_exposure",
+    "no_exposure": "no_exposure",
     "pep_exposed": "pep",
+    "pep": "pep",
     "pep_related": "related_pep",
+    "related_pep": "related_pep",
 }
+
+POA_KYC_FORM_PATCH_KEYS = frozenset(
+    {
+        "email_address",
+        "phone_number",
+        "residential_status",
+        "gender",
+        "marital_status",
+        "father_name",
+        "spouse_name",
+        "occupation_type",
+        "aadhaar_number",
+        "country_of_birth",
+        "place_of_birth",
+        "income_slab",
+        "pep_details",
+        "citizenship_countries",
+        "nationality_country",
+        "tax_residency_other_than_india",
+        "non_indian_tax_residency_1",
+        "non_indian_tax_residency_2",
+        "non_indian_tax_residency_3",
+        "geolocation",
+        "geo_location",
+    }
+)
+
+POA_PROOF_FIELDS_NEEDED = frozenset({"identity_proof", "address", "signature"})
+
+POA_OCCUPATION_TYPES = frozenset(
+    {
+        "business",
+        "professional",
+        "retired",
+        "housewife",
+        "student",
+        "public_sector_service",
+        "private_sector_service",
+        "government_service",
+        "agriculture",
+        "doctor",
+        "forex_dealer",
+        "service",
+        "others",
+    }
+)
 
 
 def _full_name(pan_draft: dict[str, Any]) -> str:
@@ -81,68 +133,16 @@ def data_url_to_file(data_url: str) -> tuple[bytes, str, str]:
     return content, f"signature.{extension}", content_type
 
 
-def _map_cybrilla_address(raw: dict[str, Any] | None) -> dict[str, str] | None:
-    if not raw:
-        return None
-    line_1 = str(raw.get("line1") or raw.get("line_1") or "").strip()
-    if not line_1:
-        return None
-    country = _country_code(str(raw.get("country") or "India"))
-    payload = {
-        "line_1": line_1[:120],
-        "city": str(raw.get("city") or "").strip()[:60],
-        "state": str(raw.get("state") or "").strip()[:60],
-        "pincode": str(raw.get("pincode") or raw.get("postal_code") or "").strip()[:10],
-        "country": country,
-    }
-    line_2 = str(raw.get("line2") or raw.get("line_2") or "").strip()
-    if line_2:
-        payload["line_2"] = line_2[:120]
-    line_3 = str(raw.get("line3") or raw.get("line_3") or "").strip()
-    if line_3:
-        payload["line_3"] = line_3[:120]
-    return payload
-
-
-def _map_nominees_for_kyc_form(nominee_draft: Any) -> list[dict[str, Any]]:
-    if not isinstance(nominee_draft, list):
-        return []
-    nominees: list[dict[str, Any]] = []
-    for item in nominee_draft:
-        if not isinstance(item, dict):
-            continue
-        core = item.get("core") if isinstance(item.get("core"), dict) else {}
-        name = str(core.get("fullName") or "").strip()
-        if not name:
-            continue
-        entry: dict[str, Any] = {
-            "name": name[:120],
-            "relationship": str(core.get("relationship") or "others").strip(),
-        }
-        dob = str(core.get("dateOfBirth") or "").strip()
-        if dob:
-            entry["date_of_birth"] = dob
-        share = str(core.get("sharePercent") or "").strip()
-        if share:
-            try:
-                entry["allocation_percentage"] = int(float(share))
-            except ValueError:
-                pass
-        nominees.append(entry)
-    return nominees
-
-
 def build_kyc_form_patch_payload(
     *,
     user_email: str,
     user_phone: str | None,
     journey: Any,
+    include_geolocation: bool = True,
 ) -> dict[str, Any]:
     pan_draft = journey.pan_draft_json or {}
     personal = journey.personal_draft_json or {}
     contact = journey.contact_draft_json or {}
-    bank = journey.bank_draft_json or {}
-    nominee_draft = journey.nominee_draft_json
 
     permanent = (contact.get("permanent") or {}) if isinstance(contact, dict) else {}
     gender = str(personal.get("gender") or "").strip().lower() or "male"
@@ -155,7 +155,7 @@ def build_kyc_form_patch_payload(
         str(personal.get("incomeSlab") or "").strip().lower(),
         "upto_1lakh",
     )
-    pep = str(personal.get("pepExposed") or "").strip().lower() or "no_exposure"
+    pep = str(personal.get("pepExposed") or "not_applicable").strip().lower()
     nationality = _country_code(str(personal.get("nationality") or "India"))
     place_of_birth = str(personal.get("placeOfBirth") or permanent.get("city") or "India").strip() or "India"
 
@@ -165,17 +165,26 @@ def build_kyc_form_patch_payload(
         "residential_status": "resident",
         "gender": gender,
         "marital_status": marital_status,
-        "occupation_type": OCCUPATION_MAP.get(occupation, occupation),
+        "occupation_type": _map_poa_occupation(occupation),
         "country_of_birth": nationality,
         "place_of_birth": place_of_birth[:60],
         "income_slab": income_slab,
-        "pep_details": PEP_MAP.get(pep, pep),
+        "pep_details": PEP_MAP.get(pep, "no_exposure"),
         "citizenship_countries": [nationality],
         "nationality_country": nationality,
         "tax_residency_other_than_india": False,
+        "non_indian_tax_residency_1": None,
+        "non_indian_tax_residency_2": None,
+        "non_indian_tax_residency_3": None,
     }
 
-    father_name = str(personal.get("fathersName") or "").strip()
+    father_name = normalize_fathers_name_value(str(personal.get("fathersName") or ""))
+    if not father_name and isinstance(contact, dict):
+        from app.application.kyc.identity_document_father import resolve_fathers_name_from_care_of
+
+        father_name = resolve_fathers_name_from_care_of(
+            str(contact.get("careOf") or contact.get("care_of") or "")
+        )
     if father_name:
         payload["father_name"] = father_name
 
@@ -184,37 +193,85 @@ def build_kyc_form_patch_payload(
         if spouse_name:
             payload["spouse_name"] = spouse_name
 
-    geolocation = journey.geolocation_json or {}
-    if geolocation.get("latitude") is not None and geolocation.get("longitude") is not None:
-        payload["geolocation"] = {
-            "latitude": float(geolocation["latitude"]),
-            "longitude": float(geolocation["longitude"]),
-        }
+    if include_geolocation:
+        geolocation = journey.geolocation_json or {}
+        if geolocation.get("latitude") is not None and geolocation.get("longitude") is not None:
+            payload["geolocation"] = {
+                "latitude": round_kyc_geo_coordinate(float(geolocation["latitude"])),
+                "longitude": round_kyc_geo_coordinate(float(geolocation["longitude"])),
+            }
 
     aadhaar_last4 = str(pan_draft.get("aadhaarLast4") or "").strip()
     if not aadhaar_last4 and isinstance(journey.personal_draft_json, dict):
         aadhaar_last4 = str(journey.personal_draft_json.get("aadhaarLast4") or "").strip()
-    if aadhaar_last4:
-        payload["aadhaar_number"] = aadhaar_last4[-4:]
+    digits = "".join(ch for ch in aadhaar_last4 if ch.isdigit())
+    if len(digits) >= 4:
+        payload["aadhaar_number"] = digits[-4:]
 
-    permanent_address = _map_cybrilla_address(permanent if isinstance(permanent, dict) else None)
-    if permanent_address:
-        payload["permanent_address"] = permanent_address
-
-    correspondence_raw = contact.get("correspondence") if isinstance(contact, dict) else None
-    if contact.get("sameAsPermanent"):
-        correspondence_address = permanent_address
-    else:
-        correspondence_address = _map_cybrilla_address(
-            correspondence_raw if isinstance(correspondence_raw, dict) else None
-        )
-    if correspondence_address:
-        payload["correspondence_address"] = correspondence_address
-
-    nominees = _map_nominees_for_kyc_form(nominee_draft)
-    if nominees:
-        payload["nominees"] = nominees
-
-    _ = bank  # bank verified via POA preverify; not embedded on kyc_form patch payload
+    # Address on the KYC form comes from DigiLocker proof_details, not manual address patches.
     _ = _full_name(pan_draft)
     return payload
+
+
+def _map_poa_occupation(raw: str) -> str:
+    mapped = OCCUPATION_MAP.get(raw, raw)
+    if mapped in POA_OCCUPATION_TYPES:
+        return mapped
+    return "others"
+
+
+def kyc_form_needs_demographic_patch(form: dict[str, Any], payload: dict[str, Any]) -> bool:
+    checks = (
+        "email_address",
+        "gender",
+        "marital_status",
+        "occupation_type",
+        "income_slab",
+        "pep_details",
+        "country_of_birth",
+        "place_of_birth",
+        "nationality_country",
+    )
+    for key in checks:
+        if not str(form.get(key) or "").strip() and payload.get(key):
+            return True
+    phone = form.get("phone_number")
+    if not isinstance(phone, dict) or not str(phone.get("number") or "").strip():
+        if payload.get("phone_number"):
+            return True
+    return False
+
+
+def filter_kyc_form_patch_for_requirements(
+    form: dict[str, Any],
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Only PATCH fields Cybrilla POA expects for the current requirements.fields_needed."""
+    req = form.get("requirements") or {}
+    fields_needed = req.get("fields_needed")
+    if not isinstance(fields_needed, list):
+        return payload
+
+    needed = {str(item).strip() for item in fields_needed if item}
+    if not needed:
+        return payload
+
+    if needed <= POA_PROOF_FIELDS_NEEDED:
+        return {}
+
+    allowed = {name for name in needed if name in POA_KYC_FORM_PATCH_KEYS}
+    if not allowed:
+        return {}
+
+    filtered = {key: value for key, value in payload.items() if key in allowed}
+    if "marital_status" in allowed and payload.get("marital_status") == "married":
+        if payload.get("spouse_name"):
+            filtered["spouse_name"] = payload["spouse_name"]
+    if "marital_status" in allowed and payload.get("marital_status") in {"unmarried", "others"}:
+        if payload.get("father_name"):
+            filtered["father_name"] = payload["father_name"]
+    if "tax_residency_other_than_india" in allowed:
+        filtered["non_indian_tax_residency_1"] = payload.get("non_indian_tax_residency_1")
+        filtered["non_indian_tax_residency_2"] = payload.get("non_indian_tax_residency_2")
+        filtered["non_indian_tax_residency_3"] = payload.get("non_indian_tax_residency_3")
+    return filtered

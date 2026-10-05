@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.application.investor.investor_profile_seed_service import seed_investor_drafts_from_kyc
 from app.application.investor.investor_provision_service import provision_investor_profile
 from app.infrastructure.persistence.investor_models import (
+    InvestorAddress,
     InvestorBankAccount,
     InvestorProfileStatus,
     InvestorProvisionTrigger,
@@ -51,7 +52,14 @@ async def test_provision_investor_profile_marks_active(db_session) -> None:
                 "pincode": "110001",
                 "country": "India",
             },
-            "sameAsPermanent": True,
+            "correspondence": {
+                "line1": "22 MG Road",
+                "city": "Indore",
+                "state": "Madhya Pradesh",
+                "pincode": "452011",
+                "country": "India",
+            },
+            "sameAsPermanent": False,
         },
         bank_draft_json={
             "accountNumber": "123456789012",
@@ -72,6 +80,7 @@ async def test_provision_investor_profile_marks_active(db_session) -> None:
         "profile": {"id": "invp_test_001", "old_id": 101, "raw": {"id": "invp_test_001", "old_id": 101}},
         "bank": {"id": "bac_test_001", "old_id": 55, "raw": {"id": "bac_test_001", "old_id": 55}},
         "address": {"id": "addr_test_001", "raw": {"id": "addr_test_001"}},
+        "correspondence": {"id": "addr_test_002", "raw": {"id": "addr_test_002"}},
         "email": {"id": "email_test_001", "raw": {"id": "email_test_001"}},
         "phone": {"id": "phone_test_001", "raw": {"id": "phone_test_001"}},
     }
@@ -88,7 +97,7 @@ async def test_provision_investor_profile_marks_active(db_session) -> None:
         ),
         patch(
             "app.application.investor.investor_provision_service.create_address",
-            new=AsyncMock(return_value=fp_results["address"]),
+            new=AsyncMock(side_effect=[fp_results["address"], fp_results["correspondence"]]),
         ),
         patch(
             "app.application.investor.investor_provision_service.create_email_address",
@@ -114,3 +123,14 @@ async def test_provision_investor_profile_marks_active(db_session) -> None:
     assert bank.sync_status == InvestorObjectSyncStatus.active
     assert bank.external_bank_account_id == "bac_test_001"
     assert bank.external_old_id == 55
+
+    addresses = list(
+        (
+            await db_session.execute(
+                select(InvestorAddress).where(InvestorAddress.investor_profile_id == user.id)
+            )
+        ).scalars()
+    )
+    assert {row.nature for row in addresses} == {"residential", "correspondence"}
+    assert all(row.sync_status == InvestorObjectSyncStatus.active for row in addresses)
+    assert {row.external_address_id for row in addresses} == {"addr_test_001", "addr_test_002"}

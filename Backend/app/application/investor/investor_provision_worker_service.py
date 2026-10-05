@@ -29,6 +29,7 @@ _PROVISION_TRIGGERS = (
     InvestorProvisionTrigger.payment,
     InvestorProvisionTrigger.mf_order,
     InvestorProvisionTrigger.mf_sip,
+    InvestorProvisionTrigger.manual,
 )
 
 

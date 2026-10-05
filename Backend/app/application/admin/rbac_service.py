@@ -85,6 +85,9 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("admin.distributor_branches.manage", "Create and update distributor branches"),
     ("admin.distributor_branches.approve", "Approve or reject branch opening requests"),
     ("admin.distributor_managers.list", "List branch managers in admin hierarchy"),
+    ("consents.read", "View consent definitions, versions, and acceptance statistics"),
+    ("consents.manage", "Create consent versions and request publish"),
+    ("consents.records.read", "View per-user consent acceptance history"),
 ]
 
 MITRA_ROLE_KEY = "mitra"

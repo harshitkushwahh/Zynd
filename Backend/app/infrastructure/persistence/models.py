@@ -144,6 +144,9 @@ class AuditEventType(str, enum.Enum):
     recommendation_basket_deleted = "recommendation_basket_deleted"
     recommendation_basket_funds_replaced = "recommendation_basket_funds_replaced"
     recommendation_config_published = "recommendation_config_published"
+    consent_version_published = "consent_version_published"
+    consent_accepted = "consent_accepted"
+    consent_revoked = "consent_revoked"
 
 
 class DeletionEventType(str, enum.Enum):
@@ -506,6 +509,7 @@ class AdminActionType(str, enum.Enum):
     security_config_update = "security_config_update"
     mf_catalog_bulk_apply = "mf_catalog_bulk_apply"
     mf_catalog_rules_apply = "mf_catalog_rules_apply"
+    consent_version_publish = "consent_version_publish"
 
 
 class AdminActionStatus(str, enum.Enum):
@@ -767,6 +771,7 @@ class KycJourneyState(Base):
     pan_verification_failure_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     external_kyc_request_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     external_identity_document_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    external_identity_document_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     external_kyc_status: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     digilocker_failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     poa_readiness_preverify_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
@@ -784,6 +789,7 @@ class KycJourneyState(Base):
     kyc_form_failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     proof_details_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     esign_details_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    kyc_partner_external_refs_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     geolocation_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -345,6 +345,12 @@ export function PersonalDetailsSettingsPanel({
                       label={copy.kyc.personalInfo.fields.maritalStatus}
                       value={personalInfo.maritalStatus}
                     />
+                    {personalInfo.spouseName?.trim() ? (
+                      <SettingsProfileDetailsRow
+                        label={copy.kyc.personalInfo.fields.spouseName}
+                        value={personalInfo.spouseName}
+                      />
+                    ) : null}
                     <SettingsProfileDetailsRow
                       label={copy.kyc.personalInfo.fields.nationality}
                       value={personalInfo.nationality}

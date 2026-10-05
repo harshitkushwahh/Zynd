@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { ApiError } from "@/lib/api-client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,19 +15,23 @@ import {
   verifyKycBankHybrid,
   verifyKycBankManual,
   fetchKycBankPreverifyStatus,
+  fetchKycIfsc,
 } from "@/features/kyc/lib/kyc-api";
 import { pollWithBackoff } from "@/features/kyc/lib/kyc-polling";
 import {
   createEmptyBankForm,
+  IFSC_PATTERN,
+  isKycBankBranchPlaceholder,
   KYC_BANK_ACCOUNT_TYPE_OPTIONS,
   normalizeAccountNumber,
   normalizeIfscCode,
   type KycBankAccountDetails,
   type KycBankFormValue,
   type KycBankVerificationResult,
+  bankAccountNumberOnFile,
   validateKycBankForm,
 } from "@/features/kyc/lib/kyc-bank";
-import type { KycReadinessInfo } from "@/features/kyc/lib/kyc-pan-readiness";
+import { resolveAccountNumberDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +40,6 @@ type KycBankStepProps = {
   initialAccountDetails?: KycBankAccountDetails | null;
   initialVerification?: KycBankVerificationResult | null;
   initialProofUploaded?: boolean;
-  readiness?: KycReadinessInfo | null;
   saving?: boolean;
   onSubmit: (value: KycBankFormValue & { accountDetails: KycBankAccountDetails }) => void;
 };
@@ -44,7 +49,6 @@ export function KycBankStep({
   initialAccountDetails,
   initialVerification,
   initialProofUploaded = false,
-  readiness,
   saving = false,
   onSubmit,
 }: KycBankStepProps) {
@@ -52,6 +56,7 @@ export function KycBankStep({
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof KycBankFormValue, string>>>({});
   const [processError, setProcessError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isFetchingIfsc, setIsFetchingIfsc] = useState(false);
   const [isComplete, setIsComplete] = useState(
     Boolean(initialVerification?.bankVerified && initialAccountDetails),
   );
@@ -65,6 +70,9 @@ export function KycBankStep({
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUploaded, setProofUploaded] = useState(initialProofUploaded);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [accountEntryActive, setAccountEntryActive] = useState(
+    () => !bankAccountNumberOnFile(initialValue ?? createEmptyBankForm()),
+  );
 
   const resetVerificationState = () => {
     setIsComplete(false);
@@ -77,6 +85,13 @@ export function KycBankStep({
 
   const handleEditBankDetails = () => {
     resetVerificationState();
+    setAccountEntryActive(true);
+    setForm((current) => ({
+      ...current,
+      accountNumber: "",
+      accountNumberLast4: "",
+      accountNumberMasked: "",
+    }));
   };
 
   const updateField = (field: keyof KycBankFormValue, value: string) => {
@@ -85,7 +100,132 @@ export function KycBankStep({
     resetVerificationState();
   };
 
-  const validateForm = () => validateKycBankForm(form);
+  const updateAccountNumber = (value: string) => {
+    const normalized = normalizeAccountNumber(value);
+    setAccountEntryActive(true);
+    setForm((current) => ({
+      ...current,
+      accountNumber: normalized,
+      accountNumberLast4: normalized ? "" : current.accountNumberLast4,
+      accountNumberMasked: normalized ? "" : current.accountNumberMasked,
+    }));
+    setFormErrors((current) => ({ ...current, accountNumber: undefined }));
+    resetVerificationState();
+  };
+
+  const accountNumberOnFile = bankAccountNumberOnFile(form);
+  const maskedAccountOnFile = accountNumberOnFile && !form.accountNumber.trim();
+  const maskedAccountHint = maskedAccountOnFile ? resolveAccountNumberDisplay(form) ?? "" : "";
+  const accountNumberLocked = isComplete || (maskedAccountOnFile && !accountEntryActive);
+
+  const validateForm = () =>
+    validateKycBankForm(form, {
+      accountNumberOnFile: accountNumberOnFile && isComplete,
+    });
+
+  const mergeIfscIntoAccountDetails = async (
+    ifscCode: string,
+    details: KycBankAccountDetails,
+  ): Promise<KycBankAccountDetails> => {
+    if (details.branch.trim() && !isKycBankBranchPlaceholder(details.branch)) {
+      return details;
+    }
+    const code = normalizeIfscCode(ifscCode);
+    if (!IFSC_PATTERN.test(code)) {
+      return details;
+    }
+    try {
+      const result = await fetchKycIfsc(code);
+      return {
+        ...details,
+        bankName: result.bank_name || details.bankName,
+        branch: result.branch || details.branch,
+      };
+    } catch {
+      return details;
+    }
+  };
+
+  const applyIfscLookup = async (ifscCode: string, options?: { preserveVerification?: boolean }) => {
+    const code = normalizeIfscCode(ifscCode);
+    if (!IFSC_PATTERN.test(code)) {
+      return;
+    }
+
+    const preserveVerification = options?.preserveVerification ?? isComplete;
+
+    setIsFetchingIfsc(true);
+    setProcessError("");
+    try {
+      const result = await fetchKycIfsc(code);
+      setAccountDetails((current) => ({
+        accountHolderName: preserveVerification ? current?.accountHolderName ?? "" : "",
+        bankName: result.bank_name,
+        branch: result.branch,
+      }));
+      if (preserveVerification) {
+        setVerification((current) =>
+          current
+            ? { ...current, bankName: result.bank_name, branch: result.branch }
+            : current,
+        );
+      } else {
+        setVerification(null);
+      }
+      setFormErrors((current) => ({ ...current, ifscCode: undefined }));
+    } catch (error) {
+      if (!preserveVerification) {
+        setAccountDetails(null);
+      }
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : copy.kyc.bank.ifscLookupFailed;
+      setFormErrors((current) => ({ ...current, ifscCode: message }));
+    } finally {
+      setIsFetchingIfsc(false);
+    }
+  };
+
+  const initialIfscRef = useRef(form.ifscCode);
+  const didBootstrapIfscRef = useRef(false);
+
+  useEffect(() => {
+    if (didBootstrapIfscRef.current) {
+      return;
+    }
+    didBootstrapIfscRef.current = true;
+    const code = normalizeIfscCode(initialIfscRef.current);
+    if (!IFSC_PATTERN.test(code)) {
+      return;
+    }
+    void applyIfscLookup(code, { preserveVerification: isComplete });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap saved IFSC once on mount
+  }, []);
+
+  useEffect(() => {
+    if (
+      !isComplete ||
+      !accountDetails ||
+      (accountDetails.branch.trim() && !isKycBankBranchPlaceholder(accountDetails.branch))
+    ) {
+      return;
+    }
+    const code = normalizeIfscCode(form.ifscCode);
+    if (!IFSC_PATTERN.test(code)) {
+      return;
+    }
+    void mergeIfscIntoAccountDetails(code, accountDetails).then((enriched) => {
+      if (enriched.branch === accountDetails.branch && enriched.bankName === accountDetails.bankName) {
+        return;
+      }
+      setAccountDetails(enriched);
+      setVerification((current) =>
+        current ? { ...current, bankName: enriched.bankName, branch: enriched.branch } : current,
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- backfill branch once when resuming verified bank
+  }, [isComplete]);
 
   const runHybridVerification = async () => {
     const result = await verifyKycBankHybrid({
@@ -110,11 +250,16 @@ export function KycBankStep({
       throw new Error(copy.kyc.bank.fetchFailed);
     }
 
-    setAccountDetails({
+    let nextAccountDetails: KycBankAccountDetails = {
       accountHolderName: result.account_holder_name,
       bankName: verificationResult.bankName,
       branch: verificationResult.branch,
-    });
+    };
+    nextAccountDetails = await mergeIfscIntoAccountDetails(form.ifscCode, nextAccountDetails);
+    verificationResult.bankName = nextAccountDetails.bankName;
+    verificationResult.branch = nextAccountDetails.branch;
+
+    setAccountDetails(nextAccountDetails);
     setVerification(verificationResult);
 
     if (result.bank_verified) {
@@ -133,8 +278,18 @@ export function KycBankStep({
         { maxAttempts: 8, baseDelayMs: 1000 },
       );
       if (polled.bank_verified) {
+        const enriched = await mergeIfscIntoAccountDetails(form.ifscCode, nextAccountDetails);
+        setAccountDetails(enriched);
         setVerification((current) =>
-          current ? { ...current, bankVerified: true, readinessVerified: true } : current,
+          current
+            ? {
+                ...current,
+                bankVerified: true,
+                readinessVerified: polled.readiness_verified ?? current.readinessVerified,
+                bankName: enriched.bankName,
+                branch: enriched.branch,
+              }
+            : current,
         );
         setIsComplete(true);
         return;
@@ -236,11 +391,11 @@ export function KycBankStep({
       <div className="space-y-4">
         <KycBankAccountCard
           isProcessing={isProcessing}
+          isFetchingIfsc={isFetchingIfsc}
           isComplete={isComplete}
           accountDetails={accountDetails}
           verification={verification}
           ifscCode={form.ifscCode}
-          readiness={readiness}
           onEdit={handleEditBankDetails}
         />
 
@@ -250,9 +405,20 @@ export function KycBankStep({
             id="kyc-bank-account-number"
             inputMode="numeric"
             value={form.accountNumber}
-            onChange={(event) => updateField("accountNumber", normalizeAccountNumber(event.target.value))}
-            placeholder={copy.kyc.bank.placeholders.accountNumber}
+            onChange={(event) => updateAccountNumber(event.target.value)}
+            onFocus={() => {
+              if (maskedAccountOnFile && !accountEntryActive) {
+                setAccountEntryActive(true);
+                setFormErrors((current) => ({ ...current, accountNumber: undefined }));
+              }
+            }}
+            placeholder={
+              maskedAccountHint && !accountEntryActive
+                ? maskedAccountHint
+                : copy.kyc.bank.placeholders.accountNumber
+            }
             disabled={isProcessing || isComplete || saving}
+            readOnly={accountNumberLocked}
             aria-invalid={Boolean(formErrors.accountNumber)}
           />
           {formErrors.accountNumber ? <FieldMessage message={formErrors.accountNumber} /> : null}
@@ -279,9 +445,10 @@ export function KycBankStep({
             placeholder={copy.kyc.bank.placeholders.ifscCode}
             autoComplete="off"
             spellCheck={false}
-            disabled={isProcessing || isComplete || saving}
+            disabled={isProcessing || isFetchingIfsc || isComplete || saving}
             aria-invalid={Boolean(formErrors.ifscCode)}
             className="font-mono uppercase tracking-wide"
+            onBlur={() => void applyIfscLookup(form.ifscCode)}
           />
           {formErrors.ifscCode ? <FieldMessage message={formErrors.ifscCode} /> : null}
         </div>

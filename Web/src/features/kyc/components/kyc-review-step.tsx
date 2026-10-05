@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CreditCard, Users, UsersRound } from "lucide-react";
+import { Building2, CreditCard, MapPin, PenLine, UserRound, Users, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -10,7 +10,7 @@ import { KycReviewNomineeEmpty } from "@/features/kyc/components/kyc-review-nomi
 import { KycReviewPanSection } from "@/features/kyc/components/kyc-review-pan-section";
 import { KycSignaturePreview } from "@/features/kyc/components/kyc-signature-preview";
 import type { KycJourneyDraft } from "@/features/kyc/lib/kyc-journey-draft";
-import type { KycNomineeRecord } from "@/features/kyc/lib/kyc-nominee";
+import { formatNomineeDobDisplay, type KycNomineeRecord } from "@/features/kyc/lib/kyc-nominee";
 import {
   resolveAccountNumberLast4,
   resolvePanDisplay,
@@ -19,6 +19,8 @@ import {
   KYC_GENDER_OPTIONS,
   KYC_INCOME_SLAB_OPTIONS,
   KYC_MARITAL_STATUS_OPTIONS,
+  KYC_NOMINEE_RELATIONSHIP_OPTIONS,
+  KYC_NOMINEE_SOURCE_OF_WEALTH_OPTIONS,
   KYC_OCCUPATION_OPTIONS,
   KYC_PEP_OPTIONS,
   lookupKycEnumLabel,
@@ -29,11 +31,13 @@ import { cn } from "@/lib/utils";
 type KycReviewStepProps = {
   draft: KycJourneyDraft;
   requiresFullKyc?: boolean;
+  nominationOptedOut?: boolean;
   onSubmit: () => void;
   onAddNominee: () => void;
   familyGroupRepromptNominee?: KycNomineeRecord | null;
   onFamilyGroupRepromptInvite?: () => void;
   onFamilyGroupRepromptDismiss?: () => void;
+  isSubmitting?: boolean;
 };
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
@@ -67,11 +71,13 @@ function formatAddressBlock(
 export function KycReviewStep({
   draft,
   requiresFullKyc = true,
+  nominationOptedOut = false,
   onSubmit,
   onAddNominee,
   familyGroupRepromptNominee = null,
   onFamilyGroupRepromptInvite,
   onFamilyGroupRepromptDismiss,
+  isSubmitting = false,
 }: KycReviewStepProps) {
   const pan = draft.pan;
   const address = draft.address;
@@ -85,7 +91,7 @@ export function KycReviewStep({
     : undefined;
 
   const panAccordionBadge = pan ? (
-    <StatusBadge variant="success" showIcon={false} className="h-5 px-2 text-[10px]">
+    <StatusBadge variant="success" className="h-5 px-2 text-[10px]">
       {copy.kyc.review.pan.verifiedBadge}
     </StatusBadge>
   ) : null;
@@ -101,14 +107,16 @@ export function KycReviewStep({
   const nomineeSummary =
     nominees.length > 0
       ? copy.kyc.nominee.list.slotsLabel(nominees.length, 3)
-      : undefined;
+      : nominationOptedOut
+        ? copy.kyc.review.nominee.emptySummary
+        : copy.kyc.review.nominee.noneSummary;
 
   const bankSummary = bank
     ? `${bank.accountDetails.bankName} · ••••${resolveAccountNumberLast4(bank) ?? "----"}`
     : undefined;
 
   const bankAccordionBadge = bank ? (
-    <StatusBadge variant="success" showIcon={false} className="h-5 px-2 text-[10px]">
+    <StatusBadge variant="success" className="h-5 px-2 text-[10px]">
       {copy.kyc.review.bank.verifiedBadge}
     </StatusBadge>
   ) : null;
@@ -168,6 +176,7 @@ export function KycReviewStep({
           title={copy.kyc.review.sections.address}
           summary={addressSummary}
           empty={!address}
+          icon={<MapPin className="size-4" strokeWidth={2} />}
         >
           {address ? (
             <>
@@ -191,6 +200,7 @@ export function KycReviewStep({
           title={copy.kyc.review.sections.personalInfo}
           summary={personalSummary}
           empty={!personalInfo}
+          icon={<UserRound className="size-4" strokeWidth={2} />}
         >
           {personalInfo ? (
             <>
@@ -211,6 +221,12 @@ export function KycReviewStep({
                 label={copy.kyc.personalInfo.fields.maritalStatus}
                 value={lookupKycEnumLabel(personalInfo.maritalStatus, KYC_MARITAL_STATUS_OPTIONS)}
               />
+              {personalInfo.spouseName?.trim() ? (
+                <ReviewRow
+                  label={copy.kyc.personalInfo.fields.spouseName}
+                  value={personalInfo.spouseName}
+                />
+              ) : null}
               <ReviewRow
                 label={copy.kyc.personalInfo.fields.pepExposed}
                 value={lookupKycEnumLabel(personalInfo.pepExposed, KYC_PEP_OPTIONS)}
@@ -226,14 +242,34 @@ export function KycReviewStep({
           summary={nomineeSummary}
           empty={nominees.length === 0}
           emptyTone="warning"
-          emptySummary={copy.kyc.review.nominee.emptySummary}
-          emptyContent={<KycReviewNomineeEmpty onAddNominee={onAddNominee} />}
+          emptySummary={
+            nominationOptedOut
+              ? copy.kyc.review.nominee.emptySummary
+              : copy.kyc.review.nominee.noneSummary
+          }
+          emptyContent={
+            <KycReviewNomineeEmpty
+              variant={nominationOptedOut ? "opted_out" : "none_added"}
+              onAddNominee={onAddNominee}
+            />
+          }
           icon={<Users className="size-4" strokeWidth={2} />}
         >
           {nominees.map((nominee, index) => (
             <div key={nominee.id} className={cn(index > 0 && "border-t border-border/60 pt-2")}>
               <ReviewRow label={copy.kyc.nominee.fields.fullName} value={nominee.core.fullName} />
-              <ReviewRow label={copy.kyc.nominee.fields.relationship} value={nominee.core.relationship} />
+              <ReviewRow
+                label={copy.kyc.nominee.fields.relationship}
+                value={lookupKycEnumLabel(nominee.core.relationship, KYC_NOMINEE_RELATIONSHIP_OPTIONS)}
+              />
+              <ReviewRow
+                label={copy.kyc.nominee.fields.sourceOfWealth}
+                value={lookupKycEnumLabel(nominee.core.sourceOfWealth, KYC_NOMINEE_SOURCE_OF_WEALTH_OPTIONS)}
+              />
+              <ReviewRow
+                label={copy.kyc.nominee.fields.dateOfBirth}
+                value={nominee.core.dateOfBirth ? formatNomineeDobDisplay(nominee.core.dateOfBirth) : ""}
+              />
               <ReviewRow
                 label={copy.kyc.nominee.fields.sharePercent}
                 value={copy.kyc.nominee.list.shareLabel(nominee.core.sharePercent)}
@@ -257,6 +293,7 @@ export function KycReviewStep({
             title={copy.kyc.review.sections.signature}
             summary={signatureSummary}
             empty={!signature}
+            icon={<PenLine className="size-4" strokeWidth={2} />}
           >
             {signature ? (
               <>
@@ -278,8 +315,14 @@ export function KycReviewStep({
       </div>
 
       <div className="shrink-0 border-t border-border/60 pt-4">
-        <Button type="button" size="lg" className="w-full" onClick={onSubmit}>
-          {copy.kyc.review.submit}
+        <Button
+          type="button"
+          size="lg"
+          className="w-full"
+          disabled={isSubmitting}
+          onClick={onSubmit}
+        >
+          {isSubmitting ? copy.kyc.review.submitting : copy.kyc.review.submit}
         </Button>
       </div>
     </div>

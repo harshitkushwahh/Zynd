@@ -105,6 +105,19 @@
   z-index: 60;
 }
 
+/* Nominee opt-out stacks above the KYC journey shell (z-50). */
+.kyc-nominee-opt-out-overlay {
+  background-color: var(--dialog-overlay) !important;
+  backdrop-filter: blur(calc(var(--blur-overlay) + 4px));
+  -webkit-backdrop-filter: blur(calc(var(--blur-overlay) + 4px));
+  z-index: 90 !important;
+  pointer-events: auto !important;
+}
+
+.kyc-nominee-opt-out-root {
+  z-index: 91 !important;
+}
+
 .kyc-redirect-dialog-root [data-slot="dialog-content"],
 .kyc-esign-dialog-root [data-slot="dialog-content"] {
   z-index: 61;
@@ -116,4 +129,34 @@
   .kyc-esign-dialog-root [data-slot="dialog-content"] {
     border-radius: 2.25rem;
   }
+}
+
+/* Incomplete external step (DigiLocker / eSign abandoned) — destructive glow */
+.kyc-redirect-dialog-root.kyc-incomplete-dialog-surface {
+  border: 1px solid color-mix(in srgb, var(--destructive) 48%, var(--border));
+  box-shadow:
+    var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.22)),
+    0 0 0 1px color-mix(in srgb, var(--destructive) 32%, transparent),
+    0 0 22px color-mix(in srgb, var(--destructive) 34%, transparent),
+    0 0 44px color-mix(in srgb, var(--destructive) 18%, transparent);
+}
+
+.kyc-partner-embed-overlay {
+  background-color: color-mix(in srgb, var(--dialog-overlay) 72%, transparent) !important;
+  backdrop-filter: blur(calc(var(--blur-overlay) + 4px));
+  -webkit-backdrop-filter: blur(calc(var(--blur-overlay) + 4px));
+  z-index: 85 !important;
+}
+
+.kyc-partner-embed-root {
+  z-index: 1 !important;
+}
+
+.dark .kyc-redirect-dialog-root.kyc-incomplete-dialog-surface {
+  border-color: color-mix(in srgb, var(--destructive) 55%, var(--border));
+  box-shadow:
+    var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.35)),
+    0 0 0 1px color-mix(in srgb, var(--destructive) 45%, transparent),
+    0 0 28px color-mix(in srgb, var(--destructive) 42%, transparent),
+    0 0 56px color-mix(in srgb, var(--destructive) 22%, transparent);
 }

@@ -38,6 +38,7 @@ HIGH_IMPACT_ACTIONS = {
     AdminActionType.security_config_update,
     AdminActionType.mf_catalog_bulk_apply,
     AdminActionType.mf_catalog_rules_apply,
+    AdminActionType.consent_version_publish,
 }
 
 
@@ -314,6 +315,27 @@ async def _execute_action(
             rule_ids=rule_ids,
             dry_run=False,
         )
+    if request.action_type == AdminActionType.consent_version_publish:
+        from uuid import UUID as UUIDType
+
+        from app.application.consent.consent_service import publish_version_direct
+
+        version_id_raw = payload.get("consent_version_id") or payload.get("version_id")
+        if not version_id_raw and request.target_id:
+            version_id_raw = str(request.target_id)
+        if not version_id_raw:
+            raise ValueError("Missing consent version id.")
+        version = await publish_version_direct(
+            db,
+            version_id=UUIDType(str(version_id_raw)),
+            publisher=approver,
+            ip=ip,
+        )
+        return {
+            "consent_version_id": str(version.id),
+            "version_label": version.version_label,
+            "status": version.status.value,
+        }
     raise ValueError(f"Unsupported action type: {request.action_type.value}")
 
 

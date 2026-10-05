@@ -78,11 +78,13 @@ import {
   formatAddInvestorNomineeSummary,
   type AddInvestorNomineeRecord,
 } from "@/lib/add-investor/add-investor-nominee";
+import { normalizeMobileInput } from "@/lib/add-investor/add-investor-demo";
 import {
-  delay,
-  DIGILOCKER_PREFILL_ADDRESS,
-  normalizeMobileInput,
-} from "@/lib/add-investor/add-investor-demo";
+  applyClientDigilockerIdentityDocument,
+  beginClientDigilockerRedirect,
+  readDigilockerReturnDocumentIdFromUrl,
+  stripDigilockerReturnParamsFromUrl,
+} from "@/lib/add-investor/add-investor-digilocker";
 import { mapPanVerifyToInvestorReadiness } from "@/lib/add-investor/add-investor-pan-readiness";
 import {
   clearStoredAddInvestorComplianceDraft,
@@ -173,6 +175,7 @@ export function AddInvestorWizard() {
   const [signatureMode, setSignatureMode] = useState<AddInvestorSignatureTab | null>(null);
   const signatureUploaded = signatureDataUrl.trim().length > 0;
   const [nominees, setNominees] = useState<AddInvestorNomineeRecord[]>([]);
+  const [nominationOptedOut, setNominationOptedOut] = useState(false);
   const [nomineeSubWizardActive, setNomineeSubWizardActive] = useState(false);
   const [bank, setBank] = useState<AddInvestorBankDraft>(emptyBankDraft());
   const [esignDone, setEsignDone] = useState(false);
@@ -275,7 +278,11 @@ export function AddInvestorWizard() {
         icon: Users,
         items: [
           nominees.length === 0
-            ? { label: "Nomination", value: "None added", tone: "muted" }
+            ? {
+                label: "Nomination",
+                value: nominationOptedOut ? "Opted out of nominations" : "None added",
+                tone: "muted",
+              }
             : {
                 label: "Nomination",
                 value: formatAddInvestorNomineeSummary(nominees),
@@ -424,6 +431,7 @@ export function AddInvestorWizard() {
     setAddressFromDigilocker(false);
     setPersonal(emptyPersonalDraft());
     setNominees([]);
+    setNominationOptedOut(false);
     setBank(emptyBankDraft());
     setEsignDone(false);
   }, []);
@@ -610,6 +618,84 @@ export function AddInvestorWizard() {
     setMaxReachedStepIndex((prev) => Math.max(prev, index));
   };
 
+  const digilockerReturnHandledRef = useRef(false);
+  const digilockerAddressAutoStartRef = useRef(false);
+  useEffect(() => {
+    if (!clientUserId || digilockerReturnHandledRef.current) return;
+    const documentId = readDigilockerReturnDocumentIdFromUrl();
+    if (!documentId) return;
+    digilockerReturnHandledRef.current = true;
+    void (async () => {
+      try {
+        const applied = await applyClientDigilockerIdentityDocument(clientUserId, documentId);
+        if (applied.success && applied.address) {
+          setAddress(applied.address);
+          setAddressFromDigilocker(true);
+          if (applied.personal) setPersonal(applied.personal);
+          setDigilockerDone(true);
+          markStepReached(addInvestorStepIndex(journeySteps, "address"));
+          switchToStep("address");
+        } else {
+          setPanError(applied.reason || "DigiLocker return could not be processed.");
+        }
+      } catch (error) {
+        setPanError(
+          error instanceof ApiError
+            ? error.message || "DigiLocker return could not be processed."
+            : "DigiLocker return could not be processed.",
+        );
+      } finally {
+        stripDigilockerReturnParamsFromUrl();
+      }
+    })();
+  }, [clientUserId, journeySteps, switchToStep]);
+
+  useEffect(() => {
+    if (!clientUserId || stepId !== "address") {
+      if (stepId !== "address") digilockerAddressAutoStartRef.current = false;
+      return;
+    }
+    if (!(requiresDigilocker ?? true) || digilockerDone) return;
+    if (digilockerLoading) return;
+    if (digilockerAddressAutoStartRef.current) return;
+    digilockerAddressAutoStartRef.current = true;
+    void (async () => {
+      try {
+        const bootstrap = await fetchClientKycBootstrap(clientUserId);
+        if (bootstrap.external_kyc_status === "returned_success") {
+          digilockerAddressAutoStartRef.current = false;
+          return;
+        }
+        if (bootstrap.external_kyc_status === "started") return;
+        const digilocker = await beginClientDigilockerRedirect(clientUserId);
+        if (digilocker.outcome !== "inline") return;
+        const applied = digilocker.applied;
+        if (!applied.success || !applied.address) {
+          throw new Error(applied.reason || "Could not load address from DigiLocker.");
+        }
+        setAddress(applied.address);
+        setAddressFromDigilocker(true);
+        if (applied.personal) setPersonal(applied.personal);
+        setDigilockerDone(true);
+      } catch (error) {
+        digilockerAddressAutoStartRef.current = false;
+        setPanError(
+          error instanceof ApiError
+            ? error.message || "DigiLocker connection failed."
+            : error instanceof Error
+              ? error.message
+              : "DigiLocker connection failed.",
+        );
+      }
+    })();
+  }, [
+    clientUserId,
+    digilockerDone,
+    digilockerLoading,
+    requiresDigilocker,
+    stepId,
+  ]);
+
   const goToStep = (id: AddInvestorStepId) => {
     const idx = addInvestorStepIndex(journeySteps, id);
     if (idx >= 0 && idx <= maxReachedStepIndex) {
@@ -652,7 +738,11 @@ export function AddInvestorWizard() {
       case "personal-info":
         return isAddInvestorPersonalDraftValid(personal);
       case "nominee":
-        return areAddInvestorNomineesValid(nominees) && !nomineeSubWizardActive;
+        return (
+          areAddInvestorNomineesValid(nominees) &&
+          !nomineeSubWizardActive &&
+          (nominees.length > 0 || nominationOptedOut)
+        );
       case "bank":
         return isAddInvestorBankDraftValid(bank);
       case "esign":
@@ -768,7 +858,7 @@ export function AddInvestorWizard() {
         }),
       );
       setRequiresDigilocker(
-        result.requires_digilocker ?? !Boolean(result.kyc_already_registered),
+        result.requires_full_kyc_submission ?? !Boolean(result.kyc_already_registered),
       );
       setPanVerified(true);
       markStepReached(addInvestorStepIndex(journeySteps, "pan"));
@@ -805,7 +895,9 @@ export function AddInvestorWizard() {
         setPanError("Could not confirm PAN name details.");
         return;
       }
-      if (confirmResult.requires_digilocker != null) {
+      if (confirmResult.requires_full_kyc_submission != null) {
+        setRequiresDigilocker(confirmResult.requires_full_kyc_submission);
+      } else if (confirmResult.requires_digilocker != null) {
         setRequiresDigilocker(confirmResult.requires_digilocker);
       }
       if (!isNewToKyc) {
@@ -825,16 +917,31 @@ export function AddInvestorWizard() {
   };
 
   const handleDigilockerConnect = async () => {
+    if (!clientUserId) return;
     setDigilockerLoading(true);
-    await delay(1200);
-    setAddress({
-      permanent: { ...DIGILOCKER_PREFILL_ADDRESS },
-      correspondence: { ...DIGILOCKER_PREFILL_ADDRESS },
-      correspondenceSame: true,
-    });
-    setAddressFromDigilocker(true);
-    setDigilockerDone(true);
-    setDigilockerLoading(false);
+    setPanError("");
+    try {
+      const digilocker = await beginClientDigilockerRedirect(clientUserId);
+      if (digilocker.outcome !== "inline") return;
+      const applied = digilocker.applied;
+      if (!applied.success || !applied.address) {
+        throw new Error(applied.reason || "Could not load address from DigiLocker.");
+      }
+      setAddress(applied.address);
+      setAddressFromDigilocker(true);
+      if (applied.personal) setPersonal(applied.personal);
+      setDigilockerDone(true);
+    } catch (error) {
+      setPanError(
+        error instanceof ApiError
+          ? error.message || "DigiLocker connection failed."
+          : error instanceof Error
+            ? error.message
+            : "DigiLocker connection failed.",
+      );
+    } finally {
+      setDigilockerLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -854,6 +961,7 @@ export function AddInvestorWizard() {
         address,
         personal,
         nominees,
+        nominationOptedOut,
         bank,
         signatureDataUrl,
         signatureMode,
@@ -870,7 +978,23 @@ export function AddInvestorWizard() {
         };
       }
 
-      await submitClientKyc(clientUserId, submitBody);
+      const submitResult = await submitClientKyc(clientUserId, submitBody);
+      if (
+        submitResult.next_action === "proof_redirect" &&
+        submitResult.redirect_url?.trim() &&
+        !digilockerDone
+      ) {
+        window.location.assign(submitResult.redirect_url);
+        return;
+      }
+      if (submitResult.next_action === "esign_redirect" && submitResult.redirect_url?.trim()) {
+        window.location.assign(submitResult.redirect_url);
+        return;
+      }
+      if (submitResult.next_action === "failed") {
+        setSubmitError(submitResult.failure_reason ?? submitResult.message ?? "Could not submit KYC. Try again.");
+        return;
+      }
 
       setSuccessState({
         clientCode: displayClientId,
@@ -1290,7 +1414,12 @@ export function AddInvestorWizard() {
               >
                 <AddInvestorNomineePanel
                   nominees={nominees}
-                  onNomineesChange={setNominees}
+                  onNomineesChange={(next) => {
+                    setNominees(next);
+                    if (next.length > 0) setNominationOptedOut(false);
+                  }}
+                  nominationOptedOut={nominationOptedOut}
+                  onNominationOptedOutChange={setNominationOptedOut}
                   onSubWizardActiveChange={setNomineeSubWizardActive}
                   nomineeOptions={kycMasterData?.nominee}
                 />

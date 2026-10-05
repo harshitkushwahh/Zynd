@@ -14,7 +14,6 @@ import {
 import { useAuth } from "@/contexts/auth-context";
 import {
   ensureKycToken,
-  checkKycReadiness,
   fetchKycBootstrap,
   fetchKycFormStatus,
   type KycBootstrapResponse,
@@ -29,11 +28,6 @@ import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
 import type { KycRecord, KycStatus } from "@/features/kyc/lib/kyc-types";
 import { copy } from "@/shared/config/copy";
 import { getDisplayName } from "@/shared/utils/user-display";
-import {
-  hasPendingDigilockerResume,
-  persistDigilockerReturnFromSearch,
-} from "@/features/kyc/lib/kyc-digilocker-return";
-
 type KycContextValue = {
   status: KycStatus | null;
   record: KycRecord | null;
@@ -199,15 +193,8 @@ export function KycProvider({ children }: { children: ReactNode }) {
       setOverallStatus(null);
       setProfileProgress(null);
       setLegalFullName(null);
-      if (!hasPendingDigilockerResume()) {
-        setDialogOpen(false);
-      }
+      setDialogOpen(false);
       return;
-    }
-
-    persistDigilockerReturnFromSearch();
-    if (hasPendingDigilockerResume()) {
-      setDialogOpen(true);
     }
 
     if (previousUserId && previousUserId !== nextUserId) {
@@ -242,14 +229,6 @@ export function KycProvider({ children }: { children: ReactNode }) {
             message: formStatus.message ?? "Your KYC is verified at the KRA.",
             readiness: { status: "verified" },
           });
-          await refreshFromBootstrap();
-          return;
-        }
-
-        const result = await checkKycReadiness();
-        if (cancelled) return;
-        if (result.kra_verified) {
-          applyReadinessCheck(result);
           await refreshFromBootstrap();
         }
       } catch {

@@ -13,7 +13,12 @@ import {
   lookupAddInvestorEnumLabel,
   type AddInvestorPersonalOptions,
 } from "@/lib/add-investor/add-investor-kyc-master-data";
-import { ADD_INVESTOR_PERSONAL_OPTIONS, normalizeAddInvestorPersonalDraft, type AddInvestorPersonalDraft } from "@/lib/add-investor/add-investor-journey";
+import {
+  ADD_INVESTOR_PERSONAL_OPTIONS,
+  isAddInvestorMarried,
+  normalizeAddInvestorPersonalDraft,
+  type AddInvestorPersonalDraft,
+} from "@/lib/add-investor/add-investor-journey";
 import { cn } from "@/lib/utils";
 
 type AddInvestorPersonalInfoPanelProps = {
@@ -74,6 +79,13 @@ export function formatAddInvestorPersonalReviewItems(
 
   return [
     { label: "Father's name", value: normalized.fathersName.trim() },
+    {
+      label: "Marital status",
+      value: personalOptionLabel(options, "maritalStatus", normalized.maritalStatus),
+    },
+    ...(normalized.spouseName.trim()
+      ? [{ label: "Spouse name", value: normalized.spouseName.trim() }]
+      : []),
     {
       label: "Occupation",
       value: personalOptionLabel(options, "occupation", normalized.occupation),
@@ -205,8 +217,37 @@ export function AddInvestorPersonalInfoPanel({
             value={personal.maritalStatus}
             placeholder="Select status"
             options={options.maritalStatus}
-            onChange={(value) => onPersonalChange({ maritalStatus: value })}
+            onChange={(value) =>
+              onPersonalChange({
+                maritalStatus: value,
+                spouseName: isAddInvestorMarried(value) ? personal.spouseName : "",
+              })
+            }
           />
+          {isAddInvestorMarried(personal.maritalStatus) ? (
+            <Field>
+              <FieldLabel htmlFor="add-investor-spouse-name">Spouse name</FieldLabel>
+              <Input
+                id="add-investor-spouse-name"
+                value={personal.spouseName}
+                onChange={(event) => onPersonalChange({ spouseName: event.target.value })}
+                placeholder="As per official records"
+                autoComplete="off"
+              />
+            </Field>
+          ) : (
+            <PersonalSelectField
+              id="add-investor-pep"
+              label="Politically exposed person (PEP)"
+              value={personal.pepExposed}
+              placeholder="Select PEP status"
+              options={options.pepExposed}
+              onChange={(value) => onPersonalChange({ pepExposed: value || "not_applicable" })}
+            />
+          )}
+        </div>
+
+        {isAddInvestorMarried(personal.maritalStatus) ? (
           <PersonalSelectField
             id="add-investor-pep"
             label="Politically exposed person (PEP)"
@@ -215,7 +256,7 @@ export function AddInvestorPersonalInfoPanel({
             options={options.pepExposed}
             onChange={(value) => onPersonalChange({ pepExposed: value || "not_applicable" })}
           />
-        </div>
+        ) : null}
 
         <div className="add-investor-personal-info-panel__row">
           <Field>

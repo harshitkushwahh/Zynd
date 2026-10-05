@@ -7,6 +7,7 @@ export type AddInvestorNomineeWizardStep = "details" | "contact" | "address";
 export type AddInvestorNomineeCore = {
   fullName: string;
   age: string;
+  dateOfBirth: string;
   relationship: string;
   sharePercent: string;
   sourceOfWealth: string;
@@ -89,6 +90,7 @@ export function createEmptyNomineeCore(): AddInvestorNomineeCore {
   return {
     fullName: "",
     age: "",
+    dateOfBirth: "",
     relationship: "",
     sharePercent: "",
     sourceOfWealth: "",
@@ -148,10 +150,80 @@ export function parseNomineeAge(value: string): number | null {
   return parsed;
 }
 
+export function parseNomineeDob(value: string): Date | null {
+  const raw = value.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const slashMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw);
+  const parts = isoMatch
+    ? { year: Number(isoMatch[1]), month: Number(isoMatch[2]), day: Number(isoMatch[3]) }
+    : slashMatch
+      ? { year: Number(slashMatch[3]), month: Number(slashMatch[2]), day: Number(slashMatch[1]) }
+      : null;
+  if (!parts) return null;
+  const date = new Date(parts.year, parts.month - 1, parts.day);
+  if (
+    date.getFullYear() !== parts.year ||
+    date.getMonth() !== parts.month - 1 ||
+    date.getDate() !== parts.day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+export function formatNomineeDobInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+export function formatNomineeDobIso(value: string) {
+  const parsed = parseNomineeDob(value);
+  if (!parsed) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function formatNomineeDobDisplay(value: string) {
+  const parsed = parseNomineeDob(value);
+  if (!parsed) return value.trim();
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${parsed.getFullYear()}`;
+}
+
+export function getNomineeAgeFromDob(dateOfBirth: string): number | null {
+  const parsed = parseNomineeDob(dateOfBirth);
+  if (!parsed) return null;
+  const today = new Date();
+  let age = today.getFullYear() - parsed.getFullYear();
+  const monthDiff = today.getMonth() - parsed.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < parsed.getDate())) {
+    age -= 1;
+  }
+  return age;
+}
+
+export function getNomineeTypeFromDob(dateOfBirth: string): AddInvestorNomineeType {
+  const age = getNomineeAgeFromDob(dateOfBirth);
+  if (age === null) return "adult";
+  return age < ADD_INVESTOR_MINOR_AGE_THRESHOLD ? "minor" : "adult";
+}
+
 export function getNomineeTypeFromAge(age: string): AddInvestorNomineeType {
   const parsed = parseNomineeAge(age);
   if (parsed === null) return "adult";
   return parsed < ADD_INVESTOR_MINOR_AGE_THRESHOLD ? "minor" : "adult";
+}
+
+export function resolveNomineeType(core: Pick<AddInvestorNomineeCore, "dateOfBirth" | "age">): AddInvestorNomineeType {
+  if (parseNomineeDob(core.dateOfBirth)) {
+    return getNomineeTypeFromDob(core.dateOfBirth);
+  }
+  return getNomineeTypeFromAge(core.age);
 }
 
 export function normalizeNomineeAgeInput(value: string): string {
@@ -193,10 +265,17 @@ export function getTotalNomineeShare(nominees: AddInvestorNomineeRecord[]): numb
 }
 
 export function isAddInvestorNomineeAddressValid(address: AddInvestorNomineeAddress): boolean {
+  const hasAny = Boolean(
+    address.line1.trim() ||
+      address.line2.trim() ||
+      address.city.trim() ||
+      address.state.trim() ||
+      address.pincode.trim(),
+  );
+  if (!hasAny) return true;
   return (
     address.line1.trim().length > 2 &&
     address.city.trim().length > 1 &&
-    address.state.trim().length > 1 &&
     address.pincode.length === 6 &&
     address.country.trim().length > 1
   );
@@ -211,10 +290,11 @@ function isValidMobile(value: string): boolean {
 }
 
 export function isAddInvestorNomineeRecordComplete(nominee: AddInvestorNomineeRecord): boolean {
+  const hasDob = parseNomineeDob(nominee.core.dateOfBirth) !== null;
   const age = parseNomineeAge(nominee.core.age);
   if (
     nominee.core.fullName.trim().length < 2 ||
-    age === null ||
+    (!hasDob && age === null) ||
     !nominee.core.relationship ||
     !nominee.core.sharePercent ||
     Number(nominee.core.sharePercent) < 1
@@ -222,32 +302,22 @@ export function isAddInvestorNomineeRecordComplete(nominee: AddInvestorNomineeRe
     return false;
   }
 
-  if (nominee.type === "adult" && !nominee.core.sourceOfWealth) {
+  if (nominee.contact.email.trim() && !isValidEmail(nominee.contact.email)) {
     return false;
   }
-
-  if (nominee.type === "adult") {
-    if (
-      !isValidEmail(nominee.contact.email) ||
-      !isValidMobile(nominee.contact.mobile) ||
-      !nominee.identity.documentType ||
-      nominee.identity.documentNumber.trim().length < 3
-    ) {
-      return false;
-    }
+  if (nominee.contact.mobile.trim() && !isValidMobile(nominee.contact.mobile)) {
+    return false;
   }
 
   if (nominee.type === "minor") {
     const guardian = nominee.guardian;
-    if (
-      !guardian ||
-      guardian.name.trim().length < 2 ||
-      !isValidEmail(guardian.email) ||
-      !isValidMobile(guardian.mobile) ||
-      !guardian.documentType ||
-      guardian.documentNumber.trim().length < 3 ||
-      !guardian.sourceOfWealth
-    ) {
+    if (!guardian || guardian.name.trim().length < 2) {
+      return false;
+    }
+    if (guardian.email.trim() && !isValidEmail(guardian.email)) {
+      return false;
+    }
+    if (guardian.mobile.trim() && !isValidMobile(guardian.mobile)) {
       return false;
     }
   }
@@ -273,7 +343,7 @@ export function formatAddInvestorNomineeSummary(nominees: AddInvestorNomineeReco
   return nominees
     .map(
       (nominee) =>
-        `${nominee.core.fullName} · ${nominee.core.relationship} · ${nominee.core.sharePercent}%`,
+        `${nominee.core.fullName} · ${relationshipLabel(nominee.core.relationship)} · ${nominee.core.sharePercent}%`,
     )
     .join(" · ");
 }

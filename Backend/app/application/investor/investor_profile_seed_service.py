@@ -208,7 +208,12 @@ async def _seed_addresses(db: AsyncSession, profile: InvestorProfile, journey: K
         correspondence = _map_address_fields(
             contact.get("correspondence") if isinstance(contact.get("correspondence"), dict) else None
         )
-        if correspondence and correspondence.get("line1") != permanent.get("line1"):
+        if correspondence and (
+            correspondence.get("line1") != permanent.get("line1")
+            or correspondence.get("city") != permanent.get("city")
+            or correspondence.get("postal_code") != permanent.get("postal_code")
+            or correspondence.get("state") != permanent.get("state")
+        ):
             db.add(
                 InvestorAddress(
                     investor_profile_id=profile.user_id,

@@ -54,6 +54,7 @@ IFSC_PREFIX_TO_BANK_NAME: dict[str, str] = {
     "UTKS": "Utkarsh Small Finance Bank",
     "NSPB": "NSDL Payments Bank",
     "JIOP": "Jio Payments Bank",
+    "STCB": "SBM Bank (India)",
     "SYNB": "Canara Bank",
     "CORP": "Union Bank of India",
     "ALLA": "Indian Bank",

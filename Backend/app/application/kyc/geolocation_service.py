@@ -13,6 +13,11 @@ MAX_REPORTED_ACCURACY_METERS = 5000.0
 MAX_IP_GPS_DISTANCE_KM = 350.0
 
 
+def round_kyc_geo_coordinate(value: float) -> float:
+    """Cybrilla POA kyc_forms allow at most 6 decimal places for geolocation."""
+    return round(float(value), 6)
+
+
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     radius_km = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)

@@ -32,7 +32,7 @@ export function KycDialogProgressState({
         <div className="flex size-14 items-center justify-center rounded-full bg-primary/5 ring-1 ring-inset ring-primary/15">
           <Loader2 className="size-6 animate-spin text-primary" strokeWidth={2.25} aria-hidden />
         </div>
-        <p className="text-compact text-muted-foreground">{copy.kyc.loading}</p>
+        <p className="text-compact text-muted-foreground">{message ?? copy.kyc.loading}</p>
       </div>
     );
   }

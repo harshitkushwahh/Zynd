@@ -108,6 +108,7 @@ def _serialize_personal_draft(personal_draft: dict[str, Any] | None) -> dict[str
         "income_slab": personal_draft.get("incomeSlab"),
         "occupation": personal_draft.get("occupation"),
         "marital_status": personal_draft.get("maritalStatus"),
+        "spouse_name": personal_draft.get("spouseName"),
         "pep_exposed": personal_draft.get("pepExposed"),
         "place_of_birth": personal_draft.get("placeOfBirth"),
         "nationality": personal_draft.get("nationality"),

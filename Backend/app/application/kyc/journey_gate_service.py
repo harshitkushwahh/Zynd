@@ -29,6 +29,13 @@ REKYC_READINESS_CODES = frozenset(
     }
 )
 
+# KRA reports no / invalid record — investor needs fresh kyc_form + full journey (not compliant submit).
+FRESH_INVESTOR_READINESS_CODES = frozenset(
+    {
+        "kyc_unavailable",
+    }
+)
+
 
 def is_rekyc_readiness_code(readiness_code: str | None) -> bool:
     return str(readiness_code or "").lower() in REKYC_READINESS_CODES
@@ -41,7 +48,7 @@ def is_rekyc_modification(journey: KycJourneyState | None) -> bool:
     return is_rekyc_readiness_code(journey.readiness_code)
 
 
-FRESH_KYC_FORM_READINESS_CODES = frozenset({"kyc_unavailable"})
+FRESH_KYC_FORM_READINESS_CODES = FRESH_INVESTOR_READINESS_CODES
 
 
 def resolve_kyc_form_type(journey: KycJourneyState | None) -> str:
@@ -63,46 +70,87 @@ def resolve_kyc_form_type(journey: KycJourneyState | None) -> str:
     return "fresh"
 
 
+def ensure_journey_kyc_form_type_recorded(journey: KycJourneyState | None) -> str:
+    """Persist Cybrilla-style form type (fresh/modify) on the journey for audit."""
+    if journey is None:
+        return "fresh"
+    existing = str(journey.kyc_form_type or "").strip()
+    if existing:
+        return existing
+    resolved = resolve_kyc_form_type(journey)
+    journey.kyc_form_type = resolved
+    return resolved
+
+
 def requires_digilocker_for_readiness(
     *,
     kyc_already_registered: bool,
     readiness_code: str | None,
 ) -> bool:
-    """Whether the pre-form DigiLocker step is required (Aadhaar address + father's name)."""
-    if kyc_already_registered:
-        return False
-    code = str(readiness_code or "").lower()
-    if code == "kyc_incomplete":
-        return True
-    if is_rekyc_readiness_code(readiness_code):
-        return False
-    return True
+    from app.application.kyc.kyc_flow_mode import requires_pan_step_digilocker
+    from app.infrastructure.persistence.models import KycJourneyState
+
+    journey = KycJourneyState(
+        user_id=None,
+        kyc_already_registered=kyc_already_registered,
+        readiness_code=readiness_code,
+    )
+    return requires_pan_step_digilocker(journey)
 
 
 def requires_digilocker(journey: KycJourneyState | None) -> bool:
+    from app.application.kyc.kyc_flow_mode import requires_pan_step_digilocker
+    from app.application.kyc.path_a_proof import path_a_digilocker_proof_satisfied
+
+    if not requires_pan_step_digilocker(journey):
+        return False
     if journey is None:
         return True
-    return requires_digilocker_for_readiness(
-        kyc_already_registered=bool(journey.kyc_already_registered),
-        readiness_code=journey.readiness_code,
-    )
+    return not path_a_digilocker_proof_satisfied(journey)
 
 
 def require_digilocker_or_kra_skip(journey: KycJourneyState) -> None:
+    from app.application.kyc.path_a_proof import path_a_digilocker_proof_satisfied
+
     if not requires_digilocker(journey):
         return
-    if journey.external_kyc_status != "returned_success":
+    if not path_a_digilocker_proof_satisfied(journey):
         raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
+
+
+def derive_kyc_already_registered(
+    *,
+    readiness_status: str | None,
+    readiness_code: str | None,
+) -> bool:
+    """True only when KRA readiness is fully compliant (short-path eligible), not new/re-KYC."""
+    if str(readiness_status or "").lower() != "verified":
+        return False
+    code = str(readiness_code or "").lower()
+    if code in FRESH_INVESTOR_READINESS_CODES or code in REKYC_READINESS_CODES:
+        return False
+    return True
 
 
 def requires_full_kyc_submission(journey: KycJourneyState | None) -> bool:
     """Fresh KYC or re-KYC needs signature, eSign, and KRA form submission."""
     if journey is None:
         return True
+    code = str(journey.readiness_code or "").lower()
+    if code in FRESH_INVESTOR_READINESS_CODES or code in REKYC_READINESS_CODES:
+        return True
     if not journey.kyc_already_registered:
         return True
-    code = str(journey.readiness_code or "").lower()
-    return code in REKYC_READINESS_CODES
+    if not journey.poa_readiness_preverify_id:
+        return True
+    return False
+
+
+def is_kra_compliant_short_submit(journey: KycJourneyState | None) -> bool:
+    """Review submit may skip kyc_form when PAN readiness is stored and KRA is already compliant."""
+    if journey is None:
+        return False
+    return not requires_full_kyc_submission(journey)
 
 
 def require_phase1_complete(journey: KycJourneyState | None) -> None:

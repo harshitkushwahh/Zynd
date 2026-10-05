@@ -20,6 +20,7 @@ from app.infrastructure.persistence import risk_profile_models  # noqa: F401
 from app.infrastructure.persistence import family_group_models  # noqa: F401
 from app.infrastructure.persistence import goal_models  # noqa: F401
 from app.infrastructure.persistence import recommendation_models  # noqa: F401
+from app.infrastructure.persistence import consent_models  # noqa: F401
 
 # Alembic 1.18 creates alembic_version.version_num as VARCHAR(32). Several
 # revision ids are longer than that. version_table_impl (Alembic 1.14+) is the

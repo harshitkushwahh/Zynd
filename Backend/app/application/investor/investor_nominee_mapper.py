@@ -28,7 +28,15 @@ def _parse_nominee_dob(value: Any) -> date | None:
     try:
         return date.fromisoformat(raw)
     except ValueError:
-        return None
+        pass
+    parts = raw.split("/")
+    if len(parts) == 3 and all(part.isdigit() for part in parts):
+        day, month, year = (int(parts[0]), int(parts[1]), int(parts[2]))
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+    return None
 
 
 def _parse_share_percent(value: Any) -> int | None:

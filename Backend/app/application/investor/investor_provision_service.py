@@ -237,8 +237,6 @@ async def _provision_child_objects(
             raise
 
     for address_row in profile.addresses:
-        if address_row.nature == "correspondence":
-            continue
         if address_row.sync_status == InvestorObjectSyncStatus.active and address_row.external_address_id:
             continue
         address_row.sync_status = InvestorObjectSyncStatus.pending_create
@@ -302,8 +300,6 @@ def profile_has_unsynced_fp_children(profile: InvestorProfile) -> bool:
         if phone_row.sync_status != InvestorObjectSyncStatus.active or not phone_row.external_phone_id:
             return True
     for address_row in profile.addresses:
-        if address_row.nature == "correspondence":
-            continue
         if address_row.sync_status != InvestorObjectSyncStatus.active or not address_row.external_address_id:
             return True
     for bank_row in profile.bank_accounts:
@@ -368,3 +364,19 @@ async def sync_unsynced_investor_children(session: AsyncSession, *, user_id) -> 
         )
         return False
     return investor_fp_contacts_ready(profile)
+
+
+async def provision_investor_after_kyc_verified(session: AsyncSession, *, user_id) -> bool:
+    """Create Finprim investor profile, addresses, related parties, then MF account."""
+    provisioned = await provision_investor_profile(session, user_id=user_id)
+    profile = await session.get(InvestorProfile, user_id)
+    if not profile or not profile.external_profile_id or profile.status != InvestorProfileStatus.active:
+        return provisioned
+
+    from app.application.mf.mf_investment_account_service import ensure_fp_mfia
+
+    try:
+        await ensure_fp_mfia(session, user_id=user_id)
+    except Exception:
+        logger.exception("MF investment account create failed after KYC user=%s", user_id)
+    return True
