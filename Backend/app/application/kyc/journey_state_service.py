@@ -306,23 +306,15 @@ async def save_journey_state(
 
         if address_step_partner_digilocker_pending(journey):
             raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
-        if requires_address_step_proof_digilocker(journey):
-            contact = journey.contact_draft_json if isinstance(journey.contact_draft_json, dict) else {}
-            if str(contact.get("source") or "") != "proof_details":
-                raise KycError(
-                    "Address must be fetched from DigiLocker. Manual entry is not allowed.",
-                    "digilocker_required",
-                    403,
-                )
-            status.address_step_status = KycStepStatus.saved
-        else:
-            from app.application.kyc.pincode_address_service import normalize_contact_draft_pincodes
+        from app.application.kyc.pincode_address_service import normalize_contact_draft_pincodes
 
-            contact_draft = payload["contactDraftJson"]
-            if isinstance(contact_draft, dict):
-                contact_draft = await normalize_contact_draft_pincodes(contact_draft)
-            journey.contact_draft_json = contact_draft
-            status.address_step_status = KycStepStatus.saved
+        contact_draft = payload["contactDraftJson"]
+        if isinstance(contact_draft, dict):
+            contact_draft = await normalize_contact_draft_pincodes(contact_draft)
+            if requires_address_step_proof_digilocker(journey):
+                contact_draft["source"] = "user"
+        journey.contact_draft_json = contact_draft
+        status.address_step_status = KycStepStatus.saved
     if "personalDraftJson" in payload:
         from app.application.kyc.personal_draft import normalize_personal_draft, validate_personal_draft
 
@@ -471,19 +463,10 @@ async def save_journey_state(
     last_step = payload.get("lastCompletedStep")
     if last_step:
         if last_step == "address":
-            from app.application.kyc.kyc_flow_mode import requires_address_step_proof_digilocker
             from app.application.kyc.path_a_proof import address_step_partner_digilocker_pending
 
             if address_step_partner_digilocker_pending(journey):
                 raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
-            if requires_address_step_proof_digilocker(journey):
-                contact = journey.contact_draft_json if isinstance(journey.contact_draft_json, dict) else {}
-                if str(contact.get("source") or "") != "proof_details":
-                    raise KycError(
-                        "Address must be fetched from DigiLocker. Manual entry is not allowed.",
-                        "digilocker_required",
-                        403,
-                    )
         journey.last_completed_step = last_step
         if last_step == "pan":
             status.pan_step_status = KycStepStatus.verified

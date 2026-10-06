@@ -311,20 +311,18 @@ export function KycAddressStep({
   };
 
   useEffect(() => {
-    if (proofAddressOnly) return;
     const pincode = initialValue?.permanent.pincode ?? "";
     if (pincode.length !== 6) return;
     if (pincodeEnrichedRef.current.permanent === pincode) return;
 
     void applyPincodeLookup(pincode, "permanent");
-  }, [initialValue?.permanent.pincode, prefilledFromDigilocker, proofAddressOnly, stateOptions]);
+  }, [initialValue?.permanent.pincode, prefilledFromDigilocker, stateOptions]);
 
   const updateAddress = (
     type: "permanent" | "correspondence",
     field: AddressFieldKey,
     value: string
   ) => {
-    if (proofAddressOnly) return;
     setForm((current) => {
       const next = {
         ...current,
@@ -357,7 +355,6 @@ export function KycAddressStep({
   };
 
   const handleSameAsPermanentChange = (checked: boolean) => {
-    if (proofAddressOnly) return;
     setForm((current) => ({
       ...current,
       sameAsPermanent: checked,
@@ -371,16 +368,6 @@ export function KycAddressStep({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
-    if (proofAddressOnly) {
-      const latest = formRef.current;
-      onSubmit({
-        ...latest,
-        sameAsPermanent: true,
-        correspondence: { ...latest.permanent },
-      });
-      return;
-    }
 
     if (digilockerPrefillIncomplete) {
       return;
@@ -434,17 +421,6 @@ export function KycAddressStep({
   const activeErrors =
     activeTab === "permanent" ? errors.permanent : errors.correspondence;
 
-  const hasProofLines = Boolean(
-    form.permanent.line1.trim() || form.permanent.city.trim() || form.permanent.pincode.trim(),
-  );
-  const proofLockedFields: Partial<Record<AddressFieldKey, boolean>> = {
-    line1: true,
-    line2: true,
-    city: true,
-    state: true,
-    pincode: true,
-  };
-
   if (digilockerBlocked) {
     return (
       <div className="mt-3 w-full">
@@ -456,20 +432,6 @@ export function KycAddressStep({
           retrying={retryingDigilocker}
         />
       </div>
-    );
-  }
-
-  if (proofAddressOnly && !hasProofLines) {
-    return (
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <KycInfoCallout
-          title={copy.kyc.address.proofOnlyTitle}
-          description={copy.kyc.address.proofOnlyWithoutLines}
-        />
-        <Button type="submit" size="lg" className="w-full" disabled={saving}>
-          {saving ? copy.kyc.saving : copy.kyc.continue}
-        </Button>
-      </form>
     );
   }
 
@@ -494,14 +456,19 @@ export function KycAddressStep({
         </div>
       ) : null}
 
-      {prefilledFromDigilocker || proofAddressOnly ? (
+      {proofAddressOnly ? (
         <KycInfoCallout
-          title={proofAddressOnly ? copy.kyc.address.proofOnlyTitle : copy.kyc.address.digilockerPrefillTitle}
-          description={
-            proofAddressOnly ? copy.kyc.address.proofOnlyDescription : copy.kyc.address.digilockerPrefillHint
-          }
+          title={copy.kyc.address.proofOnlyTitle}
+          description={copy.kyc.address.proofOnlyDescription}
+        />
+      ) : null}
+
+      {prefilledFromDigilocker && !proofAddressOnly ? (
+        <KycInfoCallout
+          title={copy.kyc.address.digilockerPrefillTitle}
+          description={copy.kyc.address.digilockerPrefillHint}
           action={
-            onRetryDigilocker && !proofAddressOnly ? (
+            onRetryDigilocker ? (
               <Button
                 type="button"
                 variant="outline"
@@ -554,14 +521,8 @@ export function KycAddressStep({
         values={activeValues}
         errors={activeErrors}
         stateOptions={stateOptions}
-        disabled={(activeTab === "correspondence" && form.sameAsPermanent) || proofAddressOnly}
-        lockedFields={
-          proofAddressOnly
-            ? proofLockedFields
-            : activeTab === "permanent"
-              ? digilockerLockedFields
-              : undefined
-        }
+        disabled={activeTab === "correspondence" && form.sameAsPermanent}
+        lockedFields={activeTab === "permanent" ? digilockerLockedFields : undefined}
         onChange={(field, value) => updateAddress(activeTab, field, value)}
         onPincodeBlur={(pincode) => void applyPincodeLookup(pincode, activeTab)}
       />
@@ -585,7 +546,6 @@ export function KycAddressStep({
           <input
             type="checkbox"
             checked={form.sameAsPermanent}
-            disabled={proofAddressOnly}
             onChange={(event) => handleSameAsPermanentChange(event.target.checked)}
             className="mt-0.5 size-4 shrink-0 rounded-[var(--radius-control)] border border-input accent-primary"
           />

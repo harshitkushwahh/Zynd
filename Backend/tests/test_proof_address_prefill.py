@@ -61,17 +61,16 @@ def test_proof_snapshot_keeps_street_lines_and_marks_source() -> None:
     assert draft["sameAsPermanent"] is True
 
 
-def test_proof_snapshot_marks_aadhaar_when_partner_returns_no_street_lines() -> None:
-    draft = proof_contact_snapshot(
-        {
-            "proof_details": {"status": "successful"},
-            "address": {"proof_type": "aadhaar"},
-        }
+def test_proof_snapshot_is_empty_when_partner_returns_only_proof_type() -> None:
+    assert (
+        proof_contact_snapshot(
+            {
+                "proof_details": {"status": "successful"},
+                "address": {"proof_type": "aadhaar"},
+            }
+        )
+        is None
     )
-    assert draft is not None
-    assert draft["source"] == "proof_details"
-    assert draft["proofType"] == "aadhaar"
-    assert draft["permanent"]["line1"] == ""
 
 
 def test_proof_snapshot_waits_until_digilocker_finishes() -> None:
@@ -94,7 +93,7 @@ def _onhold_journey() -> KycJourneyState:
 
 
 @pytest.mark.asyncio
-async def test_apply_replaces_a_typed_address(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_apply_keeps_a_typed_address(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _enrich(draft: dict) -> dict:
         return draft
 
@@ -120,11 +119,52 @@ async def test_apply_replaces_a_typed_address(monkeypatch: pytest.MonkeyPatch) -
             },
         },
     )
+    assert applied is False
+    contact = journey.contact_draft_json
+    assert isinstance(contact, dict)
+    assert contact["source"] == "user"
+    assert contact["permanent"]["line1"] == "typed street"
+
+
+@pytest.mark.asyncio
+async def test_apply_prefills_when_the_user_has_not_typed_an_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _enrich(draft: dict) -> dict:
+        return draft
+
+    monkeypatch.setattr(
+        "app.application.kyc.proof_address_prefill.enrich_digilocker_address_prefill",
+        _enrich,
+    )
+    journey = _onhold_journey()
+    journey.contact_draft_json = None
+    applied = await apply_kra_update_proof_address(
+        journey,
+        {
+            "proof_details": {"status": "fetched"},
+            "address": {"line_1": "Aadhaar lane", "city": "Pune", "pincode": "411001"},
+        },
+    )
     assert applied is True
     contact = journey.contact_draft_json
     assert isinstance(contact, dict)
-    assert contact["source"] == "proof_details"
     assert contact["permanent"]["line1"] == "Aadhaar lane"
+
+
+@pytest.mark.asyncio
+async def test_apply_does_not_store_a_blank_address_when_proof_has_no_lines() -> None:
+    journey = _onhold_journey()
+    journey.contact_draft_json = None
+    applied = await apply_kra_update_proof_address(
+        journey,
+        {
+            "proof_details": {"status": "fetched"},
+            "address": {"proof_type": "aadhaar"},
+        },
+    )
+    assert applied is False
+    assert journey.contact_draft_json is None
 
 
 @pytest.mark.asyncio

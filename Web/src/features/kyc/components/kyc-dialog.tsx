@@ -116,7 +116,10 @@ import {
   type DigilockerReturnResult,
 } from "@/features/kyc/lib/kyc-digilocker-return";
 import { isDigilockerAddressPrefillIncomplete } from "@/features/kyc/lib/kyc-digilocker-prefill";
-import { processPoaProofReturnFromUrl } from "@/features/kyc/lib/kyc-poa-proof-return";
+import {
+  processPoaProofReturnFromUrl,
+  waitForProofDetailsFetched,
+} from "@/features/kyc/lib/kyc-poa-proof-return";
 import {
   clearPendingEsignResume,
   hasPendingEsignResume,
@@ -652,10 +655,17 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
           mergedPayload.external_kyc_status === "returned_success" &&
           !mergedPayload.requires_address_step_proof_digilocker,
       );
+      const proofContact = mergedPayload.contact_draft;
+      const proofPermanent =
+        proofContact && typeof proofContact === "object"
+          ? (proofContact.permanent as { line1?: string } | undefined)
+          : undefined;
       const proofPrefill = Boolean(
         mergedPayload.requires_address_step_proof_digilocker &&
           isProofDetailsComplete(mergedPayload.proof_details_status) &&
-          mergedPayload.contact_draft,
+          proofContact &&
+          String(proofContact.source ?? "") === "proof_details" &&
+          String(proofPermanent?.line1 ?? "").trim(),
       );
       setPrefilledFromDigilocker(identityPrefill || proofPrefill);
       setShowDigilockerFailureCard(showFailureAlert);
@@ -1162,6 +1172,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         }
 
         if (proofReturn) {
+          if (callbackStatus === "successful" || callbackStatus === "success") {
+            await waitForProofDetailsFetched();
+          }
           const payload = await fetchKycBootstrap().catch(() => null);
           const reviewReady =
             payload?.last_completed_step === "signature" || payload?.last_completed_step === "review";
@@ -1502,31 +1515,6 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     setSaving(true);
     setJourneySaveError(null);
     try {
-      if (bootstrap?.requires_address_step_proof_digilocker) {
-        const started = await startPoaKycForm();
-        if (started.needs_digilocker) {
-          await beginProofDigilockerRedirect();
-          return;
-        }
-        const payload = await fetchKycBootstrap();
-        applyBootstrap(payload, { preserveActiveStep: true });
-        const source =
-          payload.contact_draft && typeof payload.contact_draft === "object"
-            ? String((payload.contact_draft as { source?: string }).source ?? "")
-            : "";
-        if (source !== "proof_details") {
-          setJourneySaveError(copy.kyc.address.manualEntryBlocked);
-          return;
-        }
-        const draft = mapContactDraft(payload.contact_draft) ?? value;
-        await saveKycJourneyState({
-          contact_draft_json: payload.contact_draft ?? undefined,
-          last_completed_step: "address",
-        });
-        updateDraft({ address: draft });
-        goToNextStep();
-        return;
-      }
       await saveKycJourneyState({
         contact_draft_json: value as unknown as Record<string, unknown>,
         last_completed_step: "address",
