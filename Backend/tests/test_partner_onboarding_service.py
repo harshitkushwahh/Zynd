@@ -223,11 +223,16 @@ async def test_partner_onboarding_submits_for_ho_review(
         onboarding_token=token,
         ip="127.0.0.1",
     )
+    pending_scan_document_ids = result.pop("pending_scan_document_ids", [])
     await db_session.commit()
 
     user = (
         await db_session.execute(select(User).where(User.email == mitra_email))
     ).scalar_one()
+    if pending_scan_document_ids:
+        from app.application.documents.document_service import finalize_document_scans
+
+        await finalize_document_scans(db_session, pending_scan_document_ids, user=user)
     assert user.password_hash is None
     assert result["status"] == "pending_ho_review"
     assert emails == []

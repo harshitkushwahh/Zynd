@@ -96,6 +96,49 @@ async def _next_version(db: AsyncSession, *, user_id, doc_type: DocumentType) ->
     return (current or 0) + 1
 
 
+async def finalize_document_scans(
+    db: AsyncSession,
+    document_ids: list[UUID],
+    *,
+    user: User | None = None,
+    settings: Settings | None = None,
+) -> None:
+    """Run malware scan after the upload transaction is committed (safe for async queue + workers)."""
+    if not document_ids:
+        return
+
+    settings = settings or get_settings()
+    for document_id in document_ids:
+        await dispatch_document_scan(document_id, settings=settings)
+
+    for document_id in document_ids:
+        result = await db.execute(select(UserDocument).where(UserDocument.id == document_id))
+        document = result.scalar_one_or_none()
+        if not document:
+            continue
+        if document.status == DocumentStatus.rejected:
+            raise DocumentError(
+                "Could not verify the uploaded file right now. Try again in a moment.",
+                "scan_unavailable",
+                422,
+            )
+        if user is not None and document.doc_type == DocumentType.profile_image:
+            notify_profile_image_updated(user=user, document_id=document.id)
+
+
+async def finalize_document_scan(
+    db: AsyncSession,
+    document_id: UUID,
+    *,
+    user: User | None = None,
+    settings: Settings | None = None,
+) -> dict[str, Any]:
+    await finalize_document_scans(db, [document_id], user=user, settings=settings)
+    result = await db.execute(select(UserDocument).where(UserDocument.id == document_id))
+    document = result.scalar_one()
+    return _document_to_dict(document)
+
+
 async def upload_user_document(
     db: AsyncSession,
     *,
@@ -106,6 +149,7 @@ async def upload_user_document(
     content: bytes,
     settings: Settings | None = None,
     ip: str | None = None,
+    defer_scan: bool = False,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
 
@@ -206,16 +250,17 @@ async def upload_user_document(
     db.add(document)
     await db.flush()
     await audit_document_uploaded(db, document=document, user_id=user.id, ip=ip)
-    await dispatch_document_scan(document.id, settings=settings, db=db)
-    await db.refresh(document)
-    if document.status == DocumentStatus.rejected:
-        raise DocumentError(
-            "Could not verify the uploaded file right now. Try again in a moment.",
-            "scan_unavailable",
-            422,
-        )
-    if doc_type == DocumentType.profile_image:
-        notify_profile_image_updated(user=user, document_id=document.id)
+    if not defer_scan:
+        await dispatch_document_scan(document.id, settings=settings, db=db)
+        await db.refresh(document)
+        if document.status == DocumentStatus.rejected:
+            raise DocumentError(
+                "Could not verify the uploaded file right now. Try again in a moment.",
+                "scan_unavailable",
+                422,
+            )
+        if doc_type == DocumentType.profile_image:
+            notify_profile_image_updated(user=user, document_id=document.id)
     await db.refresh(document)
     return _document_to_dict(document)
 

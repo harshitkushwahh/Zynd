@@ -17,6 +17,7 @@ from app.application.documents.document_download_service import (
     read_public_document_content,
 )
 from app.application.documents.document_service import (
+    finalize_document_scan,
     get_latest_document,
     get_user_document,
     list_user_documents,
@@ -121,11 +122,21 @@ async def post_document_upload(
             mime_type=mime_type,
             content=content,
             ip=get_client_ip(request),
+            defer_scan=True,
         )
     except DocumentError as exc:
         raise _handle_document_error(exc) from exc
 
+    document_id = document["id"]
     await db.commit()
+    try:
+        document = await finalize_document_scan(
+            db,
+            document_id,
+            user=current_user,
+        )
+    except DocumentError as exc:
+        raise _handle_document_error(exc) from exc
     return DocumentResponse(**document)
 
 

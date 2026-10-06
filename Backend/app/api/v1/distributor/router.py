@@ -132,6 +132,7 @@ from app.application.distributor.mitra_txn_recommendation_service import (
     list_mitra_txn_recommendations_for_actor,
     search_distributor_schemes,
 )
+from app.application.documents.errors import DocumentError
 from app.application.distributor.partner_onboarding_service import (
     PartnerOnboardingError,
     get_distributor_partner_detail,
@@ -583,7 +584,26 @@ async def post_partner_onboarding_submit(
     except PartnerOnboardingError as exc:
         await db.rollback()
         raise _partner_onboarding_http_error(exc) from exc
+
+    from app.application.documents.document_service import finalize_document_scans
+
+    pending_scan_document_ids = result.pop("pending_scan_document_ids", [])
+    partner_user_id = result["user_id"]
     await db.commit()
+    if pending_scan_document_ids:
+        partner_user = await db.get(User, partner_user_id)
+        if partner_user is not None:
+            try:
+                await finalize_document_scans(
+                    db,
+                    pending_scan_document_ids,
+                    user=partner_user,
+                )
+            except DocumentError as exc:
+                raise HTTPException(
+                    status_code=exc.status_code,
+                    detail={"code": exc.code, "message": exc.message},
+                ) from exc
     return PartnerOnboardingSubmitResponse(**result)
 
 

@@ -689,7 +689,8 @@ async def _persist_onboarding_documents(
     user: User,
     onboarding_token: str,
     ip: str | None,
-) -> None:
+) -> list[UUID]:
+    pending_scan_document_ids: list[UUID] = []
     for doc_type, document_type in (("pan", DocumentType.pan), ("aadhaar", DocumentType.aadhaar)):
         payload = await get_partner_onboarding_document(onboarding_token, doc_type)
         if not payload:
@@ -699,7 +700,7 @@ async def _persist_onboarding_documents(
                 400,
             )
         content = base64.b64decode(payload["content_b64"])
-        await upload_user_document(
+        uploaded = await upload_user_document(
             db,
             user=user,
             doc_type=document_type,
@@ -707,12 +708,14 @@ async def _persist_onboarding_documents(
             mime_type=payload.get("mime_type") or "application/pdf",
             content=content,
             ip=ip,
+            defer_scan=True,
         )
+        pending_scan_document_ids.append(uploaded["id"])
 
     photo_payload = await get_partner_onboarding_profile_photo(onboarding_token)
     if photo_payload:
         photo_bytes = base64.b64decode(photo_payload["content_b64"])
-        await upload_user_document(
+        uploaded = await upload_user_document(
             db,
             user=user,
             doc_type=DocumentType.profile_image,
@@ -720,7 +723,10 @@ async def _persist_onboarding_documents(
             mime_type=photo_payload.get("mime_type") or "image/jpeg",
             content=photo_bytes,
             ip=ip,
+            defer_scan=True,
         )
+        pending_scan_document_ids.append(uploaded["id"])
+    return pending_scan_document_ids
 
 
 async def submit_partner_onboarding(
@@ -802,7 +808,12 @@ async def submit_partner_onboarding(
     )
     await db.flush()
 
-    await _persist_onboarding_documents(db, user=user, onboarding_token=onboarding_token, ip=ip)
+    pending_scan_document_ids = await _persist_onboarding_documents(
+        db,
+        user=user,
+        onboarding_token=onboarding_token,
+        ip=ip,
+    )
     await delete_partner_onboarding_draft(onboarding_token)
 
     display_name = " ".join(
@@ -817,6 +828,7 @@ async def submit_partner_onboarding(
         "email": user.email,
         "display_name": display_name or user.email,
         "status": partner.status.value,
+        "pending_scan_document_ids": pending_scan_document_ids,
     }
 
 
