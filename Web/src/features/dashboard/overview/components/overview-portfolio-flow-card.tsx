@@ -189,9 +189,7 @@ export function OverviewPortfolioFlowCard({
     (summary?.current_value_inr ?? 0) > 0 ||
     (summary?.invested_inr ?? 0) > 0;
   const isProcessing =
-    !hasChartData &&
-    !hasHoldings &&
-    (summary?.has_pending_orders || upcomingOrders.length > 0);
+    !hasChartData && !hasHoldings && upcomingOrders.length > 0 && pendingInr > 0;
 
   const processingPreview = useMemo<OverviewPortfolioPreview | null>(() => {
     if (!isProcessing || pendingInr <= 0) return null;

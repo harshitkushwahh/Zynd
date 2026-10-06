@@ -125,19 +125,25 @@ function PortfolioOverviewPanel() {
   const errorMessage = summaryError || holdingsError;
   const hasHoldings = holdings.length > 0;
   const hasUpcoming = upcomingOrders.length > 0;
-  const showPortfolioOverview = hasHoldings || isProcessing || hasUpcoming;
+  const awaitingAllotmentInr = pendingInr;
+  const showAwaitingAllotmentPreview = !hasHoldings && hasUpcoming && awaitingAllotmentInr > 0;
+  const showPortfolioOverview = hasHoldings || showAwaitingAllotmentPreview;
 
   const displayPreview = useMemo(() => {
     if (preview && hasHoldings) return preview;
-    if (isProcessing && pendingInr > 0) return buildProcessingPortfolioPreview(pendingInr, summary);
+    if (showAwaitingAllotmentPreview) {
+      return buildProcessingPortfolioPreview(awaitingAllotmentInr, summary);
+    }
     return preview;
-  }, [preview, hasHoldings, isProcessing, pendingInr, summary]);
+  }, [awaitingAllotmentInr, hasHoldings, preview, showAwaitingAllotmentPreview, summary]);
 
   const displaySeries = useMemo(() => {
     if (flowSeries.length > 0) return flowSeries;
-    if (isProcessing && pendingInr > 0) return buildProcessingPortfolioFlowSeries(pendingInr);
+    if (showAwaitingAllotmentPreview) {
+      return buildProcessingPortfolioFlowSeries(awaitingAllotmentInr);
+    }
     return flowSeries;
-  }, [flowSeries, isProcessing, pendingInr]);
+  }, [awaitingAllotmentInr, flowSeries, showAwaitingAllotmentPreview]);
 
   if (showInitialSkeleton) {
     return (
@@ -182,7 +188,7 @@ function PortfolioOverviewPanel() {
 
   return (
     <DashboardContentFade>
-      {isProcessing ? (
+      {showAwaitingAllotmentPreview ? (
         <PortfolioProcessingBanner title={processingTitle} description={processingDescription} />
       ) : null}
 

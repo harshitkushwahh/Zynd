@@ -12,6 +12,7 @@ type MfOrderStatusBadgeProps = {
   fpPaymentStatus?: string | null;
   paymentCompleted?: boolean;
   orderType?: string | null;
+  failureCode?: string | null;
 };
 
 export function mfOrderStatusVariant(
@@ -63,6 +64,7 @@ export function MfOrderStatusBadge({
   fpPaymentStatus,
   paymentCompleted,
   orderType,
+  failureCode,
 }: MfOrderStatusBadgeProps) {
   const order = {
     fp_state: fpState ?? null,
@@ -70,6 +72,7 @@ export function MfOrderStatusBadge({
     status,
     payment_completed: paymentCompleted,
     order_type: orderType ?? "",
+    ...(failureCode != null ? { failure_code: failureCode } : {}),
   };
 
   return (

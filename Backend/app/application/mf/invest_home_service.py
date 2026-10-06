@@ -423,7 +423,7 @@ async def get_invest_fund_detail(session: AsyncSession, product_id: uuid.UUID) -
         "risk_label": content.get("risk_label"),
     }
 
-    from app.application.mf.investment_constraints import serialize_investment_constraints_for_api
+    from app.application.mf.investment_constraints import investment_details_for_fund
     from app.application.mf.scheme_compliance_service import get_amc_registry_payload, get_compliance_payload
 
     compliance = await get_compliance_payload(session, fund.id)
@@ -449,7 +449,7 @@ async def get_invest_fund_detail(session: AsyncSession, product_id: uuid.UUID) -
             "label": f"#{amc_rank_row.rank_india} in India by AUM",
         }
 
-    investment_details = serialize_investment_constraints_for_api(fund.investment_constraints)
+    investment_details = investment_details_for_fund(fund)
     if investment_details:
         payload["investment_details"] = investment_details
 

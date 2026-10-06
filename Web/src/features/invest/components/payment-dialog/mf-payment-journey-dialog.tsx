@@ -8,6 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui
 import { MfPaymentDialogMedia } from "@/features/invest/components/payment-dialog/mf-payment-dialog-media";
 import { MfPaymentProgressBar } from "@/features/invest/components/payment-dialog/mf-payment-progress-bar";
 import { MfPaymentTerminalFlow } from "@/features/invest/components/payment-dialog/mf-payment-terminal-flow";
+import { MfPaymentTrustStrip } from "@/features/invest/components/payment-dialog/mf-payment-trust-strip";
 import type { MfPaymentJourneyPhase } from "@/features/invest/components/payment-dialog/mf-payment-dialog-assets";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,7 @@ export type MfPaymentJourneyDialogProps = {
   message: string;
   statusDetail?: ReactNode;
   terminalLines?: string[];
-  layout?: "default" | "terminal";
+  layout?: "default" | "terminal" | "cta";
   primaryLabel?: string;
   onPrimaryAction?: () => void;
   secondaryLabel?: string;
@@ -61,6 +62,7 @@ export function MfPaymentJourneyDialog({
   const dismissible = allowDismiss || phase === "success" || phase === "error";
   const isInProgress = phase === "processing" || phase === "waiting";
   const useTerminalLayout = layout === "terminal" && isInProgress;
+  const useCtaLayout = layout === "cta" && Boolean(primaryLabel && onPrimaryAction);
 
   useEffect(() => {
     setOpen(openProp);
@@ -77,7 +79,7 @@ export function MfPaymentJourneyDialog({
 
   function handlePrimaryAction() {
     onPrimaryAction?.();
-    if (isOutcomePhase || allowDismiss) {
+    if (isOutcomePhase || (allowDismiss && !useCtaLayout)) {
       setOpen(false);
     }
   }
@@ -111,7 +113,7 @@ export function MfPaymentJourneyDialog({
       {dismissCloseButton}
       <MfPaymentDialogMedia phase={phase} className="size-[4.75rem]" />
       <h3 className="mt-4 text-h4 font-semibold leading-snug text-foreground">{title}</h3>
-      <p className="mt-2 max-w-[20rem] text-compact leading-relaxed text-muted-foreground">
+      <p className="mt-2 w-full px-1 text-pretty text-justify text-compact leading-relaxed text-muted-foreground [text-align-last:center]">
         {outcomeMessage}
       </p>
       {statusDetail ? (
@@ -163,7 +165,39 @@ export function MfPaymentJourneyDialog({
     </div>
   );
 
-  const dialogBody = useTerminalLayout ? terminalBody : isOutcomePhase ? outcomeBody : inProgressBody;
+  const ctaBody = (
+    <div className="relative flex flex-col px-5 py-6 sm:px-7 sm:py-7">
+      {dismissCloseButton}
+      <MfPaymentTrustStrip className="mb-6" />
+      <h3 className="text-center text-h4 font-semibold leading-snug text-foreground">{title}</h3>
+      {subtitle ? (
+        <p className="mt-2 text-center text-compact font-medium leading-snug text-foreground">{subtitle}</p>
+      ) : null}
+      <p className="mt-4 text-center font-mono text-[11px] leading-relaxed text-muted-foreground sm:text-caption">
+        {message}
+      </p>
+      {statusDetail ? (
+        <p className="mt-3 text-center text-caption leading-relaxed text-muted-foreground">{statusDetail}</p>
+      ) : null}
+      <Button type="button" className="mt-6 w-full" onClick={handlePrimaryAction}>
+        {primaryLabel}
+      </Button>
+      {secondaryLabel && onSecondaryAction ? (
+        <Button type="button" variant="ghost" className="mt-2 w-full" onClick={onSecondaryAction}>
+          {secondaryLabel}
+        </Button>
+      ) : null}
+      {children ? <div className="mt-4 space-y-3">{children}</div> : null}
+    </div>
+  );
+
+  const dialogBody = useTerminalLayout
+    ? terminalBody
+    : useCtaLayout
+      ? ctaBody
+      : isOutcomePhase
+        ? outcomeBody
+        : inProgressBody;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

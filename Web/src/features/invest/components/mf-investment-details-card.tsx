@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { copy } from "@/shared/config/copy";
 import type { InvestFundDetail, InvestInvestmentDetails } from "@/features/invest/api/invest-api";
+import { shouldShowInvestmentDetailsCard } from "@/features/invest/lib/mf-investment-details-display";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
 import { cn } from "@/lib/utils";
@@ -355,5 +356,5 @@ export function MfInvestmentDetailsCard({ details }: MfInvestmentDetailsCardProp
 }
 
 export function shouldShowInvestmentDetails(fund: InvestFundDetail) {
-  return Boolean(fund.investment_details);
+  return shouldShowInvestmentDetailsCard(fund);
 }

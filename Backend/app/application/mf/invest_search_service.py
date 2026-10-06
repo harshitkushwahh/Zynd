@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_governance_service import invest_visibility_sql_clause
 from app.application.mf.invest_home_service import _serialize_fund_summary
+from app.application.mf.investment_constraints import fund_allows_sip
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
     Category,
@@ -45,8 +48,18 @@ async def search_invest_funds(
     query: str,
     page: int = 1,
     page_size: int = 20,
+    max_min_sip_inr: float | None = None,
 ) -> dict:
     query = query.strip()
+    if max_min_sip_inr is not None:
+        return await _search_invest_funds_by_max_min_sip(
+            session,
+            query=query,
+            max_min_sip_inr=Decimal(str(max_min_sip_inr)),
+            page=page,
+            page_size=page_size,
+        )
+
     if len(query) < 2:
         return {"items": [], "page": page, "page_size": page_size, "total": 0, "has_more": False, "query": query}
 
@@ -136,6 +149,129 @@ async def search_invest_funds(
 
     return {
         "query": query,
+        "items": items,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_more": offset + len(items) < total,
+    }
+
+
+async def _search_invest_funds_by_max_min_sip(
+    session: AsyncSession,
+    *,
+    query: str,
+    max_min_sip_inr: Decimal,
+    page: int,
+    page_size: int,
+) -> dict:
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 50)
+    offset = (page - 1) * page_size
+
+    sip_filters = [
+        invest_visibility_sql_clause(),
+        MutualFund.min_sip_amount.isnot(None),
+        MutualFund.min_sip_amount <= max_min_sip_inr,
+    ]
+
+    text_filters = []
+    if len(query) >= 2:
+        ts_query = func.plainto_tsquery("simple", query)
+        like_pattern = f"%{query}%"
+        text_filters.append(
+            or_(
+                Product.invest_search_vector.op("@@")(ts_query),
+                Product.name.ilike(like_pattern),
+                MutualFund.scheme_name.ilike(like_pattern),
+                MutualFund.isin_growth.ilike(like_pattern),
+                FundAmc.name.ilike(like_pattern),
+            )
+        )
+
+    where_clause = (*sip_filters, *text_filters) if text_filters else tuple(sip_filters)
+
+    base = (
+        select(
+            Product,
+            MutualFund,
+            FundAmc,
+            FundNavMetrics,
+            FundCompositeRank.rank_position,
+            Category.slug,
+            ProductCategory.is_featured,
+            ProductCategory.display_order,
+            ProductDisplayContent,
+        )
+        .join(MutualFund, MutualFund.product_id == Product.id)
+        .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+        .outerjoin(FundNavMetrics, FundNavMetrics.fund_id == MutualFund.id)
+        .outerjoin(ProductCategory, ProductCategory.product_id == Product.id)
+        .outerjoin(Category, Category.id == ProductCategory.category_id)
+        .outerjoin(
+            FundCompositeRank,
+            (FundCompositeRank.fund_id == MutualFund.id)
+            & (FundCompositeRank.category_id == ProductCategory.category_id),
+        )
+        .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
+        .where(*where_clause)
+    )
+
+    count_stmt = (
+        select(func.count(func.distinct(Product.id)))
+        .select_from(Product)
+        .join(MutualFund, MutualFund.product_id == Product.id)
+        .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+        .where(*where_clause)
+    )
+
+    total = int(await session.scalar(count_stmt) or 0)
+    rows = (
+        await session.execute(
+            base.order_by(
+                MutualFund.min_sip_amount.asc(),
+                FundCompositeRank.rank_position.asc().nullslast(),
+                Product.name,
+            )
+            .offset(offset)
+            .limit(page_size)
+        )
+    ).all()
+
+    settings = get_settings()
+    items: list[dict] = []
+    for (
+        product,
+        fund,
+        amc,
+        metrics,
+        rank_position,
+        category,
+        is_featured,
+        display_order,
+        display_content,
+    ) in rows:
+        if not fund_allows_sip(fund):
+            continue
+        items.append(
+            _serialize_fund_summary(
+                product,
+                fund,
+                amc,
+                metrics,
+                rank_position,
+                category,
+                settings=settings,
+                is_featured=is_featured,
+                display_order=display_order,
+                display_content=display_content,
+            )
+        )
+
+    display_query = query if query else f"min_sip<={max_min_sip_inr}"
+
+    return {
+        "query": display_query,
         "items": items,
         "page": page,
         "page_size": page_size,

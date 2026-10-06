@@ -261,11 +261,15 @@ export function fetchInvestSearch(params: {
   q: string;
   page?: number;
   page_size?: number;
+  max_min_sip_inr?: number;
 }) {
   const search = new URLSearchParams();
   search.set("q", params.q);
   if (params.page) search.set("page", String(params.page));
   if (params.page_size) search.set("page_size", String(params.page_size));
+  if (params.max_min_sip_inr != null) {
+    search.set("max_min_sip_inr", String(params.max_min_sip_inr));
+  }
   return apiRequest<InvestFundSearchResponse>(`/invest/search?${search.toString()}`);
 }
 

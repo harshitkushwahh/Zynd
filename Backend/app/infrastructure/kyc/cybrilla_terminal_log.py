@@ -105,6 +105,9 @@ def _summarize_response(body: Any) -> str:
     if isinstance(esign, dict) and esign.get("status"):
         parts.append(f"esign={esign.get('status')}")
 
+    if body.get("token_url"):
+        parts.append("token_url=present")
+
     if not parts:
         compact = json.dumps(_sanitize_body(body), default=str, separators=(",", ":"))
         return compact[:320] + ("…" if len(compact) > 320 else "")
@@ -151,3 +154,11 @@ def log_kyc_step(message: str, **context: Any) -> None:
         details = details[:397] + "…"
     suffix = f" | {details}" if context else ""
     print(f"[KYC] {message}{suffix}", flush=True)
+
+
+def log_mf_payment_step(message: str, **context: Any) -> None:
+    details = json.dumps(_sanitize_body(context), default=str, separators=(",", ":"))
+    if len(details) > 400:
+        details = details[:397] + "…"
+    suffix = f" | {details}" if context else ""
+    print(f"[MF-PAY] {message}{suffix}", flush=True)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { fetchFundsForYou } from "@/features/recommendations/api/funds-for-you-api";
 import { queryKeys } from "@/lib/query-keys";
@@ -13,5 +13,6 @@ export function useFundsForYouQuery(enabled = true) {
     queryFn: fetchFundsForYou,
     enabled,
     staleTime: STALE_TIME_MS,
+    placeholderData: keepPreviousData,
   });
 }

@@ -5,8 +5,11 @@ import {
   resolveCybrillaOrderStatusLabel,
 } from "@/features/invest/lib/mf-cybrilla-status";
 import {
+  isMfPurchaseOrderAwaitingPayment,
+  isMfPurchaseOrderPaymentFailed,
   isOrderAwaitingAllotment,
   isOrderPaymentCompleted,
+  type MfOrderInvestorStatusContext,
 } from "@/features/invest/lib/mf-order-payment-status";
 import { copy } from "@/shared/config/copy";
 
@@ -473,7 +476,7 @@ export function buildOrderJourneyView(order: MfOrder, events: MfOrderEvent[]): O
 
 export function formatMfOrderStatusLabel(
   status: string,
-  order?: Pick<MfOrder, "fp_state" | "fp_payment_status" | "payment_completed" | "status" | "order_type">,
+  order?: MfOrderInvestorStatusContext,
 ) {
   const normalized = (order?.status ?? status).trim().toUpperCase();
 
@@ -490,7 +493,16 @@ export function formatMfOrderStatusLabel(
     }
   }
 
-  if (order) {
+  if (order && !isRedemptionOrder(order)) {
+    if (isMfPurchaseOrderPaymentFailed(order)) {
+      if (order.failure_code === "payment_abandoned") {
+        return copy.transactions.orderStatusPaymentCanceled;
+      }
+      return copy.transactions.journeyStatusFailed;
+    }
+    if (isMfPurchaseOrderAwaitingPayment(order)) {
+      return copy.transactions.orderStatusPending;
+    }
     if (isOrderPaymentCompleted(order)) {
       if (normalized === "SUCCEEDED") return copy.transactions.journeyStatusCompleted;
       if (isOrderAwaitingAllotment(order)) return copy.transactions.journeyStatusInProgress;
@@ -498,6 +510,10 @@ export function formatMfOrderStatusLabel(
         return copy.transactions.journeyStatusInProgress;
       }
     }
+    return resolveCybrillaOrderStatusLabel({ ...order, status: order.status ?? status });
+  }
+
+  if (order) {
     return resolveCybrillaOrderStatusLabel({ ...order, status: order.status ?? status });
   }
 
@@ -509,7 +525,7 @@ export function formatMfOrderStatusLabel(
 
 export function mfOrderStatusVariantForInvestor(
   status: string,
-  order?: Pick<MfOrder, "fp_state" | "fp_payment_status" | "payment_completed" | "status" | "order_type">,
+  order?: MfOrderInvestorStatusContext,
 ): StatusBadgeVariant {
   const normalized = status.trim().toUpperCase();
   if (order && isRedemptionOrder(order)) {
@@ -523,17 +539,18 @@ export function mfOrderStatusVariantForInvestor(
     return "info";
   }
   if (normalized === "SUCCEEDED") return "success";
+  if (order && !isRedemptionOrder(order)) {
+    if (isMfPurchaseOrderPaymentFailed(order)) return "destructive";
+    if (isMfPurchaseOrderAwaitingPayment(order)) return "warning";
+    if (isOrderPaymentCompleted(order)) {
+      if (isOrderAwaitingAllotment(order)) return "info";
+      if (normalized === "PROCESSING" || normalized === "SUBMITTED") return "info";
+    }
+  }
   if (normalized === "FAILED" || normalized === "CANCELLED") return "destructive";
   if (order && isOrderPaymentCompleted(order)) {
     if (isOrderAwaitingAllotment(order)) return "info";
     if (normalized === "PROCESSING" || normalized === "SUBMITTED") return "info";
-  }
-  if (order && !isOrderPaymentCompleted(order)) {
-    const paymentStatus = order.fp_payment_status?.trim().toUpperCase() ?? "";
-    if (["FAILED", "EXPIRED", "CANCELLED", "REJECTED", "DECLINED"].includes(paymentStatus)) {
-      return "destructive";
-    }
-    return "warning";
   }
   if (normalized === "PAYMENT_PENDING" || normalized === "PENDING" || normalized === "PROCESSING") {
     return "warning";

@@ -7,7 +7,12 @@ import { Loader2 } from "lucide-react";
 import { useRiskProfileOptional } from "@/contexts/risk-profile-context";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { MfFundSearchResultItem } from "@/features/invest/components/mf-fund-search-ui";
-import { MF_FUND_SEARCH_MIN_CHARS, useMfFundSearch } from "@/features/invest/lib/mf-fund-search";
+import { formatInr } from "@/features/invest/lib/mf-format";
+import {
+  MF_FUND_SEARCH_MIN_CHARS,
+  parseMinSipSearchAmount,
+  useMfFundSearch,
+} from "@/features/invest/lib/mf-fund-search";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
 import { RiskProfileSearchResultItem } from "@/features/risk-profile/components/risk-profile-search-result-item";
 import {
@@ -62,13 +67,23 @@ export function DashboardSearchDialog({
   const [query, setQuery] = useState("");
 
   const trimmedQuery = query.trim();
-  const isFundSearch = trimmedQuery.length >= MF_FUND_SEARCH_MIN_CHARS;
+  const minSipSearchInr = useMemo(() => parseMinSipSearchAmount(trimmedQuery), [trimmedQuery]);
+  const isFundSearch =
+    minSipSearchInr != null || trimmedQuery.length >= MF_FUND_SEARCH_MIN_CHARS;
   const hasRiskProfile = Boolean(riskProfile?.hasProfile && riskProfile.profile);
 
   const { results: funds, searching, error: searchError } = useMfFundSearch({
     query,
+    maxMinSipInr: minSipSearchInr,
     enabled: open && isFundSearch,
   });
+
+  const fundsHeading = useMemo(() => {
+    if (minSipSearchInr != null) {
+      return copy.dashboard.search.minSipFundsHeading(formatInr(minSipSearchInr));
+    }
+    return copy.dashboard.search.fundsHeading;
+  }, [minSipSearchInr]);
 
   const filteredPages = useMemo(() => {
     if (!trimmedQuery) return navRoutes;
@@ -148,7 +163,7 @@ export function DashboardSearchDialog({
           ) : null}
 
           {isFundSearch && funds.length > 0 ? (
-            <CommandGroup heading={copy.dashboard.search.fundsHeading} className="px-1">
+            <CommandGroup heading={fundsHeading} className="px-1">
               {funds.map((fund) => (
                 <CommandItem
                   key={fund.product_id}

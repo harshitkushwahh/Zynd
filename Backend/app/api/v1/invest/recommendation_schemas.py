@@ -15,6 +15,7 @@ BlockReason = Literal[
 
 class FundsForYouFundResponse(BaseModel):
     product_id: str
+    product_slug: str
     fund_id: int
     scheme_name: str
     amc_name: str

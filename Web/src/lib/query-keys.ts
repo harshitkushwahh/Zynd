@@ -62,6 +62,8 @@ export const queryKeys = {
   recommendations: {
     all: () => ["recommendations"] as const,
     fundsForYou: () => ["recommendations", "funds-for-you"] as const,
+    fundsForYouFundDetails: (productIds: readonly string[]) =>
+      ["recommendations", "funds-for-you-fund-details", ...productIds] as const,
     mitraTxnRecommendation: (token: string) =>
       ["recommendations", "mitra-txn", token] as const,
   },

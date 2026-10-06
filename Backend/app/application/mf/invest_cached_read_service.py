@@ -111,14 +111,20 @@ async def cached_list_invest_funds(
 
 
 async def cached_get_invest_fund_detail(session: AsyncSession, product_id: uuid.UUID) -> dict | None:
+    from app.application.mf.investment_constraints import ensure_investment_details_on_fund_payload
+
     settings = get_settings()
     key = await build_invest_cache_key("fund", str(product_id))
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
-        return enrich_fund_summary_logo(cached, settings)
+        return enrich_fund_summary_logo(
+            ensure_investment_details_on_fund_payload(cached),
+            settings,
+        )
     payload = await get_invest_fund_detail(session, product_id)
     if payload is None:
         return None
+    payload = ensure_investment_details_on_fund_payload(payload)
     await set_cached_json(
         key,
         payload,
@@ -161,14 +167,22 @@ async def cached_search_invest_funds(
     query: str,
     page: int = 1,
     page_size: int = 20,
+    max_min_sip_inr: float | None = None,
 ) -> dict:
     settings = get_settings()
     normalized = query.strip().lower()
-    key = await build_invest_cache_key("search", normalized, str(page), str(page_size))
+    sip_key = "" if max_min_sip_inr is None else f"max_min_sip:{max_min_sip_inr}"
+    key = await build_invest_cache_key("search", normalized, sip_key, str(page), str(page_size))
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
         return enrich_fund_list_payload(cached, settings)
-    payload = await search_invest_funds(session, query=query, page=page, page_size=page_size)
+    payload = await search_invest_funds(
+        session,
+        query=query,
+        page=page,
+        page_size=page_size,
+        max_min_sip_inr=max_min_sip_inr,
+    )
     await set_cached_json(
         key,
         payload,

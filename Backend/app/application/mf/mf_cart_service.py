@@ -20,11 +20,11 @@ from app.application.mf.mf_order_service import (
     _record_order_event,
     get_or_create_mf_investment_account,
 )
+from app.application.mf.investment_constraints import normalize_sip_frequency
 from app.application.mf.mf_sip_plan_service import (
-    _validate_installment_day,
-    _validate_number_of_installments,
     create_sip_plan,
     default_installments,
+    validate_sip_cart_line,
 )
 from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
@@ -218,19 +218,26 @@ async def upsert_cart_item(
     cart_type = _normalize_investment_type(investment_type)
     settings = get_settings()
     product, fund, _amc = await _load_order_context(session, product_id=product_id)
+    existing_items = await list_cart_items(session, user_id=user_id)
 
     if cart_type == MfCartInvestmentType.sip:
-        min_amount = fund.min_sip_amount
-        if min_amount is not None and amount_inr < min_amount:
-            raise MfOrderError(
-                code="below_minimum",
-                message=f"Minimum SIP amount is INR {min_amount}",
-            )
-        resolved_installment_day = _validate_installment_day(
+        for other in existing_items:
+            if other.investment_type != MfCartInvestmentType.sip:
+                continue
+            if other.product_id == product_id:
+                continue
+            if normalize_sip_frequency(other.frequency) != normalize_sip_frequency(frequency):
+                raise MfOrderError(
+                    code="sip_frequency_mismatch",
+                    message="All SIP funds in the cart must use the same frequency (monthly or daily).",
+                )
+        frequency, resolved_installment_day, resolved_installments = validate_sip_cart_line(
+            fund,
+            amount_inr=amount_inr,
             frequency=frequency,
             installment_day=installment_day,
+            number_of_installments=number_of_installments,
         )
-        resolved_installments = _validate_number_of_installments(number_of_installments)
     else:
         resolved_installment_day = None
         resolved_installments = None
@@ -241,7 +248,6 @@ async def upsert_cart_item(
                 message=f"Minimum lumpsum amount is INR {min_amount}",
             )
 
-    existing_items = await list_cart_items(session, user_id=user_id)
     existing = next(
         (
             item

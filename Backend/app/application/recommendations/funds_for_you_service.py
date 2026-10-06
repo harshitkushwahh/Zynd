@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_governance_service import is_product_investable
+from app.application.mf.invest_fund_slug import fund_public_slug
 from app.application.mf.mf_cart_service import list_cart_items
 from app.application.mf.mf_scheme_resolution import matching_fund_isins, mutual_fund_isin_in
 from app.application.mf.portfolio_holdings_service import list_user_portfolio_holdings
@@ -20,7 +21,14 @@ from app.application.recommendations.portfolio_story_builder import build_portfo
 from app.application.recommendations.recommendation_metrics import record_resolve
 from app.application.recommendations.selection_utils import seeded_rng, stable_index
 from app.infrastructure.persistence.mf_transaction_models import MfCartInvestmentType
-from app.infrastructure.persistence.mf_models import Category, FundAmc, MutualFund, Product, ProductCategory
+from app.infrastructure.persistence.mf_models import (
+    Category,
+    FundAmc,
+    MutualFund,
+    Product,
+    ProductCategory,
+    ProductDisplayContent,
+)
 from app.infrastructure.persistence.models import KycOverallStatus, UserKycStatus
 from app.infrastructure.persistence.recommendation_models import (
     RecommendationBasket,
@@ -40,6 +48,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class PoolFundRow:
     product_id: UUID
+    product_slug: str
     fund_id: int
     scheme_name: str
     amc_id: int
@@ -290,6 +299,7 @@ async def _success_from_snapshot(
         "funds": [
             {
                 "product_id": fund["product_id"],
+                "product_slug": fund["product_slug"],
                 "fund_id": fund["fund_id"],
                 "scheme_name": fund["scheme_name"],
                 "amc_name": fund["amc_name"],
@@ -374,6 +384,7 @@ async def _load_investable_pool(session: AsyncSession, basket_id: UUID) -> list[
         pool.append(
             PoolFundRow(
                 product_id=row.product_id,
+                product_slug=row.product_slug,
                 fund_id=row.fund_id,
                 scheme_name=row.scheme_name,
                 amc_id=row.amc_id,
@@ -399,21 +410,23 @@ async def _load_pool_rows_for_products(
         return []
 
     result = await session.execute(
-        select(Product, MutualFund, FundAmc)
+        select(Product, MutualFund, FundAmc, ProductDisplayContent.seo_slug)
         .join(MutualFund, MutualFund.product_id == Product.id)
         .join(FundAmc, FundAmc.id == MutualFund.amc_id)
+        .outerjoin(ProductDisplayContent, ProductDisplayContent.product_id == Product.id)
         .where(Product.id.in_(product_ids))
     )
 
     category_map = await _primary_category_slugs(session, product_ids)
     rows: list[PoolFundRow] = []
-    for product, fund, amc in result.all():
+    for product, fund, amc, seo_slug in result.all():
         if not is_product_investable(product=product, fund=fund, amc=amc):
             continue
         min_lumpsum = float(fund.min_lumpsum_amount) if fund.min_lumpsum_amount is not None else None
         rows.append(
             PoolFundRow(
                 product_id=product.id,
+                product_slug=fund_public_slug(name=fund.scheme_name, seo_slug=seo_slug),
                 fund_id=fund.id,
                 scheme_name=fund.scheme_name,
                 amc_id=amc.id,
@@ -486,6 +499,7 @@ def _pool_fund_to_allocation_input(row: PoolFundRow) -> dict[str, Any]:
 def _serialize_fund_row(row: PoolFundRow) -> dict[str, Any]:
     return {
         "product_id": str(row.product_id),
+        "product_slug": row.product_slug,
         "fund_id": row.fund_id,
         "scheme_name": row.scheme_name,
         "amc_name": row.amc_name,

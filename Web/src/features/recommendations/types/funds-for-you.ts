@@ -6,6 +6,7 @@ export type FundsForYouBlockReason =
 
 export type FundsForYouFund = {
   product_id: string;
+  product_slug: string;
   fund_id: number;
   scheme_name: string;
   amc_name: string;

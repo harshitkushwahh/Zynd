@@ -18,6 +18,7 @@ from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
 from app.application.referral.referral_investment_service import record_referral_investment_activity
 from app.core.config import get_settings
+from app.infrastructure.kyc.cybrilla_terminal_log import log_mf_payment_step
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
     create_mf_investment_account,
@@ -645,6 +646,14 @@ async def _create_checkout_payment(session: AsyncSession, order: MfOrder) -> Non
             await session.flush()
 
     await _set_ondc_metadata(session, order, payment_created=True, fp_payment_id=payment_id)
+    log_mf_payment_step(
+        "netbanking_payment_created",
+        order_id=str(order.id),
+        fp_payment_id=payment_id,
+        fp_purchase_old_id=order.fp_purchase_old_id,
+        has_token_url=bool(token_url),
+        provider=settings.zynd_mf_order_payment_gateway,
+    )
 
 
 async def _create_cart_checkout_payment(
@@ -682,6 +691,14 @@ async def _create_cart_checkout_payment(
     await _set_checkout_ondc_metadata(session, checkout, payment_created=True, fp_payment_id=payment_id)
     for order in orders:
         await _set_ondc_metadata(session, order, payment_created=True, fp_payment_id=payment_id)
+    log_mf_payment_step(
+        "cart_netbanking_payment_created",
+        checkout_id=str(checkout.id),
+        fp_payment_id=payment_id,
+        order_count=len(orders),
+        has_token_url=bool(token_url),
+        provider=settings.zynd_mf_order_payment_gateway,
+    )
 
 
 async def _confirm_cart_purchases(session: AsyncSession, checkout: MfCheckout, orders: list[MfOrder]) -> None:
@@ -712,6 +729,36 @@ async def _confirm_purchase(session: AsyncSession, order: MfOrder) -> None:
     await _set_ondc_metadata(session, order, purchase_confirmed=True)
 
 
+async def _confirm_purchase_after_payment_setup(session: AsyncSession, order: MfOrder) -> bool:
+    """Cybrilla ONDC: create PG payment, then confirm purchase so it can move to submitted."""
+    ondc = _ondc_metadata(order)
+    if not ondc.get("payment_created") or ondc.get("purchase_confirmed"):
+        return False
+
+    await _confirm_purchase(session, order)
+    changed = True
+    log_mf_payment_step(
+        "purchase_confirmed_after_payment_setup",
+        order_id=str(order.id),
+        fp_purchase_id=order.fp_purchase_id,
+        fp_state=order.fp_state,
+    )
+    if order.fp_purchase_id:
+        payload = await get_mf_purchase(order.fp_purchase_id)
+        fp_state = (extract_fp_state(payload) or order.fp_state or "").lower()
+        if await _apply_fp_state(
+            session,
+            order,
+            fp_state=fp_state,
+            source="WORKER",
+            payload={"stage": "confirm"},
+        ):
+            changed = True
+    if await _refresh_payment_link(session, order):
+        changed = True
+    return changed
+
+
 async def _refresh_payment_link(session: AsyncSession, order: MfOrder) -> bool:
     ondc = _ondc_metadata(order)
     payment_id = ondc.get("fp_payment_id")
@@ -729,9 +776,7 @@ async def _refresh_payment_link(session: AsyncSession, order: MfOrder) -> bool:
 
     if is_payment_success_status(extract_payment_status(payload)):
         ondc = _ondc_metadata(order)
-        fp_state = (order.fp_state or "").lower()
-        if ondc.get("payment_created") and not ondc.get("purchase_confirmed") and fp_state == "pending":
-            await _confirm_purchase(session, order)
+        if ondc.get("purchase_confirmed") and not ondc.get("payment_success"):
             await _set_ondc_metadata(session, order, payment_success=True)
             changed = True
         if order.fp_purchase_id:
@@ -837,21 +882,21 @@ async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout
                 and ondc_checkout.get("payment_created")
                 and not ondc_checkout.get("purchases_confirmed")
             ):
-                payment_id = checkout.fp_payment_id or ondc_checkout.get("fp_payment_id")
-                if payment_id is not None:
-                    payment_payload = await get_payment(int(payment_id))
-                    if is_payment_success_status(extract_payment_status(payment_payload)):
-                        await _confirm_cart_purchases(session, checkout, open_orders)
-                        await _set_checkout_ondc_metadata(
-                            session,
-                            checkout,
-                            purchases_confirmed=True,
-                            payment_success=True,
-                        )
-                        changed = True
-                    else:
-                        await _refresh_cart_payment_link(session, checkout)
-                        changed = True
+                await _confirm_cart_purchases(session, checkout, open_orders)
+                await _set_checkout_ondc_metadata(session, checkout, purchases_confirmed=True)
+                await _refresh_cart_payment_link(session, checkout)
+                changed = True
+
+        ondc_checkout = _ondc_checkout_metadata(checkout)
+        payment_id = checkout.fp_payment_id or ondc_checkout.get("fp_payment_id")
+        if payment_id is not None and ondc_checkout.get("purchases_confirmed"):
+            payment_payload = await get_payment(int(payment_id))
+            if is_payment_success_status(extract_payment_status(payment_payload)):
+                await _set_checkout_ondc_metadata(session, checkout, payment_success=True)
+                changed = True
+            else:
+                await _refresh_cart_payment_link(session, checkout)
+                changed = True
 
         if any(
             order.status == MfOrderStatus.submitted or (order.fp_state or "").lower() == "submitted"
@@ -933,23 +978,12 @@ async def advance_ondc_order(session: AsyncSession, order: MfOrder, *, force: bo
 
             ondc = _ondc_metadata(order)
             if fp_state == "pending" and ondc.get("payment_created") and not ondc.get("purchase_confirmed"):
-                if await _refresh_payment_link(session, order):
+                if await _confirm_purchase_after_payment_setup(session, order):
                     changed = True
                 payload = await get_mf_purchase(order.fp_purchase_id)
                 fp_state = (extract_fp_state(payload) or fp_state).lower()
-                if await _apply_fp_state(
-                    session,
-                    order,
-                    fp_state=fp_state,
-                    source="WORKER",
-                    payload={"stage": "payment_poll"},
-                ):
-                    changed = True
 
         if fp_state == "submitted" or order.status == MfOrderStatus.submitted:
-            ondc = _ondc_metadata(order)
-            if fp_state == "submitted" and ondc.get("purchase_confirmed"):
-                return changed
             if await _refresh_payment_link(session, order):
                 changed = True
     except FpClientError as exc:

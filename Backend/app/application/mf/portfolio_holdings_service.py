@@ -866,22 +866,28 @@ async def _load_upcoming_sips(session: AsyncSession, *, user_id: uuid.UUID, limi
 
 
 async def _has_processing_orders(session: AsyncSession, *, user_id: uuid.UUID) -> bool:
-    count = await session.scalar(
-        select(func.count())
-        .select_from(MfOrder)
-        .where(
-            MfOrder.user_id == user_id,
-            MfOrder.status.in_(
-                [
-                    MfOrderStatus.pending,
-                    MfOrderStatus.processing,
-                    MfOrderStatus.payment_pending,
-                    MfOrderStatus.submitted,
-                ]
-            ),
+    from app.application.mf.mf_order_service import order_payment_completed
+
+    rows = (
+        await session.execute(
+            select(MfOrder).where(
+                MfOrder.user_id == user_id,
+                MfOrder.order_type != MfOrderType.redemption,
+                MfOrder.status.not_in(
+                    [
+                        MfOrderStatus.succeeded,
+                        MfOrderStatus.failed,
+                        MfOrderStatus.cancelled,
+                    ]
+                ),
+            )
         )
-    )
-    return int(count or 0) > 0
+    ).scalars().all()
+
+    for order in rows:
+        if order_payment_completed(order):
+            return True
+    return False
 
 
 async def _resolve_mfia_context(

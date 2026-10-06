@@ -117,6 +117,12 @@ async def create_lumpsum_order(
     if existing:
         if existing.user_id != user_id:
             raise MfOrderError(code="idempotency_conflict", message="Idempotency key already used", status_code=409)
+        if existing.status in TERMINAL_STATUSES:
+            raise MfOrderError(
+                code="idempotency_reused_terminal",
+                message="This investment request already completed. Start a new investment.",
+                status_code=409,
+            )
         return existing
 
     product, fund, _amc = await _load_order_context(session, product_id=product_id)
@@ -279,9 +285,9 @@ def _derive_next_action(*, status: str, payment_url: str | None) -> str:
     if status == "PENDING":
         return "wait_processing"
     if status == "PROCESSING":
-        return "wait_review"
+        return "pay_upi" if payment_url else "wait_review"
     if status == "PAYMENT_PENDING":
-        return "wait_payment_setup"
+        return "pay_upi" if payment_url else "wait_payment_setup"
     if status == "SUBMITTED":
         return "pay_upi" if payment_url else "wait_payment_link"
     if status == "SUCCEEDED":

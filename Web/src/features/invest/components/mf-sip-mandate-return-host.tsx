@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
+import { notifyMfPaymentGatewayReturn } from "@/features/invest/lib/mf-payment-gateway-popup";
 import {
   getLastMfPaymentPlanId,
   getMfPaymentReturnPath,
@@ -18,6 +19,17 @@ export function MfSipMandateReturnHost() {
     if (!planId) {
       router.replace("/dashboard/mutual-funds");
       return;
+    }
+
+    notifyMfPaymentGatewayReturn({ planId, search: window.location.search });
+
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.close();
+        return;
+      }
+    } catch {
+      // ignore
     }
 
     const returnPath = getMfPaymentReturnPath() ?? "/dashboard/mutual-funds";

@@ -49,6 +49,8 @@ async def upsert_fund_from_normalized(
         existing.fp_oms_active = payload["fp_oms_active"]
         existing.min_sip_amount = payload["min_sip_amount"]
         existing.min_lumpsum_amount = payload["min_lumpsum_amount"]
+        if payload.get("investment_constraints") is not None:
+            existing.investment_constraints = payload["investment_constraints"]
         existing.sebi_category = payload["sebi_category"]
         existing.plan_type = payload["plan_type"]
         existing.option_type = payload["option_type"]
@@ -66,6 +68,7 @@ async def upsert_fund_from_normalized(
             fp_oms_active=payload["fp_oms_active"],
             min_sip_amount=payload["min_sip_amount"],
             min_lumpsum_amount=payload["min_lumpsum_amount"],
+            investment_constraints=payload.get("investment_constraints"),
             sebi_category=payload["sebi_category"],
             plan_type=payload["plan_type"],
             option_type=payload["option_type"],

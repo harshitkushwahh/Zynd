@@ -94,8 +94,7 @@ export function MfYourInvestedCard() {
     (summary?.holdings_count ?? 0) > 0 ||
     (summary?.current_value_inr ?? 0) > 0 ||
     (summary?.invested_inr ?? 0) > 0;
-  const isProcessing =
-    !hasHoldings && (summary?.has_pending_orders || upcomingOrders.length > 0) && pendingInr > 0;
+  const isProcessing = !hasHoldings && upcomingOrders.length > 0 && pendingInr > 0;
   const liveData = summary ? mapPortfolioSummaryToInvestedPreview(summary) : null;
   const previewData = MF_INVESTED_LOCKED_PREVIEW;
   const isLocked = !showSkeleton && !ordersLoading && summary != null && !hasInvestments && !isProcessing;
