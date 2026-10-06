@@ -172,6 +172,7 @@ export function AddInvestorWizard() {
   const [digilockerDone, setDigilockerDone] = useState(false);
   const [address, setAddress] = useState<AddInvestorAddressDraft>(emptyAddressDraft());
   const [addressFromDigilocker, setAddressFromDigilocker] = useState(false);
+  const [proofAddressLocked, setProofAddressLocked] = useState(false);
   const [personal, setPersonal] = useState<AddInvestorPersonalDraft>(emptyPersonalDraft());
   const [signatureDataUrl, setSignatureDataUrl] = useState("");
   const [signatureMode, setSignatureMode] = useState<AddInvestorSignatureTab | null>(null);
@@ -657,7 +658,7 @@ export function AddInvestorWizard() {
       if (stepId !== "address") digilockerAddressAutoStartRef.current = false;
       return;
     }
-    if (digilockerDone) return;
+    if (digilockerDone && proofAddressLocked) return;
     if (digilockerLoading) return;
     if (digilockerAddressAutoStartRef.current) return;
     digilockerAddressAutoStartRef.current = true;
@@ -668,6 +669,11 @@ export function AddInvestorWizard() {
           bootstrap.requires_address_step_proof_digilocker === true ||
           bootstrap.kyc_flow_mode === "kra_update";
         if (proofAtAddress) {
+          setProofAddressLocked(true);
+          if (digilockerDone) {
+            digilockerAddressAutoStartRef.current = false;
+            return;
+          }
           const proofStatus = (bootstrap.proof_details_status ?? "").trim().toLowerCase();
           const proofDone = ["fetched", "successful", "success", "completed"].includes(proofStatus);
           if (proofDone) {
@@ -691,8 +697,8 @@ export function AddInvestorWizard() {
           if (address) {
             setAddress(address);
             setAddressFromDigilocker(true);
-            setDigilockerDone(true);
           }
+          setDigilockerDone(true);
           digilockerAddressAutoStartRef.current = false;
           return;
         }
@@ -730,6 +736,7 @@ export function AddInvestorWizard() {
     clientUserId,
     digilockerDone,
     digilockerLoading,
+    proofAddressLocked,
     requiresDigilocker,
     stepId,
   ]);
@@ -769,6 +776,7 @@ export function AddInvestorWizard() {
       case "signature-upload":
         return signatureUploaded;
       case "address":
+        if (proofAddressLocked && digilockerDone) return true;
         return (
           isAddInvestorAddressFieldsValid(address.permanent) &&
           (address.correspondenceSame || isAddInvestorAddressFieldsValid(address.correspondence))
@@ -1423,8 +1431,9 @@ export function AddInvestorWizard() {
                 <AddInvestorAddressPanel
                   address={address}
                   onAddressChange={setAddress}
-                  permanentReadOnly={addressFromDigilocker}
-                  prefilledFromDigilocker={addressFromDigilocker}
+                  permanentReadOnly={addressFromDigilocker || proofAddressLocked}
+                  entryLocked={proofAddressLocked}
+                  prefilledFromDigilocker={addressFromDigilocker || proofAddressLocked}
                   addressMasterData={kycMasterData}
                 />
               </div>

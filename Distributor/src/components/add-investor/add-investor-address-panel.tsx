@@ -44,6 +44,7 @@ type AddInvestorAddressPanelProps = {
   address: AddInvestorAddressDraft;
   onAddressChange: (address: AddInvestorAddressDraft) => void;
   permanentReadOnly?: boolean;
+  entryLocked?: boolean;
   prefilledFromDigilocker?: boolean;
   addressMasterData?: Pick<AddInvestorKycMasterData, "states" | "countries"> | null;
 };
@@ -105,6 +106,7 @@ export function AddInvestorAddressPanel({
   address,
   onAddressChange,
   permanentReadOnly = false,
+  entryLocked = false,
   prefilledFromDigilocker = false,
   addressMasterData,
 }: AddInvestorAddressPanelProps) {
@@ -117,6 +119,7 @@ export function AddInvestorAddressPanel({
     ADD_INVESTOR_COUNTRY_OPTIONS.map((item) => ({ label: item.label, value: item.label }));
 
   const updateFields = (type: AddressTab, patch: Partial<AddInvestorAddressFields>) => {
+    if (entryLocked) return;
     const nextFields = {
       ...address[type],
       ...patch,
@@ -132,6 +135,7 @@ export function AddInvestorAddressPanel({
   };
 
   const handleCorrespondenceSameChange = (checked: boolean) => {
+    if (entryLocked) return;
     onAddressChange({
       ...address,
       correspondenceSame: checked,
@@ -145,7 +149,7 @@ export function AddInvestorAddressPanel({
   };
 
   const activeFields = activeTab === "permanent" ? address.permanent : address.correspondence;
-  const fieldsReadOnly = activeTab === "permanent" && permanentReadOnly;
+  const fieldsReadOnly = entryLocked || (activeTab === "permanent" && permanentReadOnly);
   const correspondenceTabDisabled = address.correspondenceSame;
   const countryValue = normalizeCountryValue(activeFields.country, countryOptions) || "India";
   const stateValue = resolveAddInvestorStateOption(activeFields.state, stateOptions);
@@ -221,6 +225,7 @@ export function AddInvestorAddressPanel({
           <Switch
             id="addr-same"
             checked={address.correspondenceSame}
+            disabled={entryLocked}
             onCheckedChange={handleCorrespondenceSameChange}
           />
           <Label htmlFor="addr-same" className="add-investor-address-panel__same-toggle-label">
