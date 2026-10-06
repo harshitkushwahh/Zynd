@@ -1,6 +1,6 @@
 # KYC DigiLocker, POA proof, and eSign (Zynd)
 
-Zynd DIY KYC mirrors the Multiplus three-journey model: **Path A** (Finprim identity document at the **address** step for fresh KYC and re-KYC), **Path B** (Cybrilla POA `kyc_forms` lifecycle — sync at Review, then **one-time** POA DigiLocker when `proof_details.fetch_url` is present), and **Aadhaar eSign** after POA proof completes.
+Zynd DIY KYC mirrors the Multiplus three-journey model: **Path A** (Finprim identity document at the **address** step for new-to-KYC only), **Path B** (Cybrilla POA `kyc_forms` — for on-hold and KRA update, **one** proof-details DigiLocker at the **address** step), and **Aadhaar eSign** after that proof completes.
 
 **J2 (`fresh_kyc`)** uses **one** DigiLocker at address + Finprim eSign at Review — [KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md](./KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md). **J3** may use POA proof at Review; hybrid debugging: [KYC_DUAL_DIGILOCKER_HYBRID.md](./KYC_DUAL_DIGILOCKER_HYBRID.md).
 
@@ -9,8 +9,8 @@ Zynd DIY KYC mirrors the Multiplus three-journey model: **Path A** (Finprim iden
 | Mode | When | Path A (address-step DigiLocker) | Path B (Review POA proof) | eSign |
 |------|------|----------------------------------|---------------------------|-------|
 | `repeat_kra` | KRA short submit | No | No | No |
-| `fresh_kyc` | New / unavailable KYC (J2) | Yes — auto at **address** step | **No** POA proof at Review | **Finprim** eSign |
-| `kra_update` | Re-KYC / modify (J3) | Yes — same as J2 at **address** | POA `proof_details.fetch_url` at Review submit | POA eSign |
+| `fresh_kyc` | New / unavailable KYC (J2) | Yes — identity document at **address** | **No** POA proof at Review | **Finprim** eSign |
+| `kra_update` | On-hold / re-KYC / modify (J3) | **No** identity document | POA `proof_details.fetch_url` once, at the **address** step | POA eSign |
 
 Bootstrap exposes `kycFlowMode`, `requiresAddressStepDigilocker` (alias `requiresPanStepDigilocker`), `requiresDigilocker` (Path A gate until `external_kyc_status === returned_success`), `poaKycFormId`, and `proofFetchUrl`.
 

@@ -118,6 +118,14 @@ def _proof_fetch_url_from_journey(journey: Any) -> str | None:
 async def start_digilocker(db: AsyncSession, *, user: User) -> dict[str, Any]:
     journey = await get_or_create_journey(db, user.id)
     require_pan_verified(journey)
+    from app.application.kyc.kyc_flow_mode import requires_address_step_digilocker
+
+    if not requires_address_step_digilocker(journey):
+        raise KycError(
+            "Identity document DigiLocker is only for new KYC. On-hold and update journeys use proof details.",
+            "identity_digilocker_not_applicable",
+            400,
+        )
     settings = get_settings()
     pan_draft = journey.pan_draft_json or {}
     pan = str(pan_draft.get("panNumber") or "").upper()

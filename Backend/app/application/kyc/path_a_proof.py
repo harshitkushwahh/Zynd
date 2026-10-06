@@ -4,15 +4,33 @@ from typing import Any
 
 from app.application.kyc.kyc_flow_mode import (
     requires_address_step_digilocker,
+    requires_address_step_proof_digilocker,
     resolve_kyc_flow_mode,
     should_use_poa_partner_form,
 )
 from app.infrastructure.persistence.models import KycJourneyState
 
+_PROOF_COMPLETE = frozenset({"fetched", "successful", "success", "completed"})
+
 
 def identity_proof_only_at_address_step(journey: KycJourneyState | None) -> bool:
     """Full KYC uses Finprim DigiLocker on the address step only — no POA proof redirect at review."""
     return requires_address_step_digilocker(journey)
+
+
+def proof_details_status_complete(status: str | None) -> bool:
+    return str(status or "").strip().lower() in _PROOF_COMPLETE
+
+
+def address_step_partner_digilocker_pending(journey: KycJourneyState | None) -> bool:
+    """Address step is blocked until the journey's single DigiLocker finishes."""
+    if journey is None:
+        return False
+    if requires_address_step_digilocker(journey):
+        return not path_a_digilocker_proof_satisfied(journey)
+    if requires_address_step_proof_digilocker(journey):
+        return not proof_details_status_complete(journey.proof_details_status)
+    return False
 
 
 def path_a_digilocker_proof_satisfied(journey: KycJourneyState | None) -> bool:
@@ -24,9 +42,6 @@ def path_a_digilocker_proof_satisfied(journey: KycJourneyState | None) -> bool:
     if not str(journey.external_identity_document_id or "").strip():
         return False
     return str(journey.external_kyc_status or "").strip() == "returned_success"
-
-
-_PROOF_COMPLETE = frozenset({"fetched", "successful", "success", "completed"})
 
 
 def poa_form_proof_complete(form: dict[str, Any]) -> bool:

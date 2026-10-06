@@ -124,6 +124,7 @@ class KycBootstrapResponse(BaseModel):
     client_id: Optional[str] = None
     kyc_flow_mode: Optional[str] = None
     requires_address_step_digilocker: Optional[bool] = None
+    requires_address_step_proof_digilocker: Optional[bool] = None
     requires_pan_step_digilocker: Optional[bool] = None
     requires_digilocker: Optional[bool] = None
     poa_kyc_form_id: Optional[str] = None

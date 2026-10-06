@@ -190,6 +190,9 @@ async def start_poa_kyc_form(db: AsyncSession, *, user: User) -> dict[str, Any]:
         raise KycError("Fresh POA KYC forms are disabled.", "poa_fresh_disabled", 400)
     form = await ensure_kyc_form(db, user=user, journey=journey)
     _sync_journey_from_form(journey, form)
+    from app.application.kyc.proof_address_prefill import apply_kra_update_proof_address
+
+    await apply_kra_update_proof_address(journey, form)
     await db.flush()
     return _status_dict(form, journey)
 
@@ -226,6 +229,9 @@ async def get_poa_kyc_form_status(db: AsyncSession, *, user: User) -> dict[str, 
             await db.flush()
             return _status_dict(form, journey)
     _sync_journey_from_form(journey, form)
+    from app.application.kyc.proof_address_prefill import apply_kra_update_proof_address
+
+    await apply_kra_update_proof_address(journey, form)
     await db.flush()
     return _status_dict(form, journey)
 
@@ -279,6 +285,9 @@ async def sync_poa_kyc_form(db: AsyncSession, *, user: User) -> dict[str, Any]:
                 raise KycError(exc.message, exc.code, exc.status_code) from exc
     form = await resolve_poa_proof_server_side(journey, form)
     _sync_journey_from_form(journey, form)
+    from app.application.kyc.proof_address_prefill import apply_kra_update_proof_address
+
+    await apply_kra_update_proof_address(journey, form)
     await db.flush()
     payload = _status_dict(form, journey)
     payload["success"] = True
@@ -293,6 +302,9 @@ async def retry_poa_proof_fetch(db: AsyncSession, *, user: User) -> dict[str, An
         raise KycError("Proof retry is only available for KRA update journeys.", "poa_retry_modify_only", 400)
     form = await retry_kyc_form_proof_fetch(journey.external_kyc_form_id)
     _sync_journey_from_form(journey, form)
+    from app.application.kyc.proof_address_prefill import apply_kra_update_proof_address
+
+    await apply_kra_update_proof_address(journey, form)
     await db.flush()
     return _status_dict(form, journey)
 

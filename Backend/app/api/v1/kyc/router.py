@@ -201,6 +201,7 @@ async def get_kyc_journey_bootstrap(
         step_statuses=KycStepStatuses(**step_statuses) if step_statuses else None,
         kyc_flow_mode=payload.get("kycFlowMode"),
         requires_address_step_digilocker=payload.get("requiresAddressStepDigilocker"),
+        requires_address_step_proof_digilocker=payload.get("requiresAddressStepProofDigilocker"),
         requires_pan_step_digilocker=payload.get("requiresPanStepDigilocker"),
         requires_digilocker=payload.get("requiresDigilocker"),
         poa_kyc_form_id=payload.get("poaKycFormId"),

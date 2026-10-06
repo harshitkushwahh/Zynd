@@ -1,5 +1,6 @@
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
 import type { KycBootstrapResponse } from "@/features/kyc/lib/kyc-api";
+import { isProofDetailsComplete } from "@/features/kyc/lib/kyc-flow-mode";
 import { requiresFullKycSubmission } from "@/features/kyc/lib/kyc-journey";
 import { copy } from "@/shared/config/copy";
 
@@ -117,9 +118,14 @@ export function shouldBlockAddressStep(input: {
   contact_draft?: Record<string, unknown> | null;
   poa_readiness_preverify_id?: string | null;
   requires_address_step_digilocker?: boolean | null;
+  requires_address_step_proof_digilocker?: boolean | null;
+  proof_details_status?: string | null;
   requires_digilocker?: boolean | null;
 } | null | undefined): boolean {
   if (!input) return false;
+  if (input.requires_address_step_proof_digilocker) {
+    return !isProofDetailsComplete(input.proof_details_status);
+  }
   const digilockerRequired =
     input.requires_address_step_digilocker != null
       ? Boolean(input.requires_address_step_digilocker)

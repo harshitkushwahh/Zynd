@@ -261,6 +261,19 @@ async def start_distributor_client_digilocker(
     return await start_digilocker(db, user=client_user)
 
 
+async def start_distributor_client_address_proof(
+    db: AsyncSession,
+    *,
+    actor: User,
+    client_user_id: UUID,
+) -> dict:
+    client_user = await _load_investor_client(db, client_user_id)
+    await assert_actor_can_access_client(db, actor=actor, client_user=client_user)
+    from app.application.kyc.poa_kyc_form_service import start_poa_kyc_form
+
+    return await start_poa_kyc_form(db, user=client_user)
+
+
 async def load_distributor_client_identity_document(
     db: AsyncSession,
     *,
