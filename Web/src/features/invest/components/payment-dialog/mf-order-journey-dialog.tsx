@@ -150,6 +150,7 @@ function OrderJourneySummaryPanel({ order }: { order: MfOrder }) {
               fpPaymentStatus={order.fp_payment_status}
               paymentCompleted={order.payment_completed}
               orderType={order.order_type}
+              failureCode={order.failure_code}
             />
           </div>
         </div>

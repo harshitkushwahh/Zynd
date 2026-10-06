@@ -9,6 +9,7 @@ import {
   isMfPurchaseOrderPaymentFailed,
   isOrderAwaitingAllotment,
   isOrderPaymentCompleted,
+  type MfOrderInvestorStatusContext,
 } from "@/features/invest/lib/mf-order-payment-status";
 import { copy } from "@/shared/config/copy";
 
@@ -475,7 +476,7 @@ export function buildOrderJourneyView(order: MfOrder, events: MfOrderEvent[]): O
 
 export function formatMfOrderStatusLabel(
   status: string,
-  order?: Pick<MfOrder, "fp_state" | "fp_payment_status" | "payment_completed" | "status" | "order_type">,
+  order?: MfOrderInvestorStatusContext,
 ) {
   const normalized = (order?.status ?? status).trim().toUpperCase();
 
@@ -524,7 +525,7 @@ export function formatMfOrderStatusLabel(
 
 export function mfOrderStatusVariantForInvestor(
   status: string,
-  order?: Pick<MfOrder, "fp_state" | "fp_payment_status" | "payment_completed" | "status" | "order_type">,
+  order?: MfOrderInvestorStatusContext,
 ): StatusBadgeVariant {
   const normalized = status.trim().toUpperCase();
   if (order && isRedemptionOrder(order)) {

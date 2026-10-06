@@ -28,9 +28,9 @@ export function MfSipFrequencyChips({
   if (monthlyAllowed && !dailyAllowed) return null;
   if (!monthlyAllowed && dailyAllowed) return null;
 
-  const options = [
-    { id: SIP_FREQUENCY_MONTHLY as const, label: copy.mutualFunds.paymentCardSipFrequencyMonthly },
-    { id: SIP_FREQUENCY_DAILY as const, label: copy.mutualFunds.paymentCardSipFrequencyDaily },
+  const options: { id: SipFrequency; label: string }[] = [
+    { id: SIP_FREQUENCY_MONTHLY, label: copy.mutualFunds.paymentCardSipFrequencyMonthly },
+    { id: SIP_FREQUENCY_DAILY, label: copy.mutualFunds.paymentCardSipFrequencyDaily },
   ].filter((option) => (option.id === SIP_FREQUENCY_MONTHLY ? monthlyAllowed : dailyAllowed));
 
   if (options.length < 2) return null;
