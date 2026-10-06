@@ -34,5 +34,21 @@ export function requiresAddressStepDigilocker(
   return Boolean(bootstrap?.requires_digilocker);
 }
 
+/** Proof-details DigiLocker on the address step — KYC on-hold and KRA update. */
+export function requiresAddressStepProofDigilocker(
+  bootstrap: Pick<KycBootstrapResponse, "requires_address_step_proof_digilocker" | "kyc_flow_mode"> | null | undefined,
+): boolean {
+  if (bootstrap?.requires_address_step_proof_digilocker != null) {
+    return Boolean(bootstrap.requires_address_step_proof_digilocker);
+  }
+  return resolveKycFlowMode(bootstrap) === "kra_update";
+}
+
+const PROOF_DETAILS_COMPLETE = new Set(["fetched", "successful", "success", "completed"]);
+
+export function isProofDetailsComplete(status: string | null | undefined): boolean {
+  return PROOF_DETAILS_COMPLETE.has((status ?? "").trim().toLowerCase());
+}
+
 /** @deprecated Use requiresAddressStepDigilocker — Path A runs at the address step. */
 export const requiresPanStepDigilockerAddress = requiresAddressStepDigilocker;

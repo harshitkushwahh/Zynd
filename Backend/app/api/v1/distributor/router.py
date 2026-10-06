@@ -60,6 +60,7 @@ from app.api.v1.kyc.schemas import (
     KycBankVerifyResponse,
     KycBootstrapResponse,
     KycDigilockerStartResponse,
+    KycPoaFormStatusResponse,
     KycIdentityDocumentResponse,
     KycBankPreverifyStatusResponse,
     KycFormSubmitRequest,
@@ -101,6 +102,7 @@ from app.application.distributor.distributor_client_kyc_service import (
     get_distributor_client_kyc_bootstrap,
     load_distributor_client_identity_document,
     save_distributor_client_kyc_journey_state,
+    start_distributor_client_address_proof,
     start_distributor_client_digilocker,
     submit_distributor_client_kyc,
     verify_distributor_client_kyc_bank_hybrid,
@@ -873,6 +875,7 @@ async def get_distributor_client_kyc_bootstrap_route(
         client_id=payload.get("clientId"),
         kyc_flow_mode=payload.get("kycFlowMode"),
         requires_address_step_digilocker=payload.get("requiresAddressStepDigilocker"),
+        requires_address_step_proof_digilocker=payload.get("requiresAddressStepProofDigilocker"),
         requires_pan_step_digilocker=payload.get("requiresPanStepDigilocker"),
         requires_digilocker=payload.get("requiresDigilocker"),
         poa_kyc_form_id=payload.get("poaKycFormId"),
@@ -946,6 +949,36 @@ async def post_distributor_client_kyc_digilocker_start(
             },
         ) from exc
     return KycDigilockerStartResponse(**result)
+
+
+@router.post(
+    "/clients/{client_user_id}/kyc/poa-form/start",
+    response_model=KycPoaFormStatusResponse,
+)
+async def post_distributor_client_kyc_address_proof_start(
+    client_user_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_permission("distributor.clients.onboard"))],
+) -> KycPoaFormStatusResponse:
+    try:
+        result = await start_distributor_client_address_proof(
+            db,
+            actor=actor,
+            client_user_id=client_user_id,
+        )
+    except KycError as exc:
+        raise _kyc_http_error(exc) from exc
+    except FpClientError as exc:
+        raise _kyc_http_error(KycError(exc.message, exc.code, exc.status_code)) from exc
+    await db.commit()
+    return KycPoaFormStatusResponse(
+        form_id=result.get("formId"),
+        form_status=result.get("formStatus"),
+        proof_details_status=result.get("proofDetailsStatus"),
+        proof_fetch_url=result.get("proofFetchUrl"),
+        partner_fields_needed=result.get("partnerFieldsNeeded"),
+        needs_digilocker=bool(result.get("needsDigilocker")),
+    )
 
 
 @router.get(

@@ -4,7 +4,7 @@ Audience: Zynd engineers.
 
 **Rule:** `fresh_kyc` (J2) = **one** Finprim DigiLocker at the **address** step + **Finprim eSign** at Review. **No** Cybrilla `proof_details` / “Link KRA KYC form” at Review.
 
-**J3** (`kra_update`) still uses Cybrilla POA `kycf_*` + proof DigiLocker at Review. See [KYC_DIGILOCKER_FLOW.md](./KYC_DIGILOCKER_FLOW.md).
+**J3** (`kra_update`, including on-hold) uses Cybrilla proof-details DigiLocker once, on the address step, then POA eSign. It does not start an identity-document DigiLocker. See [KYC_DIGILOCKER_FLOW.md](./KYC_DIGILOCKER_FLOW.md).
 
 Hybrid debugging (wrong journey mode, stale `kycf_*`): [KYC_DUAL_DIGILOCKER_HYBRID.md](./KYC_DUAL_DIGILOCKER_HYBRID.md) — **not** the J2 product spec.
 

@@ -110,11 +110,9 @@ def requires_digilocker(journey: KycJourneyState | None) -> bool:
 
 
 def require_digilocker_or_kra_skip(journey: KycJourneyState) -> None:
-    from app.application.kyc.path_a_proof import path_a_digilocker_proof_satisfied
+    from app.application.kyc.path_a_proof import address_step_partner_digilocker_pending
 
-    if not requires_digilocker(journey):
-        return
-    if not path_a_digilocker_proof_satisfied(journey):
+    if address_step_partner_digilocker_pending(journey):
         raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
 
 

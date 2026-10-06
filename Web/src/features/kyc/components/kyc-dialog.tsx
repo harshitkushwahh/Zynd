@@ -49,6 +49,7 @@ import {
   fetchKycBootstrap,
   fetchKycIdentityDocument,
   startKycDigilocker,
+  startPoaKycForm,
   fetchKycFormStatus,
   fetchKycCountries,
   fetchKycMasterDataEnums,
@@ -92,6 +93,7 @@ import {
 } from "@/features/kyc/lib/kyc-journey-draft";
 import { kycPanResetRequiresConfirm } from "@/features/kyc/lib/kyc-pan-reset";
 import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
+import { isProofDetailsComplete } from "@/features/kyc/lib/kyc-flow-mode";
 import {
   getKycJourneySteps,
   requiresFullKycSubmission,
@@ -640,17 +642,22 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       setKraVerifiedOutcomeShown(mergedPayload.step_statuses?.overall === "completed");
       setKraCheckMessage(null);
       setPanReadiness(readinessFromBootstrap(mergedPayload));
-      setPrefilledFromDigilocker(
-        Boolean(
-          mergedPayload.contact_draft &&
-            requiresFullKycSubmission({
-              kyc_already_registered: mergedPayload.kyc_already_registered,
-              readiness_code: mergedPayload.readiness_code,
-              poa_readiness_preverify_id: mergedPayload.poa_readiness_preverify_id,
-            }) &&
-            mergedPayload.external_kyc_status === "returned_success",
-        ),
+      const identityPrefill = Boolean(
+        mergedPayload.contact_draft &&
+          requiresFullKycSubmission({
+            kyc_already_registered: mergedPayload.kyc_already_registered,
+            readiness_code: mergedPayload.readiness_code,
+            poa_readiness_preverify_id: mergedPayload.poa_readiness_preverify_id,
+          }) &&
+          mergedPayload.external_kyc_status === "returned_success" &&
+          !mergedPayload.requires_address_step_proof_digilocker,
       );
+      const proofPrefill = Boolean(
+        mergedPayload.requires_address_step_proof_digilocker &&
+          isProofDetailsComplete(mergedPayload.proof_details_status) &&
+          mergedPayload.contact_draft,
+      );
+      setPrefilledFromDigilocker(identityPrefill || proofPrefill);
       setShowDigilockerFailureCard(showFailureAlert);
       if (digilockerReturn.kind === "failed") {
         digilockerAddressAutoStartRef.current = true;
@@ -710,6 +717,20 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     return "redirect";
   }, [completeDigilockerInline, openDigilockerRedirectDialog]);
 
+  const beginProofDigilockerRedirect = useCallback(async () => {
+    const status = await startPoaKycForm();
+    const fetchUrl = status.proof_fetch_url?.trim() ?? "";
+    if (status.needs_digilocker && fetchUrl) {
+      openDigilockerRedirectDialog(fetchUrl, "kraProof");
+      return;
+    }
+    if (status.needs_digilocker && !fetchUrl) {
+      throw new Error(copy.kyc.digilocker.failedDescription);
+    }
+    const payload = await fetchKycBootstrap();
+    applyBootstrap(payload);
+  }, [applyBootstrap, openDigilockerRedirectDialog]);
+
   const handleDigilockerRetry = useCallback(async () => {
     digilockerAddressAutoStartRef.current = false;
     setDigilockerRetrying(true);
@@ -717,7 +738,11 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       setDigilockerFailureDialogOpen(false);
       setShowDigilockerFailureCard(false);
       setJourneySaveError(null);
-      await beginDigilockerRedirect();
+      if (bootstrap?.requires_address_step_proof_digilocker) {
+        await beginProofDigilockerRedirect();
+      } else {
+        await beginDigilockerRedirect();
+      }
     } catch (error) {
       const message =
         error instanceof ApiError
@@ -731,7 +756,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     } finally {
       setDigilockerRetrying(false);
     }
-  }, [beginDigilockerRedirect]);
+  }, [beginDigilockerRedirect, beginProofDigilockerRedirect, bootstrap?.requires_address_step_proof_digilocker]);
 
   const handleCheckKraStatus = useCallback(async () => {
     setCheckingKraStatus(true);
@@ -1134,6 +1159,25 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
           setEsignIncompleteOpen(true);
           setSubmitError(null);
           return;
+        }
+
+        if (proofReturn) {
+          const payload = await fetchKycBootstrap().catch(() => null);
+          const reviewReady =
+            payload?.last_completed_step === "signature" || payload?.last_completed_step === "review";
+          const proofAtAddress = Boolean(payload?.requires_address_step_proof_digilocker) && !reviewReady;
+          if (proofAtAddress) {
+            if (payload) applyBootstrap(payload);
+            setPartnerEmbed(null);
+            setPartnerPopupBlocked(false);
+            if (callbackStatus !== "successful" && callbackStatus !== "success") {
+              setShowDigilockerFailureCard(true);
+              setDigilockerFailureDialogOpen(true);
+            } else {
+              setSubmitError(null);
+            }
+            return;
+          }
         }
 
         if (proofReturn && callbackStatus !== "successful" && callbackStatus !== "success") {
@@ -1806,7 +1850,11 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         setShowDigilockerFailureCard(false);
         setDigilockerFailureDialogOpen(false);
         setJourneySaveError(null);
-        await beginDigilockerRedirect();
+        if (bootstrap?.requires_address_step_proof_digilocker) {
+          await beginProofDigilockerRedirect();
+        } else {
+          await beginDigilockerRedirect();
+        }
       } catch (error) {
         const message =
           error instanceof ApiError
@@ -1824,6 +1872,8 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   }, [
     activeStepId,
     beginDigilockerRedirect,
+    beginProofDigilockerRedirect,
+    bootstrap?.requires_address_step_proof_digilocker,
     bootstrap === null,
     digilockerBlocked,
     digilockerFailureDialogOpen,

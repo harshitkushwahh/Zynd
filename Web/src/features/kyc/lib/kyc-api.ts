@@ -72,6 +72,7 @@ export type KycBootstrapResponse = {
   step_statuses?: KycStepStatuses | null;
   kyc_flow_mode?: KycFlowMode | null;
   requires_address_step_digilocker?: boolean | null;
+  requires_address_step_proof_digilocker?: boolean | null;
   requires_pan_step_digilocker?: boolean | null;
   requires_digilocker?: boolean | null;
   poa_kyc_form_id?: string | null;

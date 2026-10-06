@@ -204,6 +204,7 @@ export type ClientKycBootstrapResponse = {
   geolocation_draft: Record<string, unknown> | null;
   client_id?: string | null;
   kyc_flow_mode?: string | null;
+  requires_address_step_proof_digilocker?: boolean | null;
   requires_pan_step_digilocker?: boolean | null;
   requires_digilocker?: boolean | null;
   proof_fetch_url?: string | null;
@@ -213,6 +214,17 @@ export async function fetchClientKycBootstrap(clientUserId: string) {
   return apiRequest<ClientKycBootstrapResponse>(
     `/distributor/clients/${encodeURIComponent(clientUserId)}/kyc/bootstrap`,
   );
+}
+
+export async function startClientAddressProof(clientUserId: string) {
+  return apiRequest<{
+    form_id: string | null;
+    proof_details_status: string | null;
+    proof_fetch_url: string | null;
+    needs_digilocker: boolean;
+  }>(`/distributor/clients/${encodeURIComponent(clientUserId)}/kyc/poa-form/start`, {
+    method: "POST",
+  });
 }
 
 export async function startClientKycDigilocker(clientUserId: string) {

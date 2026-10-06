@@ -24,10 +24,19 @@ def resolve_kyc_flow_mode(journey: KycJourneyState | None) -> KycFlowMode:
 
 
 def requires_address_step_digilocker(journey: KycJourneyState | None) -> bool:
-    """Path A (Finprim iddoc) at the address step — full KYC for fresh (J2) and re-KYC (J3)."""
+    """Finprim identity-document DigiLocker at the address step — new-to-KYC only."""
     if journey is None:
         return False
-    if resolve_kyc_flow_mode(journey) == "repeat_kra":
+    if resolve_kyc_flow_mode(journey) != "fresh_kyc":
+        return False
+    return requires_full_kyc_submission(journey)
+
+
+def requires_address_step_proof_digilocker(journey: KycJourneyState | None) -> bool:
+    """Cybrilla proof_details DigiLocker at the address step — on-hold and KRA update only."""
+    if journey is None:
+        return False
+    if resolve_kyc_flow_mode(journey) != "kra_update":
         return False
     return requires_full_kyc_submission(journey)
 
@@ -38,7 +47,7 @@ def requires_pan_step_digilocker(journey: KycJourneyState | None) -> bool:
 
 
 def should_use_poa_partner_form(journey: KycJourneyState | None) -> bool:
-    """Cybrilla POA kyc_forms + proof_details at Review — J3 kra_update only (Multiplus parity)."""
+    """Cybrilla POA kyc_forms for on-hold and KRA update. Proof DigiLocker runs at the address step."""
     if journey is None:
         return False
     return resolve_kyc_flow_mode(journey) == "kra_update"
@@ -56,6 +65,7 @@ def flow_mode_bootstrap_fields(journey: KycJourneyState | None) -> dict[str, obj
         "kycFlowMode": mode,
         "requiresAddressStepDigilocker": address_step,
         "requiresPanStepDigilocker": address_step,
+        "requiresAddressStepProofDigilocker": requires_address_step_proof_digilocker(journey),
         "shouldUsePoaPartnerForm": should_use_poa_partner_form(journey),
         "poaKycFormId": journey.external_kyc_form_id if journey else None,
     }

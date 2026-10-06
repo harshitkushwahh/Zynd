@@ -101,6 +101,7 @@ import {
 import {
   emptyComplianceSnapshot,
   hydrationFromClientKycBootstrap,
+  mapBootstrapAddressDraft,
   hydrationFromComplianceSnapshot,
   mergeComplianceHydration,
   resolveResumeStepId,
@@ -118,6 +119,7 @@ import type { DistributorInvestor } from "@/lib/distributor-types";
 import {
   confirmClientKycPanNames,
   fetchClientKycBootstrap,
+  startClientAddressProof,
   submitClientKyc,
   verifyClientKycPan,
 } from "@/lib/distributor-client-onboarding-api";
@@ -655,13 +657,49 @@ export function AddInvestorWizard() {
       if (stepId !== "address") digilockerAddressAutoStartRef.current = false;
       return;
     }
-    if (!(requiresDigilocker ?? true) || digilockerDone) return;
+    if (digilockerDone) return;
     if (digilockerLoading) return;
     if (digilockerAddressAutoStartRef.current) return;
     digilockerAddressAutoStartRef.current = true;
     void (async () => {
       try {
         const bootstrap = await fetchClientKycBootstrap(clientUserId);
+        const proofAtAddress =
+          bootstrap.requires_address_step_proof_digilocker === true ||
+          bootstrap.kyc_flow_mode === "kra_update";
+        if (proofAtAddress) {
+          const proofStatus = (bootstrap.proof_details_status ?? "").trim().toLowerCase();
+          const proofDone = ["fetched", "successful", "success", "completed"].includes(proofStatus);
+          if (proofDone) {
+            const address = mapBootstrapAddressDraft(bootstrap.contact_draft ?? null);
+            if (address) {
+              setAddress(address);
+              setAddressFromDigilocker(true);
+            }
+            setDigilockerDone(true);
+            digilockerAddressAutoStartRef.current = false;
+            return;
+          }
+          const started = await startClientAddressProof(clientUserId);
+          const fetchUrl = started.proof_fetch_url?.trim() ?? "";
+          if (started.needs_digilocker && fetchUrl) {
+            window.location.assign(fetchUrl);
+            return;
+          }
+          const refreshed = await fetchClientKycBootstrap(clientUserId);
+          const address = mapBootstrapAddressDraft(refreshed.contact_draft ?? null);
+          if (address) {
+            setAddress(address);
+            setAddressFromDigilocker(true);
+            setDigilockerDone(true);
+          }
+          digilockerAddressAutoStartRef.current = false;
+          return;
+        }
+        if (!(requiresDigilocker ?? true)) {
+          digilockerAddressAutoStartRef.current = false;
+          return;
+        }
         if (bootstrap.external_kyc_status === "returned_success") {
           digilockerAddressAutoStartRef.current = false;
           return;

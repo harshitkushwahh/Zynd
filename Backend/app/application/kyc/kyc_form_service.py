@@ -1038,9 +1038,9 @@ async def submit_kyc_form(
                 "formStatus": "submitted",
             }
 
-    from app.application.kyc.journey_gate_service import requires_digilocker
+    from app.application.kyc.path_a_proof import address_step_partner_digilocker_pending
 
-    if requires_digilocker(journey):
+    if address_step_partner_digilocker_pending(journey):
         raise KycError(
             "Complete DigiLocker on the address step before submitting KYC.",
             "digilocker_required",
@@ -1284,6 +1284,9 @@ async def mark_proof_callback(db: AsyncSession, *, form_id: str, callback_status
         form = await fetch_kyc_form(form_id)
         _sync_journey_from_form(journey, form)
         record_kyc_form_partner_ref(journey, form)
+        from app.application.kyc.proof_address_prefill import apply_kra_update_proof_address
+
+        await apply_kra_update_proof_address(journey, form)
     else:
         journey.proof_details_status = "failed"
         journey.kyc_form_failure_reason = "Proof details fetch failed."
