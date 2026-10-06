@@ -1502,6 +1502,31 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     setSaving(true);
     setJourneySaveError(null);
     try {
+      if (bootstrap?.requires_address_step_proof_digilocker) {
+        const started = await startPoaKycForm();
+        if (started.needs_digilocker) {
+          await beginProofDigilockerRedirect();
+          return;
+        }
+        const payload = await fetchKycBootstrap();
+        applyBootstrap(payload, { preserveActiveStep: true });
+        const source =
+          payload.contact_draft && typeof payload.contact_draft === "object"
+            ? String((payload.contact_draft as { source?: string }).source ?? "")
+            : "";
+        if (source !== "proof_details") {
+          setJourneySaveError(copy.kyc.address.manualEntryBlocked);
+          return;
+        }
+        const draft = mapContactDraft(payload.contact_draft) ?? value;
+        await saveKycJourneyState({
+          contact_draft_json: payload.contact_draft ?? undefined,
+          last_completed_step: "address",
+        });
+        updateDraft({ address: draft });
+        goToNextStep();
+        return;
+      }
       await saveKycJourneyState({
         contact_draft_json: value as unknown as Record<string, unknown>,
         last_completed_step: "address",
@@ -2090,8 +2115,11 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               stateOptions={stateOptions}
               prefilledFromDigilocker={prefilledFromDigilocker}
               digilockerFieldsLocked={prefilledFromDigilocker}
-              digilockerPrefillIncomplete={digilockerPrefillIncomplete}
+              digilockerPrefillIncomplete={
+                Boolean(bootstrap?.requires_address_step_proof_digilocker) ? false : digilockerPrefillIncomplete
+              }
               digilockerBlocked={digilockerBlocked}
+              proofAddressOnly={Boolean(bootstrap?.requires_address_step_proof_digilocker)}
               digilockerFailureReason={digilockerAlertVisible ? digilockerAlertDescription : null}
               onRetryDigilocker={() => {
                 void handleDigilockerRetry();

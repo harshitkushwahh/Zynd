@@ -10,7 +10,7 @@ Zynd DIY KYC mirrors the Multiplus three-journey model: **Path A** (Finprim iden
 |------|------|----------------------------------|---------------------------|-------|
 | `repeat_kra` | KRA short submit | No | No | No |
 | `fresh_kyc` | New / unavailable KYC (J2) | Yes — identity document at **address** | **No** POA proof at Review | **Finprim** eSign |
-| `kra_update` | On-hold / re-KYC / modify (J3) | **No** identity document | POA `proof_details.fetch_url` once, at the **address** step | POA eSign |
+| `kra_update` | On-hold / re-KYC / modify (J3) | **No** identity document | POA `proof_details.fetch_url` once, at the **address** step. The address is read-only; the user cannot type it. | POA eSign |
 
 Bootstrap exposes `kycFlowMode`, `requiresAddressStepDigilocker` (alias `requiresPanStepDigilocker`), `requiresDigilocker` (Path A gate until `external_kyc_status === returned_success`), `poaKycFormId`, and `proofFetchUrl`.
 

@@ -35,6 +35,41 @@ def _address_block(raw: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _empty_address() -> dict[str, str]:
+    return {
+        "line1": "",
+        "line2": "",
+        "city": "",
+        "state": "",
+        "pincode": "",
+        "country": "India",
+    }
+
+
+def proof_contact_snapshot(form: dict[str, Any]) -> dict[str, Any] | None:
+    """Address for an on-hold or update journey. Comes only from proof details, never from typing."""
+    if not poa_form_proof_complete(form):
+        return None
+    mapped = contact_draft_from_kyc_form(form)
+    address = form.get("address") if isinstance(form.get("address"), dict) else {}
+    proof_type = str(address.get("proof_type") or "aadhaar").strip() or "aadhaar"
+    if mapped is not None:
+        mapped["source"] = "proof_details"
+        mapped["proofType"] = proof_type
+        permanent = mapped.get("permanent") if isinstance(mapped.get("permanent"), dict) else {}
+        mapped["correspondence"] = dict(permanent)
+        mapped["sameAsPermanent"] = True
+        return mapped
+    blank = _empty_address()
+    return {
+        "source": "proof_details",
+        "proofType": proof_type,
+        "sameAsPermanent": True,
+        "permanent": blank,
+        "correspondence": dict(blank),
+    }
+
+
 def contact_draft_from_kyc_form(form: dict[str, Any]) -> dict[str, Any] | None:
     """Map address returned by Cybrilla proof_details onto the journey contact draft."""
     candidates: list[dict[str, Any]] = []
@@ -62,21 +97,29 @@ def _contact_line1(journey: Any) -> str:
     return str(permanent.get("line1") or "").strip()
 
 
+def _draft_source(journey: Any) -> str:
+    contact = journey.contact_draft_json if isinstance(journey.contact_draft_json, dict) else {}
+    return str(contact.get("source") or "").strip()
+
+
 async def apply_kra_update_proof_address(journey: Any, form: dict[str, Any]) -> bool:
-    """Fill the address step from proof details. Does not replace an address the user already saved."""
+    """Replace any typed address with the DigiLocker proof snapshot."""
     if resolve_kyc_flow_mode(journey) != "kra_update":
         return False
-    if not poa_form_proof_complete(form):
-        return False
-    if _contact_line1(journey):
-        return False
-    draft = contact_draft_from_kyc_form(form)
+    draft = proof_contact_snapshot(form)
     if draft is None:
         return False
-    try:
-        draft = await enrich_digilocker_address_prefill(draft)
-    except Exception:
-        logger.exception("proof address pincode enrichment failed")
+    incoming_line = str((draft.get("permanent") or {}).get("line1") or "").strip()
+    if not incoming_line and _draft_source(journey) == "proof_details" and _contact_line1(journey):
+        return False
+    if incoming_line:
+        try:
+            enriched = await enrich_digilocker_address_prefill(draft)
+            enriched["source"] = "proof_details"
+            enriched["proofType"] = draft.get("proofType")
+            draft = enriched
+        except Exception:
+            logger.exception("proof address pincode enrichment failed")
     journey.contact_draft_json = draft
     father = str(form.get("father_name") or "").strip()
     if father:
