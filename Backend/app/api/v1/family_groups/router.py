@@ -46,6 +46,7 @@ from app.api.v1.goals.schemas import (
     UpdateFamilyGoalRequest,
 )
 from app.application.documents.document_image_validation import max_bytes_for_doc_type
+from app.application.documents.document_service import finalize_document_scan
 from app.application.documents.errors import DocumentError
 from app.application.family_groups.constants import MAX_FAMILY_GROUPS_PER_USER
 from app.application.family_groups.errors import FamilyGroupError
@@ -416,6 +417,16 @@ async def post_family_group_avatar(
         return _handle_family_group_error(
             FamilyGroupError(exc.code, exc.message, status_code=exc.status_code)
         )
+
+    avatar_document_id = payload.get("avatar_document_id")
+    if avatar_document_id:
+        await db.commit()
+        try:
+            await finalize_document_scan(db, UUID(str(avatar_document_id)))
+        except DocumentError as exc:
+            return _handle_family_group_error(
+                FamilyGroupError(exc.code, exc.message, status_code=exc.status_code)
+            )
     return _to_group_response(payload)
 
 

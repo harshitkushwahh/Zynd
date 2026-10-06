@@ -1,0 +1,74 @@
+# Production overrides for the Bluehost VPS (used with docker-compose.yml).
+services:
+  postgres:
+    ports: []
+
+  redis:
+    ports: []
+
+  mongo:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: zynd
+      MONGO_INITDB_ROOT_PASSWORD: zynd
+      MONGO_INITDB_DATABASE: zynd_analytics
+    ports: []
+    volumes:
+      - zynd_mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --username zynd --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  minio:
+    ports: []
+
+  clamav:
+    ports: []
+
+  document-scan-worker:
+    volumes:
+      - zynd_documents_data:/documents
+
+  api:
+    volumes:
+      - ./Backend/privateKey.pem:/app/privateKey.pem:ro
+      - ./Backend/publicKey.pem:/app/publicKey.pem:ro
+      - zynd_documents_data:/documents
+    build:
+      context: ./Backend
+    env_file:
+      - ./Backend/.env
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      clamav:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  zynd_mongo_data:
+  zynd_documents_data:

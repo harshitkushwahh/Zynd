@@ -294,6 +294,7 @@ async def upload_family_group_avatar(
             mime_type=mime_type,
             content=content,
             ip=ip,
+            defer_scan=True,
         )
     except DocumentError as exc:
         raise FamilyGroupError(exc.code, exc.message, status_code=exc.status_code) from exc

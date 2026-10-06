@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.documents.client_id_service import assign_client_id
 from app.application.documents.document_scan_service import process_document_scan
-from app.application.documents.document_service import upload_user_document
+from app.application.documents.document_service import (
+    finalize_document_scan,
+    upload_user_document,
+)
 from app.core.config import get_settings
 from app.infrastructure.persistence.models import (
     DocumentStatus,
@@ -130,6 +133,55 @@ async def test_async_enqueue_and_process_document_scan(
         select(UserDocument).where(UserDocument.id == document.id)
     )
     assert refreshed.scalar_one().status == DocumentStatus.active
+
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_deferred_upload_scan_runs_after_commit(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_redis: dict[str, str],
+) -> None:
+    _ = fake_redis
+    monkeypatch.setenv("DOCUMENTS_ROOT", str(tmp_path))
+    monkeypatch.setenv("DOCUMENT_SCAN_DISPATCH_MODE", "async")
+    get_settings.cache_clear()
+
+    user = User(
+        email=f"defer-{uuid4()}@example.com",
+        phone="9876543210",
+        role=UserRole.user,
+        status=UserStatus.active,
+    )
+    await assign_client_id(db_session, user)
+    db_session.add(user)
+    await db_session.flush()
+
+    uploaded = await upload_user_document(
+        db_session,
+        user=user,
+        doc_type=DocumentType.signature,
+        filename="signature.png",
+        mime_type="image/png",
+        content=_png_bytes(),
+        defer_scan=True,
+    )
+    assert uploaded["status"] == "pending_scan"
+    document_id = uploaded["id"]
+    await db_session.commit()
+
+    finalized = await finalize_document_scan(db_session, document_id)
+    assert finalized["status"] == "pending_scan"
+
+    job = await pop_document_scan_job(block_seconds=1, settings=get_settings())
+    assert job is not None
+    _, payload = job
+    assert payload["document_id"] == str(document_id)
+
+    status = await process_document_scan(db_session, document_id=document_id, settings=get_settings())
+    assert status == DocumentStatus.active
 
     get_settings.cache_clear()
 
