@@ -16,6 +16,7 @@ import { MfComplianceDetailsCard } from "@/features/invest/components/mf-complia
 import { MfFundDisclaimerNotice } from "@/features/invest/components/mf-fund-disclaimer-notice";
 import { MfFundFactsCard, shouldShowFundFacts } from "@/features/invest/components/mf-fund-facts-card";
 import { MfInvestmentDetailsCard } from "@/features/invest/components/mf-investment-details-card";
+import { resolveInvestmentDetailsForDisplay } from "@/features/invest/lib/mf-investment-details-display";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
 import { MF_PAGE_SECTION_CLASS, MF_FUND_DETAIL_RADIUS_CLASS, MF_INVEST_SIDEBAR_STICKY_CLASS, MF_INVEST_SIDEBAR_WIDTH_CLASS } from "@/features/invest/lib/mf-ui";
 import { mfFundHref, isFundUuid } from "@/features/invest/lib/mf-fund-url";
@@ -50,7 +51,7 @@ function resolveFundDetailError(message: string | null | undefined) {
 
 export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailViewProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, sessionRestoring } = useAuth();
   const [fund, setFund] = useState<InvestFundDetail | null>(null);
   const [navHistory, setNavHistory] = useState<InvestFundNavHistory | null>(null);
   const [calculator, setCalculator] = useState<InvestReturnCalculator | null>(null);
@@ -61,6 +62,10 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (sessionRestoring) {
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -93,7 +98,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     return () => {
       cancelled = true;
     };
-  }, [fundSlug, reloadKey]);
+  }, [fundSlug, reloadKey, sessionRestoring]);
 
   useEffect(() => {
     if (!fund?.slug) return;
@@ -132,6 +137,8 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     );
   }
 
+  const investmentDetails = fund ? resolveInvestmentDetailsForDisplay(fund) : null;
+
   const investCard = (
     <MfInvestPaymentCard
       sticky={false}
@@ -140,6 +147,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
       productId={fund.product_id}
       minLumpsumAmountInr={fund.min_lumpsum_amount_inr}
       minSipAmountInr={fund.min_sip_amount_inr}
+      sipOptions={investmentDetails?.sip_options ?? []}
       preview={false}
       canInvest={canInvest}
       sipEnabled={(config?.sip_enabled ?? false) && fund.sip_allowed === true}
@@ -175,9 +183,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
             navPoints={navHistory?.points}
           />
 
-          {fund.investment_details ? (
-            <MfInvestmentDetailsCard details={fund.investment_details} />
-          ) : null}
+          {investmentDetails ? <MfInvestmentDetailsCard details={investmentDetails} /> : null}
 
           {fund.compliance ? <MfComplianceDetailsCard compliance={fund.compliance} /> : null}
 

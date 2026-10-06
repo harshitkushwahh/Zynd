@@ -6,6 +6,7 @@ type ResolvePaymentTerminalLinesArgs = {
   abandonChecked: boolean;
   redirecting: boolean;
   returnedFromPayment: boolean;
+  gatewayPopupOpen?: boolean;
   nextAction?: string | null;
   fpState?: string | null;
   status?: string | null;
@@ -32,6 +33,11 @@ export function resolvePaymentTerminalLines(args: ResolvePaymentTerminalLinesArg
   if (args.redirecting) {
     lines.push(terminal.orderPayTerminalReview);
     lines.push(terminal.orderPayTerminalRedirect);
+    return lines;
+  }
+
+  if (args.gatewayPopupOpen) {
+    lines.push(terminal.orderPayTerminalReady);
     return lines;
   }
 

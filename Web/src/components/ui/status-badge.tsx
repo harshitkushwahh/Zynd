@@ -39,9 +39,12 @@ const variantConfig: Record<
 
 type StatusBadgeProps = {
   variant: StatusBadgeVariant;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   icon?: LucideIcon;
   showIcon?: boolean;
+  /** Icon-only pill (e.g. SIP avatar corner badge). Pass `aria-label` for accessibility. */
+  iconOnly?: boolean;
+  "aria-label"?: string;
   className?: string;
 };
 
@@ -50,10 +53,28 @@ export function StatusBadge({
   children,
   icon,
   showIcon = true,
+  iconOnly = false,
+  "aria-label": ariaLabel,
   className,
 }: StatusBadgeProps) {
   const config = variantConfig[variant];
   const Icon = icon ?? config.icon;
+
+  if (iconOnly) {
+    return (
+      <span
+        aria-label={ariaLabel ?? (typeof children === "string" ? children : undefined)}
+        className={cn(
+          "inline-flex size-6 shrink-0 items-center justify-center rounded-full border p-0 leading-none",
+          config.className,
+          variant === "warning" && "[&_svg]:translate-y-px",
+          className,
+        )}
+      >
+        <Icon className="size-3 shrink-0" strokeWidth={2.25} aria-hidden />
+      </span>
+    );
+  }
 
   return (
     <span
@@ -63,8 +84,8 @@ export function StatusBadge({
         className
       )}
     >
-      {showIcon ? <Icon className="size-3 shrink-0" strokeWidth={2.25} /> : null}
-      <span className="min-w-0 truncate">{children}</span>
+      {showIcon ? <Icon className="size-3 shrink-0" strokeWidth={2.25} aria-hidden /> : null}
+      {children ? <span className="shrink-0">{children}</span> : null}
     </span>
   );
 }

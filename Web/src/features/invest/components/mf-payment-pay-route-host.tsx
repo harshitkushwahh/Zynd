@@ -33,7 +33,7 @@ export function MfOrderPayRouteHost({ orderId }: MfOrderPayRouteHostProps) {
 
   useEffect(() => {
     const returnPath = getMfPaymentReturnPath() ?? "/dashboard/mutual-funds";
-    openOrderPayment(orderId, { captureReturnPath: false });
+    openOrderPayment(orderId, { captureReturnPath: false, resumeAfterGatewayReturn: true });
     router.replace(returnPath);
   }, [openOrderPayment, orderId, router]);
 

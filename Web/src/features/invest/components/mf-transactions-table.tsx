@@ -222,13 +222,14 @@ export function MfTransactionsTable({
                   <Table.Cell className={cn(BODY_CELL_CLASS, "text-compact text-muted-foreground")}>
                     {formatDate(order.created_at)}
                   </Table.Cell>
-                  <Table.Cell className={cn(BODY_CELL_CLASS, "overflow-visible")}>
+                  <Table.Cell className={cn(BODY_CELL_CLASS, "min-w-[7.5rem] overflow-visible")}>
                     <MfOrderStatusBadge
                       status={order.status}
                       fpState={order.fp_state}
                       fpPaymentStatus={order.fp_payment_status}
                       paymentCompleted={order.payment_completed}
                       orderType={order.order_type}
+                      className="max-w-none"
                     />
                   </Table.Cell>
                 </Table.Row>

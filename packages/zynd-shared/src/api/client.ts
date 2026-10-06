@@ -120,6 +120,10 @@ export async function apiRequest<T>(
 ): Promise<T> {
   beginBackendRequest();
   try {
+    if (!accessToken && shouldRefreshSessionOn401(path)) {
+      await refreshAccessToken();
+    }
+
     const headers = new Headers(options.headers);
     applyClientHeaders(headers);
     if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {

@@ -1,8 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { Lock, Plus, ShoppingCart } from "lucide-react";
+import {
+  BarChart3,
+  ChevronRight,
+  Lock,
+  Plus,
+  ShieldCheck,
+  ShoppingCart,
+  Target,
+} from "lucide-react";
 
+import "@/styles/zynd-recommend-funds-button.css";
+import "@/styles/zynd-recommend-funds-kyc-overlay.css";
+import { RecommendFundsFullPageShell } from "@/components/dashboard/recommend-funds-full-page-shell";
+import { RecommendFundsRiskAssessmentIllustration } from "@/components/dashboard/recommend-funds-risk-assessment-illustration";
 import { Button } from "@/components/ui/button";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { copy } from "@/shared/config/copy";
@@ -126,6 +138,70 @@ function RecommendFundsRiskLockedPreview() {
         </span>
       </div>
     </div>
+  );
+}
+
+type RecommendFundsRiskLockedFullPageProps = {
+  onClose: () => void;
+  closeLabel: string;
+};
+
+const RISK_FEATURE_ICONS = [Target, BarChart3, ShieldCheck] as const;
+
+export function RecommendFundsRiskLockedFullPage({
+  onClose,
+  closeLabel,
+}: RecommendFundsRiskLockedFullPageProps) {
+  const navbarCopy = copy.navbar.recommendFunds;
+  const pageCopy = navbarCopy.riskAssessmentPage;
+
+  return (
+    <RecommendFundsFullPageShell
+      onClose={onClose}
+      closeLabel={closeLabel}
+      contentClassName="rf-funds-page-content-hero rf-kyc-overlay-content-risk"
+    >
+      <RecommendFundsRiskAssessmentIllustration />
+
+      <div className="rf-kyc-overlay-hero rf-risk-overlay-hero">
+        <span className="rf-kyc-overlay-badge">
+          <BarChart3 className="size-3.5" strokeWidth={2.25} aria-hidden />
+          {pageCopy.badge}
+        </span>
+        <h1 className="rf-kyc-overlay-title">{pageCopy.title}</h1>
+        <p className="rf-kyc-overlay-description">{pageCopy.description}</p>
+
+        <div className="rf-risk-overlay-features">
+          {pageCopy.features.map((feature, index) => {
+            const Icon = RISK_FEATURE_ICONS[index] ?? Target;
+            return (
+              <div key={feature.label} className="rf-risk-overlay-feature">
+                <span className="rf-risk-overlay-feature-icon">
+                  <Icon className="size-3.5" strokeWidth={2.25} aria-hidden />
+                </span>
+                <span className="rf-risk-overlay-feature-label">{feature.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rf-risk-overlay-actions">
+          <Button
+            type="button"
+            size="auth"
+            className="rf-kyc-overlay-primary w-full max-w-none"
+            nativeButton={false}
+            render={<Link href={RISK_PROFILE_ASSESSMENT_HREF} className="w-full" />}
+          >
+            {pageCopy.primaryAction}
+            <ChevronRight className="size-4" strokeWidth={2.25} aria-hidden />
+          </Button>
+          <Button type="button" variant="ghost" className="rf-risk-overlay-later" onClick={onClose}>
+            {pageCopy.laterLabel}
+          </Button>
+        </div>
+      </div>
+    </RecommendFundsFullPageShell>
   );
 }
 

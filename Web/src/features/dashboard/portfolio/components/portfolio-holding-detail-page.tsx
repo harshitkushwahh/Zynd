@@ -235,7 +235,9 @@ function HoldingSipSummaryCard({ holding }: { holding: PortfolioHoldingDetail })
 
   if (!pool) return null;
 
-  const { monthly, nextDate } = formatHoldingSipPoolSummary(pool);
+  const { monthly, daily, monthlyEquivalent, nextDate } = formatHoldingSipPoolSummary(pool);
+  const hasDaily = pool.dailySipInr > 0;
+  const hasMonthly = pool.monthlySipInr > 0;
   const planCountLabel =
     pool.activePlanCount > 1
       ? portfolioCopy.holdingSipPlanCount.replace("{count}", String(pool.activePlanCount))
@@ -261,9 +263,26 @@ function HoldingSipSummaryCard({ holding }: { holding: PortfolioHoldingDetail })
           </div>
         </div>
         <div className="text-right">
-          <p className="text-compact font-semibold tabular-nums text-foreground">
-            {portfolioCopy.holdingSipMonthlyTotal.replace("{amount}", monthly)}
-          </p>
+          {hasMonthly ? (
+            <p className="text-compact font-semibold tabular-nums text-foreground">
+              {portfolioCopy.holdingSipMonthlyTotal.replace("{amount}", monthly)}
+            </p>
+          ) : null}
+          {hasDaily ? (
+            <p
+              className={cn(
+                "text-compact font-semibold tabular-nums text-foreground",
+                hasMonthly && "mt-1",
+              )}
+            >
+              {portfolioCopy.holdingSipDailyTotal.replace("{amount}", daily)}
+            </p>
+          ) : null}
+          {!hasMonthly && !hasDaily ? (
+            <p className="text-compact font-semibold tabular-nums text-foreground">
+              {portfolioCopy.holdingSipMonthlyTotal.replace("{amount}", monthlyEquivalent)}
+            </p>
+          ) : null}
           {nextDate ? (
             <p className="mt-1 text-caption text-muted-foreground">
               {portfolioCopy.holdingSipNextDebit.replace("{date}", nextDate)}

@@ -111,7 +111,12 @@ RECOVERABLE_SUBMIT_FAILURE_CODES = frozenset(
 )
 
 
-from app.application.mf.investment_constraints import fund_allows_sip
+from app.application.mf.investment_constraints import (
+    fund_allows_sip,
+    normalize_sip_frequency,
+    resolve_min_installments_for_frequency,
+    validate_sip_amount_for_frequency,
+)
 from app.application.mf.mf_scheme_resolution import (
     is_scheme_unavailable_for_transaction,
     resolve_mf_purchase_scheme,
@@ -273,13 +278,49 @@ async def _record_plan_event(
 
 
 def _validate_sip_frequency(frequency: str) -> str:
-    normalized = frequency.strip().lower()
-    if normalized not in ONDEC_SUPPORTED_FREQUENCIES:
+    try:
+        return normalize_sip_frequency(frequency)
+    except MfOrderError as exc:
+        if exc.code == "invalid_frequency":
+            raise MfOrderError(
+                code="invalid_frequency",
+                message="Only monthly and daily SIP frequencies are supported on ONDC",
+            ) from exc
+        raise
+
+
+def _validate_installments_against_fund(fund: MutualFund, frequency: str, installments: int) -> None:
+    min_installments = resolve_min_installments_for_frequency(fund, frequency)
+    if min_installments is not None and installments < min_installments:
         raise MfOrderError(
-            code="invalid_frequency",
-            message="Only monthly and daily SIP frequencies are supported on ONDC",
+            code="below_minimum_installments",
+            message=f"Minimum number of installments is {min_installments}",
         )
-    return normalized
+
+
+def validate_sip_cart_line(
+    fund: MutualFund,
+    *,
+    amount_inr: Decimal,
+    frequency: str,
+    installment_day: int | None,
+    number_of_installments: int | None,
+) -> tuple[str, int | None, int]:
+    """Shared validation for SIP cart upsert and plan create."""
+    normalized_frequency = _validate_sip_frequency(frequency)
+    resolved_day = _validate_installment_day(
+        frequency=normalized_frequency,
+        installment_day=installment_day,
+    )
+    installments = _validate_number_of_installments(number_of_installments)
+    _validate_fund_sip_eligible(fund)
+    validate_sip_amount_for_frequency(
+        fund,
+        frequency=normalized_frequency,
+        amount_inr=amount_inr,
+    )
+    _validate_installments_against_fund(fund, normalized_frequency, installments)
+    return normalized_frequency, resolved_day, installments
 
 
 def _validate_installment_day(*, frequency: str, installment_day: int | None) -> int | None:
@@ -381,12 +422,12 @@ async def validate_sip_plan_inputs(
     _product, fund, _amc = await _load_order_context(session, product_id=product_id)
     await session.refresh(fund)
     _validate_fund_sip_eligible(fund)
-    min_amount = fund.min_sip_amount
-    if min_amount is not None and amount_inr < min_amount:
-        raise MfOrderError(
-            code="below_minimum",
-            message=f"Minimum SIP amount is INR {min_amount}",
-        )
+    min_amount = validate_sip_amount_for_frequency(
+        fund,
+        frequency=normalized_frequency,
+        amount_inr=amount_inr,
+    )
+    _validate_installments_against_fund(fund, normalized_frequency, installments)
 
     return {
         "valid": True,
@@ -429,12 +470,12 @@ async def create_sip_plan(
     product, fund, _amc = await _load_order_context(session, product_id=product_id)
     await session.refresh(fund)
     _validate_fund_sip_eligible(fund)
-    min_amount = fund.min_sip_amount
-    if min_amount is not None and amount_inr < min_amount:
-        raise MfOrderError(
-            code="below_minimum",
-            message=f"Minimum SIP amount is INR {min_amount}",
-        )
+    validate_sip_amount_for_frequency(
+        fund,
+        frequency=normalized_frequency,
+        amount_inr=amount_inr,
+    )
+    _validate_installments_against_fund(fund, normalized_frequency, installments)
 
     profile = await ensure_pending_investor_profile_for_payment(
         session,

@@ -6,14 +6,11 @@ import {
   BarChart3,
   ChevronRight,
   Coins,
-  IdCard,
   Info,
-  Landmark,
   Leaf,
   PieChart,
   ShieldCheck,
   Sparkles,
-  UserRound,
   X,
   Zap,
   type LucideIcon,
@@ -21,38 +18,17 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import "@/styles/zynd-recommend-funds-kyc-overlay.css";
+import { RecommendFundsKycIllustration } from "@/components/dashboard/recommend-funds-kyc-illustration";
+import { RecommendFundsPageGlitter } from "@/components/dashboard/recommend-funds-page-glitter";
 import { RECOMMEND_FUNDS_PAGE_GRAINIENT_PROPS } from "@/components/dashboard/recommend-funds-theme";
 import { Button } from "@/components/ui/button";
 import { Grainient } from "@/components/ui/grainient";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-const GLITTER_COUNT = 44;
 const OVERLAY_EASE = [0.16, 1, 0.3, 1] as const;
 const OPEN_DURATION_S = 0.5;
 const CLOSE_DURATION_S = 0.34;
-
-type GlitterSpec = {
-  id: number;
-  left: number;
-  size: number;
-  delay: number;
-  duration: number;
-  drift: number;
-  tone: number;
-};
-
-function buildGlitter(count: number): GlitterSpec[] {
-  return Array.from({ length: count }, (_, id) => ({
-    id,
-    left: Math.random() * 100,
-    size: 2 + Math.random() * 5,
-    delay: -Math.random() * 16,
-    duration: 11 + Math.random() * 9,
-    drift: (Math.random() - 0.5) * 110,
-    tone: Math.floor(Math.random() * 3),
-  }));
-}
 
 type PreviewFund = {
   id: string;
@@ -129,29 +105,6 @@ function useIsClient() {
   );
 }
 
-function GlitterField({ specs }: { specs: GlitterSpec[] }) {
-  return (
-    <div className="rf-kyc-overlay-glitter" aria-hidden>
-      {specs.map((spec) => (
-        <span
-          key={spec.id}
-          className={cn("rf-kyc-overlay-glitter-dot", `rf-kyc-overlay-glitter-dot-${spec.tone}`)}
-          style={
-            {
-              left: `${spec.left}%`,
-              width: `${spec.size}px`,
-              height: `${spec.size}px`,
-              animationDelay: `${spec.delay}s, ${spec.delay / 2}s`,
-              animationDuration: `${spec.duration}s, ${1.8 + (spec.id % 5) * 0.35}s`,
-              "--rf-glitter-drift": `${spec.drift}px`,
-            } as React.CSSProperties
-          }
-        />
-      ))}
-    </div>
-  );
-}
-
 function Sparkline({ points, id }: { points: number[]; id: string }) {
   const width = 72;
   const height = 28;
@@ -211,54 +164,39 @@ function PreviewFundRow({ fund, index }: { fund: PreviewFund; index: number }) {
   );
 }
 
-function KycIllustration() {
-  return (
-    <div className="rf-kyc-illustration" aria-hidden>
-      <span className="rf-kyc-illustration-glow" />
-      <span className="rf-kyc-illustration-orbit" />
-
-      <div className="rf-kyc-illustration-card">
-        <span className="rf-kyc-illustration-card-tab" />
-        <span className="rf-kyc-illustration-card-avatar">
-          <UserRound className="size-6" strokeWidth={2} />
-        </span>
-        <span className="rf-kyc-illustration-card-lines">
-          <span className="rf-kyc-illustration-card-line rf-kyc-illustration-card-line-wide" />
-          <span className="rf-kyc-illustration-card-line" />
-          <span className="rf-kyc-illustration-card-line rf-kyc-illustration-card-line-short" />
-        </span>
-      </div>
-
-      <span className="rf-kyc-illustration-shield">
-        <ShieldCheck className="size-7" strokeWidth={2.25} />
-      </span>
-
-      <span className="rf-kyc-illustration-badge rf-kyc-illustration-badge-pan">
-        <span className="rf-kyc-illustration-badge-label">PAN</span>
-        <IdCard className="size-4" strokeWidth={2} />
-      </span>
-      <span className="rf-kyc-illustration-badge rf-kyc-illustration-badge-bank">
-        <Landmark className="size-5" strokeWidth={2} />
-      </span>
-      <span className="rf-kyc-illustration-badge rf-kyc-illustration-badge-user">
-        <UserRound className="size-4" strokeWidth={2} />
-      </span>
-    </div>
-  );
-}
-
 type OverlayPageProps = {
   onClose: () => void;
   onCompleteKyc?: () => void;
 };
 
-function RecommendFundsKycUnlockPage({ onClose, onCompleteKyc }: OverlayPageProps) {
+export function RecommendFundsKycPreviewFundsPanel() {
+  const overlayCopy = copy.navbar.recommendFunds.kycOverlay;
+
+  return (
+    <div className="rf-kyc-overlay-funds">
+      <div className="rf-kyc-overlay-funds-head">
+        <p className="rf-kyc-overlay-funds-title">{overlayCopy.topFundsTitle}</p>
+        <p className="rf-kyc-overlay-funds-subtitle">{overlayCopy.topFundsSubtitle}</p>
+      </div>
+      <div className="rf-kyc-overlay-funds-list">
+        {PREVIEW_FUNDS.map((fund, index) => (
+          <PreviewFundRow key={fund.id} fund={fund} index={index} />
+        ))}
+      </div>
+      <p className="rf-kyc-overlay-funds-note">
+        <Info className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+        <span>{overlayCopy.topFundsNote}</span>
+      </p>
+    </div>
+  );
+}
+
+export function RecommendFundsKycRequiredPage({ onClose, onCompleteKyc }: OverlayPageProps) {
   const navbarCopy = copy.navbar.recommendFunds;
   const overlayCopy = navbarCopy.kycOverlay;
   const reduceMotion = useReducedMotion();
   const titleId = useId();
   const descriptionId = useId();
-  const [glitter] = useState(() => buildGlitter(GLITTER_COUNT));
   const [grainientReady, setGrainientReady] = useState(false);
 
   const handleGrainientReady = useCallback(() => {
@@ -294,7 +232,7 @@ function RecommendFundsKycUnlockPage({ onClose, onCompleteKyc }: OverlayPageProp
     ? { duration: 0 }
     : { duration: CLOSE_DURATION_S * 0.8, ease: [0.4, 0, 1, 1] as const };
 
-  return (
+  const page = (
     <motion.div
       className="rf-kyc-overlay"
       role="dialog"
@@ -315,7 +253,7 @@ function RecommendFundsKycUnlockPage({ onClose, onCompleteKyc }: OverlayPageProp
       <div className="rf-kyc-overlay-blob rf-kyc-overlay-blob-a" aria-hidden />
       <div className="rf-kyc-overlay-blob rf-kyc-overlay-blob-b" aria-hidden />
       <div className="rf-kyc-overlay-blob rf-kyc-overlay-blob-c" aria-hidden />
-      <GlitterField specs={glitter} />
+      <RecommendFundsPageGlitter />
 
       <button
         type="button"
@@ -337,7 +275,7 @@ function RecommendFundsKycUnlockPage({ onClose, onCompleteKyc }: OverlayPageProp
             <Sparkles className="size-3.5" strokeWidth={2.25} aria-hidden />
             {navbarCopy.label}
           </span>
-          <KycIllustration />
+          <RecommendFundsKycIllustration />
           <h2 id={titleId} className="rf-kyc-overlay-title">
             {navbarCopy.kycRequiredTitle}
           </h2>
@@ -362,24 +300,15 @@ function RecommendFundsKycUnlockPage({ onClose, onCompleteKyc }: OverlayPageProp
           </div>
         </div>
 
-        <div className="rf-kyc-overlay-funds">
-          <div className="rf-kyc-overlay-funds-head">
-            <p className="rf-kyc-overlay-funds-title">{overlayCopy.topFundsTitle}</p>
-            <p className="rf-kyc-overlay-funds-subtitle">{overlayCopy.topFundsSubtitle}</p>
-          </div>
-          <div className="rf-kyc-overlay-funds-list">
-            {PREVIEW_FUNDS.map((fund, index) => (
-              <PreviewFundRow key={fund.id} fund={fund} index={index} />
-            ))}
-          </div>
-          <p className="rf-kyc-overlay-funds-note">
-            <Info className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
-            <span>{overlayCopy.topFundsNote}</span>
-          </p>
-        </div>
+        <RecommendFundsKycPreviewFundsPanel />
       </motion.div>
     </motion.div>
   );
+
+  const isClient = useIsClient();
+  if (!isClient) return null;
+
+  return createPortal(page, document.body);
 }
 
 type RecommendFundsKycUnlockOverlayProps = OverlayPageProps & {
@@ -397,7 +326,7 @@ export function RecommendFundsKycUnlockOverlay({
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <RecommendFundsKycUnlockPage
+        <RecommendFundsKycRequiredPage
           key="rf-kyc-unlock-page"
           onClose={onClose}
           onCompleteKyc={onCompleteKyc}

@@ -34,10 +34,17 @@ import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui"
 import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
 import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
+import { MfSipFrequencyChips } from "@/features/invest/components/mf-sip-frequency-chips";
 import { MfSipInstallmentsInput } from "@/features/invest/components/mf-sip-installments-input";
 import {
   SIP_ORDER_DEFAULT_INSTALLMENTS,
 } from "@/features/invest/lib/mf-sip-calculator";
+import {
+  defaultInstallmentsForFrequency,
+  isDailySipFrequency,
+  normalizeSipFrequency,
+  type SipFrequency,
+} from "@/features/invest/lib/mf-sip-frequency";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
 import { useAddBankAccountAction } from "@/features/invest/hooks/use-add-bank-account-action";
@@ -128,6 +135,7 @@ function CartTabToggle({
 function CartItemRow({
   item,
   tab,
+  cartSipFrequency,
   removingProductId,
   updatingProductId,
   checkoutDisabled,
@@ -136,6 +144,7 @@ function CartItemRow({
 }: {
   item: MfCartItem;
   tab: CartTab;
+  cartSipFrequency: SipFrequency;
   removingProductId: string | null;
   updatingProductId: string | null;
   checkoutDisabled: boolean;
@@ -175,15 +184,23 @@ function CartItemRow({
           </span>
         </div>
         {tab === "sip" ? (
-          <div className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:max-w-md">
-            <MfSipDayPicker
-              compact
-              compactDisplay="labeled"
-              maxDay={SIP_MAX_INSTALLMENT_DAY}
-              value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
-              disabled={rowDisabled}
-              onChange={(day) => onUpdateSipSettings(item, { installment_day: day })}
-            />
+          <div
+            className={
+              isDailySipFrequency(cartSipFrequency)
+                ? "mt-3 grid max-w-xs grid-cols-1 gap-2"
+                : "mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:max-w-md"
+            }
+          >
+            {!isDailySipFrequency(cartSipFrequency) ? (
+              <MfSipDayPicker
+                compact
+                compactDisplay="labeled"
+                maxDay={SIP_MAX_INSTALLMENT_DAY}
+                value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
+                disabled={rowDisabled}
+                onChange={(day) => onUpdateSipSettings(item, { installment_day: day })}
+              />
+            ) : null}
             <MfSipInstallmentsInput
               compact
               compactDisplay="labeled"
@@ -218,6 +235,7 @@ function CartItemRow({
 function CartItemsList({
   items,
   tab,
+  cartSipFrequency,
   removingProductId,
   updatingProductId,
   checkoutDisabled,
@@ -226,6 +244,7 @@ function CartItemsList({
 }: {
   items: MfCartItem[];
   tab: CartTab;
+  cartSipFrequency: SipFrequency;
   removingProductId: string | null;
   updatingProductId: string | null;
   checkoutDisabled: boolean;
@@ -242,6 +261,7 @@ function CartItemsList({
           key={`${item.product_id}-${item.investment_type}`}
           item={item}
           tab={tab}
+          cartSipFrequency={cartSipFrequency}
           removingProductId={removingProductId}
           updatingProductId={updatingProductId}
           checkoutDisabled={checkoutDisabled}
@@ -448,6 +468,7 @@ export function MfCartView() {
   const [error, setError] = useState<string | null>(null);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
   const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
+  const [updatingCartFrequency, setUpdatingCartFrequency] = useState(false);
   const [clearingTab, setClearingTab] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
@@ -493,6 +514,32 @@ export function MfCartView() {
   const lumpsumCount = cart?.lumpsum_item_count ?? 0;
   const sipCount = cart?.sip_item_count ?? 0;
   const activeCount = tab === "lumpsum" ? lumpsumCount : sipCount;
+  const cartSipFrequency = normalizeSipFrequency(sipItems[0]?.frequency);
+
+  async function handleCartSipFrequencyChange(next: SipFrequency) {
+    if (next === cartSipFrequency || sipItems.length === 0) return;
+    setUpdatingCartFrequency(true);
+    setError(null);
+    try {
+      let nextCart = cart;
+      for (const item of sipItems) {
+        nextCart = await upsertMfCartItem({
+          product_id: item.product_id,
+          amount_inr: item.amount_inr,
+          investment_type: "sip",
+          frequency: next,
+          installment_day: isDailySipFrequency(next) ? undefined : item.installment_day ?? 20,
+          number_of_installments:
+            item.number_of_installments ?? defaultInstallmentsForFrequency(next),
+        });
+      }
+      if (nextCart) syncMfCartQueryData(queryClient, nextCart);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : copy.mutualFunds.cartUpdateFailed);
+    } finally {
+      setUpdatingCartFrequency(false);
+    }
+  }
 
   async function handleUpdateSipSettings(
     item: MfCartItem,
@@ -500,16 +547,19 @@ export function MfCartView() {
   ) {
     setUpdatingProductId(item.product_id);
     try {
+      const frequency = normalizeSipFrequency(item.frequency);
       const next = await upsertMfCartItem({
         product_id: item.product_id,
         amount_inr: item.amount_inr,
         investment_type: "sip",
-        installment_day: updates.installment_day ?? item.installment_day ?? 20,
-        frequency: "monthly",
+        installment_day: isDailySipFrequency(frequency)
+          ? undefined
+          : updates.installment_day ?? item.installment_day ?? 20,
+        frequency,
         number_of_installments:
           updates.number_of_installments ??
           item.number_of_installments ??
-          SIP_ORDER_DEFAULT_INSTALLMENTS,
+          defaultInstallmentsForFrequency(frequency),
       });
       syncMfCartQueryData(queryClient, next);
       setError(null);
@@ -592,7 +642,7 @@ export function MfCartView() {
     removingProductId !== null ||
     updatingProductId !== null ||
     checkingOut;
-  const cartItemsDisabled = checkingOut || clearingTab;
+  const cartItemsDisabled = checkingOut || clearingTab || updatingCartFrequency;
 
   if (isLoading) {
     return (
@@ -652,6 +702,7 @@ export function MfCartView() {
               <CartItemsList
                 items={lumpsumItems}
                 tab="lumpsum"
+                cartSipFrequency={cartSipFrequency}
                 removingProductId={removingProductId}
                 updatingProductId={updatingProductId}
                 checkoutDisabled={cartItemsDisabled}
@@ -664,15 +715,25 @@ export function MfCartView() {
             {sipCount === 0 ? (
               <CartEmptyState tab="sip" />
             ) : (
-              <CartItemsList
-                items={sipItems}
-                tab="sip"
-                removingProductId={removingProductId}
-                updatingProductId={updatingProductId}
-                checkoutDisabled={cartItemsDisabled}
-                onRemove={handleRemove}
-                onUpdateSipSettings={handleUpdateSipSettings}
-              />
+              <div className="space-y-4">
+                <MfSipFrequencyChips
+                  value={cartSipFrequency}
+                  onChange={(next) => void handleCartSipFrequencyChange(next)}
+                  monthlyAllowed
+                  dailyAllowed
+                  disabled={cartItemsDisabled}
+                />
+                <CartItemsList
+                  items={sipItems}
+                  tab="sip"
+                  cartSipFrequency={cartSipFrequency}
+                  removingProductId={removingProductId}
+                  updatingProductId={updatingProductId}
+                  checkoutDisabled={cartItemsDisabled}
+                  onRemove={handleRemove}
+                  onUpdateSipSettings={handleUpdateSipSettings}
+                />
+              </div>
             )}
           </CartTabPanel>
         </div>

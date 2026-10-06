@@ -98,10 +98,10 @@ function SipAmcCircle({ plan }: { plan: MfSipPlan }) {
 
       <StatusBadge
         variant={statusVariant}
-        className="pointer-events-none absolute -right-1 -bottom-1 z-20 size-5 justify-center rounded-full px-0 shadow-zynd-low ring-2 ring-card [&_svg]:size-2.5!"
-      >
-        <span className="sr-only">{plan.status}</span>
-      </StatusBadge>
+        iconOnly
+        aria-label={plan.status}
+        className="pointer-events-none absolute -right-1 -bottom-1 z-20 size-5 shadow-zynd-low ring-2 ring-card [&_svg]:size-2.5!"
+      />
     </div>
   );
 }
@@ -126,10 +126,10 @@ function LockedSipPreviewCircle({
       </div>
       <StatusBadge
         variant="success"
-        className="pointer-events-none absolute -right-1 -bottom-1 z-20 size-5 justify-center rounded-full px-0 shadow-zynd-low ring-2 ring-card [&_svg]:size-2.5!"
-      >
-        <span className="sr-only">{formatInr(amountInr)}</span>
-      </StatusBadge>
+        iconOnly
+        aria-label={formatInr(amountInr)}
+        className="pointer-events-none absolute -right-1 -bottom-1 z-20 size-5 shadow-zynd-low ring-2 ring-card [&_svg]:size-2.5!"
+      />
     </div>
   );
 }

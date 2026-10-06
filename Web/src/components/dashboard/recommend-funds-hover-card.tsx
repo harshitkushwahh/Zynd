@@ -475,27 +475,15 @@ function RecommendFundsSuccessBody({
   );
 }
 
-export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProps) {
-  const navbarCopy = copy.navbar.recommendFunds;
-  const reduceMotion = useReducedMotion();
-  const { user, loading: authLoading } = useAuth();
-  const kyc = useKycOptional();
-  const { addFundToCart, addFundsToCart, adding } = useMfScreenerCartDrop();
-  const [isPresent, setIsPresent] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [grainientPrimed, setGrainientPrimed] = useState(false);
-  const [grainientReady, setGrainientReady] = useState(false);
-  const [kycOverlayOpen, setKycOverlayOpen] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const expandFrameRef = useRef<number | null>(null);
-  const isExpandedRef = useRef(isExpanded);
-  isExpandedRef.current = isExpanded;
+export type RecommendFundsInteractiveState = ReturnType<typeof useRecommendFundsInteractiveState>;
 
-  // Fetch as soon as the user is known so a KYC-locked account can open the
-  // overlay directly instead of flashing the hover popover first.
+export function useRecommendFundsInteractiveState(active: boolean) {
+  const navbarCopy = copy.navbar.recommendFunds;
+  const { user, loading: authLoading } = useAuth();
+  const { addFundToCart, addFundsToCart, adding } = useMfScreenerCartDrop();
+
   const queryEnabled = !authLoading && Boolean(user);
-  const { data, isLoading, isError, refetch, isFetching } = useFundsForYouQuery(queryEnabled);
-  const kycLocked = Boolean(data && !data.eligible && data.block_reason === "kyc_required");
+  const { data, isPending, isError, refetch } = useFundsForYouQuery(queryEnabled);
   const cartEnabled = Boolean(user?.fund_movement_eligible);
   const { data: cart } = useMfCartQuery(cartEnabled);
   const cartLoaded = cartEnabled && cart !== undefined;
@@ -519,7 +507,7 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
   );
 
   const contentState = useMemo(() => {
-    if (authLoading || (queryEnabled && isPresent && (isLoading || (isFetching && !data)))) {
+    if (authLoading || (queryEnabled && active && isPending)) {
       return "loading" as const;
     }
 
@@ -536,9 +524,143 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
     }
 
     return "success" as const;
-  }, [authLoading, data, isError, isFetching, isLoading, isPresent, queryEnabled, user]);
+  }, [active, authLoading, data, isError, isPending, queryEnabled, user]);
 
   const blockCopy = data?.block_reason ? resolveBlockStateCopy(data.block_reason) : null;
+
+  const handleAddFund = useCallback(
+    (fund: FundsForYouFund) => {
+      void addFundToCart(mapFundsForYouCartFund(fund));
+    },
+    [addFundToCart],
+  );
+
+  const handleAddAllToCart = useCallback(() => {
+    if (!data?.funds.length || !cartEnabled || adding) return;
+
+    if (cart) {
+      const missingFunds = filterNewLumpsumCartFunds(cart, data.funds);
+      if (missingFunds.length === 0) {
+        toast.info(navbarCopy.allFundsInCart);
+        return;
+      }
+      void addFundsToCart(missingFunds.map(mapFundsForYouCartFund));
+      return;
+    }
+
+    void addFundsToCart(data.funds.map(mapFundsForYouCartFund));
+  }, [addFundsToCart, adding, cart, cartEnabled, data?.funds, navbarCopy.allFundsInCart]);
+
+  return {
+    navbarCopy,
+    data,
+    contentState,
+    blockCopy,
+    allocation,
+    cartEnabled,
+    adding,
+    inCartProductIds,
+    cartLoaded,
+    fundsMissingFromCart,
+    allFundsInCart,
+    handleAddFund,
+    handleAddAllToCart,
+    refetch,
+  };
+}
+
+export function RecommendFundsInteractivePanel({
+  navbarCopy,
+  data,
+  contentState,
+  blockCopy,
+  allocation,
+  cartEnabled,
+  adding,
+  inCartProductIds,
+  cartLoaded,
+  handleAddFund,
+  refetch,
+}: RecommendFundsInteractiveState) {
+  return (
+    <div className="relative z-10 flex flex-col">
+      {contentState === "loading" ? <RecommendFundsLoadingBody /> : null}
+
+      {contentState === "sign_in" ? (
+        <RecommendFundsBlockBody
+          title={navbarCopy.signInTitle}
+          description={navbarCopy.signInDescription}
+        />
+      ) : null}
+
+      {contentState === "error" ? (
+        <RecommendFundsBlockBody
+          title={navbarCopy.errorTitle}
+          description={navbarCopy.errorDescription}
+          actionLabel={navbarCopy.errorRetry}
+          onAction={() => {
+            void refetch();
+          }}
+        />
+      ) : null}
+
+      {contentState === "blocked" &&
+      blockCopy &&
+      data?.block_reason !== "risk_profile_required" &&
+      data?.block_reason !== "kyc_required" ? (
+        <RecommendFundsBlockBody
+          title={blockCopy.title}
+          description={blockCopy.description}
+          actionLabel={blockCopy.actionLabel}
+        />
+      ) : null}
+
+      {contentState === "success" && data ? (
+        <RecommendFundsSuccessBody
+          funds={data.funds}
+          allocation={allocation}
+          portfolioStory={data.portfolio_story}
+          cartEnabled={cartEnabled}
+          adding={adding}
+          inCartProductIds={inCartProductIds}
+          cartLoaded={cartLoaded}
+          onAddFund={handleAddFund}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProps) {
+  const navbarCopy = copy.navbar.recommendFunds;
+  const reduceMotion = useReducedMotion();
+  const kyc = useKycOptional();
+  const [isPresent, setIsPresent] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [grainientPrimed, setGrainientPrimed] = useState(false);
+  const [grainientReady, setGrainientReady] = useState(false);
+  const [kycOverlayOpen, setKycOverlayOpen] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expandFrameRef = useRef<number | null>(null);
+  const isExpandedRef = useRef(isExpanded);
+  isExpandedRef.current = isExpanded;
+
+  const panelState = useRecommendFundsInteractiveState(isPresent);
+  const {
+    data,
+    contentState,
+    blockCopy,
+    allocation,
+    refetch,
+    cartEnabled,
+    adding,
+    inCartProductIds,
+    cartLoaded,
+    fundsMissingFromCart,
+    allFundsInCart,
+    handleAddAllToCart,
+  } = panelState;
+  const kycLocked = Boolean(data && !data.eligible && data.block_reason === "kyc_required");
 
   const openKycOverlay = useCallback(() => {
     setKycOverlayOpen(true);
@@ -628,29 +750,6 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
       setIsPresent(false);
     }
   }, []);
-
-  const handleAddFund = useCallback(
-    (fund: FundsForYouFund) => {
-      void addFundToCart(mapFundsForYouCartFund(fund));
-    },
-    [addFundToCart],
-  );
-
-  const handleAddAllToCart = useCallback(() => {
-    if (!data?.funds.length || !cartEnabled || adding) return;
-
-    if (cart) {
-      const missingFunds = filterNewLumpsumCartFunds(cart, data.funds);
-      if (missingFunds.length === 0) {
-        toast.info(navbarCopy.allFundsInCart);
-        return;
-      }
-      void addFundsToCart(missingFunds.map(mapFundsForYouCartFund));
-      return;
-    }
-
-    void addFundsToCart(data.funds.map(mapFundsForYouCartFund));
-  }, [addFundsToCart, adding, cart, cartEnabled, data?.funds, navbarCopy.allFundsInCart]);
 
   useEffect(() => {
     return () => {
@@ -764,58 +863,21 @@ export function RecommendFundsHoverCard({ trigger }: RecommendFundsHoverCardProp
                 ) : null}
 
                 <div className="relative z-10 flex flex-col">
-                  {contentState === "loading" ? <RecommendFundsLoadingBody /> : null}
-
-                  {contentState === "sign_in" ? (
-                    <RecommendFundsBlockBody
-                      title={navbarCopy.signInTitle}
-                      description={navbarCopy.signInDescription}
-                    />
-                  ) : null}
-
-                  {contentState === "error" ? (
-                    <RecommendFundsBlockBody
-                      title={navbarCopy.errorTitle}
-                      description={navbarCopy.errorDescription}
-                      actionLabel={navbarCopy.errorRetry}
-                      onAction={() => {
-                        void refetch();
-                      }}
-                    />
-                  ) : null}
-
                   {contentState === "blocked" && data?.block_reason === "risk_profile_required" ? (
                     <RecommendFundsRiskLockedBody />
-                  ) : null}
-
-                  {contentState === "blocked" && blockCopy && data?.block_reason !== "risk_profile_required" ? (
+                  ) : contentState === "blocked" && data?.block_reason === "kyc_required" && blockCopy ? (
                     <RecommendFundsBlockBody
                       title={blockCopy.title}
                       description={blockCopy.description}
                       actionLabel={blockCopy.actionLabel}
-                      onAction={
-                        data?.block_reason === "kyc_required"
-                          ? () => {
-                              beginClose();
-                              openKycOverlay();
-                            }
-                          : undefined
-                      }
+                      onAction={() => {
+                        beginClose();
+                        openKycOverlay();
+                      }}
                     />
-                  ) : null}
-
-                  {contentState === "success" && data ? (
-                    <RecommendFundsSuccessBody
-                      funds={data.funds}
-                      allocation={allocation}
-                      portfolioStory={data.portfolio_story}
-                      cartEnabled={cartEnabled}
-                      adding={adding}
-                      inCartProductIds={inCartProductIds}
-                      cartLoaded={cartLoaded}
-                      onAddFund={handleAddFund}
-                    />
-                  ) : null}
+                  ) : (
+                    <RecommendFundsInteractivePanel {...panelState} />
+                  )}
 
                   {showFooter ? (
                     <div className="recommend-funds-popover-footer">

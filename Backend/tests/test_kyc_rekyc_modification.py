@@ -192,3 +192,4 @@ async def test_verify_pan_full_submission_for_kyc_incomplete(db_session) -> None
     assert result["requiresDigilocker"] is False
     assert result["requiresFullKycSubmission"] is True
     assert result["readiness"]["code"] == "kyc_incomplete"
+

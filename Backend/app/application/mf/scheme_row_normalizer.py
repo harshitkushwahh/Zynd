@@ -77,6 +77,9 @@ def normalize_scheme_row(raw: dict[str, Any]) -> dict[str, Any] | None:
         purchase_allowed = raw.get("active")
 
     min_amounts = extract_min_amounts_from_scheme(raw)
+    from app.application.mf.investment_constraints import extract_investment_constraints_from_scheme
+
+    investment_constraints = extract_investment_constraints_from_scheme(raw)
 
     return {
         "isin_growth": isin,
@@ -88,6 +91,7 @@ def normalize_scheme_row(raw: dict[str, Any]) -> dict[str, Any] | None:
         "fp_oms_active": bool(raw.get("active")) if raw.get("active") is not None else None,
         "min_sip_amount": min_amounts["min_sip_amount"],
         "min_lumpsum_amount": min_amounts["min_lumpsum_amount"],
+        "investment_constraints": investment_constraints,
         "sebi_category": str(raw.get("fund_category") or raw.get("sebi_category") or "").strip() or None,
         "plan_type": plan_type,
         "option_type": str(raw.get("option_type") or raw.get("option") or "").strip() or None,

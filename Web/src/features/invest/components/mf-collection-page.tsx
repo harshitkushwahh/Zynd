@@ -12,11 +12,13 @@ import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-el
 import {
   bulkUpsertMfCartItems,
   fetchInvestConfig,
+  fetchInvestFundDetail,
   fetchInvestFunds,
   fetchInvestHome,
   fetchMfCart,
   type InvestCategory,
   type InvestConfig,
+  type InvestFundDetail,
   type InvestFundSummary,
 } from "@/features/invest/api/invest-api";
 import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
@@ -24,6 +26,7 @@ import { MfBreadcrumb } from "@/features/invest/components/mf-breadcrumb";
 import { MfFundsTableSkeleton } from "@/features/invest/components/mf-funds-table-skeleton";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
 import { MfFundsTable } from "@/features/invest/components/mf-funds-table";
+import { useSyncMfCartCache } from "@/features/invest/hooks/use-mf-cart-query";
 import { buildBulkCartItems } from "@/features/invest/lib/mf-cart-amount";
 import { collectionMetaFor } from "@/features/invest/lib/mf-collection-meta";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
@@ -44,6 +47,7 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
   const [config, setConfig] = useState<InvestConfig | null>(null);
   const [funds, setFunds] = useState<InvestFundSummary[]>([]);
   const [selectedFund, setSelectedFund] = useState<InvestFundSummary | null>(null);
+  const [selectedFundDetail, setSelectedFundDetail] = useState<InvestFundDetail | null>(null);
   const [investAmount, setInvestAmount] = useState(0);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -77,6 +81,7 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
 
   const meta = useMemo(() => collectionMetaFor(slug), [slug]);
   const canInvest = Boolean(user?.fund_movement_eligible && config?.orders_enabled);
+  const syncMfCartCache = useSyncMfCartCache();
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +210,25 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
     return () => observer.disconnect();
   }, [initialLoading, hasMore, tryScheduleLoadMore, slug]);
 
+  useEffect(() => {
+    const ref = selectedFund?.slug ?? selectedFund?.product_id;
+    if (!ref) {
+      setSelectedFundDetail(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchInvestFundDetail(ref)
+      .then((detail) => {
+        if (!cancelled) setSelectedFundDetail(detail);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedFundDetail(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFund?.product_id, selectedFund?.slug]);
+
   const handleSelectFund = useCallback((fund: InvestFundSummary) => {
     setSelectedFund(fund);
   }, []);
@@ -230,6 +254,7 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
       }
 
       const cart = await bulkUpsertMfCartItems({ items });
+      syncMfCartCache(cart);
       toast.success(copy.mutualFunds.cartBuyAllSuccess.replace("{count}", String(items.length)), {
         action: {
           label: copy.mutualFunds.cartViewAction,
@@ -330,6 +355,7 @@ export function MfCollectionPage({ slug }: MfCollectionPageProps) {
           productId={selectedFund?.product_id}
           minLumpsumAmountInr={selectedFund?.min_lumpsum_amount_inr}
           minSipAmountInr={selectedFund?.min_sip_amount_inr}
+          sipOptions={selectedFundDetail?.investment_details?.sip_options ?? []}
           preview={!canInvest}
           canInvest={canInvest}
           sipEnabled={config?.sip_enabled ?? false}

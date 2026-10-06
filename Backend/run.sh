@@ -207,8 +207,27 @@ if [ "${ZYND_MF_WORKER_AUTOSTART:-true}" = "true" ]; then
   fi
   rm -f .mf_transaction_worker.lock
   mkdir -p logs
-  echo "Starting MF order worker in background (logs: logs/mf-worker.log)..."
-  .venv/bin/python -m app.jobs.run_mf_transaction_workers --orders >> logs/mf-worker.log 2>&1 &
+  if [ "${ZYND_MF_WORKER_LOG_TO_TERMINAL:-true}" = "true" ]; then
+    echo "Starting MF order worker (Cybrilla/Finprim payment traces also print here; file: logs/mf-worker.log)..."
+    .venv/bin/python -m app.jobs.run_mf_transaction_workers --orders 2>&1 | tee -a logs/mf-worker.log &
+  else
+    echo "Starting MF order worker in background (logs: logs/mf-worker.log)..."
+    .venv/bin/python -m app.jobs.run_mf_transaction_workers --orders >> logs/mf-worker.log 2>&1 &
+  fi
+fi
+
+if [ "${ZYND_MF_SCHEDULER_AUTOSTART:-true}" = "true" ]; then
+  if pgrep -f "app.jobs.run_mf_scheduler" >/dev/null 2>&1; then
+    echo "Stopping existing MF scheduler..."
+    pkill -9 -f "app.jobs.run_mf_scheduler" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do
+      pgrep -f "app.jobs.run_mf_scheduler" >/dev/null 2>&1 || break
+      sleep 1
+    done
+  fi
+  mkdir -p logs
+  echo "Starting MF scheduler in background (claims admin pipeline runs; logs: logs/mf-scheduler.log)..."
+  .venv/bin/python -m app.jobs.run_mf_scheduler --schedule >> logs/mf-scheduler.log 2>&1 &
 fi
 
 if lsof -ti :"${API_PORT}" >/dev/null 2>&1; then

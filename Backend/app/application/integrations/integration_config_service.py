@@ -41,8 +41,8 @@ def _config_key(provider: IntegrationProvider) -> str:
 
 
 def get_cached_integration_environment(provider: IntegrationProvider) -> IntegrationEnvironment:
-    mode = _provider_mode_cache.get(provider, "test")
-    return mode if mode in {"test", "live"} else "test"
+    mode = _provider_mode_cache.get(provider, "live")
+    return mode if mode in {"test", "live"} else "live"
 
 
 def _set_cached_integration_environment(provider: IntegrationProvider, mode: IntegrationEnvironment) -> None:

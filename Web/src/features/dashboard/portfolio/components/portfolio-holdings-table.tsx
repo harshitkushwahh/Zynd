@@ -96,7 +96,10 @@ function HoldingFundCell({
         <p className="mt-0.5 text-caption text-muted-foreground">{holding.amcName}</p>
         {sipSummary ? (
           <p className="mt-1 text-caption text-primary">
-            {copy.dashboard.portfolio.holdingSipMonthlyTotal.replace("{amount}", sipSummary.monthly)}
+            {copy.dashboard.portfolio.holdingSipMonthlyTotal.replace(
+              "{amount}",
+              sipSummary.monthlyEquivalent,
+            )}
             {sipSummary.nextDate
               ? ` · ${copy.dashboard.portfolio.holdingSipNextDebit.replace("{date}", sipSummary.nextDate)}`
               : ""}

@@ -14,7 +14,7 @@ from app.application.mf.mf_ondc_order_service import (
     advance_ondc_order,
     sync_order_from_fp,
 )
-from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event
+from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, order_payment_completed
 from app.core.config import get_settings
 from app.infrastructure.mf.fp_oms_client import extract_fp_state, get_mf_purchase
 from app.infrastructure.mf.fp_payment_client import (
@@ -278,7 +278,8 @@ async def apply_order_fp_truth(
                 order.failure_code = "payment_not_completed"
                 order.failure_reason = "Payment was not completed"
         elif target == MfOrderStatus.cancelled and not order.failure_code:
-            order.failure_code = "payment_abandoned"
+            # payment_abandoned is reserved for explicit user abandon (abandon-payment API).
+            order.failure_code = "payment_not_completed"
             order.failure_reason = "Payment was not completed"
 
         await _record_order_event(
@@ -432,6 +433,15 @@ def classify_order_payment_outcome(
         if order.failure_code == "payment_abandoned":
             return "failed"
         return "failed"
+
+    if order_payment_completed(order):
+        return "success"
+
+    if is_payment_success_status(fp_payment_status) and order.status in {
+        MfOrderStatus.processing,
+        MfOrderStatus.submitted,
+    }:
+        return "success"
 
     if order.status not in TERMINAL_STATUSES:
         return "pending"

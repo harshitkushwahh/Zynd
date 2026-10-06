@@ -1,0 +1,628 @@
+/* Funds For You — success dashboard (full page) */
+
+.rf-success-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.rf-success-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+}
+
+.rf-success-grid {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 48rem) {
+  .rf-success-grid {
+    grid-template-columns: minmax(17rem, 0.38fr) minmax(0, 0.62fr);
+    gap: clamp(0.85rem, 1.5vw, 1.25rem);
+  }
+}
+
+.rf-success-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  padding-inline: 2px;
+}
+
+.rf-success-card.rf-success-funds-panel {
+  overflow: visible;
+}
+
+.rf-success-card {
+  border-radius: 1.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.11) 0%,
+    rgba(255, 255, 255, 0.04) 48%,
+    rgba(15, 6, 32, 0.35) 100%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
+  padding: 1rem 1.05rem 1.1rem;
+}
+
+.rf-success-funds-panel {
+  min-height: min(52rem, 72dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.rf-success-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.rf-success-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.rf-success-card-icon {
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.rf-success-card-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.rf-success-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(196, 181, 253, 0.95);
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.rf-success-card-link:hover {
+  color: #fff;
+}
+
+.rf-success-empty-copy {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.rf-success-risk-body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+@media (min-width: 30rem) {
+  .rf-success-risk-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.65rem 0.75rem;
+  }
+}
+
+.rf-success-gauge-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.rf-success-gauge-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+.rf-success-gauge-score {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.rf-success-gauge-horizon {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* Tier badges on glass: match risk profile page (filled pill, not outline-only). */
+.rf-success-gauge-caption .rf-success-risk-tier-badge {
+  height: 1.75rem;
+  max-width: 100%;
+  border-width: 1px;
+  background-color: rgb(251 191 36 / 22%);
+  border-color: rgb(251 191 36 / 38%);
+  color: rgb(254 243 199);
+}
+
+.rf-success-gauge-caption .rf-success-risk-tier-badge[class*="border-emerald"] {
+  background-color: rgb(52 211 153 / 18%);
+  border-color: rgb(52 211 153 / 35%);
+  color: rgb(209 250 229);
+}
+
+.rf-success-gauge-caption .rf-success-risk-tier-badge[class*="border-green"] {
+  background-color: rgb(34 197 94 / 18%);
+  border-color: rgb(34 197 94 / 35%);
+  color: rgb(220 252 231);
+}
+
+.rf-success-gauge-caption .rf-success-risk-tier-badge[class*="border-orange"] {
+  background-color: rgb(251 146 60 / 20%);
+  border-color: rgb(251 146 60 / 38%);
+  color: rgb(255 237 213);
+}
+
+.rf-success-gauge-caption .rf-success-risk-tier-badge[class*="border-red"] {
+  background-color: rgb(248 113 113 / 20%);
+  border-color: rgb(248 113 113 / 38%);
+  color: rgb(254 226 226);
+}
+
+.rf-success-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.rf-success-metric-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.rf-success-metric-icon {
+  display: inline-flex;
+  margin-top: 0.1rem;
+  color: rgba(196, 181, 253, 0.9);
+}
+
+.rf-success-metric-label {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.rf-success-metric-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.rf-success-portfolio-wrap {
+  position: relative;
+  min-height: 8.5rem;
+}
+
+.rf-success-portfolio-lock-backdrop {
+  border-radius: 0.85rem;
+  background-color: rgb(8 0 24 / 35%);
+}
+
+.rf-success-portfolio-lock-overlay {
+  z-index: 2;
+}
+
+.rf-success-portfolio-loading {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 30rem) {
+  .rf-success-portfolio-loading {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+  }
+}
+
+.rf-success-portfolio-loading-chart {
+  height: 8.5rem;
+}
+
+.rf-success-portfolio-loading-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rf-success-portfolio-loading-line {
+  height: 0.65rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.rf-success-portfolio-loading-line:nth-child(1) {
+  width: 88%;
+}
+
+.rf-success-portfolio-loading-line:nth-child(2) {
+  width: 72%;
+}
+
+.rf-success-portfolio-loading-line:nth-child(3) {
+  width: 80%;
+}
+
+.rf-success-portfolio-loading-line:nth-child(4) {
+  width: 64%;
+}
+
+.rf-success-portfolio-body {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 30rem) {
+  .rf-success-portfolio-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+  }
+}
+
+.rf-success-portfolio-chart {
+  position: relative;
+  height: 8.5rem;
+  min-width: 0;
+}
+
+.rf-success-donut-skeleton {
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.rf-success-portfolio-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+
+.rf-success-portfolio-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.rf-success-portfolio-value-label {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.rf-success-portfolio-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.rf-success-portfolio-legend li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.rf-success-portfolio-legend-pct {
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.rf-success-allocation-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.rf-success-allocation-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rf-success-allocation-bar {
+  display: flex;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rf-success-allocation-segment {
+  min-width: 2px;
+  height: 100%;
+}
+
+.rf-success-allocation-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+}
+
+.rf-success-allocation-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.rf-success-allocation-legend-value {
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.rf-success-funds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.rf-success-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.rf-success-filter-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.3rem 0.72rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.rf-success-filter-chip:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.rf-success-filter-chip-active {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.92);
+  color: #3b0764;
+}
+
+.rf-success-sort-trigger {
+  border-radius: 999px;
+}
+
+.rf-success-fund-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+  flex: 1;
+  padding: 0.2rem 0.35rem 0.35rem;
+  overflow: visible;
+}
+
+.rf-success-fund-row {
+  display: grid;
+  grid-template-columns: auto minmax(10rem, 1fr) minmax(7.25rem, 8.75rem) auto;
+  gap: 0.65rem 0.85rem;
+  align-items: center;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(8, 0, 24, 0.28);
+  padding: 0.65rem 0.85rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.rf-success-fund-main {
+  min-width: 0;
+}
+
+@media (max-width: 40rem) {
+  .rf-success-fund-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "logo main"
+      "return actions";
+  }
+
+  .rf-success-fund-logo {
+    grid-area: logo;
+  }
+
+  .rf-success-fund-main {
+    grid-area: main;
+  }
+
+  .rf-success-fund-return {
+    grid-area: return;
+  }
+
+  .rf-success-fund-actions {
+    grid-area: actions;
+    justify-self: end;
+  }
+}
+
+.rf-success-fund-logo {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.rf-success-fund-name {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.rf-success-fund-name:hover {
+  color: rgba(233, 213, 255, 0.98);
+}
+
+.rf-success-fund-amc {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.rf-success-fund-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.rf-success-match-badge {
+  border-radius: 999px;
+  background: rgba(74, 222, 128, 0.16);
+  padding: 0.12rem 0.45rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #86efac;
+}
+
+.rf-success-fund-return {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 7.25rem;
+  text-align: right;
+}
+
+.rf-success-fund-return-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.1;
+}
+
+.rf-success-fund-return-period {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.rf-success-fund-return-positive {
+  color: #86efac;
+}
+
+.rf-success-fund-return-negative {
+  color: #fca5a5;
+}
+
+.rf-success-spark {
+  display: block;
+  margin-top: 0.15rem;
+  margin-left: auto;
+}
+
+.rf-success-fund-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rf-success-start-sip {
+  height: 2rem;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: none;
+  background: #fff;
+  padding-inline: 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #3b0764;
+  box-shadow: none;
+}
+
+.rf-success-start-sip:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.rf-success-bookmark {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.rf-success-bookmark:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.22);
+}

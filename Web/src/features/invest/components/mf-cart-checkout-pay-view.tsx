@@ -27,12 +27,17 @@ import {
   clearMfLumpsumPaymentSession,
   clearMfPaymentRedirect,
   getLastMfPaymentCheckoutId,
+  getMfPaymentGatewayMode,
+  isMfPaymentFullPageGatewayReturn,
   markMfLumpsumPaymentDismissed,
   markMfPaymentRedirect,
   wasMfPaymentRedirected,
 } from "@/features/invest/lib/mf-payment-session";
 import { copy } from "@/shared/config/copy";
 import { useInvestCacheInvalidation } from "@/features/invest/hooks/use-invest-cache-invalidation";
+import { useMfPaymentGatewayPopup } from "@/features/invest/hooks/use-mf-payment-gateway-popup";
+import { launchMfPaymentGatewayUrl } from "@/features/invest/lib/mf-payment-gateway-popup";
+import { isFreshInvestOrder } from "@/features/invest/lib/mf-payment-order-age";
 
 type MfCartCheckoutPayViewProps = {
   checkoutId: string;
@@ -66,6 +71,7 @@ function resolveCheckoutMessage(args: {
   checkout: MfCheckout | null;
   error: string | null;
   redirecting: boolean;
+  gatewayPopupOpen: boolean;
   returnedFromPayment: boolean;
   returnConfirming: boolean;
   gatewayReturnHandled: boolean;
@@ -77,6 +83,7 @@ function resolveCheckoutMessage(args: {
     checkout,
     error,
     redirecting,
+    gatewayPopupOpen,
     returnedFromPayment,
     returnConfirming,
     gatewayReturnHandled,
@@ -84,9 +91,15 @@ function resolveCheckoutMessage(args: {
     paymentOutcome,
   } = args;
 
+  if (gatewayPopupOpen) return copy.mutualFunds.paymentGatewayPopupHint;
   if (phase === "processing") return copy.mutualFunds.orderPayProcessing;
   if (phase === "error") {
-    if (checkout?.failure_code === "payment_abandoned") return copy.mutualFunds.orderPayAbandoned;
+    if (checkout?.failure_code === "payment_abandoned") {
+      if (isFreshInvestOrder(checkout.created_at) && !returnedFromPayment) {
+        return checkout.failure_reason ?? copy.mutualFunds.orderPayFailed;
+      }
+      return copy.mutualFunds.orderPayAbandoned;
+    }
     return error ?? checkout?.failure_reason ?? copy.mutualFunds.orderPayFailed;
   }
   if (phase === "success") return copy.mutualFunds.orderPaySuccess;
@@ -97,7 +110,15 @@ function resolveCheckoutMessage(args: {
       ? copy.mutualFunds.orderPayReturnStillProcessing
       : copy.mutualFunds.orderPayReturnConfirming;
   }
-  if (returnedFromPayment && gatewayReturnHandled && phase === "waiting") {
+  if (
+    returnedFromPayment &&
+    gatewayReturnHandled &&
+    phase === "waiting" &&
+    (paymentOutcome === "failed" ||
+      checkout?.status === "CANCELLED" ||
+      checkout?.status === "FAILED" ||
+      checkout?.failure_code === "payment_abandoned")
+  ) {
     return copy.mutualFunds.orderPayAbandoned;
   }
   const primaryOrder = checkout?.orders[0];
@@ -130,7 +151,7 @@ async function syncCheckoutPaymentReturn(checkoutId: string) {
 
 export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPayViewProps) {
   const router = useRouter();
-  const initialGatewayReturn = wasMfPaymentRedirected(checkoutId);
+  const initialGatewayReturn = isMfPaymentFullPageGatewayReturn(checkoutId);
   const [checkout, setCheckout] = useState<MfCheckout | null>(null);
   const [paymentOutcome, setPaymentOutcome] = useState<MfPaymentReconcileOutcome | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,10 +162,70 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
   const [returnRetryToken, setReturnRetryToken] = useState(0);
   const [returnedFromGateway, setReturnedFromGateway] = useState(initialGatewayReturn);
   const [gatewayReturnHandled, setGatewayReturnHandled] = useState(!initialGatewayReturn);
+  const [gatewayPopupOpen, setGatewayPopupOpen] = useState(false);
   const redirectedRef = useRef(false);
   const pollAttemptsRef = useRef(0);
-  const reconcilePollingRef = useRef(initialGatewayReturn);
+  const reconcilePollingRef = useRef(true);
   const returnedFromPayment = returnedFromGateway;
+
+  const signalGatewayReturn = useCallback(() => {
+    setGatewayPopupOpen(false);
+    setReturnedFromGateway(true);
+    setRedirecting(false);
+    setGatewayReturnHandled(false);
+    setReturnRetryToken((token) => token + 1);
+  }, []);
+
+  const handlePopupClosedWithoutReturn = useCallback(() => {
+    if (!wasMfPaymentRedirected(checkoutId)) return;
+    void (async () => {
+      setGatewayPopupOpen(false);
+      setReturnConfirming(true);
+      try {
+        const next = await abandonMfCheckoutPayment(checkoutId);
+        setCheckout(next);
+        setPaymentOutcome("failed");
+        setError(null);
+      } catch (err) {
+        setPaymentOutcome("failed");
+        setError(err instanceof Error ? err.message : copy.mutualFunds.orderPayFailed);
+      } finally {
+        setReturnedFromGateway(true);
+        setGatewayReturnHandled(true);
+        setReturnConfirming(false);
+        setLoading(false);
+        clearMfPaymentRedirect(checkoutId);
+      }
+    })();
+  }, [checkoutId]);
+
+  const { attachPopup } = useMfPaymentGatewayPopup({
+    checkoutId,
+    onGatewayReturn: signalGatewayReturn,
+    onPopupClosedWithoutReturn: handlePopupClosedWithoutReturn,
+  });
+
+  const goToPaymentUrl = useCallback(
+    (paymentUrl: string) => {
+      setRedirecting(true);
+      setError(null);
+      const { popup, result } = launchMfPaymentGatewayUrl(paymentUrl);
+      if (result === "same_tab") {
+        markMfPaymentRedirect({ checkoutId, mode: "full_page" });
+        return;
+      }
+      if (result === "popup" && popup) {
+        markMfPaymentRedirect({ checkoutId, mode: "popup" });
+        attachPopup(popup);
+        setGatewayPopupOpen(true);
+        setRedirecting(false);
+        return;
+      }
+      setRedirecting(false);
+      setError(copy.mutualFunds.paymentGatewayPopupBlocked);
+    },
+    [attachPopup, checkoutId],
+  );
 
   useInvestCacheInvalidation(`checkout-${checkoutId}`, checkout?.status === "SUCCEEDED");
 
@@ -173,6 +254,7 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
 
   useEffect(() => {
     function handlePageShow(event: PageTransitionEvent) {
+      if (getMfPaymentGatewayMode(checkoutId) === "popup") return;
       if (!wasMfPaymentRedirected(checkoutId)) return;
       setReturnedFromGateway(true);
       setRedirecting(false);
@@ -219,6 +301,10 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const poll = async () => {
+      if (gatewayPopupOpen) {
+        timer = setTimeout(() => void poll(), MF_PAYMENT_POLL_MS);
+        return;
+      }
       if (returnConfirming) {
         timer = setTimeout(() => void poll(), MF_PAYMENT_POLL_MS);
         return;
@@ -256,7 +342,7 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [checkoutId, loadCheckout, returnConfirming, returnRetryToken]);
+  }, [checkoutId, gatewayPopupOpen, loadCheckout, returnConfirming, returnRetryToken]);
 
   useEffect(() => {
     if (!gatewayReturnHandled || returnedFromGateway) return;
@@ -265,10 +351,11 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
     if (redirectedRef.current || wasMfPaymentRedirected(checkoutId)) return;
 
     redirectedRef.current = true;
-    setRedirecting(true);
-    markMfPaymentRedirect({ checkoutId });
-    window.location.href = checkout.payment_url;
-  }, [checkout, checkoutId, gatewayReturnHandled, returnedFromGateway]);
+    goToPaymentUrl(checkout.payment_url);
+    if (!wasMfPaymentRedirected(checkoutId)) {
+      redirectedRef.current = false;
+    }
+  }, [checkout, checkoutId, gatewayReturnHandled, goToPaymentUrl, returnedFromGateway]);
 
   const canRetryPayment =
     returnedFromGateway &&
@@ -291,10 +378,9 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
     clearMfLumpsumPaymentDismissed(checkoutId);
     redirectedRef.current = false;
     setReturnedFromGateway(false);
+    setGatewayPopupOpen(false);
     setGatewayReturnHandled(true);
-    setRedirecting(true);
-    markMfPaymentRedirect({ checkoutId });
-    window.location.href = checkout.payment_url;
+    goToPaymentUrl(checkout.payment_url);
   }
 
   const phase = resolveCheckoutPhase({
@@ -310,6 +396,7 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
     checkout,
     error,
     redirecting,
+    gatewayPopupOpen,
     returnedFromPayment,
     returnConfirming,
     gatewayReturnHandled,
@@ -321,7 +408,8 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
     phase,
     abandonChecked: true,
     redirecting,
-    returnedFromPayment,
+    gatewayPopupOpen,
+    returnedFromPayment: returnedFromPayment && !gatewayPopupOpen,
     nextAction: checkout?.next_action ?? primaryOrder?.next_action,
     fpState: primaryOrder?.fp_state,
     status: checkout?.status,
@@ -338,7 +426,12 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
   function dismissPaymentDialog() {
     if (paymentOutcome === "success" || checkout?.status === "SUCCEEDED") {
       clearLastMfPaymentSession();
-    } else if (checkout && !TERMINAL_STATUSES.has(checkout.status)) {
+    } else if (
+      checkout &&
+      !TERMINAL_STATUSES.has(checkout.status) &&
+      returnedFromPayment &&
+      gatewayReturnHandled
+    ) {
       markMfLumpsumPaymentDismissed(checkoutId);
       void abandonMfCheckoutPayment(checkoutId);
     }
@@ -379,8 +472,6 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
             ? dismissPaymentDialog
             : undefined
       }
-      secondaryLabel={canRetryPayment ? copy.mutualFunds.backToBrowse : undefined}
-      onSecondaryAction={canRetryPayment ? dismissPaymentDialog : undefined}
     />
   );
 }

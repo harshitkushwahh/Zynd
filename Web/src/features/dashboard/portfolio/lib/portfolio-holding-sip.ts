@@ -3,7 +3,12 @@ import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 
 export type HoldingSipPool = {
   activePlanCount: number;
+  /** Sum of monthly-frequency plan amounts only. */
   monthlySipInr: number;
+  /** Sum of daily-frequency per-installment amounts. */
+  dailySipInr: number;
+  /** Monthly plans plus daily × 30 for overview-style totals. */
+  monthlyEquivalentInr: number;
   nextInstallmentDate: string | null;
 };
 
@@ -48,11 +53,14 @@ export function poolSipsForHolding(holding: PortfolioHoldingSipMatch, plans: MfS
   const matched = matchSipPlansToHolding(holding, plans);
   if (matched.length === 0) return null;
 
-  const monthlySipInr = matched.reduce((total, plan) => {
+  let monthlySipInr = 0;
+  let dailySipInr = 0;
+  for (const plan of matched) {
     const frequency = (plan.frequency ?? "").trim().toLowerCase();
-    if (frequency === "daily") return total + plan.amount_inr * 30;
-    return total + plan.amount_inr;
-  }, 0);
+    if (frequency === "daily") dailySipInr += plan.amount_inr;
+    else monthlySipInr += plan.amount_inr;
+  }
+  const monthlyEquivalentInr = monthlySipInr + dailySipInr * 30;
 
   const nextInstallmentDate =
     matched
@@ -63,12 +71,16 @@ export function poolSipsForHolding(holding: PortfolioHoldingSipMatch, plans: MfS
   return {
     activePlanCount: matched.length,
     monthlySipInr,
+    dailySipInr,
+    monthlyEquivalentInr,
     nextInstallmentDate,
   };
 }
 
 export function formatHoldingSipPoolSummary(pool: HoldingSipPool) {
   const monthly = formatInr(pool.monthlySipInr);
+  const daily = formatInr(pool.dailySipInr);
+  const monthlyEquivalent = formatInr(pool.monthlyEquivalentInr);
   const nextDate = pool.nextInstallmentDate ? formatDate(pool.nextInstallmentDate) : null;
-  return { monthly, nextDate };
+  return { monthly, daily, monthlyEquivalent, nextDate };
 }

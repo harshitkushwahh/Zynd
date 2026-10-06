@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   abandonMfSipMandate,
+  authMfMandate,
   confirmMfSipFirstInstallmentReturn,
   confirmMfSipMandateReturn,
   fetchMfSipPlan,
@@ -18,21 +19,28 @@ import { formatInr } from "@/features/invest/lib/mf-format";
 import { resolveSipFailureReason } from "@/features/invest/lib/mf-sip-failure-copy";
 import {
   clearMfSipFirstInstallmentRedirect,
+  clearMfSipMandateAutoRedirectBlocked,
   clearMfSipMandateRedirect,
   clearMfSipPaymentSession,
   getNextMfSipCartCheckoutPlanId,
   markMfSipFirstInstallmentAutoStarted,
   markMfSipFirstInstallmentRedirect,
+  markMfSipMandateAutoRedirectBlocked,
   markMfSipMandateRedirect,
   removeMfSipCartCheckoutPlan,
   wasMfSipFirstInstallmentAutoStarted,
   wasMfSipFirstInstallmentRedirected,
+  wasMfSipMandateAutoRedirectBlocked,
   wasMfSipMandateRedirected,
   wasMfSipPaymentDismissed,
+  getMfPaymentGatewayMode,
+  isMfPaymentFullPageGatewayReturn,
 } from "@/features/invest/lib/mf-payment-session";
 import { copy } from "@/shared/config/copy";
 import { useInvestCacheInvalidation } from "@/features/invest/hooks/use-invest-cache-invalidation";
 import { useMfPaymentOverlayOptional } from "@/features/invest/contexts/mf-payment-overlay-context";
+import { useMfPaymentGatewayPopup } from "@/features/invest/hooks/use-mf-payment-gateway-popup";
+import { launchMfPaymentGatewayUrl } from "@/features/invest/lib/mf-payment-gateway-popup";
 
 const SIP_UNAVAILABLE_FAILURE_CODES = new Set(["scheme_not_available", "sip_not_allowed"]);
 
@@ -112,22 +120,32 @@ function isSipSetupComplete(plan: MfSipPlan | null): boolean {
   return !isFirstInstallmentPending(plan);
 }
 
+function needsMandateAuthorization(plan: MfSipPlan | null): boolean {
+  if (!plan) return false;
+  return (
+    plan.next_action === "authorize_mandate" || plan.next_action === "authorize_mandate_switch"
+  );
+}
+
 function attemptMandateAuthRedirect(args: {
   plan: MfSipPlan;
   planId: string;
   redirectedRef: MutableRefObject<boolean>;
+  allowAutoRedirect: boolean;
+  launchAuthUrl: (authUrl: string) => boolean;
 }): boolean {
+  if (!args.allowAutoRedirect || wasMfSipMandateAutoRedirectBlocked(args.planId)) return false;
+
   const authUrl = resolveMandateAuthUrl(args.plan);
-  const shouldRedirect =
-    args.plan.next_action === "authorize_mandate" ||
-    args.plan.next_action === "authorize_mandate_switch";
-  if (!authUrl || !shouldRedirect) return false;
+  if (!authUrl || !needsMandateAuthorization(args.plan)) return false;
   if (TERMINAL_STATUSES.has(args.plan.status) && !isBankSwitchFlow(args.plan)) return false;
   if (args.redirectedRef.current || wasMfSipMandateRedirected(args.planId)) return false;
 
   args.redirectedRef.current = true;
-  markMfSipMandateRedirect(args.planId);
-  window.location.replace(authUrl);
+  if (!args.launchAuthUrl(authUrl)) {
+    args.redirectedRef.current = false;
+    return false;
+  }
   return true;
 }
 
@@ -226,10 +244,14 @@ function resolveSipMandateMessage(args: {
   return copy.mutualFunds.sipReturnDescription;
 }
 
-function shouldAbandonIncompleteMandate(plan: MfSipPlan | null, returnedFromMandate: boolean) {
-  if (!plan || returnedFromMandate) return false;
+function shouldAbandonIncompleteMandate(
+  plan: MfSipPlan | null,
+  mandateAutoRedirectBlocked: boolean,
+) {
+  if (!plan) return false;
   if (TERMINAL_STATUSES.has(plan.status)) return false;
   if (isBankSwitchFlow(plan)) return false;
+  if (mandateAutoRedirectBlocked && needsMandateAuthorization(plan)) return true;
   if (plan.next_action === "authorize_mandate" || plan.next_action === "wait_mandate") return true;
   return plan.mandate?.status?.toUpperCase() !== "APPROVED";
 }
@@ -268,7 +290,57 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
   const mandateReturnConfirmRef = useRef(false);
   const cartChainRef = useRef(false);
   const dismissedRef = useRef(false);
-  const returnedFromMandate = wasMfSipMandateRedirected(planId);
+  const mandateAutoRedirectBlockedRef = useRef(wasMfSipMandateAutoRedirectBlocked(planId));
+  const [mandateAutoRedirectBlocked, setMandateAutoRedirectBlocked] = useState(
+    () => wasMfSipMandateAutoRedirectBlocked(planId),
+  );
+  const returnedFromMandate =
+    wasMfSipMandateRedirected(planId) && isMfPaymentFullPageGatewayReturn(planId);
+
+  const signalSipGatewayReturn = useCallback(() => {
+    mandateReturnConfirmRef.current = false;
+    setRedirectingToFirstInstallment(false);
+    setAbandonChecked(false);
+    setReturnRetryToken((token) => token + 1);
+  }, []);
+
+  const { attachPopup } = useMfPaymentGatewayPopup({
+    planId,
+    onGatewayReturn: signalSipGatewayReturn,
+    onPopupClosedWithoutReturn: signalSipGatewayReturn,
+  });
+
+  const launchSipGatewayUrl = useCallback(
+    (url: string, kind: "mandate" | "first_installment") => {
+      const { popup, result } = launchMfPaymentGatewayUrl(url);
+      if (result === "same_tab") {
+        if (kind === "mandate") {
+          markMfSipMandateRedirect(planId, "full_page");
+        } else {
+          markMfSipFirstInstallmentRedirect(planId, "full_page");
+        }
+        window.location.replace(url);
+        return true;
+      }
+      if (result === "popup" && popup) {
+        if (kind === "mandate") {
+          markMfSipMandateRedirect(planId, "popup");
+        } else {
+          markMfSipFirstInstallmentRedirect(planId, "popup");
+        }
+        attachPopup(popup);
+        return true;
+      }
+      setError(copy.mutualFunds.paymentGatewayPopupBlocked);
+      return false;
+    },
+    [attachPopup, planId],
+  );
+
+  const syncMandateAutoRedirectBlocked = useCallback((blocked: boolean) => {
+    mandateAutoRedirectBlockedRef.current = blocked;
+    setMandateAutoRedirectBlocked(blocked);
+  }, []);
 
   useInvestCacheInvalidation(`sip-mandate-${planId}`, isSipSetupComplete(plan));
   useInvestCacheInvalidation(
@@ -285,7 +357,13 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
     try {
       const next = await fetchMfSipPlan(planId);
       if (next) {
-        attemptMandateAuthRedirect({ plan: next, planId, redirectedRef });
+        attemptMandateAuthRedirect({
+          plan: next,
+          planId,
+          redirectedRef,
+          allowAutoRedirect: !mandateAutoRedirectBlockedRef.current,
+          launchAuthUrl: (authUrl) => launchSipGatewayUrl(authUrl, "mandate"),
+        });
       }
       setPlan(next);
       setError(null);
@@ -296,7 +374,45 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
     } finally {
       setLoading(false);
     }
-  }, [planId]);
+  }, [launchSipGatewayUrl, planId]);
+
+  const startMandateAuthorization = useCallback(async () => {
+    if (!plan || !needsMandateAuthorization(plan)) return;
+    const mandateId = plan.mandate?.mandate_id;
+    if (!mandateId) return;
+
+    try {
+      clearMfSipMandateAutoRedirectBlocked(planId);
+      syncMandateAutoRedirectBlocked(false);
+      redirectedRef.current = false;
+
+      const refreshedMandate = await authMfMandate(mandateId);
+      const authUrl = refreshedMandate.auth_url?.trim() || resolveMandateAuthUrl(plan);
+      const updatedPlan: MfSipPlan = {
+        ...plan,
+        mandate_auth_url: authUrl,
+        mandate: plan.mandate
+          ? {
+              ...plan.mandate,
+              auth_url: refreshedMandate.auth_url ?? plan.mandate.auth_url,
+            }
+          : plan.mandate,
+      };
+      setPlan(updatedPlan);
+      setError(null);
+
+      if (authUrl) {
+        redirectedRef.current = true;
+        if (!launchSipGatewayUrl(authUrl, "mandate")) {
+          redirectedRef.current = false;
+        }
+      }
+    } catch (err) {
+      markMfSipMandateAutoRedirectBlocked(planId);
+      syncMandateAutoRedirectBlocked(true);
+      setError(err instanceof Error ? err.message : copy.mutualFunds.sipLoadError);
+    }
+  }, [launchSipGatewayUrl, plan, planId, syncMandateAutoRedirectBlocked]);
 
   const startFirstInstallmentPayment = useCallback(
     async (options?: { auto?: boolean }) => {
@@ -315,8 +431,10 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
 
         if (payment.payment_url) {
           redirectedRef.current = true;
-          markMfSipFirstInstallmentRedirect(planId);
-          window.location.replace(payment.payment_url);
+          if (!launchSipGatewayUrl(payment.payment_url, "first_installment")) {
+            redirectedRef.current = false;
+            setRedirectingToFirstInstallment(false);
+          }
         } else {
           setRedirectingToFirstInstallment(false);
         }
@@ -334,7 +452,7 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
         return null;
       }
     },
-    [plan, planId],
+    [launchSipGatewayUrl, plan, planId],
   );
 
   useEffect(() => {
@@ -348,11 +466,11 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
 
   useEffect(() => {
     function handlePageShow(event: PageTransitionEvent) {
+      if (getMfPaymentGatewayMode(planId) === "popup") return;
       if (dismissedRef.current || wasMfSipPaymentDismissed(planId)) return;
       const pendingMandate = wasMfSipMandateRedirected(planId);
       const pendingFirst = wasMfSipFirstInstallmentRedirected(planId);
       if (!pendingMandate && !pendingFirst) return;
-      if (!event.persisted) return;
       mandateReturnConfirmRef.current = false;
       setRedirectingToFirstInstallment(false);
       setAbandonChecked(false);
@@ -365,6 +483,10 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
 
   useEffect(() => {
     if (wasMfSipFirstInstallmentRedirected(planId)) {
+      if (getMfPaymentGatewayMode(planId) === "popup" && returnRetryToken === 0) {
+        setAbandonChecked(true);
+        return;
+      }
       let cancelled = false;
       setReturnConfirming(true);
 
@@ -402,6 +524,10 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
       setAbandonChecked(true);
       return;
     }
+    if (getMfPaymentGatewayMode(planId) === "popup" && returnRetryToken === 0) {
+      setAbandonChecked(true);
+      return;
+    }
     if (mandateReturnConfirmRef.current) return;
     mandateReturnConfirmRef.current = true;
 
@@ -422,12 +548,14 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
         const next = await loadPlan();
         if (next) setPlan(next);
       } finally {
+        markMfSipMandateAutoRedirectBlocked(planId);
+        syncMandateAutoRedirectBlocked(true);
         clearMfSipMandateRedirect(planId);
         setLoading(false);
         setAbandonChecked(true);
       }
     })();
-  }, [loadPlan, planId, returnRetryToken]);
+  }, [loadPlan, planId, returnRetryToken, syncMandateAutoRedirectBlocked]);
 
   useEffect(() => {
     if (!abandonChecked || returnConfirming || dismissedRef.current) return;
@@ -485,11 +613,18 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
 
   useEffect(() => {
     if (!plan) return;
-    attemptMandateAuthRedirect({ plan, planId, redirectedRef });
-  }, [plan, planId]);
+    attemptMandateAuthRedirect({
+      plan,
+      planId,
+      redirectedRef,
+      allowAutoRedirect: !mandateAutoRedirectBlockedRef.current,
+      launchAuthUrl: (authUrl) => launchSipGatewayUrl(authUrl, "mandate"),
+    });
+  }, [launchSipGatewayUrl, plan, planId]);
 
   const returnedFromFirstInstallment =
-    firstInstallmentRetryOffered || wasMfSipFirstInstallmentRedirected(planId);
+    firstInstallmentRetryOffered ||
+    (wasMfSipFirstInstallmentRedirected(planId) && isMfPaymentFullPageGatewayReturn(planId));
 
   const phase = resolveSipMandatePhase({
     loading,
@@ -520,17 +655,24 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
     status: plan?.status,
   });
   const isInProgress = phase === "processing" || phase === "waiting";
+  const mandateAuthDue =
+    mandateAutoRedirectBlocked &&
+    needsMandateAuthorization(plan) &&
+    !mandateAlreadyApproved(plan) &&
+    !returnConfirming &&
+    !redirectingToFirstInstallment;
   const firstInstallmentDue =
     isFirstInstallmentPending(plan) &&
     !redirectingToFirstInstallment &&
     !returnConfirming &&
     (firstInstallmentRetryOffered || wasMfSipFirstInstallmentAutoStarted(planId));
   const firstInstallmentPending = isFirstInstallmentPending(plan);
+  const useCtaLayout =
+    mandateAuthDue || firstInstallmentDue || firstInstallmentRetryOffered;
   const useTerminalLayout =
     isInProgress &&
     !firstInstallmentPending &&
-    !firstInstallmentDue &&
-    !firstInstallmentRetryOffered &&
+    !useCtaLayout &&
     !redirectingToFirstInstallment;
 
   const title =
@@ -544,7 +686,7 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
     dismissedRef.current = true;
     clearMfSipPaymentSession(planId);
 
-    if (shouldAbandonIncompleteMandate(plan, returnedFromMandate)) {
+    if (shouldAbandonIncompleteMandate(plan, mandateAutoRedirectBlocked)) {
       void abandonMfSipMandate(planId).finally(() => {
         removeMfSipCartCheckoutPlan(planId);
       });
@@ -560,8 +702,9 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
   return (
     <MfPaymentJourneyDialog
       phase={phase}
-      layout={useTerminalLayout ? "terminal" : "default"}
+      layout={useTerminalLayout ? "terminal" : useCtaLayout ? "cta" : "default"}
       allowDismiss={
+        mandateAuthDue ||
         firstInstallmentPending ||
         firstInstallmentDue ||
         firstInstallmentRetryOffered ||
@@ -569,29 +712,41 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
         phase === "success" ||
         phase === "error"
       }
-      title={title}
+      title={
+        useCtaLayout && plan
+          ? withSipAmount(copy.mutualFunds.sipMandateCtaHeadline, plan)
+          : title
+      }
       subtitle={
-        !useTerminalLayout && !isInProgress && plan
+        plan && !useCtaLayout && !useTerminalLayout && !isInProgress
           ? copy.mutualFunds.sipMandateAmountSubtitle.replace("{amount}", formatSipAmount(plan))
           : undefined
       }
       message={message}
-      statusDetail={!useTerminalLayout && !isInProgress ? resolveSipMandateStatusDetail(plan) : undefined}
+      statusDetail={
+        !useCtaLayout && !useTerminalLayout && !isInProgress
+          ? resolveSipMandateStatusDetail(plan)
+          : undefined
+      }
       terminalLines={terminalLines}
       onDismiss={dismissMandateDialog}
       primaryLabel={
-        firstInstallmentDue
-          ? copy.mutualFunds.sipFirstInstallmentCta
-          : phase === "success" || phase === "error"
-            ? copy.mutualFunds.backToBrowse
-            : undefined
+        mandateAuthDue
+          ? copy.mutualFunds.sipMandateCta
+          : firstInstallmentDue
+            ? copy.mutualFunds.sipFirstInstallmentCta
+            : phase === "success" || phase === "error"
+              ? copy.mutualFunds.backToBrowse
+              : undefined
       }
       onPrimaryAction={
-        firstInstallmentDue
-          ? () => void startFirstInstallmentPayment()
-          : phase === "success" || phase === "error"
-            ? dismissMandateDialog
-            : undefined
+        mandateAuthDue
+          ? () => void startMandateAuthorization()
+          : firstInstallmentDue
+            ? () => void startFirstInstallmentPayment()
+            : phase === "success" || phase === "error"
+              ? dismissMandateDialog
+              : undefined
       }
     />
   );

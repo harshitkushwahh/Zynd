@@ -23,6 +23,47 @@ export function isOrderPaymentCompleted(
   });
 }
 
+const TERMINAL_PAYMENT_FAILURE_STATUSES = new Set([
+  "FAILED",
+  "EXPIRED",
+  "CANCELLED",
+  "REJECTED",
+  "DECLINED",
+]);
+
+export function isMfPurchaseOrderPaymentFailed(
+  order: Pick<
+    MfOrder,
+    "status" | "fp_payment_status" | "payment_completed" | "order_type" | "failure_code"
+  >,
+): boolean {
+  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") return false;
+  if (isOrderPaymentCompleted(order)) return false;
+
+  const status = order.status?.trim().toUpperCase() ?? "";
+  if (status === "FAILED" || status === "CANCELLED") return true;
+
+  const paymentStatus = order.fp_payment_status?.trim().toUpperCase() ?? "";
+  return TERMINAL_PAYMENT_FAILURE_STATUSES.has(paymentStatus);
+}
+
+/** Lumpsum/SIP purchase still waiting on gateway payment (investor-facing "Pending"). */
+export function isMfPurchaseOrderAwaitingPayment(
+  order: Pick<
+    MfOrder,
+    "status" | "fp_state" | "fp_payment_status" | "payment_completed" | "order_type" | "failure_code"
+  >,
+): boolean {
+  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") return false;
+  if (isOrderPaymentCompleted(order)) return false;
+  if (isMfPurchaseOrderPaymentFailed(order)) return false;
+
+  const status = order.status?.trim().toUpperCase() ?? "";
+  if (status === "SUCCEEDED") return false;
+
+  return true;
+}
+
 export function isOrderAwaitingAllotment(
   order: Pick<MfOrder, "status" | "fp_state" | "payment_completed"> & Partial<Pick<MfOrder, "order_type">>,
   events: MfOrderEvent[] = [],

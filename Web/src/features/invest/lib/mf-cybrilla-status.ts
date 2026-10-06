@@ -1,10 +1,51 @@
 import type { MfOrder } from "@/features/invest/api/invest-api";
 import { isOrderPaymentCompleted } from "@/features/invest/lib/mf-order-payment-status";
+import { copy } from "@/shared/config/copy";
 
 export function formatCybrillaStatusLabel(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
-  return trimmed.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  return trimmed
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatZyndOrderStatusLabel(status: string): string {
+  return formatCybrillaStatusLabel(status) ?? status.trim();
+}
+
+/** Purchase orders: gateway payment status wins until payment is completed. */
+function resolvePurchaseOrderStatusLabel(
+  order: Pick<MfOrder, "status" | "fp_state" | "fp_payment_status" | "payment_completed">,
+): string {
+  const paymentComplete = isOrderPaymentCompleted(order);
+  const normalizedStatus = order.status.trim().toUpperCase();
+  const fpState = order.fp_state?.trim().toLowerCase() ?? "";
+
+  if (!paymentComplete) {
+    const paymentLabel = formatCybrillaStatusLabel(order.fp_payment_status);
+    if (paymentLabel) return paymentLabel;
+
+    if (normalizedStatus === "PENDING" || normalizedStatus === "PAYMENT_PENDING") {
+      return formatZyndOrderStatusLabel(order.status);
+    }
+
+    // ONDC often marks fp_state submitted before the gateway payment settles.
+    if (fpState === "submitted" || normalizedStatus === "SUBMITTED") {
+      return formatCybrillaStatusLabel("PENDING") ?? copy.transactions.journeyStatusAwaitingPayment;
+    }
+
+    const purchaseLabel = formatCybrillaStatusLabel(order.fp_state);
+    if (purchaseLabel) return purchaseLabel;
+
+    return formatZyndOrderStatusLabel(order.status);
+  }
+
+  const purchaseLabel = formatCybrillaStatusLabel(order.fp_state);
+  if (purchaseLabel) return purchaseLabel;
+
+  return formatZyndOrderStatusLabel(order.status);
 }
 
 export function resolveCybrillaOrderStatusLabel(
@@ -14,22 +55,8 @@ export function resolveCybrillaOrderStatusLabel(
   if (order.order_type?.trim().toUpperCase() === "REDEMPTION") {
     const redemptionLabel = formatCybrillaStatusLabel(order.fp_state);
     if (redemptionLabel) return redemptionLabel;
-    return order.status
-      .trim()
-      .replaceAll("_", " ")
-      .replace(/\b\w/g, (char) => char.toUpperCase());
+    return formatZyndOrderStatusLabel(order.status);
   }
 
-  if (order.fp_payment_status && !isOrderPaymentCompleted(order)) {
-    const paymentLabel = formatCybrillaStatusLabel(order.fp_payment_status);
-    if (paymentLabel) return paymentLabel;
-  }
-
-  const purchaseLabel = formatCybrillaStatusLabel(order.fp_state);
-  if (purchaseLabel) return purchaseLabel;
-
-  return order.status
-    .trim()
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return resolvePurchaseOrderStatusLabel(order);
 }

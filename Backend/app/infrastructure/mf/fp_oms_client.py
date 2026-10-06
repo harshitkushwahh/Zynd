@@ -11,6 +11,7 @@ import httpx
 from app.application.integrations.provider_log_recorder import record_provider_api_log
 from app.application.integrations.integration_runtime import get_finprim_runtime, is_finprim_enabled
 from app.core.config import get_settings
+from app.infrastructure.kyc.cybrilla_terminal_log import log_fp_http
 from app.infrastructure.kyc.fp_clients import FpClientError, _raise_for_fp_response
 from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 
@@ -185,6 +186,15 @@ async def _get_mf_token(*, force_refresh: bool = False) -> str:
                     "grant_type": "client_credentials",
                 },
             )
+            if not response.is_success:
+                logger.error(
+                    "Finprim MF OAuth failed env=%s tenant=%s status=%s url=%s body=%s",
+                    runtime.environment,
+                    runtime.tenant,
+                    response.status_code,
+                    url,
+                    (response.text or "")[:400],
+                )
             response.raise_for_status()
             _fp_mf_token = str(response.json()["access_token"])
         return _fp_mf_token
@@ -245,13 +255,26 @@ async def _fp_mf_request(
         error_code = "fp_mf_transport_error"
         raise
     finally:
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        if is_finprim_enabled():
+            log_fp_http(
+                use_poa=False,
+                method=method,
+                path=path,
+                status_code=status_code,
+                success=success,
+                duration_ms=duration_ms,
+                error_code=error_code,
+                request_body=body or params,
+                response_body=response_body,
+            )
         await record_provider_api_log(
             source=ProviderLogSource.fintech_primitive,
             method=method,
             path=path,
             status_code=status_code,
             success=success,
-            duration_ms=int((time.perf_counter() - started) * 1000),
+            duration_ms=duration_ms,
             error_code=error_code,
             request_body=body or params,
             response_body=response_body,

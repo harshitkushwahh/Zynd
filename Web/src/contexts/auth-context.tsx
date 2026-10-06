@@ -39,6 +39,8 @@ import { clearOverviewReadyLatch } from "@/features/dashboard/overview/lib/overv
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
+  /** False until the first in-flight session restore (refresh cookie → access token) finishes. */
+  sessionRestoring: boolean;
   sessionRetrying: boolean;
   displayName: string;
   signIn: (email: string, password: string, turnstileToken?: string | null) => Promise<LoginFlowResponse>;
@@ -57,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cached = readAuthSessionSnapshot();
   const [user, setUser] = useState<AuthUser | null>(() => cached?.user ?? null);
   const [loading, setLoading] = useState(() => !(cached?.bootstrapped ?? false));
+  const [sessionRestoring, setSessionRestoring] = useState(true);
   const [sessionRetrying, setSessionRetrying] = useState(() => cached?.sessionRetrying ?? false);
 
   useEffect(() => {
@@ -71,25 +74,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const restoreSession = async () => {
-      const result = await bootstrapSession();
-      if (cancelled) return;
+      try {
+        const result = await bootstrapSession();
+        if (cancelled) return;
 
-      if (result.user) {
-        setUser(result.user);
+        if (result.user) {
+          setUser(result.user);
+          setSessionRetrying(false);
+          setLoading(false);
+          return;
+        }
+
+        if (result.reason === "network") {
+          setSessionRetrying(true);
+          setLoading(false);
+          return;
+        }
+
+        setUser(null);
         setSessionRetrying(false);
         setLoading(false);
-        return;
+      } finally {
+        if (!cancelled) {
+          setSessionRestoring(false);
+        }
       }
-
-      if (result.reason === "network") {
-        setSessionRetrying(true);
-        setLoading(false);
-        return;
-      }
-
-      setUser(null);
-      setSessionRetrying(false);
-      setLoading(false);
     };
 
     void restoreSession();
@@ -195,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
+      sessionRestoring,
       sessionRetrying,
       displayName: user ? getDisplayName(user) : "",
       signIn,
@@ -206,7 +216,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessTokenFromAuth: setAccessToken,
       completeAuth,
     }),
-    [completeAuth, loading, refreshUser, sessionRetrying, signIn, signInWithAppleToken, signInWithGoogleToken, signOut, user]
+    [
+      completeAuth,
+      loading,
+      refreshUser,
+      sessionRestoring,
+      sessionRetrying,
+      signIn,
+      signInWithAppleToken,
+      signInWithGoogleToken,
+      signOut,
+      user,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

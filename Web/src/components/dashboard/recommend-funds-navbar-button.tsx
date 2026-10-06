@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
+
 import "@/styles/zynd-recommend-funds-button.css";
-import { RecommendFundsHoverCard } from "@/components/dashboard/recommend-funds-hover-card";
+import { FUNDS_FOR_YOU_HREF } from "@/features/recommendations/lib/funds-for-you-navigation";
 import { copy } from "@/shared/config/copy";
 
 const SPARKLES_PATH =
@@ -12,11 +14,7 @@ function ButtonLetters({ text }: { text: string }) {
     <>
       {Array.from(text).map((char, index) =>
         char === " " ? (
-          <span
-            key={`${text}-${index}`}
-            className="btn-letter-space"
-            aria-hidden
-          />
+          <span key={`${text}-${index}`} className="btn-letter-space" aria-hidden />
         ) : (
           <span key={`${text}-${index}`} className="btn-letter">
             {char}
@@ -31,39 +29,32 @@ export function RecommendFundsNavbarButton() {
   const navbarCopy = copy.navbar.recommendFunds;
 
   return (
-    <RecommendFundsHoverCard
-      trigger={
-        <div className="btn-wrapper" onMouseDown={(event) => event.preventDefault()}>
-          <button
-            type="button"
-            className="btn"
-            aria-label={navbarCopy.label}
-            onClick={(event) => event.preventDefault()}
+    <Link
+      href={FUNDS_FOR_YOU_HREF}
+      className="recommend-funds-popover-trigger inline-block"
+      aria-label={navbarCopy.label}
+    >
+      <div className="btn-wrapper">
+        <span className="btn">
+          <svg
+            className="btn-svg"
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            aria-hidden
           >
-            <svg
-              className="btn-svg"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              aria-hidden
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d={SPARKLES_PATH}
-              />
-            </svg>
+            <path strokeLinecap="round" strokeLinejoin="round" d={SPARKLES_PATH} />
+          </svg>
 
-            <div className="txt-wrapper">
-              <div className="txt-1" aria-hidden>
-                <ButtonLetters text={navbarCopy.idleLabel} />
-              </div>
-              <div className="txt-2" aria-hidden>
-                <ButtonLetters text={navbarCopy.activeLabel} />
-              </div>
+          <div className="txt-wrapper">
+            <div className="txt-1" aria-hidden>
+              <ButtonLetters text={navbarCopy.idleLabel} />
             </div>
-          </button>
-        </div>
-      }
-    />
+            <div className="txt-2" aria-hidden>
+              <ButtonLetters text={navbarCopy.activeLabel} />
+            </div>
+          </div>
+        </span>
+      </div>
+    </Link>
   );
 }

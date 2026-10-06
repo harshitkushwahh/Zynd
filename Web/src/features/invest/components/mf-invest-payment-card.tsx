@@ -19,6 +19,7 @@ import {
   createMfSipPlan,
   validateMfSipPlan,
   upsertMfCartItem,
+  type InvestSipOption,
   type MfMandateType,
   type MfPaymentMethod,
 } from "@/features/invest/api/invest-api";
@@ -28,10 +29,12 @@ import { MfFamilyGoalLinkPicker } from "@/features/invest/components/mf-family-g
 import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
 import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
+import { MfInvestModeToggle } from "@/features/invest/components/mf-invest-mode-toggle";
 import { MfAmountRollDisplay } from "@/features/invest/components/mf-amount-roll-display";
 import { MfSipInstallmentsInput } from "@/features/invest/components/mf-sip-installments-input";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
-import { useMfCartQuery } from "@/features/invest/hooks/use-mf-cart-query";
+import { clearMfPaymentSessionBeforeNewInvest } from "@/features/invest/lib/mf-payment-session";
+import { useMfCartQuery, useSyncMfCartCache } from "@/features/invest/hooks/use-mf-cart-query";
 import { usePaymentReadyBankAccounts } from "@/features/invest/hooks/use-payment-ready-bank-accounts";
 import { useAddBankAccountAction } from "@/features/invest/hooks/use-add-bank-account-action";
 import { ApiError } from "@/lib/api-client";
@@ -45,6 +48,17 @@ import {
   SIP_CALCULATOR_MAX_AMOUNT,
   SIP_ORDER_DEFAULT_INSTALLMENTS,
 } from "@/features/invest/lib/mf-sip-calculator";
+import {
+  defaultInstallmentsForFrequency,
+  isDailySipAllowed,
+  isDailySipFrequency,
+  isMonthlySipAllowed,
+  normalizeSipFrequency,
+  resolveDefaultSipFrequency,
+  resolveMinSipForFrequency,
+  type SipFrequency,
+  validateSipInstallmentAmount,
+} from "@/features/invest/lib/mf-sip-frequency";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import {
   MfRedeemPaymentCardContent,
@@ -67,6 +81,7 @@ export type MfInvestPaymentCardProps = {
   productId?: string | null;
   minLumpsumAmountInr?: number | null;
   minSipAmountInr?: number | null;
+  sipOptions?: InvestSipOption[];
   className?: string;
   sticky?: boolean;
   showFundName?: boolean;
@@ -149,48 +164,6 @@ function resolveAmountFieldError(
     );
   }
   return null;
-}
-
-function ModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: MfInvestPaymentMode;
-  onChange: (mode: MfInvestPaymentMode) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label={copy.mutualFunds.paymentCardTitle}
-      className="grid grid-cols-2 gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
-    >
-      {(
-        [
-          { id: "sip" as const, label: copy.mutualFunds.paymentCardMonthlySip },
-          { id: "lumpsum" as const, label: copy.mutualFunds.paymentCardOneTime },
-        ] as const
-      ).map((option) => {
-        const isActive = mode === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(option.id)}
-            className={cn(
-              "rounded-full px-3 py-2 text-compact font-medium transition-colors",
-              isActive
-                ? "bg-foreground text-background shadow-zynd-low"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 function resolveAmountFontSize(digitLength: number) {
@@ -595,6 +568,7 @@ export function MfInvestPaymentCard({
   productId,
   minLumpsumAmountInr,
   minSipAmountInr,
+  sipOptions: sipOptionsProp,
   className,
   sticky = true,
   showFundName = true,
@@ -667,8 +641,24 @@ export function MfInvestPaymentCard({
   const amount = controlledAmount ?? internalAmount;
   const setAmount = onAmountChange ?? setInternalAmount;
   const [installmentDay, setInstallmentDay] = useState<number>(20);
+  const [sipFrequency, setSipFrequency] = useState<SipFrequency>(() =>
+    resolveDefaultSipFrequency(sipOptionsProp, {
+      sipAllowed: sipEnabled,
+      minSipAmountInr,
+    }),
+  );
   const [numberOfInstallments, setNumberOfInstallments] = useState<number>(
     SIP_ORDER_DEFAULT_INSTALLMENTS,
+  );
+  const sipOptions = useMemo(() => sipOptionsProp ?? [], [sipOptionsProp]);
+  const monthlySipAllowed = useMemo(
+    () => isMonthlySipAllowed(sipOptions, { sipAllowed: sipEnabled, minSipAmountInr }),
+    [minSipAmountInr, sipEnabled, sipOptions],
+  );
+  const dailySipAllowed = useMemo(() => isDailySipAllowed(sipOptions), [sipOptions]);
+  const frequencyAwareMinSip = useMemo(
+    () => resolveMinSipForFrequency(sipFrequency, sipOptions, minSipAmountInr),
+    [minSipAmountInr, sipFrequency, sipOptions],
   );
   const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
   const [mandateType, setMandateType] = useState<MfMandateType>("upi");
@@ -707,6 +697,7 @@ export function MfInvestPaymentCard({
     canAddAccount,
   };
   const { data: cart } = useMfCartQuery(interactive && hasFund);
+  const syncMfCartCache = useSyncMfCartCache();
   const selectedBankAccount = useMemo(
     () => accounts.find((account) => account.id === selectedBankAccountId) ?? accounts[0] ?? null,
     [accounts, selectedBankAccountId],
@@ -741,19 +732,62 @@ export function MfInvestPaymentCard({
     }
   }, [mode, showSip]);
 
+  useEffect(() => {
+    setSipFrequency((current) => {
+      if (current === "daily" && dailySipAllowed) return current;
+      if (current === "monthly" && monthlySipAllowed) return current;
+      return resolveDefaultSipFrequency(sipOptions, {
+        sipAllowed: sipEnabled,
+        minSipAmountInr,
+      });
+    });
+  }, [dailySipAllowed, minSipAmountInr, monthlySipAllowed, sipEnabled, sipOptions]);
+
+  function handleSipFrequencyChange(next: SipFrequency) {
+    setActionError(null);
+    setShowAmountValidation(false);
+    setSipFrequency(next);
+    setNumberOfInstallments(defaultInstallmentsForFrequency(next));
+  }
+
   const canSubmit = useMemo(() => hasFund && amount > 0, [amount, hasFund]);
 
   const amountError = useMemo(() => {
-    const liveError = resolveAmountFieldError(amount, mode, minSipAmountInr, minLumpsumAmountInr);
+    const sipMin = mode === "sip" ? frequencyAwareMinSip : minSipAmountInr;
+    const frequencyError =
+      mode === "sip"
+        ? validateSipInstallmentAmount(amount, sipFrequency, sipOptions, minSipAmountInr)
+        : null;
+    if (frequencyError) return frequencyError;
+    const liveError = resolveAmountFieldError(amount, mode, sipMin, minLumpsumAmountInr);
     if (liveError) return liveError;
     if (!showAmountValidation) return null;
-    return resolveAmountFieldError(amount, mode, minSipAmountInr, minLumpsumAmountInr, {
+    return resolveAmountFieldError(amount, mode, sipMin, minLumpsumAmountInr, {
       requireAmount: true,
     });
-  }, [amount, minLumpsumAmountInr, minSipAmountInr, mode, showAmountValidation]);
+  }, [
+    amount,
+    frequencyAwareMinSip,
+    minLumpsumAmountInr,
+    minSipAmountInr,
+    mode,
+    showAmountValidation,
+    sipFrequency,
+    sipOptions,
+  ]);
 
   function validateAmount(): string | null {
-    return resolveAmountFieldError(amount, mode, minSipAmountInr, minLumpsumAmountInr, {
+    if (mode === "sip") {
+      const frequencyError = validateSipInstallmentAmount(
+        amount,
+        sipFrequency,
+        sipOptions,
+        minSipAmountInr,
+      );
+      if (frequencyError) return frequencyError;
+    }
+    const sipMin = mode === "sip" ? frequencyAwareMinSip : minSipAmountInr;
+    return resolveAmountFieldError(amount, mode, sipMin, minLumpsumAmountInr, {
       requireAmount: true,
     });
   }
@@ -799,6 +833,7 @@ export function MfInvestPaymentCard({
     setSubmitting(true);
     setActionError(null);
     try {
+      clearMfPaymentSessionBeforeNewInvest();
       const order = await createMfOrder({
         product_id: productId,
         amount_inr: amount,
@@ -830,6 +865,16 @@ export function MfInvestPaymentCard({
       return;
     }
 
+    if (mode === "sip" && cart && cart.sip_items.length > 0) {
+      const cartFrequency = normalizeSipFrequency(cart.sip_items[0]?.frequency);
+      if (cartFrequency !== sipFrequency) {
+        const message = copy.mutualFunds.cartSipFrequencyMismatch;
+        setActionError(message);
+        toast.error(message);
+        return;
+      }
+    }
+
     setSubmitting(true);
     setActionError(null);
     try {
@@ -837,10 +882,11 @@ export function MfInvestPaymentCard({
         product_id: productId,
         amount_inr: amount,
         investment_type: mode,
-        installment_day: mode === "sip" ? installmentDay : undefined,
-        frequency: mode === "sip" ? "monthly" : undefined,
+        installment_day: mode === "sip" && !isDailySipFrequency(sipFrequency) ? installmentDay : undefined,
+        frequency: mode === "sip" ? sipFrequency : undefined,
         number_of_installments: mode === "sip" ? numberOfInstallments : undefined,
       });
+      syncMfCartCache(nextCart);
       const addedLabel =
         mode === "sip" ? copy.mutualFunds.cartSipAddedToast : copy.mutualFunds.cartAddedToast;
       toast.success(addedLabel, {
@@ -879,16 +925,16 @@ export function MfInvestPaymentCard({
       await validateMfSipPlan({
         product_id: productId,
         amount_inr: amount,
-        frequency: "monthly",
-        installment_day: installmentDay,
+        frequency: sipFrequency,
+        installment_day: isDailySipFrequency(sipFrequency) ? undefined : installmentDay,
         number_of_installments: numberOfInstallments,
       });
 
       const plan = await createMfSipPlan({
         product_id: productId,
         amount_inr: amount,
-        frequency: "monthly",
-        installment_day: installmentDay,
+        frequency: sipFrequency,
+        installment_day: isDailySipFrequency(sipFrequency) ? undefined : installmentDay,
         number_of_installments: numberOfInstallments,
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
@@ -958,7 +1004,16 @@ export function MfInvestPaymentCard({
             showSip ? null : "pt-1",
           )}
         >
-          {showSip ? <ModeToggle mode={mode} onChange={handleModeChange} /> : null}
+          {showSip ? (
+            <MfInvestModeToggle
+              mode={mode}
+              sipFrequency={sipFrequency}
+              onModeChange={handleModeChange}
+              onSipFrequencyChange={handleSipFrequencyChange}
+              dailySipAllowed={dailySipAllowed}
+              disabled={!interactive || submitting}
+            />
+          ) : null}
 
           <div className="space-y-3.5">
             <AmountInput
@@ -979,14 +1034,23 @@ export function MfInvestPaymentCard({
           )}
         >
           {isSipCard ? (
-            <div className="grid grid-cols-[minmax(0,1fr)_6.75rem] gap-2 [&_button]:min-h-9 [&_button]:py-1.5">
-              <MfSipDayPicker
-                compact
-                maxDay={SIP_MAX_INSTALLMENT_DAY}
-                value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
-                onChange={setInstallmentDay}
-                disabled={submitting}
-              />
+            <div
+              className={cn(
+                "grid gap-2 [&_button]:min-h-9 [&_button]:py-1.5",
+                isDailySipFrequency(sipFrequency)
+                  ? "grid-cols-1"
+                  : "grid-cols-[minmax(0,1fr)_6.75rem]",
+              )}
+            >
+              {!isDailySipFrequency(sipFrequency) ? (
+                <MfSipDayPicker
+                  compact
+                  maxDay={SIP_MAX_INSTALLMENT_DAY}
+                  value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
+                  onChange={setInstallmentDay}
+                  disabled={submitting}
+                />
+              ) : null}
               <MfSipInstallmentsInput
                 compact
                 value={numberOfInstallments}

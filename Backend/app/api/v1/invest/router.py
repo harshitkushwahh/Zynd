@@ -389,8 +389,15 @@ async def invest_search(
     q: str = Query(min_length=0, max_length=120),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=50),
+    max_min_sip_inr: Optional[float] = Query(default=None, ge=1, le=10_000_000),
 ) -> InvestFundSearchResponse:
-    payload = await cached_search_invest_funds(db, query=q, page=page, page_size=page_size)
+    payload = await cached_search_invest_funds(
+        db,
+        query=q,
+        page=page,
+        page_size=page_size,
+        max_min_sip_inr=max_min_sip_inr,
+    )
     return InvestFundSearchResponse(
         query=payload["query"],
         items=[InvestFundSummaryResponse(**item) for item in payload["items"]],
@@ -601,6 +608,14 @@ async def create_mf_order(
     except MfOrderError:
         await db.rollback()
         raise
+
+    user_ip = get_client_ip(request)
+    try:
+        if await advance_order_for_payment(db, order, user_ip=user_ip):
+            await db.commit()
+        await db.refresh(order)
+    except Exception:
+        await db.rollback()
 
     return await _order_response(db, order, product_name=product.name if product else None)
 

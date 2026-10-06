@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 CACHE_GEN_KEY = "invest:catalog:gen"
 CACHE_HITS_KEY = "invest:cache:hits"
 CACHE_MISSES_KEY = "invest:cache:misses"
-CACHE_VERSION = "v1"
+CACHE_VERSION = "v2"
 
 
 def _cache_enabled(settings: Settings | None = None) -> bool:

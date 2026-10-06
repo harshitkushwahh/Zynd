@@ -69,6 +69,10 @@ export function resolveDocumentTitleLabel(
     return "";
   }
 
+  if (pathname.startsWith("/dashboard/funds-for-you")) {
+    return copy.navbar.recommendFunds.label;
+  }
+
   if (pathname.startsWith("/dashboard/mutual-funds/orders/payment-return")) {
     return copy.mutualFunds.orderPayReturnTitle;
   }
