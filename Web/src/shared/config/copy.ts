@@ -2065,6 +2065,8 @@ export const copy = {
     journeyStatusCompleted: "Completed",
     journeyStatusFailed: "Failed",
     orderStatusAwaitingAllotment: "Awaiting Allotment",
+    orderStatusPending: "Pending",
+    orderStatusPaymentCanceled: "Payment canceled",
   },
   mySips: {
     title: "My SIPs",
@@ -2072,8 +2074,6 @@ export const copy = {
     filterStatusLabel: "Status",
     filterActive: "Active",
     filterPending: "Pending",
-    orderStatusPending: "Pending",
-    orderStatusPaymentCanceled: "Payment canceled",
     filterCancelled: "Cancelled",
     filterFailed: "Failed",
     tableFund: "Fund",
