@@ -507,12 +507,9 @@ export const copy = {
         "These fields are locked to match your verified Aadhaar records.",
       digilockerPrefillIncomplete:
         "Some Aadhaar details could not be fetched. The available values are shown below. Try DigiLocker again to complete verification.",
-      proofOnlyTitle: "Address fetched from DigiLocker",
+      proofOnlyTitle: "Aadhaar address attached",
       proofOnlyDescription:
-        "DigiLocker collected this address from Aadhaar. You cannot type or change it.",
-      proofOnlyWithoutLines:
-        "DigiLocker confirmed your Aadhaar address. Continue to the next step. You cannot enter an address yourself.",
-      manualEntryBlocked: "Address must be fetched from DigiLocker. Manual entry is not allowed.",
+        "DigiLocker already attached your Aadhaar address to the KYC form. Enter the same address here so we can keep it on your profile.",
       permanentTab: "Permanent address",
       correspondenceTab: "Correspondence address",
       sameAsPermanent: "Correspondence address is same as permanent address",

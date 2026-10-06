@@ -35,39 +35,21 @@ def _address_block(raw: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _empty_address() -> dict[str, str]:
-    return {
-        "line1": "",
-        "line2": "",
-        "city": "",
-        "state": "",
-        "pincode": "",
-        "country": "India",
-    }
-
-
 def proof_contact_snapshot(form: dict[str, Any]) -> dict[str, Any] | None:
-    """Address for an on-hold or update journey. Comes only from proof details, never from typing."""
+    """Street lines from a completed proof form. Proof type alone is not an address."""
     if not poa_form_proof_complete(form):
         return None
     mapped = contact_draft_from_kyc_form(form)
+    if mapped is None:
+        return None
     address = form.get("address") if isinstance(form.get("address"), dict) else {}
     proof_type = str(address.get("proof_type") or "aadhaar").strip() or "aadhaar"
-    if mapped is not None:
-        mapped["source"] = "proof_details"
-        mapped["proofType"] = proof_type
-        permanent = mapped.get("permanent") if isinstance(mapped.get("permanent"), dict) else {}
-        mapped["correspondence"] = dict(permanent)
-        mapped["sameAsPermanent"] = True
-        return mapped
-    blank = _empty_address()
-    return {
-        "source": "proof_details",
-        "proofType": proof_type,
-        "sameAsPermanent": True,
-        "permanent": blank,
-        "correspondence": dict(blank),
-    }
+    mapped["source"] = "proof_details"
+    mapped["proofType"] = proof_type
+    permanent = mapped.get("permanent") if isinstance(mapped.get("permanent"), dict) else {}
+    mapped["correspondence"] = dict(permanent)
+    mapped["sameAsPermanent"] = True
+    return mapped
 
 
 def contact_draft_from_kyc_form(form: dict[str, Any]) -> dict[str, Any] | None:
@@ -97,34 +79,35 @@ def _contact_line1(journey: Any) -> str:
     return str(permanent.get("line1") or "").strip()
 
 
-def _draft_source(journey: Any) -> str:
-    contact = journey.contact_draft_json if isinstance(journey.contact_draft_json, dict) else {}
-    return str(contact.get("source") or "").strip()
+def _apply_father_name(journey: Any, form: dict[str, Any]) -> bool:
+    father = str(form.get("father_name") or "").strip()
+    if not father:
+        return False
+    personal = dict(journey.personal_draft_json or {})
+    if str(personal.get("fathersName") or "").strip():
+        return False
+    personal["fathersName"] = father
+    journey.personal_draft_json = personal
+    return True
 
 
 async def apply_kra_update_proof_address(journey: Any, form: dict[str, Any]) -> bool:
-    """Replace any typed address with the DigiLocker proof snapshot."""
+    """Store street lines only when the proof form actually returns them.
+
+    A fetched proof with only ``proof_type`` does not replace an address the user typed.
+    """
     if resolve_kyc_flow_mode(journey) != "kra_update":
         return False
+    updated = _apply_father_name(journey, form)
     draft = proof_contact_snapshot(form)
-    if draft is None:
-        return False
-    incoming_line = str((draft.get("permanent") or {}).get("line1") or "").strip()
-    if not incoming_line and _draft_source(journey) == "proof_details" and _contact_line1(journey):
-        return False
-    if incoming_line:
-        try:
-            enriched = await enrich_digilocker_address_prefill(draft)
-            enriched["source"] = "proof_details"
-            enriched["proofType"] = draft.get("proofType")
-            draft = enriched
-        except Exception:
-            logger.exception("proof address pincode enrichment failed")
+    if draft is None or _contact_line1(journey):
+        return updated
+    try:
+        enriched = await enrich_digilocker_address_prefill(draft)
+        enriched["source"] = "proof_details"
+        enriched["proofType"] = draft.get("proofType")
+        draft = enriched
+    except Exception:
+        logger.exception("proof address pincode enrichment failed")
     journey.contact_draft_json = draft
-    father = str(form.get("father_name") or "").strip()
-    if father:
-        personal = dict(journey.personal_draft_json or {})
-        if not str(personal.get("fathersName") or "").strip():
-            personal["fathersName"] = father
-            journey.personal_draft_json = personal
     return True
