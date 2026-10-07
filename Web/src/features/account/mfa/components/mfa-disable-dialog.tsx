@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, Lock } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { AuthSubmitFooter } from "@/components/auth/auth-shared";
@@ -58,7 +58,7 @@ function DisableProgress({ step, compact = false }: DisableProgressProps) {
             className={cn(
               "h-1.5 flex-1 rounded-[var(--radius-full)] transition-all duration-300",
               done && "bg-success",
-              active && "bg-primary",
+              active && "bg-destructive",
               !done && !active && "bg-border",
             )}
           />
@@ -133,13 +133,12 @@ export function MfaDisableDialog({
 
   return (
     <BrandDialog open={open} onOpenChange={handleOpenChange} title={title} maxWidth="lg">
-      <div className={cn("px-5 pb-5", step === "intro" ? "pt-4" : "pt-1.5")}>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-4">
+        <MfaDisableHeroImage className="mb-4" />
         <DisableProgress step={step} compact={step !== "intro"} />
 
         {step === "intro" ? (
           <div className="space-y-5">
-            <MfaDisableHeroImage />
-
             <ul className="space-y-2.5">
               {INTRO_POINTS.map((point) => {
                 const Icon = point.icon;
@@ -167,41 +166,44 @@ export function MfaDisableDialog({
             </AuthSubmitFooter>
           </div>
         ) : (
-          <form className="mt-2 space-y-4" onSubmit={handleSubmit}>
-            <div className="rounded-[var(--radius-xl)] border border-border bg-muted/30 p-4 shadow-zynd-low">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="disable-mfa-password" className="text-caption font-medium">
-                    {copy.pin.setupStepPassword}
-                  </Label>
-                  <PasswordInput
-                    id="disable-mfa-password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete="current-password"
-                    disabled={loading}
-                  />
-                </div>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="disable-mfa-password" className="text-caption font-medium">
+                {copy.pin.setupStepPassword}{" "}
+                <span className="text-destructive">*</span>
+              </Label>
+              <PasswordInput
+                id="disable-mfa-password"
+                icon={Lock}
+                placeholder={copy.settings.changePasswordCurrentPlaceholder}
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  if (error) setError("");
+                }}
+                autoComplete="current-password"
+                disabled={loading}
+                autoFocus
+                className="h-11 w-full min-w-0 max-w-full bg-background"
+              />
+            </div>
 
-                <div className="border-t border-border pt-4">
-                  <StepUpSecondFactorFields
-                    embedded
-                    centered
-                    useSms={useSms}
-                    onUseSmsChange={setUseSms}
-                    totpCode={totp}
-                    onTotpCodeChange={setTotp}
-                    smsOtp={smsOtp}
-                    onSmsOtpChange={setSmsOtp}
-                    smsSent={smsSent}
-                    onSmsSentChange={setSmsSent}
-                    disabled={loading}
-                    error={error}
-                    onErrorChange={setError}
-                  />
-                </div>
-              </div>
+            <div className="min-w-0 border-t border-border/60 pt-4">
+              <StepUpSecondFactorFields
+                embedded
+                compactOtp
+                useSms={useSms}
+                onUseSmsChange={setUseSms}
+                totpCode={totp}
+                onTotpCodeChange={setTotp}
+                smsOtp={smsOtp}
+                onSmsOtpChange={setSmsOtp}
+                smsSent={smsSent}
+                onSmsSentChange={setSmsSent}
+                disabled={loading}
+                error={error}
+                onErrorChange={setError}
+              />
             </div>
 
             <AuthSubmitFooter className="pt-0">

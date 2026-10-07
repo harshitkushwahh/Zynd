@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.mf.mf_fp_review_poll import (
+    PURCHASE_REVIEW_POLL_ATTEMPTS,
+    PURCHASE_REVIEW_POLL_INTERVAL_SECONDS,
+    PURCHASE_REVIEW_WAIT_STATES,
+    poll_purchase_until_actionable,
+    purchase_not_ready_error,
+)
 from app.application.mf.mf_fp_state import (
     FP_FAILURE_STATES,
     FP_PAYMENT_PENDING_STATES,
@@ -16,7 +24,12 @@ from app.application.mf.mf_fp_state import (
 )
 from app.core.config import get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import extract_fp_state, get_mf_purchase, list_mf_purchases_for_plan
+from app.infrastructure.mf.fp_oms_client import (
+    extract_fp_old_id,
+    extract_fp_state,
+    get_mf_purchase,
+    list_mf_purchases_for_plan,
+)
 from app.infrastructure.mf.fp_payment_client import (
     create_netbanking_payment,
     extract_payment_status,
@@ -290,6 +303,41 @@ async def _sync_first_installment_order(
     await sync_sip_first_installment_order(session, plan, installment=installment)
 
 
+async def _await_payable_first_installment(plan: MfSipPlan) -> dict[str, Any] | None:
+    """List the plan purchase, then poll it out of under_review until old_id exists."""
+    latest: dict[str, Any] | None = None
+    for attempt in range(PURCHASE_REVIEW_POLL_ATTEMPTS):
+        if not plan.fp_plan_id:
+            return None
+        purchases = await list_mf_purchases_for_plan(fp_plan_id=plan.fp_plan_id)
+        latest = _pick_first_installment_purchase(purchases)
+        if latest and latest.get("fp_purchase_id"):
+            break
+        if attempt + 1 < PURCHASE_REVIEW_POLL_ATTEMPTS:
+            await asyncio.sleep(PURCHASE_REVIEW_POLL_INTERVAL_SECONDS)
+    if not latest or not latest.get("fp_purchase_id"):
+        return latest
+
+    state = str(latest.get("state") or "").strip().lower()
+    purchase_id = str(latest["fp_purchase_id"])
+    if state not in PURCHASE_REVIEW_WAIT_STATES and latest.get("fp_purchase_old_id") is not None:
+        return latest
+    polled_state, payload = await poll_purchase_until_actionable(
+        purchase_id,
+        initial_state=state or "under_review",
+    )
+    old_id = extract_fp_old_id(payload)
+    if old_id is None:
+        refreshed = await get_mf_purchase(purchase_id)
+        old_id = extract_fp_old_id(refreshed)
+        polled_state = (extract_fp_state(refreshed) or polled_state).strip().lower()
+    return {
+        **latest,
+        "state": polled_state,
+        "fp_purchase_old_id": old_id if old_id is not None else latest.get("fp_purchase_old_id"),
+    }
+
+
 async def initiate_sip_first_installment_payment(
     session: AsyncSession,
     plan: MfSipPlan,
@@ -309,26 +357,51 @@ async def initiate_sip_first_installment_payment(
     cached = _first_installment_meta(plan)
     fp_purchase_old_id = cached.get("fp_purchase_old_id")
     fp_purchase_id = cached.get("fp_purchase_id")
-    if fp_purchase_old_id is None:
-        purchases = await list_mf_purchases_for_plan(fp_plan_id=plan.fp_plan_id)
-        installment = _pick_first_installment_purchase(purchases)
-        if installment is None or installment.get("fp_purchase_old_id") is None:
-            raise FpClientError("First installment order is not ready yet", "first_installment_missing", 409)
-        fp_purchase_old_id = installment["fp_purchase_old_id"]
-        fp_purchase_id = installment.get("fp_purchase_id")
+    cached_state = str(cached.get("fp_state") or "").strip().lower()
+    if (
+        fp_purchase_old_id is None
+        or not fp_purchase_id
+        or cached_state in PURCHASE_REVIEW_WAIT_STATES
+    ):
+        awaited = await _await_payable_first_installment(plan)
+        if awaited:
+            fp_purchase_old_id = awaited.get("fp_purchase_old_id") or fp_purchase_old_id
+            fp_purchase_id = awaited.get("fp_purchase_id") or fp_purchase_id
+            cached_state = str(awaited.get("state") or cached_state).strip().lower()
+    if fp_purchase_old_id is None or cached_state in PURCHASE_REVIEW_WAIT_STATES:
+        raise FpClientError("First installment order is not ready yet", "first_installment_missing", 409)
 
     if mandate is None or mandate.bank_account_old_id is None:
         raise FpClientError("Debit bank account is unavailable", "bank_old_id_missing", 400)
 
     settings = get_settings()
     try:
-        payment = await create_netbanking_payment(
-            amc_order_ids=[int(fp_purchase_old_id)],
-            bank_account_id=int(mandate.bank_account_old_id),
-            method=_resolve_payment_method(mandate),
-            provider_name="ONDC" if settings.zynd_mf_order_payment_gateway == "ondc" else "CYBRILLAPOA",
-            payment_postback_url=settings.resolved_mf_sip_first_installment_postback_url_for_plan(str(plan.id)),
-        )
+        try:
+            payment = await create_netbanking_payment(
+                amc_order_ids=[int(fp_purchase_old_id)],
+                bank_account_id=int(mandate.bank_account_old_id),
+                method=_resolve_payment_method(mandate),
+                provider_name="ONDC" if settings.zynd_mf_order_payment_gateway == "ondc" else "CYBRILLAPOA",
+                payment_postback_url=settings.resolved_mf_sip_first_installment_postback_url_for_plan(str(plan.id)),
+            )
+        except FpClientError as exc:
+            if not purchase_not_ready_error(exc) or not fp_purchase_id:
+                raise
+            polled_state, payload = await poll_purchase_until_actionable(
+                str(fp_purchase_id),
+                initial_state=cached_state or "under_review",
+            )
+            refreshed_old_id = extract_fp_old_id(payload) or fp_purchase_old_id
+            if polled_state in PURCHASE_REVIEW_WAIT_STATES:
+                raise
+            payment = await create_netbanking_payment(
+                amc_order_ids=[int(refreshed_old_id)],
+                bank_account_id=int(mandate.bank_account_old_id),
+                method=_resolve_payment_method(mandate),
+                provider_name="ONDC" if settings.zynd_mf_order_payment_gateway == "ondc" else "CYBRILLAPOA",
+                payment_postback_url=settings.resolved_mf_sip_first_installment_postback_url_for_plan(str(plan.id)),
+            )
+            fp_purchase_old_id = refreshed_old_id
     except FpClientError as exc:
         message = (exc.message or "").lower()
         if "already in progress" in message or "given order set" in message:

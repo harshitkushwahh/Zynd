@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Download, Eye, KeyRound } from "lucide-react";
+import { Check, Copy, Download, Eye, EyeOff, KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -22,6 +22,10 @@ type BackupStatus = {
   remaining: number;
   used: number;
 };
+
+function maskBackupCode(code: string) {
+  return "•".repeat(code.length || 8);
+}
 
 type BackupCodesSettingsPanelProps = {
   mfaEnabled: boolean;
@@ -74,23 +78,25 @@ export function BackupCodesSettingsPanel({
 
   const showBackupSkeleton = backupCodesLoading && !backupCodesHydrated;
 
-  const backupBody =
-    canRevealStoredCodes && backupCodesRevealed ? (
-      <div className="grid grid-cols-2 gap-2 font-mono text-compact sm:grid-cols-3">
+  const backupBody = !canRevealStoredCodes ? (
+    <p className="text-caption leading-relaxed text-muted-foreground">
+      {copy.settings.backupCodesMissingHint}
+    </p>
+  ) : (
+      <div
+        className="grid grid-cols-2 gap-2 font-mono text-compact sm:grid-cols-3"
+        aria-hidden={!backupCodesRevealed}
+      >
         {storedBackupCodes.map((code) => (
           <span
             key={code}
-            className="rounded-[var(--radius-control)] border border-border bg-muted/15 px-2.5 py-2 text-center"
+            className="rounded-[var(--radius-control)] border border-border bg-muted/15 px-2.5 py-2 text-center tracking-widest text-muted-foreground"
           >
-            {code}
+            {backupCodesRevealed ? code : maskBackupCode(code)}
           </span>
         ))}
       </div>
-    ) : !canRevealStoredCodes ? (
-      <p className="text-caption leading-relaxed text-muted-foreground">
-        {copy.settings.backupCodesMissingHint}
-      </p>
-    ) : null;
+  );
 
   return (
     <>
@@ -136,6 +142,15 @@ export function BackupCodesSettingsPanel({
                   <Download className="size-3.5" />
                   {copy.mfa.enroll.downloadBackupCodesJson}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onBackupCodesRevealed(false)}
+                >
+                  <EyeOff className="size-3.5" />
+                  {copy.mfa.backupAccess.hide}
+                </Button>
               </>
             ) : canRevealStoredCodes ? (
               <Button type="button" variant="outline" size="sm" onClick={() => setAccessOpen(true)}>
@@ -159,7 +174,7 @@ export function BackupCodesSettingsPanel({
         onOpenChange={setRegenerateOpen}
         onCompleted={async () => {
           await onRefreshBackupCodes();
-          onBackupCodesRevealed(true);
+          onBackupCodesRevealed(false);
         }}
       />
       <MfaBackupCodesAccessDialog

@@ -3,6 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useProfileImageOptional } from "@/contexts/profile-image-context";
 import { initialsFromName } from "@/features/referral/lib/referral-initials";
+import { resolveProfileImageSrc } from "@/features/referral/lib/resolve-profile-image-src";
 import { cn } from "@/lib/utils";
 
 type ReferralUserAvatarProps = {
@@ -21,8 +22,8 @@ export function ReferralUserAvatar({
   fallbackClassName,
 }: ReferralUserAvatarProps) {
   const profileImage = useProfileImageOptional();
-  const resolvedImageUrl =
-    imageUrl ?? (isCurrentUser ? profileImage?.profileUrl : null);
+  const currentUserPhoto = isCurrentUser ? profileImage?.profileUrl : null;
+  const resolvedImageUrl = currentUserPhoto || resolveProfileImageSrc(imageUrl);
   const initials = initialsFromName(name);
 
   return (

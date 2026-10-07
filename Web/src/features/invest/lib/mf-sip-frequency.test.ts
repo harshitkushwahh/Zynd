@@ -4,6 +4,7 @@ import {
   SIP_FREQUENCY_DAILY,
   SIP_FREQUENCY_MONTHLY,
   defaultInstallmentsForFrequency,
+  formatMinInstallmentsDisplay,
   isDailySipAllowed,
   isMonthlySipAllowed,
   normalizeSipFrequency,
@@ -48,5 +49,16 @@ describe("defaultInstallmentsForFrequency", () => {
   it("uses higher default for daily", () => {
     expect(defaultInstallmentsForFrequency(SIP_FREQUENCY_DAILY)).toBe(30);
     expect(defaultInstallmentsForFrequency(SIP_FREQUENCY_MONTHLY)).toBe(12);
+  });
+});
+
+describe("formatMinInstallmentsDisplay", () => {
+  it("shows Any when the fund has no minimum", () => {
+    expect(formatMinInstallmentsDisplay(null)).toBe("Any");
+    expect(formatMinInstallmentsDisplay(undefined)).toBe("Any");
+  });
+
+  it("shows the count when set", () => {
+    expect(formatMinInstallmentsDisplay(6)).toBe("6");
   });
 });

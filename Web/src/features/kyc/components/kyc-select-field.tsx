@@ -1,5 +1,7 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
+
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -19,6 +21,9 @@ type KycSelectFieldProps = {
   placeholder: string;
   disabled?: boolean;
   hasError?: boolean;
+  required?: boolean;
+  icon?: LucideIcon;
+  triggerClassName?: string;
   onChange: (value: string) => void;
 };
 
@@ -36,6 +41,9 @@ export function KycSelectField({
   placeholder,
   disabled,
   hasError,
+  required = false,
+  icon: Icon,
+  triggerClassName,
   onChange,
 }: KycSelectFieldProps) {
   const normalizedOptions = normalizeOptions(options);
@@ -45,6 +53,7 @@ export function KycSelectField({
     <div className="space-y-2">
       <Label htmlFor={id} className="whitespace-nowrap">
         {label}
+        {required ? <span className="text-destructive">*</span> : null}
       </Label>
       <Select
         value={value || null}
@@ -53,9 +62,10 @@ export function KycSelectField({
       >
         <SelectTrigger
           id={id}
-          className="w-full rounded-[var(--radius-control)] text-body"
+          className={triggerClassName ?? "w-full rounded-[var(--radius-control)] text-body"}
           aria-invalid={hasError}
         >
+          {Icon ? <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} aria-hidden /> : null}
           <SelectValue placeholder={placeholder}>{selectedLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>

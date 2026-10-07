@@ -169,17 +169,14 @@ export function MfSipInstallmentsInput({
         }
         className={cn(
           "flex min-h-10 w-full items-center rounded-[var(--radius-card)] border border-border/80 bg-muted/15 py-2 text-left transition-colors hover:bg-muted/25 disabled:pointer-events-none disabled:opacity-50",
-          compact ? "justify-between gap-1.5 px-2.5" : "gap-2.5 px-3",
+          compact ? "gap-1.5 px-2.5" : "gap-2.5 px-3",
           error && "border-destructive/40",
         )}
       >
-        {!compact ? (
-          <Repeat2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        ) : null}
+        <Repeat2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-compact font-medium tabular-nums text-foreground",
-            compact && compactDisplay === "value" && "text-center",
           )}
         >
           {formatCompactValue()}

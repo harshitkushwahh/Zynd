@@ -111,16 +111,18 @@ async def cached_list_invest_funds(
 
 
 async def cached_get_invest_fund_detail(session: AsyncSession, product_id: uuid.UUID) -> dict | None:
-    from app.application.mf.investment_constraints import ensure_investment_details_on_fund_payload
+    from app.application.mf.investment_constraints import (
+        ensure_investment_details_on_fund_payload,
+        is_min_amount_fallback_details,
+    )
 
     settings = get_settings()
     key = await build_invest_cache_key("fund", str(product_id))
     cached = await get_cached_json(key, settings=settings)
     if cached is not None:
-        return enrich_fund_summary_logo(
-            ensure_investment_details_on_fund_payload(cached),
-            settings,
-        )
+        enriched = ensure_investment_details_on_fund_payload(cached)
+        if not is_min_amount_fallback_details(enriched.get("investment_details")):
+            return enrich_fund_summary_logo(enriched, settings)
     payload = await get_invest_fund_detail(session, product_id)
     if payload is None:
         return None

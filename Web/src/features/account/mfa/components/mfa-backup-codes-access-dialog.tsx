@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Info } from "lucide-react";
+import { Check, Info, Lock } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { PinInput } from "@/features/account/pin/components/pin-input";
@@ -147,13 +147,12 @@ export function MfaBackupCodesAccessDialog({
 
   return (
     <BrandDialog open={open} onOpenChange={handleOpenChange} title={dialogTitle} maxWidth="lg">
-      <div className={cn("px-5 pb-5", step === "intro" ? "pt-4" : "pt-1.5")}>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-4">
+        <MfaRevealBackupHeroImage className="mb-4" compact={step === "verify"} />
         <RevealBackupProgress step={step} compact={step !== "intro"} />
 
         {step === "intro" ? (
           <div className="space-y-5">
-            <MfaRevealBackupHeroImage />
-
             <ul className="space-y-2.5">
               {INTRO_POINTS.map((point) => {
                 const Icon = point.icon;
@@ -188,7 +187,7 @@ export function MfaBackupCodesAccessDialog({
             </AuthSubmitFooter>
           </div>
         ) : verifyMethod === "pin" ? (
-          <form className="mt-2 space-y-4" onSubmit={handlePinSubmit}>
+          <form className="space-y-4" onSubmit={handlePinSubmit}>
             <div className="rounded-[var(--radius-xl)] border border-border bg-muted/30 p-4 shadow-zynd-low">
               <div className="space-y-3 text-center">
                 <p className="text-caption font-medium text-foreground">
@@ -227,25 +226,23 @@ export function MfaBackupCodesAccessDialog({
             </AuthSubmitFooter>
           </form>
         ) : (
-          <form className="mt-2 space-y-4" onSubmit={handlePasswordSubmit}>
-            <div className="rounded-[var(--radius-xl)] border border-border bg-muted/30 p-4 shadow-zynd-low">
-              <div className="space-y-2">
-                <Label htmlFor="reveal-backup-password" className="text-caption font-medium">
-                  {copy.pin.setupStepPassword}
-                </Label>
-                <PasswordInput
-                  id="reveal-backup-password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
-                  disabled={loading}
-                  autoFocus
-                />
-                <p className="text-caption leading-relaxed text-muted-foreground">
-                  {copy.mfa.backupAccess.passwordDescription}
-                </p>
-              </div>
+          <form className="space-y-4" onSubmit={handlePasswordSubmit}>
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="reveal-backup-password" className="text-caption font-medium">
+                {copy.pin.setupStepPassword}{" "}
+                <span className="text-destructive">*</span>
+              </Label>
+              <PasswordInput
+                id="reveal-backup-password"
+                icon={Lock}
+                placeholder={copy.settings.changePasswordCurrentPlaceholder}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                disabled={loading}
+                autoFocus
+                className="h-11 w-full min-w-0 max-w-full bg-background"
+              />
             </div>
 
             <FieldMessage message={error} />

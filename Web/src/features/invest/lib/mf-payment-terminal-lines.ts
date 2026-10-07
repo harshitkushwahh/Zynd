@@ -31,7 +31,6 @@ export function resolvePaymentTerminalLines(args: ResolvePaymentTerminalLinesArg
   lines.push(terminal.orderPayTerminalProcessing);
 
   if (args.redirecting) {
-    lines.push(terminal.orderPayTerminalReview);
     lines.push(terminal.orderPayTerminalRedirect);
     return lines;
   }
@@ -47,7 +46,6 @@ export function resolvePaymentTerminalLines(args: ResolvePaymentTerminalLinesArg
   }
 
   if (args.nextAction === "wait_review" || args.fpState === "under_review") {
-    lines.push(terminal.orderPayTerminalReview);
     return lines;
   }
 

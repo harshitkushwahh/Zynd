@@ -7,8 +7,9 @@ import {
 } from "@/features/kyc/lib/kyc-esign-return";
 
 /**
- * DigiLocker / eSign in a companion dialog + centered popup (default).
- * Opt out with NEXT_PUBLIC_KYC_PARTNER_FULL_REDIRECT=1 (countdown + full-page redirect).
+ * DigiLocker / eSign: try a centered popup with a companion dialog (default).
+ * Blocked popups fall back to same-tab redirect. Set NEXT_PUBLIC_KYC_PARTNER_FULL_REDIRECT=1
+ * to skip popups and always use the countdown + full-page redirect UI.
  */
 export function isKycPartnerEmbedEnabled(): boolean {
   if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_KYC_PARTNER_FULL_REDIRECT === "1") {

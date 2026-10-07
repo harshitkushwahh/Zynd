@@ -4,8 +4,12 @@ import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
+import { markGatewayReturnKind } from "@/features/invest/lib/mf-payment-gateway-return";
 import { notifyMfPaymentGatewayReturn } from "@/features/invest/lib/mf-payment-gateway-popup";
-import { getMfPaymentReturnPath } from "@/features/invest/lib/mf-payment-session";
+import {
+  getMfPaymentReturnPath,
+  markMfSipFirstInstallmentRedirect,
+} from "@/features/invest/lib/mf-payment-session";
 
 export function MfSipFirstInstallmentReturnHost() {
   const router = useRouter();
@@ -34,6 +38,8 @@ export function MfSipFirstInstallmentReturnHost() {
     }
 
     const returnPath = getMfPaymentReturnPath() ?? "/dashboard/mutual-funds";
+    markGatewayReturnKind("postback");
+    markMfSipFirstInstallmentRedirect(planId, "full_page");
     openSipMandate(planId, { captureReturnPath: false });
     router.replace(returnPath);
   }, [openSipMandate, planId, router]);

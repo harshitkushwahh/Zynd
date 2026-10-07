@@ -978,7 +978,12 @@ async def list_mf_mandates(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfMandateListResponse:
     mandates = await list_user_mandates(db, user_id=current_user.id)
-    return MfMandateListResponse(mandates=[MfMandateResponse(**serialize_mandate(row)) for row in mandates])
+    return MfMandateListResponse(
+        mandates=[
+            MfMandateResponse(**serialize_mandate(row, expose_mandate_limit=True))
+            for row in mandates
+        ]
+    )
 
 
 @router.post("/mandates", response_model=MfMandateResponse)
@@ -1034,7 +1039,10 @@ async def auth_mf_mandate(
         mandate = await initiate_mandate_auth(db, mandate)
         await db.commit()
     except MfOrderError:
-        await db.rollback()
+        if mandate.failure_code == "mandate_auth_expired":
+            await db.commit()
+        else:
+            await db.rollback()
         raise
     return MfMandateResponse(**serialize_mandate(mandate))
 
@@ -1425,7 +1433,12 @@ async def get_mf_order_payment_status(
     order = await get_user_order(db, user_id=current_user.id, order_id=order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    reconcile = await reconcile_order_payment(db, order, user_ip=get_client_ip(request))
+    reconcile = await reconcile_order_payment(
+        db,
+        order,
+        user_ip=get_client_ip(request),
+        force=True,
+    )
     await db.commit()
     product = await db.get(Product, order.product_id)
     return MfPaymentStatusResponse(

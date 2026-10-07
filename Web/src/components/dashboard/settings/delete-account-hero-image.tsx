@@ -2,10 +2,9 @@
 
 import Image from "next/image";
 
-import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-const DELETE_ACCOUNT_HERO_SIZES = "(max-width: 640px) 240px, 272px";
+const DELETE_ACCOUNT_HERO_SIZES = "(max-width: 768px) 280px, 360px";
 
 type DeleteAccountHeroImageProps = {
   className?: string;
@@ -15,8 +14,8 @@ export function DeleteAccountHeroImage({ className }: DeleteAccountHeroImageProp
   return (
     <div className={cn("flex justify-center", className)}>
       <Image
-        src="/zynd-account-delete.png"
-        alt={copy.settings.confirmAccountDeletionTitle}
+        src="/account-delete.png"
+        alt=""
         width={1536}
         height={1024}
         sizes={DELETE_ACCOUNT_HERO_SIZES}

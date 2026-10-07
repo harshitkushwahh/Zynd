@@ -1010,6 +1010,7 @@ export function MfInvestPaymentCard({
               sipFrequency={sipFrequency}
               onModeChange={handleModeChange}
               onSipFrequencyChange={handleSipFrequencyChange}
+              monthlySipAllowed={monthlySipAllowed}
               dailySipAllowed={dailySipAllowed}
               disabled={!interactive || submitting}
             />
@@ -1039,7 +1040,7 @@ export function MfInvestPaymentCard({
                 "grid gap-2 [&_button]:min-h-9 [&_button]:py-1.5",
                 isDailySipFrequency(sipFrequency)
                   ? "grid-cols-1"
-                  : "grid-cols-[minmax(0,1fr)_6.75rem]",
+                  : "grid-cols-[minmax(0,1fr)_8.5rem]",
               )}
             >
               {!isDailySipFrequency(sipFrequency) ? (

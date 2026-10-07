@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
@@ -11,6 +12,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.mf.mf_fp_review_poll import (
+    PURCHASE_PAYMENT_SETUP_STATES,
+    PURCHASE_REVIEW_WAIT_STATES,
+    poll_purchase_until_actionable,
+    purchase_not_ready_error,
+)
 from app.application.mf.mf_fp_state import map_fp_purchase_state, map_fp_purchase_state_to_checkout
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, get_or_create_mf_investment_account
@@ -58,7 +65,9 @@ from app.infrastructure.persistence.referral_models import ReferralInvestmentMod
 
 logger = logging.getLogger(__name__)
 
-_REVIEW_STATES = {"under_review", "review_completed"}
+# Only ``under_review`` is a wait. ``review_completed`` is ready for consent.
+_REVIEW_STATES = PURCHASE_REVIEW_WAIT_STATES
+_PAYMENT_SETUP_STATES = PURCHASE_PAYMENT_SETUP_STATES
 _PAYMENT_PIPELINE_STATES = {"pending", "confirmed"}
 
 
@@ -815,6 +824,67 @@ async def _refresh_cart_payment_link(session: AsyncSession, checkout: MfCheckout
         await session.flush()
 
 
+async def _store_purchase_snapshot(
+    session: AsyncSession,
+    order: MfOrder,
+    *,
+    fp_state: str,
+    payload: dict[str, Any],
+    stage: str,
+) -> bool:
+    changed = False
+    old_id = extract_fp_old_id(payload)
+    if old_id is not None and order.fp_purchase_old_id is None:
+        order.fp_purchase_old_id = old_id
+        changed = True
+    if await _apply_fp_state(
+        session,
+        order,
+        fp_state=fp_state,
+        source="WORKER",
+        payload={"stage": stage},
+    ):
+        changed = True
+    return changed
+
+
+async def _poll_orders_out_of_review(session: AsyncSession, orders: list[MfOrder]) -> bool:
+    """Keep GETting Cybrilla until each purchase leaves under_review, in this request."""
+    waiting = [
+        order
+        for order in orders
+        if order.fp_purchase_id and (order.fp_state or "").lower() in _REVIEW_STATES
+    ]
+    if not waiting:
+        return False
+
+    snapshots = await asyncio.gather(
+        *[
+            poll_purchase_until_actionable(
+                order.fp_purchase_id or "",
+                initial_state=order.fp_state,
+            )
+            for order in waiting
+        ]
+    )
+    changed = False
+    for order, snapshot in zip(waiting, snapshots):
+        state, payload = snapshot
+        if await _store_purchase_snapshot(
+            session,
+            order,
+            fp_state=state,
+            payload=payload,
+            stage="review_poll",
+        ):
+            changed = True
+    return changed
+
+
+def _purchase_ready_for_payment_setup(fp_state: str | None) -> bool:
+    return (fp_state or "").lower() in _PAYMENT_SETUP_STATES
+
+
 async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout) -> bool:
     if checkout.checkout_type != MfCheckoutType.cart:
         return False
@@ -842,10 +912,15 @@ async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout
     ondc_checkout = _ondc_checkout_metadata(checkout)
 
     try:
+        if await _poll_orders_out_of_review(session, open_orders):
+            changed = True
+        open_orders = [order for order in orders if order.status not in TERMINAL_STATUSES and order.fp_purchase_id]
+        if not open_orders:
+            return changed
         if any((order.fp_state or "").lower() in _REVIEW_STATES for order in open_orders):
             return changed
 
-        all_pending = all((order.fp_state or "").lower() == "pending" for order in open_orders)
+        all_pending = all(_purchase_ready_for_payment_setup(order.fp_state) for order in open_orders)
         if all_pending:
             for order in open_orders:
                 ondc = _ondc_metadata(order)
@@ -868,7 +943,7 @@ async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout
                 for order in orders
                 if order.status not in TERMINAL_STATUSES and order.fp_purchase_id
             ]
-            all_pending = all((order.fp_state or "").lower() == "pending" for order in open_orders)
+            all_pending = all(_purchase_ready_for_payment_setup(order.fp_state) for order in open_orders)
             all_consented = all(_ondc_metadata(order).get("consent_applied") for order in open_orders)
 
             ondc_checkout = _ondc_checkout_metadata(checkout)
@@ -905,6 +980,9 @@ async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout
             await _refresh_cart_payment_link(session, checkout)
             changed = True
     except FpClientError as exc:
+        if purchase_not_ready_error(exc):
+            logger.info("ONDC cart purchase still under review checkout=%s", checkout.id)
+            return changed
         logger.exception("ONDc cart advance failed checkout=%s", checkout.id)
         if is_transient_error(exc):
             meta, terminal = bump_transient_retry(checkout.metadata_, error_code=exc.code, error_message=exc.message)
@@ -962,22 +1040,50 @@ async def advance_ondc_order(session: AsyncSession, order: MfOrder, *, force: bo
     ondc = _ondc_metadata(order)
 
     try:
+        if fp_state in _REVIEW_STATES and order.fp_purchase_id:
+            fp_state, payload = await poll_purchase_until_actionable(
+                order.fp_purchase_id,
+                initial_state=fp_state,
+                initial_payload=payload,
+            )
+            if await _store_purchase_snapshot(
+                session,
+                order,
+                fp_state=fp_state,
+                payload=payload,
+                stage="review_poll",
+            ):
+                changed = True
+        if order.status in TERMINAL_STATUSES:
+            return changed
         if fp_state in _REVIEW_STATES:
             return changed
 
-        if fp_state == "pending":
+        if _purchase_ready_for_payment_setup(fp_state):
             if not ondc.get("consent_applied"):
                 await _apply_purchase_consent(session, order)
                 changed = True
                 payload = await get_mf_purchase(order.fp_purchase_id)
                 fp_state = (extract_fp_state(payload) or fp_state).lower()
+                if await _store_purchase_snapshot(
+                    session,
+                    order,
+                    fp_state=fp_state,
+                    payload=payload,
+                    stage="consent",
+                ):
+                    changed = True
 
-            if fp_state == "pending" and not ondc.get("payment_created"):
+            if _purchase_ready_for_payment_setup(fp_state) and not ondc.get("payment_created"):
                 await _create_checkout_payment(session, order)
                 changed = True
 
             ondc = _ondc_metadata(order)
-            if fp_state == "pending" and ondc.get("payment_created") and not ondc.get("purchase_confirmed"):
+            if (
+                _purchase_ready_for_payment_setup(fp_state)
+                and ondc.get("payment_created")
+                and not ondc.get("purchase_confirmed")
+            ):
                 if await _confirm_purchase_after_payment_setup(session, order):
                     changed = True
                 payload = await get_mf_purchase(order.fp_purchase_id)
@@ -987,6 +1093,31 @@ async def advance_ondc_order(session: AsyncSession, order: MfOrder, *, force: bo
             if await _refresh_payment_link(session, order):
                 changed = True
     except FpClientError as exc:
+        if purchase_not_ready_error(exc):
+            refreshed = (order.fp_state or "").lower()
+            if order.fp_purchase_id:
+                try:
+                    snapshot = await get_mf_purchase(order.fp_purchase_id)
+                    refreshed = (extract_fp_state(snapshot) or refreshed).lower()
+                    if await _store_purchase_snapshot(
+                        session,
+                        order,
+                        fp_state=refreshed,
+                        payload=snapshot,
+                        stage="not_ready",
+                    ):
+                        changed = True
+                except FpClientError:
+                    logger.info("ONDC purchase refresh failed during review wait order=%s", order.id)
+            if order.status in TERMINAL_STATUSES:
+                return changed
+            if refreshed in _REVIEW_STATES | _PAYMENT_SETUP_STATES | {""}:
+                logger.info("ONDC purchase still under review order=%s state=%s", order.id, refreshed)
+                return changed
+            if refreshed == "submitted":
+                if await _refresh_payment_link(session, order):
+                    changed = True
+                return changed
         logger.exception("ONDc advance failed order=%s", order.id)
         if is_transient_error(exc):
             order.metadata_, terminal = bump_transient_retry(

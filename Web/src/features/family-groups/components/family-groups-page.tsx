@@ -208,17 +208,7 @@ export function FamilyGroupsPage() {
                 icon={FamilyRouteIcon}
                 title={copy.familyGroups.dashboard.heroTitle}
                 action={
-                  data && data.items.length === 0 ? (
-                    <Button
-                      type="button"
-                      onClick={() => setCreateOpen(true)}
-                      disabled={atLimit}
-                      className="shrink-0"
-                    >
-                      <Plus className="size-4" strokeWidth={2} />
-                      {copy.familyGroups.createAction}
-                    </Button>
-                  ) : selectedGroup?.my_role === "head" ? (
+                  selectedGroup?.my_role === "head" ? (
                     <Button
                       type="button"
                       onClick={() => setInviteOpen(true)}
@@ -232,7 +222,7 @@ export function FamilyGroupsPage() {
                 }
               />
 
-              {data ? (
+              {data && data.items.length > 0 ? (
                 <FamilyGroupTabs
                   groups={data.items}
                   selectedGroupId={selectedGroupId}

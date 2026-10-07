@@ -1,3 +1,8 @@
+import {
+  clearMfGatewayReturnMarkers,
+  markMfPaymentOverlayResume,
+} from "@/features/invest/lib/mf-payment-gateway-return";
+
 const REDIRECT_KEY_PREFIX = "mf-payment-redirected-";
 const LUMPSUM_DISMISSED_PREFIX = "mf-lumpsum-payment-dismissed-";
 const SIP_MANDATE_REDIRECT_PREFIX = "mf-sip-mandate-redirected-";
@@ -23,6 +28,7 @@ export function markMfPaymentRedirect(target: {
     markMfPaymentReturnPath(`${window.location.pathname}${window.location.search}`);
   }
   const mode: MfPaymentGatewayMode = target.mode ?? "full_page";
+  markMfPaymentOverlayResume();
   if (target.orderId) {
     sessionStorage.setItem(`${REDIRECT_KEY_PREFIX}${target.orderId}`, Date.now().toString());
     sessionStorage.setItem(`${GATEWAY_MODE_PREFIX}${target.orderId}`, mode);
@@ -60,6 +66,7 @@ export function clearMfPaymentRedirect(id: string) {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(`${REDIRECT_KEY_PREFIX}${id}`);
   clearMfPaymentGatewayMode(id);
+  clearMfGatewayReturnMarkers();
 }
 
 /** Clears every in-flight gateway redirect marker (fresh Invest must not inherit a prior order). */
@@ -85,6 +92,7 @@ export function clearAllMfPaymentRedirectFlags() {
   for (const key of modeKeys) {
     sessionStorage.removeItem(key);
   }
+  clearMfGatewayReturnMarkers();
 }
 
 export function markMfLumpsumPaymentDismissed(id: string) {

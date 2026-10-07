@@ -9,11 +9,12 @@ const REVEAL_BACKUP_HERO_SIZES = "(max-width: 640px) 240px, 272px";
 
 type MfaRevealBackupHeroImageProps = {
   className?: string;
+  compact?: boolean;
 };
 
-export function MfaRevealBackupHeroImage({ className }: MfaRevealBackupHeroImageProps) {
+export function MfaRevealBackupHeroImage({ className, compact = false }: MfaRevealBackupHeroImageProps) {
   return (
-    <div className={cn("flex justify-center", className)}>
+    <div className={cn("flex shrink-0 justify-center", className)}>
       <Image
         src="/reveal-backup-code.png"
         alt={copy.mfa.backupAccess.reveal}
@@ -21,7 +22,10 @@ export function MfaRevealBackupHeroImage({ className }: MfaRevealBackupHeroImage
         height={1024}
         sizes={REVEAL_BACKUP_HERO_SIZES}
         unoptimized
-        className="h-auto w-full max-w-[min(100%,15rem)] object-contain sm:max-w-[17rem]"
+        className={cn(
+          "h-auto w-full object-contain",
+          compact ? "max-w-[10.5rem] sm:max-w-[11.5rem]" : "max-w-[min(100%,15rem)] sm:max-w-[17rem]",
+        )}
         priority
       />
     </div>

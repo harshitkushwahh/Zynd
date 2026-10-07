@@ -21,6 +21,10 @@ def test_derive_next_action_processing_with_url() -> None:
     assert _derive_next_action(status="PROCESSING", payment_url="https://pay.example/1") == "pay_upi"
 
 
+def test_derive_next_action_url_redirects_even_while_pending() -> None:
+    assert _derive_next_action(status="PENDING", payment_url="https://pay.example/1") == "pay_upi"
+
+
 def test_derive_next_action_complete() -> None:
     assert _derive_next_action(status="SUCCEEDED", payment_url=None) == "complete"
 

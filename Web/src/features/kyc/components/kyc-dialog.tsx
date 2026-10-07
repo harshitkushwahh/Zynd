@@ -138,9 +138,7 @@ import {
 } from "@/features/kyc/lib/kyc-partner-embed";
 import {
   closeKycPartnerPopup,
-  navigateKycPartnerPopup,
-  openKycPartnerPopup,
-  type KycPartnerPopupKind,
+  launchKycPartnerUrl,
 } from "@/features/kyc/lib/kyc-partner-popup";
 import { copy } from "@/shared/config/copy";
 import { ApiError } from "@/lib/api-client";
@@ -349,45 +347,22 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     setPartnerPopupBlocked(false);
   }, []);
 
-  const navigatePartnerPopup = useCallback((url: string, kind: KycPartnerPopupKind): boolean => {
-    const target = url.trim();
-    if (!target) return false;
-
-    let popup = partnerPopupRef.current;
-    if (!popup || popup.closed) {
-      popup = openKycPartnerPopup(target, kind);
-      partnerPopupRef.current = popup;
-      if (!popup) {
-        setPartnerPopupBlocked(true);
-        return false;
+  const redirectKycPartnerFullWindow = useCallback(
+    (kind: "digilocker" | "esign", url: string) => {
+      const target = url.trim();
+      if (!target) return;
+      resetPartnerEmbedState();
+      pendingDigilockerUrlRef.current = null;
+      pendingEsignUrlRef.current = null;
+      if (kind === "esign") {
+        markPendingEsignResume(bootstrap?.external_kyc_form_id ?? null);
+      } else {
+        markPendingDigilockerResume(null);
       }
-      setPartnerPopupBlocked(false);
-      try {
-        popup.focus();
-      } catch {
-        // ignore
-      }
-      return true;
-    }
-
-    const ok = navigateKycPartnerPopup(popup, target);
-    if (!ok) {
-      partnerPopupRef.current = null;
-      popup = openKycPartnerPopup(target, kind);
-      partnerPopupRef.current = popup;
-      if (!popup) {
-        setPartnerPopupBlocked(true);
-        return false;
-      }
-      try {
-        popup.focus();
-      } catch {
-        // ignore
-      }
-    }
-    setPartnerPopupBlocked(false);
-    return true;
-  }, []);
+      window.location.assign(target);
+    },
+    [bootstrap?.external_kyc_form_id, resetPartnerEmbedState],
+  );
 
   const launchKycPartnerFlow = useCallback(
     (kind: "digilocker" | "esign", redirectUrl: string) => {
@@ -395,10 +370,23 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       if (!url) return;
       partnerReturnHandledRef.current = false;
       partnerPopupClosedHandledRef.current = false;
+
+      const launched = launchKycPartnerUrl(url, kind);
+      if (launched.mode === "redirect") {
+        redirectKycPartnerFullWindow(kind, url);
+        return;
+      }
+
+      partnerPopupRef.current = launched.popup;
       setPartnerEmbed({ kind, url });
-      navigatePartnerPopup(url, kind);
+      setPartnerPopupBlocked(false);
+      try {
+        launched.popup.focus();
+      } catch {
+        // ignore
+      }
     },
-    [navigatePartnerPopup],
+    [redirectKycPartnerFullWindow],
   );
 
   const reopenKycPartnerPopup = useCallback(() => {
@@ -406,8 +394,14 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     const kind = partnerEmbed?.kind ?? "digilocker";
     if (!url) return;
     partnerPopupRef.current = null;
-    navigatePartnerPopup(url, kind);
-  }, [navigatePartnerPopup, partnerEmbed?.kind, partnerEmbed?.url]);
+    const launched = launchKycPartnerUrl(url, kind);
+    if (launched.mode === "redirect") {
+      redirectKycPartnerFullWindow(kind, url);
+      return;
+    }
+    partnerPopupRef.current = launched.popup;
+    setPartnerPopupBlocked(false);
+  }, [partnerEmbed?.kind, partnerEmbed?.url, redirectKycPartnerFullWindow]);
 
   const openDigilockerRedirectDialog = useCallback(
     (redirectUrl: string, variant: "address" | "kraProof" = "address") => {
@@ -1243,21 +1237,15 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   }, [partnerEmbed?.kind, recoverDigilockerPartnerPopupReturn, resetPartnerEmbedState, showPartnerEmbedAbandoned]);
 
   const openPartnerEmbedFullWindow = useCallback(() => {
-    const kind = partnerEmbed?.kind;
+    const kind = partnerEmbed?.kind ?? "digilocker";
     const url =
       partnerEmbed?.url?.trim() ||
       pendingDigilockerUrlRef.current?.trim() ||
       pendingEsignUrlRef.current?.trim() ||
       "";
-    resetPartnerEmbedState();
-    pendingDigilockerUrlRef.current = null;
-    pendingEsignUrlRef.current = null;
     if (!url) return;
-    if (kind === "esign") {
-      markPendingEsignResume(bootstrap?.external_kyc_form_id ?? null);
-    }
-    window.location.assign(url);
-  }, [bootstrap?.external_kyc_form_id, partnerEmbed?.kind, partnerEmbed?.url, resetPartnerEmbedState]);
+    redirectKycPartnerFullWindow(kind, url);
+  }, [partnerEmbed?.kind, partnerEmbed?.url, redirectKycPartnerFullWindow]);
 
   useEffect(() => {
     const ingestPartnerEmbedReturn = (search: string, pathname: string) => {

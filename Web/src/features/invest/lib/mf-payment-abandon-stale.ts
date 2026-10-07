@@ -10,7 +10,11 @@ import {
   type MfPendingPaymentResumeTarget,
 } from "@/features/invest/lib/mf-payment-session";
 
-/** Cancel backend payment session and clear client flags after back/reload without completing gateway return. */
+/**
+ * Silent cancel for a gateway handoff that never came back through the payment dialog.
+ * Browser Back and bfcache must not call this — the payment overlay reconciles first and
+ * shows success or "Payment was not completed".
+ */
 export async function abandonStaleMfPaymentResume(
   pending: MfPendingPaymentResumeTarget,
 ): Promise<void> {

@@ -123,11 +123,29 @@ function OrderJourneySummaryPanel({ order }: { order: MfOrder }) {
       </div>
 
       <div className="mt-5 space-y-3">
-        <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {copy.transactions.journeyPaymentType}
-          </p>
-          <p className="mt-1 text-compact font-semibold text-foreground">{orderTypeLabel}</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {copy.transactions.journeyPaymentType}
+            </p>
+            <p className="mt-1 text-compact font-semibold text-foreground">{orderTypeLabel}</p>
+          </div>
+
+          <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {copy.transactions.journeyLatestStatus}
+            </p>
+            <div className="mt-2">
+              <MfOrderStatusBadge
+                status={order.status}
+                fpState={order.fp_state}
+                fpPaymentStatus={order.fp_payment_status}
+                paymentCompleted={order.payment_completed}
+                orderType={order.order_type}
+                failureCode={order.failure_code}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">
@@ -137,22 +155,6 @@ function OrderJourneySummaryPanel({ order }: { order: MfOrder }) {
           <p className="mt-1 text-h4 font-semibold tabular-nums text-foreground">
             {formatInr(order.amount_inr)}
           </p>
-        </div>
-
-        <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {copy.transactions.journeyLatestStatus}
-          </p>
-          <div className="mt-2">
-            <MfOrderStatusBadge
-              status={order.status}
-              fpState={order.fp_state}
-              fpPaymentStatus={order.fp_payment_status}
-              paymentCompleted={order.payment_completed}
-              orderType={order.order_type}
-              failureCode={order.failure_code}
-            />
-          </div>
         </div>
 
         <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">

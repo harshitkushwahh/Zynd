@@ -26,7 +26,21 @@ def build_profile_image_public_url(
         return cdn_url
 
     prefix = settings.api_prefix.rstrip("/")
-    return f"{prefix}/documents/public/{document.id}?v={document.version}"
+    path = f"{prefix}/documents/public/{document.id}?v={document.version}"
+    return _absolute_api_url(path, settings)
+
+
+def _absolute_api_url(path: str, settings: Settings) -> str:
+    """Turn an API path into a URL the browser can load from the web app host."""
+    if path.startswith(("http://", "https://")):
+        return path
+    if not path.startswith("/"):
+        path = f"/{path}"
+
+    public = settings.resolved_api_public_url.rstrip("/")
+    prefix = settings.api_prefix.rstrip("/")
+    origin = public[: -len(prefix)] if prefix and public.endswith(prefix) else public
+    return f"{origin.rstrip('/')}{path}"
 
 
 async def resolve_profile_image_urls_by_user_id(

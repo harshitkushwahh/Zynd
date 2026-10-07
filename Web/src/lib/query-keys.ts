@@ -9,6 +9,7 @@ export const queryKeys = {
     orders: (limit?: number) => ["invest", "orders", { limit: limit ?? 100 }] as const,
     order: (orderId: string) => ["invest", "order", orderId] as const,
     sipPlans: () => ["invest", "sip-plans"] as const,
+    mandates: () => ["invest", "mandates"] as const,
     externalHoldings: () => ["invest", "external-holdings"] as const,
     fundNavs: (productId: string, limit: number) =>
       ["invest", "fund-navs", productId, { limit }] as const,
