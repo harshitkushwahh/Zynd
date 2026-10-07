@@ -148,13 +148,12 @@ export function MfaRegenerateBackupDialog({
       title={title}
       maxWidth="lg"
     >
-      <div className={cn("px-5 pb-5", step === "intro" ? "pt-4" : "pt-1.5")}>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-4">
+        <MfaRegenerateBackupHeroImage className="mb-4" />
         <RegenerateProgress step={step} compact={step !== "intro"} />
 
         {step === "intro" ? (
           <div className="space-y-5">
-            <MfaRegenerateBackupHeroImage />
-
             <ul className="space-y-2.5">
               {INTRO_POINTS.map((point) => {
                 const Icon = point.icon;
@@ -182,7 +181,7 @@ export function MfaRegenerateBackupDialog({
             </AuthSubmitFooter>
           </div>
         ) : (
-          <form className="mt-2 space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="rounded-[var(--radius-xl)] border border-border bg-muted/30 p-4 shadow-zynd-low">
               <div className="space-y-4">
                 <div className="space-y-2">

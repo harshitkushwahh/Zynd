@@ -26,6 +26,7 @@ import { copy } from "@/shared/config/copy";
 import type { InvestFundDetail, InvestInvestmentDetails } from "@/features/invest/api/invest-api";
 import { shouldShowInvestmentDetailsCard } from "@/features/invest/lib/mf-investment-details-display";
 import { formatInr } from "@/features/invest/lib/mf-format";
+import { formatMinInstallmentsDisplay } from "@/features/invest/lib/mf-sip-frequency";
 import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +55,8 @@ function formatUnits(value: number | null | undefined) {
 }
 
 function formatFrequency(frequency: string) {
-  return frequency.charAt(0).toUpperCase() + frequency.slice(1);
+  const normalized = frequency.trim().toLowerCase().replaceAll("_", " ");
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function hasAmountBlock(block: AmountBlock | null | undefined) {
@@ -272,7 +274,9 @@ function buildInvestmentDetailSections(details: InvestInvestmentDetails): Detail
                 <tr key={option.frequency} className="border-b border-border/60 last:border-0">
                   <td className="px-3 py-2.5 font-medium">{formatFrequency(option.frequency)}</td>
                   <td className="px-3 py-2.5 tabular-nums">{formatAmount(option.min_inr)}</td>
-                  <td className="px-3 py-2.5 tabular-nums">{option.min_installments ?? "—"}</td>
+                  <td className="px-3 py-2.5 tabular-nums">
+                    {formatMinInstallmentsDisplay(option.min_installments)}
+                  </td>
                 </tr>
               ))}
             </tbody>

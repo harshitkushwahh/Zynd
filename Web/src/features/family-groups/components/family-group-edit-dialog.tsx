@@ -154,7 +154,7 @@ export function FamilyGroupEditDialog({
             </div>
           </div>
 
-          <div className="space-y-4 border-t border-border/60 pt-6">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-family-group-title">{copy.familyGroups.form.titleLabel}</Label>
               <Input

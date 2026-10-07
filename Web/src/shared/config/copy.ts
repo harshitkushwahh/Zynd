@@ -104,9 +104,18 @@ export const copy = {
       loading: "Loading your bank accounts…",
       addTitle: "Add Bank Account",
       addDescription: "We verify the account against your PAN using secure bank pre-verification.",
-      addIntroPanVerification: "Verified against your PAN with secure bank pre-verification.",
-      addIntroUsage: "For investments, SIP mandates, and payouts.",
+      addIntroPoints: [
+        {
+          title: "Verified against your PAN",
+          description: "Secure bank pre-verification.",
+        },
+        {
+          title: "For investments, SIP mandates, and payouts",
+          description: "This account is used when you invest or receive money.",
+        },
+      ],
       addBankAccount: "Add Bank Account",
+      verifyAction: "Verify bank account",
       cancelAdd: "Cancel",
       setPrimary: "Set as primary",
       primaryBadge: "Primary",
@@ -719,6 +728,7 @@ export const copy = {
       verify: "Verify",
       detailsPendingTitle: "Bank account details",
       detailsPendingDescription: "Enter your account number, account type, and IFSC code below.",
+      detailsStartHint: "Enter your bank account information to get started.",
       fetchingBranchTitle: "Fetching branch details",
       fetchingBranchDescription: "Looking up bank and branch for your IFSC code.",
       manualPendingTitle: "Bank verification needs your help",
@@ -741,6 +751,7 @@ export const copy = {
       placeholders: {
         accountNumber: "Enter account number",
         ifscCode: "HDFC0001234",
+        enterIfscCode: "Enter IFSC code",
         select: "Select",
       },
       badges: {
@@ -817,7 +828,7 @@ export const copy = {
       close: "Close verification",
       popupHint: "Keep this window open until verification finishes and you return to Zynd.",
       popupBlockedHint:
-        "Your browser blocked the verification popup. Allow popups for this site, then open it again.",
+        "Your browser blocked the verification popup. Continue in this tab instead, or allow popups and try again.",
       reopenPopup: "Open verification window",
       openFullWindow: "Continue in this tab",
       finishingTitle: "Finishing verification",
@@ -936,6 +947,7 @@ export const copy = {
     backupCodesOfflineHint: "Keep these codes offline. You will not see them again.",
     backupAccess: {
       reveal: "Reveal Backup Codes",
+      hide: "Hide codes",
       pinTitle: "Enter Zynd PIN",
       pinDescription: "Confirm your PIN to view your saved backup codes.",
       passwordTitle: "Confirm Your Password",
@@ -951,9 +963,27 @@ export const copy = {
     preparing: "Preparing...",
     enroll: {
       startTitle: "Enable two-factor authentication",
-      startDescription: "Add an extra layer of security to your account. Optional for investing — SMS verification is used at login and for sensitive actions.",
+      startDescription: "Optional for investing. SMS verification still applies at login.",
+      startIntroPoints: [
+        {
+          title: "Download an authenticator app",
+          description: "Get Google Authenticator, Authy, or similar from the App Store or Play Store.",
+        },
+        {
+          title: "Open Scan QR code",
+          description: "Add an account in the app and choose Scan QR code.",
+        },
+        {
+          title: "Scan the QR code",
+          description: "On the next step, scan the QR code we show for Zynd.",
+        },
+      ],
       confirmTitle: "Scan your authenticator",
-      confirmDescription: "Scan the QR code or copy the setup key.",
+      confirmDescription: "6-digit authenticator code",
+      confirmReadyHint: "Ready to verify",
+      showSetupKey: "Show setup key",
+      setupKeyDialogTitle: "Setup key",
+      setupKeyDialogDescription: "Add this key manually in your authenticator app if you cannot scan the QR code.",
       backupTitle: "Save your backup codes",
       backupDescription: "Each code works once if you lose access to your authenticator.",
       benefits: [
@@ -961,6 +991,40 @@ export const copy = {
         "Works with any standard authenticator app",
         "Backup codes are shown once - store them safely",
       ] as const,
+      startFeaturePoints: [
+        {
+          title: "Protects your account",
+          description: "Extra check for money moves and sensitive changes.",
+        },
+        {
+          title: "Works with standard apps",
+          description: "Google Authenticator, Authy, and other TOTP apps.",
+        },
+        {
+          title: "Backup codes included",
+          description: "One-time codes if you lose your phone.",
+        },
+      ],
+      confirmIntroPoints: [
+        {
+          title: "Scan the QR code",
+          description: "Use Google Authenticator, Authy, or any TOTP app.",
+        },
+        {
+          title: "Or use the setup key",
+          description: "Copy the key if you cannot scan the QR code.",
+        },
+      ],
+      backupIntroPoints: [
+        {
+          title: "Save your backup codes",
+          description: "Each code works once if you lose your authenticator.",
+        },
+        {
+          title: "Store them offline",
+          description: "You will not be able to view these codes again.",
+        },
+      ],
       verifyAndEnable: "Verify and enable MFA",
       successTitle: "MFA is enabled",
       successDescription: "Two-factor authentication is active on your account.",
@@ -1028,10 +1092,49 @@ export const copy = {
       successDescription: "Use it to unlock after idle time or when you return to this browser.",
     },
     setupBenefits: [
-      "Required before transfers and investments",
-      "Unlocks your account after idle time",
+      "Required for transfers, investments, and idle unlock",
       "Separate from your login password",
     ] as const,
+    setupFeaturePoints: [
+      {
+        title: "Transfers and idle unlock",
+        description: "Move money on Zynd and unlock quickly when you return to this device.",
+      },
+      {
+        title: "Separate from your password",
+        description: "A 4-digit PIN only for unlocking Zynd here.",
+      },
+    ],
+    setupStartIntroPoints: [
+      {
+        title: "Verify it's you",
+        description: "Confirm your password and authenticator code.",
+      },
+      {
+        title: "Create your PIN",
+        description: "Choose and confirm a 4-digit unlock code.",
+      },
+    ],
+    verifyIntroPoints: [
+      {
+        title: "Confirm your password",
+        description: "Enter the password for your Zynd account.",
+      },
+      {
+        title: "Authenticator code",
+        description: "Enter the 6-digit code from your authenticator app.",
+      },
+    ],
+    pinIntroPoints: [
+      {
+        title: "Create your PIN",
+        description: "Choose a 4-digit PIN you'll use to unlock Zynd on this device.",
+      },
+      {
+        title: "Confirm your PIN",
+        description: "Enter the same PIN again to confirm.",
+      },
+    ],
     setupVerifyHint: "We verify your identity before letting you create a PIN.",
     setupStepPassword: "Confirm your password",
     setupStepMfa: "Enter authenticator code",
@@ -1039,6 +1142,7 @@ export const copy = {
     setupStepConfirm: "Confirm your PIN",
     setupSuccess: "Zynd PIN is ready. Use it to unlock your account on this device.",
     pinMismatch: "PIN entries do not match.",
+    pinsMatchBadge: "PINs match",
     verifyButton: "Unlock",
     forgotLink: "Forgot PIN?",
     forgotTitle: "Reset Zynd PIN",
@@ -1627,6 +1731,7 @@ export const copy = {
     orderPaySuccess: "Payment received. Units will be allotted by the next business day.",
     orderPayFailed: "Payment could not be completed.",
     orderPayAbandoned: "This payment link is no longer valid. Please start a new investment.",
+    orderPayNotCompleted: "Payment was not completed.",
     paymentJourneyFailedTitle: "Payment couldn't be completed",
     paymentJourneyFailedMessage: "Something went wrong. Please try again.",
     paymentJourneySuccessTitle: "Payment successful",
@@ -1688,6 +1793,7 @@ export const copy = {
     sipOptionsTitle: "SIP options",
     sipFrequency: "Frequency",
     sipMinInstallments: "Min installments",
+    sipMinInstallmentsAny: "Any",
     investmentMin: "Min",
     investmentMax: "Max",
     investmentMultiples: "Multiples",
@@ -1916,8 +2022,12 @@ export const copy = {
     cartNavbarEmptyLabel: "Add MF to cart",
     cartEmptyTitle: "Nothing in your cart yet",
     cartSipEmptyTitle: "No SIPs in your cart yet",
+    cartMonthlyEmptyTitle: "No monthly SIPs in your cart yet",
+    cartDailyEmptyTitle: "No daily SIPs in your cart yet",
     cartEmptyHint: "Browse collections or open any fund to add investments here.",
     cartSipEmptyHint: "Open a fund page, choose Monthly SIP, and add it to your cart.",
+    cartMonthlyEmptyHint: "Open a fund page, choose Monthly, and add it to your cart.",
+    cartDailyEmptyHint: "Open a fund page, choose Daily, and add it to your cart.",
     cartOrderSummary: "Order summary",
     cartTotalLabel: "Total payable",
     cartBrowseFunds: "Browse funds",
@@ -1930,6 +2040,13 @@ export const copy = {
     cartLoadError: "Unable to load your cart",
     cartEmpty: "Your cart is empty. Add funds from any collection or fund page.",
     cartItemCount: "{count} funds",
+    cartSipItemCount: "{count} SIP",
+    cartSipItemCountPlural: "{count} SIPs",
+    cartSipNextStep: "Next step · {count}",
+    cartSipAmountMonthly: "/ monthly",
+    cartSipAmountDaily: "/ daily",
+    cartMandateApproved: "Approved mandate · up to {limit}",
+    cartMandateApproval: "Mandate approval · up to {limit}",
     cartSinglePaymentHint: "All funds in your cart are checked out together with one UPI payment.",
     cartCheckoutCta: "Pay for cart",
     cartCheckoutFailed: "Unable to start cart checkout",
@@ -2001,6 +2118,7 @@ export const copy = {
     sipMandateRedirecting: "Redirecting you to complete UPI autopay setup…",
     sipMandateAbandoned: "Mandate authorization was not completed. Please start a new SIP.",
     sipMandateCta: "Authorize with UPI",
+    sipMandateAuthRetry: "Could not start a new UPI authorization. Please try again.",
     sipInstallmentDay: "Monthly on {day}th",
     sipReturnTitle: "Completing your SIP",
     sipReturnDescription: "Confirming autopay and activating your SIP…",
@@ -2069,7 +2187,7 @@ export const copy = {
     journeyStatusFailed: "Failed",
     orderStatusAwaitingAllotment: "Awaiting Allotment",
     orderStatusPending: "Pending",
-    orderStatusPaymentCanceled: "Payment canceled",
+    orderStatusPaymentCanceled: "Cancelled",
   },
   mySips: {
     title: "My SIPs",
@@ -2522,12 +2640,21 @@ export const copy = {
     pageTitle: "Family groups",
     pageDescription: "Create groups for your family and manage shared visibility in one place.",
     createAction: "Create group",
-    createTitle: "Create family group",
+    createTitle: "Create Family Group",
     createDescription: "Give your group a name and invite members in the next step.",
-    createIntroSteps: [
-      "Give your family group a name everyone will recognize.",
-      "Add an optional description and tag to keep groups organized.",
-      "Invite members after creating to start investing together.",
+    createIntroPoints: [
+      {
+        title: "Give your family group a name",
+        description: "Everyone will recognize it.",
+      },
+      {
+        title: "Add an optional description and tag",
+        description: "Keep your groups organized.",
+      },
+      {
+        title: "Invite members after creating",
+        description: "Start investing together.",
+      },
     ],
     editTitle: "Edit group",
     editDescription: "Update your group name, description, tag, and icon.",
@@ -2676,11 +2803,14 @@ export const copy = {
     },
     form: {
       titleLabel: "Group name",
-      titlePlaceholder: "e.g. Sharma Family",
+      titlePlaceholder: "Enter group name",
       descriptionLabel: "Description",
-      descriptionPlaceholder: "Optional note about this group",
+      descriptionOptional: "(optional)",
+      descriptionPlaceholder: "Add a short description...",
       tagLabel: "Tag",
-      tagPlaceholder: "e.g. Primary",
+      tagOptional: "(optional)",
+      tagPlaceholder: "e.g. Family, Parents, Kids, Retirement",
+      tagSuggestions: ["Family", "Parents", "Kids", "Retirement", "Education"],
       submit: "Create group",
       cancel: "Cancel",
       save: "Save changes",
@@ -2761,10 +2891,19 @@ export const copy = {
       action: "Invite member",
       title: "Invite a family member",
       description: (groupTitle: string) => `Send an invite to join ${groupTitle}.`,
-      introSteps: [
-        "Enter their email, choose a role, and optionally add a relationship badge.",
-        "We'll email them a secure link to join your family group on Zynd.",
-        "Once they accept, they'll appear in your family orbit and shared dashboard.",
+      introPoints: [
+        {
+          title: "Enter their email and choose a role",
+          description: "Optionally add a relationship badge.",
+        },
+        {
+          title: "We'll email them a secure link",
+          description: "They can join your family group on Zynd.",
+        },
+        {
+          title: "Once they accept",
+          description: "They'll appear in your family orbit and shared dashboard.",
+        },
       ],
       emailLabel: "Email address",
       emailPlaceholder: "family.member@email.com",
@@ -2779,6 +2918,7 @@ export const copy = {
       linkRecipient: "Invite link recipient",
       linkCopied: "Invite link copied",
       capacityLabel: (reserved: number, limit: number) => `${reserved}/${limit} slots used`,
+      slotsBadge: (reserved: number, limit: number) => `${reserved}/${limit} Slots`,
       capacityReached: (limit: number) => `This group is full (${limit} members max).`,
       pendingTitle: "Pending invites",
       sentTitle: "Sent invites",

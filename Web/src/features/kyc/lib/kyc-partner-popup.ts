@@ -80,3 +80,26 @@ export function closeKycPartnerPopup(popup: Window | null): void {
     // ignore
   }
 }
+
+export type LaunchKycPartnerResult =
+  | { mode: "popup"; popup: Window }
+  | { mode: "redirect" };
+
+/** Try a centered popup; fall back to same-tab redirect when the browser blocks popups. */
+export function launchKycPartnerUrl(
+  url: string,
+  kind: KycPartnerPopupKind = "digilocker",
+): LaunchKycPartnerResult {
+  const trimmed = url.trim();
+  if (!trimmed || typeof window === "undefined") {
+    return { mode: "redirect" };
+  }
+
+  const popup = openKycPartnerPopup("about:blank", kind);
+  if (popup && navigateKycPartnerPopup(popup, trimmed)) {
+    return { mode: "popup", popup };
+  }
+
+  closeKycPartnerPopup(popup);
+  return { mode: "redirect" };
+}

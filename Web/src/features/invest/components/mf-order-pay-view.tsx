@@ -23,6 +23,12 @@ import {
   MF_PAYMENT_RETURN_FAST_ATTEMPTS,
 } from "@/features/invest/lib/mf-payment-poll";
 import {
+  getGatewayReturnKind,
+  isHistoryBackForwardNavigation,
+  isHistoryGatewayReturn,
+  shouldShowGatewayBackNotCompleted,
+} from "@/features/invest/lib/mf-payment-gateway-return";
+import {
   clearLastMfPaymentSession,
   clearMfLumpsumPaymentDismissed,
   clearMfLumpsumPaymentSession,
@@ -67,6 +73,12 @@ function resolveOrderPayPhase(args: {
   ) {
     return "success";
   }
+  const setupStillRunning =
+    !returnedFromPayment &&
+    !order.payment_url &&
+    order.failure_code === "payment_not_completed" &&
+    isFreshInvestOrder(order.created_at);
+  if (setupStillRunning) return "waiting";
   if (paymentOutcome === "failed") return "error";
   if (paymentOutcome === "pending" || paymentOutcome === "unclear") return "waiting";
   if (order.status === "FAILED" || order.status === "CANCELLED") return "error";
@@ -102,10 +114,16 @@ function resolveOrderPayMessage(args: {
   if (phase === "processing") return copy.mutualFunds.orderPayProcessing;
   if (phase === "error") {
     if (order?.failure_code === "payment_abandoned") {
-      if (isFreshInvestOrder(order.created_at) && !returnedFromPayment) {
+      if (returnedFromPayment) {
+        return order.failure_reason?.trim() || error || copy.mutualFunds.orderPayNotCompleted;
+      }
+      if (isFreshInvestOrder(order.created_at)) {
         return order.failure_reason ?? copy.mutualFunds.orderPayFailed;
       }
       return copy.mutualFunds.orderPayAbandoned;
+    }
+    if (returnedFromPayment && (order?.failure_code === "payment_not_completed" || error)) {
+      return order?.failure_reason?.trim() || error || copy.mutualFunds.orderPayNotCompleted;
     }
     return error ?? order?.failure_reason ?? copy.mutualFunds.orderPayFailed;
   }
@@ -126,10 +144,10 @@ function resolveOrderPayMessage(args: {
       order?.status === "FAILED" ||
       order?.failure_code === "payment_abandoned")
   ) {
-    return copy.mutualFunds.orderPayAbandoned;
+    return order?.failure_reason?.trim() || copy.mutualFunds.orderPayNotCompleted;
   }
   if (order?.next_action === "wait_review" || order?.fp_state === "under_review") {
-    return copy.mutualFunds.orderPayUnderReview;
+    return copy.mutualFunds.orderPayProcessing;
   }
   if (order?.next_action === "wait_payment_setup" || order?.status === "PAYMENT_PENDING") {
     return copy.mutualFunds.orderPayPendingSetup;
@@ -164,11 +182,17 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
   const [longRunning, setLongRunning] = useState(false);
   const [returnRetryToken, setReturnRetryToken] = useState(0);
   const [returnedFromGateway, setReturnedFromGateway] = useState(initialGatewayReturn);
+  const [historyGatewayReturn, setHistoryGatewayReturn] = useState(
+    () =>
+      initialGatewayReturn &&
+      (isHistoryBackForwardNavigation() || getGatewayReturnKind() === "history"),
+  );
   const [gatewayReturnHandled, setGatewayReturnHandled] = useState(!initialGatewayReturn);
   const [gatewayPopupOpen, setGatewayPopupOpen] = useState(false);
   const redirectedRef = useRef(false);
   const pollAttemptsRef = useRef(0);
   const reconcilePollingRef = useRef(true);
+  const concludedBackRef = useRef(false);
   const returnedFromPayment = returnedFromGateway;
 
   const signalGatewayReturn = useCallback(() => {
@@ -261,8 +285,9 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
       if (!wasMfPaymentRedirected(orderId)) return;
       setReturnedFromGateway(true);
       setRedirecting(false);
-      if (event.persisted) {
-        setGatewayReturnHandled(false);
+      setGatewayReturnHandled(false);
+      if (isHistoryGatewayReturn(event) || getGatewayReturnKind() === "history") {
+        setHistoryGatewayReturn(true);
       }
       setReturnRetryToken((token) => token + 1);
     }
@@ -282,10 +307,11 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
     setReturnConfirming(true);
     setLongRunning(false);
     pollAttemptsRef.current = 0;
+    concludedBackRef.current = false;
 
     void (async () => {
       const status = await syncOrderPaymentReturn(orderId);
-      if (cancelled) return;
+      if (cancelled || concludedBackRef.current) return;
       setPaymentOutcome(status.outcome);
       const next = pickOrderFromPaymentStatus(status);
       if (next) setOrder(next);
@@ -321,9 +347,61 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
       if (reconcilePollingRef.current) {
         try {
           const status = await reconcileMfOrderPayment(orderId);
-          if (cancelled) return;
-          setPaymentOutcome(status.outcome);
+          if (cancelled || concludedBackRef.current) return;
           const next = pickOrderFromPaymentStatus(status);
+          if (
+            shouldShowGatewayBackNotCompleted({
+              historyReturn: historyGatewayReturn,
+              attempts: pollAttemptsRef.current,
+              outcome: status.outcome,
+            })
+          ) {
+            concludedBackRef.current = true;
+            reconcilePollingRef.current = false;
+            try {
+              const abandoned = await abandonMfOrderPayment(orderId);
+              if (cancelled) return;
+              setOrder(abandoned);
+              const paid =
+                abandoned.status === "SUCCEEDED" || isOrderPaymentCompleted(abandoned);
+              setPaymentOutcome(paid ? "success" : "failed");
+              if (!paid) {
+                setError(abandoned.failure_reason?.trim() || copy.mutualFunds.orderPayNotCompleted);
+              } else {
+                setError(null);
+              }
+            } catch {
+              if (cancelled) return;
+              try {
+                const latest = await reconcileMfOrderPayment(orderId);
+                if (cancelled) return;
+                const recovered = pickOrderFromPaymentStatus(latest);
+                if (recovered) setOrder(recovered);
+                const paid =
+                  latest.outcome === "success" ||
+                  (recovered != null && isOrderPaymentCompleted(recovered));
+                setPaymentOutcome(paid ? "success" : "failed");
+                setError(
+                  paid
+                    ? null
+                    : recovered?.failure_reason?.trim() || copy.mutualFunds.orderPayNotCompleted,
+                );
+              } catch {
+                if (!cancelled) {
+                  setPaymentOutcome("failed");
+                  setError(copy.mutualFunds.orderPayNotCompleted);
+                }
+              }
+            } finally {
+              if (!cancelled) {
+                setReturnConfirming(false);
+                setGatewayReturnHandled(true);
+                setLoading(false);
+              }
+            }
+            return;
+          }
+          setPaymentOutcome(status.outcome);
           if (next) setOrder(next);
           if (isMfPaymentReconcileTerminal(status.outcome)) return;
           if (next && isOrderPaymentCompleted(next)) return;
@@ -346,11 +424,11 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [gatewayPopupOpen, loadOrder, orderId, returnConfirming, returnRetryToken]);
+  }, [gatewayPopupOpen, historyGatewayReturn, loadOrder, orderId, returnConfirming, returnRetryToken]);
 
   useEffect(() => {
     if (!gatewayReturnHandled || returnedFromGateway) return;
-    if (!order?.payment_url || order.next_action !== "pay_upi") return;
+    if (!order?.payment_url) return;
     if (TERMINAL_STATUSES.has(order.status)) return;
     if (redirectedRef.current || wasMfPaymentRedirected(orderId)) return;
 
@@ -367,7 +445,6 @@ export function MfOrderPayView({ orderId, onClose }: MfOrderPayViewProps) {
     !redirecting &&
     !returnConfirming &&
     Boolean(order?.payment_url) &&
-    order?.next_action === "pay_upi" &&
     !TERMINAL_STATUSES.has(order?.status ?? "");
 
   const canLeaveAfterReturn =
@@ -586,7 +663,7 @@ export function MfOrderPaymentReturnView() {
         ? copy.mutualFunds.orderPaySuccess
         : phase === "error"
           ? order?.failure_code === "payment_abandoned"
-            ? copy.mutualFunds.orderPayAbandoned
+          ? order?.failure_reason?.trim() || copy.mutualFunds.orderPayNotCompleted
             : error ?? order?.failure_reason ?? copy.mutualFunds.orderPayReturnUnknown
           : paymentOutcome === "unclear"
             ? copy.mutualFunds.orderPayReturnUnclear

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CreditCard, Landmark, LayoutGrid } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -246,7 +247,7 @@ export function AddBankAccountForm({
     ? copy.kyc.bank.verifying
     : showManualProof
       ? copy.kyc.bank.verifyManual
-      : copy.kyc.bank.verify;
+      : copy.settings.bankAccounts.verifyAction;
   const busy = isProcessing || proofUploading;
 
   useEffect(() => {
@@ -271,25 +272,43 @@ export function AddBankAccountForm({
       ) : null}
 
       <div className="space-y-4">
-        <KycBankAccountCard
-          isProcessing={isProcessing}
-          isComplete={isComplete}
-          accountDetails={accountDetails}
-          verification={verification}
-          ifscCode={form.ifscCode}
-        />
+        {!isProcessing && !isComplete && !accountDetails ? (
+          <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Landmark className="size-4" strokeWidth={2.25} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-compact font-semibold text-foreground">{copy.kyc.bank.detailsPendingTitle}</p>
+              <p className="mt-0.5 text-caption text-muted-foreground">{copy.kyc.bank.detailsStartHint}</p>
+            </div>
+          </div>
+        ) : (
+          <KycBankAccountCard
+            isProcessing={isProcessing}
+            isComplete={isComplete}
+            accountDetails={accountDetails}
+            verification={verification}
+            ifscCode={form.ifscCode}
+          />
+        )}
 
         <div className="space-y-2">
-          <Label htmlFor="add-bank-account-number">{copy.kyc.bank.fields.accountNumber}</Label>
-          <Input
-            id="add-bank-account-number"
-            inputMode="numeric"
-            value={form.accountNumber}
-            onChange={(event) => updateField("accountNumber", normalizeAccountNumber(event.target.value))}
-            placeholder={copy.kyc.bank.placeholders.accountNumber}
-            disabled={isProcessing || isComplete}
-            aria-invalid={Boolean(formErrors.accountNumber)}
-          />
+          <Label htmlFor="add-bank-account-number">
+            {copy.kyc.bank.fields.accountNumber} <span className="text-destructive">*</span>
+          </Label>
+          <div className="relative min-w-0">
+            <CreditCard className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="add-bank-account-number"
+              inputMode="numeric"
+              value={form.accountNumber}
+              onChange={(event) => updateField("accountNumber", normalizeAccountNumber(event.target.value))}
+              placeholder={copy.kyc.bank.placeholders.accountNumber}
+              disabled={isProcessing || isComplete}
+              aria-invalid={Boolean(formErrors.accountNumber)}
+              className="h-11 bg-background pl-9"
+            />
+          </div>
           {formErrors.accountNumber ? <FieldMessage message={formErrors.accountNumber} /> : null}
         </div>
 
@@ -301,23 +320,31 @@ export function AddBankAccountForm({
           placeholder={copy.kyc.bank.placeholders.select}
           disabled={isProcessing || isComplete}
           hasError={Boolean(formErrors.accountType)}
+          required
+          icon={Landmark}
+          triggerClassName="h-11 w-full bg-background pl-3"
           onChange={(value) => updateField("accountType", value)}
         />
         {formErrors.accountType ? <FieldMessage message={formErrors.accountType} /> : null}
 
         <div className="space-y-2">
-          <Label htmlFor="add-bank-ifsc">{copy.kyc.bank.fields.ifscCode}</Label>
-          <Input
-            id="add-bank-ifsc"
-            value={form.ifscCode}
-            onChange={(event) => updateField("ifscCode", normalizeIfscCode(event.target.value))}
-            placeholder={copy.kyc.bank.placeholders.ifscCode}
-            autoComplete="off"
-            spellCheck={false}
-            disabled={isProcessing || isComplete}
-            aria-invalid={Boolean(formErrors.ifscCode)}
-            className="font-mono uppercase tracking-wide"
-          />
+          <Label htmlFor="add-bank-ifsc">
+            {copy.kyc.bank.fields.ifscCode} <span className="text-destructive">*</span>
+          </Label>
+          <div className="relative min-w-0">
+            <LayoutGrid className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="add-bank-ifsc"
+              value={form.ifscCode}
+              onChange={(event) => updateField("ifscCode", normalizeIfscCode(event.target.value))}
+              placeholder={copy.kyc.bank.placeholders.enterIfscCode}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={isProcessing || isComplete}
+              aria-invalid={Boolean(formErrors.ifscCode)}
+              className="h-11 bg-background pl-9 font-mono uppercase tracking-wide"
+            />
+          </div>
           {formErrors.ifscCode ? <FieldMessage message={formErrors.ifscCode} /> : null}
         </div>
 

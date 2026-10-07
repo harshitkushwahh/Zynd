@@ -15,6 +15,12 @@ import {
 import { MfPaymentJourneyDialog } from "@/features/invest/components/payment-dialog";
 import type { MfPaymentJourneyPhase } from "@/features/invest/components/payment-dialog/mf-payment-dialog-assets";
 import { resolveSipMandateTerminalLines } from "@/features/invest/lib/mf-sip-mandate-terminal-lines";
+import {
+  getGatewayReturnKind,
+  isHistoryBackForwardNavigation,
+  isHistoryGatewayReturn,
+  MF_GATEWAY_BACK_RECONCILE_ATTEMPTS,
+} from "@/features/invest/lib/mf-payment-gateway-return";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { resolveSipFailureReason } from "@/features/invest/lib/mf-sip-failure-copy";
 import {
@@ -158,6 +164,7 @@ function resolveSipMandatePhase(args: {
   returnedFromFirstInstallment: boolean;
   returnConfirming: boolean;
   redirectingToFirstInstallment: boolean;
+  gatewayBackIncomplete: boolean;
 }): MfPaymentJourneyPhase {
   const {
     loading,
@@ -168,9 +175,11 @@ function resolveSipMandatePhase(args: {
     returnedFromFirstInstallment,
     returnConfirming,
     redirectingToFirstInstallment,
+    gatewayBackIncomplete,
   } = args;
 
   if (returnConfirming || redirectingToFirstInstallment) return "waiting";
+  if (gatewayBackIncomplete && !isSipSetupComplete(plan)) return "error";
   if (!abandonChecked && (returnedFromMandate || returnedFromFirstInstallment)) return "waiting";
   if ((loading && !plan) || !abandonChecked) return "processing";
   if (error || !plan) return "error";
@@ -294,6 +303,12 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
   const [mandateAutoRedirectBlocked, setMandateAutoRedirectBlocked] = useState(
     () => wasMfSipMandateAutoRedirectBlocked(planId),
   );
+  const [historyGatewayReturn, setHistoryGatewayReturn] = useState(
+    () =>
+      (wasMfSipMandateRedirected(planId) || wasMfSipFirstInstallmentRedirected(planId)) &&
+      (isHistoryBackForwardNavigation() || getGatewayReturnKind() === "history"),
+  );
+  const [gatewayBackIncomplete, setGatewayBackIncomplete] = useState(false);
   const returnedFromMandate =
     wasMfSipMandateRedirected(planId) && isMfPaymentFullPageGatewayReturn(planId);
 
@@ -319,7 +334,6 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
         } else {
           markMfSipFirstInstallmentRedirect(planId, "full_page");
         }
-        window.location.replace(url);
         return true;
       }
       if (result === "popup" && popup) {
@@ -387,7 +401,10 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
       redirectedRef.current = false;
 
       const refreshedMandate = await authMfMandate(mandateId);
-      const authUrl = refreshedMandate.auth_url?.trim() || resolveMandateAuthUrl(plan);
+      const authUrl = refreshedMandate.auth_url?.trim() || "";
+      if (!authUrl) {
+        throw new Error(copy.mutualFunds.sipMandateAuthRetry);
+      }
       const updatedPlan: MfSipPlan = {
         ...plan,
         mandate_auth_url: authUrl,
@@ -411,6 +428,8 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
       markMfSipMandateAutoRedirectBlocked(planId);
       syncMandateAutoRedirectBlocked(true);
       setError(err instanceof Error ? err.message : copy.mutualFunds.sipLoadError);
+      const next = await fetchMfSipPlan(planId);
+      if (next) setPlan(next);
     }
   }, [launchSipGatewayUrl, plan, planId, syncMandateAutoRedirectBlocked]);
 
@@ -474,6 +493,9 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
       mandateReturnConfirmRef.current = false;
       setRedirectingToFirstInstallment(false);
       setAbandonChecked(false);
+      if (isHistoryGatewayReturn(event) || getGatewayReturnKind() === "history") {
+        setHistoryGatewayReturn(true);
+      }
       setReturnRetryToken((token) => token + 1);
     }
 
@@ -482,6 +504,8 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
   }, [planId]);
 
   useEffect(() => {
+    const concludeUnpaidReturn = historyGatewayReturn || getGatewayReturnKind() === "postback";
+
     if (wasMfSipFirstInstallmentRedirected(planId)) {
       if (getMfPaymentGatewayMode(planId) === "popup" && returnRetryToken === 0) {
         setAbandonChecked(true);
@@ -495,11 +519,17 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
           const next = await reconcileFirstInstallmentReturn(planId);
           if (!cancelled && next) {
             setPlan(next);
-            if (isFirstInstallmentPending(next)) {
+            if (concludeUnpaidReturn && isFirstInstallmentPending(next)) {
+              setGatewayBackIncomplete(true);
               setFirstInstallmentRetryOffered(true);
+              setError(copy.mutualFunds.sipFirstInstallmentRetry);
+            } else {
+              if (isFirstInstallmentPending(next)) {
+                setFirstInstallmentRetryOffered(true);
+              }
+              setError(null);
             }
           }
-          setError(null);
         } catch (err) {
           if (!cancelled) {
             setError(err instanceof Error ? err.message : copy.mutualFunds.sipLoadError);
@@ -542,8 +572,37 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
         if (needsMandateConfirm) {
           next = await confirmMfSipMandateReturn(planId);
         }
+        if (
+          concludeUnpaidReturn &&
+          next &&
+          !isSipSetupComplete(next) &&
+          needsMandateAuthorization(next)
+        ) {
+          for (let attempt = 0; attempt < MF_GATEWAY_BACK_RECONCILE_ATTEMPTS; attempt += 1) {
+            await sleep(POLL_MS);
+            next = await confirmMfSipMandateReturn(planId);
+            if (!next || isSipSetupComplete(next) || !needsMandateAuthorization(next)) break;
+          }
+          if (next && !isSipSetupComplete(next) && needsMandateAuthorization(next)) {
+            try {
+              next = await abandonMfSipMandate(planId);
+            } catch {
+              // Keep the refreshed plan and still show the not-completed dialog.
+            }
+          }
+        }
         setPlan(next);
-        setError(null);
+        if (
+          concludeUnpaidReturn &&
+          next &&
+          !isSipSetupComplete(next) &&
+          (needsMandateAuthorization(next) || next.status === "FAILED" || next.status === "CANCELLED")
+        ) {
+          setGatewayBackIncomplete(true);
+          setError(next.failure_reason?.trim() || copy.mutualFunds.sipMandateAbandoned);
+        } else {
+          setError(null);
+        }
       } catch {
         const next = await loadPlan();
         if (next) setPlan(next);
@@ -555,12 +614,12 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
         setAbandonChecked(true);
       }
     })();
-  }, [loadPlan, planId, returnRetryToken, syncMandateAutoRedirectBlocked]);
+  }, [historyGatewayReturn, loadPlan, planId, returnRetryToken, syncMandateAutoRedirectBlocked]);
 
   useEffect(() => {
     if (!abandonChecked || returnConfirming || dismissedRef.current) return;
     if (!plan || !isFirstInstallmentPending(plan)) return;
-    if (firstInstallmentRetryOffered || wasMfSipFirstInstallmentAutoStarted(planId)) return;
+    if (gatewayBackIncomplete || firstInstallmentRetryOffered || wasMfSipFirstInstallmentAutoStarted(planId)) return;
     if (redirectedRef.current) return;
 
     markMfSipFirstInstallmentAutoStarted(planId);
@@ -568,6 +627,7 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
   }, [
     abandonChecked,
     firstInstallmentRetryOffered,
+    gatewayBackIncomplete,
     plan,
     planId,
     returnConfirming,
@@ -635,6 +695,7 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
     returnedFromFirstInstallment,
     returnConfirming,
     redirectingToFirstInstallment,
+    gatewayBackIncomplete,
   });
   const message = resolveSipMandateMessage({
     phase,
@@ -668,7 +729,8 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
     (firstInstallmentRetryOffered || wasMfSipFirstInstallmentAutoStarted(planId));
   const firstInstallmentPending = isFirstInstallmentPending(plan);
   const useCtaLayout =
-    mandateAuthDue || firstInstallmentDue || firstInstallmentRetryOffered;
+    phase !== "error" &&
+    (mandateAuthDue || firstInstallmentDue || firstInstallmentRetryOffered);
   const useTerminalLayout =
     isInProgress &&
     !firstInstallmentPending &&
@@ -677,7 +739,9 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
 
   const title =
     phase === "error"
-      ? copy.mutualFunds.sipJourneyFailedTitle
+      ? gatewayBackIncomplete
+        ? copy.mutualFunds.paymentJourneyFailedTitle
+        : copy.mutualFunds.sipJourneyFailedTitle
       : phase === "success"
         ? copy.mutualFunds.sipJourneySuccessTitle
         : copy.mutualFunds.sipMandateTitle;

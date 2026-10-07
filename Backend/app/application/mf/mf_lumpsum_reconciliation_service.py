@@ -34,6 +34,7 @@ from app.infrastructure.persistence.mf_transaction_models import (
 )
 from app.application.mf.mf_fp_state import (
     FP_FAILURE_STATES,
+    FP_PAYMENT_PENDING_STATES,
     FP_PROCESSING_STATES,
     FP_SUBMITTED_STATES,
     FP_SUCCESS_STATES,
@@ -148,10 +149,15 @@ def _target_status_without_payment(
 
     if _purchase_state_ahead_of_payment(fp_state):
         if payment_id is None:
+            # Review / setup has no PG row yet. Do not mark the order failed.
+            if normalized_fp in FP_PROCESSING_STATES | FP_PAYMENT_PENDING_STATES:
+                return map_fp_purchase_state(fp_state)
+            if normalized_fp in FP_SUBMITTED_STATES:
+                return MfOrderStatus.payment_pending
+            return map_fp_purchase_state(fp_state)
+        if is_payment_failure_status(fp_payment_status):
             return MfOrderStatus.failed
-        if is_payment_pending_status(fp_payment_status):
-            return MfOrderStatus.payment_pending
-        return MfOrderStatus.failed
+        return MfOrderStatus.payment_pending
 
     return map_fp_purchase_state(fp_state)
 
@@ -253,6 +259,14 @@ async def apply_order_fp_truth(
         truth = await fetch_order_fp_truth(order, checkout=checkout)
 
     target = MfOrderStatus(truth["target_status"])
+    fp_state_norm = (truth.get("fp_state") or "").strip().lower()
+    # Cart checkout never runs this revert. Do not fail a one-time purchase
+    # while Cybrilla is still reviewing or the payment link is not ready.
+    if target in {MfOrderStatus.failed, MfOrderStatus.cancelled} and not truth.get("payment_succeeded"):
+        if not is_payment_failure_status(truth.get("fp_payment_status")) and fp_state_norm not in FP_FAILURE_STATES:
+            target = map_fp_purchase_state(truth.get("fp_state"))
+            if target in {MfOrderStatus.failed, MfOrderStatus.cancelled}:
+                target = MfOrderStatus.processing
     before = {
         "status": order.status.value,
         "fp_state": order.fp_state,
@@ -540,6 +554,21 @@ async def reconcile_order_payment(
         }
 
     checkout = await session.get(MfCheckout, order.checkout_id) if order.checkout_id else None
+    if (
+        order.status == MfOrderStatus.failed
+        and order.failure_code == "payment_not_completed"
+        and (order.fp_state or "").strip().lower() not in FP_FAILURE_STATES
+    ):
+        restored = map_fp_purchase_state(order.fp_state)
+        order.status = restored if restored != MfOrderStatus.failed else MfOrderStatus.processing
+        order.failure_code = None
+        order.failure_reason = None
+        if checkout and checkout.status == MfCheckoutStatus.failed:
+            checkout.status = map_fp_purchase_state_to_checkout(order.fp_state)
+            checkout.failure_code = None
+            checkout.failure_reason = None
+        await session.flush()
+
     payment_id = _resolve_order_payment_id(order, checkout)
     fp_payment_status = await _fetch_fp_payment_status(payment_id)
 

@@ -43,7 +43,7 @@ export function SecuritySettingsPanel({
         onRefreshBackupCodes={onRefreshBackupCodes}
         autoOpenEnroll={autoOpenEnroll}
         onAutoOpenEnrollHandled={onAutoOpenEnrollHandled}
-        onEnrollCompleted={() => setBackupCodesRevealed(true)}
+        onEnrollCompleted={() => setBackupCodesRevealed(false)}
       />
       <ZyndPinSettingsPanel mfaEnabled={mfaEnabled} pinEnrolled={pinEnrolled} />
       <PinBiometricSettingsPanel pinEnrolled={pinEnrolled} />

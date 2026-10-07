@@ -24,7 +24,13 @@ from app.infrastructure.mf.fp_mandate_client import (
     get_mandate,
 )
 from app.infrastructure.mf.fp_oms_client import invalidate_mf_token
-from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus, MfSipPlan, MfSipPlanStatus
+from app.infrastructure.persistence.mf_transaction_models import (
+    MfMandate,
+    MfMandateStatus,
+    MfSipPlan,
+    MfSipPlanEvent,
+    MfSipPlanStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +44,18 @@ SYNC_SKIP_MANDATE_STATUSES = frozenset(
     {
         MfMandateStatus.failed,
         MfMandateStatus.cancelled,
+    }
+)
+
+MANDATE_AUTH_TTL = timedelta(minutes=2)
+MANDATE_AUTH_ISSUED_AT_KEY = "auth_issued_at"
+MANDATE_AUTH_EXPIRED_CODE = "mandate_auth_expired"
+MANDATE_AUTH_EXPIRED_REASON = "UPI authorization expired. Start this SIP again."
+_SIP_STATUSES_EXPIRED_WITH_MANDATE = frozenset(
+    {
+        MfSipPlanStatus.pending,
+        MfSipPlanStatus.review,
+        MfSipPlanStatus.consent_pending,
     }
 )
 
@@ -75,6 +93,105 @@ def record_mandate_sync(metadata: dict | None) -> dict:
     sync["last_sync_at"] = datetime.now(timezone.utc).isoformat()
     meta["mandate_sync"] = sync
     return meta
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def mandate_auth_started_at(mandate: MfMandate) -> datetime | None:
+    """When the UPI auth link was issued. Cybrilla leaves that link pending after it dies."""
+    meta = mandate.metadata_ or {}
+    raw = meta.get(MANDATE_AUTH_ISSUED_AT_KEY)
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return _as_utc(datetime.fromisoformat(raw))
+        except ValueError:
+            pass
+    if mandate.status == MfMandateStatus.auth_pending or mandate.auth_token_url:
+        if mandate.created_at is None:
+            return None
+        return _as_utc(mandate.created_at)
+    return None
+
+
+def mandate_auth_window_elapsed(mandate: MfMandate, *, now: datetime | None = None) -> bool:
+    if mandate.status in TERMINAL_MANDATE_STATUSES:
+        return False
+    started = mandate_auth_started_at(mandate)
+    if started is None:
+        return False
+    current = _as_utc(now or datetime.now(timezone.utc))
+    return current >= started + MANDATE_AUTH_TTL
+
+
+def stamp_mandate_auth_issued_at(
+    mandate: MfMandate,
+    *,
+    now: datetime | None = None,
+    reset: bool = False,
+) -> None:
+    meta = dict(mandate.metadata_ or {})
+    if meta.get(MANDATE_AUTH_ISSUED_AT_KEY) and not reset:
+        return
+    meta[MANDATE_AUTH_ISSUED_AT_KEY] = _as_utc(now or datetime.now(timezone.utc)).isoformat()
+    mandate.metadata_ = meta
+
+
+def _first_installment_was_paid(plan: MfSipPlan) -> bool:
+    meta = plan.metadata_ or {}
+    sip = meta.get("sip")
+    if not isinstance(sip, dict):
+        return False
+    first = sip.get("first_installment")
+    if not isinstance(first, dict):
+        return False
+    return str(first.get("status") or "").strip().lower() == "paid"
+
+
+async def expire_unapproved_mandate_auth(session: AsyncSession, mandate: MfMandate | None) -> bool:
+    """Fail a mandate and its open SIPs once the 2-minute UPI link has died unpaid."""
+    if mandate is None or not mandate_auth_window_elapsed(mandate):
+        return False
+
+    if mandate.fp_mandate_id is not None and mandate.status not in SYNC_SKIP_MANDATE_STATUSES:
+        await refresh_mandate_status_from_fp(session, mandate, force=True)
+    if mandate.status in TERMINAL_MANDATE_STATUSES:
+        return False
+
+    plans = list(
+        (
+            await session.execute(select(MfSipPlan).where(MfSipPlan.mf_mandate_id == mandate.id))
+        ).scalars()
+    )
+    if any(plan.status == MfSipPlanStatus.active or _first_installment_was_paid(plan) for plan in plans):
+        return False
+
+    mandate.status = MfMandateStatus.failed
+    mandate.failure_code = MANDATE_AUTH_EXPIRED_CODE
+    mandate.failure_reason = MANDATE_AUTH_EXPIRED_REASON
+    mandate.auth_token_url = None
+
+    for plan in plans:
+        if plan.status not in _SIP_STATUSES_EXPIRED_WITH_MANDATE:
+            continue
+        previous = plan.status.value
+        plan.status = MfSipPlanStatus.failed
+        plan.failure_code = MANDATE_AUTH_EXPIRED_CODE
+        plan.failure_reason = MANDATE_AUTH_EXPIRED_REASON
+        session.add(
+            MfSipPlanEvent(
+                plan_id=plan.id,
+                from_status=previous,
+                to_status=plan.status.value,
+                source="SYSTEM",
+                payload={"reason": MANDATE_AUTH_EXPIRED_CODE},
+            )
+        )
+    await session.flush()
+    return True
 
 
 def _derive_mandate_next_action(*, status: str, auth_url: str | None) -> str:
@@ -356,24 +473,110 @@ async def get_user_mandate(
     return mandate
 
 
+async def _store_mandate_auth_url(session: AsyncSession, mandate: MfMandate, token_url: str) -> None:
+    mandate.auth_token_url = token_url
+    mandate.status = MfMandateStatus.auth_pending
+    stamp_mandate_auth_issued_at(mandate, reset=True)
+    await session.flush()
+
+
+async def _request_mandate_auth_url(mandate: MfMandate) -> str | None:
+    if mandate.fp_mandate_id is None:
+        return None
+    result = await authorize_mandate(mandate_id=int(mandate.fp_mandate_id))
+    token_url = result.get("token_url")
+    if not token_url:
+        return None
+    return str(token_url).strip() or None
+
+
+async def _replace_mandate_with_fresh_auth(session: AsyncSession, mandate: MfMandate) -> MfMandate:
+    """The previous Cybrilla link dies on browser Back. Mint a new mandate and link."""
+    result = await create_mandate(
+        bank_account_id=mandate.bank_account_old_id,
+        mandate_limit=mandate.mandate_limit,
+        mandate_type=mandate.mandate_type,
+    )
+    fp_mandate_id = result.get("id")
+    if fp_mandate_id is None:
+        raise MfOrderError(
+            code="fp_mandate_id_missing",
+            message="Could not start a new UPI authorization. Please try again.",
+        )
+
+    replacement = MfMandate(
+        user_id=mandate.user_id,
+        investor_bank_account_id=mandate.investor_bank_account_id,
+        bank_account_old_id=mandate.bank_account_old_id,
+        status=MfMandateStatus.auth_pending,
+        mandate_type=mandate.mandate_type,
+        mandate_limit=mandate.mandate_limit,
+        fp_mandate_id=int(fp_mandate_id),
+        idempotency_key=f"{mandate.idempotency_key}:reauth:{uuid.uuid4()}",
+    )
+    session.add(replacement)
+    await session.flush()
+
+    token_url = await _request_mandate_auth_url(replacement)
+    if not token_url:
+        raise MfOrderError(
+            code="mandate_auth_unavailable",
+            message="Could not start a new UPI authorization. Please try again.",
+        )
+    await _store_mandate_auth_url(session, replacement, token_url)
+
+    plans = list(
+        (
+            await session.execute(
+                select(MfSipPlan).where(
+                    MfSipPlan.mf_mandate_id == mandate.id,
+                    MfSipPlan.status.in_(list(_SIP_STATUSES_EXPIRED_WITH_MANDATE)),
+                )
+            )
+        ).scalars()
+    )
+    for plan in plans:
+        plan.mf_mandate_id = replacement.id
+
+    mandate.status = MfMandateStatus.cancelled
+    mandate.auth_token_url = None
+    mandate.failure_code = "mandate_auth_replaced"
+    mandate.failure_reason = "Replaced with a new UPI authorization link"
+    await session.flush()
+
+    if mandate.fp_mandate_id is not None:
+        try:
+            await cancel_mandate(int(mandate.fp_mandate_id))
+        except FpClientError:
+            logger.info("Old mandate %s stayed open at Cybrilla after a new auth link was issued", mandate.id)
+    return replacement
+
+
 async def initiate_mandate_auth(session: AsyncSession, mandate: MfMandate) -> MfMandate:
     if mandate.status == MfMandateStatus.approved:
         return mandate
     if mandate.fp_mandate_id is None:
         raise MfOrderError(code="mandate_not_ready", message="Mandate is still being created")
 
+    previous_url = (mandate.auth_token_url or "").strip()
     try:
-        result = await authorize_mandate(mandate_id=int(mandate.fp_mandate_id))
+        token_url = await _request_mandate_auth_url(mandate)
     except FpClientError as exc:
+        if previous_url:
+            return await _replace_mandate_with_fresh_auth(session, mandate)
         mandate.status = MfMandateStatus.failed
         mandate.failure_code = exc.code
         mandate.failure_reason = exc.message
         await session.flush()
         raise MfOrderError(code=exc.code, message=exc.message) from exc
 
-    token_url = result.get("token_url")
-    if token_url:
-        mandate.auth_token_url = str(token_url)
+    if token_url and token_url != previous_url:
+        await _store_mandate_auth_url(session, mandate, token_url)
+        return mandate
+
+    if previous_url:
+        return await _replace_mandate_with_fresh_auth(session, mandate)
+
     mandate.status = MfMandateStatus.auth_pending
     await session.flush()
     return mandate
@@ -554,6 +757,9 @@ async def sync_open_mandates(session: AsyncSession, *, batch_size: int = 20) -> 
     failed = 0
     skipped = 0
     for mandate in mandates:
+        if await expire_unapproved_mandate_auth(session, mandate):
+            updated += 1
+            continue
         if should_skip_mandate_sync(mandate.metadata_):
             skipped += 1
             continue

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Info } from "lucide-react";
+import { AlertTriangle, Check, Info, Lock } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import { AuthSubmitFooter } from "@/components/auth/auth-shared";
@@ -137,12 +137,12 @@ export function DeleteAccountRequestDialog({
       title={copy.settings.confirmAccountDeletionTitle}
       maxWidth="lg"
     >
-      <div className={cn("px-5 pb-5", step === "intro" ? "pt-4" : "pt-1.5")}>
+      <div className="px-5 pt-4 pb-5">
+        <DeleteAccountHeroImage className="mb-4" />
         <DeleteAccountProgress step={step} mfaEnabled={mfaEnabled} compact={step !== "intro"} />
 
         {step === "intro" ? (
           <div className="space-y-5">
-            <DeleteAccountHeroImage />
 
             <ul className="space-y-2.5">
               {INTRO_POINTS.map((point) => {
@@ -181,16 +181,14 @@ export function DeleteAccountRequestDialog({
           </div>
         ) : step === "password" ? (
           <form className="mt-2 space-y-4" onSubmit={handlePasswordSubmit}>
-            <p className="text-caption leading-relaxed text-muted-foreground">
-              {copy.account.deletionPasswordPrompt()}
-            </p>
-
-            <div className="space-y-2">
-              <Label htmlFor="delete-account-password" className="text-caption font-medium">
-                {copy.pin.setupStepPassword}
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="delete-account-password">
+                {copy.settings.changePasswordCurrentLabel}{" "}
+                <span className="text-destructive">*</span>
               </Label>
               <PasswordInput
                 id="delete-account-password"
+                icon={Lock}
                 placeholder={copy.settings.changePasswordCurrentPlaceholder}
                 value={password}
                 onChange={(event) => {
@@ -200,6 +198,7 @@ export function DeleteAccountRequestDialog({
                 autoComplete="current-password"
                 disabled={loading}
                 autoFocus
+                className="h-11 w-full min-w-0 max-w-full bg-background"
               />
             </div>
 
@@ -222,8 +221,6 @@ export function DeleteAccountRequestDialog({
           </form>
         ) : (
           <form className="mt-2 space-y-4" onSubmit={handleVerifySubmit}>
-            <DeleteAccountHeroImage />
-
             <div className="rounded-[var(--radius-xl)] border border-border bg-muted/30 p-4 shadow-zynd-low">
               <StepUpSecondFactorFields
                 embedded

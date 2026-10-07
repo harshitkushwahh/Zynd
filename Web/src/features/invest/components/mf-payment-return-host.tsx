@@ -4,11 +4,13 @@ import { useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
+import { markGatewayReturnKind } from "@/features/invest/lib/mf-payment-gateway-return";
 import { notifyMfPaymentGatewayReturn } from "@/features/invest/lib/mf-payment-gateway-popup";
 import {
   getLastMfPaymentCheckoutId,
   getLastMfPaymentOrderId,
   getMfPaymentReturnPath,
+  markMfPaymentRedirect,
 } from "@/features/invest/lib/mf-payment-session";
 
 export function MfPaymentReturnHost() {
@@ -51,11 +53,15 @@ export function MfPaymentReturnHost() {
       (useCheckoutReturn ? "/dashboard/mutual-funds/cart" : "/dashboard/mutual-funds");
 
     if (useCheckoutReturn && checkoutId) {
+      markGatewayReturnKind("postback");
+      markMfPaymentRedirect({ checkoutId, mode: "full_page" });
       openCartCheckoutPayment(checkoutId, {
         captureReturnPath: false,
         resumeAfterGatewayReturn: true,
       });
     } else if (orderId) {
+      markGatewayReturnKind("postback");
+      markMfPaymentRedirect({ orderId, mode: "full_page" });
       openOrderPayment(orderId, {
         captureReturnPath: false,
         resumeAfterGatewayReturn: true,

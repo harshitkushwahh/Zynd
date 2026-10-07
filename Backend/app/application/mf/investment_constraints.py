@@ -12,14 +12,15 @@ SIP_FREQUENCY_MONTHLY = "monthly"
 SIP_FREQUENCY_DAILY = "daily"
 SUPPORTED_SIP_FREQUENCIES = frozenset({SIP_FREQUENCY_MONTHLY, SIP_FREQUENCY_DAILY})
 
-SIP_FREQUENCY_ORDER = ("monthly", "quarterly", "weekly", "daily")
+SIP_FREQUENCY_ORDER = ("monthly", "quarterly", "weekly", "daily", "calendar_day_daily")
+SIP_FREQUENCY_ALIASES = frozenset({"calendar_day_daily"})
 TRANSACTION_TYPE_FIELDS = (
     ("purchase", ("purchase_allowed", "active")),
     ("sip", ("sip_allowed",)),
     ("redemption", ("redemption_allowed",)),
     ("switch", ("switch_in_allowed", "switch_out_allowed")),
     ("swp", ("swp_allowed",)),
-    ("stp", ("stp_allowed",)),
+    ("stp", ("stp_allowed", "stp_in_allowed", "stp_out_allowed")),
 )
 
 
@@ -40,11 +41,11 @@ def _to_api_int(value: Any) -> int | None:
 
 
 def _scheme_flag(scheme: dict[str, Any], *keys: str) -> bool:
-    for key in keys:
-        value = scheme.get(key)
-        if value is not None:
-            return bool(value)
-    return False
+    """True when any listed Cybrilla flag is explicitly true (e.g. switch in OR out)."""
+    values = [scheme.get(key) for key in keys if scheme.get(key) is not None]
+    if not values:
+        return False
+    return any(bool(value) for value in values)
 
 
 def _extract_sip_options(scheme: dict[str, Any]) -> list[dict[str, Any]]:
@@ -53,7 +54,10 @@ def _extract_sip_options(scheme: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     options: list[dict[str, Any]] = []
+    seen_frequencies: set[str] = set()
     for frequency in SIP_FREQUENCY_ORDER:
+        if frequency in SIP_FREQUENCY_ALIASES:
+            continue
         block = freq_data.get(frequency)
         if not isinstance(block, dict):
             continue
@@ -63,6 +67,9 @@ def _extract_sip_options(scheme: dict[str, Any]) -> list[dict[str, Any]]:
         min_installments = _to_api_int(block.get("min_installments"))
         if min_inr is None and max_inr is None and min_installments is None:
             continue
+        if frequency in seen_frequencies:
+            continue
+        seen_frequencies.add(frequency)
         options.append(
             {
                 "frequency": frequency,
@@ -187,9 +194,25 @@ def build_fallback_investment_details_from_fund(fund: MutualFund) -> dict[str, A
     )
 
 
+def is_min_amount_fallback_details(details: dict[str, Any] | None) -> bool:
+    """True for catalog-min fallback payloads, not full Cybrilla investment_constraints."""
+    if not isinstance(details, dict):
+        return True
+    if details.get("redemption") or details.get("switch"):
+        return False
+    tx = details.get("transaction_types")
+    if isinstance(tx, list) and any(t not in {"purchase", "sip"} for t in tx):
+        return False
+    for opt in details.get("sip_options") or []:
+        if isinstance(opt, dict) and opt.get("min_installments") is not None:
+            return False
+    return True
+
+
 def ensure_investment_details_on_fund_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Fill investment_details on fund detail payloads (incl. stale Redis cache entries)."""
-    if payload.get("investment_details"):
+    existing = payload.get("investment_details")
+    if existing and not is_min_amount_fallback_details(existing):
         return payload
     details = investment_details_from_min_amounts(
         min_sip_inr=payload.get("min_sip_amount_inr"),
@@ -207,6 +230,37 @@ def investment_details_for_fund(fund: MutualFund) -> dict[str, Any] | None:
     stored = serialize_investment_constraints_for_api(fund.investment_constraints)
     if stored:
         return stored
+    return build_fallback_investment_details_from_fund(fund)
+
+
+async def resolve_investment_details_for_fund(
+    session: Any,
+    fund: MutualFund,
+) -> dict[str, Any] | None:
+    """Prefer stored OMS JSON; on miss, fetch Cybrilla once and persist for fund detail UI."""
+    stored = serialize_investment_constraints_for_api(fund.investment_constraints)
+    if stored and not is_min_amount_fallback_details(stored):
+        return stored
+
+    from app.core.config import get_settings
+    from app.infrastructure.mf.fp_oms_client import get_fund_scheme_by_isin
+
+    settings = get_settings()
+    if settings.resolved_fp_enabled and fund.isin_growth:
+        try:
+            raw = await get_fund_scheme_by_isin(fund.isin_growth)
+            constraints = extract_investment_constraints_from_scheme(raw)
+            if constraints:
+                fund.investment_constraints = constraints
+                await session.flush()
+                if fund.product_id is not None:
+                    from app.application.mf.invest_catalog_cache import invalidate_invest_fund_detail_cache
+
+                    await invalidate_invest_fund_detail_cache(str(fund.product_id))
+                return constraints
+        except Exception:
+            pass
+
     return build_fallback_investment_details_from_fund(fund)
 
 

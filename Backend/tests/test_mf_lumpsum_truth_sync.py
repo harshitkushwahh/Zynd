@@ -48,13 +48,31 @@ def test_unpaid_submitted_purchase_with_failed_payment_maps_to_failed() -> None:
     assert target == MfOrderStatus.failed
 
 
-def test_unpaid_submitted_purchase_without_payment_id_maps_to_failed() -> None:
+def test_unpaid_submitted_purchase_without_payment_id_stays_payment_pending() -> None:
     target = _target_status_without_payment(
         fp_state="submitted",
         fp_payment_status="PENDING",
         payment_id=None,
     )
-    assert target == MfOrderStatus.failed
+    assert target == MfOrderStatus.payment_pending
+
+
+def test_under_review_without_payment_id_stays_processing() -> None:
+    target = _target_status_without_payment(
+        fp_state="under_review",
+        fp_payment_status=None,
+        payment_id=None,
+    )
+    assert target == MfOrderStatus.processing
+
+
+def test_unrecognized_payment_status_stays_payment_pending() -> None:
+    target = _target_status_without_payment(
+        fp_state="submitted",
+        fp_payment_status="AUTHORIZED",
+        payment_id=123,
+    )
+    assert target == MfOrderStatus.payment_pending
 
 
 def test_pending_purchase_state_maps_from_cybrilla() -> None:

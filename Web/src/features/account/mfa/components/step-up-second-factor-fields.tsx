@@ -28,7 +28,14 @@ type StepUpSecondFactorFieldsProps = {
   onErrorChange?: (message: string) => void;
   embedded?: boolean;
   centered?: boolean;
+  compactOtp?: boolean;
 };
+
+const COMPACT_OTP_CLASS =
+  "w-full max-w-[17.5rem] [&>div>div]:gap-1.5 [&_input]:h-9 [&_input]:text-compact [&_input]:shadow-none";
+
+const COMPACT_OTP_INLINE_CLASS =
+  "min-w-0 flex-1 [&>div>div]:gap-1.5 [&_input]:h-9 [&_input]:text-compact [&_input]:shadow-none";
 
 export function StepUpSecondFactorFields({
   useSms,
@@ -44,6 +51,7 @@ export function StepUpSecondFactorFields({
   onErrorChange,
   embedded = false,
   centered = false,
+  compactOtp = false,
 }: StepUpSecondFactorFieldsProps) {
   const [smsFallbackAvailable, setSmsFallbackAvailable] = useState(false);
   const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
@@ -94,6 +102,24 @@ export function StepUpSecondFactorFields({
     await handleSendSms();
   };
 
+  const inlineSmsAction = compactOtp && embedded && !centered;
+
+  const sendSmsButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className={cn("gap-1.5", inlineSmsAction && "h-9 shrink-0 px-2.5 sm:px-3")}
+      disabled={disabled || sendingSms}
+      onClick={() => void handleSendSms()}
+    >
+      <Smartphone className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+      <span className={cn(inlineSmsAction && "max-w-[5.5rem] truncate text-caption sm:max-w-none sm:text-compact")}>
+        {sendingSms ? copy.mfa.verifying : copy.mfa.secondFactor.stepUpSendSms}
+      </span>
+    </Button>
+  );
+
   const bannerMessage = useSms
     ? maskedPhone
       ? `${copy.mfa.secondFactor.stepUpDescription} (${maskedPhone})`
@@ -112,7 +138,8 @@ export function StepUpSecondFactorFields({
           </div>
         ) : embedded ? (
           <Label htmlFor="stepUpTotp" className="text-caption font-medium">
-            {copy.pin.setupStepMfa}
+            {copy.pin.setupStepMfa}{" "}
+            <span className="text-destructive">*</span>
           </Label>
         ) : (
           <div className="flex items-center justify-center gap-2">
@@ -120,19 +147,40 @@ export function StepUpSecondFactorFields({
             <p className="text-compact font-medium text-foreground">Authenticator code</p>
           </div>
         )}
-        <p className={cn("text-caption text-muted-foreground", centered || !embedded ? "text-center" : "")}>
-          {copy.auth.mfaAuthenticatorForApp}
-        </p>
+        {!embedded || centered ? (
+          <p className={cn("text-caption text-muted-foreground", centered || !embedded ? "text-center" : "")}>
+            {copy.auth.mfaAuthenticatorForApp}
+          </p>
+        ) : null}
       </div>
-      <OtpInput
-        id="stepUpTotp"
-        value={totpCode}
-        error={!!error}
-        onChange={(value) => {
-          onTotpCodeChange(value);
-          if (error) onErrorChange?.("");
-        }}
-      />
+      {inlineSmsAction ? (
+        <div className="flex items-center gap-2">
+          <div className={COMPACT_OTP_INLINE_CLASS}>
+            <OtpInput
+              id="stepUpTotp"
+              value={totpCode}
+              error={!!error}
+              onChange={(value) => {
+                onTotpCodeChange(value);
+                if (error) onErrorChange?.("");
+              }}
+            />
+          </div>
+          {smsFallbackAvailable && !useSms ? sendSmsButton : null}
+        </div>
+      ) : (
+        <div className={cn(compactOtp && COMPACT_OTP_CLASS)}>
+          <OtpInput
+            id="stepUpTotp"
+            value={totpCode}
+            error={!!error}
+            onChange={(value) => {
+              onTotpCodeChange(value);
+              if (error) onErrorChange?.("");
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -154,38 +202,28 @@ export function StepUpSecondFactorFields({
                 : undefined
             }
           />
-          <OtpInput
-            id="stepUpSmsOtp"
-            value={smsOtp}
-            error={!!error}
-            onChange={(value) => {
-              onSmsOtpChange(value);
-              if (error) onErrorChange?.("");
-            }}
-          />
+          <div className={cn(compactOtp && COMPACT_OTP_CLASS)}>
+            <OtpInput
+              id="stepUpSmsOtp"
+              value={smsOtp}
+              error={!!error}
+              onChange={(value) => {
+                onSmsOtpChange(value);
+                if (error) onErrorChange?.("");
+              }}
+            />
+          </div>
         </>
       ) : (
         authenticatorFields
       )}
 
-      {smsFallbackAvailable && !useSms ? (
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            disabled={disabled || sendingSms}
-            onClick={() => void handleSendSms()}
-          >
-            <Smartphone className="size-3.5" strokeWidth={2.25} aria-hidden />
-            {sendingSms ? copy.mfa.verifying : copy.mfa.secondFactor.stepUpSendSms}
-          </Button>
-        </div>
+      {smsFallbackAvailable && !useSms && !inlineSmsAction ? (
+        <div className={cn("flex", centered ? "justify-center" : "justify-start")}>{sendSmsButton}</div>
       ) : null}
 
       {useSms ? (
-        <div className="flex justify-center">
+        <div className={cn("flex", centered ? "justify-center" : "justify-start")}>
           <Button
             type="button"
             variant="ghost"

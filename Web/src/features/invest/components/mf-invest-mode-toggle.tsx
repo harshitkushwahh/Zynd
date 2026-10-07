@@ -1,13 +1,7 @@
 "use client";
 
-import { Calendar, ChevronDown, CreditCard, Sun } from "lucide-react";
+import { Calendar, CreditCard, Sun } from "lucide-react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 import {
@@ -16,113 +10,111 @@ import {
   SIP_FREQUENCY_MONTHLY,
   type SipFrequency,
 } from "@/features/invest/lib/mf-sip-frequency";
+
 type InvestMode = "sip" | "lumpsum";
+type InvestTab = "monthly" | "daily" | "lumpsum";
 
 export type MfInvestModeToggleProps = {
   mode: InvestMode;
   sipFrequency: SipFrequency;
   onModeChange: (mode: InvestMode) => void;
   onSipFrequencyChange: (frequency: SipFrequency) => void;
+  monthlySipAllowed: boolean;
   dailySipAllowed: boolean;
   disabled?: boolean;
 };
 
-function sipFrequencyLabel(frequency: SipFrequency) {
-  return isDailySipFrequency(frequency)
-    ? copy.mutualFunds.paymentCardSipFrequencyDaily
-    : copy.mutualFunds.paymentCardSipFrequencyMonthly;
+function activeTab(mode: InvestMode, sipFrequency: SipFrequency): InvestTab {
+  if (mode === "lumpsum") return "lumpsum";
+  return isDailySipFrequency(sipFrequency) ? "daily" : "monthly";
 }
+
+const tabButtonClass =
+  "flex min-h-9 items-center justify-center gap-1 rounded-full px-2 py-2 text-[11px] font-medium transition-colors sm:gap-1.5 sm:px-3 sm:text-compact";
 
 export function MfInvestModeToggle({
   mode,
   sipFrequency,
   onModeChange,
   onSipFrequencyChange,
+  monthlySipAllowed,
   dailySipAllowed,
   disabled = false,
 }: MfInvestModeToggleProps) {
-  const sipActive = mode === "sip";
-  /** Always offer Monthly/Daily picker on active SIP; Daily is disabled when OMS has no daily bucket. */
-  const showSipFrequencyDropdown = sipActive;
+  const selected = activeTab(mode, sipFrequency);
+
+  function selectMonthly() {
+    if (!monthlySipAllowed || disabled) return;
+    onModeChange("sip");
+    onSipFrequencyChange(SIP_FREQUENCY_MONTHLY);
+  }
+
+  function selectDaily() {
+    if (!dailySipAllowed || disabled) return;
+    onModeChange("sip");
+    onSipFrequencyChange(SIP_FREQUENCY_DAILY);
+  }
+
+  function selectOneTime() {
+    if (disabled) return;
+    onModeChange("lumpsum");
+  }
 
   return (
     <div
       role="tablist"
       aria-label={copy.mutualFunds.paymentCardTitle}
-      className="grid grid-cols-2 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
+      className="grid grid-cols-3 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
     >
-      {showSipFrequencyDropdown ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            disabled={disabled}
-            className={cn(
-              "flex min-h-9 w-full items-center justify-center gap-1.5 rounded-full px-3 py-2 text-compact font-medium outline-none transition-colors",
-              "bg-foreground text-background shadow-zynd-low",
-              disabled && "cursor-not-allowed opacity-60",
-            )}
-          >
-            <span>{copy.mutualFunds.paymentCardSip}</span>
-            <span className="text-background/70" aria-hidden>
-              ·
-            </span>
-            <span>{sipFrequencyLabel(sipFrequency)}</span>
-            <ChevronDown className="size-3.5 shrink-0 opacity-80" aria-hidden />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" className="min-w-[10.5rem]">
-            <DropdownMenuItem
-              onClick={() => onSipFrequencyChange(SIP_FREQUENCY_MONTHLY)}
-              className="gap-2"
-            >
-              <Calendar className="size-4 text-muted-foreground" aria-hidden />
-              {copy.mutualFunds.paymentCardSipFrequencyMonthly}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!dailySipAllowed}
-              onClick={() => {
-                if (dailySipAllowed) onSipFrequencyChange(SIP_FREQUENCY_DAILY);
-              }}
-              className="gap-2"
-            >
-              <Sun className="size-4 text-muted-foreground" aria-hidden />
-              {copy.mutualFunds.paymentCardSipFrequencyDaily}
-              {!dailySipAllowed ? (
-                <span className="ml-auto text-caption text-muted-foreground">
-                  {copy.mutualFunds.paymentCardSipFrequencyDailyUnavailable}
-                </span>
-              ) : null}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : (
-        <button
-          type="button"
-          role="tab"
-          aria-selected={sipActive}
-          disabled={disabled}
-          onClick={() => onModeChange("sip")}
-          className={cn(
-            "flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-compact font-medium transition-colors",
-            disabled && "cursor-not-allowed opacity-60",
-            sipActive
-              ? "bg-foreground text-background shadow-zynd-low"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <Calendar className="size-3.5 shrink-0 opacity-90" aria-hidden />
-          {copy.mutualFunds.paymentCardSip}
-        </button>
-      )}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={selected === "monthly"}
+        disabled={disabled || !monthlySipAllowed}
+        onClick={selectMonthly}
+        className={cn(
+          tabButtonClass,
+          (disabled || !monthlySipAllowed) && "cursor-not-allowed opacity-50",
+          selected === "monthly"
+            ? "bg-foreground text-background shadow-zynd-low"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <Calendar className="size-3.5 shrink-0 opacity-90 sm:size-3.5" aria-hidden />
+        {copy.mutualFunds.paymentCardSipFrequencyMonthly}
+      </button>
 
       <button
         type="button"
         role="tab"
-        aria-selected={mode === "lumpsum"}
-        disabled={disabled}
-        onClick={() => onModeChange("lumpsum")}
+        aria-selected={selected === "daily"}
+        disabled={disabled || !dailySipAllowed}
+        title={
+          !dailySipAllowed ? copy.mutualFunds.paymentCardSipFrequencyDailyUnavailable : undefined
+        }
+        onClick={selectDaily}
         className={cn(
-          "flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-compact font-medium transition-colors",
+          tabButtonClass,
+          (disabled || !dailySipAllowed) && "cursor-not-allowed opacity-50",
+          selected === "daily"
+            ? "bg-foreground text-background shadow-zynd-low"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <Sun className="size-3.5 shrink-0 opacity-90" aria-hidden />
+        {copy.mutualFunds.paymentCardSipFrequencyDaily}
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        aria-selected={selected === "lumpsum"}
+        disabled={disabled}
+        onClick={selectOneTime}
+        className={cn(
+          tabButtonClass,
           disabled && "cursor-not-allowed opacity-60",
-          mode === "lumpsum"
+          selected === "lumpsum"
             ? "bg-foreground text-background shadow-zynd-low"
             : "text-muted-foreground hover:text-foreground",
         )}

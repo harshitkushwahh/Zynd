@@ -15,9 +15,12 @@ import { MfCartCheckoutPayView } from "@/features/invest/components/mf-cart-chec
 import { MfOrderPayView } from "@/features/invest/components/mf-order-pay-view";
 import { MfSipMandateView } from "@/features/invest/components/mf-sip-mandate-view";
 import {
-  abandonStaleMfPaymentResume,
-  isStaleMfPaymentNavigation,
-} from "@/features/invest/lib/mf-payment-abandon-stale";
+  hasMfPaymentOverlayResume,
+  markGatewayReturnKind,
+  readNavigationType,
+  resolveGatewayNavigationAction,
+  shouldMarkHistoryGatewayReturn,
+} from "@/features/invest/lib/mf-payment-gateway-return";
 import {
   beginMfCartCheckoutPaymentSession,
   beginMfOrderPaymentSession,
@@ -28,6 +31,7 @@ import {
   getPendingMfPaymentResumeTarget,
   isMfPaymentGatewayReturnRoute,
   markMfPaymentReturnPath,
+  type MfPendingPaymentResumeTarget,
 } from "@/features/invest/lib/mf-payment-session";
 
 export type MfPaymentOverlayTarget =
@@ -95,6 +99,48 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
     setActivePayment({ kind: "sip-mandate", planId });
   }, []);
 
+  const resumePendingGatewayReturn = useCallback(
+    (pending: MfPendingPaymentResumeTarget) => {
+      if (pending.kind === "cart-checkout") {
+        openCartCheckoutPayment(pending.checkoutId, {
+          captureReturnPath: false,
+          resumeAfterGatewayReturn: true,
+        });
+        return;
+      }
+      if (pending.kind === "order") {
+        openOrderPayment(pending.orderId, {
+          captureReturnPath: false,
+          resumeAfterGatewayReturn: true,
+        });
+        return;
+      }
+      openSipMandate(pending.planId, { captureReturnPath: false });
+    },
+    [openCartCheckoutPayment, openOrderPayment, openSipMandate],
+  );
+
+  const resumeGatewayReturnIfNeeded = useCallback(
+    (event?: PageTransitionEvent) => {
+      if (isMfPaymentGatewayReturnRoute(pathname)) return;
+      const pending = getPendingMfPaymentResumeTarget();
+      const navigationType = readNavigationType();
+      const action = resolveGatewayNavigationAction({
+        onGatewayReturnRoute: false,
+        hasPendingResume: pending != null,
+        navigationType,
+        persisted: event?.persisted,
+        forceResume: hasMfPaymentOverlayResume(),
+      });
+      if (!pending || action !== "resume") return;
+      if (shouldMarkHistoryGatewayReturn({ persisted: event?.persisted, navigationType })) {
+        markGatewayReturnKind("history");
+      }
+      resumePendingGatewayReturn(pending);
+    },
+    [pathname, resumePendingGatewayReturn],
+  );
+
   const closePayment = useCallback(() => {
     if (activePayment?.kind === "sip-mandate") {
       clearMfSipPaymentSession(activePayment.planId);
@@ -107,28 +153,17 @@ export function MfPaymentOverlayProvider({ children }: { children: ReactNode }) 
   }, [activePayment]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (isMfPaymentGatewayReturnRoute(pathname)) return;
-
-    const pending = getPendingMfPaymentResumeTarget();
-    if (!pending) return;
-    if (!isStaleMfPaymentNavigation()) return;
-
-    void abandonStaleMfPaymentResume(pending);
-  }, [pathname]);
+    resumeGatewayReturnIfNeeded();
+  }, [resumeGatewayReturnIfNeeded]);
 
   useEffect(() => {
     function handlePageShow(event: PageTransitionEvent) {
-      if (isMfPaymentGatewayReturnRoute(pathname)) return;
-      const pending = getPendingMfPaymentResumeTarget();
-      if (!pending) return;
-      if (!event.persisted && !isStaleMfPaymentNavigation()) return;
-      void abandonStaleMfPaymentResume(pending);
+      resumeGatewayReturnIfNeeded(event);
     }
 
     window.addEventListener("pageshow", handlePageShow);
     return () => window.removeEventListener("pageshow", handlePageShow);
-  }, [pathname]);
+  }, [resumeGatewayReturnIfNeeded]);
 
   const value = useMemo(
     () => ({

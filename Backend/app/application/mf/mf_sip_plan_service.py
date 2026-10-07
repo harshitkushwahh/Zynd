@@ -21,6 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.goals.errors import GoalError
 from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
+from app.application.mf.mf_fp_review_poll import (
+    PLAN_REVIEW_WAIT_STATES,
+    poll_plan_until_consent_eligible,
+)
 from app.application.mf.mf_fp_state import FP_PLAN_CANCELLED_STATES, FP_PLAN_FAILURE_STATES, map_fp_plan_state
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
 from app.application.mf.mf_mandate_service import (
@@ -886,7 +890,11 @@ async def _refresh_sip_plan_from_fp(
             await session.flush()
         return changed
 
-    if repair_terminal and plan.status == MfSipPlanStatus.failed:
+    if (
+        repair_terminal
+        and plan.status == MfSipPlanStatus.failed
+        and plan.failure_code != "mandate_auth_expired"
+    ):
         if mapped not in {MfSipPlanStatus.failed, MfSipPlanStatus.cancelled}:
             previous = plan.status.value
             plan.status = mapped
@@ -910,7 +918,12 @@ async def _refresh_sip_plan_from_fp(
     return changed
 
 
-async def advance_sip_plan(session: AsyncSession, plan: MfSipPlan) -> bool:
+async def advance_sip_plan(
+    session: AsyncSession,
+    plan: MfSipPlan,
+    *,
+    wait_for_review: bool = False,
+) -> bool:
     if not plan.fp_plan_id:
         return False
     if should_skip_retry(plan.metadata_):
@@ -926,6 +939,19 @@ async def advance_sip_plan(session: AsyncSession, plan: MfSipPlan) -> bool:
 
     sip_meta = _sip_meta(plan)
     fp_state_normalized = (plan.fp_state or "").lower()
+    # Mandate auth must return immediately. Once the mandate is approved, wait
+    # in this request until Cybrilla can accept plan confirm (MultiPlus parity).
+    if wait_for_review and fp_state_normalized in PLAN_REVIEW_WAIT_STATES:
+        state, _payload = await poll_plan_until_consent_eligible(
+            plan.fp_plan_id,
+            initial_state=fp_state_normalized,
+        )
+        if await _apply_plan_state(session, plan, fp_state=state, source="WORKER"):
+            changed = True
+        fp_state_normalized = (plan.fp_state or state or "").lower()
+        if fp_state_normalized in PLAN_REVIEW_WAIT_STATES or plan.status in SIP_TERMINAL_STATUSES:
+            return changed
+
     if fp_state_normalized in {"active", "confirmed"}:
         return changed
 
@@ -1092,6 +1118,13 @@ async def sync_sip_plan_after_mandate_auth(
         await session.flush()
         return
 
+    from app.application.mf.mf_mandate_service import expire_unapproved_mandate_auth
+
+    if mandate is not None and await expire_unapproved_mandate_auth(session, mandate):
+        return
+    if plan.status in SIP_TERMINAL_STATUSES:
+        return
+
     switch_meta = get_mandate_switch_meta(plan)
     pending_switch = switch_meta.get("pending")
     if plan.status == MfSipPlanStatus.active and isinstance(pending_switch, dict):
@@ -1135,7 +1168,13 @@ async def sync_sip_plan_after_mandate_auth(
         return
 
     if plan.fp_plan_id:
-        await advance_sip_plan(session, plan)
+        await advance_sip_plan(
+            session,
+            plan,
+            wait_for_review=(
+                mandate_row is not None and mandate_row.status == MfMandateStatus.approved
+            ),
+        )
 
 
 async def process_pending_sip_plans(session: AsyncSession, *, batch_size: int = 10) -> dict[str, int]:
@@ -1207,10 +1246,14 @@ async def reconcile_sip_plan_from_fp(
             except ValueError:
                 pass
 
-        if plan.status == MfSipPlanStatus.failed and mapped not in {
-            MfSipPlanStatus.failed,
-            MfSipPlanStatus.cancelled,
-        }:
+        if (
+            plan.status == MfSipPlanStatus.failed
+            and plan.failure_code != "mandate_auth_expired"
+            and mapped not in {
+                MfSipPlanStatus.failed,
+                MfSipPlanStatus.cancelled,
+            }
+        ):
             previous = plan.status.value
             plan.status = mapped
             plan.fp_state = str(fp_state) if fp_state is not None else plan.fp_state

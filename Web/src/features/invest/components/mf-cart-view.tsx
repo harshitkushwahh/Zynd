@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
+  Circle,
+  CircleCheck,
+  Clock,
   IndianRupee,
   Info,
   Loader2,
@@ -22,6 +25,7 @@ import {
   checkoutMfCart,
   checkoutMfSipCart,
   clearMfCartTab,
+  fetchMfMandates,
   removeMfCartItem,
   upsertMfCartItem,
   type MfCartItem,
@@ -34,7 +38,6 @@ import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui"
 import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
 import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
-import { MfSipFrequencyChips } from "@/features/invest/components/mf-sip-frequency-chips";
 import { MfSipInstallmentsInput } from "@/features/invest/components/mf-sip-installments-input";
 import {
   SIP_ORDER_DEFAULT_INSTALLMENTS,
@@ -53,15 +56,24 @@ import { syncMfCartQueryData, useMfCartQuery } from "@/features/invest/hooks/use
 import { invalidateInvestQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import {
+  findCoveringApprovedMandate,
+  requiredMandateLimitInr,
+} from "@/features/invest/lib/mf-mandate-limit";
+import {
   MF_CARD_RADIUS_CLASS,
   MF_INVEST_PAYMENT_CARD_CLASS,
   MF_PAGE_SECTION_CLASS,
 } from "@/features/invest/lib/mf-ui";
 import { TabPanel } from "@/shared/ui/tab-panel";
+import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-type CartTab = "lumpsum" | "sip";
+type CartTab = "lumpsum" | "monthly" | "daily";
+
+function isSipCartTab(tab: CartTab) {
+  return tab === "monthly" || tab === "daily";
+}
 const SIP_MAX_INSTALLMENT_DAY = 28;
 
 function CartTabPanel({
@@ -81,23 +93,26 @@ function CartTabToggle({
   tab,
   onChange,
   lumpsumCount,
-  sipCount,
+  monthlyCount,
+  dailyCount,
 }: {
   tab: CartTab;
   onChange: (tab: CartTab) => void;
   lumpsumCount: number;
-  sipCount: number;
+  monthlyCount: number;
+  dailyCount: number;
 }) {
   const options = [
     { id: "lumpsum" as const, label: copy.mutualFunds.paymentCardOneTime, count: lumpsumCount },
-    { id: "sip" as const, label: copy.mutualFunds.paymentCardMonthlySip, count: sipCount },
+    { id: "monthly" as const, label: copy.mutualFunds.paymentCardSipFrequencyMonthly, count: monthlyCount },
+    { id: "daily" as const, label: copy.mutualFunds.paymentCardSipFrequencyDaily, count: dailyCount },
   ];
 
   return (
     <div
       role="tablist"
       aria-label={copy.mutualFunds.cartTitle}
-      className="grid max-w-md grid-cols-2 gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
+      className="grid max-w-xl grid-cols-3 gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
     >
       {options.map((option) => {
         const isActive = tab === option.id;
@@ -183,7 +198,7 @@ function CartItemRow({
             {formatInr(item.amount_inr)}
           </span>
         </div>
-        {tab === "sip" ? (
+        {isSipCartTab(tab) ? (
           <div
             className={
               isDailySipFrequency(cartSipFrequency)
@@ -275,6 +290,16 @@ function CartItemsList({
 
 function CartEmptyState({ tab }: { tab: CartTab }) {
   const isLumpsum = tab === "lumpsum";
+  const title = isLumpsum
+    ? copy.mutualFunds.cartEmptyTitle
+    : tab === "daily"
+      ? copy.mutualFunds.cartDailyEmptyTitle
+      : copy.mutualFunds.cartMonthlyEmptyTitle;
+  const hint = isLumpsum
+    ? copy.mutualFunds.cartEmptyHint
+    : tab === "daily"
+      ? copy.mutualFunds.cartDailyEmptyHint
+      : copy.mutualFunds.cartMonthlyEmptyHint;
 
   return (
     <div
@@ -286,12 +311,8 @@ function CartEmptyState({ tab }: { tab: CartTab }) {
       <div className="flex size-14 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
         <ShoppingCart className="size-6" strokeWidth={1.75} />
       </div>
-      <p className="mt-5 text-body font-semibold text-foreground">
-        {isLumpsum ? copy.mutualFunds.cartEmptyTitle : copy.mutualFunds.cartSipEmptyTitle}
-      </p>
-      <p className="mt-2 max-w-sm text-compact leading-relaxed text-muted-foreground">
-        {isLumpsum ? copy.mutualFunds.cartEmptyHint : copy.mutualFunds.cartSipEmptyHint}
-      </p>
+      <p className="mt-5 text-body font-semibold text-foreground">{title}</p>
+      <p className="mt-2 max-w-sm text-compact leading-relaxed text-muted-foreground">{hint}</p>
       <div className="mt-6">
         <Button nativeButton={false} render={<Link href="/dashboard/mutual-funds/all" />}>
           {copy.mutualFunds.cartBrowseFunds}
@@ -343,6 +364,27 @@ function CartCheckoutPanel({
   className?: string;
 }) {
   const checkoutDisabled = isEmpty || checkingOut || banksLoading || !hasPaymentReadyAccount;
+  const isSip = isSipCartTab(tab);
+  const sipCountLabel = (activeCount === 1
+    ? copy.mutualFunds.cartSipItemCount
+    : copy.mutualFunds.cartSipItemCountPlural
+  ).replace("{count}", String(activeCount));
+  const { data: mandateList } = useQuery({
+    queryKey: queryKeys.invest.mandates(),
+    queryFn: fetchMfMandates,
+    enabled: isSip && !isEmpty,
+    staleTime: 30_000,
+  });
+  const requiredLimit = isSip && !isEmpty ? requiredMandateLimitInr(activeTotal) : null;
+  const approvedMandate =
+    requiredLimit == null
+      ? null
+      : findCoveringApprovedMandate(mandateList?.mandates ?? [], {
+          bankAccountId: selectedBankAccountId,
+          mandateType,
+          requiredLimitInr: requiredLimit,
+        });
+  const mandateLimitLabel = formatInr(approvedMandate?.mandate_limit ?? requiredLimit);
 
   return (
     <aside
@@ -361,7 +403,7 @@ function CartCheckoutPanel({
         <div className="min-w-0 flex-1">
           <p className="text-compact font-semibold text-foreground">{copy.mutualFunds.cartOrderSummary}</p>
           <p className="mt-0.5 text-caption text-muted-foreground">
-            {copy.mutualFunds.cartItemCount.replace("{count}", String(activeCount))}
+            {isSip ? sipCountLabel : copy.mutualFunds.cartItemCount.replace("{count}", String(activeCount))}
           </p>
         </div>
         <Tooltip>
@@ -401,9 +443,46 @@ function CartCheckoutPanel({
               isEmpty ? "text-muted-foreground" : "text-foreground",
             )}
           >
-            {isEmpty ? "NA" : formatInr(activeTotal)}
+            {isEmpty ? (
+              "NA"
+            ) : (
+              <>
+                {formatInr(activeTotal)}
+                {isSip ? (
+                  <span className="ml-1 text-body font-medium text-muted-foreground">
+                    {tab === "daily"
+                      ? copy.mutualFunds.cartSipAmountDaily
+                      : copy.mutualFunds.cartSipAmountMonthly}
+                  </span>
+                ) : null}
+              </>
+            )}
           </p>
         </div>
+
+        {isSip && !isEmpty && requiredLimit != null ? (
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              {approvedMandate ? (
+                <CircleCheck className="size-4 shrink-0 text-success" strokeWidth={2.25} aria-hidden />
+              ) : (
+                <Clock className="size-4 shrink-0 text-warning" strokeWidth={2.25} aria-hidden />
+              )}
+              <p className="text-compact font-medium text-foreground">
+                {(approvedMandate
+                  ? copy.mutualFunds.cartMandateApproved
+                  : copy.mutualFunds.cartMandateApproval
+                ).replace("{limit}", mandateLimitLabel)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5 text-muted-foreground">
+              <Circle className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+              <p className="text-compact font-medium">
+                {copy.mutualFunds.cartSipNextStep.replace("{count}", sipCountLabel)}
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
           <div
@@ -421,7 +500,7 @@ function CartCheckoutPanel({
           <div
             className={cn(
               "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
-              tab === "sip" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+              isSipCartTab(tab) ? "opacity-100" : "pointer-events-none invisible opacity-0",
             )}
           >
             <MfMandateTypePicker
@@ -468,7 +547,6 @@ export function MfCartView() {
   const [error, setError] = useState<string | null>(null);
   const [removingProductId, setRemovingProductId] = useState<string | null>(null);
   const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
-  const [updatingCartFrequency, setUpdatingCartFrequency] = useState(false);
   const [clearingTab, setClearingTab] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
@@ -496,9 +574,12 @@ export function MfCartView() {
 
   useEffect(() => {
     if (!cart) return;
-    if (cart.lumpsum_item_count === 0 && cart.sip_item_count > 0) {
-      setTab("sip");
-    }
+    if (cart.lumpsum_item_count > 0) return;
+    const sipLines = cart.sip_items ?? [];
+    const hasDaily = sipLines.some((item) => isDailySipFrequency(item.frequency));
+    const hasMonthly = sipLines.some((item) => !isDailySipFrequency(item.frequency));
+    if (hasDaily && !hasMonthly) setTab("daily");
+    else if (hasMonthly) setTab("monthly");
   }, [cart]);
 
   const loadError =
@@ -511,36 +592,14 @@ export function MfCartView() {
 
   const lumpsumItems = cart?.lumpsum_items ?? [];
   const sipItems = cart?.sip_items ?? [];
+  const monthlyItems = sipItems.filter((item) => !isDailySipFrequency(item.frequency));
+  const dailyItems = sipItems.filter((item) => isDailySipFrequency(item.frequency));
   const lumpsumCount = cart?.lumpsum_item_count ?? 0;
-  const sipCount = cart?.sip_item_count ?? 0;
-  const activeCount = tab === "lumpsum" ? lumpsumCount : sipCount;
-  const cartSipFrequency = normalizeSipFrequency(sipItems[0]?.frequency);
-
-  async function handleCartSipFrequencyChange(next: SipFrequency) {
-    if (next === cartSipFrequency || sipItems.length === 0) return;
-    setUpdatingCartFrequency(true);
-    setError(null);
-    try {
-      let nextCart = cart;
-      for (const item of sipItems) {
-        nextCart = await upsertMfCartItem({
-          product_id: item.product_id,
-          amount_inr: item.amount_inr,
-          investment_type: "sip",
-          frequency: next,
-          installment_day: isDailySipFrequency(next) ? undefined : item.installment_day ?? 20,
-          number_of_installments:
-            item.number_of_installments ?? defaultInstallmentsForFrequency(next),
-        });
-      }
-      if (nextCart) syncMfCartQueryData(queryClient, nextCart);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : copy.mutualFunds.cartUpdateFailed);
-    } finally {
-      setUpdatingCartFrequency(false);
-    }
-  }
-
+  const monthlyCount = monthlyItems.length;
+  const dailyCount = dailyItems.length;
+  const activeItems = tab === "lumpsum" ? lumpsumItems : tab === "daily" ? dailyItems : monthlyItems;
+  const activeCount = activeItems.length;
+  const activeTotal = activeItems.reduce((sum, item) => sum + item.amount_inr, 0);
   async function handleUpdateSipSettings(
     item: MfCartItem,
     updates: { installment_day?: number; number_of_installments?: number },
@@ -573,7 +632,7 @@ export function MfCartView() {
   async function handleRemove(productId: string) {
     setRemovingProductId(productId);
     try {
-      const next = await removeMfCartItem(productId, tab);
+      const next = await removeMfCartItem(productId, tab === "lumpsum" ? "lumpsum" : "sip");
       syncMfCartQueryData(queryClient, next);
       setError(null);
     } catch (err) {
@@ -587,7 +646,7 @@ export function MfCartView() {
     if (activeCount === 0) return;
     setClearingTab(true);
     try {
-      const next = await clearMfCartTab(tab);
+      const next = await clearMfCartTab(tab === "lumpsum" ? "lumpsum" : "sip");
       syncMfCartQueryData(queryClient, next);
       setError(null);
     } catch (err) {
@@ -642,7 +701,7 @@ export function MfCartView() {
     removingProductId !== null ||
     updatingProductId !== null ||
     checkingOut;
-  const cartItemsDisabled = checkingOut || clearingTab || updatingCartFrequency;
+  const cartItemsDisabled = checkingOut || clearingTab;
 
   if (isLoading) {
     return (
@@ -672,7 +731,8 @@ export function MfCartView() {
           tab={tab}
           onChange={setTab}
           lumpsumCount={lumpsumCount}
-          sipCount={sipCount}
+          monthlyCount={monthlyCount}
+          dailyCount={dailyCount}
         />
         <Button
           type="button"
@@ -702,7 +762,7 @@ export function MfCartView() {
               <CartItemsList
                 items={lumpsumItems}
                 tab="lumpsum"
-                cartSipFrequency={cartSipFrequency}
+                cartSipFrequency="monthly"
                 removingProductId={removingProductId}
                 updatingProductId={updatingProductId}
                 checkoutDisabled={cartItemsDisabled}
@@ -711,29 +771,36 @@ export function MfCartView() {
               />
             )}
           </CartTabPanel>
-          <CartTabPanel active={tab === "sip"}>
-            {sipCount === 0 ? (
-              <CartEmptyState tab="sip" />
+          <CartTabPanel active={tab === "monthly"}>
+            {monthlyCount === 0 ? (
+              <CartEmptyState tab="monthly" />
             ) : (
-              <div className="space-y-4">
-                <MfSipFrequencyChips
-                  value={cartSipFrequency}
-                  onChange={(next) => void handleCartSipFrequencyChange(next)}
-                  monthlyAllowed
-                  dailyAllowed
-                  disabled={cartItemsDisabled}
-                />
-                <CartItemsList
-                  items={sipItems}
-                  tab="sip"
-                  cartSipFrequency={cartSipFrequency}
-                  removingProductId={removingProductId}
-                  updatingProductId={updatingProductId}
-                  checkoutDisabled={cartItemsDisabled}
-                  onRemove={handleRemove}
-                  onUpdateSipSettings={handleUpdateSipSettings}
-                />
-              </div>
+              <CartItemsList
+                items={monthlyItems}
+                tab="monthly"
+                cartSipFrequency="monthly"
+                removingProductId={removingProductId}
+                updatingProductId={updatingProductId}
+                checkoutDisabled={cartItemsDisabled}
+                onRemove={handleRemove}
+                onUpdateSipSettings={handleUpdateSipSettings}
+              />
+            )}
+          </CartTabPanel>
+          <CartTabPanel active={tab === "daily"}>
+            {dailyCount === 0 ? (
+              <CartEmptyState tab="daily" />
+            ) : (
+              <CartItemsList
+                items={dailyItems}
+                tab="daily"
+                cartSipFrequency="daily"
+                removingProductId={removingProductId}
+                updatingProductId={updatingProductId}
+                checkoutDisabled={cartItemsDisabled}
+                onRemove={handleRemove}
+                onUpdateSipSettings={handleUpdateSipSettings}
+              />
             )}
           </CartTabPanel>
         </div>
@@ -763,9 +830,9 @@ export function MfCartView() {
             )}
           />
           <CartCheckoutPanel
-            tab="sip"
-            activeCount={sipCount}
-            activeTotal={cart?.sip_total_amount_inr ?? 0}
+            tab={tab === "daily" ? "daily" : "monthly"}
+            activeCount={tab === "daily" ? dailyCount : monthlyCount}
+            activeTotal={tab === "daily" ? activeTotal : monthlyItems.reduce((sum, item) => sum + item.amount_inr, 0)}
             checkingOut={checkingOut}
             banksLoading={banksLoading}
             hasPaymentReadyAccount={hasPaymentReadyAccount}
@@ -779,10 +846,10 @@ export function MfCartView() {
             mandateType={mandateType}
             onMandateTypeChange={setMandateType}
             {...bankPickerProps}
-            isEmpty={sipCount === 0}
+            isEmpty={(tab === "daily" ? dailyCount : monthlyCount) === 0}
             className={cn(
               "transition-opacity duration-200 ease-out motion-reduce:transition-none",
-              tab === "sip" ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+              isSipCartTab(tab) ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
             )}
           />
         </div>

@@ -796,6 +796,9 @@ export function MfSipPlanDetailDialog({
         confirmLabel={copy.mySips.cancelConfirm}
         onConfirm={() => void handleCancelSip()}
         loading={actionLoading}
+        showCloseButton
+        hideCancelButton
+        contentClassName="rounded-3xl"
       />
 
       <ConfirmDialog
@@ -807,6 +810,9 @@ export function MfSipPlanDetailDialog({
         confirmLabel={copy.mySips.cancelConfirm}
         onConfirm={() => void handleCancelMandate()}
         loading={actionLoading}
+        showCloseButton
+        hideCancelButton
+        contentClassName="rounded-3xl"
       />
 
       {plan ? (

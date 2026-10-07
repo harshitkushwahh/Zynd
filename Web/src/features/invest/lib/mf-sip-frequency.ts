@@ -83,6 +83,14 @@ export function resolveMinInstallmentsForFrequency(
   return null;
 }
 
+/** No scheme minimum on installments means any count is allowed. */
+export function formatMinInstallmentsDisplay(minInstallments?: number | null): string {
+  if (minInstallments != null && minInstallments > 0) {
+    return String(minInstallments);
+  }
+  return copy.mutualFunds.sipMinInstallmentsAny;
+}
+
 export function defaultInstallmentsForFrequency(frequency: SipFrequency) {
   return frequency === SIP_FREQUENCY_DAILY
     ? SIP_DEFAULT_DAILY_INSTALLMENTS

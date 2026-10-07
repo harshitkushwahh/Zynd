@@ -282,18 +282,21 @@ async def _record_order_event(
 
 
 def _derive_next_action(*, status: str, payment_url: str | None) -> str:
-    if status == "PENDING":
-        return "wait_processing"
-    if status == "PROCESSING":
-        return "pay_upi" if payment_url else "wait_review"
-    if status == "PAYMENT_PENDING":
-        return "pay_upi" if payment_url else "wait_payment_setup"
-    if status == "SUBMITTED":
-        return "pay_upi" if payment_url else "wait_payment_link"
     if status == "SUCCEEDED":
         return "complete"
     if status in {"FAILED", "CANCELLED"}:
         return "failed"
+    # A Cybrilla token is ready. Do not keep the client on review/setup.
+    if payment_url:
+        return "pay_upi"
+    if status == "PENDING":
+        return "wait_processing"
+    if status == "PROCESSING":
+        return "wait_review"
+    if status == "PAYMENT_PENDING":
+        return "wait_payment_setup"
+    if status == "SUBMITTED":
+        return "wait_payment_link"
     return "wait_processing"
 
 
