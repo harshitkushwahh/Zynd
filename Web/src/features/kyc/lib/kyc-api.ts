@@ -424,3 +424,43 @@ export async function checkKycReadiness(options?: { forceRefresh?: boolean }) {
     method: "POST",
   });
 }
+
+export type InvestorSettingsStateResponse = {
+  kyc_completed: boolean;
+  has_investor_profile: boolean;
+  investor_profile_id?: string | null;
+  has_mf_investment_account: boolean;
+  mfia_id?: string | null;
+  can_edit_profile: boolean;
+  can_add_nominee: boolean;
+  nominee_count: number;
+  max_nominees: number;
+  nominees: Record<string, unknown>[];
+};
+
+export async function fetchInvestorSettingsState() {
+  return apiRequest<InvestorSettingsStateResponse>("/kyc/settings/investor");
+}
+
+export async function updateInvestorProfileSettings(body: {
+  income_slab?: string;
+  pep_details?: string;
+  marital_status?: string;
+  spouse_name?: string;
+}) {
+  return apiRequest<InvestorSettingsStateResponse>("/kyc/settings/investor-profile", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function addInvestorNominee(nominee: object | object[]) {
+  const nominees = Array.isArray(nominee) ? nominee : [nominee];
+  return apiRequest<InvestorSettingsStateResponse>("/kyc/settings/nominees", {
+    method: "POST",
+    body: JSON.stringify({
+      nominees,
+      nominee: nominees[0] ?? null,
+    }),
+  });
+}

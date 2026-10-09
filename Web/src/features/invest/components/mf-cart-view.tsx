@@ -705,7 +705,7 @@ export function MfCartView() {
 
   if (isLoading) {
     return (
-      <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-6")}>
+      <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full")}>
         <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
         <MfCartPageSkeleton itemRows={4} />
       </div>
@@ -714,9 +714,10 @@ export function MfCartView() {
 
   return (
     <>
-    <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-5 pb-6")}>
+    <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full pb-6")}>
       <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
       <FundEligibilityBanner />
+      <div className="space-y-5">
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -853,6 +854,7 @@ export function MfCartView() {
             )}
           />
         </div>
+      </div>
       </div>
     </div>
     </>

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.mf_fp_state import map_fp_mandate_status, map_fp_purchase_state, map_fp_purchase_state_to_checkout
 from app.application.mf.mf_redemption_service import apply_redemption_fp_state
+from app.application.mf.mf_switch_service import apply_switch_fp_state
+from app.application.mf.mf_systematic_plan_service import apply_plan_fp_state, find_stp_by_fp_id, find_swp_by_fp_id
 from app.application.mf.mf_sip_plan_service import _apply_plan_state
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event
 from app.application.referral.referral_investment_service import record_referral_investment_activity
@@ -21,8 +24,11 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfFinprimWebhookEvent,
     MfMandate,
     MfOrder,
+    MfOrderStatus,
     MfOrderType,
     MfSipPlan,
+    MfStpPlan,
+    MfSwpPlan,
     MfWebhookProcessingStatus,
 )
 from app.infrastructure.persistence.models import User
@@ -32,7 +38,10 @@ logger = logging.getLogger(__name__)
 
 MF_PURCHASE_EVENT_PREFIX = "mf_purchase"
 MF_PURCHASE_PLAN_EVENT_PREFIX = "mf_purchase_plan"
+MF_REDEMPTION_PLAN_EVENT_PREFIX = "mf_redemption_plan"
 MF_REDEMPTION_EVENT_PREFIX = "mf_redemption"
+MF_SWITCH_PLAN_EVENT_PREFIX = "mf_switch_plan"
+MF_SWITCH_EVENT_PREFIX = "mf_switch"
 MANDATE_EVENT_PREFIX = "mandate"
 PAYMENT_EVENT_PREFIX = "payment"
 
@@ -320,12 +329,211 @@ async def _find_order_for_redemption_object(
     return None
 
 
+async def _find_order_for_switch_object(
+    session: AsyncSession,
+    switch_obj: dict[str, Any],
+) -> MfOrder | None:
+    source_ref_id = switch_obj.get("source_ref_id")
+    if source_ref_id:
+        try:
+            order_id = UUID(str(source_ref_id))
+        except ValueError:
+            order_id = None
+        if order_id:
+            order = await session.get(MfOrder, order_id)
+            if order and order.order_type == MfOrderType.switch:
+                return order
+    fp_switch_id = switch_obj.get("id")
+    if fp_switch_id:
+        order = await session.scalar(
+            select(MfOrder).where(
+                MfOrder.order_type == MfOrderType.switch,
+                MfOrder.metadata_["fp_switch_id"].as_string() == str(fp_switch_id),
+            )
+        )
+        if order:
+            return order
+    return None
+
+
+def _nested_id(value: Any) -> str | None:
+    if isinstance(value, dict):
+        raw = value.get("id")
+        return str(raw) if raw else None
+    if value:
+        return str(value)
+    return None
+
+
+def _plan_id_from_installment(obj: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        found = _nested_id(obj.get(key))
+        if found:
+            return found
+    return None
+
+
+async def _ensure_plan_installment_order(
+    session: AsyncSession,
+    *,
+    plan: MfSwpPlan | MfStpPlan,
+    obj: dict[str, Any],
+    order_type: MfOrderType,
+    fp_id_key: str,
+) -> MfOrder | None:
+    fp_id = str(obj.get("id") or "")
+    if not fp_id:
+        return None
+    existing = await session.scalar(
+        select(MfOrder).where(MfOrder.metadata_[fp_id_key].as_string() == fp_id)
+    )
+    if existing:
+        return existing
+    amount = obj.get("amount") or plan.amount_inr
+    try:
+        amount_inr = Decimal(str(amount))
+    except (TypeError, ValueError):
+        amount_inr = Decimal(str(plan.amount_inr))
+    plan_meta = plan.metadata_ if isinstance(plan.metadata_, dict) else {}
+    order = MfOrder(
+        user_id=plan.user_id,
+        product_id=plan.product_id,
+        fund_id=plan.fund_id,
+        mf_investment_account_id=plan.mf_investment_account_id,
+        checkout_id=None,
+        line_index=0,
+        order_type=order_type,
+        amount_inr=amount_inr,
+        status=MfOrderStatus.processing,
+        idempotency_key=f"{order_type.value.lower()}-installment:{plan.id}:{fp_id}",
+        fp_state=str(obj.get("state") or "") or None,
+        metadata_={
+            fp_id_key: fp_id,
+            "swp_plan_id" if isinstance(plan, MfSwpPlan) else "stp_plan_id": str(plan.id),
+            "folio_number": plan.folio_number,
+            "isin": plan_meta.get("isin"),
+        },
+    )
+    session.add(order)
+    await session.flush()
+    await _record_order_event(
+        session,
+        order,
+        from_status=None,
+        to_status=order.status.value,
+        source="WEBHOOK",
+        payload={"fp_id": fp_id, "plan_id": str(plan.id)},
+    )
+    return order
+
+
+async def _handle_mf_switch_event(session: AsyncSession, *, event_type: str, payload: dict[str, Any]) -> bool:
+    switch_obj = _extract_event_object(payload)
+    if not switch_obj:
+        return False
+    order = await _find_order_for_switch_object(session, switch_obj)
+    if not order:
+        plan_id = _plan_id_from_installment(switch_obj, "mf_switch_plan", "switch_plan")
+        plan = await find_stp_by_fp_id(session, plan_id) if plan_id else None
+        if plan is None and plan_id:
+            try:
+                plan = await session.get(MfStpPlan, UUID(plan_id))
+            except ValueError:
+                plan = None
+        if plan:
+            order = await _ensure_plan_installment_order(
+                session,
+                plan=plan,
+                obj=switch_obj,
+                order_type=MfOrderType.switch,
+                fp_id_key="fp_switch_id",
+            )
+    if not order:
+        logger.info("Finprim webhook %s: no matching switch order for %s", event_type, switch_obj.get("id"))
+        return False
+    meta = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    if not meta.get("fp_switch_id") and switch_obj.get("id"):
+        order.metadata_ = {**meta, "fp_switch_id": str(switch_obj["id"])}
+    fp_state = switch_obj.get("state")
+    if event_type.endswith("review_completed") and fp_state is None:
+        fp_state = "pending"
+    return await apply_switch_fp_state(
+        session,
+        order,
+        fp_state=str(fp_state) if fp_state is not None else order.fp_state,
+        source="WEBHOOK",
+        payload=switch_obj,
+    )
+
+
+async def _handle_mf_redemption_plan_event(session: AsyncSession, *, event_type: str, payload: dict[str, Any]) -> bool:
+    del event_type
+    plan_obj = _extract_event_object(payload)
+    if not plan_obj:
+        return False
+    fp_plan_id = str(plan_obj.get("id") or "")
+    if not fp_plan_id:
+        return False
+    plan = await find_swp_by_fp_id(session, fp_plan_id)
+    if not plan:
+        source_ref_id = plan_obj.get("source_ref_id")
+        if source_ref_id:
+            try:
+                plan = await session.get(MfSwpPlan, UUID(str(source_ref_id)))
+            except ValueError:
+                plan = None
+    if not plan:
+        return False
+    return await apply_plan_fp_state(
+        session, plan, fp_state=plan_obj.get("state"), source="WEBHOOK", payload=plan_obj
+    )
+
+
+async def _handle_mf_switch_plan_event(session: AsyncSession, *, event_type: str, payload: dict[str, Any]) -> bool:
+    del event_type
+    plan_obj = _extract_event_object(payload)
+    if not plan_obj:
+        return False
+    fp_plan_id = str(plan_obj.get("id") or "")
+    if not fp_plan_id:
+        return False
+    plan = await find_stp_by_fp_id(session, fp_plan_id)
+    if not plan:
+        source_ref_id = plan_obj.get("source_ref_id")
+        if source_ref_id:
+            try:
+                plan = await session.get(MfStpPlan, UUID(str(source_ref_id)))
+            except ValueError:
+                plan = None
+    if not plan:
+        return False
+    return await apply_plan_fp_state(
+        session, plan, fp_state=plan_obj.get("state"), source="WEBHOOK", payload=plan_obj
+    )
+
+
 async def _handle_mf_redemption_event(session: AsyncSession, *, event_type: str, payload: dict[str, Any]) -> bool:
     redemption_obj = _extract_event_object(payload)
     if not redemption_obj:
         return False
 
     order = await _find_order_for_redemption_object(session, redemption_obj)
+    if not order:
+        plan_id = _plan_id_from_installment(redemption_obj, "mf_redemption_plan", "redemption_plan")
+        plan = await find_swp_by_fp_id(session, plan_id) if plan_id else None
+        if plan is None and plan_id:
+            try:
+                plan = await session.get(MfSwpPlan, UUID(plan_id))
+            except ValueError:
+                plan = None
+        if plan:
+            order = await _ensure_plan_installment_order(
+                session,
+                plan=plan,
+                obj=redemption_obj,
+                order_type=MfOrderType.redemption,
+                fp_id_key="fp_redemption_id",
+            )
     if not order:
         logger.info("Finprim webhook %s: no matching redemption order for %s", event_type, redemption_obj.get("id"))
         return False
@@ -357,8 +565,14 @@ async def _dispatch_finprim_event(
         return await _handle_mf_purchase_event(session, event_type=event_type, payload=payload)
     if event_type.startswith(MF_PURCHASE_PLAN_EVENT_PREFIX):
         return await _handle_mf_purchase_plan_event(session, event_type=event_type, payload=payload)
+    if event_type.startswith(MF_REDEMPTION_PLAN_EVENT_PREFIX):
+        return await _handle_mf_redemption_plan_event(session, event_type=event_type, payload=payload)
     if event_type.startswith(MF_REDEMPTION_EVENT_PREFIX):
         return await _handle_mf_redemption_event(session, event_type=event_type, payload=payload)
+    if event_type.startswith(MF_SWITCH_PLAN_EVENT_PREFIX):
+        return await _handle_mf_switch_plan_event(session, event_type=event_type, payload=payload)
+    if event_type.startswith(MF_SWITCH_EVENT_PREFIX):
+        return await _handle_mf_switch_event(session, event_type=event_type, payload=payload)
     if event_type.startswith(MANDATE_EVENT_PREFIX):
         return await _handle_mandate_event(session, event_type=event_type, payload=payload)
     if event_type.startswith(PAYMENT_EVENT_PREFIX):

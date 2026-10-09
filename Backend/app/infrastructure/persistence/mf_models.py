@@ -532,6 +532,50 @@ class MfPipelineRun(Base):
     )
 
 
+class NfoOfferStatus(str, enum.Enum):
+    upcoming = "UPCOMING"
+    open = "OPEN"
+    closed = "CLOSED"
+    allotted = "ALLOTTED"
+
+
+class NfoOffer(Base):
+    __tablename__ = "nfo_offers"
+    __table_args__ = (UniqueConstraint("product_id", name="uq_nfo_offers_product_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    mutual_fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_funds.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[NfoOfferStatus] = mapped_column(_pg_enum(NfoOfferStatus, name="nfo_offer_status"), nullable=False)
+    subscription_open_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    subscription_close_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    allotment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    marketing_headline: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    marketing_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), default="HEURISTIC", nullable=False)
+    admin_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class NfoSchedulerState(Base):
+    __tablename__ = "nfo_scheduler_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pending_after_mf: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    pending_triggered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_mf_run_uuid: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    last_nfo_success_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    last_trigger_kind: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class MfSchedulerJobSkip(Base):
     """Records scheduler jobs satisfied manually so cron skips until the next IST day."""
 

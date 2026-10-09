@@ -9,8 +9,9 @@ import {
   MfaResetDialog,
 } from "@/features/account/mfa";
 import { SecurityFeatureCard } from "@/components/dashboard/settings/security-feature-card";
-import { Button } from "@/components/ui/button";
+import { IconActionButton } from "@/components/ui/icon-action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/auth-context";
 import { copy } from "@/shared/config/copy";
 
@@ -67,23 +68,31 @@ export function MfaSettingsPanel({
           </StatusBadge>
         }
         actions={
-          mfaEnabled ? (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}>
-                <RefreshCw className="size-3.5" />
-                {copy.settings.changeAuthenticator}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setDisableOpen(true)}>
-                <ShieldOff className="size-3.5" />
-                {copy.settings.disableMfa}
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" onClick={() => setEnrollOpen(true)}>
-              <ShieldCheck className="size-3.5" />
-              {copy.mfa.setupButton}
-            </Button>
-          )
+          <TooltipProvider>
+            <div className="flex flex-wrap items-center gap-1">
+              {mfaEnabled ? (
+                <>
+                  <IconActionButton
+                    label={copy.settings.changeAuthenticator}
+                    icon={RefreshCw}
+                    onClick={() => setResetOpen(true)}
+                  />
+                  <IconActionButton
+                    label={copy.settings.disableMfa}
+                    icon={ShieldOff}
+                    destructive
+                    onClick={() => setDisableOpen(true)}
+                  />
+                </>
+              ) : (
+                <IconActionButton
+                  label={copy.mfa.setupButton}
+                  icon={ShieldCheck}
+                  onClick={() => setEnrollOpen(true)}
+                />
+              )}
+            </div>
+          </TooltipProvider>
         }
       />
 

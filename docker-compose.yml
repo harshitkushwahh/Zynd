@@ -154,6 +154,23 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  nfo-scheduler:
+    build:
+      context: ./Backend
+    command: python -m app.jobs.run_nfo_scheduler --schedule
+    env_file:
+      - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zynd:zynd@postgres:5432/zynd
+      REDIS_URL: redis://redis:6379/0
+      ZYND_NFO_INGESTION_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   mf-order-worker:
     build:
       context: ./Backend

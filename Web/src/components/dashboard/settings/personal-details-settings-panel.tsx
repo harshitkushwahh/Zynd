@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { PencilLine, ShieldCheck } from "lucide-react";
 
 import { AppleIcon, GoogleIcon } from "@/components/auth/oauth-provider-icons";
 import {
@@ -9,6 +9,7 @@ import {
   PasswordVerifyDialog,
 } from "@/features/account/mfa";
 import type { StepUpVerification } from "@/features/account/mfa/types/step-up-types";
+import { EditPersonalDetailsDialog } from "@/components/dashboard/settings/edit-personal-details-dialog";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import {
@@ -22,6 +23,7 @@ import { SETTINGS_NAV } from "@/components/dashboard/settings/settings-sidebar";
 import { Button } from "@/components/ui/button";
 import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import { useKycOptional } from "@/contexts/kyc-context";
+import { updateInvestorProfileSettings } from "@/features/kyc/lib/kyc-api";
 import type { SettingsKycProfile } from "@/features/kyc/lib/settings-kyc-profile";
 import { formatSettingsCountryCode } from "@/features/kyc/lib/settings-kyc-display";
 import { ApiError } from "@/lib/api-client";
@@ -54,6 +56,7 @@ type PersonalDetailsSettingsPanelProps = {
   mfaEnabled: boolean;
   kycProfile?: SettingsKycProfile | null;
   kycProfileLoading?: boolean;
+  onKycProfileReload?: () => Promise<void> | void;
 };
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -68,6 +71,7 @@ export function PersonalDetailsSettingsPanel({
   mfaEnabled,
   kycProfile,
   kycProfileLoading = false,
+  onKycProfileReload,
 }: PersonalDetailsSettingsPanelProps) {
   const sectionMeta = SETTINGS_NAV.find((item) => item.id === "personal-details")!;
   const kyc = useKycOptional();
@@ -84,6 +88,9 @@ export function PersonalDetailsSettingsPanel({
   const [passwordError, setPasswordError] = useState("");
   const [authError, setAuthError] = useState("");
   const [pendingPassword, setPendingPassword] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const hasIdentity = Boolean(kycProfile?.kycVerified && (kycProfile?.panMasked || personalInfo));
   const hasAddress = Boolean(kycProfile?.kycVerified && kycProfile?.address);
@@ -209,6 +216,33 @@ export function PersonalDetailsSettingsPanel({
     void submitDisconnect(password);
   };
 
+  const handleSaveProfile = async (value: {
+    incomeSlab: string;
+    pepExposed: string;
+    maritalStatus: string;
+    spouseName: string;
+  }) => {
+    setEditLoading(true);
+    setEditError("");
+    setError("");
+    setSuccess("");
+    try {
+      await updateInvestorProfileSettings({
+        income_slab: value.incomeSlab,
+        pep_details: value.pepExposed,
+        marital_status: value.maritalStatus,
+        spouse_name: value.spouseName,
+      });
+      await onKycProfileReload?.();
+      setEditOpen(false);
+      setSuccess(copy.settings.profileUpdated);
+    } catch (err) {
+      setEditError(getErrorMessage(err, copy.settings.couldNotUpdateProfile));
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const googleConnected = connections?.google.connected ?? false;
   const appleConnected = connections?.apple.connected ?? false;
   const buttonsBusy = loading || actionLoading !== null;
@@ -261,6 +295,21 @@ export function PersonalDetailsSettingsPanel({
                     ? copy.settings.disconnectApple
                     : copy.settings.connectApple}
               </Button>
+              {kycProfile?.canEditProfile && kycProfile.personalInfoRaw ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={oauthButtonClassName}
+                  onClick={() => {
+                    setEditError("");
+                    setEditOpen(true);
+                  }}
+                >
+                  <PencilLine className="size-3.5" />
+                  {copy.settings.editProfile}
+                </Button>
+              ) : null}
             </>
           }
         />
@@ -434,6 +483,17 @@ export function PersonalDetailsSettingsPanel({
         error={authError}
         onSubmit={(verification) => void submitDisconnect(pendingPassword, verification)}
       />
+
+      {kycProfile?.personalInfoRaw ? (
+        <EditPersonalDetailsDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          initialValue={kycProfile.personalInfoRaw}
+          loading={editLoading}
+          error={editError}
+          onSubmit={(value) => void handleSaveProfile(value)}
+        />
+      ) : null}
     </SettingsContentCard>
   );
 }

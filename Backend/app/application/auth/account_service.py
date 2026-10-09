@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import base64
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.application.auth.mfa_service import (
     build_provisioning_uri,
@@ -962,6 +965,12 @@ async def change_email_confirm(
                 "If you didn't make this change, contact support immediately."
             ),
         )
+    try:
+        from app.application.investor.investor_provision_service import sync_investor_email_after_account_change
+
+        await sync_investor_email_after_account_change(db, user_id=user.id, new_email=new_email)
+    except Exception:
+        logger.exception("Failed to sync changed email onto Finprim MFIA folio_defaults user=%s", user.id)
     return {"ok": True}
 
 

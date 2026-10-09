@@ -25,6 +25,12 @@ export function resolveInvestAssetUrl(url: string | null | undefined) {
   return url;
 }
 
+export function amcSlugFromLogoUrl(logoUrl: string | null | undefined) {
+  if (!logoUrl) return null;
+  const match = logoUrl.match(/public\/amcs\/([^/?#]+)\.(?:png|svg|jpe?g)/i);
+  return match?.[1] ?? null;
+}
+
 /** Resolve AMC logo from API value, falling back to the standard storage path from slug. */
 export function resolveAmcLogoUrl(
   logoUrl: string | null | undefined,
@@ -156,7 +162,7 @@ export function healthBadgeLabel(flag: string) {
     case "shallow_nav_history":
       return "Limited history";
     case "missing_3y_metrics":
-      return "New fund";
+      return "Insufficient history";
     case "force_show_not_purchasable":
       return "View only";
     default:

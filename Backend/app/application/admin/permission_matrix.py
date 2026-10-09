@@ -191,13 +191,15 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
             "GET /admin/mf/pipeline/preview",
             "GET /admin/mf/pipeline/runs/{run_id}",
             "GET /admin/mf/pipeline/runs/active",
+            "GET /admin/mf/nfo/scheduler/status",
+            "GET /admin/mf/nfo/ingestion-runs",
         ],
         "notes": "MF scheduler job inventory, run history, metrics, and pipeline status.",
     },
     {
         "permission": "mf.jobs.run",
         "status": "enforced",
-        "routes": ["POST /admin/mf/jobs/{job_name}/run"],
+        "routes": ["POST /admin/mf/jobs/{job_name}/run", "POST /admin/mf/nfo/jobs/{job_name}/run"],
         "notes": "Manual MF job trigger (optional force=true skips dependency guard).",
     },
     {
@@ -234,6 +236,7 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
             "GET /admin/mf/catalog/health/issues",
             "GET /admin/mf/categories",
             "GET /admin/mf/funds",
+            "GET /admin/mf/nfo",
             "GET /admin/mf/funds/{fund_id}",
             "GET /admin/mf/funds/{fund_id}/navs",
             "GET /admin/mf/funds/{fund_id}/content",
@@ -251,6 +254,7 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
         "permission": "mf.catalog.manage",
         "status": "enforced",
         "routes": [
+            "PATCH /admin/mf/nfo/{product_id}",
             "PATCH /admin/mf/funds/{fund_id}",
             "PATCH /admin/mf/categories/{category_id}",
             "PUT /admin/mf/categories/{category_slug}/order",

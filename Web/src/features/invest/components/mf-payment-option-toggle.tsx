@@ -1,6 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
+import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 
@@ -66,10 +67,11 @@ export function MfPaymentOptionToggle<TValue extends string>({
                 )}
               >
                 {option.imageSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={option.imageSrc}
                     alt=""
+                    width={16}
+                    height={16}
                     className="size-4 object-contain"
                   />
                 ) : Icon ? (

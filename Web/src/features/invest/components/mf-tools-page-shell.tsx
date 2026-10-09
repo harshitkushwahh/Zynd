@@ -21,7 +21,7 @@ export function MfToolsPageShell({ trail, title, icon, children }: MfToolsPageSh
       <MfBreadcrumb trail={trail} />
 
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        <div className="min-w-0 flex-1 space-y-6">
+        <div className="min-w-0 flex-1">
           <PageHeader icon={icon} title={title} />
           {children}
         </div>

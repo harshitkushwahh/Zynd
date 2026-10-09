@@ -57,6 +57,33 @@ export function scenariosToChartSeries(
   }));
 }
 
+export type HistoricReturnBarPercents = {
+  totalPct: number;
+  investedPct: number;
+  gainPct: number;
+};
+
+/** Scale invested + gain bars to the largest projected value in the table. */
+export function historicReturnBarPercents(
+  invested: number,
+  value: number,
+  maxValue: number,
+): HistoricReturnBarPercents {
+  const scale = Math.max(maxValue, 1);
+  const shownValue = Math.max(value, 0);
+  const totalPct = Math.min(100, (shownValue / scale) * 100);
+  if (shownValue <= 0) {
+    return { totalPct: 0, investedPct: 0, gainPct: 0 };
+  }
+  const investedWithin = Math.min(Math.max(invested, 0), shownValue);
+  const investedPct = (investedWithin / shownValue) * totalPct;
+  return {
+    totalPct,
+    investedPct,
+    gainPct: Math.max(0, totalPct - investedPct),
+  };
+}
+
 /** Illustrative lumpsum growth by horizon — shown before a fund is selected. */
 export const LUMPSUM_PLACEHOLDER_CHART_SERIES: CalculatorChartSeriesPoint[] = [
   { label: "1Y", invested: 1_00_000, value: 1_12_000, gain: 12_000 },

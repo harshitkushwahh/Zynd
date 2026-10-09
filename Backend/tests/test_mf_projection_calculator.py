@@ -11,6 +11,8 @@ from app.application.mf.mf_projection_calculator import (
     project_sip,
     project_swp,
 )
+from app.application.mf.nav_metrics_calculator import compute_metrics_for_history
+from app.application.mf.return_calculator_snapshot_service import _build_horizons_from_history
 
 
 def _history() -> list[tuple[date, Decimal]]:
@@ -35,14 +37,46 @@ def test_project_lumpsum_one_year() -> None:
     assert result.return_pct == Decimal("10")
 
 
-def test_project_lumpsum_scenarios_filters_missing_horizons() -> None:
+def test_project_lumpsum_scenarios_projects_missing_horizons_from_trailing() -> None:
     history = [
         (date(2025, 1, 1), Decimal("100")),
         (date(2026, 1, 1), Decimal("110")),
     ]
     scenarios = project_lumpsum_scenarios(history, amount_inr=Decimal("1000"), horizons=["1y", "5y"])
-    assert len(scenarios) == 1
-    assert scenarios[0].horizon == "1y"
+    by_horizon = {row.horizon: row for row in scenarios}
+    assert set(by_horizon) == {"1y", "5y"}
+    assert by_horizon["1y"].value_inr == Decimal("1100.00")
+    assert by_horizon["5y"].value_inr == Decimal("1610.51")
+
+
+def test_project_lumpsum_one_month_history_still_projects_five_year() -> None:
+    history = [
+        (date(2026, 1, 1), Decimal("100")),
+        (date(2026, 1, 31), Decimal("110")),
+    ]
+    result = project_lumpsum(history, amount_inr=Decimal("1000"), horizon="5y")
+    assert result is not None
+    assert result.value_inr > Decimal("1000")
+
+    catalog = compute_metrics_for_history(history)
+    assert catalog is not None
+    _as_of, metrics = catalog
+    assert metrics["return_3y"] is None
+    assert metrics["return_5y"] is None
+    assert metrics["return_1m"] == Decimal("10")
+
+
+def test_snapshot_fills_missing_horizons_from_trailing() -> None:
+    history = [
+        (date(2026, 1, 1), Decimal("100")),
+        (date(2026, 1, 31), Decimal("110")),
+    ]
+    as_of_date, horizons = _build_horizons_from_history(history)
+    assert as_of_date == date(2026, 1, 31)
+    assert "3m" in horizons
+    assert "5y" in horizons
+    assert horizons["5y"]["projected_from_trailing"] is True
+    assert horizons["5y"]["multiplier"] > 1
 
 
 def test_project_sip_accumulates_units() -> None:

@@ -47,6 +47,7 @@ export type PortfolioHoldingResponse = {
   isin: string;
   fund_name: string;
   amc_name: string | null;
+  amc_slug?: string | null;
   amc_logo_url: string | null;
   units: number;
   redeemable_units: number;
@@ -79,6 +80,14 @@ export type PortfolioHoldingTransactionResponse = {
   value_inr: number;
 };
 
+export type PortfolioHoldingSipOption = {
+  frequency: string;
+  min_inr?: number | null;
+  max_inr?: number | null;
+  multiples_inr?: number | null;
+  min_installments?: number | null;
+};
+
 export type PortfolioHoldingDetailResponse = PortfolioHoldingResponse & {
   holding_mode: string | null;
   invested_months: number | null;
@@ -91,7 +100,23 @@ export type PortfolioHoldingDetailResponse = PortfolioHoldingResponse & {
   redeem_bank_name: string | null;
   redeem_bank_ifsc: string | null;
   nominee_name: string | null;
+  product_id?: string | null;
+  min_sip_amount_inr?: number | null;
+  min_lumpsum_amount_inr?: number | null;
+  sip_allowed?: boolean;
+  sip_options?: PortfolioHoldingSipOption[];
   transactions: PortfolioHoldingTransactionResponse[];
+  pending_action?: PortfolioHoldingPendingActionResponse | null;
+};
+
+export type PortfolioHoldingPendingActionResponse = {
+  kind: "switch" | "redeem";
+  status: string;
+  order_id: string;
+  amount_inr: number;
+  confirmed: boolean;
+  switch_in_scheme?: string | null;
+  switch_in_product_id?: string | null;
 };
 
 export type PortfolioHoldingDetailEnvelopeResponse = {
@@ -229,6 +254,165 @@ export function sendMfRedemptionConsentOtp(orderId: string) {
 
 export function confirmMfRedemption(orderId: string, otp: string) {
   return apiRequest<MfRedemptionOrder>(`/invest/redemptions/${orderId}/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ otp }),
+  });
+}
+
+export type MfSwitchDestination = {
+  product_id: string;
+  fund_id: number;
+  isin: string;
+  name: string;
+  seo_slug: string | null;
+  amc_name: string | null;
+  amc_slug: string | null;
+  amc_logo_url: string | null;
+};
+
+export type MfSwitchOrder = {
+  order_id: string;
+  product_id: string;
+  product_name: string | null;
+  order_type: string;
+  amount_inr: number;
+  status: string;
+  fp_switch_id: string | null;
+  fp_state: string | null;
+  holding_id: string | null;
+  folio_number: string | null;
+  isin: string | null;
+  switch_in_scheme: string | null;
+  switch_in_product_id: string | null;
+  units: number | null;
+  switch_mode: string | null;
+  next_action: string | null;
+  consent_otp_sent: boolean;
+  switch_confirmed: boolean;
+  failure_code: string | null;
+  failure_reason: string | null;
+  created_at: string | null;
+  submitted_at: string | null;
+  settled_at: string | null;
+};
+
+export type MfSystematicPlan = {
+  plan_id: string;
+  kind: string;
+  product_id: string;
+  product_name: string | null;
+  amount_inr: number;
+  frequency: string;
+  installment_day: number | null;
+  number_of_installments: number;
+  folio_number: string | null;
+  status: string;
+  fp_plan_id: string | null;
+  fp_state: string | null;
+  next_installment_date: string | null;
+  next_action: string | null;
+  consent_otp_sent: boolean;
+  plan_confirmed: boolean;
+  switch_in_product_id: string | null;
+  switch_in_name: string | null;
+  failure_code: string | null;
+  failure_reason: string | null;
+  created_at: string | null;
+  activated_at: string | null;
+  cancelled_at: string | null;
+};
+
+export function fetchMfSwitchDestinations(holdingId: string) {
+  return apiRequest<{ destinations: MfSwitchDestination[] }>(
+    `/invest/switches/destinations?holding_id=${encodeURIComponent(holdingId)}`,
+  );
+}
+
+export function createMfSwitch(payload: {
+  holding_id: string;
+  switch_in_product_id: string;
+  idempotency_key: string;
+  switch_mode: "amount" | "units" | "all";
+  amount_inr?: number;
+  units?: number;
+}) {
+  return apiRequest<MfSwitchOrder>("/invest/switches", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchMfSwitchConsent(orderId: string) {
+  return apiRequest<{
+    order_id: string;
+    fp_switch_id: string;
+    masked_email: string;
+    masked_mobile: string;
+    consent_otp_sent: boolean;
+    switch_confirmed: boolean;
+  }>(`/invest/switches/${orderId}/consent`);
+}
+
+export function sendMfSwitchConsentOtp(orderId: string) {
+  return apiRequest<{ order_id: string; masked_mobile: string; retry_after_seconds: number }>(
+    `/invest/switches/${orderId}/consent/send-otp`,
+    { method: "POST" },
+  );
+}
+
+export function confirmMfSwitch(orderId: string, otp: string) {
+  return apiRequest<MfSwitchOrder>(`/invest/switches/${orderId}/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ otp }),
+  });
+}
+
+export function createMfSwpPlan(payload: {
+  holding_id: string;
+  idempotency_key: string;
+  amount_inr: number;
+  installment_day: number;
+  number_of_installments: number;
+}) {
+  return apiRequest<MfSystematicPlan>("/invest/swp/plans", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createMfStpPlan(payload: {
+  holding_id: string;
+  switch_in_product_id: string;
+  idempotency_key: string;
+  amount_inr: number;
+  installment_day: number;
+  number_of_installments: number;
+}) {
+  return apiRequest<MfSystematicPlan>("/invest/stp/plans", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchMfSystematicPlanConsent(kind: "swp" | "stp", planId: string) {
+  return apiRequest<{
+    plan_id: string;
+    masked_email: string;
+    masked_mobile: string;
+    consent_otp_sent: boolean;
+    plan_confirmed: boolean;
+  }>(`/invest/${kind}/plans/${planId}/consent`);
+}
+
+export function sendMfSystematicPlanOtp(kind: "swp" | "stp", planId: string) {
+  return apiRequest<{ plan_id: string; masked_mobile: string; retry_after_seconds: number }>(
+    `/invest/${kind}/plans/${planId}/consent/send-otp`,
+    { method: "POST" },
+  );
+}
+
+export function confirmMfSystematicPlan(kind: "swp" | "stp", planId: string, otp: string) {
+  return apiRequest<MfSystematicPlan>(`/invest/${kind}/plans/${planId}/confirm`, {
     method: "POST",
     body: JSON.stringify({ otp }),
   });

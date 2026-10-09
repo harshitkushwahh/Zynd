@@ -120,6 +120,20 @@ def extract_investment_constraints_from_scheme(raw: dict[str, Any]) -> dict[str,
         ),
         "min_out_inr": _to_api_amount(scheme.get("min_switch_out_amount")),
         "min_out_units": _to_api_amount(scheme.get("min_switch_out_units")),
+        "out_multiples_inr": _to_api_amount(scheme.get("switch_out_amount_multiples")),
+        "out_unit_multiples": _to_api_amount(scheme.get("switch_out_unit_multiples")),
+    }
+    swp_constraints = {
+        "min_inr": _to_api_amount(scheme.get("min_swp_amount")),
+        "max_inr": _to_api_amount(scheme.get("max_swp_amount")),
+        "multiples_inr": _to_api_amount(scheme.get("swp_multiples")),
+    }
+    stp_constraints = {
+        "min_inr": _to_api_amount(scheme.get("min_stp_amount") or scheme.get("min_switch_out_amount")),
+        "max_inr": _to_api_amount(scheme.get("max_stp_amount") or scheme.get("max_switch_out_amount")),
+        "multiples_inr": _to_api_amount(
+            scheme.get("stp_multiples") or scheme.get("switch_out_amount_multiples")
+        ),
     }
     sip_options = _extract_sip_options(scheme)
     transaction_types = _extract_transaction_types(scheme)
@@ -143,6 +157,8 @@ def extract_investment_constraints_from_scheme(raw: dict[str, Any]) -> dict[str,
         "additional": additional,
         "redemption": redemption,
         "switch": switch_constraints,
+        "swp": swp_constraints,
+        "stp": stp_constraints,
         "sip_options": sip_options,
         "transaction_types": transaction_types,
     }
@@ -182,6 +198,8 @@ def investment_details_from_min_amounts(
         "additional": None,
         "redemption": None,
         "switch": None,
+        "swp": None,
+        "stp": None,
         "sip_options": sip_options,
         "transaction_types": transaction_types,
     }

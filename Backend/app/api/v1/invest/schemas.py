@@ -37,6 +37,8 @@ class InvestInvestmentDetailsResponse(BaseModel):
     additional: Optional[InvestAmountConstraintResponse] = None
     redemption: Optional[InvestRedemptionConstraintResponse] = None
     switch: Optional[InvestSwitchConstraintResponse] = None
+    swp: Optional[InvestAmountConstraintResponse] = None
+    stp: Optional[InvestAmountConstraintResponse] = None
     sip_options: list[InvestSipOptionResponse] = Field(default_factory=list)
     transaction_types: list[str] = Field(default_factory=list)
 
@@ -80,6 +82,18 @@ class InvestFundContentResponse(InvestFundDisplayResponse):
     amc_website_url: Optional[str] = None
 
 
+class InvestNfoBlockResponse(BaseModel):
+    status: str
+    subscription_open_date: Optional[str] = None
+    subscription_close_date: Optional[str] = None
+    allotment_date: Optional[str] = None
+    is_featured: bool = False
+    headline: Optional[str] = None
+    body: Optional[str] = None
+    source: Optional[str] = None
+    disclaimer: Optional[str] = None
+
+
 class InvestFundSummaryResponse(BaseModel):
     product_id: str
     slug: str
@@ -100,6 +114,7 @@ class InvestFundSummaryResponse(BaseModel):
     display_order: Optional[int] = None
     health_badges: list[str] = Field(default_factory=list)
     display: Optional[InvestFundDisplayResponse] = None
+    nfo: Optional[InvestNfoBlockResponse] = None
     returns: InvestReturnsResponse
 
 
@@ -120,6 +135,7 @@ class InvestHomeResponse(BaseModel):
     collections: list[InvestCategoryResponse] = Field(default_factory=list)
     popular_funds: list[InvestFundSummaryResponse] = Field(default_factory=list)
     featured_funds: list[InvestFundSummaryResponse]
+    nfo_carousel: list[InvestFundSummaryResponse] = Field(default_factory=list)
     total_active_funds: int
 
 
@@ -250,6 +266,7 @@ class CreateMfOrderRequest(BaseModel):
     bank_account_id: Optional[UUID] = None
     family_goal_id: Optional[UUID] = None
     payment_method: Literal["upi", "netbanking"] = "upi"
+    folio_number: Optional[str] = Field(default=None, max_length=64)
 
 
 class MfOrderResponse(BaseModel):
@@ -435,6 +452,7 @@ class CreateMfSipPlanRequest(BaseModel):
     bank_account_id: Optional[UUID] = None
     family_goal_id: Optional[UUID] = None
     mandate_type: Literal["upi", "nach"] = "upi"
+    folio_number: Optional[str] = Field(default=None, max_length=64)
 
 
 class ValidateMfSipPlanRequest(BaseModel):
@@ -588,6 +606,7 @@ class PortfolioHoldingResponse(BaseModel):
     isin: str
     fund_name: str
     amc_name: Optional[str] = None
+    amc_slug: Optional[str] = None
     amc_logo_url: Optional[str] = None
     units: float
     redeemable_units: float
@@ -620,12 +639,23 @@ class PortfolioHoldingTransactionResponse(BaseModel):
     value_inr: float
 
 
+class PortfolioHoldingPendingActionResponse(BaseModel):
+    kind: Literal["switch", "redeem"]
+    status: str
+    order_id: str
+    amount_inr: float = 0
+    confirmed: bool = False
+    switch_in_scheme: Optional[str] = None
+    switch_in_product_id: Optional[str] = None
+
+
 class PortfolioHoldingDetailResponse(BaseModel):
     id: str
     folio_number: str
     isin: str
     fund_name: str
     amc_name: Optional[str] = None
+    amc_slug: Optional[str] = None
     amc_logo_url: Optional[str] = None
     units: float
     redeemable_units: float
@@ -648,7 +678,13 @@ class PortfolioHoldingDetailResponse(BaseModel):
     redeem_bank_name: Optional[str] = None
     redeem_bank_ifsc: Optional[str] = None
     nominee_name: Optional[str] = None
+    product_id: Optional[str] = None
+    min_sip_amount_inr: Optional[float] = None
+    min_lumpsum_amount_inr: Optional[float] = None
+    sip_allowed: bool = False
+    sip_options: list[InvestSipOptionResponse] = Field(default_factory=list)
     transactions: list[PortfolioHoldingTransactionResponse] = Field(default_factory=list)
+    pending_action: Optional[PortfolioHoldingPendingActionResponse] = None
 
 
 class PortfolioHoldingDetailEnvelopeResponse(BaseModel):
@@ -753,6 +789,145 @@ class MfRedemptionOtpSendResponse(BaseModel):
     retry_after_seconds: int
 
 
+class MfSwitchDestinationResponse(BaseModel):
+    product_id: str
+    fund_id: int
+    isin: str
+    name: str
+    seo_slug: Optional[str] = None
+    amc_name: Optional[str] = None
+    amc_slug: Optional[str] = None
+    amc_logo_url: Optional[str] = None
+
+
+class MfSwitchDestinationListResponse(BaseModel):
+    destinations: list[MfSwitchDestinationResponse]
+
+
+class CreateMfSwitchRequest(BaseModel):
+    holding_id: str
+    switch_in_product_id: UUID
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    switch_mode: Literal["amount", "units", "all"]
+    amount_inr: Optional[float] = Field(default=None, gt=0)
+    units: Optional[float] = Field(default=None, gt=0)
+
+
+class ConfirmMfSwitchRequest(BaseModel):
+    otp: str = Field(min_length=4, max_length=8)
+
+
+class MfSwitchOrderResponse(BaseModel):
+    order_id: str
+    product_id: str
+    product_name: Optional[str] = None
+    order_type: str
+    amount_inr: float
+    status: str
+    fp_switch_id: Optional[str] = None
+    fp_state: Optional[str] = None
+    holding_id: Optional[str] = None
+    folio_number: Optional[str] = None
+    isin: Optional[str] = None
+    switch_in_scheme: Optional[str] = None
+    switch_in_product_id: Optional[str] = None
+    units: Optional[float] = None
+    switch_mode: Optional[str] = None
+    next_action: Optional[str] = None
+    consent_otp_sent: bool = False
+    switch_confirmed: bool = False
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    created_at: Optional[str] = None
+    submitted_at: Optional[str] = None
+    settled_at: Optional[str] = None
+
+
+class MfSwitchConsentResponse(BaseModel):
+    order_id: str
+    fp_switch_id: Optional[str] = None
+    status: str
+    fp_state: Optional[str] = None
+    masked_email: str
+    masked_mobile: str
+    consent_otp_sent: bool = False
+    switch_confirmed: bool = False
+
+
+class MfSwitchOtpSendResponse(BaseModel):
+    order_id: str
+    masked_mobile: str
+    retry_after_seconds: int
+
+
+class CreateMfSwpPlanRequest(BaseModel):
+    holding_id: str
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    amount_inr: float = Field(gt=0)
+    installment_day: int = Field(ge=1, le=28)
+    number_of_installments: int = Field(ge=1, le=600)
+
+
+class CreateMfStpPlanRequest(BaseModel):
+    holding_id: str
+    switch_in_product_id: UUID
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    amount_inr: float = Field(gt=0)
+    installment_day: int = Field(ge=1, le=28)
+    number_of_installments: int = Field(ge=1, le=600)
+
+
+class ConfirmMfSystematicPlanRequest(BaseModel):
+    otp: str = Field(min_length=4, max_length=8)
+
+
+class MfSystematicPlanResponse(BaseModel):
+    plan_id: str
+    kind: str
+    product_id: str
+    product_name: Optional[str] = None
+    amount_inr: float
+    frequency: str
+    installment_day: Optional[int] = None
+    number_of_installments: int
+    folio_number: Optional[str] = None
+    status: str
+    fp_plan_id: Optional[str] = None
+    fp_state: Optional[str] = None
+    next_installment_date: Optional[str] = None
+    next_action: Optional[str] = None
+    consent_otp_sent: bool = False
+    plan_confirmed: bool = False
+    switch_in_product_id: Optional[str] = None
+    switch_in_name: Optional[str] = None
+    failure_code: Optional[str] = None
+    failure_reason: Optional[str] = None
+    created_at: Optional[str] = None
+    activated_at: Optional[str] = None
+    cancelled_at: Optional[str] = None
+
+
+class MfSystematicPlanListResponse(BaseModel):
+    plans: list[MfSystematicPlanResponse]
+
+
+class MfSystematicPlanConsentResponse(BaseModel):
+    plan_id: str
+    fp_plan_id: Optional[str] = None
+    status: str
+    fp_state: Optional[str] = None
+    masked_email: str
+    masked_mobile: str
+    consent_otp_sent: bool = False
+    plan_confirmed: bool = False
+
+
+class MfSystematicPlanOtpSendResponse(BaseModel):
+    plan_id: str
+    masked_mobile: str
+    retry_after_seconds: int
+
+
 class MfCasImportResponse(BaseModel):
     import_id: str
     status: str
@@ -765,6 +940,26 @@ class MfCasImportResponse(BaseModel):
 
 class MfCasImportListResponse(BaseModel):
     imports: list[MfCasImportResponse]
+
+
+class CreateInvestorReportRequest(BaseModel):
+    kind: Literal["account_statement", "capital_gains", "tax"]
+
+
+class InvestorReportResponse(BaseModel):
+    id: str
+    kind: str
+    status: str
+    period_from: str
+    period_to: str
+    error_message: Optional[str] = None
+    filename: Optional[str] = None
+    generated_at: Optional[str] = None
+    downloadable: bool = False
+
+
+class InvestorReportListResponse(BaseModel):
+    reports: list[InvestorReportResponse]
 
 
 class InvestorBankAccountFailure(BaseModel):

@@ -70,7 +70,6 @@ function MfaStoreBadges({ className }: { className?: string }) {
       width={560}
       height={168}
       sizes="(max-width: 640px) 220px, 280px"
-      unoptimized
       className={className}
     />
   );
@@ -84,7 +83,6 @@ function MfaEnrollLaptopImage({ className }: { className?: string }) {
       width={707}
       height={353}
       sizes="(max-width: 640px) 260px, 320px"
-      unoptimized
       className={className}
     />
   );

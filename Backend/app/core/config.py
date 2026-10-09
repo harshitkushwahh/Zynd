@@ -435,6 +435,17 @@ class Settings(BaseSettings):
     zynd_mf_compliance_sync_enabled: bool = True
     zynd_mf_compliance_sync_cron: str = "30 20 * * 0"
     zynd_mf_compliance_sync_batch_size: int = 200
+    zynd_nfo_ingestion_enabled: bool = True
+    zynd_nfo_scheduler_timezone: str = "Asia/Kolkata"
+    zynd_nfo_chain_after_mf_enabled: bool = True
+    zynd_nfo_fallback_cron: str = "0 22 * * *"
+    zynd_nfo_poll_seconds: int = 30
+    zynd_nfo_mf_boundary_jobs: str = "catalog-lifecycle-sync,amfi-nav-daily,nav-metrics-compute"
+    zynd_nfo_shallow_nav_max: int = 30
+    zynd_nfo_max_age_days: int = 90
+    zynd_nfo_allotted_nav_min: int = 60
+    zynd_mf_nfo_mutex_key: str = "zynd:mf-nfo-ingest"
+
     zynd_mf_scheme_min_amounts_backfill_enabled: bool = True
     zynd_mf_scheme_min_amounts_backfill_cron: str = "15 21 * * *"
     zynd_mf_scheme_min_amounts_backfill_batch_size: int = 200

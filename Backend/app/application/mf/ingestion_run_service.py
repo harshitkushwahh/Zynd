@@ -256,10 +256,13 @@ async def list_recent_runs(
     session: AsyncSession,
     *,
     job_name: str | None = None,
+    job_name_prefix: str | None = None,
     limit: int = 50,
 ) -> list[IngestionRunLog]:
     stmt = select(IngestionRunLog).order_by(desc(IngestionRunLog.started_at)).limit(limit)
     if job_name:
         stmt = stmt.where(IngestionRunLog.job_name == job_name)
+    elif job_name_prefix:
+        stmt = stmt.where(IngestionRunLog.job_name.startswith(job_name_prefix))
     result = await session.execute(stmt)
     return list(result.scalars())

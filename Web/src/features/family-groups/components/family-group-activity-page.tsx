@@ -202,21 +202,19 @@ export function FamilyGroupActivityPage() {
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin]">
-          <div className="mb-6">
-            <PageHeader
-              icon={Clock3}
-              title={copy.familyGroups.activity.pageTitle}
-              action={
-                groupReady && canViewInvites ? (
-                  <ActivityPageTabToggle
-                    tab={tab}
-                    onChange={setTab}
-                    sentInviteCount={sentInviteCount}
-                  />
-                ) : undefined
-              }
-            />
-          </div>
+          <PageHeader
+            icon={Clock3}
+            title={copy.familyGroups.activity.pageTitle}
+            action={
+              groupReady && canViewInvites ? (
+                <ActivityPageTabToggle
+                  tab={tab}
+                  onChange={setTab}
+                  sentInviteCount={sentInviteCount}
+                />
+              ) : undefined
+            }
+          />
 
           {loading ? (
             <FamilyGroupActivityPageSkeleton />

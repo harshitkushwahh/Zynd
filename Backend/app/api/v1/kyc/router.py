@@ -36,6 +36,9 @@ from app.api.v1.kyc.schemas import (
     KycPanFailure,
     KycPanVerifyRequest,
     KycPanVerifyResponse,
+    InvestorNomineeCreateRequest,
+    InvestorProfileSettingsUpdateRequest,
+    InvestorSettingsStateResponse,
     KycIfscResponse,
     KycPincodeResponse,
     KycReadinessCheckResponse,
@@ -51,6 +54,7 @@ from app.application.kyc.bank_verification_service import (
 )
 from app.application.kyc.eligibility import kyc_eligibility_status
 from app.application.kyc.errors import KycError
+from app.infrastructure.kyc.cybrilla_terminal_log import log_exception_dump
 from app.application.kyc.journey_gate_service import (
     require_digilocker_or_kra_skip,
     require_entry_gate,
@@ -108,10 +112,21 @@ router = APIRouter(prefix="/kyc", tags=["kyc"])
 
 
 def _handle_kyc_error(exc: KycError) -> HTTPException:
-    return HTTPException(
+    log_exception_dump(
+        "KYC request failed",
+        exc,
+        code=exc.code,
         status_code=exc.status_code,
-        detail={"code": exc.code, "message": exc.message},
+        message=exc.message,
     )
+    cause = exc.__cause__
+    detail: dict[str, object] = {"code": exc.code, "message": exc.message}
+    if cause is not None:
+        detail["cause"] = str(getattr(cause, "message", None) or cause)
+        response_data = getattr(cause, "response_data", None)
+        if response_data is not None:
+            detail["provider"] = response_data
+    return HTTPException(status_code=exc.status_code, detail=detail)
 
 
 @router.post("/token/ensure")
@@ -208,6 +223,70 @@ async def get_kyc_journey_bootstrap(
         proof_fetch_url=payload.get("proofFetchUrl"),
         requires_poa_proof_fetch=bool(payload.get("requiresPoaProofFetch")),
     )
+
+
+@router.get("/settings/investor", response_model=InvestorSettingsStateResponse)
+async def get_kyc_settings_investor(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InvestorSettingsStateResponse:
+    from app.application.investor.investor_settings_service import get_investor_settings_state
+
+    state = await get_investor_settings_state(db, user_id=current_user.id)
+    return InvestorSettingsStateResponse(**state)
+
+
+@router.patch("/settings/investor-profile", response_model=InvestorSettingsStateResponse)
+async def patch_kyc_settings_investor_profile(
+    body: InvestorProfileSettingsUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InvestorSettingsStateResponse:
+    from app.application.investor.investor_settings_service import update_investor_profile_settings
+
+    try:
+        state = await update_investor_profile_settings(
+            db,
+            user=current_user,
+            income_slab=body.income_slab,
+            pep_details=body.pep_details,
+            marital_status=body.marital_status,
+            spouse_name=body.spouse_name,
+        )
+    except KycError as exc:
+        raise _handle_kyc_error(exc) from exc
+    await db.commit()
+    return InvestorSettingsStateResponse(**state)
+
+
+@router.post("/settings/nominees", response_model=InvestorSettingsStateResponse)
+async def post_kyc_settings_nominee(
+    body: InvestorNomineeCreateRequest,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InvestorSettingsStateResponse:
+    from app.application.consent.consent_service import ConsentAcceptContext
+    from app.application.investor.investor_settings_service import add_investor_nominee
+
+    try:
+        state = await add_investor_nominee(
+            db,
+            user=current_user,
+            nominees=body.resolved_nominees(),
+            consent_context=ConsentAcceptContext(
+                source="settings_nominee",
+                ip=get_client_ip(request),
+                user_agent=request.headers.get("user-agent"),
+            ),
+        )
+    except KycError as exc:
+        raise _handle_kyc_error(exc) from exc
+    except Exception as exc:
+        log_exception_dump("POST /kyc/settings/nominees failed", exc)
+        raise
+    await db.commit()
+    return InvestorSettingsStateResponse(**state)
 
 
 @router.post("/pan/verify", response_model=KycPanVerifyResponse)

@@ -11,11 +11,16 @@ function payloadString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function isConsentFundOrderType(orderType: string | null | undefined) {
+  const type = orderType?.trim().toUpperCase();
+  return type === "REDEMPTION" || type === "SWITCH";
+}
+
 export function isOrderPaymentCompleted(
   order: Pick<MfOrder, "status" | "payment_completed"> & Partial<Pick<MfOrder, "order_type">>,
   events: MfOrderEvent[] = [],
 ) {
-  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") return true;
+  if (isConsentFundOrderType(order.order_type)) return true;
   if (order.payment_completed === true) return true;
   if (order.status?.toUpperCase() === "SUCCEEDED") return true;
 
@@ -42,7 +47,7 @@ export function isMfPurchaseOrderPaymentFailed(
   order: Pick<MfOrder, "status" | "fp_payment_status" | "payment_completed" | "order_type"> &
     Partial<Pick<MfOrder, "failure_code">>,
 ): boolean {
-  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") return false;
+  if (isConsentFundOrderType(order.order_type)) return false;
   if (isOrderPaymentCompleted(order)) return false;
 
   const status = order.status?.trim().toUpperCase() ?? "";
@@ -54,7 +59,7 @@ export function isMfPurchaseOrderPaymentFailed(
 
 /** Lumpsum/SIP purchase still waiting on gateway payment (investor-facing "Pending"). */
 export function isMfPurchaseOrderAwaitingPayment(order: MfOrderInvestorStatusContext): boolean {
-  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") return false;
+  if (isConsentFundOrderType(order.order_type)) return false;
   if (isOrderPaymentCompleted(order)) return false;
   if (isMfPurchaseOrderPaymentFailed(order)) return false;
 
@@ -68,7 +73,7 @@ export function isOrderAwaitingAllotment(
   order: Pick<MfOrder, "status" | "fp_state" | "payment_completed"> & Partial<Pick<MfOrder, "order_type">>,
   events: MfOrderEvent[] = [],
 ) {
-  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") return false;
+  if (isConsentFundOrderType(order.order_type)) return false;
   if (!isOrderPaymentCompleted(order, events)) return false;
 
   const status = order.status.trim().toUpperCase();

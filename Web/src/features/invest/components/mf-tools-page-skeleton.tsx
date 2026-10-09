@@ -5,12 +5,13 @@ import {
   MF_CALC_CARD_CONTENT_CLASS,
   MF_CALC_PANEL_CLASS,
 } from "@/features/invest/lib/mf-calculator-ui";
+import { PAGE_STACK_GAP_CLASS } from "@/components/ui/page-header";
 import { MF_CARD_RADIUS_CLASS, MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { cn } from "@/lib/utils";
 
 function MfToolsBreadcrumbSkeleton() {
   return (
-    <div className="mb-6 flex shrink-0 items-center gap-2">
+    <div className={cn(PAGE_STACK_GAP_CLASS, "flex shrink-0 items-center gap-2")}>
       <Skeleton className="h-4 w-20" />
       <Skeleton className="size-3.5 rounded-full" />
       <Skeleton className="h-4 w-28" />
@@ -33,7 +34,7 @@ function MfToolsSidebarSkeleton() {
 
 function MfToolsPageHeaderSkeleton() {
   return (
-    <div>
+    <div className={PAGE_STACK_GAP_CLASS}>
       <Skeleton className="h-8 w-52 max-w-full" />
       <Skeleton className="mt-2 h-4 w-full max-w-2xl" />
       <Skeleton className="mt-1.5 h-4 w-4/5 max-w-xl" />
@@ -46,7 +47,7 @@ function MfToolsShellSkeleton({ children }: { children: React.ReactNode }) {
     <div className={MF_PAGE_SECTION_CLASS}>
       <MfToolsBreadcrumbSkeleton />
       <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        <div className="min-w-0 flex-1 space-y-6">
+        <div className="min-w-0 flex-1">
           <MfToolsPageHeaderSkeleton />
           {children}
         </div>

@@ -112,7 +112,7 @@ export function MitraTxnRecommendationPage({ token }: MitraTxnRecommendationPage
     recommendation?.status === "invested";
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader
         icon={HandCoins}
         title="Mitra investment recommendation"

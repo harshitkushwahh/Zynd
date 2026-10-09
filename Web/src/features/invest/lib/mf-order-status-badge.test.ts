@@ -66,4 +66,25 @@ describe("mf order status badge", () => {
       }),
     ).toBe("destructive");
   });
+
+  it("shows awaiting OTP for an unconfirmed switch, not payment completed", () => {
+    expect(
+      formatMfOrderStatusLabel("PENDING", {
+        status: "PENDING",
+        fp_state: null,
+        fp_payment_status: null,
+        payment_completed: true,
+        order_type: "SWITCH",
+      }),
+    ).toBe(copy.dashboard.portfolio.redeemJourneyStatusAwaitingConsent);
+    expect(
+      mfOrderStatusVariantForInvestor("PENDING", {
+        status: "PENDING",
+        fp_state: null,
+        fp_payment_status: null,
+        payment_completed: true,
+        order_type: "SWITCH",
+      }),
+    ).toBe("warning");
+  });
 });

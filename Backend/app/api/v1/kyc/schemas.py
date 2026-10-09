@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class KycEligibilityResponse(BaseModel):
@@ -372,6 +372,58 @@ def build_kyc_bank_verify_response(result: dict) -> KycBankVerifyResponse:
         poa_bank_status=_poa_field_status(result.get("poaBankStatus")),
         poa_readiness_status=_poa_field_status(result.get("poaReadinessStatus")),
     )
+
+
+class InvestorSettingsStateResponse(BaseModel):
+    kyc_completed: bool
+    has_investor_profile: bool
+    investor_profile_id: Optional[str] = None
+    has_mf_investment_account: bool
+    mfia_id: Optional[str] = None
+    can_edit_profile: bool
+    can_add_nominee: bool
+    nominee_count: int = 0
+    max_nominees: int = 3
+    nominees: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class InvestorProfileSettingsUpdateRequest(BaseModel):
+    income_slab: Optional[str] = None
+    pep_details: Optional[str] = None
+    marital_status: Optional[str] = None
+    spouse_name: Optional[str] = None
+
+
+class InvestorNomineeCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    nominees: list[dict[str, Any]] = Field(default_factory=list)
+    nominee: Optional[dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_nominees(cls, value: Any) -> Any:
+        if isinstance(value, list):
+            return {"nominees": [item for item in value if isinstance(item, dict)]}
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        nested = payload.get("body")
+        if isinstance(nested, dict) and "nominees" not in payload and "nominee" not in payload:
+            payload = nested
+        raw = payload.get("nominees")
+        if isinstance(raw, dict):
+            payload["nominees"] = [raw]
+        elif raw is None and isinstance(payload.get("nominee"), dict):
+            payload["nominees"] = [payload["nominee"]]
+        return payload
+
+    def resolved_nominees(self) -> list[dict[str, Any]]:
+        if self.nominees:
+            return self.nominees
+        if self.nominee:
+            return [self.nominee]
+        return []
 
 
 def build_kyc_bank_preverify_status_response(result: dict) -> KycBankPreverifyStatusResponse:

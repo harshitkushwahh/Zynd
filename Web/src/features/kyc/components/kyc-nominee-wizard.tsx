@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,14 @@ import {
   createEmptyNomineeIdentity,
   formatNomineeDobForDateInput,
   formatNomineeDobIso,
+  getNomineeKindFromDob,
   getNomineeTypeFromDob,
   isFutureNomineeDob,
   isNomineeWizardDirty,
   KYC_NOMINEE_WIZARD_STEPS,
   normalizeNomineeSharePercentInput,
   parseNomineeDob,
+  type KycNomineeKind,
   type KycNomineeRecord,
   type KycNomineeWizardStep,
 } from "@/features/kyc/lib/kyc-nominee";
@@ -42,6 +44,7 @@ import {
   validateKycNomineeAddress,
   validateKycNomineeEmail,
   validateKycNomineeMobile,
+  nomineePanMatchesInvestor,
   validateKycPersonName,
   validateOptionalKycNomineeDocument,
 } from "@/features/kyc/lib/kyc-nominee-validation";
@@ -56,8 +59,19 @@ type KycNomineeWizardProps = {
   relationshipOptions?: KycMasterDataOption[];
   sourceOfWealthOptions?: KycMasterDataOption[];
   documentTypeOptions?: KycMasterDataOption[];
+  investorPanLast4?: string | null;
+  hideOuterTitle?: boolean;
+  hideFooter?: boolean;
+  onPrimaryLabelChange?: (label: string) => void;
+  onProgressChange?: (step: number) => void;
+  onKindChange?: (kind: KycNomineeKind) => void;
   onCancel: (hasUnsavedContent: boolean) => void;
   onSave: (nominee: KycNomineeRecord) => void;
+};
+
+export type KycNomineeWizardHandle = {
+  advance: () => void;
+  back: () => void;
 };
 
 type WizardPhase = "core" | "steps";
@@ -107,6 +121,7 @@ function validateCore(
 function validateWizardStep(
   step: KycNomineeWizardStep,
   draft: ReturnType<typeof createEmptyNomineeDraft>,
+  investorPanLast4?: string | null,
 ) {
   const errors: ErrorMap = {};
 
@@ -114,18 +129,30 @@ function validateWizardStep(
     if (draft.type === "minor" && draft.guardian) {
       const guardianNameError = validateKycPersonName(draft.guardian.name);
       if (guardianNameError) errors.guardianName = guardianNameError;
-      const guardianDocumentError = validateOptionalKycNomineeDocument(
-        draft.guardian.documentType,
-        draft.guardian.documentNumber,
-      );
+      const guardianDocumentError =
+        validateOptionalKycNomineeDocument(
+          draft.guardian.documentType,
+          draft.guardian.documentNumber,
+        ) ??
+        nomineePanMatchesInvestor(
+          draft.guardian.documentType,
+          draft.guardian.documentNumber,
+          investorPanLast4,
+        );
       if (guardianDocumentError) {
         errors.guardianDocumentNumber = guardianDocumentError;
       }
     } else {
-      const documentError = validateOptionalKycNomineeDocument(
-        draft.identity.documentType,
-        draft.identity.documentNumber,
-      );
+      const documentError =
+        validateOptionalKycNomineeDocument(
+          draft.identity.documentType,
+          draft.identity.documentNumber,
+        ) ??
+        nomineePanMatchesInvestor(
+          draft.identity.documentType,
+          draft.identity.documentNumber,
+          investorPanLast4,
+        );
       if (documentError) {
         errors.documentNumber = documentError;
       }
@@ -187,15 +214,21 @@ function NomineeWizardStepIndicator({
   );
 }
 
-export function KycNomineeWizard({
+export const KycNomineeWizard = forwardRef<KycNomineeWizardHandle, KycNomineeWizardProps>(function KycNomineeWizard({
   existingNominees,
   editingNominee,
   relationshipOptions,
   sourceOfWealthOptions,
   documentTypeOptions,
+  investorPanLast4 = null,
+  hideOuterTitle = false,
+  hideFooter = false,
+  onPrimaryLabelChange,
+  onProgressChange,
+  onKindChange,
   onCancel,
   onSave,
-}: KycNomineeWizardProps) {
+}, ref) {
   const relationshipSelectOptions = useMemo(
     () => relationshipOptions ?? KYC_NOMINEE_RELATIONSHIP_OPTIONS,
     [relationshipOptions],
@@ -330,7 +363,11 @@ export function KycNomineeWizard({
   };
 
   const handleWizardNext = () => {
-    const nextErrors = validateWizardStep(activeStep, { ...draft, core, type: nomineeType });
+    const nextErrors = validateWizardStep(
+      activeStep,
+      { ...draft, core, type: nomineeType },
+      investorPanLast4,
+    );
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
@@ -384,25 +421,70 @@ export function KycNomineeWizard({
     );
   };
 
+  const primaryLabel =
+    phase === "steps" && activeStep === "address"
+      ? copy.kyc.nominee.saveNominee
+      : copy.kyc.nominee.next;
+
+  useEffect(() => {
+    onPrimaryLabelChange?.(primaryLabel);
+  }, [onPrimaryLabelChange, primaryLabel]);
+
+  const progressStep =
+    phase === "core" ? 1 : KYC_NOMINEE_WIZARD_STEPS.indexOf(activeStep) + 2;
+
+  useEffect(() => {
+    onProgressChange?.(progressStep);
+  }, [onProgressChange, progressStep]);
+
+  const nomineeKind = getNomineeKindFromDob(core.dateOfBirth);
+
+  useEffect(() => {
+    onKindChange?.(nomineeKind);
+  }, [onKindChange, nomineeKind]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      advance: () => {
+        if (phase === "core") {
+          handleCoreNext();
+          return;
+        }
+        handleWizardNext();
+      },
+      back: () => {
+        if (phase === "core") {
+          return;
+        }
+        handleWizardBack();
+      },
+    }),
+    // handlers close over latest field state via render; re-bind each render
+    [phase, activeStep, core, draft, nomineeType, existingNominees, editingNominee, onSave],
+  );
+
   if (phase === "core") {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label={copy.kyc.nominee.back}
-            >
-              <ArrowLeft className="size-4" />
-            </button>
-            <h3 className="truncate text-body font-semibold text-foreground">
-              {copy.kyc.nominee.addNomineeTitle}
-            </h3>
+        {hideOuterTitle ? null : (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={copy.kyc.nominee.back}
+              >
+                <ArrowLeft className="size-4" />
+              </button>
+              <h3 className="truncate text-body font-semibold text-foreground">
+                {copy.kyc.nominee.addNomineeTitle}
+              </h3>
+            </div>
+            <NomineeWizardCircleProgress step={0} />
           </div>
-          <NomineeWizardCircleProgress step={0} />
-        </div>
+        )}
 
         <div className="space-y-4">
           <div className="space-y-2">
@@ -469,9 +551,11 @@ export function KycNomineeWizard({
           </div>
         </div>
 
-        <Button type="button" size="lg" className="w-full" onClick={handleCoreNext}>
-          {copy.kyc.nominee.next}
-        </Button>
+        {hideFooter ? null : (
+          <Button type="button" size="lg" className="w-full" onClick={handleCoreNext}>
+            {copy.kyc.nominee.next}
+          </Button>
+        )}
       </div>
     );
   }
@@ -482,32 +566,34 @@ export function KycNomineeWizard({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button
-              type="button"
-              onClick={handleWizardBack}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label={copy.kyc.nominee.back}
-            >
-              <ArrowLeft className="size-4" />
-            </button>
-            <div className="min-w-0">
-              <h3 className="truncate text-body font-semibold text-foreground">
-                {copy.kyc.nominee.addNomineeTitle}
-              </h3>
-              <p className="text-caption text-muted-foreground">
-                {nomineeType === "minor"
-                  ? copy.kyc.nominee.types.minor
-                  : copy.kyc.nominee.types.individual}
-              </p>
+      {hideOuterTitle ? null : (
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <button
+                type="button"
+                onClick={handleWizardBack}
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={copy.kyc.nominee.back}
+              >
+                <ArrowLeft className="size-4" />
+              </button>
+              <div className="min-w-0">
+                <h3 className="truncate text-body font-semibold text-foreground">
+                  {copy.kyc.nominee.addNomineeTitle}
+                </h3>
+                <p className="text-caption text-muted-foreground">
+                  {nomineeType === "minor"
+                    ? copy.kyc.nominee.types.minor
+                    : copy.kyc.nominee.types.individual}
+                </p>
+              </div>
             </div>
+            <NomineeWizardCircleProgress step={activeStepIndex + 1} />
           </div>
-          <NomineeWizardCircleProgress step={activeStepIndex + 1} />
+          <NomineeWizardStepIndicator activeStep={activeStep} />
         </div>
-        <NomineeWizardStepIndicator activeStep={activeStep} />
-      </div>
+      )}
 
       <div className="space-y-4">
         {activeStep === "basic" && nomineeType === "minor" ? (
@@ -674,9 +760,11 @@ export function KycNomineeWizard({
 
         {activeStep === "address" ? (
           <>
-            <p className="text-compact font-medium text-foreground">
-              {copy.kyc.nominee.fields.nomineeAddress}
-            </p>
+            {hideOuterTitle ? null : (
+              <p className="text-compact font-medium text-foreground">
+                {copy.kyc.nominee.fields.nomineeAddress}
+              </p>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="nominee-address-line1">{copy.kyc.nominee.fields.addressLine1}</Label>
@@ -747,14 +835,16 @@ export function KycNomineeWizard({
         ) : null}
       </div>
 
-      <div className="flex gap-3">
-        <Button type="button" variant="outline" className="flex-1" onClick={handleCancel}>
-          {copy.kyc.nominee.cancel}
-        </Button>
-        <Button type="button" className="flex-1" onClick={handleWizardNext}>
-          {activeStep === "address" ? copy.kyc.nominee.saveNominee : copy.kyc.nominee.next}
-        </Button>
-      </div>
+      {hideFooter ? null : (
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" className="flex-1" onClick={handleCancel}>
+            {copy.kyc.nominee.cancel}
+          </Button>
+          <Button type="button" className="flex-1" onClick={handleWizardNext}>
+            {activeStep === "address" ? copy.kyc.nominee.saveNominee : copy.kyc.nominee.next}
+          </Button>
+        </div>
+      )}
     </div>
   );
-}
+});

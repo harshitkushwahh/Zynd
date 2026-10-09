@@ -211,12 +211,25 @@ export function formatNomineeDobIso(value: string) {
   return formatNomineeDobForDateInput(value);
 }
 
+function clampDobSegment(digits: string, max: number, min = 1): string {
+  if (digits.length < 2) return digits;
+
+  const value = Number(digits);
+  if (!Number.isFinite(value)) return digits;
+  if (value > max) return String(max).padStart(2, "0");
+  if (value < min) return String(min).padStart(2, "0");
+  return digits;
+}
+
 export function formatNomineeDobInput(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 8);
+  const day = clampDobSegment(digits.slice(0, 2), 31);
+  const month = clampDobSegment(digits.slice(2, 4), 12);
+  const year = digits.slice(4, 8);
 
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  if (digits.length <= 2) return day;
+  if (digits.length <= 4) return `${day}/${month}`;
+  return `${day}/${month}/${year}`;
 }
 
 export function isFutureNomineeDob(dateOfBirth: string) {
@@ -260,11 +273,42 @@ export function getNomineeTypeFromDob(dateOfBirth: string): KycNomineeType {
   return isMinorNomineeDob(dateOfBirth) ? "minor" : "individual";
 }
 
+export type KycNomineeKind = "unknown" | KycNomineeType;
+
+export function getNomineeKindFromDob(dateOfBirth: string): KycNomineeKind {
+  if (!parseNomineeDob(dateOfBirth)) return "unknown";
+  return getNomineeTypeFromDob(dateOfBirth);
+}
+
 export function getTotalNomineeShare(nominees: KycNomineeRecord[]) {
   return nominees.reduce((total, nominee) => {
     const share = Number(nominee.core.sharePercent);
     return total + (Number.isFinite(share) ? share : 0);
   }, 0);
+}
+
+export function cloneKycNominee(nominee: KycNomineeRecord): KycNomineeRecord {
+  return {
+    ...nominee,
+    core: { ...nominee.core },
+    identity: { ...nominee.identity },
+    contact: { ...nominee.contact },
+    address: { ...nominee.address },
+    guardian: nominee.guardian ? { ...nominee.guardian } : undefined,
+  };
+}
+
+export function assignLeftoverShareAfterRemove(
+  nominees: KycNomineeRecord[],
+  removedId: string,
+): KycNomineeRecord[] {
+  const next = nominees.filter((nominee) => nominee.id !== removedId).map(cloneKycNominee);
+  if (next.length === 0) return next;
+  const leftover = 100 - getTotalNomineeShare(next);
+  if (leftover <= 0) return next;
+  const first = next[0];
+  first.core.sharePercent = String(Number(first.core.sharePercent) + leftover);
+  return next;
 }
 
 export function normalizeNomineeSharePercentInput(value: string) {

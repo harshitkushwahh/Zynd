@@ -63,6 +63,9 @@ from app.api.v1.invest.schemas import (
     MfCartResponse,
     MfCasImportListResponse,
     MfCasImportResponse,
+    CreateInvestorReportRequest,
+    InvestorReportListResponse,
+    InvestorReportResponse,
     MfCheckoutResponse,
     MfExternalHoldingResponse,
     MfHoldingsResponse,
@@ -95,6 +98,20 @@ from app.api.v1.invest.schemas import (
     MfRedemptionOrderResponse,
     MfRedemptionConsentResponse,
     MfRedemptionOtpSendResponse,
+    CreateMfSwitchRequest,
+    ConfirmMfSwitchRequest,
+    MfSwitchOrderResponse,
+    MfSwitchConsentResponse,
+    MfSwitchOtpSendResponse,
+    MfSwitchDestinationListResponse,
+    MfSwitchDestinationResponse,
+    CreateMfSwpPlanRequest,
+    CreateMfStpPlanRequest,
+    ConfirmMfSystematicPlanRequest,
+    MfSystematicPlanResponse,
+    MfSystematicPlanListResponse,
+    MfSystematicPlanConsentResponse,
+    MfSystematicPlanOtpSendResponse,
     PortfolioSummaryResponse,
     PortfolioUpcomingSipResponse,
     PortfolioAllocationSliceResponse,
@@ -116,6 +133,13 @@ from app.application.mf.cas_import_service import (
     list_user_external_holdings,
     request_user_cas_import,
 )
+from app.application.mf.investor_report_service import (
+    InvestorReportError,
+    download_investor_report,
+    generate_investor_report,
+    list_investor_reports,
+)
+from app.infrastructure.persistence.mf_transaction_models import MfGeneratedReportKind
 from app.application.mf.invest_cached_read_service import (
     cached_get_invest_config,
     cached_get_invest_fund_detail,
@@ -144,6 +168,31 @@ from app.application.mf.mf_redemption_service import (
     send_redemption_consent_otp,
     serialize_redemption_order,
     sync_redemption_order_from_fp,
+)
+from app.application.mf.mf_switch_service import (
+    confirm_switch_order,
+    create_switch_order,
+    get_switch_consent_context,
+    get_switch_journey,
+    get_switch_order,
+    list_switch_destinations,
+    send_switch_consent_otp,
+    serialize_switch_order,
+)
+from app.application.mf.mf_systematic_plan_service import (
+    cancel_systematic_plan,
+    confirm_systematic_plan,
+    create_stp_plan,
+    create_swp_plan,
+    get_plan_consent_context,
+    get_plan_journey,
+    get_stp_plan,
+    get_swp_plan,
+    list_user_stp_plans,
+    list_user_swp_plans,
+    product_name as systematic_product_name,
+    send_plan_consent_otp,
+    serialize_systematic_plan,
 )
 from app.application.mf.return_calculator_service import (
     cached_compute_lumpsum_calculator,
@@ -327,6 +376,7 @@ async def invest_home(
         collections=[InvestCategoryResponse(**item) for item in payload.get("collections", [])],
         popular_funds=[InvestFundSummaryResponse(**item) for item in payload.get("popular_funds", [])],
         featured_funds=[InvestFundSummaryResponse(**item) for item in payload["featured_funds"]],
+        nfo_carousel=[InvestFundSummaryResponse(**item) for item in payload.get("nfo_carousel", [])],
         total_active_funds=payload["total_active_funds"],
     )
 
@@ -347,6 +397,37 @@ async def invest_collections(
 ) -> InvestCategoryListResponse:
     collections = await cached_list_invest_collections(db)
     return InvestCategoryListResponse(categories=[InvestCategoryResponse(**item) for item in collections])
+
+
+@router.get("/nfo", response_model=InvestFundListResponse)
+async def invest_nfo_list(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+    status: Optional[str] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+) -> InvestFundListResponse:
+    from app.application.mf.nfo_list_service import list_invest_nfo
+
+    try:
+        payload = await list_invest_nfo(db, status=status, page=page, page_size=page_size)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return InvestFundListResponse(**payload)
+
+
+@router.get("/nfo/{product_id}", response_model=InvestFundDetailResponse)
+async def invest_nfo_detail(
+    product_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_user)],
+) -> InvestFundDetailResponse:
+    from app.application.mf.nfo_list_service import get_invest_nfo_detail
+
+    payload = await get_invest_nfo_detail(db, product_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="NFO not found")
+    return InvestFundDetailResponse(**payload)
 
 
 @router.get("/funds", response_model=InvestFundListResponse)
@@ -429,7 +510,7 @@ async def invest_fund_navs(
     fund_ref: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_user)],
-    limit: int = Query(default=365, ge=1, le=2000),
+    limit: int = Query(default=2000, ge=1, le=2000),
 ) -> InvestFundNavHistoryResponse:
     product_id = await _resolve_fund_product_id(db, fund_ref)
     payload = await list_invest_fund_navs(db, product_id, limit=limit)
@@ -602,6 +683,7 @@ async def create_mf_order(
             bank_account_id=body.bank_account_id,
             family_goal_id=body.family_goal_id,
             payment_method=body.payment_method,
+            folio_number=body.folio_number,
         )
         product = await db.get(Product, order.product_id)
         await db.commit()
@@ -1117,6 +1199,7 @@ async def create_mf_sip_plan(
             bank_account_id=body.bank_account_id,
             family_goal_id=body.family_goal_id,
             mandate_type=body.mandate_type,
+            folio_number=body.folio_number,
         )
         product = await db.get(Product, plan.product_id)
         await db.commit()
@@ -1693,6 +1776,399 @@ async def get_mf_redemption_order_route(
     return await _redemption_order_response(db, order)
 
 
+async def _switch_order_response(db: AsyncSession, order) -> MfSwitchOrderResponse:
+    product = await db.get(Product, order.product_id)
+    return MfSwitchOrderResponse(**serialize_switch_order(order, product_name=product.name if product else None))
+
+
+@router.get("/switches/destinations", response_model=MfSwitchDestinationListResponse)
+async def list_mf_switch_destinations_route(
+    holding_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSwitchDestinationListResponse:
+    try:
+        rows = await list_switch_destinations(db, user_id=current_user.id, holding_id=holding_id)
+    except MfOrderError:
+        raise
+    return MfSwitchDestinationListResponse(destinations=[MfSwitchDestinationResponse(**row) for row in rows])
+
+
+@router.post("/switches", response_model=MfSwitchOrderResponse)
+async def create_mf_switch_route(
+    body: CreateMfSwitchRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSwitchOrderResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_orders_enabled:
+        raise HTTPException(status_code=503, detail="MF switches are temporarily unavailable")
+    try:
+        order = await create_switch_order(
+            db,
+            user_id=current_user.id,
+            holding_id=body.holding_id,
+            switch_in_product_id=body.switch_in_product_id,
+            idempotency_key=body.idempotency_key,
+            switch_mode=body.switch_mode,
+            amount_inr=Decimal(str(body.amount_inr)) if body.amount_inr is not None else None,
+            units=body.units,
+            user_ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _switch_order_response(db, order)
+
+
+@router.get("/switches/{order_id}/consent", response_model=MfSwitchConsentResponse)
+async def get_mf_switch_consent_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSwitchConsentResponse:
+    payload = await get_switch_consent_context(db, user_id=current_user.id, order_id=order_id)
+    return MfSwitchConsentResponse(**payload)
+
+
+@router.post("/switches/{order_id}/consent/send-otp", response_model=MfSwitchOtpSendResponse)
+async def send_mf_switch_consent_otp_route(
+    order_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSwitchOtpSendResponse:
+    try:
+        payload = await send_switch_consent_otp(
+            db, user_id=current_user.id, order_id=order_id, ip=get_client_ip(request)
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return MfSwitchOtpSendResponse(**payload)
+
+
+@router.post("/switches/{order_id}/confirm", response_model=MfSwitchOrderResponse)
+async def confirm_mf_switch_route(
+    order_id: UUID,
+    body: ConfirmMfSwitchRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSwitchOrderResponse:
+    try:
+        order = await confirm_switch_order(
+            db,
+            user_id=current_user.id,
+            order_id=order_id,
+            otp=body.otp,
+            ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _switch_order_response(db, order)
+
+
+@router.get("/switches/{order_id}", response_model=MfSwitchOrderResponse)
+async def get_mf_switch_order_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfSwitchOrderResponse:
+    order = await get_switch_order(db, user_id=current_user.id, order_id=order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Switch order not found")
+    return await _switch_order_response(db, order)
+
+
+@router.get("/switches/{order_id}/journey", response_model=MfRedemptionJourneyEnvelopeResponse)
+async def get_mf_switch_journey_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfRedemptionJourneyEnvelopeResponse:
+    payload = await get_switch_journey(db, user_id=current_user.id, order_id=order_id)
+    journey_payload = payload.get("journey")
+    journey = MfRedemptionJourneyResponse(**journey_payload) if journey_payload else None
+    return MfRedemptionJourneyEnvelopeResponse(status=payload["status"], journey=journey)
+
+
+async def _systematic_plan_response(db: AsyncSession, plan) -> MfSystematicPlanResponse:
+    name = await systematic_product_name(db, plan.product_id)
+    switch_in_name = None
+    if getattr(plan, "switch_in_product_id", None):
+        switch_in_name = await systematic_product_name(db, plan.switch_in_product_id)
+    return MfSystematicPlanResponse(**serialize_systematic_plan(plan, product_name=name, switch_in_name=switch_in_name))
+
+
+@router.get("/swp/plans", response_model=MfSystematicPlanListResponse)
+async def list_mf_swp_plans_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfSystematicPlanListResponse:
+    plans = await list_user_swp_plans(db, user_id=current_user.id)
+    return MfSystematicPlanListResponse(
+        plans=[await _systematic_plan_response(db, plan) for plan in plans]
+    )
+
+
+@router.post("/swp/plans", response_model=MfSystematicPlanResponse)
+async def create_mf_swp_plan_route(
+    body: CreateMfSwpPlanRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanResponse:
+    try:
+        plan = await create_swp_plan(
+            db,
+            user_id=current_user.id,
+            holding_id=body.holding_id,
+            idempotency_key=body.idempotency_key,
+            amount_inr=Decimal(str(body.amount_inr)),
+            installment_day=body.installment_day,
+            number_of_installments=body.number_of_installments,
+            user_ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _systematic_plan_response(db, plan)
+
+
+@router.get("/swp/plans/{plan_id}", response_model=MfSystematicPlanResponse)
+async def get_mf_swp_plan_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfSystematicPlanResponse:
+    plan = await get_swp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SWP plan not found")
+    return await _systematic_plan_response(db, plan)
+
+
+@router.get("/swp/plans/{plan_id}/journey", response_model=MfRedemptionJourneyEnvelopeResponse)
+async def get_mf_swp_journey_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfRedemptionJourneyEnvelopeResponse:
+    plan = await get_swp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SWP plan not found")
+    payload = await get_plan_journey(db, plan)
+    journey_payload = payload.get("journey")
+    journey = MfRedemptionJourneyResponse(**journey_payload) if journey_payload else None
+    return MfRedemptionJourneyEnvelopeResponse(status=payload["status"], journey=journey)
+
+
+@router.get("/swp/plans/{plan_id}/consent", response_model=MfSystematicPlanConsentResponse)
+async def get_mf_swp_consent_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanConsentResponse:
+    plan = await get_swp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SWP plan not found")
+    return MfSystematicPlanConsentResponse(**await get_plan_consent_context(db, plan))
+
+
+@router.post("/swp/plans/{plan_id}/consent/send-otp", response_model=MfSystematicPlanOtpSendResponse)
+async def send_mf_swp_otp_route(
+    plan_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanOtpSendResponse:
+    plan = await get_swp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SWP plan not found")
+    try:
+        payload = await send_plan_consent_otp(db, plan, ip=get_client_ip(request))
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return MfSystematicPlanOtpSendResponse(**payload)
+
+
+@router.post("/swp/plans/{plan_id}/confirm", response_model=MfSystematicPlanResponse)
+async def confirm_mf_swp_plan_route(
+    plan_id: UUID,
+    body: ConfirmMfSystematicPlanRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanResponse:
+    plan = await get_swp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SWP plan not found")
+    try:
+        plan = await confirm_systematic_plan(db, plan, otp=body.otp)
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _systematic_plan_response(db, plan)
+
+
+@router.post("/swp/plans/{plan_id}/cancel", response_model=MfSystematicPlanResponse)
+async def cancel_mf_swp_plan_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanResponse:
+    plan = await get_swp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="SWP plan not found")
+    try:
+        plan = await cancel_systematic_plan(db, plan)
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _systematic_plan_response(db, plan)
+
+
+@router.get("/stp/plans", response_model=MfSystematicPlanListResponse)
+async def list_mf_stp_plans_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfSystematicPlanListResponse:
+    plans = await list_user_stp_plans(db, user_id=current_user.id)
+    return MfSystematicPlanListResponse(
+        plans=[await _systematic_plan_response(db, plan) for plan in plans]
+    )
+
+
+@router.post("/stp/plans", response_model=MfSystematicPlanResponse)
+async def create_mf_stp_plan_route(
+    body: CreateMfStpPlanRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanResponse:
+    try:
+        plan = await create_stp_plan(
+            db,
+            user_id=current_user.id,
+            holding_id=body.holding_id,
+            switch_in_product_id=body.switch_in_product_id,
+            idempotency_key=body.idempotency_key,
+            amount_inr=Decimal(str(body.amount_inr)),
+            installment_day=body.installment_day,
+            number_of_installments=body.number_of_installments,
+            user_ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _systematic_plan_response(db, plan)
+
+
+@router.get("/stp/plans/{plan_id}", response_model=MfSystematicPlanResponse)
+async def get_mf_stp_plan_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfSystematicPlanResponse:
+    plan = await get_stp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="STP plan not found")
+    return await _systematic_plan_response(db, plan)
+
+
+@router.get("/stp/plans/{plan_id}/journey", response_model=MfRedemptionJourneyEnvelopeResponse)
+async def get_mf_stp_journey_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfRedemptionJourneyEnvelopeResponse:
+    plan = await get_stp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="STP plan not found")
+    payload = await get_plan_journey(db, plan)
+    journey_payload = payload.get("journey")
+    journey = MfRedemptionJourneyResponse(**journey_payload) if journey_payload else None
+    return MfRedemptionJourneyEnvelopeResponse(status=payload["status"], journey=journey)
+
+
+@router.get("/stp/plans/{plan_id}/consent", response_model=MfSystematicPlanConsentResponse)
+async def get_mf_stp_consent_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanConsentResponse:
+    plan = await get_stp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="STP plan not found")
+    return MfSystematicPlanConsentResponse(**await get_plan_consent_context(db, plan))
+
+
+@router.post("/stp/plans/{plan_id}/consent/send-otp", response_model=MfSystematicPlanOtpSendResponse)
+async def send_mf_stp_otp_route(
+    plan_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanOtpSendResponse:
+    plan = await get_stp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="STP plan not found")
+    try:
+        payload = await send_plan_consent_otp(db, plan, ip=get_client_ip(request))
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return MfSystematicPlanOtpSendResponse(**payload)
+
+
+@router.post("/stp/plans/{plan_id}/confirm", response_model=MfSystematicPlanResponse)
+async def confirm_mf_stp_plan_route(
+    plan_id: UUID,
+    body: ConfirmMfSystematicPlanRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanResponse:
+    plan = await get_stp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="STP plan not found")
+    try:
+        plan = await confirm_systematic_plan(db, plan, otp=body.otp)
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _systematic_plan_response(db, plan)
+
+
+@router.post("/stp/plans/{plan_id}/cancel", response_model=MfSystematicPlanResponse)
+async def cancel_mf_stp_plan_route(
+    plan_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSystematicPlanResponse:
+    plan = await get_stp_plan(db, user_id=current_user.id, plan_id=plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="STP plan not found")
+    try:
+        plan = await cancel_systematic_plan(db, plan)
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _systematic_plan_response(db, plan)
+
+
 @router.post("/cas/imports", response_model=MfCasImportResponse)
 async def request_cas_import(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -1739,6 +2215,66 @@ async def list_cas_imports(
             )
             for row in imports
         ]
+    )
+
+
+def _investor_report_error(exc: InvestorReportError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": exc.message},
+    )
+
+
+@router.post("/reports", response_model=InvestorReportResponse)
+async def post_investor_report(
+    body: CreateInvestorReportRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> InvestorReportResponse:
+    try:
+        payload = await generate_investor_report(
+            db,
+            user=current_user,
+            kind=MfGeneratedReportKind(body.kind),
+        )
+        await db.commit()
+    except InvestorReportError as exc:
+        await db.rollback()
+        raise _investor_report_error(exc) from exc
+    except Exception:
+        await db.rollback()
+        raise
+    return InvestorReportResponse(**payload)
+
+
+@router.get("/reports", response_model=InvestorReportListResponse)
+async def get_investor_reports(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> InvestorReportListResponse:
+    reports = await list_investor_reports(db, user_id=current_user.id)
+    return InvestorReportListResponse(reports=[InvestorReportResponse(**item) for item in reports])
+
+
+@router.get("/reports/{report_id}/download")
+async def get_investor_report_download(
+    report_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Response:
+    try:
+        pdf_bytes, filename = await download_investor_report(
+            db,
+            user_id=current_user.id,
+            report_id=report_id,
+        )
+    except InvestorReportError as exc:
+        raise _investor_report_error(exc) from exc
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

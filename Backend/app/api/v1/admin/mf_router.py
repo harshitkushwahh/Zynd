@@ -41,6 +41,10 @@ from app.api.v1.admin.schemas import (
     MfFundNavHistoryResponse,
     MfIngestionRunListResponse,
     MfIngestionRunResponse,
+    NfoOfferAdminListResponse,
+    NfoOfferAdminResponse,
+    NfoOfferPatchRequest,
+    NfoSchedulerStatusResponse,
     MfJobListResponse,
     MfJobResponse,
     MfPipelineRunGetResponse,
@@ -440,7 +444,7 @@ async def list_mf_fund_navs(
     _: Annotated[object, Depends(require_permission("mf.catalog.read"))],
     from_date: Optional[date] = Query(default=None),
     to_date: Optional[date] = Query(default=None),
-    limit: int = Query(default=365, ge=1, le=2000),
+    limit: int = Query(default=2000, ge=1, le=2000),
 ) -> MfFundNavHistoryResponse:
     history = await list_fund_navs_admin(
         db,
@@ -1049,9 +1053,12 @@ async def list_mf_ingestion_runs_admin(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
     job_name: Optional[str] = Query(default=None),
+    job_name_prefix: Optional[str] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> MfIngestionRunListResponse:
-    runs = await list_mf_ingestion_runs(db, job_name=job_name, limit=limit)
+    runs = await list_mf_ingestion_runs(
+        db, job_name=job_name, job_name_prefix=job_name_prefix, limit=limit
+    )
     return MfIngestionRunListResponse(runs=[MfIngestionRunResponse(**run) for run in runs])
 
 
@@ -1106,3 +1113,98 @@ async def update_mf_amc(
         raise HTTPException(status_code=404, detail="AMC not found")
     await db.commit()
     return MfAmcResponse(**updated)
+
+
+@router.get("/nfo", response_model=NfoOfferAdminListResponse)
+async def list_nfo_offers_admin_route(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[object, Depends(require_permission("mf.catalog.read"))],
+) -> NfoOfferAdminListResponse:
+    from app.application.mf.nfo_offer_service import list_nfo_offers_admin
+
+    payload = await list_nfo_offers_admin(db)
+    return NfoOfferAdminListResponse(**payload)
+
+
+@router.patch("/nfo/{product_id}", response_model=NfoOfferAdminResponse)
+async def patch_nfo_offer_admin_route(
+    product_id: uuid.UUID,
+    body: NfoOfferPatchRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[object, Depends(require_permission("mf.catalog.manage"))],
+) -> NfoOfferAdminResponse:
+    from app.application.mf.nfo_offer_service import update_nfo_offer_admin
+
+    try:
+        updated = await update_nfo_offer_admin(
+            db,
+            product_id,
+            status=body.status,
+            subscription_open_date=body.subscription_open_date,
+            subscription_close_date=body.subscription_close_date,
+            allotment_date=body.allotment_date,
+            is_featured=body.is_featured,
+            is_hidden=body.is_hidden,
+            marketing_headline=body.marketing_headline,
+            marketing_body=body.marketing_body,
+            admin_override=body.admin_override,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="NFO not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await db.commit()
+    return NfoOfferAdminResponse(**updated)
+
+
+@router.get("/nfo/scheduler/status", response_model=NfoSchedulerStatusResponse)
+async def nfo_scheduler_status_admin(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+) -> NfoSchedulerStatusResponse:
+    from app.application.mf.nfo_chain_trigger_service import scheduler_status_payload
+    from app.application.mf.nfo_ingestion_mutex_service import mf_family_mutex_busy
+
+    payload = await scheduler_status_payload(db)
+    busy, holders = await mf_family_mutex_busy(db)
+    payload["mutex_busy"] = busy
+    payload["mutex_holders"] = holders
+    return NfoSchedulerStatusResponse(**payload)
+
+
+@router.post("/nfo/jobs/{job_name}/run", response_model=MfRunJobResponse)
+async def run_nfo_job_admin(
+    job_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[object, Depends(require_permission("mf.jobs.run"))],
+    force: bool = Query(default=False),
+) -> MfRunJobResponse:
+    from app.application.mf.nfo_job_runner_service import execute_nfo_job
+
+    try:
+        result = await execute_nfo_job(
+            db,
+            job_name,
+            triggered_by="ADMIN",
+            skip_dependency_check=force,
+            skip_mutex=force,
+        )
+        await db.commit()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    payload = {key: value for key, value in result.items() if key != "job"}
+    return MfRunJobResponse(job=job_name, result=result, **payload)
+
+
+@router.get("/nfo/ingestion-runs", response_model=MfIngestionRunListResponse)
+async def list_nfo_ingestion_runs_admin(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+    job_name: Optional[str] = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> MfIngestionRunListResponse:
+    runs = await list_mf_ingestion_runs(db, job_name=job_name, job_name_prefix="nfo-", limit=limit)
+    return MfIngestionRunListResponse(runs=[MfIngestionRunResponse(**run) for run in runs])

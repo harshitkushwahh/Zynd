@@ -20,6 +20,7 @@ from app.application.mf.mf_fp_review_poll import (
 )
 from app.application.mf.mf_fp_state import map_fp_purchase_state, map_fp_purchase_state_to_checkout
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
+from app.application.mf.mf_folio_reuse_service import resolve_existing_folio_for_scheme
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, get_or_create_mf_investment_account
 from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
@@ -405,6 +406,18 @@ async def submit_pending_order(
         order.metadata_ = meta
         await session.flush()
 
+    folio_number = str(meta.get("folio_number") or "").strip() or await resolve_existing_folio_for_scheme(
+        session,
+        fp_mfia_id=fp_mfia_id,
+        isin=scheme,
+        mfia=mfia,
+        fund=fund,
+    )
+    if folio_number and meta.get("folio_number") != folio_number:
+        meta["folio_number"] = folio_number
+        order.metadata_ = meta
+        await session.flush()
+
     try:
         result = await create_mf_purchase(
             fp_mfia_id=fp_mfia_id,
@@ -413,6 +426,7 @@ async def submit_pending_order(
             source_ref_id=str(order.id),
             user_ip=user_ip or (_order_metadata(order).get("user_ip")),
             gateway=get_settings().zynd_mf_order_payment_gateway,
+            folio_number=folio_number,
         )
     except Exception as exc:
         logger.exception("MF purchase submit failed order=%s", order.id)
@@ -508,12 +522,24 @@ async def submit_pending_cart_checkout(
         scheme = _purchase_scheme(order, funds.get(order.fund_id))
         if not scheme:
             continue
+        order_meta = dict(order.metadata_ or {})
+        folio_number = str(order_meta.get("folio_number") or "").strip() or await resolve_existing_folio_for_scheme(
+            session,
+            fp_mfia_id=fp_mfia_id,
+            isin=scheme,
+            mfia=mfia,
+            fund=funds.get(order.fund_id),
+        )
+        if folio_number and order_meta.get("folio_number") != folio_number:
+            order_meta["folio_number"] = folio_number
+            order.metadata_ = order_meta
         purchases.append(
             {
                 "fp_mfia_id": fp_mfia_id,
                 "scheme": scheme,
                 "amount_inr": float(order.amount_inr),
                 "source_ref_id": str(order.id),
+                **({"folio_number": folio_number} if folio_number else {}),
             }
         )
     if len(purchases) != len(orders):

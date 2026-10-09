@@ -34,6 +34,21 @@ export type MfCollectionMeta = {
 };
 
 const COLLECTION_META: Record<string, MfCollectionMeta> = {
+  nfo: {
+    icon: Sparkles,
+    accentClass: "text-primary",
+    description: copy.mutualFunds.collectionDescNfo,
+    theme: {
+      cardClass:
+        "bg-gradient-to-br from-violet-50 via-indigo-100 to-violet-200 dark:from-violet-950 dark:via-indigo-900/70 dark:to-violet-800/40",
+      labelClass: "text-violet-950 dark:text-violet-50",
+      borderClass: "border-violet-200/80 dark:border-violet-700/50",
+      footerClass: "bg-gradient-to-t from-violet-950/45 via-violet-900/15 to-transparent",
+      iconBadgeClass:
+        "border-violet-100/40 bg-violet-950/15 text-violet-950 dark:border-violet-200/25 dark:bg-white/10 dark:text-violet-50",
+      glowClass: "bg-violet-300/35 dark:bg-violet-400/20",
+    },
+  },
   "high-return": {
     icon: TrendingUp,
     accentClass: "text-success",

@@ -20,9 +20,7 @@ export function ZyndPinResetHeroImage({ className }: ZyndPinResetHeroImageProps)
         width={1536}
         height={1024}
         sizes={PIN_RESET_HERO_SIZES}
-        unoptimized
         className="h-auto w-full max-w-[min(100%,15rem)] object-contain sm:max-w-[17rem]"
-        priority
       />
     </div>
   );

@@ -47,6 +47,20 @@ async def execute_mf_job(
     if not job.enabled:
         return {"skipped": 1, "reason": "job_disabled", "phase": job.phase, "job": job.name}
 
+    if job.name != "stale-run-cleanup" and triggered_by == "SCHEDULER":
+        from app.application.mf.nfo_ingestion_mutex_service import running_mf_family_jobs
+        from app.application.mf.nfo_detection_service import NFO_JOB_NAMES
+
+        running = await running_mf_family_jobs(session)
+        nfo_holders = [name for name in running if name in NFO_JOB_NAMES]
+        if nfo_holders:
+            return {
+                "skipped": 1,
+                "reason": "nfo_mutex_busy",
+                "mutex_holders": nfo_holders,
+                "job": job.name,
+            }
+
     settings = get_settings()
     if job.depends_on and settings.zynd_mf_dependency_guard_enabled and not skip_dependency_check:
         satisfied, reason = await check_job_dependencies(

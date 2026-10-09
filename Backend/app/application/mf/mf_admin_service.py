@@ -57,7 +57,10 @@ async def list_mf_ingestion_runs(
     session: AsyncSession,
     *,
     job_name: str | None = None,
+    job_name_prefix: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
-    runs = await list_recent_runs(session, job_name=job_name, limit=limit)
+    runs = await list_recent_runs(
+        session, job_name=job_name, job_name_prefix=job_name_prefix, limit=limit
+    )
     return [_serialize_run(run) for run in runs if run is not None]

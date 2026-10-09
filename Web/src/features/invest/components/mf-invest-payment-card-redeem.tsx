@@ -122,7 +122,7 @@ function formatRedeemInr(value: number) {
   }).format(value);
 }
 
-function RedeemValueInput({
+export function RedeemValueInput({
   mode,
   amount,
   units,
@@ -320,7 +320,7 @@ function RedeemExitLoadDetail({
   );
 }
 
-function RedeemBankRow({
+export function RedeemBankRow({
   label,
   expectedTransferBy,
   bankName,

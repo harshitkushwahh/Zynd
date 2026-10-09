@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { LockKeyhole } from "lucide-react";
+import { HelpCircle, LockKeyhole } from "lucide-react";
 
 import {
   ZyndPinForgotDialog,
   ZyndPinSetupDialog,
 } from "@/features/account/pin";
 import { SecurityFeatureCard } from "@/components/dashboard/settings/security-feature-card";
-import { Button } from "@/components/ui/button";
+import { IconActionButton } from "@/components/ui/icon-action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { copy } from "@/shared/config/copy";
 
 type ZyndPinSettingsPanelProps = {
@@ -40,16 +41,24 @@ export function ZyndPinSettingsPanel({ mfaEnabled, pinEnrolled }: ZyndPinSetting
           </StatusBadge>
         }
         actions={
-          !pinEnrolled ? (
-            <Button size="sm" disabled={!mfaEnabled} onClick={() => setSetupOpen(true)}>
-              <LockKeyhole className="size-3.5" />
-              {copy.pin.setUpButton}
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => setForgotOpen(true)}>
-              {copy.pin.forgotLink}
-            </Button>
-          )
+          <TooltipProvider>
+            <div className="flex flex-wrap items-center gap-1">
+              {!pinEnrolled ? (
+                <IconActionButton
+                  label={copy.pin.setUpButton}
+                  icon={LockKeyhole}
+                  disabled={!mfaEnabled}
+                  onClick={() => setSetupOpen(true)}
+                />
+              ) : (
+                <IconActionButton
+                  label={copy.pin.forgotLink}
+                  icon={HelpCircle}
+                  onClick={() => setForgotOpen(true)}
+                />
+              )}
+            </div>
+          </TooltipProvider>
         }
       />
 

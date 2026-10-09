@@ -19,9 +19,7 @@ export function MfaEnrollHeroImage({ className }: MfaEnrollHeroImageProps) {
         width={1451}
         height={1084}
         sizes={MFA_HERO_SIZES}
-        unoptimized
         className="h-auto w-full object-contain"
-        priority
       />
     </div>
   );

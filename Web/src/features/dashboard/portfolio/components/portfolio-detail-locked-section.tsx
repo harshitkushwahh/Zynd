@@ -24,7 +24,7 @@ export function PortfolioDetailLockedSection({
   return (
     <div className={cn("relative overflow-hidden rounded-[1.75rem]", className)}>
       <div className="pointer-events-none select-none blur-[5px]">{children}</div>
-      <OverviewLockedCardBackdrop className="inset-0" />
+      <OverviewLockedCardBackdrop className="pointer-events-auto inset-0" />
       <OverviewLockedCardOverlay className="inset-0" title={title} subtitle={subtitle} />
     </div>
   );

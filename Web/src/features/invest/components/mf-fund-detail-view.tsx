@@ -156,7 +156,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
   );
 
   return (
-    <DashboardContentFade className="w-full min-w-0 max-w-full space-y-6">
+    <DashboardContentFade className="w-full min-w-0 max-w-full">
       {renderBreadcrumb?.(fund.name)}
 
       {user && !user.fund_movement_eligible ? <FundEligibilityBanner /> : null}
@@ -164,6 +164,20 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1 space-y-6">
           <MfFundDetailHeader fund={fund} />
+
+          {fund.nfo ? (
+            <div className={cn("border border-border bg-muted/20 px-4 py-3", MF_FUND_DETAIL_RADIUS_CLASS)}>
+              <p className="text-compact font-semibold">NFO · {fund.nfo.status}</p>
+              {fund.nfo.subscription_close_date ? (
+                <p className="mt-1 text-caption text-muted-foreground">
+                  Offer window closes {fund.nfo.subscription_close_date}
+                </p>
+              ) : null}
+              <p className="mt-1 text-caption text-muted-foreground">
+                {fund.nfo.disclaimer ?? copy.mutualFunds.nfoDisclaimer}
+              </p>
+            </div>
+          ) : null}
 
           <div className="lg:hidden">{investCard}</div>
 
@@ -174,7 +188,9 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
             onChartRangeChange={setChartRange}
           />
 
-          <MfFundCalculatorCard fund={fund} initialCalculator={calculator} />
+          {fund.nfo && fund.latest_nav == null ? null : (
+            <MfFundCalculatorCard fund={fund} initialCalculator={calculator} />
+          )}
 
           <MfFundReturnsCard
             returns={fund.returns}

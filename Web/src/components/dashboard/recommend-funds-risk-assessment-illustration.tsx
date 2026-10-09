@@ -15,8 +15,8 @@ export function RecommendFundsRiskAssessmentIllustration() {
         alt=""
         width={1536}
         height={1024}
+        sizes="(max-width: 768px) 180px, 240px"
         className="rf-risk-illustration-image"
-        priority
       />
     </div>
   );

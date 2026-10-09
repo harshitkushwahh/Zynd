@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.application.mf.mf_folio_defaults_service import build_folio_defaults
+from app.application.mf.mf_folio_defaults_service import (
+    build_folio_defaults,
+    build_nominee_slot_defaults,
+    select_mfia_nominee_parties,
+)
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
     InvestorBankAccount,
@@ -197,3 +201,51 @@ def test_build_folio_defaults_skips_stub_bank_when_fp_enabled() -> None:
 
     folio = build_folio_defaults(profile, fp_enabled=True)
     assert "payout_bank_account" not in folio
+
+
+def _party(*, name: str, relp: str, share: int, status=InvestorObjectSyncStatus.active) -> InvestorRelatedParty:
+    return InvestorRelatedParty(
+        investor_profile_id=uuid4(),
+        name=name,
+        party_relationship="spouse",
+        external_related_party_id=relp,
+        share_percent=share,
+        sync_status=status,
+        source=InvestorObjectSource.user,
+    )
+
+
+def test_mfia_links_at_most_three_related_parties_totaling_100() -> None:
+    extra = [
+        _party(name="One", relp="relp_1", share=40),
+        _party(name="Two", relp="relp_2", share=30),
+        _party(name="Three", relp="relp_3", share=30),
+    ]
+    leftover = _party(name="Four", relp="relp_4", share=100)
+    chosen = select_mfia_nominee_parties([leftover], extra_parties=extra)
+    assert [row.external_related_party_id for row in chosen] == ["relp_1", "relp_2", "relp_3"]
+    slots = build_nominee_slot_defaults(chosen)
+    assert slots["nominee1"] == "relp_1"
+    assert slots["nominee1_allocation_percentage"] == 40
+    assert slots["nominee2"] == "relp_2"
+    assert slots["nominee2_allocation_percentage"] == 30
+    assert slots["nominee3"] == "relp_3"
+    assert slots["nominee3_allocation_percentage"] == 30
+    assert (
+        slots["nominee1_allocation_percentage"]
+        + slots["nominee2_allocation_percentage"]
+        + slots["nominee3_allocation_percentage"]
+        == 100
+    )
+
+
+def test_mfia_links_two_related_parties_at_50_each() -> None:
+    extra = [
+        _party(name="One", relp="relp_a", share=50),
+        _party(name="Two", relp="relp_b", share=50),
+    ]
+    slots = build_nominee_slot_defaults(select_mfia_nominee_parties([], extra_parties=extra))
+    assert slots["nominee1"] == "relp_a"
+    assert slots["nominee2"] == "relp_b"
+    assert slots["nominee3"] is None
+    assert slots["nominee1_allocation_percentage"] + slots["nominee2_allocation_percentage"] == 100

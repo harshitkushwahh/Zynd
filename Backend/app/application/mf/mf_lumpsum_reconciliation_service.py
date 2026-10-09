@@ -252,7 +252,7 @@ async def apply_order_fp_truth(
     checkout: MfCheckout | None = None,
     truth: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if order.order_type == MfOrderType.redemption:
+    if order.order_type in {MfOrderType.redemption, MfOrderType.switch}:
         return {"changed": False}
 
     if truth is None:
@@ -516,7 +516,7 @@ async def reconcile_order_payment(
     user_ip: str | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
-    if order.order_type == MfOrderType.redemption:
+    if order.order_type in {MfOrderType.redemption, MfOrderType.switch}:
         return {
             "outcome": "pending",
             "fp_payment_status": None,

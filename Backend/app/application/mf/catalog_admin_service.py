@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import case, desc, func, or_, select
@@ -496,24 +496,26 @@ async def list_fund_navs_admin(
     *,
     from_date: date | None = None,
     to_date: date | None = None,
-    limit: int = 365,
+    limit: int = 2000,
 ) -> dict | None:
     fund = await session.get(MutualFund, fund_id)
     if not fund:
         return None
 
     to_dt = to_date or date.today()
-    from_dt = from_date or (to_dt - timedelta(days=365))
     limit = min(max(limit, 1), 2000)
+
+    filters = [
+        SchemeNav.fund_id == fund_id,
+        SchemeNav.nav_date <= to_dt,
+    ]
+    if from_date is not None:
+        filters.append(SchemeNav.nav_date >= from_date)
 
     rows = (
         await session.execute(
             select(SchemeNav.nav_date, SchemeNav.nav_value)
-            .where(
-                SchemeNav.fund_id == fund_id,
-                SchemeNav.nav_date >= from_dt,
-                SchemeNav.nav_date <= to_dt,
-            )
+            .where(*filters)
             .order_by(SchemeNav.nav_date.desc())
             .limit(limit)
         )
@@ -523,10 +525,11 @@ async def list_fund_navs_admin(
         {"date": nav_date.isoformat(), "nav": _decimal(nav_value)}
         for nav_date, nav_value in reversed(rows)
     ]
+    resolved_from = from_date or (date.fromisoformat(points[0]["date"]) if points else to_dt)
 
     return {
         "fund_id": fund_id,
-        "from_date": from_dt.isoformat(),
+        "from_date": resolved_from.isoformat(),
         "to_date": to_dt.isoformat(),
         "count": len(points),
         "points": points,

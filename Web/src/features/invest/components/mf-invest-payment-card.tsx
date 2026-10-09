@@ -104,6 +104,7 @@ export type MfInvestPaymentCardProps = {
   exitLoadPct?: number;
   onRedeemProceed?: (payload: MfRedeemProceedPayload) => void | Promise<void>;
   onRedeemBack?: () => void;
+  folioNumber?: string | null;
 };
 
 const QUICK_AMOUNTS = [1000, 2000, 5000] as const;
@@ -590,6 +591,7 @@ export function MfInvestPaymentCard({
   exitLoadPct,
   onRedeemProceed,
   onRedeemBack,
+  folioNumber,
 }: MfInvestPaymentCardProps) {
   const hasFundForUi = Boolean(fundName?.trim());
 
@@ -841,6 +843,7 @@ export function MfInvestPaymentCard({
         bank_account_id: selectedBankAccountId,
         family_goal_id: selectedFamilyGoalId ?? undefined,
         payment_method: paymentMethod,
+        folio_number: folioNumber?.trim() || undefined,
       });
       openOrderPayment(order.order_id);
     } catch (err) {
@@ -940,6 +943,7 @@ export function MfInvestPaymentCard({
         bank_account_id: selectedBankAccountId,
         family_goal_id: selectedFamilyGoalId ?? undefined,
         mandate_type: mandateType,
+        folio_number: folioNumber?.trim() || undefined,
       });
       if (
         plan.mandate?.status?.toUpperCase() === "APPROVED" &&

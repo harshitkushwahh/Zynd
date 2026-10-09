@@ -250,7 +250,6 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
       <PageHeader
         icon={MF_TOOL_ICONS.screener}
         title={copy.mutualFunds.toolFundScreener}
-        className="mb-6"
       />
 
       <MfFundsFilterBar

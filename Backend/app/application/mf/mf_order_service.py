@@ -109,6 +109,7 @@ async def create_lumpsum_order(
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
     payment_method: str = "upi",
+    folio_number: str | None = None,
 ) -> MfOrder:
     if amount_inr <= 0:
         raise MfOrderError(code="invalid_amount", message="Amount must be positive")
@@ -179,6 +180,7 @@ async def create_lumpsum_order(
             "investor_profile_status": profile.status.value,
             "mfia_status": mfia.status.value,
             "user_ip": user_ip,
+            **({"folio_number": folio_number.strip()} if folio_number and folio_number.strip() else {}),
             **(
                 apply_family_goal_metadata({}, family_goal_id=linked_goal.id)
                 if linked_goal
@@ -350,7 +352,7 @@ async def load_order_product_slugs(
 
 
 def order_payment_completed(order: MfOrder) -> bool:
-    if order.order_type == MfOrderType.redemption:
+    if order.order_type in {MfOrderType.redemption, MfOrderType.switch}:
         return True
     if order.status == MfOrderStatus.succeeded:
         return True

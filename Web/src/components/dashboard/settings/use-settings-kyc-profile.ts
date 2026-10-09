@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useKycOptional } from "@/contexts/kyc-context";
-import { ensureKycToken, fetchKycBootstrap } from "@/features/kyc/lib/kyc-api";
+import { ensureKycToken, fetchInvestorSettingsState, fetchKycBootstrap } from "@/features/kyc/lib/kyc-api";
 import {
   mapBootstrapToKycProfile,
   type SettingsKycProfile,
@@ -32,7 +32,13 @@ export function useSettingsKycProfile(enabled: boolean) {
         setProfile(null);
         return;
       }
-      setProfile(mapBootstrapToKycProfile(bootstrap));
+      let investorSettings = null;
+      try {
+        investorSettings = await fetchInvestorSettingsState();
+      } catch {
+        investorSettings = null;
+      }
+      setProfile(mapBootstrapToKycProfile(bootstrap, investorSettings));
     } catch {
       setProfile(null);
     } finally {

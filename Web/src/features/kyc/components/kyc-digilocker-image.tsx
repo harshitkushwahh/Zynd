@@ -27,7 +27,6 @@ export function KycDigilockerImage({ className, variant = "default" }: KycDigilo
       src={src}
       alt={copy.kyc.digilocker.title}
       className={cn(IMAGE_BY_VARIANT[variant], className)}
-      priority
     />
   );
 }

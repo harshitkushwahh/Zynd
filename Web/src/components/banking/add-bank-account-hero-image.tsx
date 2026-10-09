@@ -19,9 +19,7 @@ export function AddBankAccountHeroImage({ className }: AddBankAccountHeroImagePr
         width={1536}
         height={1024}
         sizes={ADD_BANK_HERO_SIZES}
-        unoptimized
         className="h-auto w-full object-contain"
-        priority
       />
     </div>
   );

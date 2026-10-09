@@ -144,6 +144,75 @@ export const copy = {
     identitySectionTitle: "Identity",
     identitySectionDescription: "Verified from your PAN and KYC records.",
     addressSectionTitle: "Address",
+    editProfile: "Edit",
+    editProfileTitle: "Edit Profile",
+    saveProfile: "Save changes",
+    cancelEditProfile: "Cancel",
+    profileUpdated: "Profile updated.",
+    couldNotUpdateProfile: "Could not update your profile.",
+    lockedFieldsHint:
+      "Name, PAN, date of birth, gender, occupation, nationality, place of birth, and address cannot be changed after KYC.",
+    editProfileIntroPoints: [
+      {
+        title: "Verified details stay locked",
+        description: "Name, PAN, date of birth, gender, occupation, and address cannot be changed after KYC.",
+      },
+      {
+        title: "Update income, PEP, and marital status",
+        description: "These fields are saved to your investor profile for future folios.",
+      },
+    ],
+    editProfileCardTitle: "Updatable details",
+    editProfileCardDescription: "Change income slab, PEP, and marital status. Identity fields stay locked.",
+    editProfileCardInfo:
+      "Name, PAN, date of birth, gender, occupation, nationality, place of birth, and address cannot be changed after KYC.",
+    editProfileFieldInfo: {
+      incomeSlab: "Your annual income range, used for KYC and folio records.",
+      pepExposed: "Whether you are a politically exposed person, or related to one.",
+      maritalStatus: "Current marital status. Spouse name is required if you are married.",
+      spouseName: "Spouse full name, as per official records.",
+    },
+    nomineesTitle: "Nominees",
+    nomineesDescription: "People who receive your mutual fund holdings if something happens to you.",
+    nomineeAdded: "Nominees updated for newly created folios.",
+    couldNotAddNominee: "Could not update nominees.",
+    removeNominee: "Remove nominee",
+    noNomineesYet: "No nominees added yet.",
+    nomineesEmptyTitle: "No nominees yet",
+    nomineesEmptyDescription:
+      "Add up to 3 nominees and split the allocation so it totals 100%. Changes apply to newly created folios, not existing AMC-registered folios.",
+    nomineesFolioDisclaimer:
+      "Updating nominees here only applies to newly created folios going forward. Existing folios already registered with AMCs are not changed.",
+    nomineesReduceShareToAdd:
+      "To add another nominee, edit an existing share so the new split totals 100%. Unused slots are cleared.",
+    nomineesKycRequiredTitle: "Complete KYC to add nominees",
+    nomineesKycRequiredDescription:
+      "Nominees can be added after your KYC is fully verified and your investment account is ready.",
+    nomineesNotReadyTitle: "Investment account is still setting up",
+    nomineesNotReadyDescription:
+      "Your KYC is verified. Nominees will be available once your investor profile and mutual fund account are ready.",
+    nomineesMaxReached: "You have added the maximum of 3 nominees.",
+    nomineesRemainingShare: (share: number) => `${share}% still to allocate`,
+    nomineesAllocatedShare: (share: number) => `${share}% allocated`,
+    nomineesAddIntroPoints: [
+      {
+        title: "Applies to new folios",
+        description:
+          "Updating nominees here only applies to newly created folios going forward. Existing folios already registered with AMCs are not changed.",
+      },
+      {
+        title: "Add, remove, or re-split",
+        description:
+          "You can add a second nominee, wipe a slot by removing someone, and change splits so they total 100%. Unused slots are cleared.",
+      },
+    ],
+    nomineesAddCta: "Add nominee",
+    nomineesAddTitle: "Add Nominee",
+    nomineesAddAnother: "Add another nominee",
+    nomineesSavedLocally: (name: string, remaining: number) =>
+      `${name} saved. ${remaining}% still to allocate add another nominee (up to 3) so shares total 100%.`,
+    nomineesMustTotalBeforeSave: "Shares must total 100% before nominees are saved to your folios.",
+    nomineesStepDetails: "Details",
     fullNameLabel: "Full Name",
     emailLabel: "Email",
     phoneLabel: "Phone",
@@ -193,9 +262,8 @@ export const copy = {
     backupCodesRemaining: (remaining: number, total: number) => `${remaining} of ${total} remaining`,
     backupCodesDescription: "One-time codes for account recovery if you lose your authenticator.",
     copyCodes: "Copy Codes",
+    copiedCodes: "Copied",
     regenerateCodes: "Regenerate Codes",
-    backupCodesMissingHint:
-      "Backup codes are only shown once after setup. Regenerate new codes if you did not save them.",
     zyndPinTitle: "Zynd PIN",
     zyndPinDescription: "Quick 4-digit unlock for your account on web and mobile.",
     zyndPinEnrolledHint:
@@ -619,6 +687,7 @@ export const copy = {
       invalidMobile: "Enter a valid 10-digit Indian mobile number.",
       invalidDocumentNumber: "Enter a valid number for the selected document type.",
       invalidPan: "Enter a valid 10-character PAN number.",
+      panMatchesInvestor: "Nominee PAN cannot be the same as your PAN. Enter the nominee’s PAN, or leave it blank.",
       invalidAadhaar: "Enter a valid 12-digit Aadhaar number.",
       invalidPassport: "Enter a valid passport number (e.g. A1234567).",
       invalidDrivingLicence: "Enter a valid driving licence number (6-20 characters).",
@@ -630,6 +699,7 @@ export const copy = {
       types: {
         minor: "Minor",
         individual: "Individual",
+        unknown: "Nominee",
       },
       wizardSteps: {
         basic: "Basic",
@@ -1365,6 +1435,35 @@ export const copy = {
       holdingActionStp: "Start STP",
       holdingActionSwp: "Start SWP",
       holdingActionRedeem: "Redeem",
+      holdingSwitchDescription: "Move units from this scheme to another scheme of the same fund house, in the same folio.",
+      holdingStpDescription: "Set a monthly transfer from this scheme into another scheme of the same fund house.",
+      holdingSwpDescription: "Set a monthly withdrawal from this holding to your registered bank account.",
+      holdingActionAvailable: "Available in this holding: {amount}",
+      holdingActionDestination: "Switch into",
+      holdingActionAmount: "Amount (₹)",
+      holdingActionInstallmentDay: "Installment day",
+      holdingActionStpDate: "STP date",
+      holdingActionSwpDate: "SWP date",
+      holdingActionLoadingFunds: "Loading funds…",
+      holdingActionSearchFunds: "Search by fund name or ISIN…",
+      holdingActionNoDestinations: "No other schemes available in this fund house",
+      holdingActionNoSearchMatches: "No funds match that search",
+      holdingActionLoadFailed: "Could not load destination funds.",
+      holdingActionAmountRequired: "Enter an amount.",
+      holdingActionDestinationRequired: "Choose a destination scheme.",
+      holdingActionSubmitFailed: "Could not place this request.",
+      holdingActionProceed: "Proceed",
+      holdingActionSwitchAll: "Switch all",
+      holdingActionSwitchInto: "Switch into",
+      holdingActionStpInto: "Transfer into",
+      holdingActionSchedule: "Schedule",
+      holdingConsentTitle: "Confirm with OTP",
+      holdingConsentBody: "We will send an OTP to {mobile} registered on this folio.",
+      holdingConsentConfirm: "Confirm",
+      holdingConsentConfirmed: "Request confirmed.",
+      holdingConsentLoadFailed: "Could not load consent details.",
+      holdingConsentDoneTitle: "Request submitted",
+      holdingConsentDoneBody: "We’ll update this holding as the fund house processes the order.",
       holdingTxnTitle: "Transaction history",
       holdingTxnTooltip: "Shows unit allotments and NAV for each transaction in this folio.",
       holdingTxnDate: "Date",
@@ -1372,6 +1471,23 @@ export const copy = {
       holdingTxnUnits: "Units",
       holdingTxnNav: "NAV",
       holdingTxnValue: "Value",
+      holdingSwitchJourneyStepPlaced: "Switch placed",
+      holdingSwitchJourneyPlacedDescription:
+        "Your switch request was saved. Confirm with OTP before it is sent to the fund house.",
+      holdingSwitchJourneyStepProcessing: "Sent for processing",
+      holdingSwitchJourneyProcessingDescription:
+        "The fund house is processing your switch. This usually takes a few working days.",
+      holdingSwitchJourneyAmcSubmittedDescription:
+        "The fund house received your switch and started moving units.",
+      holdingSwitchJourneyStepCompleted: "Switch completed",
+      holdingSwitchJourneyCompletedDescription: "Units were moved to the destination scheme.",
+      holdingSwitchJourneyStepFailed: "Switch failed",
+      holdingPendingSwitchTitle: "Switch in progress",
+      holdingPendingSwitchDescription:
+        "This holding is being switched to another scheme. Invest, redeem, switch, STP, and SWP stay paused until the fund house completes it.",
+      holdingPendingRedeemTitle: "Redemption in progress",
+      holdingPendingRedeemDescription:
+        "This holding is being redeemed. Invest, switch, STP, and SWP stay paused until the fund house completes it.",
       holdingUpcomingDetailLockedTitle: "Holding details unlock after allotment",
       holdingUpcomingDetailLockedDescription:
         "Units, NAV, returns, and transaction history will appear once the fund house completes unit allotment.",
@@ -1896,12 +2012,15 @@ export const copy = {
     calculatorModeLumpsum: "One-time",
     calculatorModeSip: "SIP",
     calculatorHorizonColumn: "Horizon",
+    calculatorInvestedColumn: "Invested",
+    calculatorHistoricReturnsColumn: "Historic returns",
     calculatorReturnColumn: "Return",
     lumpsumFundMinNote: "Minimum one-time amount for this fund: {amount}",
     lumpsumSelectFundPrompt: "Select a fund to begin",
     lumpsumSelectFundPromptDescription:
       "Pick a mutual fund to load its minimum one-time amount and project historical returns",
-    lumpsumHorizonsNote: "Projections use historical returns for each horizon",
+    lumpsumHorizonsNote:
+      "Horizons with enough NAV use real history. Missing 3Y/5Y are predicted from the longest trailing return not actual CAGR.",
     lumpsumChartTitle: "Growth by horizon",
     lumpsumChartDescription: "How your invested amount and estimated returns may grow over time",
     lumpsumChartInvested: "Invested",
@@ -1944,6 +2063,9 @@ export const copy = {
     collectionDescHighReturn: "Top performers by weighted historical returns",
     collectionDescBestSip: "SIP-friendly funds with strong long-term returns",
     collectionDescGoldSilver: "Precious metal and commodity-focused schemes",
+    collectionDescNfo: "New fund offers open for subscription",
+    nfoDisclaimer:
+      "NFO units are allotted after the offer closes, at the allotment NAV. Past performance is not available for new schemes.",
     collectionDescLargeCap: "Large-cap equity funds for stable core exposure",
     collectionDescMidCap: "Mid-cap funds with higher growth potential",
     collectionDescSmallCap: "Small-cap funds for aggressive long-term allocation",
@@ -3022,70 +3144,37 @@ export const copy = {
     quickRepliesHint: "Quick replies",
     helpNavLabel: "Help",
   },
-  about: {
-    pageTitle: "About Zynd",
-    pageDescription:
-      "Learn what Zynd is, how the platform works, and who builds it.",
-    navLabel: "About Zynd",
-    eyebrow: "About",
-    heroTitle: (appName: string = APP_NAME) => `What is ${appName}?`,
-    heroLead: (appName: string = APP_NAME) =>
-      `${appName} is a wealth platform that brings investing, goals, and family finances into one secure dashboard — so you can see the full picture and act with confidence.`,
-    taglineLabel: "Tagline",
-    missionTitle: "Our mission",
-    missionBody:
-      "We believe financial clarity should feel premium and approachable: transparent tools, thoughtful design, and guidance that respects your goals — not noise.",
-    howItWorksTitle: "How Zynd works",
-    howItWorksIntro:
-      "From first sign-in to ongoing investing, the experience is designed to stay simple while the underlying rails stay robust.",
-    howItWorksSteps: [
-      {
-        title: "Create your account",
-        body: "Sign in securely, complete KYC when you are ready to invest, and set up protection like MFA and your Zynd PIN.",
-      },
-      {
-        title: "Invest with intention",
-        body: "Explore mutual funds, build carts and SIPs, and track orders and holdings alongside the rest of your wealth view.",
-      },
-      {
-        title: "Plan with goals",
-        body: "Model personal and family goals, tune assumptions, and follow progress as you invest toward each milestone.",
-      },
-      {
-        title: "Stay informed",
-        body: "Notifications, risk profiling, and portfolio insights help you understand changes without leaving the dashboard.",
-      },
-    ] as const,
-    platformTitle: "The platform",
-    platformPoints: [
-      "Dashboard-first experience for portfolio, transactions, SIPs, and referrals.",
-      "Goal planning with calculators tuned to Indian investing assumptions.",
-      "Family groups for shared targets and coordinated contributions.",
-      "Support and help center when you need a human or a quick answer.",
-    ] as const,
-    trustTitle: "Built for trust",
-    trustBody:
-      "Security and compliance are foundational: authenticated sessions, verified flows for investing, and clear separation between demo content and live money movement where applicable.",
-    heroVisualLabel: "Zynd brand visual",
-    heroVisualHint: "Image placeholder",
-    missionVisualLabel: "Mission",
-    trustVisualLabel: "Security & compliance",
-    foundersTitle: "Founders",
-    foundersIntro:
-      "Zynd is shaped by people who care about clarity in money — how it’s planned, invested, and shared with family.",
-    founders: [
-      {
-        name: "Co-founder",
-        role: "Product & vision",
-        bio: "Sets direction for the Zynd experience — goals, investing flows, and the details that make wealth feel understandable.",
-      },
-      {
-        name: "Co-founder",
-        role: "Platform & engineering",
-        bio: "Turns that vision into a secure, reliable product — from account protection to the rails that power investing.",
-      },
-    ] as const,
-    founderPhotoPlaceholder: "Founder photo",
+  reports: {
+    navLabel: "Reports",
+    pageTitle: "Reports",
+    pageDescription: "Download statements and tax documents for your Zynd investments.",
+    runLabel: "Run",
+    emptyTitle: "No reports yet",
+    emptyDescription:
+      "Account statements, capital gains, and tax reports will appear here after you have investment activity.",
+    tableTitle: "Generated Reports",
+    tableSearchPlaceholder: "Search reports",
+    tableSearchEmpty: "No reports match your search.",
+    tableType: "Type",
+    tableGeneratedOn: "Generated on",
+    accountStatementTitle: "Account statement",
+    accountStatementBody: "Holdings, transactions, and folio activity across your mutual funds.",
+    capitalGainsTitle: "Capital gains",
+    capitalGainsBody: "Realised and unrealised gains for a financial year, ready for tax filing.",
+    taxReportsTitle: "Tax reports",
+    taxReportsBody: "ELSS and other tax-related statements for the selected financial year.",
+    casTitle: "CAS report",
+    casBody: "Consolidated account statement of holdings across AMCs, imported from your CAS.",
+    casLockedTitle: "CAS import locked",
+    casLockedDescription: "CAS reports unlock when external holdings import is enabled for your account.",
+    tableDownload: "Download",
+    downloadLabel: "Download",
+    downloadProcessing: "Preparing your report…",
+    downloadReady: "Report downloaded",
+    downloadFailed: "Could not download this report.",
+    generatingLabel: "Generating…",
+    failedLabel: "Could not generate",
+    runFailed: "Could not generate this report.",
   },
   navbar: {
     aiBotLabel: "AI assistant",
