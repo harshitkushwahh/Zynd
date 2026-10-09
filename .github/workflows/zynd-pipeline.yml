@@ -619,7 +619,24 @@ jobs:
             if [ "${infra_failed}" -ne 0 ]; then
               exit 1
             fi
-            for svc in postgres "${MONGO_SERVICE}" redis clamav minio; do
+            wait_healthy() {
+              local svc="$1"
+              local seconds="${2:-180}"
+              local elapsed=0
+              local state
+              while [ "${elapsed}" -lt "${seconds}" ]; do
+                state="$(service_state "${svc}")"
+                echo "${svc}: ${state} (${elapsed}s)"
+                case "${state}" in
+                  running|healthy) return 0 ;;
+                esac
+                sleep 10
+                elapsed=$((elapsed + 10))
+              done
+              echo "ERROR: ${svc} is ${state} after ${seconds}s. API was not recreated."
+              return 1
+            }
+            for svc in postgres "${MONGO_SERVICE}" redis minio; do
               state="$(service_state "${svc}")"
               echo "${svc}: ${state}"
               case "${state}" in
@@ -630,6 +647,13 @@ jobs:
                   ;;
               esac
             done
+            clamav_state="$(service_state clamav)"
+            echo "clamav: ${clamav_state}"
+            if [ "${clamav_state}" != "healthy" ] && [ "${clamav_state}" != "running" ]; then
+              echo "ClamAV is ${clamav_state}; recreating so deploy is not blocked by a stuck signature reload."
+              compose up -d --no-deps --force-recreate clamav
+              wait_healthy clamav 240 || exit 1
+            fi
             echo "api before deploy: $(service_state api)"
             echo "Infrastructure containers were not restarted."
             end_section
