@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 export default function MutualFundsCartLoading() {
   return (
-    <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full space-y-6")}>
+    <div className={cn(MF_PAGE_SECTION_CLASS, "w-full min-w-0 max-w-full")}>
       <MfBreadcrumb trail={[{ label: copy.mutualFunds.cartTitle }]} />
       <MfCartPageSkeleton />
     </div>

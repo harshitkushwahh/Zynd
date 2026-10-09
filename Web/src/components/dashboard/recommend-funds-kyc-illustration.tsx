@@ -15,8 +15,8 @@ export function RecommendFundsKycIllustration() {
         alt=""
         width={1789}
         height={879}
+        sizes="(max-width: 768px) 180px, 240px"
         className="rf-kyc-illustration-image"
-        priority
       />
     </div>
   );

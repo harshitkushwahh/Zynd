@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
+from app.application.mf.mf_projection_calculator import resolve_trailing_daily_growth
 from app.application.mf.nav_metrics_calculator import (
     RETURN_CAGR_YEARS,
     RETURN_PERIODS,
@@ -74,6 +75,24 @@ def _build_horizons_from_history(history: list[tuple]) -> tuple[date | None, dic
             _, prior_nav = match
             multiplier = float(latest_nav / prior_nav)
         horizons[horizon_key] = {"return_pct": float(pct), "multiplier": multiplier}
+
+    trailing = resolve_trailing_daily_growth(sorted_history)
+    if trailing is not None:
+        _sample_days, daily_growth = trailing
+        daily = float(daily_growth)
+        for key in ("return_3m", "return_6m", "return_1y", "return_3y", "return_5y"):
+            horizon_key = key.replace("return_", "")
+            if horizon_key in horizons:
+                continue
+            period_days = RETURN_PERIODS[key]
+            multiplier = daily ** period_days
+            if multiplier <= 0:
+                continue
+            horizons[horizon_key] = {
+                "return_pct": (multiplier - 1.0) * 100.0,
+                "multiplier": multiplier,
+                "projected_from_trailing": True,
+            }
     return as_of_date, horizons
 
 

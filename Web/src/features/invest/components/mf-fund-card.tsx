@@ -96,6 +96,9 @@ export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
   const categoryKind = resolveMfFundCategoryKind(categoryLabel);
 
   const secondaryBadges = [
+    fund.nfo
+      ? { key: "nfo", label: "NFO", variant: "secondary" as const }
+      : null,
     fund.display?.hero_badge
       ? { key: "hero", label: fund.display.hero_badge, variant: "secondary" as const }
       : null,

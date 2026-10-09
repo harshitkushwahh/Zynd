@@ -15,7 +15,7 @@ const GoalsIcon = goalsRoute.icon;
 
 export function GoalsPageLoadingView() {
   return (
-    <div className="animate-in fade-in space-y-6 duration-200">
+    <div className="animate-in fade-in duration-200">
       <DashboardBreadcrumb items={[{ label: copy.goals.title }]} />
 
       <PageHeader
@@ -48,7 +48,7 @@ export function GoalsListPageLoadingView({ variant }: GoalsListPageLoadingViewPr
       : copy.goals.familyGoalsListDescription;
 
   return (
-    <div className="animate-in fade-in space-y-6 duration-200">
+    <div className="animate-in fade-in duration-200">
       <DashboardBreadcrumb
         items={[
           { label: copy.goals.title, href: GOALS_LIST_HREF },
@@ -65,7 +65,7 @@ export function GoalsListPageLoadingView({ variant }: GoalsListPageLoadingViewPr
 
 export function GoalDetailPageLoadingView() {
   return (
-    <div className="animate-in fade-in space-y-6 duration-200">
+    <div className="animate-in fade-in duration-200">
       <DashboardBreadcrumb
         items={[
           { label: copy.goals.title, href: GOALS_LIST_HREF },
@@ -73,6 +73,7 @@ export function GoalDetailPageLoadingView() {
         ]}
       />
 
+      <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
           <Skeleton className="size-11 shrink-0 rounded-[var(--radius-control)]" />
@@ -99,6 +100,7 @@ export function GoalDetailPageLoadingView() {
           <Skeleton className="h-40 rounded-[var(--radius-card)]" />
         </div>
         <Skeleton className="h-[22rem] rounded-[var(--radius-card)] xl:col-span-2" />
+      </div>
       </div>
     </div>
   );

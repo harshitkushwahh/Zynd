@@ -184,7 +184,7 @@ export function GoalDetailPage({ goalId }: GoalDetailPageProps) {
 
   if (errorMessage || actionError || !goal) {
     return (
-      <div className="space-y-6">
+      <div>
         <GoalDetailBreadcrumb title={copy.goals.detailTitle} />
         <LoadErrorCard
           title={copy.goals.detailLoadFailedTitle}
@@ -211,8 +211,9 @@ export function GoalDetailPage({ goalId }: GoalDetailPageProps) {
   const canToggleActive = canToggleGoalActiveStatus(goal.status);
 
   return (
-    <GoalsContentFade className="space-y-6">
+    <GoalsContentFade>
       <GoalDetailBreadcrumb title={goal.title} />
+      <div className="space-y-6">
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
@@ -338,6 +339,7 @@ export function GoalDetailPage({ goalId }: GoalDetailPageProps) {
         loading={archiving}
         onConfirm={() => void handleArchiveGoal()}
       />
+      </div>
     </GoalsContentFade>
   );
 }

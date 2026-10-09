@@ -27,12 +27,14 @@ function formatSipDay(
   day: number,
   compact = false,
   compactDisplay: "labeled" | "day" = "labeled",
+  label?: string,
 ) {
+  const dayLabel = label ?? copy.mutualFunds.sipDayLabel;
   if (compact && compactDisplay === "day") {
     return formatOrdinalDay(day);
   }
   if (compact) {
-    return `${copy.mutualFunds.sipDayLabel} · ${formatOrdinalDay(day)}`;
+    return `${dayLabel} · ${formatOrdinalDay(day)}`;
   }
   return copy.mutualFunds.sipInstallmentDay.replace("{day}", String(day));
 }
@@ -82,6 +84,7 @@ type MfSipDayPickerProps = {
   disabled?: boolean;
   compact?: boolean;
   compactDisplay?: "labeled" | "day";
+  label?: string;
   maxDay?: number;
   className?: string;
 };
@@ -92,6 +95,7 @@ export function MfSipDayPicker({
   disabled = false,
   compact = false,
   compactDisplay = "labeled",
+  label,
   maxDay = DEFAULT_MAX_SIP_DAY,
   className,
 }: MfSipDayPickerProps) {
@@ -105,7 +109,7 @@ export function MfSipDayPicker({
           disabled={disabled}
           aria-label={
             compact && compactDisplay === "day"
-              ? `${copy.mutualFunds.sipDayLabel}, ${formatOrdinalDay(value)}`
+              ? `${label ?? copy.mutualFunds.sipDayLabel}, ${formatOrdinalDay(value)}`
               : undefined
           }
           className={cn(
@@ -132,7 +136,7 @@ export function MfSipDayPicker({
               <>
                 <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1 truncate text-compact font-medium text-foreground">
-                  {formatSipDay(value, true, compactDisplay)}
+                  {formatSipDay(value, true, compactDisplay, label)}
                 </span>
                 <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
               </>

@@ -64,7 +64,7 @@ function MfFundDetailSectionSkeleton({ tall = false }: { tall?: boolean }) {
 
 export function MfFundDetailSkeleton({ showBreadcrumb = true }: { showBreadcrumb?: boolean }) {
   return (
-    <div className="w-full min-w-0 max-w-full space-y-6">
+    <div className="w-full min-w-0 max-w-full">
       {showBreadcrumb ? <MfFundDetailBreadcrumbSkeleton /> : null}
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">

@@ -193,6 +193,7 @@ export function FamilyGroupsPage() {
                 icon={FamilyRouteIcon}
                 title={copy.familyGroups.dashboard.heroTitle}
                 loading
+                className="mb-0"
               />
               <div className="flex gap-2 overflow-hidden pb-1" aria-hidden="true">
                 <Skeleton className="h-10 w-[10rem] shrink-0 rounded-full" />
@@ -207,6 +208,7 @@ export function FamilyGroupsPage() {
               <PageHeader
                 icon={FamilyRouteIcon}
                 title={copy.familyGroups.dashboard.heroTitle}
+                className="mb-0"
                 action={
                   selectedGroup?.my_role === "head" ? (
                     <Button

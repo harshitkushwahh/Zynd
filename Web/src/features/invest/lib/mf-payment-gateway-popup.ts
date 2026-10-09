@@ -16,12 +16,11 @@ export type MfPaymentGatewayReturnMessage = {
   planId?: string | null;
 };
 
-/** ONDC / netbanking HTTPS pages run in a popup; UPI deep links use full navigation. */
+/** HTTPS checkout uses same-tab redirect unless popup is explicitly enabled. */
 export function isMfPaymentPopupEnabled(): boolean {
-  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT === "1") {
-    return false;
-  }
-  return true;
+  if (typeof process === "undefined") return false;
+  if (process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT === "1") return false;
+  return process.env.NEXT_PUBLIC_MF_PAYMENT_POPUP === "1";
 }
 
 export function isHttpPaymentGatewayUrl(url: string): boolean {

@@ -16,6 +16,15 @@ async def create_investor_profile(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def patch_investor_profile(body: dict[str, Any]) -> dict[str, Any]:
+    payload = await fp_mf_patch("/v2/investor_profiles", body=body)
+    return {
+        "id": extract_fp_id(payload),
+        "old_id": extract_fp_old_id(payload),
+        "raw": payload,
+    }
+
+
 async def create_bank_account(body: dict[str, Any]) -> dict[str, Any]:
     payload = await fp_mf_post("/v2/bank_accounts", body=body)
     return {

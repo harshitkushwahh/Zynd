@@ -118,10 +118,7 @@ function PlanIllustrationHeader({
       <div className="w-full shrink-0 border-b border-border/70 px-4 pb-4 pt-4 sm:px-5">
         <div className="relative overflow-hidden rounded-[var(--radius-card)] border border-border/70 bg-popover shadow-sm">
           <div className="relative aspect-[4/3] w-full">
-            <GoalTemplateIllustrationImage
-              src={illustrationUrl}
-              priority
-            />
+            <GoalTemplateIllustrationImage src={illustrationUrl} />
             <div
               className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-popover via-popover/75 to-transparent"
               aria-hidden

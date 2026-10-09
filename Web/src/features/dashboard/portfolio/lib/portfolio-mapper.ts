@@ -107,6 +107,7 @@ export function mapPortfolioHoldingDetail(
     id: holding.id,
     fundName: holding.fund_name,
     amcName: holding.amc_name ?? "Mutual fund",
+    amcSlug: holding.amc_slug ?? null,
     amcLogoUrl: holding.amc_logo_url,
     isin: holding.isin,
     currentValueInr: holding.current_value_inr,
@@ -127,6 +128,20 @@ export function mapPortfolioHoldingDetail(
     redeemBankName: holding.redeem_bank_name,
     redeemBankIfsc: holding.redeem_bank_ifsc,
     nomineeName: holding.nominee_name,
+    productId: holding.product_id ?? null,
+    minSipAmountInr: holding.min_sip_amount_inr ?? null,
+    minLumpsumAmountInr: holding.min_lumpsum_amount_inr ?? null,
+    sipAllowed: holding.sip_allowed === true,
+    sipOptions: holding.sip_options ?? [],
+    pendingAction: holding.pending_action
+      ? {
+          kind: holding.pending_action.kind,
+          status: holding.pending_action.status,
+          orderId: holding.pending_action.order_id,
+          amountInr: holding.pending_action.amount_inr,
+          confirmed: holding.pending_action.confirmed,
+        }
+      : null,
     transactions: holding.transactions.map((txn) => ({
       id: txn.id,
       date: txn.date,

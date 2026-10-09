@@ -31,6 +31,7 @@ import {
   DASHBOARD_ROUTES,
   isDashboardRouteActive,
   NOTIFICATIONS_PAGE_META,
+  REPORTS_ROUTE,
   type DashboardRoute,
 } from "@/features/dashboard/navigation/dashboard-routes";
 import {
@@ -400,7 +401,13 @@ export function DashboardSidebar({ className }: { className?: string }) {
           ))}
         </nav>
 
-        <ProfileAvatar withMenu compact className="self-center pb-1" />
+        <div className="flex w-full flex-col items-center gap-2 pb-1">
+          <SidebarNavItem
+            item={REPORTS_ROUTE}
+            active={isDashboardRouteActive(pathname, REPORTS_ROUTE)}
+          />
+          <ProfileAvatar withMenu compact />
+        </div>
       </div>
     </aside>
   );

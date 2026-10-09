@@ -11,6 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { PAGE_STACK_GAP_CLASS } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 
 export type DashboardBreadcrumbItem = {
@@ -36,7 +37,7 @@ export function DashboardBreadcrumb({
     ) : undefined;
 
   return (
-    <Breadcrumb className={cn("mb-6 shrink-0", className)}>
+    <Breadcrumb className={cn(PAGE_STACK_GAP_CLASS, "shrink-0", className)}>
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink

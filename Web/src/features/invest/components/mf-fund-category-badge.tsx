@@ -1,8 +1,8 @@
-import { Droplets, Landmark, TrendingUp, type LucideIcon } from "lucide-react";
+import { Droplets, Landmark, Sparkles, TrendingUp, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-export type MfFundCategoryKind = "equity" | "debt" | "liquid";
+export type MfFundCategoryKind = "equity" | "debt" | "liquid" | "nfo";
 
 type MfFundCategoryMeta = {
   label: string;
@@ -22,6 +22,10 @@ const MF_FUND_CATEGORY_META: Record<MfFundCategoryKind, MfFundCategoryMeta> = {
     label: "Liquid",
     icon: Droplets,
   },
+  nfo: {
+    label: "NFO",
+    icon: Sparkles,
+  },
 };
 
 export function resolveMfFundCategoryKind(input: string | null | undefined): MfFundCategoryKind | null {
@@ -31,6 +35,7 @@ export function resolveMfFundCategoryKind(input: string | null | undefined): MfF
   if (normalized.includes("liquid")) return "liquid";
   if (normalized.includes("debt")) return "debt";
   if (normalized.includes("equity")) return "equity";
+  if (normalized === "nfo" || normalized.includes("new fund")) return "nfo";
 
   return null;
 }
@@ -39,6 +44,7 @@ export function resolveMfFundCategoryFromSlug(slug: string): MfFundCategoryKind 
   if (slug === "equity-funds") return "equity";
   if (slug === "debt-funds") return "debt";
   if (slug === "liquid-funds") return "liquid";
+  if (slug === "nfo") return "nfo";
 
   return resolveMfFundCategoryKind(slug);
 }

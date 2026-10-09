@@ -15,6 +15,10 @@ describe("dashboard-routes", () => {
     expect(isDashboardRouteActive("/dashboard/transactions", portfolio)).toBe(false);
   });
 
+  it("shows portfolio in the sidebar nav", () => {
+    expect(DASHBOARD_ROUTES.find((route) => route.id === "portfolio")?.showInSidebar).not.toBe(false);
+  });
+
   it("resolves nested dashboard paths", () => {
     expect(resolveDashboardRoute("/dashboard/portfolio")?.id).toBe("portfolio");
     expect(resolveDashboardRoute("/dashboard/goals")?.id).toBe("goals");
@@ -33,8 +37,9 @@ describe("dashboard-routes", () => {
     expect(resolveDashboardRoute("/dashboard/help")).toBeUndefined();
   });
 
-  it("returns about meta for about paths and does not resolve as a nav route", () => {
-    expect(getDashboardPageMeta("/dashboard/about").title).toBe("About Zynd");
-    expect(resolveDashboardRoute("/dashboard/about")).toBeUndefined();
+  it("returns reports meta for reports paths and keeps reports out of sidebar nav", () => {
+    expect(getDashboardPageMeta("/dashboard/reports").title).toBe("Reports");
+    expect(resolveDashboardRoute("/dashboard/reports")).toBeUndefined();
+    expect(DASHBOARD_ROUTES.find((route) => route.id === "reports")?.showInSidebar).toBe(false);
   });
 });

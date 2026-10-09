@@ -10,9 +10,10 @@ import {
 import { SecurityFeatureCard } from "@/components/dashboard/settings/security-feature-card";
 import { SecurityFeatureCardSkeleton } from "@/components/dashboard/settings/settings-skeleton";
 import { downloadBackupCodesJson } from "@/features/account/mfa/lib/backup-codes-download";
-import { Button } from "@/components/ui/button";
+import { IconActionButton } from "@/components/ui/icon-action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/auth-context";
 import { copy } from "@/shared/config/copy";
 
@@ -78,25 +79,21 @@ export function BackupCodesSettingsPanel({
 
   const showBackupSkeleton = backupCodesLoading && !backupCodesHydrated;
 
-  const backupBody = !canRevealStoredCodes ? (
-    <p className="text-caption leading-relaxed text-muted-foreground">
-      {copy.settings.backupCodesMissingHint}
-    </p>
-  ) : (
-      <div
-        className="grid grid-cols-2 gap-2 font-mono text-compact sm:grid-cols-3"
-        aria-hidden={!backupCodesRevealed}
-      >
-        {storedBackupCodes.map((code) => (
-          <span
-            key={code}
-            className="rounded-[var(--radius-control)] border border-border bg-muted/15 px-2.5 py-2 text-center tracking-widest text-muted-foreground"
-          >
-            {backupCodesRevealed ? code : maskBackupCode(code)}
-          </span>
-        ))}
-      </div>
-  );
+  const backupBody = canRevealStoredCodes ? (
+    <div
+      className="grid grid-cols-2 gap-2 font-mono text-compact sm:grid-cols-3"
+      aria-hidden={!backupCodesRevealed}
+    >
+      {storedBackupCodes.map((code) => (
+        <span
+          key={code}
+          className="rounded-[var(--radius-control)] border border-border bg-muted/15 px-2.5 py-2 text-center tracking-widest text-muted-foreground"
+        >
+          {backupCodesRevealed ? code : maskBackupCode(code)}
+        </span>
+      ))}
+    </div>
+  ) : null;
 
   return (
     <>
@@ -117,52 +114,40 @@ export function BackupCodesSettingsPanel({
         }
         actions={
           showBackupSkeleton ? undefined : (
-          <div className="flex flex-wrap gap-2">
-            {canRevealStoredCodes && backupCodesRevealed ? (
-              <>
-                <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyBackupCodes()}>
-                  {copiedBackup ? (
-                    <>
-                      <Check className="size-3.5 text-success" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="size-3.5" />
-                      {copy.settings.copyCodes}
-                    </>
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => downloadBackupCodesJson(storedBackupCodes, user.email)}
-                >
-                  <Download className="size-3.5" />
-                  {copy.mfa.enroll.downloadBackupCodesJson}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onBackupCodesRevealed(false)}
-                >
-                  <EyeOff className="size-3.5" />
-                  {copy.mfa.backupAccess.hide}
-                </Button>
-              </>
-            ) : canRevealStoredCodes ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => setAccessOpen(true)}>
-                <Eye className="size-3.5" />
-                {copy.mfa.backupAccess.reveal}
-              </Button>
-            ) : null}
-            <Button type="button" variant="outline" size="sm" onClick={() => setRegenerateOpen(true)}>
-              <KeyRound className="size-3.5" />
-              {copy.settings.regenerateCodes}
-            </Button>
-          </div>
+            <TooltipProvider>
+              <div className="flex flex-wrap items-center gap-1">
+                {canRevealStoredCodes && backupCodesRevealed ? (
+                  <>
+                    <IconActionButton
+                      label={copiedBackup ? copy.settings.copiedCodes : copy.settings.copyCodes}
+                      icon={copiedBackup ? Check : Copy}
+                      onClick={() => void handleCopyBackupCodes()}
+                    />
+                    <IconActionButton
+                      label={copy.mfa.enroll.downloadBackupCodesJson}
+                      icon={Download}
+                      onClick={() => downloadBackupCodesJson(storedBackupCodes, user.email)}
+                    />
+                    <IconActionButton
+                      label={copy.mfa.backupAccess.hide}
+                      icon={EyeOff}
+                      onClick={() => onBackupCodesRevealed(false)}
+                    />
+                  </>
+                ) : canRevealStoredCodes ? (
+                  <IconActionButton
+                    label={copy.mfa.backupAccess.reveal}
+                    icon={Eye}
+                    onClick={() => setAccessOpen(true)}
+                  />
+                ) : null}
+                <IconActionButton
+                  label={copy.settings.regenerateCodes}
+                  icon={KeyRound}
+                  onClick={() => setRegenerateOpen(true)}
+                />
+              </div>
+            </TooltipProvider>
           )
         }
       >

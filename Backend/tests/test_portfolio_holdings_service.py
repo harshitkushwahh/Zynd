@@ -6,6 +6,9 @@ from decimal import Decimal
 from app.application.mf.portfolio_holdings_service import (
     _downsample_growth_points,
     _extract_folio_meta,
+    _pending_order_matches_holding,
+    _nav_for_order_allotment,
+    _nav_on_or_after,
     _nav_on_or_before,
     build_portfolio_holding_id,
     holding_hidden_from_redeem_units,
@@ -35,6 +38,17 @@ def test_nav_on_or_before_uses_latest_nav_up_to_target() -> None:
     assert _nav_on_or_before(nav_rows, date(2026, 8, 10)) == Decimal("102")
     assert _nav_on_or_before(nav_rows, date(2026, 8, 11)) == Decimal("102")
     assert _nav_on_or_before([], date(2026, 8, 1)) is None
+
+
+def test_nav_for_order_allotment_falls_forward_when_purchase_day_has_no_nav() -> None:
+    nav_rows = [
+        (date(2026, 10, 9), Decimal("20")),
+        (date(2026, 10, 10), Decimal("19.7")),
+    ]
+
+    assert _nav_on_or_before(nav_rows, date(2026, 10, 8)) is None
+    assert _nav_on_or_after(nav_rows, date(2026, 10, 8)) == Decimal("20")
+    assert _nav_for_order_allotment(nav_rows, date(2026, 10, 8)) == Decimal("20")
 
 
 def test_downsample_growth_points_keeps_last_point() -> None:
@@ -270,3 +284,22 @@ def test_filter_active_portfolio_holdings_hides_fully_redeemed() -> None:
     assert len(filtered) == 1
     assert filtered[0]["isin"] == "INF1"
     assert _is_active_portfolio_holding(holdings[1]) is False
+
+
+def test_pending_order_matches_holding_by_id_or_folio_isin() -> None:
+    holding_id = build_portfolio_holding_id(folio_number="44851151/97", isin="INF179KC1HC7")
+    assert _pending_order_matches_holding({"holding_id": holding_id}, holding_id) is True
+    assert (
+        _pending_order_matches_holding(
+            {"folio_number": "44851151/97", "isin": "inf179kc1hc7"},
+            holding_id,
+        )
+        is True
+    )
+    assert (
+        _pending_order_matches_holding(
+            {"folio_number": "other", "isin": "INF179KC1HC7"},
+            holding_id,
+        )
+        is False
+    )

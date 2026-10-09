@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PersonalDetailsSettingsPanel } from "@/components/dashboard/settings/personal-details-settings-panel";
 import { BankAccountSettingsPanel } from "@/components/dashboard/settings/bank-account-settings-panel";
+import { NomineesSettingsPanel } from "@/components/dashboard/settings/nominees-settings-panel";
 import { useSettingsKycProfile } from "@/components/dashboard/settings/use-settings-kyc-profile";
 import { ChangeEmailSettingsPanel } from "@/components/dashboard/settings/change-email-settings-panel";
 import { ChangePasswordSettingsPanel } from "@/components/dashboard/settings/change-password-settings-panel";
@@ -92,7 +93,7 @@ export function SettingsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { profile: kycProfile, loading: kycProfileLoading } = useSettingsKycProfile(Boolean(user));
+  const { profile: kycProfile, loading: kycProfileLoading, reloadProfile } = useSettingsKycProfile(Boolean(user));
 
   const [backupStatus, setBackupStatus] = useState({
     enrolled: false,
@@ -210,7 +211,7 @@ export function SettingsPage() {
         />
       </div>
 
-      <DashboardContentFade className="mt-6 flex min-h-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row md:items-stretch">
+      <DashboardContentFade className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden md:flex-row md:items-stretch">
         <SettingsSidebar
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
@@ -230,6 +231,7 @@ export function SettingsPage() {
               mfaEnabled={mfaEnabled}
               kycProfile={kycProfile}
               kycProfileLoading={kycProfileLoading}
+              onKycProfileReload={reloadProfile}
             />
           </SettingsSectionPanel>
 
@@ -240,6 +242,19 @@ export function SettingsPage() {
             unwrapped
           >
             <BankAccountSettingsPanel />
+          </SettingsSectionPanel>
+
+          <SettingsSectionPanel
+            section="nominees"
+            activeSection={activeSection}
+            mounted={isMounted("nominees")}
+            unwrapped
+          >
+            <NomineesSettingsPanel
+              kycProfile={kycProfile}
+              kycProfileLoading={kycProfileLoading}
+              onKycProfileReload={reloadProfile}
+            />
           </SettingsSectionPanel>
 
           <SettingsSectionPanel

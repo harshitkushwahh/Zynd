@@ -15,6 +15,7 @@ from app.infrastructure.persistence import family_group_models  # noqa: F401
 from app.infrastructure.persistence import goal_models  # noqa: F401
 from app.infrastructure.persistence import recommendation_models  # noqa: F401
 from app.infrastructure.persistence import mitra_txn_recommendation_models  # noqa: F401
+from app.infrastructure.persistence import mf_transaction_models  # noqa: F401
 
 # Enum values added after initial schema creation — sync for isolated test DBs.
 _AUDIT_EVENT_ENUM_EXTENSIONS = [
@@ -159,6 +160,7 @@ async def db_session() -> AsyncSession:
         await conn.execute(text("DROP TABLE IF EXISTS family_group_activities CASCADE"))
         await conn.execute(text("DROP TYPE IF EXISTS familygroupactivitytype CASCADE"))
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TYPE mf_order_type ADD VALUE IF NOT EXISTS 'SWITCH'"))
         for value in _AUDIT_EVENT_ENUM_EXTENSIONS:
             await conn.execute(
                 text(f"ALTER TYPE auditeventtype ADD VALUE IF NOT EXISTS '{value}'")

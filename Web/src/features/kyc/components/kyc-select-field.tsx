@@ -1,6 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
+import { Info } from "lucide-react";
 
 import { Label } from "@/components/ui/label";
 import {
@@ -10,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type KycSelectOption = string | { label: string; value: string };
 
@@ -24,6 +26,7 @@ type KycSelectFieldProps = {
   required?: boolean;
   icon?: LucideIcon;
   triggerClassName?: string;
+  infoTooltip?: string;
   onChange: (value: string) => void;
 };
 
@@ -44,6 +47,7 @@ export function KycSelectField({
   required = false,
   icon: Icon,
   triggerClassName,
+  infoTooltip,
   onChange,
 }: KycSelectFieldProps) {
   const normalizedOptions = normalizeOptions(options);
@@ -51,10 +55,26 @@ export function KycSelectField({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={id} className="whitespace-nowrap">
-        {label}
-        {required ? <span className="text-destructive">*</span> : null}
-      </Label>
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={id} className="whitespace-nowrap">
+          {label}
+          {required ? <span className="text-destructive">*</span> : null}
+        </Label>
+        {infoTooltip ? (
+          <Tooltip>
+            <TooltipTrigger
+              type="button"
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={`About ${label}`}
+            >
+              <Info className="size-3.5" strokeWidth={2.25} aria-hidden />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[16rem] text-pretty">
+              {infoTooltip}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
       <Select
         value={value || null}
         onValueChange={(nextValue) => onChange(nextValue ?? "")}

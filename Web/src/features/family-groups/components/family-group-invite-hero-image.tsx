@@ -19,9 +19,7 @@ export function FamilyGroupInviteHeroImage({ className }: FamilyGroupInviteHeroI
         width={1536}
         height={1024}
         sizes={INVITE_HERO_SIZES}
-        unoptimized
         className="h-auto w-full object-contain"
-        priority
       />
     </div>
   );

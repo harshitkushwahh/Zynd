@@ -394,7 +394,6 @@ export function RiskAssessmentPage() {
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
       <DashboardBreadcrumb
-        className="mb-4"
         items={[
           { label: "Risk Profile", href: RISK_PROFILE_HREF },
           { label: copy.riskProfile.dialogTitle },
@@ -440,7 +439,6 @@ export function RiskAssessmentPage() {
                     fill
                     sizes="(min-width: 768px) 128px, 96px"
                     className="object-contain object-bottom object-right mix-blend-multiply dark:mix-blend-screen drop-shadow-lg"
-                    priority
                   />
                 </div>
 

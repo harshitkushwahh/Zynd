@@ -26,12 +26,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 
-def _mf_pg_enum(enum_cls: type[enum.Enum], *, name: str) -> Enum:
+def _mf_pg_enum(enum_cls: type[enum.Enum], *, name: str, create_type: bool = True) -> Enum:
     """Bind SQLAlchemy enums to PostgreSQL types created by Alembic migrations."""
     return Enum(
         enum_cls,
         name=name,
         values_callable=lambda members: [member.value for member in members],
+        create_type=create_type,
     )
 
 
@@ -45,6 +46,7 @@ class MfOrderType(str, enum.Enum):
     lumpsum = "LUMPSUM"
     sip = "SIP"
     redemption = "REDEMPTION"
+    switch = "SWITCH"
 
 
 class MfOrderStatus(str, enum.Enum):
@@ -62,6 +64,18 @@ class MfCasImportStatus(str, enum.Enum):
     processing = "PROCESSING"
     succeeded = "SUCCEEDED"
     failed = "FAILED"
+
+
+class MfGeneratedReportKind(str, enum.Enum):
+    account_statement = "account_statement"
+    capital_gains = "capital_gains"
+    tax = "tax"
+
+
+class MfGeneratedReportStatus(str, enum.Enum):
+    pending = "pending"
+    completed = "completed"
+    failed = "failed"
 
 
 class MfCheckoutType(str, enum.Enum):
@@ -362,6 +376,128 @@ class MfSipPlanEvent(Base):
     plan: Mapped[MfSipPlan] = relationship(back_populates="events")
 
 
+class MfSwpPlan(Base):
+    __tablename__ = "mf_swp_plans"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_mf_swp_plans_idempotency_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
+    )
+    fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_funds.id", ondelete="RESTRICT"), nullable=False)
+    mf_investment_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mf_investment_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    amount_inr: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    frequency: Mapped[str] = mapped_column(String(16), nullable=False)
+    installment_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    number_of_installments: Mapped[int] = mapped_column(Integer, nullable=False)
+    folio_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    status: Mapped[MfSipPlanStatus] = mapped_column(
+        _mf_pg_enum(MfSipPlanStatus, name="mf_sip_plan_status", create_type=False),
+        default=MfSipPlanStatus.pending,
+        nullable=False,
+        index=True,
+    )
+    fp_plan_id: Mapped[Optional[str]] = mapped_column(String(128), unique=True, nullable=True)
+    fp_state: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    next_installment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    failure_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    events: Mapped[list["MfSwpPlanEvent"]] = relationship(back_populates="plan", cascade="all, delete-orphan")
+
+
+class MfSwpPlanEvent(Base):
+    __tablename__ = "mf_swp_plan_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mf_swp_plans.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    from_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), default="SYSTEM", nullable=False)
+    payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    plan: Mapped[MfSwpPlan] = relationship(back_populates="events")
+
+
+class MfStpPlan(Base):
+    __tablename__ = "mf_stp_plans"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_mf_stp_plans_idempotency_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
+    )
+    fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_funds.id", ondelete="RESTRICT"), nullable=False)
+    switch_in_fund_id: Mapped[int] = mapped_column(ForeignKey("mutual_funds.id", ondelete="RESTRICT"), nullable=False)
+    switch_in_product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
+    )
+    mf_investment_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mf_investment_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    amount_inr: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    frequency: Mapped[str] = mapped_column(String(16), nullable=False)
+    installment_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    number_of_installments: Mapped[int] = mapped_column(Integer, nullable=False)
+    folio_number: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    status: Mapped[MfSipPlanStatus] = mapped_column(
+        _mf_pg_enum(MfSipPlanStatus, name="mf_sip_plan_status", create_type=False),
+        default=MfSipPlanStatus.pending,
+        nullable=False,
+        index=True,
+    )
+    fp_plan_id: Mapped[Optional[str]] = mapped_column(String(128), unique=True, nullable=True)
+    fp_state: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    next_installment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    failure_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata_: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    events: Mapped[list["MfStpPlanEvent"]] = relationship(back_populates="plan", cascade="all, delete-orphan")
+
+
+class MfStpPlanEvent(Base):
+    __tablename__ = "mf_stp_plan_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mf_stp_plans.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    from_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), default="SYSTEM", nullable=False)
+    payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    plan: Mapped[MfStpPlan] = relationship(back_populates="events")
+
+
 class MfFinprimWebhookEvent(Base):
     __tablename__ = "mf_finprim_webhook_events"
 
@@ -423,6 +559,35 @@ class MfExternalHolding(Base):
     matched_fund_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("mutual_funds.id", ondelete="SET NULL"), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MfGeneratedReport(Base):
+    __tablename__ = "mf_generated_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    kind: Mapped[MfGeneratedReportKind] = mapped_column(
+        _mf_pg_enum(MfGeneratedReportKind, name="mf_generated_report_kind"),
+        nullable=False,
+    )
+    period_from: Mapped[date] = mapped_column(Date, nullable=False)
+    period_to: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[MfGeneratedReportStatus] = mapped_column(
+        _mf_pg_enum(MfGeneratedReportStatus, name="mf_generated_report_status"),
+        default=MfGeneratedReportStatus.pending,
+        nullable=False,
+        index=True,
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

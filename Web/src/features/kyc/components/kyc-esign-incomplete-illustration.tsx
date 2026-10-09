@@ -17,7 +17,6 @@ export function KycEsignIncompleteIllustration({ className }: KycEsignIncomplete
         src={aadhaarEsignNotImage}
         alt={copy.kyc.esign.incompleteIllustrationAlt}
         className="h-auto w-full max-w-[17rem] object-contain"
-        priority
       />
     </div>
   );

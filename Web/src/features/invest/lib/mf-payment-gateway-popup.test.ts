@@ -7,7 +7,7 @@ import {
 } from "@/features/invest/lib/mf-payment-gateway-popup";
 
 describe("mf-payment-gateway-popup", () => {
-  it("detects HTTPS payment URLs for popup flow", () => {
+  it("detects HTTPS payment URLs for gateway checkout", () => {
     expect(isHttpPaymentGatewayUrl("https://pay.example/ondc")).toBe(true);
     expect(isHttpPaymentGatewayUrl("http://localhost/gateway")).toBe(true);
     expect(isHttpPaymentGatewayUrl("upi://pay?pa=test@bank")).toBe(false);
@@ -23,10 +23,20 @@ describe("mf-payment-gateway-popup", () => {
     expect(message.orderId).toBe("abc");
   });
 
-  it("allows disabling popup via env flag", () => {
-    const previous = process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT;
+  it("uses same-tab redirect unless popup is explicitly enabled", () => {
+    const previousRedirect = process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT;
+    const previousPopup = process.env.NEXT_PUBLIC_MF_PAYMENT_POPUP;
+    delete process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT;
+    delete process.env.NEXT_PUBLIC_MF_PAYMENT_POPUP;
+    expect(isMfPaymentPopupEnabled()).toBe(false);
+
+    process.env.NEXT_PUBLIC_MF_PAYMENT_POPUP = "1";
+    expect(isMfPaymentPopupEnabled()).toBe(true);
+
     process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT = "1";
     expect(isMfPaymentPopupEnabled()).toBe(false);
-    process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT = previous;
+
+    process.env.NEXT_PUBLIC_MF_PAYMENT_FULL_REDIRECT = previousRedirect;
+    process.env.NEXT_PUBLIC_MF_PAYMENT_POPUP = previousPopup;
   });
 });

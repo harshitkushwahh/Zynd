@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.application.mf.nav_cold_start_backfill_service import (
+    evaluate_nav_history_depth,
+    resolve_gap_fill_bounds,
+)
+
 
 def _build_date_windows(from_date: date, to_date: date, *, days_per_window: int) -> list[tuple[date, date]]:
     from datetime import timedelta
@@ -42,3 +47,57 @@ def test_prometheus_metrics_renders_latest_job_stats() -> None:
     assert 'job="amfi-nav-daily"' in body
     assert "zynd_mf_job_last_success" in body
     assert "zynd_mf_job_last_records_inserted" in body
+
+
+def test_evaluate_nav_history_depth_needs_gap_fill_when_oldest_is_recent() -> None:
+    needed, stats = evaluate_nav_history_depth(
+        nav_count=5_000_000,
+        mf_count=5000,
+        oldest_nav_date=date(2025, 10, 1),
+        newest_nav_date=date(2026, 10, 9),
+        target_from=date(2006, 4, 1),
+        row_threshold=1000,
+    )
+    assert needed is True
+    assert stats["reason"] == "history_span_below_5y"
+
+
+def test_evaluate_nav_history_depth_skips_when_oldest_already_at_amfi_floor() -> None:
+    needed, stats = evaluate_nav_history_depth(
+        nav_count=5_000_000,
+        mf_count=5000,
+        oldest_nav_date=date(2006, 4, 3),
+        newest_nav_date=date(2026, 10, 9),
+        target_from=date(2006, 4, 1),
+        row_threshold=1000,
+    )
+    assert needed is False
+    assert stats["oldest_nav_date"] == "2006-04-03"
+
+
+def test_resolve_gap_fill_bounds_stops_before_existing_rows() -> None:
+    backfill_from, backfill_to = resolve_gap_fill_bounds(
+        target_from=date(2006, 4, 1),
+        oldest_nav_date=date(2025, 10, 1),
+        newest_nav_date=date(2026, 10, 9),
+        today=date(2026, 10, 9),
+        force=False,
+        from_date=None,
+        to_date=None,
+    )
+    assert backfill_from == date(2006, 4, 1)
+    assert backfill_to == date(2025, 9, 30)
+
+
+def test_resolve_gap_fill_bounds_force_runs_through_today() -> None:
+    backfill_from, backfill_to = resolve_gap_fill_bounds(
+        target_from=date(2006, 4, 1),
+        oldest_nav_date=date(2025, 10, 1),
+        newest_nav_date=date(2026, 10, 9),
+        today=date(2026, 10, 9),
+        force=True,
+        from_date=None,
+        to_date=None,
+    )
+    assert backfill_from == date(2006, 4, 1)
+    assert backfill_to == date(2026, 10, 9)

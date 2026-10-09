@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.investor.indian_bank_display import format_bank_account_label, resolve_bank_display_name
@@ -22,6 +22,7 @@ from app.application.mf.mf_scheme_resolution import (
     mutual_fund_isin_equals,
     mutual_fund_isin_in,
 )
+from app.application.mf.investment_constraints import fund_allows_sip, investment_details_for_fund
 from app.application.mf.mf_investment_account_service import ensure_fp_mfia, ensure_mfia_old_id
 from app.application.mf.mf_order_service import get_or_create_mf_investment_account
 from app.application.mf.public_asset_service import resolve_amc_logo_url
@@ -68,6 +69,56 @@ def _is_active_portfolio_holding(row: dict[str, Any]) -> bool:
 
 def _filter_active_portfolio_holdings(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [row for row in holdings if _is_active_portfolio_holding(row)]
+
+
+_HOLDING_PENDING_ORDER_STATUSES = {
+    MfOrderStatus.pending,
+    MfOrderStatus.submitted,
+    MfOrderStatus.payment_pending,
+    MfOrderStatus.processing,
+}
+
+
+async def _load_holding_pending_action(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    holding_id: str,
+) -> dict[str, Any] | None:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=21)
+    rows = (
+        await session.execute(
+            select(MfOrder)
+            .where(
+                MfOrder.user_id == user_id,
+                MfOrder.order_type.in_((MfOrderType.switch, MfOrderType.redemption)),
+                or_(
+                    MfOrder.status.in_(_HOLDING_PENDING_ORDER_STATUSES),
+                    and_(
+                        MfOrder.status == MfOrderStatus.succeeded,
+                        MfOrder.created_at >= cutoff,
+                    ),
+                ),
+            )
+            .order_by(MfOrder.created_at.desc())
+            .limit(25)
+        )
+    ).scalars().all()
+    for order in rows:
+        meta = order.metadata_ if isinstance(order.metadata_, dict) else {}
+        if not _pending_order_matches_holding(meta, holding_id):
+            continue
+        kind = "switch" if order.order_type == MfOrderType.switch else "redeem"
+        return {
+            "kind": kind,
+            "status": order.status.value,
+            "order_id": str(order.id),
+            "amount_inr": float(order.amount_inr),
+            "confirmed": bool(meta.get("switch_confirmed") or meta.get("redemption_confirmed")),
+            "switch_in_scheme": meta.get("switch_in_scheme"),
+            "switch_in_product_id": meta.get("switch_in_product_id"),
+        }
+    return None
 
 ALLOCATION_SLICE_META: dict[str, dict[str, str]] = {
     "equity": {"label": "Equity", "color": "bg-sky-500"},
@@ -124,6 +175,22 @@ def parse_holding_id(holding_id: str) -> tuple[str, str] | None:
     if not folio_number or not isin:
         return None
     return folio_number, isin
+
+
+def _pending_order_matches_holding(meta: dict[str, Any], holding_id: str) -> bool:
+    stored = str(meta.get("holding_id") or "").strip()
+    if stored and stored == holding_id:
+        return True
+    parsed = parse_holding_id(holding_id)
+    stored_parsed = parse_holding_id(stored) if stored else None
+    if parsed and stored_parsed and parsed == stored_parsed:
+        return True
+    if parsed is None:
+        return False
+    folio_number, isin = parsed
+    meta_folio = str(meta.get("folio_number") or "").strip()
+    meta_isin = str(meta.get("isin") or "").strip().upper()
+    return bool(meta_folio) and meta_folio == folio_number and meta_isin == isin
 
 
 def parse_scheme_wise_returns(payload: dict[str, Any], *, isin: str) -> dict[str, float | None]:
@@ -407,6 +474,17 @@ def _nav_on_or_before(nav_rows: list[tuple[date, Decimal]], target: date) -> Dec
     return chosen
 
 
+def _nav_on_or_after(nav_rows: list[tuple[date, Decimal]], target: date) -> Decimal | None:
+    for nav_date, nav_value in nav_rows:
+        if nav_date >= target:
+            return nav_value
+    return None
+
+
+def _nav_for_order_allotment(nav_rows: list[tuple[date, Decimal]], target: date) -> Decimal | None:
+    return _nav_on_or_before(nav_rows, target) or _nav_on_or_after(nav_rows, target)
+
+
 async def _load_nav_histories_by_fund(
     session: AsyncSession,
     *,
@@ -581,7 +659,7 @@ async def _build_portfolio_growth_series(
     unit_deltas: dict[date, dict[int, Decimal]] = {}
     invested_deltas: dict[date, Decimal] = {}
     for event_date, fund_id, amount, order_type in events:
-        nav = _nav_on_or_before(nav_by_fund.get(fund_id, []), event_date)
+        nav = _nav_for_order_allotment(nav_by_fund.get(fund_id, []), event_date)
         if order_type == MfOrderType.redemption:
             invested_deltas[event_date] = invested_deltas.get(event_date, Decimal("0")) - amount
             if nav is not None and nav > 0:
@@ -598,7 +676,7 @@ async def _build_portfolio_growth_series(
 
     cumulative_units: dict[int, Decimal] = {fund_id: Decimal("0") for fund_id in fund_ids}
     cumulative_invested = Decimal("0")
-    value_ratio = Decimal(str(current_value_inr / invested_inr)) if invested_inr > 0 else Decimal("1")
+    last_nav_value: Decimal | None = None
     points: list[dict[str, Any]] = []
 
     for day in _iter_calendar_days(first_date, today):
@@ -624,8 +702,12 @@ async def _build_portfolio_growth_series(
 
         if has_nav:
             estimated_value = portfolio_value
+            last_nav_value = portfolio_value
+        elif last_nav_value is not None:
+            estimated_value = last_nav_value
         else:
-            estimated_value = cumulative_invested * value_ratio
+            # Cost, not today's P&L — missing NAV must not paint every day at current value.
+            estimated_value = cumulative_invested
 
         points.append(
             {
@@ -638,13 +720,6 @@ async def _build_portfolio_growth_series(
 
     if len(points) < 2:
         return _build_flow_series(invested_inr=invested_inr, current_value_inr=current_value_inr)
-
-    computed_last = points[-1]["value"]
-    if computed_last > 0 and current_value_inr > 0:
-        scale = current_value_inr / computed_last
-        if abs(scale - 1.0) > 0.001:
-            for point in points[:-1]:
-                point["value"] = round(point["value"] * scale, 2)
 
     points[-1]["value"] = round(current_value_inr, 2)
     points[-1]["invested"] = round(invested_inr, 2)
@@ -690,6 +765,7 @@ async def _merge_external_holdings(
                 "isin": isin,
                 "fund_name": meta.get("matched_fund_name") or ext.get("matched_scheme_name") or ext.get("scheme_name") or isin,
                 "amc_name": meta.get("amc_name") or ext.get("amc_name"),
+                "amc_slug": meta.get("amc_slug"),
                 "amc_logo_url": meta.get("amc_logo_url") or ext.get("amc_logo_url"),
                 "units": units,
                 "redeemable_units": units,
@@ -753,6 +829,8 @@ async def invalidate_user_portfolio_cache(user_id: uuid.UUID) -> None:
         f"portfolio:redeem_units:v1:{user_id}",
         f"portfolio:redeem_units:v2:{user_id}",
         f"portfolio:holding_detail:v2:{user_id}:*",
+        f"portfolio:holding_detail:v3:{user_id}:*",
+        f"portfolio:holding_detail:v4:{user_id}:*",
     ]
     for pattern in patterns:
         if pattern.endswith("*"):
@@ -792,6 +870,7 @@ async def _load_fund_metadata(
             "matched_fund_name": scheme_name,
             "sebi_category": sebi_category,
             "amc_name": amc_name,
+            "amc_slug": slug,
             "amc_logo_url": resolve_amc_logo_url(logo_url, slug, settings),
         }
         for key in matching_fund_isins(
@@ -872,7 +951,7 @@ async def _has_processing_orders(session: AsyncSession, *, user_id: uuid.UUID) -
         await session.execute(
             select(MfOrder).where(
                 MfOrder.user_id == user_id,
-                MfOrder.order_type != MfOrderType.redemption,
+                MfOrder.order_type.not_in([MfOrderType.redemption, MfOrderType.switch]),
                 MfOrder.status.not_in(
                     [
                         MfOrderStatus.succeeded,
@@ -951,6 +1030,7 @@ async def _fetch_enriched_holdings(
                 "isin": isin,
                 "fund_name": meta.get("matched_fund_name") or row["fund_name"],
                 "amc_name": meta.get("amc_name"),
+                "amc_slug": meta.get("amc_slug"),
                 "amc_logo_url": meta.get("amc_logo_url"),
                 "units": row["units"],
                 "redeemable_units": row["redeemable_units"],
@@ -1300,7 +1380,7 @@ async def get_user_portfolio_holding_detail(
     holding_id: str,
 ) -> dict[str, Any]:
     settings = get_settings()
-    cache_key = f"portfolio:holding_detail:v1:{user_id}:{holding_id}"
+    cache_key = f"portfolio:holding_detail:v4:{user_id}:{holding_id}"
     cached = await _get_cached_portfolio(cache_key, settings=settings)
     if cached is not None:
         return cached
@@ -1310,6 +1390,10 @@ async def get_user_portfolio_holding_detail(
         return {"status": "invalid_holding_id", "holding": None}
 
     folio_number, isin = parsed
+    resolved_holding_id = build_portfolio_holding_id(folio_number=folio_number, isin=isin)
+    pending_action = await _load_holding_pending_action(
+        session, user_id=user_id, holding_id=resolved_holding_id
+    )
     _mfia, old_id, fp_mfia_id, readiness = await _resolve_mfia_context(session, user_id=user_id)
 
     if readiness != "ready" or old_id is None or fp_mfia_id is None:
@@ -1322,14 +1406,32 @@ async def get_user_portfolio_holding_detail(
         folios=folio_number,
     )
     raw_rows = [row for row in parse_holdings_report(holdings_payload) if str(row.get("isin")).upper() == isin]
-    if not raw_rows:
+    if not raw_rows and pending_action is None:
         payload = {"status": "not_found", "holding": None}
         await _set_cached_portfolio(cache_key, payload, settings=settings)
         return payload
 
-    row = raw_rows[0]
+    row = raw_rows[0] if raw_rows else {
+        "units": 0,
+        "redeemable_units": 0,
+        "current_value_inr": 0,
+        "invested_inr": 0,
+        "fund_name": None,
+        "nav": 0,
+        "nav_as_on": None,
+        "redeemable_amount_inr": 0,
+    }
     fund_meta = await _load_fund_metadata(session, isins={isin}, settings=settings)
     meta = fund_meta.get(isin, {})
+    catalog_fund = (
+        await session.execute(select(MutualFund).where(mutual_fund_isin_in({isin})).limit(1))
+    ).scalar_one_or_none()
+    invest_details = investment_details_for_fund(catalog_fund) if catalog_fund else None
+    sip_options = (
+        invest_details.get("sip_options")
+        if isinstance(invest_details, dict) and isinstance(invest_details.get("sip_options"), list)
+        else []
+    )
 
     folio_payload = await list_mf_folios(fp_mfia_id=fp_mfia_id, folio_number=folio_number)
     folio_meta = _extract_folio_meta(folio_payload)
@@ -1352,6 +1454,17 @@ async def get_user_portfolio_holding_detail(
     current_value = float(row.get("current_value_inr") or 0)
     units = float(row.get("units") or 0)
     redeemable_units = float(row.get("redeemable_units") or units)
+    if (
+        pending_action
+        and str(pending_action.get("status") or "").upper() == "SUCCEEDED"
+        and units <= 0
+        and redeemable_units <= 0
+    ):
+        pending_action = None
+    if not raw_rows and pending_action is None:
+        payload = {"status": "not_found", "holding": None}
+        await _set_cached_portfolio(cache_key, payload, settings=settings)
+        return payload
     nav = float(row.get("nav") or 0)
     return_inr = current_value - invested
     return_pct = (return_inr / invested * 100) if invested > 0 else 0.0
@@ -1378,11 +1491,12 @@ async def get_user_portfolio_holding_detail(
     _apply_holding_day_change([day_change_row], return_1d_by_isin=return_1d_by_isin)
 
     holding = {
-        "id": build_portfolio_holding_id(folio_number=folio_number, isin=isin),
+        "id": resolved_holding_id,
         "folio_number": folio_number,
         "isin": isin,
         "fund_name": meta.get("matched_fund_name") or row.get("fund_name") or isin,
         "amc_name": meta.get("amc_name"),
+        "amc_slug": meta.get("amc_slug"),
         "amc_logo_url": meta.get("amc_logo_url"),
         "units": units,
         "redeemable_units": redeemable_units,
@@ -1405,11 +1519,27 @@ async def get_user_portfolio_holding_detail(
         "redeem_bank_name": bank_name,
         "redeem_bank_ifsc": bank_ifsc,
         "nominee_name": nominee_name,
+        "product_id": str(catalog_fund.product_id) if catalog_fund and catalog_fund.product_id else None,
+        "min_sip_amount_inr": (
+            float(catalog_fund.min_sip_amount) if catalog_fund and catalog_fund.min_sip_amount is not None else None
+        ),
+        "min_lumpsum_amount_inr": (
+            float(catalog_fund.min_lumpsum_amount)
+            if catalog_fund and catalog_fund.min_lumpsum_amount is not None
+            else None
+        ),
+        "sip_allowed": bool(
+            catalog_fund
+            and fund_allows_sip(catalog_fund, payment_gateway=settings.zynd_mf_order_payment_gateway)
+        ),
+        "sip_options": sip_options,
         "transactions": transactions,
+        "pending_action": pending_action,
     }
 
     payload = {"status": "ready", "holding": holding}
-    await _set_cached_portfolio(cache_key, payload, settings=settings)
+    if holding["pending_action"] is None:
+        await _set_cached_portfolio(cache_key, payload, settings=settings)
     return payload
 
 

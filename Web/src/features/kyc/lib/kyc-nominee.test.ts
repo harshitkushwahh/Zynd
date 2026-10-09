@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assignLeftoverShareAfterRemove,
   formatNomineeDobDisplay,
   formatNomineeDobForDateInput,
   formatNomineeDobInput,
+  getNomineeKindFromDob,
   getNomineeTypeFromDob,
   isFutureNomineeDob,
   nomineeContinueRequiresOptOutDialog,
   parseNomineeDob,
+  type KycNomineeRecord,
 } from "@/features/kyc/lib/kyc-nominee";
 import {
   validateKycNomineeAddress,
@@ -33,16 +36,54 @@ describe("nominee date of birth", () => {
 
   it("formats keyboard input as dd/mm/yyyy", () => {
     expect(formatNomineeDobInput("15082000")).toBe("15/08/2000");
+    expect(formatNomineeDobInput("12202000")).toBe("12/12/2000");
+    expect(formatNomineeDobInput("3213")).toBe("31/12");
+    expect(formatNomineeDobInput("00")).toBe("01");
   });
 
   it("classifies adult and minor from date of birth", () => {
     expect(getNomineeTypeFromDob("2000-08-15")).toBe("individual");
     expect(getNomineeTypeFromDob("2024-01-01")).toBe("minor");
+    expect(getNomineeKindFromDob("")).toBe("unknown");
+    expect(getNomineeKindFromDob("2000-08-15")).toBe("individual");
+    expect(getNomineeKindFromDob("2024-01-01")).toBe("minor");
   });
 
   it("rejects a future date of birth", () => {
     expect(isFutureNomineeDob("2099-01-01")).toBe(true);
     expect(isFutureNomineeDob("2000-01-01")).toBe(false);
+  });
+});
+
+function nominee(id: string, share: string): KycNomineeRecord {
+  return {
+    id,
+    type: "individual",
+    core: {
+      fullName: id,
+      relationship: "son",
+      sourceOfWealth: "salary",
+      dateOfBirth: "2000-01-01",
+      sharePercent: share,
+    },
+    identity: { documentType: "", documentNumber: "" },
+    contact: { email: "", mobile: "" },
+    address: { line1: "", line2: "", city: "", pincode: "", country: "in" },
+  };
+}
+
+describe("nominee allocation after remove", () => {
+  it("gives leftover share to the remaining nominee", () => {
+    const next = assignLeftoverShareAfterRemove(
+      [nominee("a", "50"), nominee("b", "50")],
+      "b",
+    );
+    expect(next).toHaveLength(1);
+    expect(next[0]?.core.sharePercent).toBe("100");
+  });
+
+  it("clears the list when the last nominee is removed", () => {
+    expect(assignLeftoverShareAfterRemove([nominee("a", "100")], "a")).toEqual([]);
   });
 });
 

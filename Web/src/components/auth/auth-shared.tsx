@@ -243,11 +243,13 @@ export function OtpInput({
   onChange,
   error,
   id,
+  variant = "default",
 }: {
   value: string;
   onChange: (value: string) => void;
   error?: boolean;
   id?: string;
+  variant?: "default" | "square";
 }) {
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const digits = value.padEnd(6, " ").split("").slice(0, 6);
@@ -283,9 +285,14 @@ export function OtpInput({
     inputsRef.current[Math.min(pasted.length, 5)]?.focus();
   };
 
+  const isSquare = variant === "square";
+
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between gap-2" onPaste={handlePaste}>
+    <div className={cn(isSquare ? "w-full" : "space-y-2")}>
+      <div
+        className={cn("flex w-full", isSquare ? "gap-2 sm:gap-2.5" : "justify-between gap-2")}
+        onPaste={handlePaste}
+      >
         {digits.map((digit, index) => (
           <input
             key={index}
@@ -301,7 +308,10 @@ export function OtpInput({
             onChange={(event) => updateDigit(index, event.target.value)}
             onKeyDown={(event) => handleKeyDown(index, event)}
             className={cn(
-              "h-11 w-full rounded-[var(--radius-control)] border border-input bg-muted/20 text-center text-body font-medium text-foreground shadow-zynd-low outline-none transition-all focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30",
+              "text-center text-body font-semibold text-foreground shadow-zynd-low outline-none transition-all focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30",
+              isSquare
+                ? "aspect-square min-w-0 flex-1 rounded-[var(--radius-md)] border border-border bg-muted/15"
+                : "h-11 w-full rounded-[var(--radius-control)] border border-input bg-muted/20 font-medium",
               error && "border-destructive focus-visible:ring-destructive/20"
             )}
           />

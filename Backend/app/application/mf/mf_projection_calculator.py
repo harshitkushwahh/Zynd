@@ -88,6 +88,65 @@ def horizon_to_days(horizon: str) -> int | None:
     return CALCULATOR_HORIZONS.get(horizon)
 
 
+TRAILING_SAMPLE_DAYS: tuple[int, ...] = (365, 180, 90, 30)
+
+
+def resolve_trailing_daily_growth(history: History) -> tuple[int, Decimal] | None:
+    """Longest available trailing NAV window as a daily growth factor."""
+    history = sorted_history(history)
+    if len(history) < 2:
+        return None
+    as_of_date, end_nav = history[-1]
+    if end_nav <= 0:
+        return None
+    for sample_days in TRAILING_SAMPLE_DAYS:
+        match = resolve_period_start_nav(history, as_of_date, sample_days)
+        if match is None:
+            continue
+        _prior_date, start_nav = match
+        if start_nav <= 0:
+            continue
+        ratio = float(end_nav / start_nav)
+        if ratio <= 0:
+            continue
+        return sample_days, Decimal(str(ratio ** (1.0 / sample_days)))
+
+    first_date, first_nav = history[0]
+    span_days = (as_of_date - first_date).days
+    if span_days < 1 or first_nav <= 0:
+        return None
+    ratio = float(end_nav / first_nav)
+    if ratio <= 0:
+        return None
+    return span_days, Decimal(str(ratio ** (1.0 / span_days)))
+
+
+def _project_from_daily_growth(
+    *,
+    history: History,
+    amount_inr: Decimal,
+    horizon: str,
+    horizon_days: int,
+    daily_growth: Decimal,
+) -> LumpsumProjection:
+    as_of_date, end_nav = sorted_history(history)[-1]
+    multiplier = Decimal(str(float(daily_growth) ** horizon_days))
+    value_inr = _quantize_inr(amount_inr * multiplier)
+    return_pct = (multiplier - Decimal("1")) * Decimal("100")
+    implied_start = end_nav / multiplier if multiplier > 0 else end_nav
+    return LumpsumProjection(
+        as_of_date=as_of_date,
+        amount_inr=amount_inr,
+        horizon=horizon,
+        horizon_days=horizon_days,
+        start_date=as_of_date - timedelta(days=horizon_days),
+        start_nav=implied_start,
+        end_nav=end_nav,
+        value_inr=value_inr,
+        return_pct=_quantize_inr(return_pct),
+    )
+
+
 def compute_xirr(
     cashflows: list[tuple[date, Decimal]],
     *,
@@ -155,23 +214,32 @@ def project_lumpsum(
     as_of_date, end_nav = history[-1]
     start_date = as_of_date - timedelta(days=horizon_days)
     start_match = resolve_period_start_nav(history, as_of_date, horizon_days)
-    if start_match is None or end_nav <= 0:
-        return None
-    _prior_date, start_nav = start_match
-    if start_nav <= 0:
-        return None
+    if start_match is not None and end_nav > 0:
+        _prior_date, start_nav = start_match
+        if start_nav > 0:
+            value_inr = _quantize_inr(amount_inr * (end_nav / start_nav))
+            return LumpsumProjection(
+                as_of_date=as_of_date,
+                amount_inr=amount_inr,
+                horizon=horizon,
+                horizon_days=horizon_days,
+                start_date=start_date,
+                start_nav=start_nav,
+                end_nav=end_nav,
+                value_inr=value_inr,
+                return_pct=compute_period_return(end_nav, start_nav),
+            )
 
-    value_inr = _quantize_inr(amount_inr * (end_nav / start_nav))
-    return LumpsumProjection(
-        as_of_date=as_of_date,
+    trailing = resolve_trailing_daily_growth(history)
+    if trailing is None or end_nav <= 0:
+        return None
+    _sample_days, daily_growth = trailing
+    return _project_from_daily_growth(
+        history=history,
         amount_inr=amount_inr,
         horizon=horizon,
         horizon_days=horizon_days,
-        start_date=start_date,
-        start_nav=start_nav,
-        end_nav=end_nav,
-        value_inr=value_inr,
-        return_pct=compute_period_return(end_nav, start_nav),
+        daily_growth=daily_growth,
     )
 
 

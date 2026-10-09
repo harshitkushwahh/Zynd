@@ -11,6 +11,7 @@ import {
   Shield,
   Trash2,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 
 import { ProfilePhotoUploadDialog } from "@/components/dashboard/settings/profile-photo-upload-dialog";
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 export type SettingsSection =
   | "personal-details"
   | "bank-account"
+  | "nominees"
   | "security"
   | "change-password"
   | "change-email"
@@ -38,7 +40,11 @@ export const SETTINGS_SECTION_ALIASES: Partial<Record<string, SettingsSection>> 
   "zynd-pin": "security",
 };
 
-export const PROFILE_SETTINGS_SECTIONS: SettingsSection[] = ["personal-details", "bank-account"];
+export const PROFILE_SETTINGS_SECTIONS: SettingsSection[] = [
+  "personal-details",
+  "bank-account",
+  "nominees",
+];
 
 export const SETTINGS_NAV: {
   id: SettingsSection;
@@ -60,6 +66,13 @@ export const SETTINGS_NAV: {
     title: copy.settings.bankAccountTitle,
     description: copy.settings.bankAccountDescription,
     icon: Building2,
+  },
+  {
+    id: "nominees",
+    label: copy.settings.nomineesTitle,
+    title: copy.settings.nomineesTitle,
+    description: copy.settings.nomineesDescription,
+    icon: UsersRound,
   },
   {
     id: "security",

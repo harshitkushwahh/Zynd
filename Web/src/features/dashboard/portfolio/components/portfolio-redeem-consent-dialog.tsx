@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2, Mail, Phone, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
-import { AuthSubmitFooter, OtpInput } from "@/components/auth/auth-shared";
+import { AuthSubmitFooter } from "@/components/auth/auth-shared";
+import {
+  OtpConsentSuccessCard,
+  OtpConsentVerifyPanel,
+  OtpConsentVerifySkeleton,
+} from "@/components/otp/otp-consent-verify-panel";
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
 import { FieldMessage } from "@/components/ui/ui-message";
@@ -83,7 +88,7 @@ export function PortfolioRedeemConsentDialog({
 
   const resetState = useCallback(() => {
     setStep("review");
-    setLoading(false);
+    setLoading(true);
     setSubmitting(false);
     setSendingOtp(false);
     setOtpSent(false);
@@ -123,8 +128,8 @@ export function PortfolioRedeemConsentDialog({
         ? portfolioCopy.redeemConsentDoneTitle
         : portfolioCopy.redeemConsentTitle;
 
-  async function handleSendOtp() {
-    if (!order) return false;
+  async function handleSendOtp(): Promise<number | void> {
+    if (!order) return;
     setSendingOtp(true);
     setError("");
     try {
@@ -132,10 +137,9 @@ export function PortfolioRedeemConsentDialog({
       setMaskedMobile(result.masked_mobile);
       setOtpSent(true);
       toast.success(portfolioCopy.redeemConsentOtpSent);
-      return true;
+      return result.retry_after_seconds || 30;
     } catch (err) {
       setError(err instanceof Error ? err.message : portfolioCopy.redeemConsentOtpSendFailed);
-      return false;
     } finally {
       setSendingOtp(false);
     }
@@ -147,7 +151,7 @@ export function PortfolioRedeemConsentDialog({
       return;
     }
     const sent = await handleSendOtp();
-    if (sent) setStep("verify");
+    if (typeof sent === "number") setStep("verify");
   }
 
   async function handleConfirm() {
@@ -179,11 +183,9 @@ export function PortfolioRedeemConsentDialog({
 
   return (
     <BrandDialog open={open} onOpenChange={onOpenChange} title={dialogTitle} maxWidth="lg">
-      <div className={cn("px-5 pb-5", step === "review" ? "pt-4" : "pt-1.5")}>
+      <div className={cn("px-5 pb-5 sm:px-6", step === "review" || loading ? "pt-4" : "pt-1")}>
         {loading ? (
-          <div className="flex min-h-40 items-center justify-center">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
-          </div>
+          <OtpConsentVerifySkeleton />
         ) : (
           <>
             {step === "review" ? <PortfolioRedeemConsentHeroImage className="mb-4" /> : null}
@@ -260,72 +262,30 @@ export function PortfolioRedeemConsentDialog({
             ) : null}
 
             {step === "verify" ? (
-              <form
-                className="mt-2 space-y-4"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleConfirm();
+              <OtpConsentVerifyPanel
+                className="mt-2"
+                otpSent={otpSent}
+                otp={otp}
+                onOtpChange={(value) => {
+                  setOtp(value);
+                  if (error) setError("");
                 }}
-              >
-                <div className="rounded-[var(--radius-xl)] border border-border bg-muted/30 p-4 shadow-zynd-low">
-                  <div className="space-y-3 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <ShieldCheck className="size-4 text-primary" strokeWidth={2.25} aria-hidden />
-                      <p className="text-caption font-medium text-foreground">
-                        {portfolioCopy.redeemConsentEnterOtp}
-                      </p>
-                    </div>
-                    {maskedMobile ? (
-                      <p className="text-caption text-muted-foreground">{maskedMobile}</p>
-                    ) : null}
-                    <OtpInput
-                      id="portfolio-redeem-consent-otp"
-                      value={otp}
-                      onChange={setOtp}
-                      error={Boolean(error)}
-                    />
-                    <button
-                      type="button"
-                      className="text-caption text-primary underline-offset-4 hover:underline disabled:opacity-60"
-                      disabled={sendingOtp}
-                      onClick={() => void handleSendOtp()}
-                    >
-                      {sendingOtp ? copy.mfa.verifying : portfolioCopy.redeemConsentResendOtp}
-                    </button>
-                  </div>
-                </div>
-
-                {error ? <FieldMessage variant="error" message={error} /> : null}
-
-                <AuthSubmitFooter className="pt-0">
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={otp.trim().length < appConfig.otpLength || submitting}
-                  >
-                    {submitting ? <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> : null}
-                    {submitting ? copy.mfa.verifying : portfolioCopy.redeemConsentConfirm}
-                  </Button>
-                </AuthSubmitFooter>
-              </form>
+                sending={sendingOtp}
+                onSendOtp={handleSendOtp}
+                submitting={submitting}
+                onConfirm={() => void handleConfirm()}
+                error={error}
+                confirmLabel={portfolioCopy.redeemConsentConfirm}
+                infoMessage={portfolioCopy.redeemConsentEnterOtp}
+              />
             ) : null}
 
             {step === "done" ? (
               <div className="mt-2 space-y-4">
-                <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-success/25 bg-success/5 px-3 py-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
-                    <Check className="size-5" strokeWidth={2.5} aria-hidden />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <p className="text-compact font-semibold text-foreground">
-                      {portfolioCopy.redeemConsentSuccessTitle}
-                    </p>
-                    <p className="mt-0.5 text-caption leading-snug text-muted-foreground">
-                      {portfolioCopy.redeemConsentSuccessDescription}
-                    </p>
-                  </div>
-                </div>
-
+                <OtpConsentSuccessCard
+                  title={portfolioCopy.redeemConsentSuccessTitle}
+                  description={portfolioCopy.redeemConsentSuccessDescription}
+                />
                 <AuthSubmitFooter>
                   <Button className="w-full" onClick={handleDone}>
                     {portfolioCopy.redeemConsentDone}

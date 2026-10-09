@@ -52,7 +52,10 @@ export function resolveCybrillaOrderStatusLabel(
   order: Pick<MfOrder, "status" | "fp_state" | "fp_payment_status" | "payment_completed"> &
     Partial<Pick<MfOrder, "order_type">>,
 ): string {
-  if (order.order_type?.trim().toUpperCase() === "REDEMPTION") {
+  if (
+    order.order_type?.trim().toUpperCase() === "REDEMPTION" ||
+    order.order_type?.trim().toUpperCase() === "SWITCH"
+  ) {
     const redemptionLabel = formatCybrillaStatusLabel(order.fp_state);
     if (redemptionLabel) return redemptionLabel;
     return formatZyndOrderStatusLabel(order.status);

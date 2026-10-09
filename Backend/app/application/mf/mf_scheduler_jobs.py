@@ -127,7 +127,7 @@ def build_scheduled_jobs() -> list[ScheduledMfJob]:
             enabled=master and settings.zynd_mf_cold_start_backfill_enabled,
             runner=run_nav_cold_start_backfill,
             phase=4,
-            description="Historical AMFI NAV backfill when scheme_navs is below threshold",
+            description="Historical AMFI NAV backfill when scheme_navs is shallow or starts after 2006",
             depends_on=(scheme_dep,),
             run_sequence=10,
         ),

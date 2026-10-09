@@ -114,6 +114,7 @@ export function ReferralLeaderboardPanel() {
               icon={Trophy}
               title={copy.referral.leaderboardPageTitle}
               description={copy.referral.leaderboardPageSubtitle}
+              className="mb-0"
               iconClassName="text-warning"
               descriptionClassName="mt-1"
             />

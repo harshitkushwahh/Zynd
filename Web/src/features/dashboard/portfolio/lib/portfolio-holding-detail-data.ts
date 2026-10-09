@@ -17,6 +17,7 @@ export type PortfolioHoldingDetail = {
   id: string;
   fundName: string;
   amcName: string;
+  amcSlug: string | null;
   amcLogoUrl: string | null;
   isin?: string | null;
   currentValueInr: number;
@@ -37,7 +38,25 @@ export type PortfolioHoldingDetail = {
   redeemBankName: string | null;
   redeemBankIfsc: string | null;
   nomineeName: string | null;
+  productId: string | null;
+  minSipAmountInr: number | null;
+  minLumpsumAmountInr: number | null;
+  sipAllowed: boolean;
+  sipOptions: Array<{
+    frequency: string;
+    min_inr?: number | null;
+    max_inr?: number | null;
+    multiples_inr?: number | null;
+    min_installments?: number | null;
+  }>;
   transactions: PortfolioHoldingTransaction[];
+  pendingAction: {
+    kind: "switch" | "redeem";
+    status: string;
+    orderId: string;
+    amountInr: number;
+    confirmed: boolean;
+  } | null;
 };
 
 export function portfolioHoldingDetailHref(holdingId: string) {

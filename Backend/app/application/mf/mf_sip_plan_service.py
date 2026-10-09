@@ -27,6 +27,7 @@ from app.application.mf.mf_fp_review_poll import (
 )
 from app.application.mf.mf_fp_state import FP_PLAN_CANCELLED_STATES, FP_PLAN_FAILURE_STATES, map_fp_plan_state
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
+from app.application.mf.mf_folio_reuse_service import resolve_existing_folio_for_scheme
 from app.application.mf.mf_mandate_service import (
     create_mandate_for_user,
     maybe_release_mandate_after_sip_change,
@@ -457,6 +458,7 @@ async def create_sip_plan(
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
     mandate_type: str = "upi",
+    folio_number: str | None = None,
 ) -> MfSipPlan:
     if amount_inr <= 0:
         raise MfOrderError(code="invalid_amount", message="Amount must be positive")
@@ -530,6 +532,7 @@ async def create_sip_plan(
                 "fp_scheme_id": fund.fp_scheme_id,
                 "purchase_scheme": resolve_mf_purchase_scheme(fund)[0],
                 "user_ip": resolved_user_ip,
+                **({"folio_number": folio_number.strip()} if folio_number and folio_number.strip() else {}),
             },
             family_goal_id=linked_goal.id if linked_goal else None,
         ),
@@ -782,6 +785,18 @@ async def submit_pending_sip_plan(session: AsyncSession, plan: MfSipPlan) -> boo
     }
     if plan.installment_day is not None:
         body["installment_day"] = plan.installment_day
+    folio_number = str(meta.get("folio_number") or "").strip() or await resolve_existing_folio_for_scheme(
+        session,
+        fp_mfia_id=fp_mfia_id,
+        isin=purchase_scheme,
+        mfia=mfia,
+        fund=fund,
+    )
+    if folio_number:
+        body["folio_number"] = folio_number
+        if meta.get("folio_number") != folio_number:
+            meta["folio_number"] = folio_number
+            plan.metadata_ = meta
     user_ip = await resolve_fp_user_ip(meta.get("user_ip"))
     if user_ip:
         body["user_ip"] = user_ip

@@ -17,7 +17,6 @@ export function KycNomineeOptOutIllustration({ className }: KycNomineeOptOutIllu
         src={optOutNomineeImage}
         alt={copy.kyc.nominee.optOut.illustrationAlt}
         className="h-auto w-full max-w-[17rem] object-contain"
-        priority
       />
     </div>
   );

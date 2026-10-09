@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ChevronRight, ImageIcon } from "lucide-react";
 
 import type { InvestCategory } from "@/features/invest/api/invest-api";
@@ -21,12 +22,13 @@ function CollectionIllustration({
 }) {
   if (illustrationSrc) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={illustrationSrc}
         alt=""
+        fill
+        sizes="(max-width: 640px) 40vw, 160px"
         className={cn(
-          "h-full w-full object-contain object-right-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.22)]",
+          "object-contain object-right-bottom drop-shadow-[0_8px_24px_rgba(0,0,0,0.22)]",
           scaleClass,
         )}
       />

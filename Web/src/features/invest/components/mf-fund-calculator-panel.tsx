@@ -14,6 +14,7 @@ import {
 import { formatDate, formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
 import {
   clampLumpsumAmount,
+  historicReturnBarPercents,
   LUMPSUM_CALCULATOR_DEFAULT_AMOUNT,
   LUMPSUM_CALCULATOR_MAX_AMOUNT,
   lumpsumAmountStep,
@@ -91,24 +92,62 @@ function ModeTabs({
   );
 }
 
+function HistoricReturnsBar({
+  invested,
+  value,
+  maxValue,
+}: {
+  invested: number;
+  value: number;
+  maxValue: number;
+}) {
+  const { totalPct, investedPct, gainPct } = historicReturnBarPercents(invested, value, maxValue);
+  const gains = Math.max(0, value - invested);
+
+  return (
+    <div
+      className="h-3 w-full min-w-[5.5rem]"
+      role="img"
+      aria-label={`${copy.mutualFunds.lumpsumChartInvested} ${formatInr(invested)}, ${copy.mutualFunds.lumpsumChartGain} ${formatInr(gains)}`}
+    >
+      <div
+        className="flex h-full overflow-hidden rounded-full"
+        style={{ width: `${totalPct}%` }}
+      >
+        {investedPct > 0 ? (
+          <div
+            className="h-full min-w-0 bg-[var(--sip-invested-track)]"
+            style={{ width: `${totalPct > 0 ? (investedPct / totalPct) * 100 : 0}%` }}
+          />
+        ) : null}
+        {gainPct > 0 ? <div className="h-full min-w-0 flex-1 bg-[var(--sip-gain-track)]" /> : null}
+      </div>
+    </div>
+  );
+}
+
 function MfFundCalculatorResultsSkeleton() {
   return (
     <div className="w-full space-y-4" aria-busy="true" aria-live="polite">
       <div className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
-        <div className="border-b border-border bg-muted/20 px-4 py-2.5">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="border-b border-border bg-muted/20 px-3 py-2.5 sm:px-4">
+          <div className="grid grid-cols-5 gap-3">
+            <Skeleton className="h-4 w-14" />
             <Skeleton className="h-4 w-16" />
             <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-24" />
             <Skeleton className="h-4 w-14 justify-self-end" />
           </div>
         </div>
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="grid grid-cols-3 gap-3 border-b border-border/60 px-4 py-3 last:border-0"
+            className="grid grid-cols-5 gap-3 border-b border-border/60 px-3 py-3 last:border-0 sm:px-4"
           >
             <Skeleton className="h-4 w-10" />
+            <Skeleton className="h-4 w-20" />
             <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-full self-center" />
             <Skeleton className="h-4 w-14 justify-self-end" />
           </div>
         ))}
@@ -148,6 +187,10 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
 
   const amountLabel =
     mode === "lumpsum" ? copy.mutualFunds.lumpsumAmountLabel : copy.mutualFunds.sipMonthlyLabel;
+  const maxProjectedValue = useMemo(
+    () => Math.max(...(calculator?.scenarios.map((row) => row.value_inr) ?? [0]), 1),
+    [calculator],
+  );
 
   useEffect(() => {
     if (previousMode.current !== mode) {
@@ -276,17 +319,23 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
         <MfFundCalculatorResultsSkeleton />
       ) : calculator && calculator.scenarios.length > 0 ? (
         <div className="w-full space-y-4">
-          <div className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
-            <table className="w-full text-left text-compact">
+          <div className={cn("overflow-x-auto border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
+            <table className="w-full min-w-[36rem] text-left text-compact">
               <thead>
                 <tr className="border-b border-border bg-muted/20">
-                  <th className="px-4 py-2.5 font-medium text-muted-foreground">
+                  <th className="px-3 py-2.5 font-medium text-muted-foreground sm:px-4">
                     {copy.mutualFunds.calculatorHorizonColumn}
                   </th>
-                  <th className="px-4 py-2.5 font-medium text-muted-foreground">
+                  <th className="px-3 py-2.5 font-medium text-muted-foreground sm:px-4">
+                    {copy.mutualFunds.calculatorInvestedColumn}
+                  </th>
+                  <th className="px-3 py-2.5 font-medium text-muted-foreground sm:px-4">
                     {copy.mutualFunds.lumpsumChartValue}
                   </th>
-                  <th className="px-4 py-2.5 text-right font-medium text-muted-foreground">
+                  <th className="w-[22%] min-w-[6.5rem] px-3 py-2.5 font-medium text-muted-foreground sm:px-4">
+                    {copy.mutualFunds.calculatorHistoricReturnsColumn}
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground sm:px-4">
                     {copy.mutualFunds.calculatorReturnColumn}
                   </th>
                 </tr>
@@ -296,15 +345,25 @@ export function MfFundCalculatorPanel({ fund, initialCalculator }: MfFundCalcula
                   const returnDisplay = formatSignedReturn(scenario.return_pct);
                   return (
                     <tr key={scenario.horizon} className="border-b border-border/60 last:border-0">
-                      <td className="px-4 py-3 font-medium uppercase text-muted-foreground">
+                      <td className="px-3 py-3 font-medium uppercase text-muted-foreground sm:px-4">
                         {scenario.horizon}
                       </td>
-                      <td className="px-4 py-3 font-semibold tabular-nums">
+                      <td className="px-3 py-3 tabular-nums text-foreground sm:px-4">
+                        {formatInr(scenario.invested_inr)}
+                      </td>
+                      <td className="px-3 py-3 font-semibold tabular-nums sm:px-4">
                         {formatInr(scenario.value_inr)}
+                      </td>
+                      <td className="px-3 py-3 sm:px-4">
+                        <HistoricReturnsBar
+                          invested={scenario.invested_inr}
+                          value={scenario.value_inr}
+                          maxValue={maxProjectedValue}
+                        />
                       </td>
                       <td
                         className={cn(
-                          "px-4 py-3 text-right font-medium tabular-nums",
+                          "px-3 py-3 text-right font-medium tabular-nums sm:px-4",
                           returnDisplay.tone === "positive" && "text-success",
                           returnDisplay.tone === "negative" && "text-destructive",
                           returnDisplay.tone === "muted" && "text-muted-foreground",

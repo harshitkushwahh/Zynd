@@ -23,7 +23,7 @@ from app.application.integrations.integration_runtime import (
     is_kyckart_live,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.cybrilla_terminal_log import log_fp_http
+from app.infrastructure.kyc.cybrilla_terminal_log import log_exception_dump, log_fp_http
 from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 
 
@@ -85,8 +85,16 @@ def _raise_for_fp_response(response: httpx.Response) -> None:
     try:
         payload = response.json()
     except ValueError:
-        payload = None
+        payload = {"raw": (response.text or "")[:4000]}
     message = _parse_fp_error_message(payload, fallback=fallback)
+    log_exception_dump(
+        "Finprim HTTP error",
+        status_code=response.status_code,
+        url=str(response.request.url) if response.request else None,
+        method=response.request.method if response.request else None,
+        message=message,
+        response=payload,
+    )
     raise FpClientError(message, "fp_client_error", response.status_code, response_data=payload)
 
 

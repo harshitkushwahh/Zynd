@@ -69,7 +69,7 @@ export function isAwaitingAllotmentOrder(order: MfOrder) {
 /** Paid orders waiting for AMC unit allotment — not unpaid payment-pending orders. */
 export function isUpcomingHoldingOrder(order: MfOrder) {
   const orderType = normalizeOrderType(order.order_type);
-  if (orderType === "REDEMPTION") return false;
+  if (orderType === "REDEMPTION" || orderType === "SWITCH") return false;
   return isAwaitingAllotmentOrder(order);
 }
 

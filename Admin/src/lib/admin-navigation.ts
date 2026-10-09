@@ -108,6 +108,14 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     ],
   },
   {
+    id: "nfo",
+    label: "NFO",
+    href: "/dashboard/mutual-funds/nfo",
+    icon: TrendingUp,
+    description: "New fund offers, NFO scheduler, and category membership",
+    permissions: ["mf.catalog.read", "mf.jobs.read"],
+  },
+  {
     id: "bulk-order",
     label: "Bulk Order",
     href: "/dashboard/bulk-order",

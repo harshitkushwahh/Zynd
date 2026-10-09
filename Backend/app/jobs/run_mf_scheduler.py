@@ -80,6 +80,16 @@ async def _run_due_jobs(fired: dict[str, datetime] | None = None) -> list[dict]:
                 await session.rollback()
                 logger.exception("MF job failed job=%s", job.name)
                 results.append({"job": job.name, "ok": False, "error": str(exc)})
+        try:
+            from app.application.mf.nfo_chain_trigger_service import signal_nfo_after_mf_success
+
+            signal = await signal_nfo_after_mf_success(session)
+            await session.commit()
+            if signal.get("signaled"):
+                logger.info("NFO chain trigger armed after MF scheduler tick: %s", signal)
+        except Exception:
+            await session.rollback()
+            logger.exception("Failed to arm NFO chain trigger")
     return results
 
 

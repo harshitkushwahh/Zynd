@@ -137,7 +137,6 @@ export function RiskProfileHeroCard({ className }: { className?: string }) {
             fill
             sizes="(min-width: 1024px) 192px, 144px"
             className="object-contain object-bottom object-right mix-blend-screen drop-shadow-lg"
-            priority
           />
         </div>
       </section>

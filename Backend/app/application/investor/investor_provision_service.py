@@ -41,6 +41,7 @@ from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
     InvestorBankAccount,
     InvestorEmailAddress,
+    InvestorObjectSource,
     InvestorObjectSyncStatus,
     InvestorPhoneNumber,
     InvestorProfile,
@@ -53,7 +54,12 @@ logger = logging.getLogger(__name__)
 
 
 def _mark_child_active(row: Any, *, external_id: str | None, external_old_id: int | None = None, raw: dict | None = None) -> None:
-    row.external_payload_json = raw
+    current = row.external_payload_json if isinstance(row.external_payload_json, dict) else {}
+    kyc_nominee = current.get("kyc_nominee")
+    if isinstance(raw, dict):
+        row.external_payload_json = {**current, **raw} if kyc_nominee is None else {**current, "finprim": raw}
+    elif raw is not None:
+        row.external_payload_json = raw
     row.sync_status = InvestorObjectSyncStatus.active
     row.failure_code = None
     row.failure_reason = None
@@ -266,30 +272,56 @@ async def _provision_child_objects(
             raise
 
     for party_row in profile.related_parties:
-        if party_row.sync_status == InvestorObjectSyncStatus.active and party_row.external_related_party_id:
-            patch_payload = build_related_party_patch_payload(party_row=party_row)
-            if patch_payload:
-                party_row.sync_status = InvestorObjectSyncStatus.pending_create
-                try:
-                    result = await patch_related_party(patch_payload)
-                    _mark_child_active(party_row, external_id=party_row.external_related_party_id, raw=result.get("raw"))
-                except FpClientError as exc:
-                    _mark_child_failed(party_row, code="fp_related_party_patch_failed", reason=str(exc))
-                    raise
-            continue
-        party_row.sync_status = InvestorObjectSyncStatus.pending_create
-        try:
-            result = await create_related_party(build_related_party_payload(profile_id=profile_id, party_row=party_row))
-            _mark_child_active(party_row, external_id=result.get("id"), raw=result.get("raw"))
-            patch_payload = build_related_party_patch_payload(party_row=party_row)
-            if patch_payload:
-                patch_result = await patch_related_party(patch_payload)
-                _mark_child_active(party_row, external_id=result.get("id"), raw=patch_result.get("raw"))
-        except FpClientError as exc:
-            _mark_child_failed(party_row, code="fp_related_party_failed", reason=str(exc))
-            raise
+        await provision_related_party_row(session, profile_id=profile_id, party_row=party_row)
 
     await session.flush()
+
+
+async def provision_related_party_row(
+    session: AsyncSession,
+    *,
+    profile_id: str,
+    party_row: InvestorRelatedParty,
+) -> None:
+    if party_row.sync_status == InvestorObjectSyncStatus.active and party_row.external_related_party_id:
+        patch_payload = build_related_party_patch_payload(party_row=party_row)
+        if not patch_payload:
+            return
+        party_row.sync_status = InvestorObjectSyncStatus.pending_create
+        try:
+            result = await patch_related_party(patch_payload)
+            _mark_child_active(party_row, external_id=party_row.external_related_party_id, raw=result.get("raw"))
+        except FpClientError as exc:
+            _mark_child_failed(party_row, code="fp_related_party_patch_failed", reason=str(exc))
+            raise
+        return
+
+    party_row.sync_status = InvestorObjectSyncStatus.pending_create
+    try:
+        result = await create_related_party(build_related_party_payload(profile_id=profile_id, party_row=party_row))
+        _mark_child_active(party_row, external_id=result.get("id"), raw=result.get("raw"))
+    except FpClientError as exc:
+        _mark_child_failed(party_row, code="fp_related_party_failed", reason=str(exc))
+        raise
+
+    await session.flush()
+    patch_payload = build_related_party_patch_payload(party_row=party_row)
+    if not patch_payload:
+        return
+    try:
+        patch_result = await patch_related_party(patch_payload)
+        _mark_child_active(party_row, external_id=party_row.external_related_party_id, raw=patch_result.get("raw"))
+        await session.flush()
+    except FpClientError as exc:
+        logger.exception(
+            "Related party created but optional identity PATCH failed id=%s",
+            party_row.external_related_party_id,
+        )
+        print(
+            f"[ERROR] PATCH /v2/related_parties failed after create id={party_row.external_related_party_id} "
+            f"status={exc.status_code} message={exc.message} response={exc.response_data}",
+            flush=True,
+        )
 
 
 def profile_has_unsynced_fp_children(profile: InvestorProfile) -> bool:
@@ -380,3 +412,69 @@ async def provision_investor_after_kyc_verified(session: AsyncSession, *, user_i
     except Exception:
         logger.exception("MF investment account create failed after KYC user=%s", user_id)
     return True
+
+
+async def sync_investor_email_after_account_change(
+    session: AsyncSession,
+    *,
+    user_id,
+    new_email: str,
+) -> bool:
+    """Create a Finprim email_address and point MFIA folio_defaults at it."""
+    normalized = str(new_email or "").strip().lower()
+    if not normalized:
+        return False
+
+    profile = await session.get(InvestorProfile, user_id)
+    if not profile or not profile.external_profile_id:
+        print(f"[MFIA] skip email folio_defaults sync; investor profile missing user={user_id}", flush=True)
+        return False
+
+    email_rows = list(
+        (
+            await session.scalars(
+                select(InvestorEmailAddress).where(InvestorEmailAddress.investor_profile_id == user_id)
+            )
+        ).all()
+    )
+    matching = next((row for row in email_rows if row.email.lower() == normalized), None)
+    for row in email_rows:
+        if row is not matching:
+            row.is_primary = False
+
+    if matching is None:
+        matching = InvestorEmailAddress(
+            investor_profile_id=user_id,
+            email=normalized,
+            is_primary=True,
+            source=InvestorObjectSource.user,
+            sync_status=InvestorObjectSyncStatus.draft,
+            belongs_to="self",
+        )
+        session.add(matching)
+        await session.flush()
+    else:
+        matching.email = normalized
+        matching.is_primary = True
+
+    if not matching.external_email_id:
+        matching.sync_status = InvestorObjectSyncStatus.pending_create
+        try:
+            result = await create_email_address(
+                build_email_payload(profile_id=str(profile.external_profile_id), email_row=matching)
+            )
+            _mark_child_active(matching, external_id=result.get("id"), raw=result.get("raw"))
+            await session.flush()
+        except FpClientError as exc:
+            _mark_child_failed(matching, code="fp_email_failed", reason=str(exc))
+            logger.exception("Finprim email_address create failed after account email change user=%s", user_id)
+            print(
+                f"[ERROR] Finprim POST /v2/email_addresses failed user={user_id} message={exc.message} "
+                f"response={exc.response_data}",
+                flush=True,
+            )
+            return False
+
+    from app.application.mf.mf_folio_defaults_service import refresh_mfia_communication_email
+
+    return await refresh_mfia_communication_email(session, user_id=user_id, email=matching)

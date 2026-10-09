@@ -103,6 +103,7 @@ export function usePortfolioHoldingDetailQuery(holdingId: string) {
     enabled: Boolean(holdingId),
     staleTime: PORTFOLIO_QUERY_STALE_MS,
     placeholderData: keepPreviousQueryData,
+    refetchInterval: (current) => (current.state.data?.holding?.pending_action ? 8_000 : false),
   });
 
   const holding = query.data?.holding ? mapPortfolioHoldingDetail(query.data.holding) : null;

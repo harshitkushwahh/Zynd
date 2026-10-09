@@ -19,9 +19,7 @@ export function DeleteAccountHeroImage({ className }: DeleteAccountHeroImageProp
         width={1536}
         height={1024}
         sizes={DELETE_ACCOUNT_HERO_SIZES}
-        unoptimized
         className="h-auto w-full max-w-[min(100%,15rem)] object-contain sm:max-w-[17rem]"
-        priority
       />
     </div>
   );

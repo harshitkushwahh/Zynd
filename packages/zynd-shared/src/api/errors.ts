@@ -55,10 +55,15 @@ export async function parseApiError(response: Response): Promise<ApiError> {
         response.status,
       );
     }
-    if (Array.isArray(detail) && detail[0]?.message) {
+    if (Array.isArray(detail) && detail[0]) {
+      const first = detail[0] as ApiErrorBody & { msg?: string; loc?: unknown[] };
+      const loc = Array.isArray(first.loc)
+        ? first.loc.filter((part) => part !== "body").join(".")
+        : "";
+      const message = first.message ?? first.msg ?? "Request failed";
       return new ApiError(
-        normalizeApiErrorMessage(detail[0].message, response.status),
-        detail[0].code ?? "api_error",
+        normalizeApiErrorMessage(loc ? `${loc}: ${message}` : message, response.status),
+        first.code ?? "api_error",
         response.status,
       );
     }

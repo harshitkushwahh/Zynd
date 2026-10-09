@@ -20,9 +20,7 @@ export function ChangeEmailHeroImage({ className }: ChangeEmailHeroImageProps) {
         width={1536}
         height={1024}
         sizes={CHANGE_EMAIL_HERO_SIZES}
-        unoptimized
         className="h-auto w-full max-w-[min(100%,15rem)] object-contain sm:max-w-[17rem]"
-        priority
       />
     </div>
   );

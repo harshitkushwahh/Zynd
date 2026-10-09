@@ -102,3 +102,17 @@ def test_resolve_period_start_nav_requires_full_span() -> None:
         (date(2026, 2, 1), Decimal("110")),
     ]
     assert resolve_period_start_nav(history, date(2026, 2, 1), 365) is None
+
+
+def test_compute_metrics_for_history_uses_real_five_year_nav() -> None:
+    history = [
+        (date(2021, 1, 1), Decimal("100")),
+        (date(2023, 1, 1), Decimal("121")),
+        (date(2026, 1, 1), Decimal("140")),
+    ]
+    result = compute_metrics_for_history(history)
+    assert result is not None
+    _as_of, metrics = result
+    assert metrics["return_3y"] == compute_cagr_return(Decimal("140"), Decimal("121"), years=Decimal("3"))
+    assert metrics["return_5y"] is not None
+    assert metrics["return_1y"] is None

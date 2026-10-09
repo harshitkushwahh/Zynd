@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
@@ -618,6 +618,58 @@ class MfJobResponse(BaseModel):
 
 class MfJobListResponse(BaseModel):
     jobs: list[MfJobResponse]
+
+
+class NfoOfferAdminResponse(BaseModel):
+    id: str
+    product_id: str
+    mutual_fund_id: int
+    fund_name: str
+    scheme_name: str
+    amc_name: str
+    status: str
+    subscription_open_date: Optional[str] = None
+    subscription_close_date: Optional[str] = None
+    allotment_date: Optional[str] = None
+    is_featured: bool = False
+    is_hidden: bool = False
+    marketing_headline: Optional[str] = None
+    marketing_body: Optional[str] = None
+    source: str
+    admin_override: bool = False
+    purchase_allowed: Optional[bool] = None
+    updated_at: Optional[str] = None
+
+
+class NfoOfferAdminListResponse(BaseModel):
+    items: list[NfoOfferAdminResponse]
+    counts: dict
+
+
+class NfoOfferPatchRequest(BaseModel):
+    status: Optional[str] = None
+    subscription_open_date: Optional[date] = None
+    subscription_close_date: Optional[date] = None
+    allotment_date: Optional[date] = None
+    is_featured: Optional[bool] = None
+    is_hidden: Optional[bool] = None
+    marketing_headline: Optional[str] = None
+    marketing_body: Optional[str] = None
+    admin_override: Optional[bool] = None
+
+
+class NfoSchedulerStatusResponse(BaseModel):
+    pending_after_mf: bool
+    pending_triggered_at: Optional[str] = None
+    last_mf_run_uuid: Optional[str] = None
+    last_nfo_success_date: Optional[str] = None
+    last_trigger_kind: Optional[str] = None
+    mf_boundary_succeeded_today: bool
+    nfo_succeeded_today: bool
+    fallback_cron: str
+    timezone: str
+    mutex_busy: bool = False
+    mutex_holders: list[str] = Field(default_factory=list)
 
 
 class MfRunJobResponse(BaseModel):

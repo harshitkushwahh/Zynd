@@ -658,7 +658,7 @@ jobs:
                 echo "Leaving mf-scheduler running so a live ingestion or pipeline is not killed."
               fi
             fi
-            for worker in mf-scheduler mf-order-worker mf-cas-worker event-worker outbox-relay document-scan-worker deletion-cron; do
+            for worker in mf-scheduler nfo-scheduler mf-order-worker mf-cas-worker event-worker outbox-relay document-scan-worker deletion-cron; do
               if [ "${worker}" = "mf-scheduler" ] && [ "${skip_scheduler}" -eq 1 ]; then
                 echo "mf-scheduler: skipped (live work)"
                 continue

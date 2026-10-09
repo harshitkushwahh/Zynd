@@ -25,7 +25,7 @@ export function PortfolioPageLoadingView() {
   const portfolioCopy = copy.dashboard.portfolio;
 
   return (
-    <div className="w-full min-w-0 space-y-6 pb-8">
+    <div className="w-full min-w-0 pb-8">
       <DashboardBreadcrumb items={[{ label: portfolioCopy.pageTitle }]} separator="slash" />
 
       <PageHeader

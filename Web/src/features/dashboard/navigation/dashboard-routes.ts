@@ -1,10 +1,10 @@
 import {
   Bell,
+  FileBarChart,
   Gauge,
   Gift,
   HandCoins,
   Headset,
-  Info,
   Landmark,
   LayoutDashboard,
   PieChart,
@@ -58,7 +58,6 @@ export const DASHBOARD_ROUTES: DashboardRoute[] = [
     description: "Track your holdings, allocation, and performance in one place.",
     enabled: true,
     showInTopNav: false,
-    showInSidebar: false,
   },
   {
     id: "family-groups",
@@ -136,6 +135,16 @@ export const DASHBOARD_ROUTES: DashboardRoute[] = [
     disabled: true,
     showInSidebar: false,
   },
+  {
+    id: "reports",
+    label: copy.reports.navLabel,
+    href: "/dashboard/reports",
+    icon: FileBarChart,
+    description: copy.reports.pageDescription,
+    enabled: true,
+    showInTopNav: false,
+    showInSidebar: false,
+  },
 ];
 
 export const SETTINGS_PAGE_META: DashboardPageMeta = {
@@ -157,11 +166,13 @@ export const HELP_PAGE_META: DashboardPageMeta = {
   icon: Headset,
 };
 
-export const ABOUT_PAGE_META: DashboardPageMeta = {
-  title: copy.about.pageTitle,
-  description: copy.about.pageDescription,
-  icon: Info,
+export const REPORTS_PAGE_META: DashboardPageMeta = {
+  title: copy.reports.pageTitle,
+  description: copy.reports.pageDescription,
+  icon: FileBarChart,
 };
+
+export const REPORTS_ROUTE = DASHBOARD_ROUTES.find((route) => route.id === "reports")!;
 
 export const DEFAULT_DASHBOARD_HREF = DASHBOARD_ROUTES[0].href;
 
@@ -188,7 +199,7 @@ export function resolveDashboardRoute(pathname: string): DashboardRoute | undefi
     pathname.startsWith("/dashboard/kyc") ||
     pathname.startsWith("/dashboard/notifications") ||
     pathname.startsWith("/dashboard/help") ||
-    pathname.startsWith("/dashboard/about")
+    pathname.startsWith("/dashboard/reports")
   ) {
     return undefined;
   }
@@ -216,8 +227,8 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
     return HELP_PAGE_META;
   }
 
-  if (pathname.startsWith("/dashboard/about")) {
-    return ABOUT_PAGE_META;
+  if (pathname.startsWith("/dashboard/reports")) {
+    return REPORTS_PAGE_META;
   }
 
   if (pathname.startsWith("/dashboard/referral/leaderboard")) {

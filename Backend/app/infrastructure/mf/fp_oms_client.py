@@ -18,6 +18,18 @@ from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 logger = logging.getLogger(__name__)
 
 _fp_mf_token: str | None = None
+
+
+def _fp_mf_transport_client_error(exc: httpx.TransportError, *, base_url: str, operation: str) -> FpClientError:
+    return FpClientError(
+        (
+            f"Finprim is unreachable ({operation}). "
+            f"Check network connectivity and FP base URL ({base_url.rstrip('/')}). "
+            f"{exc}"
+        ),
+        code="fp_mf_transport_error",
+        status_code=503,
+    )
 _token_lock = asyncio.Lock()
 _public_ip_cache: tuple[str, float] | None = None
 _public_ip_fetch_lock = asyncio.Lock()
@@ -177,27 +189,34 @@ async def _get_mf_token(*, force_refresh: bool = False) -> str:
             return _fp_mf_token
 
         url = f"{runtime.base_url.rstrip('/')}/v2/auth/{runtime.tenant}/token"
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.post(
-                url,
-                data={
-                    "client_id": runtime.client_id,
-                    "client_secret": runtime.client_secret,
-                    "grant_type": "client_credentials",
-                },
-            )
-            if not response.is_success:
-                logger.error(
-                    "Finprim MF OAuth failed env=%s tenant=%s status=%s url=%s body=%s",
-                    runtime.environment,
-                    runtime.tenant,
-                    response.status_code,
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.post(
                     url,
-                    (response.text or "")[:400],
+                    data={
+                        "client_id": runtime.client_id,
+                        "client_secret": runtime.client_secret,
+                        "grant_type": "client_credentials",
+                    },
                 )
-            response.raise_for_status()
-            _fp_mf_token = str(response.json()["access_token"])
-        return _fp_mf_token
+                if not response.is_success:
+                    logger.error(
+                        "Finprim MF OAuth failed env=%s tenant=%s status=%s url=%s body=%s",
+                        runtime.environment,
+                        runtime.tenant,
+                        response.status_code,
+                        url,
+                        (response.text or "")[:400],
+                    )
+                response.raise_for_status()
+                _fp_mf_token = str(response.json()["access_token"])
+            return _fp_mf_token
+        except httpx.TransportError as exc:
+            raise _fp_mf_transport_client_error(
+                exc,
+                base_url=runtime.base_url,
+                operation="OAuth token",
+            ) from exc
 
 
 async def _fp_mf_request(
@@ -251,6 +270,13 @@ async def _fp_mf_request(
 
         assert response is not None
         return response
+    except httpx.TransportError as exc:
+        error_code = "fp_mf_transport_error"
+        raise _fp_mf_transport_client_error(
+            exc,
+            base_url=runtime.base_url,
+            operation=f"{method} {path}",
+        ) from exc
     except Exception:
         error_code = "fp_mf_transport_error"
         raise
@@ -388,6 +414,7 @@ async def create_mf_purchase(
     source_ref_id: str,
     user_ip: str | None = None,
     gateway: str = "ondc",
+    folio_number: str | None = None,
 ) -> dict[str, Any]:
     settings = get_settings()
     body: dict[str, Any] = {
@@ -397,6 +424,8 @@ async def create_mf_purchase(
         "gateway": gateway,
         "source_ref_id": source_ref_id,
     }
+    if folio_number:
+        body["folio_number"] = folio_number
     await _attach_fp_user_ip(body, user_ip)
     if settings.zynd_distributor_arn.strip():
         body["distributor_arn"] = settings.zynd_distributor_arn.strip()
@@ -503,6 +532,9 @@ async def create_mf_purchases_batch(
             "gateway": purchase.get("gateway", gateway),
             "source_ref_id": purchase["source_ref_id"],
         }
+        folio_number = purchase.get("folio_number")
+        if folio_number:
+            item["folio_number"] = folio_number
         if resolved_ip:
             item["user_ip"] = resolved_ip
         if settings.zynd_distributor_arn.strip():
@@ -770,6 +802,51 @@ async def get_scheme_wise_returns(
     return await fp_mf_post("/v2/transactions/reports/scheme_wise_returns", body=body)
 
 
+async def get_capital_gains_report(
+    *,
+    fp_mfia_id: str,
+    traded_on_from: str | None = None,
+    traded_on_to: str | None = None,
+    folios: list[str] | None = None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"mf_investment_account": fp_mfia_id}
+    if traded_on_from:
+        body["traded_on_from"] = traded_on_from
+    if traded_on_to:
+        body["traded_on_to"] = traded_on_to
+    if folios:
+        body["folios"] = folios
+
+    if not is_finprim_enabled():
+        return {
+            "object": "transaction_report",
+            "data": {
+                "rows": [],
+                "columns": [
+                    "folio_number",
+                    "isin",
+                    "scheme_name",
+                    "type",
+                    "amount",
+                    "units",
+                    "traded_on",
+                    "traded_at",
+                    "source_days_held",
+                    "source_purchased_on",
+                    "source_purchased_at",
+                    "source_actual_gain",
+                    "source_taxable_gain",
+                    "grand_fathering",
+                    "grand_fathering_nav",
+                    "indexed_cost_of_acquisition",
+                    "indexed_capital_gain",
+                ],
+            },
+        }
+
+    return await fp_mf_post("/v2/transactions/reports/capital_gains", body=body)
+
+
 async def list_mf_folios(
     *,
     fp_mfia_id: str,
@@ -790,12 +867,18 @@ async def list_mf_transactions(
     folios: str,
     fp_mfia_id: str | None = None,
     types: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {"folios": folios}
     if fp_mfia_id:
         params["mf_investment_account"] = fp_mfia_id
     if types:
         params["types"] = types
+    if from_date:
+        params["from"] = from_date
+    if to_date:
+        params["to"] = to_date
 
     if not is_finprim_enabled():
         return {"object": "list", "data": []}
@@ -900,6 +983,218 @@ async def update_mf_redemption(fp_redemption_id: str, *, body: dict[str, Any]) -
         "state": extract_fp_state(payload),
         "raw": payload,
     }
+
+
+def _attach_distributor_fields(body: dict[str, Any]) -> None:
+    settings = get_settings()
+    if settings.zynd_distributor_arn.strip():
+        body["distributor_arn"] = settings.zynd_distributor_arn.strip()
+    if settings.zynd_distributor_euin.strip():
+        body["euin"] = settings.zynd_distributor_euin.strip()
+
+
+def _order_gateway() -> str:
+    return get_settings().zynd_mf_order_payment_gateway
+
+
+async def create_mf_switch(
+    *,
+    fp_mfia_id: str,
+    folio_number: str,
+    switch_out_scheme: str,
+    switch_in_scheme: str,
+    source_ref_id: str,
+    amount_inr: float | None = None,
+    units: float | None = None,
+    user_ip: str | None = None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "mf_investment_account": fp_mfia_id,
+        "folio_number": folio_number,
+        "switch_out_scheme": switch_out_scheme,
+        "switch_in_scheme": switch_in_scheme,
+        "source_ref_id": source_ref_id,
+        "gateway": _order_gateway(),
+    }
+    if amount_inr is not None:
+        body["amount"] = amount_inr
+    elif units is not None:
+        body["units"] = units
+    await _attach_fp_user_ip(body, user_ip)
+    _attach_distributor_fields(body)
+
+    if not is_finprim_enabled():
+        return {
+            "fp_switch_id": "stub-mfs-id",
+            "fp_switch_old_id": 1,
+            "state": "pending",
+            "raw": body,
+        }
+
+    payload = await fp_mf_post("/v2/mf_switches", body=body)
+    return {
+        "fp_switch_id": _extract_fp_id(payload),
+        "fp_switch_old_id": extract_fp_old_id(payload),
+        "state": extract_fp_state(payload),
+        "raw": payload,
+    }
+
+
+async def get_mf_switch(fp_switch_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {"id": fp_switch_id, "object": "mf_switch", "state": "pending"}
+    return await fp_mf_get(f"/v2/mf_switches/{fp_switch_id}")
+
+
+async def update_mf_switch(fp_switch_id: str, *, body: dict[str, Any]) -> dict[str, Any]:
+    payload_body = {"id": fp_switch_id, **body}
+    if not is_finprim_enabled():
+        return {
+            "fp_switch_id": fp_switch_id,
+            "fp_switch_old_id": 1,
+            "state": payload_body.get("state", "confirmed"),
+            "raw": payload_body,
+        }
+    payload = await fp_mf_patch("/v2/mf_switches", body=payload_body)
+    return {
+        "fp_switch_id": _extract_fp_id(payload) or fp_switch_id,
+        "fp_switch_old_id": extract_fp_old_id(payload),
+        "state": extract_fp_state(payload),
+        "raw": payload,
+    }
+
+
+async def list_mf_switches(*, fp_mfia_id: str | None = None, states: str | None = None) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    if fp_mfia_id:
+        params["mf_investment_account"] = fp_mfia_id
+    if states:
+        params["states"] = states
+    if not is_finprim_enabled():
+        return {"object": "list", "data": []}
+    return await fp_mf_get("/v2/mf_switches", params=params or None)
+
+
+async def create_mf_redemption_plan(*, body: dict[str, Any]) -> dict[str, Any]:
+    payload_body = dict(body)
+    payload_body.setdefault("gateway", _order_gateway())
+    await _attach_fp_user_ip(payload_body, payload_body.get("user_ip"))
+    _attach_distributor_fields(payload_body)
+    if not is_finprim_enabled():
+        return {
+            "fp_plan_id": "stub-mfrp-id",
+            "state": "created",
+            "source_ref_id": payload_body.get("source_ref_id"),
+            "next_installment_date": None,
+            "raw": payload_body,
+        }
+    payload = await fp_mf_post("/v2/mf_redemption_plans", body=payload_body)
+    return _serialize_mf_plan_item(_extract_fp_object(payload))
+
+
+async def get_mf_redemption_plan(fp_plan_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {"id": fp_plan_id, "object": "mf_redemption_plan", "state": "created"}
+    return await fp_mf_get(f"/v2/mf_redemption_plans/{fp_plan_id}")
+
+
+async def update_mf_redemption_plan(*, body: dict[str, Any]) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        state = body.get("state")
+        return {
+            "fp_plan_id": body.get("id", "stub-mfrp-id"),
+            "state": "active" if state == "confirmed" else (state or "review_completed"),
+            "source_ref_id": None,
+            "next_installment_date": None,
+            "raw": body,
+        }
+    payload = await fp_mf_patch("/v2/mf_redemption_plans", body=body)
+    return _serialize_mf_plan_item(_extract_fp_object(payload))
+
+
+async def cancel_mf_redemption_plan(*, fp_plan_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {
+            "fp_plan_id": fp_plan_id,
+            "state": "cancelled",
+            "source_ref_id": None,
+            "next_installment_date": None,
+            "raw": {"id": fp_plan_id},
+        }
+    payload = await fp_mf_post(f"/v2/mf_redemption_plans/{fp_plan_id}/cancel", body={})
+    return _serialize_mf_plan_item(_extract_fp_object(payload))
+
+
+async def list_mf_redemption_plans(*, fp_mfia_id: str | None = None, states: str | None = None) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    if fp_mfia_id:
+        params["mf_investment_account"] = fp_mfia_id
+    if states:
+        params["states"] = states
+    if not is_finprim_enabled():
+        return {"object": "list", "data": []}
+    return await fp_mf_get("/v2/mf_redemption_plans", params=params or None)
+
+
+async def create_mf_switch_plan(*, body: dict[str, Any]) -> dict[str, Any]:
+    payload_body = dict(body)
+    payload_body.setdefault("gateway", _order_gateway())
+    await _attach_fp_user_ip(payload_body, payload_body.get("user_ip"))
+    _attach_distributor_fields(payload_body)
+    if not is_finprim_enabled():
+        return {
+            "fp_plan_id": "stub-mfsp-id",
+            "state": "created",
+            "source_ref_id": payload_body.get("source_ref_id"),
+            "next_installment_date": None,
+            "raw": payload_body,
+        }
+    payload = await fp_mf_post("/v2/mf_switch_plans", body=payload_body)
+    return _serialize_mf_plan_item(_extract_fp_object(payload))
+
+
+async def get_mf_switch_plan(fp_plan_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {"id": fp_plan_id, "object": "mf_switch_plan", "state": "created"}
+    return await fp_mf_get(f"/v2/mf_switch_plans/{fp_plan_id}")
+
+
+async def update_mf_switch_plan(*, body: dict[str, Any]) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        state = body.get("state")
+        return {
+            "fp_plan_id": body.get("id", "stub-mfsp-id"),
+            "state": "active" if state == "confirmed" else (state or "review_completed"),
+            "source_ref_id": None,
+            "next_installment_date": None,
+            "raw": body,
+        }
+    payload = await fp_mf_patch("/v2/mf_switch_plans", body=body)
+    return _serialize_mf_plan_item(_extract_fp_object(payload))
+
+
+async def cancel_mf_switch_plan(*, fp_plan_id: str) -> dict[str, Any]:
+    if not is_finprim_enabled():
+        return {
+            "fp_plan_id": fp_plan_id,
+            "state": "cancelled",
+            "source_ref_id": None,
+            "next_installment_date": None,
+            "raw": {"id": fp_plan_id},
+        }
+    payload = await fp_mf_post(f"/v2/mf_switch_plans/{fp_plan_id}/cancel", body={})
+    return _serialize_mf_plan_item(_extract_fp_object(payload))
+
+
+async def list_mf_switch_plans(*, fp_mfia_id: str | None = None, states: str | None = None) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    if fp_mfia_id:
+        params["mf_investment_account"] = fp_mfia_id
+    if states:
+        params["states"] = states
+    if not is_finprim_enabled():
+        return {"object": "list", "data": []}
+    return await fp_mf_get("/v2/mf_switch_plans", params=params or None)
 
 
 async def list_fund_schemes(*, page: int = 1, size: int = 100) -> dict[str, Any]:

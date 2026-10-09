@@ -62,6 +62,14 @@ function isRedemptionOrder(order: Pick<MfOrder, "order_type">) {
   return order.order_type?.trim().toUpperCase() === "REDEMPTION";
 }
 
+function isSwitchOrder(order: Pick<MfOrder, "order_type">) {
+  return order.order_type?.trim().toUpperCase() === "SWITCH";
+}
+
+function isConsentFundOrder(order: Pick<MfOrder, "order_type">) {
+  return isRedemptionOrder(order) || isSwitchOrder(order);
+}
+
 function redemptionFpState(order: Pick<MfOrder, "fp_state">) {
   return order.fp_state?.trim().toLowerCase() ?? "";
 }
@@ -98,7 +106,7 @@ function redemptionFailureLabel(
 }
 
 function isPaymentAbandoned(order: MfOrder, events: MfOrderEvent[]) {
-  if (isRedemptionOrder(order)) return false;
+  if (isConsentFundOrder(order)) return false;
   const status = order.status?.toUpperCase();
   if (
     status &&
@@ -336,6 +344,7 @@ export function formatEventSource(source?: string | null) {
 
 function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): OrderJourneyView {
   const portfolioCopy = copy.dashboard.portfolio;
+  const isSwitch = isSwitchOrder(order);
   const placedAt = order.created_at ?? events[0]?.created_at ?? null;
   const status = order.status?.trim().toUpperCase() ?? "";
   const confirmed = events.some((event) => {
@@ -361,8 +370,10 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
 
   const steps: JourneyDisplayStep[] = [
     buildStep({
-      title: portfolioCopy.redeemJourneyStepPlaced,
-      description: portfolioCopy.redeemJourneyPlacedDescription,
+      title: isSwitch ? portfolioCopy.holdingSwitchJourneyStepPlaced : portfolioCopy.redeemJourneyStepPlaced,
+      description: isSwitch
+        ? portfolioCopy.holdingSwitchJourneyPlacedDescription
+        : portfolioCopy.redeemJourneyPlacedDescription,
       toStatus: copy.transactions.journeyStatusDone,
       badgeVariant: "success",
       isComplete: true,
@@ -373,7 +384,7 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
   if (isFailed && !isSubmitted && status !== "SUCCEEDED") {
     steps.push(
       buildStep({
-        title: portfolioCopy.redeemJourneyStepFailed,
+        title: isSwitch ? portfolioCopy.holdingSwitchJourneyStepFailed : portfolioCopy.redeemJourneyStepFailed,
         description: redemptionFailureLabel(order),
         toStatus: copy.transactions.journeyStatusFailed,
         badgeVariant: "destructive",
@@ -402,8 +413,12 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
   if (status === "SUCCEEDED") {
     steps.push(
       buildStep({
-        title: portfolioCopy.redeemJourneyStepPayoutCredited,
-        description: portfolioCopy.redeemJourneyPayoutCreditedDescription,
+        title: isSwitch
+          ? portfolioCopy.holdingSwitchJourneyStepCompleted
+          : portfolioCopy.redeemJourneyStepPayoutCredited,
+        description: isSwitch
+          ? portfolioCopy.holdingSwitchJourneyCompletedDescription
+          : portfolioCopy.redeemJourneyPayoutCreditedDescription,
         toStatus: copy.transactions.journeyStatusCompleted,
         badgeVariant: "success",
         isComplete: true,
@@ -419,10 +434,16 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
         buildStep({
           title: isSubmitted
             ? portfolioCopy.redeemJourneyStepAmcSubmitted
-            : portfolioCopy.redeemJourneyStepProcessing,
+            : isSwitch
+              ? portfolioCopy.holdingSwitchJourneyStepProcessing
+              : portfolioCopy.redeemJourneyStepProcessing,
           description: isSubmitted
-            ? portfolioCopy.redeemJourneyAmcSubmittedDescription
-            : portfolioCopy.redeemJourneyOutcomeProcessing,
+            ? isSwitch
+              ? portfolioCopy.holdingSwitchJourneyAmcSubmittedDescription
+              : portfolioCopy.redeemJourneyAmcSubmittedDescription
+            : isSwitch
+              ? portfolioCopy.holdingSwitchJourneyProcessingDescription
+              : portfolioCopy.redeemJourneyOutcomeProcessing,
           toStatus: copy.transactions.journeyStatusDone,
           badgeVariant: "success",
           isComplete: true,
@@ -432,7 +453,7 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
     }
     steps.push(
       buildStep({
-        title: portfolioCopy.redeemJourneyStepFailed,
+        title: isSwitch ? portfolioCopy.holdingSwitchJourneyStepFailed : portfolioCopy.redeemJourneyStepFailed,
         description: redemptionFailureLabel(order),
         toStatus: copy.transactions.journeyStatusFailed,
         badgeVariant: "destructive",
@@ -448,10 +469,16 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
     buildStep({
       title: isSubmitted
         ? portfolioCopy.redeemJourneyStepAmcSubmitted
-        : portfolioCopy.redeemJourneyStepProcessing,
+        : isSwitch
+          ? portfolioCopy.holdingSwitchJourneyStepProcessing
+          : portfolioCopy.redeemJourneyStepProcessing,
       description: isSubmitted
-        ? portfolioCopy.redeemJourneyAmcSubmittedDescription
-        : portfolioCopy.redeemJourneyOutcomeProcessing,
+        ? isSwitch
+          ? portfolioCopy.holdingSwitchJourneyAmcSubmittedDescription
+          : portfolioCopy.redeemJourneyAmcSubmittedDescription
+        : isSwitch
+          ? portfolioCopy.holdingSwitchJourneyProcessingDescription
+          : portfolioCopy.redeemJourneyOutcomeProcessing,
       toStatus: copy.transactions.journeyStatusInProgress,
       badgeVariant: "info",
       isComplete: false,
@@ -462,7 +489,7 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
 }
 
 export function buildOrderJourneyView(order: MfOrder, events: MfOrderEvent[]): OrderJourneyView {
-  if (isRedemptionOrder(order)) {
+  if (isConsentFundOrder(order)) {
     return buildRedemptionOrderJourney(order, events);
   }
 
@@ -480,7 +507,7 @@ export function formatMfOrderStatusLabel(
 ) {
   const normalized = (order?.status ?? status).trim().toUpperCase();
 
-  if (order && isRedemptionOrder(order)) {
+  if (order && isConsentFundOrder(order)) {
     if (isTerminalRedemptionFpFailure(order)) {
       return redemptionFailureLabel(order);
     }
@@ -493,7 +520,7 @@ export function formatMfOrderStatusLabel(
     }
   }
 
-  if (order && !isRedemptionOrder(order)) {
+  if (order && !isConsentFundOrder(order)) {
     if (isMfPurchaseOrderPaymentFailed(order)) {
       if (order.failure_code === "payment_abandoned") {
         return copy.transactions.orderStatusPaymentCanceled;
@@ -528,7 +555,7 @@ export function mfOrderStatusVariantForInvestor(
   order?: MfOrderInvestorStatusContext,
 ): StatusBadgeVariant {
   const normalized = status.trim().toUpperCase();
-  if (order && isRedemptionOrder(order)) {
+  if (order && isConsentFundOrder(order)) {
     if (isTerminalRedemptionFpFailure(order)) return "destructive";
     if (normalized === "SUCCEEDED" || redemptionFpState(order) === "successful") return "success";
     if (isRedemptionOrderFailed(order)) {
@@ -539,7 +566,7 @@ export function mfOrderStatusVariantForInvestor(
     return "info";
   }
   if (normalized === "SUCCEEDED") return "success";
-  if (order && !isRedemptionOrder(order)) {
+  if (order && !isConsentFundOrder(order)) {
     if (isMfPurchaseOrderPaymentFailed(order)) return "destructive";
     if (isMfPurchaseOrderAwaitingPayment(order)) return "warning";
     if (isOrderPaymentCompleted(order)) {

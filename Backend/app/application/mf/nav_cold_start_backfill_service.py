@@ -19,6 +19,8 @@ from app.infrastructure.persistence.mf_models import IngestionRunLog, IngestionR
 logger = logging.getLogger(__name__)
 
 MIN_AVG_NAV_ROWS_PER_FUND = 50
+HISTORY_DEPTH_SLACK_DAYS = 14
+MIN_HISTORY_SPAN_DAYS = 365 * 5
 _WINDOW_START_RE = re.compile(
     r"window \d+/\d+ \((\d{4}-\d{2}-\d{2}) \.\. (\d{4}-\d{2}-\d{2})\)"
 )
@@ -82,34 +84,94 @@ def _build_date_windows(from_date: date, to_date: date, *, days_per_window: int)
     return windows
 
 
-async def needs_cold_start_backfill(session: AsyncSession) -> tuple[bool, dict[str, int]]:
-    settings = get_settings()
-    nav_count = int(await session.scalar(select(func.count()).select_from(SchemeNav)) or 0)
-    mf_count = int(await session.scalar(select(func.count()).select_from(MutualFund)) or 0)
+def evaluate_nav_history_depth(
+    *,
+    nav_count: int,
+    mf_count: int,
+    oldest_nav_date: date | None,
+    newest_nav_date: date | None,
+    target_from: date,
+    row_threshold: int,
+    min_avg_rows: int = MIN_AVG_NAV_ROWS_PER_FUND,
+    slack_days: int = HISTORY_DEPTH_SLACK_DAYS,
+    min_span_days: int = MIN_HISTORY_SPAN_DAYS,
+) -> tuple[bool, dict[str, int | str]]:
+    stats: dict[str, int | str] = {"nav_count": nav_count, "mf_count": mf_count}
+    if oldest_nav_date is not None:
+        stats["oldest_nav_date"] = oldest_nav_date.isoformat()
+    if newest_nav_date is not None:
+        stats["newest_nav_date"] = newest_nav_date.isoformat()
 
-    if nav_count == 0:
-        return True, {"nav_count": nav_count, "mf_count": mf_count, "reason": "empty_nav_table"}
+    if nav_count == 0 or oldest_nav_date is None:
+        return True, {**stats, "reason": "empty_nav_table"}
 
     if mf_count > 0:
         avg_nav_per_fund = nav_count // mf_count
-        if avg_nav_per_fund < MIN_AVG_NAV_ROWS_PER_FUND:
-            return True, {
-                "nav_count": nav_count,
-                "mf_count": mf_count,
-                "avg_nav_per_fund": avg_nav_per_fund,
-                "reason": "shallow_nav_history",
-            }
+        stats["avg_nav_per_fund"] = avg_nav_per_fund
+        if avg_nav_per_fund < min_avg_rows:
+            return True, {**stats, "reason": "shallow_nav_history"}
 
-    threshold = max(settings.zynd_mf_cold_start_backfill_threshold, 1)
+    threshold = max(row_threshold, 1)
     if nav_count < threshold:
-        return True, {
-            "nav_count": nav_count,
-            "mf_count": mf_count,
-            "threshold": threshold,
-            "reason": "below_threshold",
-        }
+        return True, {**stats, "threshold": threshold, "reason": "below_threshold"}
 
-    return False, {"nav_count": nav_count, "mf_count": mf_count}
+    stats["target_from"] = target_from.isoformat()
+    if (oldest_nav_date - target_from).days > slack_days:
+        reason = "history_starts_too_late"
+        if newest_nav_date is not None and (newest_nav_date - oldest_nav_date).days < min_span_days:
+            reason = "history_span_below_5y"
+        return True, {**stats, "reason": reason}
+
+    return False, stats
+
+
+def resolve_gap_fill_bounds(
+    *,
+    target_from: date,
+    oldest_nav_date: date | None,
+    newest_nav_date: date | None,
+    today: date,
+    force: bool,
+    from_date: date | None,
+    to_date: date | None,
+) -> tuple[date, date]:
+    backfill_from = from_date or target_from
+    if to_date is not None:
+        backfill_to = min(to_date, today)
+    elif force or oldest_nav_date is None:
+        backfill_to = today
+    elif (oldest_nav_date - target_from).days > HISTORY_DEPTH_SLACK_DAYS:
+        backfill_to = min(today, oldest_nav_date - timedelta(days=1))
+    else:
+        backfill_to = today
+
+    if backfill_from > backfill_to and newest_nav_date is not None and newest_nav_date < today:
+        backfill_from = newest_nav_date + timedelta(days=1)
+        backfill_to = today
+    if backfill_to > today:
+        backfill_to = today
+    return backfill_from, backfill_to
+
+
+async def _nav_date_bounds(session: AsyncSession) -> tuple[date | None, date | None]:
+    oldest = await session.scalar(select(func.min(SchemeNav.nav_date)))
+    newest = await session.scalar(select(func.max(SchemeNav.nav_date)))
+    return oldest, newest
+
+
+async def needs_cold_start_backfill(session: AsyncSession) -> tuple[bool, dict[str, int | str]]:
+    settings = get_settings()
+    nav_count = int(await session.scalar(select(func.count()).select_from(SchemeNav)) or 0)
+    mf_count = int(await session.scalar(select(func.count()).select_from(MutualFund)) or 0)
+    oldest_nav_date, newest_nav_date = await _nav_date_bounds(session)
+    return evaluate_nav_history_depth(
+        nav_count=nav_count,
+        mf_count=mf_count,
+        oldest_nav_date=oldest_nav_date,
+        newest_nav_date=newest_nav_date,
+        target_from=date.fromisoformat(settings.zynd_mf_cold_start_backfill_from_date),
+        row_threshold=settings.zynd_mf_cold_start_backfill_threshold,
+    )
 
 
 async def run_nav_cold_start_backfill(
@@ -137,10 +199,17 @@ async def run_nav_cold_start_backfill(
 
     run = await begin_ingestion_run(session, job_name="nav-cold-start-backfill", triggered_by=triggered_by)
     processed = inserted = skipped = window_errors = 0
-    backfill_from = from_date or date.fromisoformat(settings.zynd_mf_cold_start_backfill_from_date)
-    backfill_to = to_date or date.today()
-    if backfill_to > date.today():
-        backfill_to = date.today()
+    target_from = date.fromisoformat(settings.zynd_mf_cold_start_backfill_from_date)
+    oldest_nav_date, newest_nav_date = await _nav_date_bounds(session)
+    backfill_from, backfill_to = resolve_gap_fill_bounds(
+        target_from=target_from,
+        oldest_nav_date=oldest_nav_date,
+        newest_nav_date=newest_nav_date,
+        today=date.today(),
+        force=force,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
     try:
         isin_to_fund_id: dict[str, int] = {}

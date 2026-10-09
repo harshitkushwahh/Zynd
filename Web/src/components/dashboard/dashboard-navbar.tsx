@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Bot,
-  Info,
   Search,
   ShoppingCart,
 } from "lucide-react";
@@ -49,42 +48,6 @@ function NavIconButton({
             className="size-10 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={label}
             onClick={onClick}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function NavIconLink({
-  href,
-  label,
-  children,
-  active,
-}: {
-  href: string;
-  label: string;
-  children: React.ReactNode;
-  active?: boolean;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Link
-            href={href}
-            prefetch={false}
-            scroll={false}
-            aria-label={label}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "inline-flex size-10 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors",
-              "hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
-              active && "bg-muted text-foreground",
-            )}
           />
         }
       >
@@ -245,14 +208,6 @@ export function DashboardNavbar() {
           </NavIconButton>
 
           <NotificationPopover />
-
-          <NavIconLink
-            href="/dashboard/about"
-            label={copy.about.navLabel}
-            active={pathname.startsWith("/dashboard/about")}
-          >
-            <Info className="size-4" />
-          </NavIconLink>
         </div>
 
         <Tooltip>

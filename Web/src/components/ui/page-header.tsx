@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 
 export const PAGE_HEADER_ICON_CLASS = "text-black dark:text-white";
 export const PAGE_HEADER_DESCRIPTION_CLASS = "mt-2 max-w-2xl text-compact text-muted-foreground";
+/** Shared gap after the dashboard breadcrumb and after the page header. */
+export const PAGE_STACK_GAP_CLASS = "mb-6";
 
 type PageHeaderProps = {
   icon?: LucideIcon;
@@ -61,12 +63,12 @@ export function PageHeader({
 
   if (action) {
     return (
-      <div className={cn("flex flex-wrap justify-between gap-4", rowAlign, className)}>
+      <div className={cn(PAGE_STACK_GAP_CLASS, "flex flex-wrap justify-between gap-4", rowAlign, className)}>
         {heading}
         <div className="shrink-0">{action}</div>
       </div>
     );
   }
 
-  return <div className={cn("min-w-0", className)}>{heading}</div>;
+  return <div className={cn(PAGE_STACK_GAP_CLASS, "min-w-0", className)}>{heading}</div>;
 }

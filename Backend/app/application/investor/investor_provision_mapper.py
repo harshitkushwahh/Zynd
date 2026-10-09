@@ -175,6 +175,33 @@ def validate_provision_drafts(
         raise InvestorProvisionValidationError("address_draft_missing", "Investor address draft is missing")
 
 
+FP_INVESTOR_PROFILE_INCOME_SLABS = frozenset(
+    {
+        "upto_1lakh",
+        "above_1lakh_upto_5lakh",
+        "above_5lakh_upto_10lakh",
+        "above_10lakh_upto_25lakh",
+        "above_25lakh_upto_1cr",
+        "above_1cr",
+    }
+)
+FP_INVESTOR_PROFILE_PEP_DETAILS = frozenset({"not_applicable", "pep_exposed", "pep_related"})
+
+
+def build_investor_profile_patch_payload(
+    *,
+    profile_id: str,
+    income_slab: str | None = None,
+    pep_details: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"id": profile_id}
+    if income_slab:
+        payload["income_slab"] = income_slab
+    if pep_details:
+        payload["pep_details"] = pep_details
+    return payload
+
+
 def build_investor_profile_payload(*, user: User, journey: KycJourneyState) -> dict[str, Any]:
     validate_provision_inputs(user=user, journey=journey)
     pan = journey.pan_draft_json or {}

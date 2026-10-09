@@ -87,7 +87,20 @@ export type InvestFundSummary = {
   display_order?: number;
   health_badges?: string[];
   display?: InvestFundDisplay | null;
+  nfo?: InvestNfoBlock | null;
   returns: InvestReturns;
+};
+
+export type InvestNfoBlock = {
+  status: string;
+  subscription_open_date?: string | null;
+  subscription_close_date?: string | null;
+  allotment_date?: string | null;
+  is_featured?: boolean;
+  headline?: string | null;
+  body?: string | null;
+  source?: string | null;
+  disclaimer?: string | null;
 };
 
 export type InvestFundDetail = InvestFundSummary & {
@@ -219,6 +232,7 @@ export type InvestHomeResponse = {
   collections?: InvestCategory[];
   popular_funds?: InvestFundSummary[];
   featured_funds: InvestFundSummary[];
+  nfo_carousel?: InvestFundSummary[];
   total_active_funds: number;
 };
 
@@ -277,7 +291,7 @@ export function fetchInvestFundDetail(fundRef: string) {
   return apiRequest<InvestFundDetail>(`/invest/funds/${encodeURIComponent(fundRef)}`);
 }
 
-export function fetchInvestFundNavs(fundRef: string, limit = 365) {
+export function fetchInvestFundNavs(fundRef: string, limit = 2000) {
   return apiRequest<InvestFundNavHistory>(`/invest/funds/${encodeURIComponent(fundRef)}/navs?limit=${limit}`);
 }
 
@@ -397,6 +411,7 @@ export function createMfOrder(body: {
   bank_account_id?: string;
   family_goal_id?: string;
   payment_method?: MfPaymentMethod;
+  folio_number?: string;
 }) {
   return apiRequest<MfOrder>("/invest/orders", {
     method: "POST",
@@ -706,6 +721,7 @@ export function createMfSipPlan(body: {
   bank_account_id?: string;
   family_goal_id?: string;
   mandate_type?: MfMandateType;
+  folio_number?: string;
 }) {
   return apiRequest<MfSipPlan>("/invest/sip/plans", {
     method: "POST",
@@ -826,4 +842,33 @@ export type MfCasImport = {
 
 export function requestCasImport() {
   return apiRequest<MfCasImport>("/invest/cas/imports", { method: "POST" });
+}
+
+export type InvestorReportKind = "account_statement" | "capital_gains" | "tax";
+
+export type InvestorReport = {
+  id: string;
+  kind: InvestorReportKind | string;
+  status: "pending" | "completed" | "failed" | string;
+  period_from: string;
+  period_to: string;
+  error_message: string | null;
+  filename: string | null;
+  generated_at: string | null;
+  downloadable: boolean;
+};
+
+export type InvestorReportListResponse = {
+  reports: InvestorReport[];
+};
+
+export function fetchInvestorReports() {
+  return apiRequest<InvestorReportListResponse>("/invest/reports");
+}
+
+export function createInvestorReport(kind: InvestorReportKind) {
+  return apiRequest<InvestorReport>("/invest/reports", {
+    method: "POST",
+    body: JSON.stringify({ kind }),
+  });
 }

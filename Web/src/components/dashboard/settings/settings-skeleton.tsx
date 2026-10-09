@@ -92,6 +92,14 @@ export function SecurityFeatureCardSkeleton() {
   return <Skeleton className="h-[7.5rem] w-full rounded-[var(--radius-card)]" />;
 }
 
+export function NomineesPanelSkeleton() {
+  return (
+    <PanelBodySkeleton>
+      <Skeleton className="h-32 w-full rounded-[var(--radius-card)]" />
+    </PanelBodySkeleton>
+  );
+}
+
 export function BankAccountsPanelSkeleton() {
   return (
     <PanelBodySkeleton>

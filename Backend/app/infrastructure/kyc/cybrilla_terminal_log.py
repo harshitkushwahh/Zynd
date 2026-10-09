@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import traceback
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _PAN_PATTERN = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 _SENSITIVE_KEYS = frozenset(
@@ -138,6 +142,56 @@ def log_fp_http(
         f"[{tag}] {method} {path} → {status} {outcome} {duration_ms}ms{err} | req={req} | res={summary}",
         flush=True,
     )
+    if not success:
+        print(
+            json.dumps(
+                {
+                    "tag": tag,
+                    "method": method,
+                    "path": path,
+                    "status_code": status_code,
+                    "error_code": error_code,
+                    "request": _sanitize_body(request_body),
+                    "response": _sanitize_body(response_body),
+                },
+                indent=2,
+                default=str,
+            ),
+            flush=True,
+        )
+
+
+def log_exception_dump(title: str, exc: BaseException | None = None, **context: Any) -> None:
+    try:
+        details = json.dumps(_sanitize_body(context), indent=2, default=str) if context else ""
+    except Exception:
+        details = repr(context)
+    print(f"[ERROR] {title}", flush=True)
+    if details:
+        print(details, flush=True)
+    logger.error("%s %s", title, details)
+    if exc is not None:
+        logger.exception("%s", title, exc_info=exc)
+        traceback.print_exception(type(exc), exc, exc.__traceback__)
+        cause = exc.__cause__ or exc.__context__
+        if cause is not None and cause is not exc:
+            print("[ERROR] cause:", flush=True)
+            traceback.print_exception(type(cause), cause, cause.__traceback__)
+            response_data = getattr(cause, "response_data", None)
+            if response_data is not None:
+                print(
+                    json.dumps(
+                        {
+                            "fp_status": getattr(cause, "status_code", None),
+                            "fp_code": getattr(cause, "code", None),
+                            "fp_message": getattr(cause, "message", str(cause)),
+                            "fp_response": _sanitize_body(response_data),
+                        },
+                        indent=2,
+                        default=str,
+                    ),
+                    flush=True,
+                )
 
 
 def log_poa_operation(operation: str, *, live: bool, **context: Any) -> None:

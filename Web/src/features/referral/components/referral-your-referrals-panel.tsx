@@ -157,6 +157,7 @@ export function ReferralYourReferralsPanel() {
           <PageHeader
             icon={Users}
             title={copy.referral.referralsPageTitle}
+            className="mb-0"
             descriptionClassName="mt-1"
           />
 

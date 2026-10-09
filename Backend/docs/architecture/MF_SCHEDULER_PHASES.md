@@ -1,5 +1,8 @@
 # MF Scheduler — phased build plan
 
+NFO classification runs in a **separate** worker (`nfo-scheduler`). After the MF daily boundary succeeds, that worker starts immediately; fallback is `0 22 * * *` IST. See [NFO_ZYND_PLAN.md](./NFO_ZYND_PLAN.md).
+
+
 Zynd mutual fund data runs as **cron workers** under `app/jobs/run_mf_scheduler.py`.
 Each phase adds jobs, tables, and config gates. Earlier phases must succeed before later ones matter.
 

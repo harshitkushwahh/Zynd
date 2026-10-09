@@ -38,6 +38,7 @@ export function formatSettingsPersonalInfo(
     pepExposed: lookupKycEnumLabel(personalInfo.pepExposed, KYC_PEP_OPTIONS),
     placeOfBirth: titleCaseWords(personalInfo.placeOfBirth),
     nationality: personalInfo.nationality.trim() || titleCaseWords(personalInfo.nationality),
+    maritalStatusLocked: personalInfo.maritalStatusLocked,
   };
 }
 
@@ -58,6 +59,7 @@ export function formatSettingsKycProfile(profile: SettingsKycProfile): SettingsK
   return {
     ...profile,
     personalInfo: formatSettingsPersonalInfo(profile.personalInfo),
+    personalInfoRaw: profile.personalInfoRaw,
     bank: formatSettingsBankAccount(profile.bank),
   };
 }

@@ -17,7 +17,6 @@ export function KycDigilockerFailureIllustration({ className }: KycDigilockerFai
         src={digilockerNotImage}
         alt={copy.kyc.digilocker.failedIllustrationAlt}
         className="h-auto w-full max-w-[17rem] object-contain"
-        priority
       />
     </div>
   );

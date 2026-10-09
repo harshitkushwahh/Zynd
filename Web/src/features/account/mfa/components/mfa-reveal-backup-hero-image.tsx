@@ -21,12 +21,10 @@ export function MfaRevealBackupHeroImage({ className, compact = false }: MfaReve
         width={1536}
         height={1024}
         sizes={REVEAL_BACKUP_HERO_SIZES}
-        unoptimized
         className={cn(
           "h-auto w-full object-contain",
           compact ? "max-w-[10.5rem] sm:max-w-[11.5rem]" : "max-w-[min(100%,15rem)] sm:max-w-[17rem]",
         )}
-        priority
       />
     </div>
   );

@@ -3,7 +3,10 @@ import {
   KYC_PERSON_NAME_LIMITS,
   validateKycPersonName as validatePersonName,
 } from "@/features/kyc/lib/kyc-name-validation";
-import { validateKycNomineeDocument } from "@/features/kyc/lib/kyc-nominee-document";
+import {
+  resolveNomineeDocumentTypeKey,
+  validateKycNomineeDocument,
+} from "@/features/kyc/lib/kyc-nominee-document";
 
 export const KYC_NOMINEE_LIMITS = {
   fullName: KYC_PERSON_NAME_LIMITS,
@@ -53,6 +56,20 @@ export function validateOptionalKycNomineeDocument(documentType: string, documen
   const number = documentNumber.trim();
   if (!type && !number) return undefined;
   return validateKycNomineeDocument(type, number);
+}
+
+export function nomineePanMatchesInvestor(
+  documentType: string,
+  documentNumber: string,
+  investorPanLast4?: string | null,
+) {
+  if (!investorPanLast4) return undefined;
+  if (resolveNomineeDocumentTypeKey(documentType) !== "pan") return undefined;
+  const pan = documentNumber.trim().toUpperCase();
+  if (pan.length === 10 && pan.slice(-4) === investorPanLast4.trim().toUpperCase()) {
+    return copy.kyc.nominee.panMatchesInvestor;
+  }
+  return undefined;
 }
 
 export function validateKycNomineeAddress(

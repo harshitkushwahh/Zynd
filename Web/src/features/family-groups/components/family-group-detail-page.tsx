@@ -99,20 +99,18 @@ export function FamilyGroupDetailPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-8 [scrollbar-width:thin]">
-        <div className="mb-6 space-y-4">
-          <PageHeader
-            icon={UsersRound}
-            title={copy.familyGroups.dashboard.viewGroupAction}
-            description={pageDescription}
-            action={
-              groupReady ? (
-                <Badge variant="secondary" className="font-normal tabular-nums">
-                  {reservedSlots}/{memberLimit}
-                </Badge>
-              ) : null
-            }
-          />
-        </div>
+        <PageHeader
+          icon={UsersRound}
+          title={copy.familyGroups.dashboard.viewGroupAction}
+          description={pageDescription}
+          action={
+            groupReady ? (
+              <Badge variant="secondary" className="font-normal tabular-nums">
+                {reservedSlots}/{memberLimit}
+              </Badge>
+            ) : null
+          }
+        />
 
         {showSkeleton ? (
           <FamilyGroupDetailPageSkeleton />

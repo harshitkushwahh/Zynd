@@ -20,7 +20,7 @@ import { SectionTitle } from "@/components/ui/page-title";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-export const MF_BROWSE_TAB_CATEGORY_SLUGS = ["equity-funds", "debt-funds", "liquid-funds"] as const;
+export const MF_BROWSE_TAB_CATEGORY_SLUGS = ["equity-funds", "debt-funds", "liquid-funds", "nfo"] as const;
 
 const BROWSE_TAB_SKELETON_COUNT = 5;
 

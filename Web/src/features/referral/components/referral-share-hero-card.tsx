@@ -191,7 +191,6 @@ export function ReferralShareHeroCard({ shareUrl, code }: ReferralShareHeroCardP
               fill
               sizes="(min-width: 1024px) 6.75rem, 6rem"
               className="object-contain object-top mix-blend-screen drop-shadow-md"
-              priority
             />
           </div>
         </div>

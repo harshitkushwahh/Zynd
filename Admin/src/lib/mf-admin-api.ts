@@ -365,6 +365,80 @@ export async function runMfJob(jobName: string, force = false) {
   );
 }
 
+export type NfoOfferAdmin = {
+  id: string;
+  product_id: string;
+  mutual_fund_id: number;
+  fund_name: string;
+  scheme_name: string;
+  amc_name: string;
+  status: string;
+  subscription_open_date: string | null;
+  subscription_close_date: string | null;
+  allotment_date: string | null;
+  is_featured: boolean;
+  is_hidden: boolean;
+  marketing_headline: string | null;
+  marketing_body: string | null;
+  source: string;
+  admin_override: boolean;
+  purchase_allowed: boolean | null;
+  updated_at: string | null;
+};
+
+export type NfoSchedulerStatus = {
+  pending_after_mf: boolean;
+  pending_triggered_at: string | null;
+  last_mf_run_uuid: string | null;
+  last_nfo_success_date: string | null;
+  last_trigger_kind: string | null;
+  mf_boundary_succeeded_today: boolean;
+  nfo_succeeded_today: boolean;
+  fallback_cron: string;
+  timezone: string;
+  mutex_busy: boolean;
+  mutex_holders: string[];
+};
+
+export async function fetchNfoOffers() {
+  return apiRequest<{ items: NfoOfferAdmin[]; counts: Record<string, number> }>("/admin/mf/nfo");
+}
+
+export async function patchNfoOffer(
+  productId: string,
+  payload: Partial<{
+    status: string;
+    is_featured: boolean;
+    is_hidden: boolean;
+    admin_override: boolean;
+    marketing_headline: string;
+  }>,
+) {
+  return apiRequest<NfoOfferAdmin>(`/admin/mf/nfo/${encodeURIComponent(productId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchNfoSchedulerStatus() {
+  return apiRequest<NfoSchedulerStatus>("/admin/mf/nfo/scheduler/status");
+}
+
+export async function runNfoJob(jobName: string, force = false) {
+  const query = force ? "?force=true" : "";
+  return apiRequest<MfRunJobResult>(
+    `/admin/mf/nfo/jobs/${encodeURIComponent(jobName)}/run${query}`,
+    { method: "POST" },
+  );
+}
+
+export async function fetchNfoIngestionRuns(limit = 50) {
+  const result = await apiRequest<{ runs: MfIngestionRun[] }>(
+    `/admin/mf/nfo/ingestion-runs?limit=${limit}`,
+  );
+  return result.runs;
+}
+
 export async function fetchMfIngestionRuns(limit = 20) {
   const result = await apiRequest<{ runs: MfIngestionRun[] }>(
     `/admin/mf/ingestion-runs?limit=${limit}`

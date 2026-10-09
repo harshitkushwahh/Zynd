@@ -56,6 +56,10 @@ async def advance_order_for_payment(
         repaired = await repair_redemption_payment_misclassify(session, order)
         synced = await sync_redemption_order_from_fp(session, order)
         return repaired or synced
+    if order.order_type == MfOrderType.switch:
+        from app.application.mf.mf_switch_service import sync_switch_order_from_fp
+
+        return await sync_switch_order_from_fp(session, order)
 
     if not _ondc_gateway_enabled():
         return False
@@ -152,7 +156,7 @@ async def confirm_checkout_payment_return(
 
 
 async def abandon_unpaid_order_payment(session: AsyncSession, order: MfOrder) -> bool:
-    if order.order_type == MfOrderType.redemption:
+    if order.order_type in {MfOrderType.redemption, MfOrderType.switch}:
         return False
     if order.status not in _ABANDONABLE_ORDER_STATUSES:
         return False

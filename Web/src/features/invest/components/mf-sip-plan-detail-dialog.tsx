@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Check, Copy, Loader2, ShieldCheck, ShieldOff, ArrowLeftRight, CircleX, Smartphone } from "lucide-react";
+import { CalendarClock, Check, Copy, ShieldCheck, ShieldOff, ArrowLeftRight, CircleX, Smartphone } from "lucide-react";
 
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
+import { IconActionButton } from "@/components/ui/icon-action-button";
 import { BankLogo } from "@/components/banking/bank-logo";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { FieldMessage } from "@/components/ui/ui-message";
 import {
   cancelMfMandate,
@@ -179,59 +180,6 @@ function SummaryCard({
   );
 }
 
-function SipPlanActionIconButton({
-  label,
-  icon: Icon,
-  disabled,
-  loading,
-  destructive = false,
-  onClick,
-}: {
-  label: string;
-  icon: typeof Smartphone;
-  disabled: boolean;
-  loading: boolean;
-  destructive?: boolean;
-  onClick: () => void;
-}) {
-  const isDisabled = disabled || loading;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            className={cn("inline-flex", isDisabled && "cursor-not-allowed")}
-            tabIndex={isDisabled ? 0 : undefined}
-          />
-        }
-      >
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          className={cn(
-            "rounded-[var(--radius-control)]",
-            destructive &&
-              !isDisabled &&
-              "text-destructive hover:bg-destructive/10 hover:text-destructive",
-          )}
-          disabled={isDisabled}
-          onClick={onClick}
-          aria-label={label}
-        >
-          {loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Icon className="size-4" strokeWidth={2.25} />
-          )}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 function SipPlanHeaderActions({
   canAuthorize,
   canContinueBankSwitch,
@@ -259,7 +207,7 @@ function SipPlanHeaderActions({
   return (
     <TooltipProvider>
       <div className="flex shrink-0 items-center gap-1">
-        <SipPlanActionIconButton
+        <IconActionButton
           label={
             primaryUsesBankSwitch
               ? copy.mySips.continueBankSwitch
@@ -270,7 +218,7 @@ function SipPlanHeaderActions({
           loading={actionLoading}
           onClick={primaryUsesBankSwitch ? onContinueBankSwitch : onAuthorize}
         />
-        <SipPlanActionIconButton
+        <IconActionButton
           label={copy.mySips.cancelSip}
           icon={CircleX}
           disabled={!canCancelSip || actionLoading}
@@ -278,7 +226,7 @@ function SipPlanHeaderActions({
           destructive
           onClick={onCancelSip}
         />
-        <SipPlanActionIconButton
+        <IconActionButton
           label={copy.mySips.cancelMandate}
           icon={ShieldOff}
           disabled={!canCancelMandate || actionLoading}
@@ -391,7 +339,7 @@ function SipPlanSummaryPanel({
               icon={
                 onSwitchDebitBank ? (
                   <TooltipProvider>
-                    <SipPlanActionIconButton
+                    <IconActionButton
                       label={copy.mySips.bankSwitch.action}
                       icon={ArrowLeftRight}
                       disabled={false}

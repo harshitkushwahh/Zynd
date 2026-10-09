@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func, null, select
@@ -201,6 +201,7 @@ async def list_invest_funds(
     rows = (await session.execute(base.offset(offset).limit(page_size))).all()
     settings = get_settings()
     items = _serialize_invest_fund_rows(rows, settings=settings)
+    items = await attach_nfo_to_payloads(session, items)
 
     return {
         "items": items,
@@ -305,11 +306,15 @@ async def get_invest_home(session: AsyncSession) -> dict:
     popular = await list_popular_invest_funds(session, limit=5)
     featured = await list_featured_invest_funds(session, limit=8)
     total_payload = await list_invest_funds(session, page=1, page_size=1)
+    from app.application.mf.nfo_list_service import list_featured_nfo
+
+    nfo_carousel = await list_featured_nfo(session, limit=6)
     return {
         "categories": categories,
         "collections": collections,
         "popular_funds": popular,
         "featured_funds": featured,
+        "nfo_carousel": nfo_carousel,
         "total_active_funds": total_payload["total"],
     }
 
@@ -453,6 +458,7 @@ async def get_invest_fund_detail(session: AsyncSession, product_id: uuid.UUID) -
     if investment_details:
         payload["investment_details"] = investment_details
 
+    await attach_nfo_to_payloads(session, [payload])
     return payload
 
 
@@ -482,7 +488,7 @@ async def list_invest_fund_navs(
     session: AsyncSession,
     product_id: uuid.UUID,
     *,
-    limit: int = 365,
+    limit: int = 2000,
 ) -> dict | None:
     row = (
         await session.execute(
@@ -498,14 +504,12 @@ async def list_invest_fund_navs(
 
     limit = min(max(limit, 1), 2000)
     to_dt = date.today()
-    from_dt = to_dt - timedelta(days=365)
 
     rows = (
         await session.execute(
             select(SchemeNav.nav_date, SchemeNav.nav_value)
             .where(
                 SchemeNav.fund_id == fund.id,
-                SchemeNav.nav_date >= from_dt,
                 SchemeNav.nav_date <= to_dt,
             )
             .order_by(SchemeNav.nav_date.desc())
@@ -517,6 +521,7 @@ async def list_invest_fund_navs(
         {"date": nav_date.isoformat(), "nav": _decimal(nav_value)}
         for nav_date, nav_value in reversed(rows)
     ]
+    from_dt = date.fromisoformat(points[0]["date"]) if points else to_dt
     return {
         "product_id": str(product_id),
         "from_date": from_dt.isoformat(),
@@ -608,3 +613,21 @@ def _serialize_fund_summary(
         seo_slug=display_content.seo_slug if display_content else None,
     )
     return payload
+
+
+async def attach_nfo_to_payloads(session: AsyncSession, payloads: list[dict]) -> list[dict]:
+    from app.application.mf.nfo_list_service import attach_nfo, load_nfo_by_product_ids
+
+    ids = []
+    for payload in payloads:
+        raw = payload.get("product_id")
+        if raw:
+            ids.append(uuid.UUID(str(raw)))
+    offers = await load_nfo_by_product_ids(session, ids)
+    for payload in payloads:
+        raw = payload.get("product_id")
+        if not raw:
+            continue
+        offer = offers.get(uuid.UUID(str(raw)))
+        attach_nfo(payload, offer)
+    return payloads

@@ -13,6 +13,7 @@ export const queryKeys = {
     externalHoldings: () => ["invest", "external-holdings"] as const,
     fundNavs: (productId: string, limit: number) =>
       ["invest", "fund-navs", productId, { limit }] as const,
+    reports: () => ["invest", "reports"] as const,
   },
   portfolio: {
     all: () => ["portfolio"] as const,

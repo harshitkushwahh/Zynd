@@ -325,7 +325,7 @@ export function PortfolioPage() {
         action={<PortfolioPageTabs value={activeTab} onChange={handleTabChange} />}
       />
 
-      <div className="mt-6">
+      <div>
         <PortfolioTabPanel tab="overview" activeTab={activeTab}>
           <PortfolioOverviewPanel />
         </PortfolioTabPanel>
