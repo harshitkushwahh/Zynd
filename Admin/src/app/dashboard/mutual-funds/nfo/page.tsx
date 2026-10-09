@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { AlertTriangle, CalendarClock, Sparkles, Star, XCircle } from "lucide-react";
 
 import { AdminSectionPageShell } from "@/components/dashboard/admin-section-page-shell";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
@@ -114,15 +114,23 @@ export default function NfoAdminPage() {
       ]}
     >
       <div className="space-y-6">
-        {error ? <AdminFeedbackMessage tone="danger">{error}</AdminFeedbackMessage> : null}
-        {message ? <AdminFeedbackMessage tone="success">{message}</AdminFeedbackMessage> : null}
+        {error ? (
+          <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>
+            {error}
+          </AdminFeedbackMessage>
+        ) : null}
+        {message ? (
+          <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>
+            {message}
+          </AdminFeedbackMessage>
+        ) : null}
 
         <AdminMetricCardsGrid>
-          <AdminMetricCard label="Open" value={String(counts.OPEN ?? 0)} />
-          <AdminMetricCard label="Upcoming" value={String(counts.UPCOMING ?? 0)} />
-          <AdminMetricCard label="Closed" value={String(counts.CLOSED ?? 0)} />
-          <AdminMetricCard label="Featured" value={String(counts.featured ?? 0)} />
-          <AdminMetricCard label="Stale OMS" value={String(counts.stale_oms ?? 0)} />
+          <AdminMetricCard label="Open" value={String(counts.OPEN ?? 0)} icon={Sparkles} />
+          <AdminMetricCard label="Upcoming" value={String(counts.UPCOMING ?? 0)} icon={CalendarClock} />
+          <AdminMetricCard label="Closed" value={String(counts.CLOSED ?? 0)} icon={XCircle} />
+          <AdminMetricCard label="Featured" value={String(counts.featured ?? 0)} icon={Star} />
+          <AdminMetricCard label="Stale OMS" value={String(counts.stale_oms ?? 0)} icon={AlertTriangle} />
         </AdminMetricCardsGrid>
 
         <section className="rounded-2xl border border-border bg-card p-4">

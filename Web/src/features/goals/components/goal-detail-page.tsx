@@ -186,7 +186,7 @@ export function GoalDetailPage({ goalId }: GoalDetailPageProps) {
     return (
       <div>
         <GoalDetailBreadcrumb title={copy.goals.detailTitle} />
-        <LoadErrorCard>
+        <LoadErrorCard
           title={copy.goals.detailLoadFailedTitle}
           description={actionError ?? errorMessage ?? copy.goals.detailLoadError}
           retryLabel={copy.goals.retry}

@@ -26,7 +26,7 @@ export function GoalsPersonalListPage() {
 
   return (
     <div>
-      <DashboardBreadcrumb>
+      <DashboardBreadcrumb
         items={[
           { label: copy.goals.title, href: GOALS_LIST_HREF },
           { label: copy.goals.personalGoalsListTitle },
