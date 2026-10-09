@@ -18,6 +18,18 @@ from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 logger = logging.getLogger(__name__)
 
 _fp_mf_token: str | None = None
+
+
+def _fp_mf_transport_client_error(exc: httpx.TransportError, *, base_url: str, operation: str) -> FpClientError:
+    return FpClientError(
+        (
+            f"Finprim is unreachable ({operation}). "
+            f"Check network connectivity and FP base URL ({base_url.rstrip('/')}). "
+            f"{exc}"
+        ),
+        code="fp_mf_transport_error",
+        status_code=503,
+    )
 _token_lock = asyncio.Lock()
 _public_ip_cache: tuple[str, float] | None = None
 _public_ip_fetch_lock = asyncio.Lock()
@@ -177,27 +189,34 @@ async def _get_mf_token(*, force_refresh: bool = False) -> str:
             return _fp_mf_token
 
         url = f"{runtime.base_url.rstrip('/')}/v2/auth/{runtime.tenant}/token"
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.post(
-                url,
-                data={
-                    "client_id": runtime.client_id,
-                    "client_secret": runtime.client_secret,
-                    "grant_type": "client_credentials",
-                },
-            )
-            if not response.is_success:
-                logger.error(
-                    "Finprim MF OAuth failed env=%s tenant=%s status=%s url=%s body=%s",
-                    runtime.environment,
-                    runtime.tenant,
-                    response.status_code,
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.post(
                     url,
-                    (response.text or "")[:400],
+                    data={
+                        "client_id": runtime.client_id,
+                        "client_secret": runtime.client_secret,
+                        "grant_type": "client_credentials",
+                    },
                 )
-            response.raise_for_status()
-            _fp_mf_token = str(response.json()["access_token"])
-        return _fp_mf_token
+                if not response.is_success:
+                    logger.error(
+                        "Finprim MF OAuth failed env=%s tenant=%s status=%s url=%s body=%s",
+                        runtime.environment,
+                        runtime.tenant,
+                        response.status_code,
+                        url,
+                        (response.text or "")[:400],
+                    )
+                response.raise_for_status()
+                _fp_mf_token = str(response.json()["access_token"])
+            return _fp_mf_token
+        except httpx.TransportError as exc:
+            raise _fp_mf_transport_client_error(
+                exc,
+                base_url=runtime.base_url,
+                operation="OAuth token",
+            ) from exc
 
 
 async def _fp_mf_request(
@@ -251,6 +270,13 @@ async def _fp_mf_request(
 
         assert response is not None
         return response
+    except httpx.TransportError as exc:
+        error_code = "fp_mf_transport_error"
+        raise _fp_mf_transport_client_error(
+            exc,
+            base_url=runtime.base_url,
+            operation=f"{method} {path}",
+        ) from exc
     except Exception:
         error_code = "fp_mf_transport_error"
         raise
