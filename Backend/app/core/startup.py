@@ -20,8 +20,7 @@ def run_dev_migrations(settings: Settings) -> None:
         return
 
     logger.info("Applying pending Alembic migrations (development startup)...")
-    # The child loads Settings() again. Pin DATABASE_URL to the URL this process
-    # already resolved so a .env file cannot replace the Docker environment.
+    
     child_env = os.environ.copy()
     child_env["DATABASE_URL"] = settings.database_url
     subprocess.run(
