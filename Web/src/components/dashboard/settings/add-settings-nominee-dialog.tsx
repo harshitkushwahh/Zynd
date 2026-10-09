@@ -63,7 +63,7 @@ export function AddSettingsNomineeDialog({
 }: AddSettingsNomineeDialogProps) {
   const wizardRef = useRef<KycNomineeWizardHandle>(null);
   const [wizardKey, setWizardKey] = useState(0);
-  const [primaryLabel, setPrimaryLabel] = useState(copy.kyc.nominee.next);
+  const [primaryLabel, setPrimaryLabel] = useState<string>(copy.kyc.nominee.next);
   const [currentStep, setCurrentStep] = useState(1);
   const [nomineeKind, setNomineeKind] = useState<KycNomineeKind>("unknown");
   const [draftNominees, setDraftNominees] = useState<KycNomineeRecord[]>([]);
