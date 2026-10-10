@@ -96,8 +96,7 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
   const canViewHierarchy = DISTRIBUTOR_HEAD_HIERARCHY_PERMISSIONS.some((permission) =>
     hasPermission(permission),
   );
-  const canViewMitraConsole = canViewQueue || canViewHierarchy;
-  const canView = canViewMitraConsole;
+  const canView = canViewQueue || canViewHierarchy;
   const canManageStateHeads = hasPermission(DISTRIBUTOR_HEAD_BRANCHES_MANAGE_PERMISSION);
   const tabSlug = segments?.[0];
   const entityId = segments?.[1];
@@ -110,11 +109,11 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
   const visibleTabs = useMemo(
     () =>
       DISTRIBUTOR_HEAD_TABS.filter((tab) => {
-        if (tab.id === "state-heads") return canViewMitraConsole && !isStateHeadOnly;
+        if (tab.id === "state-heads") return canView && !isStateHeadOnly;
         if (tab.id === "queue") return canViewQueue;
-        return canViewMitraConsole;
+        return canView;
       }),
-    [canViewMitraConsole, canViewQueue, isStateHeadOnly],
+    [canView, canViewQueue, isStateHeadOnly],
   );
 
   const [managerDetail, setManagerDetail] = useState<DistributorHeadManager | undefined>(() => {
@@ -358,7 +357,7 @@ export function DistributorHeadPage({ segments }: DistributorHeadPageProps) {
     const nextTab = DISTRIBUTOR_HEAD_TABS.find((tab) => tab.id === value);
     if (!nextTab) return;
     if (nextTab.id === "queue" && !canViewQueue) return;
-    if (nextTab.id !== "queue" && !canViewMitraConsole) return;
+    if (nextTab.id !== "queue" && !canView) return;
     if (entityId) {
       router.push(distributorHeadTabHref(nextTab));
       return;

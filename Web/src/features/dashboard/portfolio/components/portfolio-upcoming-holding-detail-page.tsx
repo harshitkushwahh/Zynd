@@ -153,7 +153,7 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
   }
 
   if (!resolvedOrder) {
-    return notFound();
+    notFound();
   }
 
   if (errorMessage) {
@@ -172,7 +172,7 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
   }
 
   if (!order || !isUpcomingHoldingOrder(order)) {
-    return notFound();
+    notFound();
   }
 
   const fundName = order.product_name ?? copy.mutualFunds.unknownFund;

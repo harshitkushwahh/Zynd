@@ -24,10 +24,7 @@ import { AdminSearchInput } from "@/components/ui/admin-search-input";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
 import { AdminTableSkeletonRows } from "@/components/ui/admin-skeletons";
 import { AUDIT_EVENT_GROUPS, formatAuditEvent } from "@/lib/admin-audit-events";
-import {
-  riskAuditLogsQueryKey,
-  useRiskAuditLogsQuery,
-} from "@/hooks/use-risk-profile-queries";
+import { useRiskAuditLogsQuery } from "@/hooks/use-risk-profile-queries";
 import { type RiskAuditLogItem } from "@/lib/risk-profile-admin-api";
 import { cn } from "@/lib/utils";
 
@@ -147,7 +144,7 @@ export function RiskProfileAuditPanel({
               variant="outline"
               size="icon"
               onClick={() =>
-                void queryClient.invalidateQueries({ queryKey: riskAuditLogsQueryKey(queryParams) })
+                void queryClient.invalidateQueries({ queryKey: ["risk-profile-audit-logs"] })
               }
               aria-label="Refresh"
             >

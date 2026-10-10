@@ -250,11 +250,19 @@ export function NfoCategoryPanel({ canManage }: { canManage: boolean }) {
       </AdminDataTable>
       <AdminTablePagination
         page={pagination.page}
-        pageCount={pagination.pageCount}
+        totalPages={pagination.totalPages}
+        hasPrevious={pagination.hasPrevious}
+        hasNext={pagination.hasNext}
+        disabled={loading}
+        totalCount={filteredOffers.length}
+        currentPageCount={pagination.items.length}
         pageSize={pageSize}
-        total={filteredOffers.length}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
+        onPageSizeChange={(next) => {
+          setPageSize(next);
+          setPage(0);
+        }}
+        onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+        onNext={() => setPage((current) => current + 1)}
       />
     </div>
   );

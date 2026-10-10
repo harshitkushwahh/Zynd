@@ -36,7 +36,6 @@ import { pickUserRef } from "@/lib/admin-user-ref";
 import { getErrorMessage } from "@/lib/errors";
 import { downloadAdminRiskProfileReport } from "@/lib/risk-profile-pdf-download";
 import {
-  riskProfileUsersQueryKey,
   useRiskProfileUsersQuery,
 } from "@/hooks/use-risk-profile-queries";
 import { type UserRiskProfileItem } from "@/lib/risk-profile-admin-api";
@@ -160,7 +159,7 @@ export function RiskProfileUsersPanel({
               variant="outline"
               size="icon"
               onClick={() =>
-                void queryClient.invalidateQueries({ queryKey: riskProfileUsersQueryKey(queryParams) })
+                void queryClient.invalidateQueries({ queryKey: ["risk-profile-users"] })
               }
               aria-label="Refresh"
             >
