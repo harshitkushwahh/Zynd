@@ -88,6 +88,8 @@ PERMISSIONS: list[tuple[str, str]] = [
     ("consents.read", "View consent definitions, versions, and acceptance statistics"),
     ("consents.manage", "Create consent versions and request publish"),
     ("consents.records.read", "View per-user consent acceptance history"),
+    ("support.tickets.read", "View support tickets and conversation history"),
+    ("support.tickets.manage", "Assign, update, and reply on support tickets"),
 ]
 
 MITRA_ROLE_KEY = "mitra"
@@ -106,6 +108,9 @@ ADMIN_CONSOLE_ROLE_KEYS = frozenset(
         MITRA_STATE_HEAD_ROLE_KEY,
     }
 )
+SUPPORT_AGENT_ROLE_KEY = "support_agent"
+SUPPORT_LEAD_ROLE_KEY = "support_lead"
+SUPPORT_CONSOLE_ROLE_KEYS = frozenset({SUPPORT_AGENT_ROLE_KEY, SUPPORT_LEAD_ROLE_KEY})
 
 ROLE_KEY_MIGRATIONS: dict[str, str] = {
     "distributor_console": MITRA_ROLE_KEY,
@@ -115,7 +120,6 @@ ROLE_KEY_MIGRATIONS: dict[str, str] = {
 REMOVED_BUILTIN_ROLE_KEYS = frozenset(
     {
         "compliance_officer",
-        "support_agent",
         "operations",
         "catalog_publisher",
         "distributor_console",
@@ -184,6 +188,27 @@ ROLES: dict[str, dict[str, object]] = {
             "distributor.work.manage",
             "distributor.leave.apply",
             "distributor.payroll.read",
+        ],
+    },
+    SUPPORT_AGENT_ROLE_KEY: {
+        "name": "Support Agent",
+        "description": "Zynd Support console access for customer assistance.",
+        "permissions": [
+            "users.read",
+            "audit.read",
+            "documents.read",
+            "support.tickets.read",
+        ],
+    },
+    SUPPORT_LEAD_ROLE_KEY: {
+        "name": "Support Lead",
+        "description": "Support console lead with ticket management access.",
+        "permissions": [
+            "users.read",
+            "audit.read",
+            "documents.read",
+            "support.tickets.read",
+            "support.tickets.manage",
         ],
     },
 }

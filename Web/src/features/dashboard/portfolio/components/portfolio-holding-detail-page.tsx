@@ -741,10 +741,7 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
     );
   }
 
-  if (!holding) {
-    notFound();
-  }
-  if (status === "not_found" || status === "invalid_holding_id") {
+  if (!holding || status === "not_found" || status === "invalid_holding_id") {
     notFound();
   }
 

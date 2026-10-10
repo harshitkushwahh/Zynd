@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/admin-table";
 import type { AdminTableMinWidth } from "@/components/ui/admin-design-tokens";
 
-export { AdminTableSkeletonRows } from "@/components/ui/admin-table";
+export { AdminTableSkeletonRows };
 
 type AdminTableSkeletonRowsProps = {
   columns: number;

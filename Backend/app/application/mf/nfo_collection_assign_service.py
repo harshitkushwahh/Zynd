@@ -33,6 +33,7 @@ async def run_nfo_collection_assign_sync(
 
     run = await begin_ingestion_run(session, job_name="nfo-collection-assign-sync", triggered_by=triggered_by)
     linked = 0
+    logger.info("nfo-collection-assign-sync started run=%s triggered_by=%s", run.run_uuid, triggered_by)
     try:
         category = await session.scalar(
             select(Category).where(Category.slug == NFO_CATEGORY_SLUG)
@@ -77,9 +78,22 @@ async def run_nfo_collection_assign_sync(
             records_processed=len(offers),
             records_inserted=linked,
             records_skipped=removed,
+            metadata={"linked": linked, "removed": removed, "category_slug": NFO_CATEGORY_SLUG},
         )
         await notify_invest_catalog_changed(session, refresh_search_vectors=False)
-        return {"processed": len(offers), "linked": linked, "removed": removed}
+        logger.info(
+            "nfo-collection-assign-sync succeeded run=%s linked=%s removed=%s category=%s",
+            run.run_uuid,
+            linked,
+            removed,
+            NFO_CATEGORY_SLUG,
+        )
+        return {
+            "processed": len(offers),
+            "linked": linked,
+            "removed": removed,
+            "run_uuid": str(run.run_uuid),
+        }
     except Exception:
         logger.exception("nfo-collection-assign-sync failed")
         await finish_ingestion_run(session, run, status=IngestionRunStatus.failed)

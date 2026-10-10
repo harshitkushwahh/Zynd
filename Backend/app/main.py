@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.exception_handlers import register_domain_exception_handlers
 from app.api.v1.router import api_router
 from app.application.admin.dev_admin_seed_service import ensure_dev_admin_seed
+from app.application.admin.dev_mitra_seed_service import ensure_dev_mitra_seed
+from app.application.admin.dev_support_seed_service import ensure_dev_support_seed
 from app.application.compliance.retention_service import ensure_retention_seed
 from app.application.risk_profile.risk_profile_seed_service import ensure_risk_profile_seed
 from app.application.goals.goal_template_seed_service import ensure_goal_template_seed
@@ -91,6 +93,8 @@ async def lifespan(_: FastAPI):
 
     async with AsyncSessionLocal() as session:
         await ensure_dev_admin_seed(session)
+        await ensure_dev_support_seed(session)
+        await ensure_dev_mitra_seed(session)
         await ensure_security_config_seed(session)
         await ensure_risk_profile_seed(session)
         await ensure_goal_template_seed(session)

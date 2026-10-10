@@ -1,8 +1,8 @@
 const OVERLAY_RESUME_KEY = "mf-payment-overlay-resume";
 const RETURN_KIND_KEY = "mf-payment-gateway-return-kind";
 
-/** Reconcile attempts after browser Back before showing payment-not-completed. */
-export const MF_GATEWAY_BACK_RECONCILE_ATTEMPTS = 3;
+/** One reconcile after browser Back, then abandon if payment is still pending. */
+export const MF_GATEWAY_BACK_RECONCILE_ATTEMPTS = 1;
 
 export type MfGatewayReturnKind = "history" | "postback";
 
@@ -113,4 +113,12 @@ export function shouldShowGatewayBackNotCompleted(args: {
   if (args.outcome === "success" || args.outcome === "failed") return false;
   const maxAttempts = args.maxAttempts ?? MF_GATEWAY_BACK_RECONCILE_ATTEMPTS;
   return args.attempts >= maxAttempts;
+}
+
+export function shouldAbandonPaymentOnDismiss(args: {
+  isTerminal: boolean;
+  paymentSucceeded: boolean;
+  paymentStarted: boolean;
+}) {
+  return !args.isTerminal && !args.paymentSucceeded && args.paymentStarted;
 }

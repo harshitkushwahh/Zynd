@@ -63,10 +63,23 @@ async def list_invest_categories(session: AsyncSession) -> list[dict]:
             .order_by(Category.display_order, Category.name)
         )
     ).all()
-    return [
+    items = [
         {"id": category_id, "slug": slug, "name": name, "fund_count": count}
         for category_id, slug, name, count in rows
     ]
+    from app.application.mf.nfo_detection_service import NFO_CATEGORY_SLUG
+
+    if not any(item["slug"] == NFO_CATEGORY_SLUG for item in items):
+        nfo = await session.scalar(select(Category).where(Category.slug == NFO_CATEGORY_SLUG))
+        items.append(
+            {
+                "id": nfo.id if nfo else 0,
+                "slug": NFO_CATEGORY_SLUG,
+                "name": nfo.name if nfo else "NFO",
+                "fund_count": 0,
+            }
+        )
+    return items
 
 
 async def list_invest_collections(session: AsyncSession) -> list[dict]:

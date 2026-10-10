@@ -384,6 +384,21 @@ export type NfoOfferAdmin = {
   admin_override: boolean;
   purchase_allowed: boolean | null;
   updated_at: string | null;
+  scheme_category_slug?: string | null;
+  scheme_category_name?: string | null;
+  sebi_category?: string | null;
+};
+
+export type NfoCategoryGroup = {
+  slug: string | null;
+  name: string;
+  count: number;
+  items: NfoOfferAdmin[];
+};
+
+export type NfoCategoryBreakdown = {
+  groups: NfoCategoryGroup[];
+  counts: Record<string, number>;
 };
 
 export type NfoSchedulerStatus = {
@@ -402,6 +417,15 @@ export type NfoSchedulerStatus = {
 
 export async function fetchNfoOffers() {
   return apiRequest<{ items: NfoOfferAdmin[]; counts: Record<string, number> }>("/admin/mf/nfo");
+}
+
+export async function fetchNfoJobs() {
+  const result = await apiRequest<{ jobs: MfJob[] }>("/admin/mf/nfo/jobs");
+  return result.jobs;
+}
+
+export async function fetchNfoCategory() {
+  return apiRequest<NfoCategoryBreakdown>("/admin/mf/nfo/category");
 }
 
 export async function patchNfoOffer(
@@ -469,6 +493,8 @@ export type MfPipelineMode =
   | "health-repair"
   | "staging-only";
 
+export type NfoPipelineMode = "nfo" | "nfo-lifecycle" | "nfo-category";
+
 export type MfPipelineRun = {
   run_id: string;
   mode: string;
@@ -491,6 +517,7 @@ export type MfPipelineRun = {
   pause_reason: string | null;
   staging_batch_uuid: string | null;
   can_approve_staging: boolean;
+  can_approve_category?: boolean;
   health_diff: MfPipelineHealthDiff | null;
   skip_steps: string[];
   auto_resume: boolean;
@@ -610,6 +637,80 @@ export async function clearStuckMfPipelineRuns() {
 export async function approveMfPipelineStaging(runId: string) {
   const result = await apiRequest<{ run: MfPipelineRun }>(
     `/admin/mf/pipeline/runs/${encodeURIComponent(runId)}/approve-staging`,
+    { method: "POST" }
+  );
+  return result.run;
+}
+
+export async function previewNfoPipeline(mode: NfoPipelineMode = "nfo", skipSteps: string[] = []) {
+  const skipQuery =
+    skipSteps.length > 0 ? `&skip_steps=${encodeURIComponent(skipSteps.join(","))}` : "";
+  return apiRequest<MfPipelinePreview>(
+    `/admin/mf/nfo/pipeline/preview?mode=${encodeURIComponent(mode)}${skipQuery}`
+  );
+}
+
+export async function startNfoPipeline(
+  mode: NfoPipelineMode = "nfo",
+  confirmProduction = false,
+  skipSteps: string[] = [],
+  autoResume = true
+) {
+  const result = await apiRequest<{ run: MfPipelineRun }>("/admin/mf/nfo/pipeline/run", {
+    method: "POST",
+    body: JSON.stringify({
+      mode,
+      confirm_production: confirmProduction,
+      skip_steps: skipSteps,
+      auto_resume: autoResume,
+    }),
+  });
+  return result.run;
+}
+
+export async function fetchNfoPipelineRun(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/nfo/pipeline/runs/${encodeURIComponent(runId)}`
+  );
+  return result.run;
+}
+
+export async function fetchActiveNfoPipelineRun() {
+  const result = await apiRequest<{ run: MfPipelineRun }>("/admin/mf/nfo/pipeline/runs/active");
+  return result.run;
+}
+
+export async function cancelNfoPipelineRun(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/nfo/pipeline/runs/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST" }
+  );
+  return result.run;
+}
+
+export async function resumeNfoPipelineRun(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/nfo/pipeline/runs/${encodeURIComponent(runId)}/resume`,
+    { method: "POST" }
+  );
+  return result.run;
+}
+
+export async function retryNfoPipelineStep(runId: string, stepKey: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/nfo/pipeline/runs/${encodeURIComponent(runId)}/retry-step`,
+    { method: "POST", body: JSON.stringify({ step_key: stepKey }) }
+  );
+  return result.run;
+}
+
+export async function clearStuckNfoPipelineRuns() {
+  return apiRequest<{ cleaned: number }>("/admin/mf/nfo/pipeline/clear-stuck", { method: "POST" });
+}
+
+export async function approveNfoPipelineCategory(runId: string) {
+  const result = await apiRequest<{ run: MfPipelineRun }>(
+    `/admin/mf/nfo/pipeline/runs/${encodeURIComponent(runId)}/approve-category`,
     { method: "POST" }
   );
   return result.run;

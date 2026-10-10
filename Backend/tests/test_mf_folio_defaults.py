@@ -82,6 +82,7 @@ def test_build_folio_defaults_includes_nominees() -> None:
     assert folio["payout_bank_account"] == "bac_1"
     assert folio["nominee1"] == "relp_1"
     assert folio["nominee1_allocation_percentage"] == 100
+    assert folio["nomination_info_visibility"] == "SHOW"
 
 
 def test_build_folio_defaults_prefers_selected_bank() -> None:
@@ -231,6 +232,7 @@ def test_mfia_links_at_most_three_related_parties_totaling_100() -> None:
     assert slots["nominee2_allocation_percentage"] == 30
     assert slots["nominee3"] == "relp_3"
     assert slots["nominee3_allocation_percentage"] == 30
+    assert slots["nomination_info_visibility"] == "SHOW"
     assert (
         slots["nominee1_allocation_percentage"]
         + slots["nominee2_allocation_percentage"]

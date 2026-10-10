@@ -16,15 +16,18 @@ import { MfCatalogEmptyState } from "@/features/invest/components/mf-catalog-emp
 import { MfCollectionCards } from "@/features/invest/components/mf-collection-cards";
 import { MfDashboardSidebar } from "@/features/invest/components/mf-dashboard-sidebar";
 import { MutualFundsPageSkeleton } from "@/features/invest/components/mf-mutual-funds-catalog-skeleton";
+import { MfNfoFundsSection } from "@/features/invest/components/mf-nfo-funds-section";
 import { MfPopularFundsSection } from "@/features/invest/components/mf-popular-funds-section";
 import { useInvestHomeQuery } from "@/features/invest/hooks/use-invest-home-query";
 import { mfFundHref } from "@/features/invest/lib/mf-fund-url";
+import { isInvestNfo } from "@/features/invest/lib/mf-nfo";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 
 function isCatalogEmpty(data: InvestHomeResponse): boolean {
   return (
     data.categories.length === 0 &&
     (data.popular_funds?.length ?? 0) === 0 &&
+    (data.nfo_carousel?.length ?? 0) === 0 &&
     (data.collections?.length ?? 0) === 0
   );
 }
@@ -44,8 +47,15 @@ function BrowseHome({
 
       {!error && isCatalogEmpty(data) ? <MfCatalogEmptyState /> : null}
 
-      {data.popular_funds && data.popular_funds.length > 0 ? (
-        <MfPopularFundsSection funds={data.popular_funds} onSelectFund={onSelectFund} />
+      {data.popular_funds && data.popular_funds.some((fund) => !isInvestNfo(fund)) ? (
+        <MfPopularFundsSection
+          funds={data.popular_funds.filter((fund) => !isInvestNfo(fund))}
+          onSelectFund={onSelectFund}
+        />
+      ) : null}
+
+      {data.nfo_carousel && data.nfo_carousel.some(isInvestNfo) ? (
+        <MfNfoFundsSection funds={data.nfo_carousel.filter(isInvestNfo)} onSelectFund={onSelectFund} />
       ) : null}
 
       {data.collections && data.collections.length > 0 ? (

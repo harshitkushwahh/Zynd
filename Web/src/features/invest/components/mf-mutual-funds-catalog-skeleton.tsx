@@ -5,6 +5,7 @@ import {
   MF_COLLECTIONS_GRID_CLASS,
   MF_COLLECTION_CARD_MIN_HEIGHT_CLASS,
   MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS,
+  MF_NFO_CARD_HORIZONTAL_WIDTH_CLASS,
   MF_FUNDS_GRID_CLASS,
   MF_FUNDS_HORIZONTAL_ROW_CLASS,
 } from "@/features/invest/lib/mf-ui";
@@ -66,6 +67,15 @@ export function MutualFundsCatalogSkeleton() {
               key={index}
               className={MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS}
             />
+          ))}
+        </div>
+      </section>
+
+      <section className="min-w-0 space-y-4">
+        <SectionHeaderSkeleton />
+        <div className={MF_FUNDS_HORIZONTAL_ROW_CLASS}>
+          {Array.from({ length: 3 }).map((_, index) => (
+            <MfFundCardSkeleton key={index} className={MF_NFO_CARD_HORIZONTAL_WIDTH_CLASS} />
           ))}
         </div>
       </section>

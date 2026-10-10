@@ -10,12 +10,11 @@ import {
   MfFundCategoryBadge,
   resolveMfFundCategoryKind,
 } from "@/features/invest/components/mf-fund-category-badge";
-import {
-  formatInr,
-  healthBadgeLabel,
-  resolveAmcLogoUrl,
-} from "@/features/invest/lib/mf-format";
+import { AmcLogo } from "@/features/invest/components/mf-amc-logo";
+import { formatInr, healthBadgeLabel } from "@/features/invest/lib/mf-format";
 import { resolveFundCardReturn } from "@/features/invest/lib/mf-fund-card-return";
+import { MfNfoFundCard } from "@/features/invest/components/mf-nfo-fund-card";
+import { isInvestNfo, nfoStatusLabel } from "@/features/invest/lib/mf-nfo";
 import {
   MF_FUND_CARD_HOVER_CLASS,
   MF_FUND_CARD_RADIUS_CLASS,
@@ -28,34 +27,6 @@ type MfFundCardProps = {
   onSelect: (fund: InvestFundSummary) => void;
   className?: string;
 };
-
-function AmcLogo({ fund, className }: { fund: InvestFundSummary; className?: string }) {
-  const logoUrl = resolveAmcLogoUrl(fund.amc_logo_url, fund.amc_slug);
-  if (logoUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={logoUrl}
-        alt=""
-        className={cn(
-          "size-11 rounded-[var(--radius-control)] bg-background object-contain p-1.5",
-          className,
-        )}
-      />
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        "flex size-11 items-center justify-center rounded-[var(--radius-control)] bg-muted/40 text-caption font-semibold text-muted-foreground",
-        className,
-      )}
-    >
-      {fund.amc_name.slice(0, 2).toUpperCase()}
-    </div>
-  );
-}
 
 function displayRiskLabel(fund: InvestFundSummary) {
   return fund.display?.risk_label ?? fund.sebi_category;
@@ -91,19 +62,23 @@ function FundMetric({
 }
 
 export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
+  if (isInvestNfo(fund)) {
+    return <MfNfoFundCard fund={fund} onSelect={onSelect} className={className} />;
+  }
+
   const cardReturn = resolveFundCardReturn(fund.returns);
   const categoryLabel = displayRiskLabel(fund);
   const categoryKind = resolveMfFundCategoryKind(categoryLabel);
 
   const secondaryBadges = [
-    fund.nfo
-      ? { key: "nfo", label: "NFO", variant: "secondary" as const }
+    isInvestNfo(fund)
+      ? { key: "nfo", label: `NFO · ${nfoStatusLabel(fund.nfo?.status)}`, variant: "secondary" as const }
       : null,
     fund.display?.hero_badge
       ? { key: "hero", label: fund.display.hero_badge, variant: "secondary" as const }
       : null,
     fund.is_featured ? { key: "featured", label: "Featured", variant: "secondary" as const } : null,
-    ...(fund.health_badges ?? []).map((flag) => ({
+    ...(isInvestNfo(fund) ? [] : fund.health_badges ?? []).map((flag) => ({
       key: flag,
       label: healthBadgeLabel(flag),
       variant: "warning" as const,
@@ -179,7 +154,15 @@ export function MfFundCard({ fund, onSelect, className }: MfFundCardProps) {
 
           <div className="mt-auto min-w-0">
             <div className="grid min-w-0 grid-cols-2 gap-3 rounded-[var(--radius-card)] border border-border/50 bg-muted/10 px-3 py-3">
-              <FundMetric label={cardReturn.label} value={cardReturn.text} tone={cardReturn.tone} />
+              {isInvestNfo(fund) ? (
+                <FundMetric
+                  label="Offer"
+                  value={nfoStatusLabel(fund.nfo?.status)}
+                  tone="muted"
+                />
+              ) : (
+                <FundMetric label={cardReturn.label} value={cardReturn.text} tone={cardReturn.tone} />
+              )}
               <FundMetric
                 label="Min SIP"
                 value={formatInr(fund.min_sip_amount_inr)}

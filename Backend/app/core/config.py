@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
 
     cors_origins: str = (
-        "http://localhost:7777,http://localhost:8888,http://localhost:9900,"
-        "http://127.0.0.1:7777,http://127.0.0.1:8888,http://127.0.0.1:9900"
+        "http://localhost:7777,http://localhost:8888,http://localhost:9900,http://localhost:9999,"
+        "http://127.0.0.1:7777,http://127.0.0.1:8888,http://127.0.0.1:9900,http://127.0.0.1:9999"
     )
 
     database_url: str = "postgresql+asyncpg://zynd:zynd@localhost:5432/zynd"
@@ -165,6 +165,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:7777"
     admin_frontend_url: str = "http://localhost:8888"
     distributor_frontend_url: str = "http://localhost:9900"
+    support_frontend_url: str = "http://localhost:9999"
     referral_min_first_investment_inr: int = 1000
     referral_qualification_hold_days: int = 30
     referral_min_engagement_investment_inr: int = 1000
@@ -175,6 +176,7 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "zynd_refresh_token"
     refresh_cookie_name_admin: str = "zynd_admin_refresh_token"
     refresh_cookie_name_distributor: str = "zynd_distributor_refresh_token"
+    refresh_cookie_name_support: str = "zynd_support_refresh_token"
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: str = "lax"
 
@@ -444,6 +446,7 @@ class Settings(BaseSettings):
     zynd_nfo_shallow_nav_max: int = 30
     zynd_nfo_max_age_days: int = 90
     zynd_nfo_allotted_nav_min: int = 60
+    zynd_nfo_calendar_url: str = "https://mfcalc.getabundance.in/api/nfo?format=json"
     zynd_mf_nfo_mutex_key: str = "zynd:mf-nfo-ingest"
 
     zynd_mf_scheme_min_amounts_backfill_enabled: bool = True
@@ -801,6 +804,7 @@ class Settings(BaseSettings):
             self.frontend_url.rstrip("/"),
             self.admin_frontend_url.rstrip("/"),
             self.distributor_frontend_url.rstrip("/"),
+            self.support_frontend_url.rstrip("/"),
         }
         origins.update(self.cors_origin_list)
         return sorted(origin for origin in origins if origin)

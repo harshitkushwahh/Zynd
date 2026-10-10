@@ -100,7 +100,9 @@ function buildOpeningProgressSteps(branch: AdminHierarchyBranchDetail): Progress
       ? branch.manager_id
         ? "complete"
         : "current"
-      : "upcoming";
+      : branch.status === "rejected"
+        ? "rejected"
+        : "upcoming";
 
   const activeState: ProgressStep["state"] =
     branch.status === "active" && branch.manager_id

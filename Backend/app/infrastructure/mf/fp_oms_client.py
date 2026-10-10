@@ -17,6 +17,8 @@ from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 
 logger = logging.getLogger(__name__)
 
+NOMINATION_INFO_VISIBILITY_SHOW = "SHOW"
+
 _fp_mf_token: str | None = None
 
 

@@ -194,7 +194,6 @@ function resolveSipMandateMessage(args: {
   plan: MfSipPlan | null;
   error: string | null;
   returnedFromMandate: boolean;
-  returnedFromFirstInstallment: boolean;
   firstInstallmentRetryOffered: boolean;
   abandonChecked: boolean;
   redirectingToFirstInstallment: boolean;
@@ -519,12 +518,13 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
           const next = await reconcileFirstInstallmentReturn(planId);
           if (!cancelled && next) {
             setPlan(next);
-            if (concludeUnpaidReturn && isFirstInstallmentPending(next)) {
+            const firstInstallmentPending = isFirstInstallmentPending(next);
+            if (concludeUnpaidReturn && firstInstallmentPending) {
               setGatewayBackIncomplete(true);
               setFirstInstallmentRetryOffered(true);
               setError(copy.mutualFunds.sipFirstInstallmentRetry);
             } else {
-              if (isFirstInstallmentPending(next)) {
+              if (firstInstallmentPending) {
                 setFirstInstallmentRetryOffered(true);
               }
               setError(null);
@@ -702,7 +702,6 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
     plan,
     error,
     returnedFromMandate,
-    returnedFromFirstInstallment,
     firstInstallmentRetryOffered,
     abandonChecked,
     redirectingToFirstInstallment,

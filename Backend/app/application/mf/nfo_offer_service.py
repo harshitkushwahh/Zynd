@@ -6,6 +6,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.mf.category_mapping import scheme_category_for_nfo
 from app.application.mf.invest_catalog_invalidation import notify_invest_catalog_changed
 from app.infrastructure.persistence.mf_models import (
     FundAmc,
@@ -44,6 +45,7 @@ def _serialize_admin_offer(
         "admin_override": offer.admin_override,
         "purchase_allowed": fund.fp_oms_purchase_allowed,
         "updated_at": offer.updated_at.isoformat() if offer.updated_at else None,
+        **scheme_category_for_nfo(fund.sebi_category),
     }
 
 
@@ -81,6 +83,35 @@ async def list_nfo_offers_admin(session: AsyncSession) -> dict:
             "featured": featured,
             "hidden": hidden,
             "stale_oms": stale_oms,
+        },
+    }
+
+
+async def list_nfo_category_breakdown(session: AsyncSession) -> dict:
+    payload = await list_nfo_offers_admin(session)
+    groups_by_key: dict[str, dict] = {}
+    unclassified = 0
+    for item in payload["items"]:
+        slug = item.get("scheme_category_slug")
+        name = item.get("scheme_category_name") or "Unclassified"
+        key = slug or "unclassified"
+        if slug is None:
+            unclassified += 1
+        group = groups_by_key.get(key)
+        if group is None:
+            group = {"slug": slug, "name": name, "count": 0, "items": []}
+            groups_by_key[key] = group
+        group["items"].append(item)
+        group["count"] += 1
+    groups = sorted(groups_by_key.values(), key=lambda row: (row["slug"] is None, row["name"]))
+    return {
+        "groups": groups,
+        "counts": {
+            "total": payload["counts"]["total"],
+            "classified": payload["counts"]["total"] - unclassified,
+            "unclassified": unclassified,
+            "categories": sum(1 for group in groups if group["slug"]),
+            "featured": payload["counts"]["featured"],
         },
     }
 

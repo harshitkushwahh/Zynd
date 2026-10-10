@@ -36,6 +36,8 @@ function applyClientHeaders(headers: Headers) {
     headers.set("X-Zynd-Client", "admin");
   } else if (kind === "distributor") {
     headers.set("X-Zynd-Client", "distributor");
+  } else if (kind === "support") {
+    headers.set("X-Zynd-Client", "support");
   }
 }
 

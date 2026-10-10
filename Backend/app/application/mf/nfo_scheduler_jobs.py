@@ -42,12 +42,17 @@ def build_nfo_jobs() -> list[ScheduledNfoJob]:
 
 
 def nfo_jobs_for_cli() -> list[dict[str, Any]]:
+    settings = get_settings()
+    cron = settings.zynd_nfo_fallback_cron or "0 22 * * *"
     return [
         {
             "name": job.name,
+            "sequence": index,
+            "phase": 1,
+            "cron": cron,
             "enabled": job.enabled,
             "description": job.description,
             "depends_on": list(job.depends_on),
         }
-        for job in build_nfo_jobs()
+        for index, job in enumerate(build_nfo_jobs(), start=1)
     ]

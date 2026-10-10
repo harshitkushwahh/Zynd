@@ -9,6 +9,7 @@ from app.application.admin.rbac_service import (
     DISTRIBUTOR_CONSOLE_ROLE_KEYS,
     DISTRIBUTOR_MANAGER_ROLE_KEY,
     DISTRIBUTOR_PARTNER_ROLE_KEY,
+    SUPPORT_CONSOLE_ROLE_KEYS,
     list_user_role_keys,
 )
 from app.application.auth.errors import AuthError
@@ -53,6 +54,21 @@ def origin_suggests_distributor_console(origin: str | None, referer: str | None 
     return False
 
 
+def origin_suggests_support_console(origin: str | None, referer: str | None = None) -> bool:
+    for value in (origin, referer):
+        if not value:
+            continue
+        lowered = value.lower()
+        if ":9999" in lowered or "/support" in lowered:
+            return True
+    return False
+
+
+async def user_is_support_console_account(db: AsyncSession, user_id: UUID) -> bool:
+    role_keys = await list_user_role_keys(db, user_id)
+    return any(key in SUPPORT_CONSOLE_ROLE_KEYS for key in role_keys)
+
+
 async def resolve_password_reset_target(
     db: AsyncSession,
     settings: Settings,
@@ -64,10 +80,12 @@ async def resolve_password_reset_target(
 ) -> tuple[str, str]:
     distributor_base = settings.distributor_frontend_url.rstrip("/")
     admin_base = settings.admin_frontend_url.rstrip("/")
+    support_base = settings.support_frontend_url.rstrip("/")
     web_base = settings.frontend_url.rstrip("/")
 
     normalized_client = (client or "").strip().lower()
     is_distributor_account = await user_is_distributor_console_account(db, user.id)
+    is_support_account = await user_is_support_console_account(db, user.id)
 
     if (
         is_distributor_account
@@ -75,6 +93,12 @@ async def resolve_password_reset_target(
         or origin_suggests_distributor_console(origin, referer)
     ):
         return distributor_base, "Zynd Mitra console"
+    if (
+        is_support_account
+        or normalized_client == "support"
+        or origin_suggests_support_console(origin, referer)
+    ):
+        return support_base, "Zynd Support console"
     if normalized_client == "admin":
         return admin_base, "ZYND Admin"
     return web_base, "ZYND"

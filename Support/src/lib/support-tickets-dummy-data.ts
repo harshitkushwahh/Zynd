@@ -1,0 +1,171 @@
+import type { SupportTicket } from "@/lib/support-types";
+
+export const SUPPORT_DUMMY_TICKETS: SupportTicket[] = [
+  {
+    id: "TKT-1042",
+    subject: "SIP mandate not reflecting",
+    description:
+      "Investor completed SIP setup but the mandate still shows pending in the app and on the payment partner.",
+    topic: "sip",
+    status: "open",
+    priority: "high",
+    userId: "ZYND-U-001",
+    assigneeId: "support-agent-1",
+    assigneeName: "Support Agent",
+    createdAt: "2026-10-07T11:05:00Z",
+    updatedAt: "2026-10-08T14:22:00Z",
+    channel: "web_chat",
+    attachments: [],
+    messages: [
+      {
+        id: "msg-1",
+        role: "user",
+        body: "I set up a monthly SIP yesterday but it still shows as pending in the app.",
+        createdAt: "2026-10-07T11:05:00Z",
+        senderName: "Ananya Sharma",
+      },
+      {
+        id: "msg-2",
+        role: "agent",
+        body: "Thanks for reaching out. I am checking your mandate status with the payment partner.",
+        createdAt: "2026-10-07T11:18:00Z",
+        senderName: "Support Agent",
+      },
+      {
+        id: "msg-3",
+        role: "user",
+        body: "Sure, please let me know once it is active.",
+        createdAt: "2026-10-08T09:40:00Z",
+        senderName: "Ananya Sharma",
+      },
+    ],
+  },
+  {
+    id: "TKT-981",
+    subject: "KYC document re-upload",
+    description:
+      "Address proof was rejected; investor uploaded a new utility bill and needs KYC review.",
+    topic: "kyc",
+    status: "pending",
+    priority: "medium",
+    userId: "ZYND-U-001",
+    assigneeId: null,
+    assigneeName: null,
+    createdAt: "2026-10-04T08:30:00Z",
+    updatedAt: "2026-10-05T09:10:00Z",
+    channel: "email",
+    attachments: [
+      { id: "att-981-1", fileName: "utility-bill-oct-2026.pdf", uploadedAt: "2026-10-04T08:30:00Z" },
+      { id: "att-981-2", fileName: "address-proof-front.jpg", uploadedAt: "2026-10-04T08:30:00Z" },
+    ],
+    messages: [
+      {
+        id: "msg-4",
+        role: "user",
+        body: "My address proof was rejected. I have attached a fresh utility bill.",
+        createdAt: "2026-10-04T08:30:00Z",
+        senderName: "Ananya Sharma",
+      },
+      {
+        id: "msg-5",
+        role: "system",
+        body: "Ticket queued for KYC review.",
+        createdAt: "2026-10-04T08:31:00Z",
+      },
+    ],
+  },
+  {
+    id: "TKT-1104",
+    subject: "Redemption amount not credited",
+    description:
+      "Redemption order shows successful but the payout has not reached the investor bank account.",
+    topic: "payment",
+    status: "open",
+    priority: "high",
+    userId: "ZYND-U-002",
+    assigneeId: "support-lead-1",
+    assigneeName: "Support Lead",
+    createdAt: "2026-10-09T06:15:00Z",
+    updatedAt: "2026-10-09T16:00:00Z",
+    channel: "web_chat",
+    attachments: [
+      {
+        id: "att-1104-1",
+        fileName: "redemption-confirmation.pdf",
+        uploadedAt: "2026-10-09T06:16:00Z",
+      },
+    ],
+    messages: [
+      {
+        id: "msg-6",
+        role: "user",
+        body: "Redemption was marked successful two days ago but I have not received the amount.",
+        createdAt: "2026-10-09T06:15:00Z",
+        senderName: "Rahul Mehta",
+      },
+    ],
+  },
+  {
+    id: "TKT-1055",
+    subject: "Bank account change pending review",
+    description:
+      "Investor submitted a new primary bank account; payout verification is still in progress.",
+    topic: "account",
+    status: "pending",
+    priority: "medium",
+    userId: "ZYND-U-002",
+    assigneeId: "support-agent-1",
+    assigneeName: "Support Agent",
+    createdAt: "2026-10-02T09:20:00Z",
+    updatedAt: "2026-10-03T11:05:00Z",
+    channel: "email",
+    attachments: [
+      {
+        id: "att-1055-1",
+        fileName: "bank-cheque-scan.pdf",
+        uploadedAt: "2026-10-02T09:21:00Z",
+      },
+    ],
+    messages: [
+      {
+        id: "msg-6b",
+        role: "user",
+        body: "I updated my bank account last week. Can you confirm when payouts will use the new account?",
+        createdAt: "2026-10-02T09:20:00Z",
+        senderName: "Rahul Mehta",
+      },
+    ],
+  },
+  {
+    id: "TKT-892",
+    subject: "Unable to update nominee",
+    description:
+      "Nominee update flow times out before submit; investor cannot save changes on Profile → Nominee.",
+    topic: "account",
+    status: "resolved",
+    priority: "low",
+    userId: "ZYND-U-003",
+    assigneeId: "support-agent-1",
+    assigneeName: "Support Agent",
+    createdAt: "2026-09-28T12:00:00Z",
+    updatedAt: "2026-09-29T10:20:00Z",
+    channel: "email",
+    attachments: [],
+    messages: [
+      {
+        id: "msg-7",
+        role: "user",
+        body: "The nominee update screen keeps timing out.",
+        createdAt: "2026-09-28T12:00:00Z",
+        senderName: "Priya Nair",
+      },
+      {
+        id: "msg-8",
+        role: "agent",
+        body: "We refreshed your profile cache. Please try again from Profile → Nominee.",
+        createdAt: "2026-09-29T10:20:00Z",
+        senderName: "Support Agent",
+      },
+    ],
+  },
+];

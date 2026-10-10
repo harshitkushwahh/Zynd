@@ -1,26 +1,52 @@
 import type { StatusBadgeVariant } from "@/components/ui/status-badge";
-import type { SupportTicketPriority, SupportTicketStatus } from "@/lib/dummy/tickets";
-import type { SupportUserKycStatus } from "@/lib/dummy/users";
+import type {
+  InvestorComplianceStatus,
+  InvestorInvestmentStatus,
+  InvestorOnboardingStatus,
+  OrderStatus,
+  SystematicPlanStatus,
+  TxnRequestStatus,
+} from "@/lib/distributor-types";
 
-export function ticketStatusVariant(status: SupportTicketStatus): StatusBadgeVariant {
-  if (status === "open") return "info";
-  if (status === "pending") return "warning";
-  return "success";
+export function onboardingStatusVariant(
+  status: InvestorOnboardingStatus,
+): StatusBadgeVariant {
+  if (status === "Onboarded") return "success";
+  return "warning";
 }
 
-export function ticketPriorityVariant(priority: SupportTicketPriority): StatusBadgeVariant {
-  if (priority === "high") return "destructive";
-  if (priority === "medium") return "warning";
+export function complianceStatusVariant(
+  status: InvestorComplianceStatus,
+): StatusBadgeVariant {
+  if (status === "Compliant") return "success";
+  return "destructive";
+}
+
+export function investmentStatusVariant(
+  status: InvestorInvestmentStatus,
+): StatusBadgeVariant {
+  if (status === "Invested") return "info";
   return "neutral";
 }
 
-export function kycStatusVariant(status: SupportUserKycStatus): StatusBadgeVariant {
-  if (status === "verified") return "success";
-  if (status === "pending") return "warning";
-  if (status === "rejected") return "destructive";
+export function orderStatusVariant(status: OrderStatus): StatusBadgeVariant {
+  if (status === "Completed") return "success";
+  if (status === "Failed") return "destructive";
+  if (status === "Processing") return "info";
+  return "warning";
+}
+
+export function planStatusVariant(status: SystematicPlanStatus | string): StatusBadgeVariant {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  if (normalized === "active") return "success";
+  if (normalized === "paused") return "warning";
+  if (normalized === "failed") return "destructive";
+  if (normalized === "cancelled" || normalized === "canceled") return "neutral";
   return "neutral";
 }
 
-export function labelize(value: string): string {
-  return value.replaceAll("_", " ");
+export function txnRequestStatusVariant(status: TxnRequestStatus): StatusBadgeVariant {
+  if (status === "Approved") return "success";
+  if (status === "Rejected") return "destructive";
+  return "warning";
 }

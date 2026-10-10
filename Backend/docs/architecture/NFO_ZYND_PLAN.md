@@ -277,6 +277,8 @@ Existing reuse:
 | Method | Path | Permission | Purpose |
 |--------|------|------------|---------|
 | `GET` | `/admin/mf/nfo` | `mf.catalog.read` | List detected + curated NFO rows |
+| `GET` | `/admin/mf/nfo/category` | `mf.catalog.read` | Browse-category `nfo` membership for admin curation |
+| `GET` | `/admin/mf/nfo/jobs` | `mf.jobs.read` | NFO job library (cron, last run, processed counts) |
 | `PATCH` | `/admin/mf/nfo/{product_id}` | `mf.catalog.manage` | Override dates, featured, hide, marketing copy |
 | `POST` | `/admin/mf/nfo/jobs/{job_name}/run` | `mf.jobs.run` | Manual NFO job trigger |
 | `GET` | `/admin/mf/nfo/scheduler/status` | `mf.jobs.read` | Worker health, last chain trigger, mutex holder |

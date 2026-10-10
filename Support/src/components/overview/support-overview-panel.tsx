@@ -1,123 +1,135 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, Clock3, Headset, Ticket } from "lucide-react";
+import { useMemo } from "react";
+import { CheckCircle2, Clock3, Layers3, Ticket } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { DUMMY_TICKETS } from "@/lib/dummy/tickets";
-import { getDummyUser } from "@/lib/dummy/users";
-import { formatSupportDateTime } from "@/lib/format";
-import { labelize, ticketPriorityVariant, ticketStatusVariant } from "@/lib/status-meta";
+import { DistributorOverviewSection } from "@/components/overview/distributor-overview-section";
+import { SupportDashboardGreeting } from "@/components/overview/support-dashboard-greeting";
+import { SupportOverviewCategoryCard } from "@/components/overview/support-overview-category-card";
+import { SupportOverviewMetricTile } from "@/components/overview/support-overview-metric-tile";
+import { SupportOverviewPerformanceCards } from "@/components/overview/support-overview-performance-cards";
+import { DistributorActionButton } from "@/components/ui/distributor-action-button";
+import { SupportOverviewTicketTrendsCard } from "@/components/overview/support-overview-ticket-trends-card";
+import { SupportTicketsTable } from "@/components/tickets/support-tickets-table";
+import { useSupportAuth } from "@/contexts/support-auth-context";
+import {
+  SUPPORT_OVERVIEW_CATEGORY_SEGMENTS,
+  SUPPORT_OVERVIEW_METRIC_TRENDS,
+  SUPPORT_OVERVIEW_SPARKLINE,
+  SUPPORT_OVERVIEW_TICKET_TRENDS,
+} from "@/lib/support-overview-analytics-data";
+import {
+  filterTicketsForAgentQueue,
+  sortTicketsByRecentActivity,
+  summarizeAgentTicketQueue,
+} from "@/lib/support-overview-ticket-stats";
+import { SUPPORT_DUMMY_TICKETS } from "@/lib/support-tickets-dummy-data";
+import { DISTRIBUTOR_DASHBOARD_HOME_SPACER_CLASS, DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
+import { cn } from "@/lib/utils";
 
-const openCount = DUMMY_TICKETS.filter((ticket) => ticket.status === "open").length;
-const pendingCount = DUMMY_TICKETS.filter((ticket) => ticket.status === "pending").length;
-const resolvedCount = DUMMY_TICKETS.filter((ticket) => ticket.status === "resolved").length;
-const recentTickets = [...DUMMY_TICKETS]
-  .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  .slice(0, 5);
+const RECENT_TICKET_LIMIT = 6;
 
 export function SupportOverviewPanel() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-h3 font-semibold text-foreground">Overview</h1>
-        <p className="mt-1 text-caption text-muted-foreground">
-          Dummy queue health for the contact team — backend wiring comes later.
-        </p>
-      </div>
+  const { displayName } = useSupportAuth();
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
+  const agentTickets = useMemo(
+    () => filterTicketsForAgentQueue(SUPPORT_DUMMY_TICKETS),
+    [],
+  );
+
+  const queueSummary = useMemo(() => summarizeAgentTicketQueue(agentTickets), [agentTickets]);
+
+  const recentTickets = useMemo(
+    () => sortTicketsByRecentActivity(agentTickets).slice(0, RECENT_TICKET_LIMIT),
+    [agentTickets],
+  );
+
+  const metricValues = {
+    total: String(queueSummary.total),
+    open: String(queueSummary.open),
+    inProgress: String(queueSummary.inProgress),
+    resolved: String(queueSummary.resolved),
+  };
+
+  return (
+    <div
+      className={cn(
+        DISTRIBUTOR_PAGE_STACK_CLASS,
+        DISTRIBUTOR_DASHBOARD_HOME_SPACER_CLASS,
+        "distributor-dashboard-page--enter",
+      )}
+    >
+      <SupportDashboardGreeting name={displayName} />
+
+      <div className="support-overview-metrics-grid distributor-metric-tiles-grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SupportOverviewMetricTile
+          icon={Layers3}
+          label="My queue"
+          value={metricValues.total}
+          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.total}
+          sparkline={SUPPORT_OVERVIEW_SPARKLINE.total}
+          href="/dashboard/tickets"
+          tileTone="accent"
+        />
+        <SupportOverviewMetricTile
           icon={Ticket}
           label="Open tickets"
-          value={String(openCount)}
-          hint={`${pendingCount} pending`}
+          value={metricValues.open}
+          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.open}
+          sparkline={SUPPORT_OVERVIEW_SPARKLINE.open}
+          href="/dashboard/tickets"
         />
-        <MetricCard
+        <SupportOverviewMetricTile
           icon={Clock3}
-          label="Avg first response"
-          value="12m"
-          hint="Demo estimate"
+          label="In progress"
+          value={metricValues.inProgress}
+          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.inProgress}
+          sparkline={SUPPORT_OVERVIEW_SPARKLINE.inProgress}
+          href="/dashboard/tickets"
         />
-        <MetricCard
-          icon={Headset}
-          label="Active agents"
-          value="2"
-          hint="Aanya · Rahul"
-        />
-        <MetricCard
+        <SupportOverviewMetricTile
           icon={CheckCircle2}
           label="Resolved"
-          value={String(resolvedCount)}
-          hint="Closed in demo data"
+          value={metricValues.resolved}
+          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.resolved}
+          sparkline={SUPPORT_OVERVIEW_SPARKLINE.resolved}
+          href="/dashboard/tickets"
         />
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 pb-3">
-          <CardTitle className="text-body">Recent tickets</CardTitle>
-          <Link href="/dashboard/tickets" className="text-caption text-primary hover:underline">
-            View all
-          </Link>
-        </CardHeader>
-        <CardContent className="space-y-2 p-0 px-4 pb-4">
-          {recentTickets.map((ticket) => {
-            const user = getDummyUser(ticket.userId);
-            return (
-              <Link
-                key={ticket.id}
-                href="/dashboard/tickets"
-                className="flex items-start justify-between gap-3 rounded-[var(--radius-card)] border border-border/70 px-3 py-3 transition-colors hover:bg-muted/40"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-compact font-medium text-foreground">
-                    {ticket.subject}
-                  </p>
-                  <p className="mt-0.5 truncate text-caption text-muted-foreground">
-                    {ticket.id} · {user?.name ?? "Unknown"} · {formatSupportDateTime(ticket.updatedAt)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <StatusBadge variant={ticketStatusVariant(ticket.status)} showIcon={false}>
-                    {labelize(ticket.status)}
-                  </StatusBadge>
-                  <StatusBadge variant={ticketPriorityVariant(ticket.priority)} showIcon={false}>
-                    {ticket.priority}
-                  </StatusBadge>
-                </div>
-              </Link>
-            );
-          })}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+      <div className="support-overview-insights-row grid items-stretch gap-3 xl:grid-cols-3">
+        <div className="flex min-h-0 min-w-0 xl:col-span-2">
+          <SupportOverviewTicketTrendsCard
+            className="min-w-0 flex-1"
+            series={SUPPORT_OVERVIEW_TICKET_TRENDS}
+          />
+        </div>
+        <div className="flex min-h-0 min-w-0">
+          <SupportOverviewCategoryCard
+            className="min-w-0 flex-1"
+            segments={SUPPORT_OVERVIEW_CATEGORY_SEGMENTS}
+          />
+        </div>
+      </div>
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: typeof Ticket;
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex gap-3 p-4">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Icon className="size-4" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-caption text-muted-foreground">{label}</p>
-          <p className="mt-1 font-heading text-h4 font-semibold tabular-nums">{value}</p>
-          <p className="mt-1 text-caption text-muted-foreground">{hint}</p>
-        </div>
-      </CardContent>
-    </Card>
+      <SupportOverviewPerformanceCards />
+
+      <DistributorOverviewSection
+        title="Recent tickets"
+        actions={
+          <DistributorActionButton variant="chevron" size="sm" asChild>
+            <Link href="/dashboard/tickets">View all tickets</Link>
+          </DistributorActionButton>
+        }
+      >
+        <SupportTicketsTable
+          tickets={recentTickets}
+          showToolbar={false}
+          showUserColumn
+          emptyTitle="No tickets in your queue"
+        />
+      </DistributorOverviewSection>
+    </div>
   );
 }

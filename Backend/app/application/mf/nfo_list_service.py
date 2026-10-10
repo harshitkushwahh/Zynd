@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_governance_service import invest_visibility_sql_clause
 from app.application.mf.invest_home_service import _serialize_fund_summary
-from app.application.mf.invest_nfo_mappers import serialize_nfo_block
+from app.application.mf.invest_nfo_mappers import INVEST_NFO_STATUSES, serialize_nfo_block
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
     FundAmc,
@@ -28,8 +28,8 @@ STATUS_FILTERS = {
 }
 
 
-def attach_nfo(payload: dict, offer: NfoOffer | None) -> dict:
-    block = serialize_nfo_block(offer)
+def attach_nfo(payload: dict, offer: NfoOffer | None, *, catalog_only: bool = True) -> dict:
+    block = serialize_nfo_block(offer, catalog_only=catalog_only)
     if block is not None:
         payload["nfo"] = block
     return payload
@@ -46,6 +46,7 @@ async def load_nfo_by_product_ids(
             select(NfoOffer).where(
                 NfoOffer.product_id.in_(product_ids),
                 NfoOffer.is_hidden.is_(False),
+                NfoOffer.status.in_(tuple(INVEST_NFO_STATUSES)),
             )
         )
     ).scalars()

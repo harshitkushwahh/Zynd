@@ -7,12 +7,16 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.admin.rbac_service import DISTRIBUTOR_CONSOLE_ROLE_KEYS
+from app.application.admin.rbac_service import (
+    DISTRIBUTOR_CONSOLE_ROLE_KEYS,
+    SUPPORT_CONSOLE_ROLE_KEYS,
+)
 from app.application.auth.auth_client_policy import (
     AuthClientKind,
     invite_target_console,
     is_admin_device_fingerprint,
     is_distributor_device_fingerprint,
+    is_support_device_fingerprint,
     resolve_auth_client_kind,
     validate_invite_client_for_role,
 )
@@ -89,6 +93,8 @@ def _invite_url(token: str, *, role_key: str, settings: Settings | None = None) 
     settings = settings or get_settings()
     if role_key in DISTRIBUTOR_CONSOLE_ROLE_KEYS:
         base = settings.distributor_frontend_url.rstrip("/")
+    elif role_key in SUPPORT_CONSOLE_ROLE_KEYS:
+        base = settings.support_frontend_url.rstrip("/")
     else:
         base = settings.admin_frontend_url.rstrip("/")
     return f"{base}/accept-invite?token={token}"
@@ -99,6 +105,8 @@ def _resolve_invite_auth_client(*, header: str | None, fingerprint: str | None) 
         return resolve_auth_client_kind(header=header, fingerprint=fingerprint)
     if is_distributor_device_fingerprint(fingerprint):
         return "distributor"
+    if is_support_device_fingerprint(fingerprint):
+        return "support"
     if is_admin_device_fingerprint(fingerprint):
         return "admin"
     return "web"
@@ -221,6 +229,9 @@ async def _send_invite_email(
     if invitation.role_key in DISTRIBUTOR_CONSOLE_ROLE_KEYS:
         subject = "You're invited to the Zynd Mitra console"
         product_label = "Zynd Mitra console"
+    elif invitation.role_key in SUPPORT_CONSOLE_ROLE_KEYS:
+        subject = "You're invited to the Zynd Support console"
+        product_label = "Zynd Support console"
     else:
         subject = "You're invited to the ZYND Admin Console"
         product_label = "ZYND Admin Console"

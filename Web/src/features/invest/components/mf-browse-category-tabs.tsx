@@ -12,6 +12,7 @@ import {
   resolveMfFundCategoryFromSlug,
 } from "@/features/invest/components/mf-fund-category-badge";
 import { fetchTopFundsForCategory } from "@/features/invest/lib/mf-fund-ranking";
+import { isInvestNfo } from "@/features/invest/lib/mf-nfo";
 import {
   MF_CARD_RADIUS_CLASS,
   MF_FUNDS_GRID_CLASS,
@@ -36,9 +37,14 @@ type MfBrowseCategoryTabsProps = {
 export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCategoryTabsProps) {
   const tabCategories = useMemo(
     () =>
-      MF_BROWSE_TAB_CATEGORY_SLUGS.map((slug) => categories.find((category) => category.slug === slug)).filter(
-        (category): category is InvestCategory => Boolean(category),
-      ),
+      MF_BROWSE_TAB_CATEGORY_SLUGS.map((slug) => {
+        const existing = categories.find((category) => category.slug === slug);
+        if (existing) return existing;
+        if (slug === "nfo") {
+          return { id: 0, slug: "nfo", name: "NFO", fund_count: 0 } satisfies InvestCategory;
+        }
+        return undefined;
+      }).filter((category): category is InvestCategory => Boolean(category)),
     [categories],
   );
 
@@ -51,7 +57,12 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
   fundsCacheRef.current = fundsCache;
 
   const activeCategory = tabCategories.find((category) => category.slug === activeSlug) ?? tabCategories[0];
-  const activeFunds = activeCategory ? fundsCache[activeCategory.slug] : undefined;
+  const activeFunds = useMemo(() => {
+    const funds = activeCategory ? fundsCache[activeCategory.slug] : undefined;
+    if (!funds) return undefined;
+    if (activeCategory.slug === "nfo") return funds.filter(isInvestNfo);
+    return funds.filter((fund) => !isInvestNfo(fund));
+  }, [activeCategory, fundsCache]);
   const activeError = activeCategory ? errorBySlug[activeCategory.slug] : null;
   const isLoadingActive = Boolean(activeCategory && loadingSlug === activeCategory.slug);
 

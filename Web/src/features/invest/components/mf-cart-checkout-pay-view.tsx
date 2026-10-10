@@ -25,6 +25,7 @@ import {
   getGatewayReturnKind,
   isHistoryBackForwardNavigation,
   isHistoryGatewayReturn,
+  shouldAbandonPaymentOnDismiss,
   shouldShowGatewayBackNotCompleted,
 } from "@/features/invest/lib/mf-payment-gateway-return";
 import {
@@ -430,6 +431,7 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
     Boolean(checkout?.payment_url) &&
     !TERMINAL_STATUSES.has(checkout?.status ?? "");
 
+  const paymentStarted = wasMfPaymentRedirected(checkoutId) || Boolean(checkout?.payment_url);
   const canLeaveAfterReturn =
     returnedFromGateway &&
     gatewayReturnHandled &&
@@ -492,9 +494,11 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
       clearLastMfPaymentSession();
     } else if (
       checkout &&
-      !TERMINAL_STATUSES.has(checkout.status) &&
-      returnedFromPayment &&
-      gatewayReturnHandled
+      shouldAbandonPaymentOnDismiss({
+        isTerminal: TERMINAL_STATUSES.has(checkout.status),
+        paymentSucceeded: checkout.status === "SUCCEEDED",
+        paymentStarted,
+      })
     ) {
       markMfLumpsumPaymentDismissed(checkoutId);
       void abandonMfCheckoutPayment(checkoutId);
@@ -518,21 +522,31 @@ export function MfCartCheckoutPayView({ checkoutId, onClose }: MfCartCheckoutPay
       title={title}
       message={message}
       terminalLines={terminalLines}
-      allowDismiss={canLeaveAfterReturn || phase === "success" || phase === "error" || longRunning}
+      allowDismiss={
+        canLeaveAfterReturn ||
+        paymentStarted ||
+        phase === "success" ||
+        phase === "error" ||
+        longRunning
+      }
       onDismiss={dismissPaymentDialog}
       primaryLabel={
         canRetryPayment
           ? copy.mutualFunds.orderPayUpiCta
           : phase === "error"
             ? copy.mutualFunds.paymentJourneyBackToCart
-            : canLeaveAfterReturn || phase === "success" || longRunning
+            : canLeaveAfterReturn || paymentStarted || phase === "success" || longRunning
               ? copy.mutualFunds.backToBrowse
               : undefined
       }
       onPrimaryAction={
         canRetryPayment
           ? handleManualPayment
-          : canLeaveAfterReturn || phase === "success" || phase === "error" || longRunning
+          : canLeaveAfterReturn ||
+              paymentStarted ||
+              phase === "success" ||
+              phase === "error" ||
+              longRunning
             ? dismissPaymentDialog
             : undefined
       }

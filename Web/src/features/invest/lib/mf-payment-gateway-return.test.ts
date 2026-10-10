@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   resolveGatewayNavigationAction,
+  shouldAbandonPaymentOnDismiss,
   shouldMarkHistoryGatewayReturn,
   shouldShowGatewayBackNotCompleted,
 } from "@/features/invest/lib/mf-payment-gateway-return";
@@ -71,14 +72,14 @@ describe("mf payment gateway return", () => {
     expect(shouldMarkHistoryGatewayReturn({ navigationType: "navigate" })).toBe(false);
   });
 
-  it("waits a few reconcile attempts on Back, then shows not-completed unless payment succeeded", () => {
+  it("abandons on the first pending reconcile after Back unless payment already succeeded", () => {
     expect(
       shouldShowGatewayBackNotCompleted({
         historyReturn: true,
         attempts: 1,
         outcome: "pending",
       }),
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       shouldShowGatewayBackNotCompleted({
@@ -117,6 +118,30 @@ describe("mf payment gateway return", () => {
         historyReturn: false,
         attempts: 3,
         outcome: "pending",
+      }),
+    ).toBe(false);
+  });
+
+  it("abandons dismiss only after payment started and before a terminal result", () => {
+    expect(
+      shouldAbandonPaymentOnDismiss({
+        isTerminal: false,
+        paymentSucceeded: false,
+        paymentStarted: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAbandonPaymentOnDismiss({
+        isTerminal: false,
+        paymentSucceeded: false,
+        paymentStarted: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAbandonPaymentOnDismiss({
+        isTerminal: true,
+        paymentSucceeded: false,
+        paymentStarted: true,
       }),
     ).toBe(false);
   });

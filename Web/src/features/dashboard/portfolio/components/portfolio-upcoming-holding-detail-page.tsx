@@ -171,10 +171,7 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
     );
   }
 
-  if (!order) {
-    notFound();
-  }
-  if (!isUpcomingHoldingOrder(order)) {
+  if (!order || !isUpcomingHoldingOrder(order)) {
     notFound();
   }
 

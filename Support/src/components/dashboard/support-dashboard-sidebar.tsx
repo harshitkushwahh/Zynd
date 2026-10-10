@@ -5,54 +5,86 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
+  SUPPORT_SIDEBAR_CHROME_CLASS,
+  SUPPORT_SIDEBAR_COLLAPSED_UI_CLASS,
+} from "@/lib/support-layout";
+import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   isSupportRouteActive,
   SUPPORT_NAV_ROUTES,
+  type SupportNavRoute,
 } from "@/lib/support-navigation";
+import { ZYND_SUPPORT_FAVICON_PNG_SRC } from "@/lib/support-brand-assets";
 import { cn } from "@/lib/utils";
 
 function SupportSidebarBrand() {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
   return (
     <Link
       href="/dashboard"
-      className={cn(
-        "flex items-center gap-3 rounded-md p-1 transition-colors hover:bg-sidebar-accent",
-        collapsed && "justify-center",
-      )}
+      className="distributor-sidebar-brand distributor-sidebar-brand--logo-only"
       aria-label="ZYND Support home"
     >
-      <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md">
+      <span className="distributor-sidebar-brand__logo-wrap">
         <Image
-          src="/logo.png"
-          alt="ZYND"
+          src={ZYND_SUPPORT_FAVICON_PNG_SRC}
+          alt="ZYND Support"
           width={32}
           height={32}
-          className="size-8 object-contain"
+          className="distributor-sidebar-brand__logo"
           priority
         />
       </span>
-      {!collapsed ? (
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-sidebar-foreground">ZYND</span>
-          <span className="block truncate text-xs text-sidebar-foreground/60">Support Console</span>
+    </Link>
+  );
+}
+
+function SupportSidebarNavItem({
+  route,
+  active,
+  href,
+}: {
+  route: SupportNavRoute;
+  active: boolean;
+  href: string;
+}) {
+  const Icon = route.icon;
+  const tooltip =
+    route.badgeCount != null && route.badgeCount > 0
+      ? `${route.label} (${route.badgeCount} open)`
+      : route.label;
+
+  const showBadge = route.badgeCount != null && route.badgeCount > 0;
+
+  return (
+    <SidebarMenuItem className="support-sidebar-menu-item">
+      {showBadge ? (
+        <span
+          className="support-sidebar-menu-item__badge"
+          aria-label={`${route.badgeCount} open tickets`}
+        >
+          {route.badgeCount! > 9 ? "9+" : route.badgeCount}
         </span>
       ) : null}
-    </Link>
+      <SidebarMenuButton
+        isActive={active}
+        tooltip={tooltip}
+        className="distributor-sidebar-menu-button"
+        render={
+          <Link href={href} aria-current={active ? "page" : undefined} aria-label={route.label} />
+        }
+      >
+        <Icon strokeWidth={active ? 2.25 : 1.75} />
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
@@ -60,38 +92,36 @@ export function SupportDashboardSidebar() {
   const pathname = usePathname();
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarHeader className="border-b border-sidebar-border px-3 py-3">
+    <Sidebar
+      collapsible="icon"
+      variant="sidebar"
+      data-slot="distributor-sidebar"
+      className={cn(
+        SUPPORT_SIDEBAR_COLLAPSED_UI_CLASS,
+        SUPPORT_SIDEBAR_CHROME_CLASS,
+        "distributor-sidebar-rail",
+      )}
+    >
+      <SidebarHeader className="distributor-sidebar-rail__section distributor-sidebar-rail__brand">
         <SupportSidebarBrand />
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+
+      <SidebarContent className="distributor-sidebar-rail__section distributor-sidebar-rail__nav">
+        <SidebarGroup className="distributor-sidebar-nav-group">
           <SidebarGroupContent>
-            <SidebarMenu>
-              {SUPPORT_NAV_ROUTES.map((route) => {
-                const Icon = route.icon;
-                const active = isSupportRouteActive(pathname, route.href);
-                return (
-                  <SidebarMenuItem key={route.id}>
-                    <SidebarMenuButton
-                      isActive={active}
-                      tooltip={route.label}
-                      render={
-                        <Link href={route.href} aria-current={active ? "page" : undefined} />
-                      }
-                    >
-                      <Icon />
-                      <span>{route.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+            <SidebarMenu className="distributor-sidebar-rail__menu">
+              {SUPPORT_NAV_ROUTES.map((route) => (
+                <SupportSidebarNavItem
+                  key={route.id}
+                  route={route}
+                  href={route.href}
+                  active={isSupportRouteActive(pathname, route.href)}
+                />
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarRail />
     </Sidebar>
   );
 }
@@ -100,8 +130,8 @@ export function SupportDashboardMobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-[var(--blur-sm)] md:hidden">
-      <div className="mx-auto flex max-w-lg items-center justify-between gap-1 px-2 py-2">
+    <nav className="distributor-mobile-nav" aria-label="Primary">
+      <div className="distributor-mobile-nav__inner">
         {SUPPORT_NAV_ROUTES.map((route) => {
           const Icon = route.icon;
           const active = isSupportRouteActive(pathname, route.href);
@@ -110,14 +140,13 @@ export function SupportDashboardMobileNav() {
               key={route.id}
               href={route.href}
               className={cn(
-                "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[10px]",
-                active
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                "distributor-mobile-nav__item",
+                active && "distributor-mobile-nav__item--active",
               )}
+              aria-current={active ? "page" : undefined}
             >
-              <Icon className="size-4" />
-              <span className="truncate">{route.label}</span>
+              <Icon strokeWidth={active ? 2.25 : 1.75} />
+              <span className="distributor-mobile-nav__label">{route.label}</span>
             </Link>
           );
         })}

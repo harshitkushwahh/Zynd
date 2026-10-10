@@ -11,76 +11,131 @@ import {
 } from "react";
 
 import {
-  findSupportAgent,
-  type SupportAgent,
-} from "@/lib/support-agents";
-
-const SESSION_STORAGE_KEY = "zynd-support-session";
-
-type SupportSessionUser = Omit<SupportAgent, "password">;
+  bootstrapSupportSession,
+  supportLogin,
+  supportLogout,
+  supportVerifyLoginSms,
+  supportVerifyMfa,
+  resendSupportLoginSms,
+  type SupportLoginFlowResponse,
+  type SupportSessionUser,
+} from "@/lib/support-auth-api";
 
 type SupportAuthContextValue = {
   user: SupportSessionUser | null;
+  permissions: string[];
+  roleKeys: string[];
   loading: boolean;
   displayName: string;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => void;
+  signIn: (email: string, password: string) => Promise<SupportLoginFlowResponse>;
+  verifyMfa: (mfaToken: string, totpCode: string) => Promise<void>;
+  verifyLoginSms: (loginToken: string, otp: string) => Promise<void>;
+  resendLoginSms: (loginToken: string) => Promise<number>;
+  signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 };
 
 const SupportAuthContext = createContext<SupportAuthContextValue | null>(null);
 
-function toSessionUser(agent: SupportAgent): SupportSessionUser {
-  const { password: _password, ...rest } = agent;
-  return rest;
-}
-
-function readStoredSession(): SupportSessionUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SupportSessionUser;
-    if (!parsed?.id || !parsed?.email) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 export function SupportAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SupportSessionUser | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [roleKeys, setRoleKeys] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const applySession = useCallback(
+    (session: {
+      sessionUser: SupportSessionUser | null;
+      permissions: string[];
+      roleKeys: string[];
+    }) => {
+      setUser(session.sessionUser);
+      setPermissions(session.permissions);
+      setRoleKeys(session.roleKeys);
+    },
+    [],
+  );
+
   useEffect(() => {
-    setUser(readStoredSession());
-    setLoading(false);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      const session = await bootstrapSupportSession();
+      if (cancelled) return;
+      applySession(session);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [applySession]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    const agent = findSupportAgent(email, password);
-    if (!agent) {
-      throw new Error("Invalid email or password. Use a demo support account.");
+    const result = await supportLogin(email.trim(), password);
+    if (result.next === "authenticated") {
+      const session = await bootstrapSupportSession();
+      applySession(session);
     }
-    const sessionUser = toSessionUser(agent);
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionUser));
-    setUser(sessionUser);
+    return result;
+  }, [applySession]);
+
+  const verifyMfa = useCallback(
+    async (mfaToken: string, totpCode: string) => {
+      const sessionUser = await supportVerifyMfa(mfaToken, totpCode);
+      const session = await bootstrapSupportSession();
+      applySession({ ...session, sessionUser: sessionUser ?? session.sessionUser });
+    },
+    [applySession],
+  );
+
+  const verifyLoginSms = useCallback(
+    async (loginToken: string, otp: string) => {
+      const sessionUser = await supportVerifyLoginSms(loginToken, otp);
+      const session = await bootstrapSupportSession();
+      applySession({ ...session, sessionUser: sessionUser ?? session.sessionUser });
+    },
+    [applySession],
+  );
+
+  const resendLoginSmsHandler = useCallback(async (loginToken: string) => {
+    return resendSupportLoginSms(loginToken);
   }, []);
 
-  const signOut = useCallback(() => {
-    window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    setUser(null);
-  }, []);
+  const signOut = useCallback(async () => {
+    await supportLogout();
+    applySession({ sessionUser: null, permissions: [], roleKeys: [] });
+  }, [applySession]);
+
+  const refreshUser = useCallback(async () => {
+    const session = await bootstrapSupportSession();
+    applySession(session);
+  }, [applySession]);
 
   const value = useMemo(
     () => ({
       user,
+      permissions,
+      roleKeys,
       loading,
       displayName: user?.name ?? "Support",
       signIn,
+      verifyMfa,
+      verifyLoginSms,
+      resendLoginSms: resendLoginSmsHandler,
       signOut,
+      refreshUser,
     }),
-    [user, loading, signIn, signOut],
+    [
+      user,
+      permissions,
+      roleKeys,
+      loading,
+      signIn,
+      verifyMfa,
+      verifyLoginSms,
+      resendLoginSmsHandler,
+      signOut,
+      refreshUser,
+    ],
   );
 
   return (

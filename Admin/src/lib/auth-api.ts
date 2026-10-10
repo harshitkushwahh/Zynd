@@ -35,10 +35,12 @@ export function getDisplayName(user: AdminUser) {
   return parts.length ? parts.join(" ") : user.email.split("@")[0];
 }
 
-import { isDistributorConsoleOnlyUser } from "@/lib/admin-mitra-roles";
+import { isDistributorConsoleOnlyUser, isSupportConsoleOnlyUser } from "@/lib/admin-mitra-roles";
 
 const ADMIN_CONSOLE_ACCESS_ERROR =
   "This account is for the Zynd Mitra console. Sign in at the distributor dashboard.";
+const SUPPORT_CONSOLE_ACCESS_ERROR =
+  "This account is for the Zynd Support console. Sign in at the support dashboard.";
 
 function assertAdminUser(user: AdminUser) {
   if (user.role !== "admin") {
@@ -47,6 +49,9 @@ function assertAdminUser(user: AdminUser) {
 }
 
 function assertAdminConsoleAccess(roleKeys: string[]) {
+  if (isSupportConsoleOnlyUser(roleKeys)) {
+    throw new Error(SUPPORT_CONSOLE_ACCESS_ERROR);
+  }
   if (isDistributorConsoleOnlyUser(roleKeys)) {
     throw new Error(ADMIN_CONSOLE_ACCESS_ERROR);
   }

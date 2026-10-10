@@ -1,0 +1,107 @@
+@layer components {
+  .support-overview-metrics-grid .support-overview-metric-tile.distributor-metric-card--tile {
+    border-radius: var(--radius-5xl);
+  }
+
+  .support-overview-metrics-grid > * {
+    display: block;
+    min-width: 0;
+    height: 100%;
+  }
+
+  .support-overview-metrics-grid > a:hover .distributor-metric-card--tile,
+  .support-overview-metrics-grid > a:focus-visible .distributor-metric-card--tile {
+    transform: translateY(-0.25rem);
+    opacity: 0.98;
+  }
+
+  .support-overview-metrics-grid > a:focus-visible {
+    outline: none;
+  }
+
+  .support-overview-metrics-grid > a:focus-visible .distributor-metric-card--tile {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+
+  .support-overview-metric-tile .distributor-metric-card__body--tile {
+    min-height: 8.5rem;
+    padding-bottom: 0 !important;
+  }
+
+  .support-overview-metric-tile .distributor-metric-card__tile-icon,
+  .support-overview-metric-tile .distributor-metric-card__tile-action {
+    width: 2.625rem;
+    height: 2.625rem;
+  }
+
+  .support-overview-metric-tile .distributor-metric-card__tile-icon svg,
+  .support-overview-metric-tile .distributor-metric-card__tile-action svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .support-overview-metric-tile__sparkline {
+    margin-top: 0.625rem;
+    margin-inline: -0.9375rem;
+    margin-bottom: 0;
+    height: 3.25rem;
+    width: calc(100% + 1.875rem);
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .support-overview-metric-tile--accent .distributor-growth-badge-wrap__suffix {
+    color: color-mix(in srgb, var(--primary-foreground) 72%, transparent);
+  }
+
+  .support-overview-insights-row {
+    --support-overview-insight-min-height: var(--distributor-dashboard-card-height, 19.5rem);
+  }
+
+  .support-overview-insight-card {
+    min-height: var(--support-overview-insight-min-height);
+  }
+
+  .support-overview-trends-card {
+    gap: 0.5rem;
+    padding-bottom: 0.625rem;
+  }
+
+  .support-overview-trends-card .support-overview-trends-card__chart {
+    min-height: 9.75rem;
+    margin-top: 0;
+  }
+
+  .support-overview-category-card .distributor-operations-team-card__gauge {
+    position: relative;
+    width: min(100%, 11.5rem);
+    min-height: 9.25rem;
+  }
+
+  .support-overview-category-card .distributor-operations-team-card__gauge-chart {
+    height: 9.25rem;
+    min-height: 9.25rem;
+  }
+
+  .support-overview-category-card .distributor-operations-team-card__gauge-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.125rem;
+    margin-top: 0;
+    padding-bottom: 0;
+    text-align: center;
+  }
+
+  /* ~3 legend rows visible; scroll for Transactions, Document upload, Others */
+  .support-overview-category-card__legend {
+    max-height: 4.875rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.125rem;
+    scrollbar-width: thin;
+  }
+}

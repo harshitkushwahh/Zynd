@@ -95,11 +95,11 @@ export function DashboardSearchDialog({
   }, [navRoutes, trimmedQuery]);
 
   const showRiskProfileCard = useMemo(() => {
-    if (!hasRiskProfile || !riskProfile?.profile || !trimmedQuery) return false;
+    if (!hasRiskProfile || !trimmedQuery) return false;
     const normalized = trimmedQuery.toLowerCase();
     const haystack = `${RISK_PROFILE_ROUTE?.label ?? ""} ${RISK_PROFILE_ROUTE?.description ?? ""} risk profile risk appetite`.toLowerCase();
     return haystack.includes(normalized);
-  }, [hasRiskProfile, riskProfile?.profile, trimmedQuery]);
+  }, [hasRiskProfile, trimmedQuery]);
 
   const pagesToShow = useMemo(() => {
     if (!hasRiskProfile) {

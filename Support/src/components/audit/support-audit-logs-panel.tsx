@@ -1,119 +1,226 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Headset, ScrollText, Ticket, UserRound } from "lucide-react";
+import type { SortDescriptor } from "react-aria-components";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Table, useDistributorTablePagination } from "@/components/application/table";
 import {
-  DUMMY_AUDIT_LOGS,
-  type SupportAuditAction,
-} from "@/lib/dummy/audit-logs";
-import { formatSupportDateTime } from "@/lib/format";
-import { labelize } from "@/lib/status-meta";
+  SupportPageMetricTile,
+  SupportPageMetricTilesGrid,
+} from "@/components/dashboard/support-page-metric-tile";
+import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
+import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
+import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
+import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
+import { SupportFilterSelect } from "@/components/ui/support-filter-select";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
+import {
+  DISTRIBUTOR_PAGE_STACK_CLASS,
+  DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
+} from "@/lib/distributor-layout";
+import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
+import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
+import { formatDistributorDateTime } from "@/lib/format";
+import { sortByDescriptor } from "@/lib/sort-by-descriptor";
+import {
+  SUPPORT_DUMMY_AUDIT_LOGS,
+  type SupportAuditLogEntry,
+} from "@/lib/support-audit-logs-dummy-data";
+import { cn } from "@/lib/utils";
 
-const ACTION_FILTERS: Array<"all" | SupportAuditAction> = [
-  "all",
-  "ticket.viewed",
-  "ticket.replied",
-  "ticket.status_changed",
-  "ticket.assigned",
-  "user.viewed",
-  "login",
+type ActorRoleFilter = SupportAuditLogEntry["actorRole"] | "all";
+
+const ACTOR_ROLE_OPTIONS: Array<{ value: SupportAuditLogEntry["actorRole"]; label: string }> = [
+  { value: "Support Agent", label: "Support Agent" },
+  { value: "Support Lead", label: "Support Lead" },
+  { value: "System", label: "System" },
 ];
 
+function actorRoleVariant(role: SupportAuditLogEntry["actorRole"]) {
+  if (role === "System") return "info";
+  if (role === "Support Lead") return "warning";
+  return "neutral";
+}
+
 export function SupportAuditLogsPanel() {
-  const [query, setQuery] = useState("");
-  const [action, setAction] = useState<(typeof ACTION_FILTERS)[number]>("all");
+  const entries = SUPPORT_DUMMY_AUDIT_LOGS;
+  const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState<string | "all">("all");
+  const [roleFilter, setRoleFilter] = useState<ActorRoleFilter>("all");
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: "occurredAt",
+    direction: "descending",
+  });
+
+  const actionOptions = useMemo(() => {
+    const labels = [...new Set(entries.map((entry) => entry.action))].sort((a, b) =>
+      a.localeCompare(b),
+    );
+    return labels.map((label) => ({ value: label, label }));
+  }, [entries]);
+
+  const ticketEvents = entries.filter((row) => row.resource.startsWith("TKT-")).length;
+  const userEvents = entries.filter((row) => row.resource.startsWith("ZYND-U-")).length;
+  const agentEvents = entries.filter((row) => row.actorRole !== "System").length;
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return DUMMY_AUDIT_LOGS.filter((log) => {
-      if (action !== "all" && log.action !== action) return false;
-      if (!q) return true;
-      return (
-        log.actorName.toLowerCase().includes(q) ||
-        log.targetLabel.toLowerCase().includes(q) ||
-        log.detail.toLowerCase().includes(q) ||
-        log.targetId.toLowerCase().includes(q)
+    return entries.filter((entry) => {
+      if (actionFilter !== "all" && entry.action !== actionFilter) return false;
+      if (roleFilter !== "all" && entry.actorRole !== roleFilter) return false;
+      return distributorTableSearchMatch(
+        search,
+        entry.action,
+        entry.resource,
+        entry.detail,
+        entry.actor,
+        entry.actorRole,
       );
-    }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [action, query]);
+    });
+  }, [actionFilter, entries, roleFilter, search]);
+
+  const sorted = useMemo(
+    () => sortByDescriptor(filtered, sortDescriptor),
+    [filtered, sortDescriptor],
+  );
+
+  const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
+
+  const clearDisabled = search.trim() === "" && actionFilter === "all" && roleFilter === "all";
+
+  const toolbar = (
+    <DistributorTableToolbar
+      onClearAll={() => {
+        setSearch("");
+        setActionFilter("all");
+        setRoleFilter("all");
+        setPage(1);
+      }}
+      clearDisabled={clearDisabled}
+      search={
+        <DistributorTableSearchCard
+          variant="card"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search activity…"
+          aria-label="Search activity"
+        />
+      }
+    >
+      <SupportFilterSelect
+        label="Action"
+        value={actionFilter}
+        options={actionOptions}
+        onValueChange={(value) => {
+          setActionFilter(value);
+          setPage(1);
+        }}
+      />
+      <SupportFilterSelect
+        label="Actor role"
+        value={roleFilter}
+        options={ACTOR_ROLE_OPTIONS}
+        onValueChange={(value) => {
+          setRoleFilter(value);
+          setPage(1);
+        }}
+      />
+    </DistributorTableToolbar>
+  );
+
+  const table = wrapDistributorTableBody(
+    <Table
+      aria-label="Support activity log"
+      className="min-w-[var(--table-min-width-5xl)]"
+      sortDescriptor={sortDescriptor}
+      onSortChange={(descriptor) => {
+        setSortDescriptor(descriptor);
+        setPage(1);
+      }}
+      pagination={pagination}
+    >
+      <Table.Header>
+        <Table.Head
+          id="occurredAt"
+          label="When"
+          isRowHeader
+          allowsSorting
+          className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}
+        />
+        <Table.Head id="action" label="Action" allowsSorting />
+        <Table.Head id="resource" label="Resource" allowsSorting />
+        <Table.Head id="detail" label="Details" />
+        <Table.Head id="actor" label="Actor" allowsSorting />
+        <Table.Head id="actorRole" label="Role" allowsSorting />
+      </Table.Header>
+      <Table.Body items={pageItems}>
+        {(entry) => (
+          <Table.Row id={entry.id}>
+            <Table.Cell
+              className={cn(
+                "whitespace-nowrap tabular-nums text-muted-foreground",
+                DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
+              )}
+            >
+              {formatDistributorDateTime(entry.occurredAt)}
+            </Table.Cell>
+            <Table.Cell className="font-medium text-foreground">{entry.action}</Table.Cell>
+            <Table.Cell className="font-mono text-caption text-primary">{entry.resource}</Table.Cell>
+            <Table.Cell className="max-w-[22rem] truncate text-muted-foreground">
+              {entry.detail}
+            </Table.Cell>
+            <Table.Cell>{entry.actor}</Table.Cell>
+            <Table.Cell>
+              <StatusBadge variant={actorRoleVariant(entry.actorRole)} showIcon={false}>
+                {entry.actorRole}
+              </StatusBadge>
+            </Table.Cell>
+          </Table.Row>
+        )}
+      </Table.Body>
+    </Table>,
+  );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-h3 font-semibold text-foreground">Audit logs</h1>
-        <p className="mt-1 text-caption text-muted-foreground">
-          Agent and system actions for the support console (dummy trail).
-        </p>
-      </div>
+    <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
+      <DistributorPageHeader title="Activity logs" />
 
-      <div className="space-y-3">
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search actor, target, or detail…"
-          className="sm:max-w-sm"
+      <SupportPageMetricTilesGrid>
+        <SupportPageMetricTile
+          tileTone="accent"
+          icon={ScrollText}
+          label="Events"
+          value={String(entries.length)}
         />
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {ACTION_FILTERS.map((value) => (
-            <Button
-              key={value}
-              type="button"
-              size="sm"
-              variant={action === value ? "default" : "outline"}
-              className="shrink-0 capitalize"
-              onClick={() => setAction(value)}
-            >
-              {value === "all" ? "All" : labelize(value.replace(".", " · "))}
-            </Button>
-          ))}
-        </div>
-      </div>
+        <SupportPageMetricTile
+          icon={Headset}
+          label="Agent actions"
+          value={String(agentEvents)}
+        />
+        <SupportPageMetricTile
+          icon={Ticket}
+          label="Ticket events"
+          value={String(ticketEvents)}
+        />
+        <SupportPageMetricTile
+          icon={UserRound}
+          label="User lookups"
+          value={String(userEvents)}
+        />
+      </SupportPageMetricTilesGrid>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-left text-compact">
-              <thead className="border-b border-border bg-muted/30 text-caption text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">When</th>
-                  <th className="px-4 py-3 font-medium">Actor</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
-                  <th className="px-4 py-3 font-medium">Target</th>
-                  <th className="px-4 py-3 font-medium">Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((log) => (
-                  <tr key={log.id} className="border-b border-border/70 last:border-0">
-                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                      {formatSupportDateTime(log.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 font-medium">{log.actorName}</td>
-                    <td className="px-4 py-3 capitalize text-muted-foreground">
-                      {labelize(log.action.replace(".", " · "))}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{log.targetLabel}</p>
-                      <p className="text-caption text-muted-foreground">
-                        {log.targetType} · {log.targetId}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{log.detail}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {filtered.length === 0 ? (
-            <p className="px-4 py-10 text-center text-caption text-muted-foreground">
-              No audit events match this filter.
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+      <DistributorTableOnlyShell
+        toolbar={toolbar}
+        isEmpty={sorted.length === 0}
+        emptyTitle="No activity matches your filters"
+        emptyDescription={DISTRIBUTOR_CLIENT_COPY.activity.filtersEmptyDescription}
+      >
+        {table}
+      </DistributorTableOnlyShell>
     </div>
   );
 }

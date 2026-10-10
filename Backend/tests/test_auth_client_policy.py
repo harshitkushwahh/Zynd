@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.application.auth.auth_client_policy import (
+    invite_target_console,
     resolve_auth_client_kind,
     validate_invite_client_for_role,
     validate_user_role_for_client,
@@ -106,3 +107,50 @@ def test_unknown_client_header_rejected() -> None:
     with pytest.raises(AuthError) as exc:
         resolve_auth_client_kind(header="mobile", fingerprint="zynd-12345678")
     assert exc.value.code == "invalid_auth_client"
+
+
+def test_support_agent_allowed_on_support_client() -> None:
+    user = _admin_user()
+    validate_user_role_for_client(
+        user,
+        client="support",
+        role_keys=["support_agent"],
+    )
+
+
+def test_support_agent_blocked_from_admin_client() -> None:
+    user = _admin_user()
+    with pytest.raises(AuthError) as exc:
+        validate_user_role_for_client(
+            user,
+            client="admin",
+            role_keys=["support_agent"],
+        )
+    assert exc.value.code == "support_console_required"
+
+
+def test_super_admin_blocked_from_support_client() -> None:
+    user = _admin_user()
+    with pytest.raises(AuthError) as exc:
+        validate_user_role_for_client(
+            user,
+            client="support",
+            role_keys=["super_admin"],
+        )
+    assert exc.value.code == "support_console_required"
+
+
+def test_support_agent_invite_requires_support_client() -> None:
+    with pytest.raises(AuthError) as exc:
+        validate_invite_client_for_role(role_key="support_agent", client="admin")
+    assert exc.value.code == "support_console_required"
+
+
+def test_support_client_requires_matching_header_and_fingerprint() -> None:
+    assert (
+        resolve_auth_client_kind(header="support", fingerprint="support-console") == "support"
+    )
+
+
+def test_support_role_invite_targets_support_console() -> None:
+    assert invite_target_console("support_lead") == "support"

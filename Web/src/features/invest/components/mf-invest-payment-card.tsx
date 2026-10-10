@@ -95,6 +95,8 @@ export type MfInvestPaymentCardProps = {
   /** Extra space between mode toggle and amount input (portfolio sidebar). */
   relaxedAmountSpacing?: boolean;
   defaultMode?: MfInvestPaymentMode;
+  mode?: MfInvestPaymentMode;
+  onModeChange?: (mode: MfInvestPaymentMode) => void;
   amount?: number;
   onAmountChange?: (amount: number) => void;
   redeemableValueInr?: number;
@@ -582,6 +584,8 @@ export function MfInvestPaymentCard({
   sipEnabled = true,
   relaxedAmountSpacing = false,
   defaultMode = "lumpsum",
+  mode: controlledMode,
+  onModeChange,
   amount: controlledAmount,
   onAmountChange,
   redeemableValueInr,
@@ -638,7 +642,9 @@ export function MfInvestPaymentCard({
 
   const router = useRouter();
   const { openOrderPayment, openSipMandate } = useMfPaymentOverlay();
-  const [mode, setMode] = useState<MfInvestPaymentMode>(defaultMode);
+  const [internalMode, setInternalMode] = useState<MfInvestPaymentMode>(defaultMode);
+  const mode = controlledMode ?? internalMode;
+  const setMode = onModeChange ?? setInternalMode;
   const [internalAmount, setInternalAmount] = useState(0);
   const amount = controlledAmount ?? internalAmount;
   const setAmount = onAmountChange ?? setInternalAmount;

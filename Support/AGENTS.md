@@ -6,7 +6,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Support console
 
-- Frontend-first contact-team dashboard (tickets, users, audit logs)
-- Dummy auth and dummy data until backend is built
+- Contact-team dashboard (tickets, users, audit logs)
+- Auth via shared Backend (`clientKind: support` in `src/lib/api-client.ts`)
+- Ticket APIs not wired yet — panels use empty states
 - Cross-app utilities live in `packages/zynd-shared` (`@zynd/shared`)
 - See `docs/FRONTEND_SHARED_BOUNDARIES.md` at repo root

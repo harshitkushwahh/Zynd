@@ -39,6 +39,19 @@ async def execute_mf_job(
     skip_dependency_check: bool = False,
     job_kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from app.application.mf.nfo_detection_service import NFO_JOB_NAMES
+
+    if job_name in NFO_JOB_NAMES:
+        from app.application.mf.nfo_job_runner_service import execute_nfo_job
+
+        return await execute_nfo_job(
+            session,
+            job_name,
+            triggered_by=triggered_by,
+            skip_dependency_check=skip_dependency_check,
+            skip_mutex=triggered_by.startswith("PIPELINE:"),
+        )
+
     jobs = {job.name: job for job in build_scheduled_jobs()}
     job = jobs.get(job_name)
     if not job:

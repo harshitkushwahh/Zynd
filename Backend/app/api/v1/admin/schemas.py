@@ -639,6 +639,21 @@ class NfoOfferAdminResponse(BaseModel):
     admin_override: bool = False
     purchase_allowed: Optional[bool] = None
     updated_at: Optional[str] = None
+    scheme_category_slug: Optional[str] = None
+    scheme_category_name: Optional[str] = None
+    sebi_category: Optional[str] = None
+
+
+class NfoCategoryGroupResponse(BaseModel):
+    slug: Optional[str] = None
+    name: str
+    count: int
+    items: list[NfoOfferAdminResponse]
+
+
+class NfoCategoryBreakdownResponse(BaseModel):
+    groups: list[NfoCategoryGroupResponse]
+    counts: dict
 
 
 class NfoOfferAdminListResponse(BaseModel):
@@ -780,6 +795,7 @@ class MfPipelineRunResponse(BaseModel):
     pause_reason: Optional[str] = None
     staging_batch_uuid: Optional[str] = None
     can_approve_staging: bool = False
+    can_approve_category: bool = False
     health_diff: Optional[MfPipelineHealthDiffResponse] = None
     skip_steps: list[str] = Field(default_factory=list)
     auto_resume: bool = True
@@ -803,6 +819,13 @@ class MfPipelineStartRequest(BaseModel):
         "health-repair",
         "staging-only",
     ] = "full"
+    confirm_production: bool = False
+    skip_steps: list[str] = Field(default_factory=list)
+    auto_resume: bool = True
+
+
+class NfoPipelineStartRequest(BaseModel):
+    mode: Literal["nfo", "nfo-lifecycle", "nfo-category"] = "nfo"
     confirm_production: bool = False
     skip_steps: list[str] = Field(default_factory=list)
     auto_resume: bool = True

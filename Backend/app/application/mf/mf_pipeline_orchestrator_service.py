@@ -51,7 +51,10 @@ from app.application.mf.mf_pipeline_types import (
     MfPipelineStepState,
     MfPipelineStepStatus,
     NAV_ANALYTICS_ONLY_JOBS,
+    NFO_PIPELINE_STEP_JOBS,
+    PAUSE_REASON_CATEGORY_APPROVAL,
     PIPELINE_MODES,
+    is_nfo_pipeline_mode,
     normalize_pipeline_mode,
 )
 from app.application.mf.mf_scheduler_jobs import build_scheduled_jobs, run_job_once
@@ -175,8 +178,22 @@ def _append_job_steps(steps: list[tuple[str, str]], job_names: tuple[str, ...]) 
         steps.append((job_name, job_name.replace("-", " ")))
 
 
+def _build_nfo_step_plan(mode: str) -> list[tuple[str, str]]:
+    steps: list[tuple[str, str]] = [("cleanup-stale-runs", "Clean stale ingestion runs")]
+    if mode in {"nfo", "nfo-lifecycle"}:
+        steps.append(("nfo-lifecycle-sync", "Detect and sync NFO offers"))
+    if mode in {"nfo", "nfo-category"}:
+        steps.append(("nfo-category-approve", "Approve NFO category curation"))
+    if mode in {"nfo", "nfo-category"}:
+        steps.append(("nfo-collection-assign-sync", "Assign offers to NFO category"))
+    steps.append(("nfo-final-counts", "Collect NFO offer counts"))
+    return steps
+
+
 def _build_step_plan(mode: str) -> list[tuple[str, str]]:
     normalized = normalize_pipeline_mode(mode)
+    if is_nfo_pipeline_mode(normalized):
+        return _build_nfo_step_plan(normalized)
     settings = get_settings()
     steps: list[tuple[str, str]] = [("cleanup-stale-runs", "Clean stale ingestion runs")]
 
@@ -536,6 +553,64 @@ async def _execute_step(run: MfPipelineRunState, step: MfPipelineStepState, cont
         await _set_step_status(run, step, MfPipelineStepStatus.succeeded, result=health)
         return
 
+    if step.key == "nfo-category-approve":
+        if context.get("category_approved"):
+            await _set_step_status(
+                run,
+                step,
+                MfPipelineStepStatus.succeeded,
+                result={"approved": True},
+            )
+            return
+        context["pause_reason"] = PAUSE_REASON_CATEGORY_APPROVAL
+        run.context = context
+        await _set_step_status(
+            run,
+            step,
+            MfPipelineStepStatus.pending,
+            error="Awaiting NFO category approval",
+        )
+        raise MfPipelineControlledPause(
+            pause_reason=PAUSE_REASON_CATEGORY_APPROVAL,
+            message="Review the NFO Category tab, then Approve to continue collection assignment.",
+        )
+
+    if step.key == "nfo-final-counts":
+        from app.application.mf.nfo_offer_service import list_nfo_offers_admin
+
+        async with AsyncSessionLocal() as session:
+            counts = (await list_nfo_offers_admin(session))["counts"]
+        run.final_counts = counts
+        await _set_step_status(run, step, MfPipelineStepStatus.succeeded, result=counts)
+        return
+
+    if step.key in NFO_PIPELINE_STEP_JOBS:
+        from app.application.mf.nfo_job_runner_service import execute_nfo_job
+
+        async with AsyncSessionLocal() as session:
+            result = await execute_nfo_job(session, step.key, triggered_by=triggered_by)
+            if result.get("run_uuid"):
+                await _tag_ingestion_run_pipeline(session, str(result["run_uuid"]), run.run_id)
+            await session.commit()
+        if result.get("reason") == "already_running":
+            step.status = MfPipelineStepStatus.pending
+            step.error = None
+            raise MfPipelineControlledPause(
+                pause_reason=PAUSE_REASON_JOB_STILL_RUNNING,
+                message=JOB_STILL_RUNNING_MESSAGE,
+            )
+        if _job_step_was_skipped(result):
+            await _set_step_status(
+                run,
+                step,
+                MfPipelineStepStatus.skipped,
+                result=result,
+                error=str(result.get("reason") or "skipped"),
+            )
+        else:
+            await _finalize_step_success(run, step, result=result)
+        return
+
     async with AsyncSessionLocal() as session:
         job_kwargs = await _cold_start_job_kwargs(session, run, step)
         result = await _run_job_step(session, step.key, triggered_by=triggered_by, job_kwargs=job_kwargs)
@@ -590,11 +665,12 @@ async def _execute_pipeline_run(run: MfPipelineRunState, *, from_step_key: str |
     run.error = None
     resuming = bool(from_step_key or context.pop("resuming", False))
     context.pop("pause_reason", None)
-    if not from_step_key and "health_before" not in context:
+    nfo_run = is_nfo_pipeline_mode(run.mode)
+    if not from_step_key and "health_before" not in context and not nfo_run:
         context["health_before"] = await capture_catalog_health_snapshot()
     await _append_log(
         run,
-        f"{'Resuming' if resuming else 'Starting'} MF pipeline ({run.mode})",
+        f"{'Resuming' if resuming else 'Starting'} {'NFO' if nfo_run else 'MF'} pipeline ({run.mode})",
     )
     await notify_pipeline_event(run, event="resumed" if resuming else "started")
 
@@ -667,9 +743,10 @@ async def _execute_pipeline_run(run: MfPipelineRunState, *, from_step_key: str |
             run.finished_at = _utc_now_iso()
             run.current_step_key = None
             context.pop("pause_reason", None)
-            health_after = await capture_catalog_health_snapshot()
-            context["health_after"] = health_after
-            context["health_diff"] = compute_health_diff(context.get("health_before"), health_after)
+            if not is_nfo_pipeline_mode(run.mode):
+                health_after = await capture_catalog_health_snapshot()
+                context["health_after"] = health_after
+                context["health_diff"] = compute_health_diff(context.get("health_before"), health_after)
             run.context = context
             await _append_log(run, "Pipeline completed successfully", level="success")
             await _record_scheduler_skips(run)
@@ -717,6 +794,10 @@ async def _launch_execution(run: MfPipelineRunState, *, from_step_key: str | Non
 
 
 async def _queue_or_launch(run: MfPipelineRunState, *, from_step_key: str | None = None) -> None:
+    if is_nfo_pipeline_mode(run.mode):
+        await _append_log(run, "Running NFO pipeline in API")
+        await _launch_execution(run, from_step_key=from_step_key)
+        return
     if pipeline_executes_in_this_process():
         await _launch_execution(run, from_step_key=from_step_key)
         return
@@ -746,6 +827,8 @@ async def claim_unattached_pipeline_runs() -> int:
         runs = await list_running_pipeline_runs(session)
     claimed = 0
     for run in runs:
+        if is_nfo_pipeline_mode(run.mode):
+            continue
         existing = _execution_tasks.get(run.run_id)
         if existing is not None and not existing.done():
             continue
@@ -818,6 +901,21 @@ async def approve_mf_pipeline_staging(run_id: str, *, admin_user_id: UUID) -> Mf
         )
     elif batch.get("status") != "approved":
         raise RuntimeError(f"Batch cannot be approved (status={batch.get('status')})")
+    return await resume_mf_pipeline_run(run_id)
+
+
+async def approve_nfo_pipeline_category(run_id: str) -> MfPipelineRunState:
+    async with AsyncSessionLocal() as session:
+        run = await get_pipeline_run(session, run_id)
+        if not run:
+            raise ValueError(f"Pipeline run not found: {run_id}")
+        if run.context.get("pause_reason") != PAUSE_REASON_CATEGORY_APPROVAL:
+            raise RuntimeError("Pipeline is not awaiting NFO category approval")
+        if not is_nfo_pipeline_mode(run.mode):
+            raise RuntimeError("Pipeline run is not an NFO pipeline")
+        run.context["category_approved"] = True
+        await save_pipeline_run(session, run)
+        await session.commit()
     return await resume_mf_pipeline_run(run_id)
 
 
@@ -924,10 +1022,22 @@ async def get_mf_pipeline_run(run_id: str) -> MfPipelineRunState | None:
 
 async def get_active_mf_pipeline_run() -> MfPipelineRunState | None:
     async with AsyncSessionLocal() as session:
-        running = await get_running_pipeline_run(session)
+        running = await get_running_pipeline_run(session, nfo_only=False)
         if running:
             return running
-        return await _load_reconciled_run(session, await get_latest_resumable_pipeline_run(session))
+        return await _load_reconciled_run(
+            session, await get_latest_resumable_pipeline_run(session, nfo_only=False)
+        )
+
+
+async def get_active_nfo_pipeline_run() -> MfPipelineRunState | None:
+    async with AsyncSessionLocal() as session:
+        running = await get_running_pipeline_run(session, nfo_only=True)
+        if running:
+            return running
+        return await _load_reconciled_run(
+            session, await get_latest_resumable_pipeline_run(session, nfo_only=True)
+        )
 
 
 async def cancel_mf_pipeline_run(run_id: str) -> MfPipelineRunState | None:
