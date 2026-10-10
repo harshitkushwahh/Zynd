@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -32,6 +32,7 @@ from app.application.mf.mf_pipeline_store import (
     latest_pipeline_activity,
     list_running_pipeline_runs,
     pipeline_cancel_requested,
+    pipeline_run_awaits_worker,
     recover_interrupted_pipeline_runs,
     save_pipeline_run,
 )
@@ -332,12 +333,61 @@ async def _check_blockers(*, auto_cleanup_stale: bool = False, except_run_id: st
             )
 
 
+def _pipeline_has_live_execution(run_id: str) -> bool:
+    existing = _execution_tasks.get(run_id)
+    return existing is not None and not existing.done()
+
+
+def _queued_pipeline_is_stale(run: MfPipelineRunState) -> bool:
+    started = run.started_at
+    if not started:
+        return True
+    try:
+        started_at = datetime.fromisoformat(started)
+    except ValueError:
+        return True
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    hours = get_settings().zynd_mf_stale_run_cleanup_threshold_hours
+    return started_at < datetime.now(timezone.utc) - timedelta(hours=hours)
+
+
+async def _finalize_cancelled_run(run: MfPipelineRunState, *, message: str) -> MfPipelineRunState:
+    run._cancel_requested = True
+    run.status = MfPipelineRunStatus.cancelled
+    run.error = "Cancelled by operator"
+    run.finished_at = _utc_now_iso()
+    await _append_log(run, message, level="warning")
+    return run
+
+
+async def _cancel_orphaned_queued_pipeline_runs() -> int:
+    async with AsyncSessionLocal() as session:
+        runs = await list_running_pipeline_runs(session)
+    cleaned = 0
+    for run in runs:
+        if not pipeline_run_awaits_worker(run):
+            continue
+        if _pipeline_has_live_execution(run.run_id):
+            continue
+        if not (run._cancel_requested or _queued_pipeline_is_stale(run)):
+            continue
+        await _finalize_cancelled_run(
+            run,
+            message="Cancelled orphaned queued pipeline — no worker had started a step",
+        )
+        cleaned += 1
+    return cleaned
+
+
 async def clear_stuck_ingestion_runs(*, threshold_hours: int | None = None) -> int:
     settings = get_settings()
     hours = settings.zynd_mf_stale_run_cleanup_threshold_hours if threshold_hours is None else threshold_hours
     async with AsyncSessionLocal() as session:
         cleaned = await cleanup_stale_runs(session, threshold_hours=hours)
         await session.commit()
+
+    cleaned += await _cancel_orphaned_queued_pipeline_runs()
 
     from app.application.mf.mf_pipeline_auto_resume_service import try_auto_resume_latest_eligible
 
@@ -832,6 +882,12 @@ async def claim_unattached_pipeline_runs() -> int:
         existing = _execution_tasks.get(run.run_id)
         if existing is not None and not existing.done():
             continue
+        if run._cancel_requested and pipeline_run_awaits_worker(run):
+            await _finalize_cancelled_run(
+                run,
+                message="Cancelled queued pipeline after operator cancel — worker never started it",
+            )
+            continue
         await _launch_execution(run, from_step_key=run.current_step_key)
         claimed += 1
     return claimed
@@ -1044,9 +1100,20 @@ async def cancel_mf_pipeline_run(run_id: str) -> MfPipelineRunState | None:
     run = await get_mf_pipeline_run(run_id)
     if not run:
         return None
-    run._cancel_requested = True
-    await _append_log(run, "Cancel requested — stopping after current step", level="warning")
-    return run
+    if run.status in {
+        MfPipelineRunStatus.cancelled,
+        MfPipelineRunStatus.succeeded,
+        MfPipelineRunStatus.failed,
+    }:
+        return run
+    if _pipeline_has_live_execution(run.run_id) and not pipeline_run_awaits_worker(run):
+        run._cancel_requested = True
+        await _append_log(run, "Cancel requested — stopping after current step", level="warning")
+        return run
+    return await _finalize_cancelled_run(
+        run,
+        message="Pipeline cancelled — it was queued and never started a step",
+    )
 
 
 async def run_mf_pipeline_sync(*, mode: str = "full", triggered_by: str = "CLI") -> MfPipelineRunState:
