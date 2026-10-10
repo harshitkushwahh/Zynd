@@ -666,9 +666,14 @@ export function PortfolioHoldingDetailPage({ holdingId }: PortfolioHoldingDetail
 
 function requirePortfolioHoldingDetail(
   holding: PortfolioHoldingDetail | null | undefined,
-  status: string,
+  status: string | null,
 ): PortfolioHoldingDetail {
-  if (!holding || status === "not_found" || status === "invalid_holding_id") {
+  if (
+    !holding ||
+    status == null ||
+    status === "not_found" ||
+    status === "invalid_holding_id"
+  ) {
     notFound();
   }
   return holding;
