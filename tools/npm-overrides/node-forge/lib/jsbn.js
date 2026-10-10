@@ -53,10 +53,6 @@ module.exports = forge.jsbn = forge.jsbn || {};
 // Bits per digit
 var dbits;
 
-// JavaScript engine analysis
-var canary = 0xdeadbeefcafe;
-var j_lm = ((canary&0xffffff)==0xefcafe);
-
 // (public) Constructor
 function BigInteger(a,b,c) {
   this.data = [];
@@ -121,11 +117,13 @@ if(typeof(navigator) === 'undefined')
 {
    BigInteger.prototype.am = am3;
    dbits = 28;
-} else if(j_lm && (navigator.appName == "Microsoft Internet Explorer")) {
+} else if(typeof navigator !== 'undefined' &&
+  navigator.appName == "Microsoft Internet Explorer") {
   BigInteger.prototype.am = am2;
   dbits = 30;
 }
-else if(j_lm && (navigator.appName != "Netscape")) {
+else if(typeof navigator !== 'undefined' &&
+  navigator.appName != "Netscape") {
   BigInteger.prototype.am = am1;
   dbits = 26;
 }
@@ -278,7 +276,7 @@ function nbits(x) {
   if((t=x>>8) != 0) { x = t; r += 8; }
   if((t=x>>4) != 0) { x = t; r += 4; }
   if((t=x>>2) != 0) { x = t; r += 2; }
-  if((t=x>>1) != 0) { x = t; r += 1; }
+  if((t=x>>1) != 0) { r += 1; }
   return r;
 }
 

@@ -413,15 +413,15 @@ p12.pkcs12FromAsn1 = function(obj, strict, password) {
   };
 
   if(capture.version.charCodeAt(0) !== 3) {
-    var error = new Error('PKCS#12 PFX of version other than 3 not supported.');
-    error.version = capture.version.charCodeAt(0);
-    throw error;
+    var versionError = new Error('PKCS#12 PFX of version other than 3 not supported.');
+    versionError.version = capture.version.charCodeAt(0);
+    throw versionError;
   }
 
   if(asn1.derToOid(capture.contentType) !== pki.oids.data) {
-    var error = new Error('Only PKCS#12 PFX in password integrity mode supported.');
-    error.oid = asn1.derToOid(capture.contentType);
-    throw error;
+    var integrityModeError = new Error('Only PKCS#12 PFX in password integrity mode supported.');
+    integrityModeError.oid = asn1.derToOid(capture.contentType);
+    throw integrityModeError;
   }
 
   var data = capture.content.value[0];
@@ -560,9 +560,9 @@ function _decodeAuthenticatedSafe(pfx, authSafe, strict, password) {
       obj.encrypted = true;
       break;
     default:
-      var error = new Error('Unsupported PKCS#12 contentType.');
-      error.contentType = asn1.derToOid(capture.contentType);
-      throw error;
+      var contentTypeError = new Error('Unsupported PKCS#12 contentType.');
+      contentTypeError.contentType = asn1.derToOid(capture.contentType);
+      throw contentTypeError;
     }
 
     obj.safeBags = _decodeSafeContents(safeContents, strict, password);
@@ -590,10 +590,10 @@ function _decryptSafeContents(data, password) {
 
   var oid = asn1.derToOid(capture.contentType);
   if(oid !== pki.oids.data) {
-    var error = new Error(
+    var contentTypeError = new Error(
       'PKCS#12 EncryptedContentInfo ContentType is not Data.');
-    error.oid = oid;
-    throw error;
+    contentTypeError.oid = oid;
+    throw contentTypeError;
   }
 
   // get cipher
@@ -647,9 +647,9 @@ function _decodeSafeContents(safeContents, strict, password) {
     var capture = {};
     var errors = [];
     if(!asn1.validate(safeBag, safeBagValidator, capture, errors)) {
-      var error = new Error('Cannot read SafeBag.');
-      error.errors = errors;
-      throw error;
+      var safeBagError = new Error('Cannot read SafeBag.');
+      safeBagError.errors = errors;
+      throw safeBagError;
     }
 
     /* Create bag object and push to result array. */
@@ -712,17 +712,17 @@ function _decodeSafeContents(safeContents, strict, password) {
         break;
 
       default:
-        var error = new Error('Unsupported PKCS#12 SafeBag type.');
-        error.oid = bag.type;
-        throw error;
+        var bagTypeError = new Error('Unsupported PKCS#12 SafeBag type.');
+        bagTypeError.oid = bag.type;
+        throw bagTypeError;
     }
 
     /* Validate SafeBag value (i.e. CertBag, etc.) and capture data if needed. */
     if(validator !== undefined &&
        !asn1.validate(bagAsn1, validator, capture, errors)) {
-      var error = new Error('Cannot read PKCS#12 ' + validator.name);
-      error.errors = errors;
-      throw error;
+      var validatorError = new Error('Cannot read PKCS#12 ' + validator.name);
+      validatorError.errors = errors;
+      throw validatorError;
     }
 
     /* Call decoder function from above to store the results. */
@@ -1004,14 +1004,14 @@ p12.toPkcs12Asn1 = function(key, cert, password, options) {
   var macData;
   if(options.useMac) {
     // MacData
-    var sha1 = forge.md.sha1.create();
+    var macSha1 = forge.md.sha1.create();
     var macSalt = new forge.util.ByteBuffer(
       forge.random.getBytes(options.saltSize));
     var count = options.count;
     // 160-bit key
     var key = p12.generateKey(password, macSalt, 3, count, 20);
     var mac = forge.hmac.create();
-    mac.start(sha1, key);
+    mac.start(macSha1, key);
     mac.update(asn1.toDer(safe).getBytes());
     var macValue = mac.getMac();
     macData = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [

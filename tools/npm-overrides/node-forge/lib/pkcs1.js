@@ -225,11 +225,11 @@ pkcs1.decode_rsa_oaep = function(key, em, options) {
   var lHashPrime = db.substring(0, md.digestLength);
 
   // constant time check that all values match what is expected
-  var error = (y !== '\x00');
+  var invalid = (y !== '\x00');
 
   // constant time check lHash vs lHashPrime
   for(var i = 0; i < md.digestLength; ++i) {
-    error |= (lHash.charAt(i) !== lHashPrime.charAt(i));
+    invalid |= (lHash.charAt(i) !== lHashPrime.charAt(i));
   }
 
   // "constant time" find the 0x1 byte separating the padding (zeros) from the
@@ -244,14 +244,14 @@ pkcs1.decode_rsa_oaep = function(key, em, options) {
 
     // non-zero if not 0 or 1 in the ps section
     var error_mask = in_ps ? 0xfffe : 0x0000;
-    error |= (code & error_mask);
+    invalid |= (code & error_mask);
 
     // latch in_ps to zero after we find 0x1
     in_ps = in_ps & is_0;
     index += in_ps;
   }
 
-  if(error || db.charCodeAt(index) !== 0x1) {
+  if(invalid || db.charCodeAt(index) !== 0x1) {
     throw new Error('Invalid RSAES-OAEP padding.');
   }
 

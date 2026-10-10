@@ -14,6 +14,7 @@ import { resolveUpcomingHoldingOrder } from "@/features/dashboard/portfolio/lib/
 import { MfOrderJourneyDialog } from "@/features/invest/components/payment-dialog";
 import { useMfOrderQuery } from "@/features/invest/hooks/use-mf-order-query";
 import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
+import type { MfOrder } from "@/features/invest/api/invest-api";
 import { isUpcomingHoldingOrder } from "@/features/invest/lib/mf-transaction-filters";
 import { MF_PAGE_SECTION_CLASS } from "@/features/invest/lib/mf-ui";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
@@ -23,6 +24,13 @@ import { cn } from "@/lib/utils";
 type PortfolioUpcomingHoldingDetailPageProps = {
   slug: string;
 };
+
+function requireUpcomingHoldingOrder(order: MfOrder | null | undefined): MfOrder {
+  if (!order || !isUpcomingHoldingOrder(order)) {
+    notFound();
+  }
+  return order;
+}
 
 function UpcomingHoldingDetailPlaceholder() {
   return (
@@ -171,11 +179,8 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
     );
   }
 
-  if (!order || !isUpcomingHoldingOrder(order)) {
-    notFound();
-  }
-
-  const fundName = order.product_name ?? copy.mutualFunds.unknownFund;
+  const upcomingOrder = requireUpcomingHoldingOrder(order);
+  const fundName = upcomingOrder.product_name ?? copy.mutualFunds.unknownFund;
 
   return (
     <DashboardContentFade className={cn(MF_PAGE_SECTION_CLASS, "pb-8")}>
@@ -188,7 +193,7 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
 
       <div className="space-y-4">
         <PortfolioUpcomingOrderSummaryCard
-          order={order}
+          order={upcomingOrder}
           onViewJourney={() => setJourneyOpen(true)}
         />
 
@@ -200,7 +205,11 @@ export function PortfolioUpcomingHoldingDetailPage({ slug }: PortfolioUpcomingHo
         </PortfolioDetailLockedSection>
       </div>
 
-      <MfOrderJourneyDialog open={journeyOpen} orderId={order.order_id} onOpenChange={setJourneyOpen} />
+      <MfOrderJourneyDialog
+        open={journeyOpen}
+        orderId={upcomingOrder.order_id}
+        onOpenChange={setJourneyOpen}
+      />
     </DashboardContentFade>
   );
 }

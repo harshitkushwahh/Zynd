@@ -1,6 +1,5 @@
 import {
   addInvestorStepIndex,
-  buildAddInvestorJourneySteps,
   requiresFullKycSubmission,
   emptyAddressDraft,
   emptyBankDraft,

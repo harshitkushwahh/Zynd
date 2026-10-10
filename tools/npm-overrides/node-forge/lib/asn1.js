@@ -1264,7 +1264,6 @@ asn1.validate = function(obj, v, capture, errors) {
           capture[v.captureBitStringContents] = obj.bitStringContents;
         }
         if(v.captureBitStringValue && 'bitStringContents' in obj) {
-          var value;
           if(obj.bitStringContents.length < 2) {
             capture[v.captureBitStringValue] = '';
           } else {
@@ -1302,7 +1301,7 @@ asn1.validate = function(obj, v, capture, errors) {
 };
 
 // regex for testing for non-latin characters
-var _nonLatinRegex = /[^\\u0000-\\u00ff]/;
+var _nonLatinRegex = /[^\u0000-\u00ff]/;
 
 /**
  * Pretty prints an ASN.1 object to a string.

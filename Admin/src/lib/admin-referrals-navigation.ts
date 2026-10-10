@@ -1,4 +1,4 @@
-import { Gift, History, ListTree, Settings2, Trophy, Users } from "lucide-react";
+import { History, ListTree, Settings2, Trophy, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { clientIdToProfilePath } from "@/lib/admin-user-ref";

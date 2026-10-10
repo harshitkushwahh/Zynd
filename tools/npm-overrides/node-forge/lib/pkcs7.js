@@ -428,13 +428,13 @@ p7.createSignedData = function() {
 
     // add unique digest algorithm identifiers
     msg.digestAlgorithmIdentifiers = [];
-    for(var oid in mds) {
+    for(var digestOid in mds) {
       msg.digestAlgorithmIdentifiers.push(
         // AlgorithmIdentifier
         asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
           // algorithm
           asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false,
-            asn1.oidToDer(oid).getBytes()),
+            asn1.oidToDer(digestOid).getBytes()),
           // parameters (null)
           asn1.create(asn1.Class.UNIVERSAL, asn1.Type.NULL, false, '')
         ]));
@@ -932,13 +932,11 @@ function _signerFromAsn1(obj) {
     digestAlgorithm: asn1.derToOid(capture.digestAlgorithm),
     signatureAlgorithm: asn1.derToOid(capture.signatureAlgorithm),
     signature: capture.signature,
-    authenticatedAttributes: [],
-    unauthenticatedAttributes: []
+    authenticatedAttributes: capture.authenticatedAttributes || [],
+    unauthenticatedAttributes: capture.unauthenticatedAttributes || []
   };
 
   // TODO: convert attributes
-  var authenticatedAttributes = capture.authenticatedAttributes || [];
-  var unauthenticatedAttributes = capture.unauthenticatedAttributes || [];
 
   return rval;
 }
@@ -1173,39 +1171,39 @@ function _fromAsn1(msg, obj, validator) {
   }
 
   if(capture.encryptedContent) {
-    var content = '';
+    var encryptedContentBytes = '';
     if(forge.util.isArray(capture.encryptedContent)) {
       for(var i = 0; i < capture.encryptedContent.length; ++i) {
         if(capture.encryptedContent[i].type !== asn1.Type.OCTETSTRING) {
           throw new Error('Malformed PKCS#7 message, expecting encrypted ' +
             'content constructed of only OCTET STRING objects.');
         }
-        content += capture.encryptedContent[i].value;
+        encryptedContentBytes += capture.encryptedContent[i].value;
       }
     } else {
-      content = capture.encryptedContent;
+      encryptedContentBytes = capture.encryptedContent;
     }
     msg.encryptedContent = {
       algorithm: asn1.derToOid(capture.encAlgorithm),
       parameter: forge.util.createBuffer(capture.encParameter.value),
-      content: forge.util.createBuffer(content)
+      content: forge.util.createBuffer(encryptedContentBytes)
     };
   }
 
   if(capture.content) {
-    var content = '';
+    var contentBytes = '';
     if(forge.util.isArray(capture.content)) {
-      for(var i = 0; i < capture.content.length; ++i) {
-        if(capture.content[i].type !== asn1.Type.OCTETSTRING) {
+      for(var j = 0; j < capture.content.length; ++j) {
+        if(capture.content[j].type !== asn1.Type.OCTETSTRING) {
           throw new Error('Malformed PKCS#7 message, expecting ' +
             'content constructed of only OCTET STRING objects.');
         }
-        content += capture.content[i].value;
+        contentBytes += capture.content[j].value;
       }
     } else {
-      content = capture.content;
+      contentBytes = capture.content;
     }
-    msg.content = forge.util.createBuffer(content);
+    msg.content = forge.util.createBuffer(contentBytes);
   }
 
   msg.version = capture.version.charCodeAt(0);

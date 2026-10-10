@@ -26,7 +26,6 @@ import { formatDistributorDateTime } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import {
   SUPPORT_DUMMY_SYSTEM_LOGS,
-  type SupportSystemLogEntry,
   type SupportSystemLogLevel,
 } from "@/lib/support-system-logs-dummy-data";
 import { cn } from "@/lib/utils";

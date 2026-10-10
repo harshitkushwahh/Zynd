@@ -99,7 +99,6 @@ import {
   requestAddInvestorKycGeolocation,
 } from "@/lib/add-investor/add-investor-kyc-geolocation";
 import {
-  emptyComplianceSnapshot,
   hydrationFromClientKycBootstrap,
   mapBootstrapAddressDraft,
   hydrationFromComplianceSnapshot,

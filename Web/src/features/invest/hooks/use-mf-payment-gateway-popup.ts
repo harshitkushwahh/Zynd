@@ -74,7 +74,6 @@ export function useMfPaymentGatewayPopup({
       }
 
       if (
-        !returnHandledRef.current &&
         closedStreak >= POPUP_CLOSED_CONFIRM_POLLS &&
         Date.now() - openedAt >= POPUP_MIN_OPEN_MS
       ) {

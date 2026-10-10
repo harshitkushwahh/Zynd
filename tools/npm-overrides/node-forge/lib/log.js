@@ -118,7 +118,7 @@ forge.log.prepareFull = function(message) {
   if(!('full' in message)) {
     // copy args and insert message at the front
     var args = [message.message];
-    args = args.concat([] || message['arguments']);
+    args = args.concat(message['arguments'] || []);
     // format the message
     message.full = forge.util.format.apply(this, args);
   }

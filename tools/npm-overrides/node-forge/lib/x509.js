@@ -747,18 +747,18 @@ var _verifySignature = function(options) {
       /* initialize mgf */
       hash = oids[cert.signatureParameters.mgf.hash.algorithmOid];
       if(hash === undefined || forge.md[hash] === undefined) {
-        var error = new Error('Unsupported MGF hash function.');
-        error.oid = cert.signatureParameters.mgf.hash.algorithmOid;
-        error.name = hash;
-        throw error;
+        var mgfHashError = new Error('Unsupported MGF hash function.');
+        mgfHashError.oid = cert.signatureParameters.mgf.hash.algorithmOid;
+        mgfHashError.name = hash;
+        throw mgfHashError;
       }
 
       mgf = oids[cert.signatureParameters.mgf.algorithmOid];
       if(mgf === undefined || forge.mgf[mgf] === undefined) {
-        var error = new Error('Unsupported MGF function.');
-        error.oid = cert.signatureParameters.mgf.algorithmOid;
-        error.name = mgf;
-        throw error;
+        var mgfError = new Error('Unsupported MGF function.');
+        mgfError.oid = cert.signatureParameters.mgf.algorithmOid;
+        mgfError.name = mgf;
+        throw mgfError;
       }
 
       mgf = forge.mgf[mgf].create(forge.md[hash].create());
@@ -766,10 +766,10 @@ var _verifySignature = function(options) {
       /* initialize hash function */
       hash = oids[cert.signatureParameters.hash.algorithmOid];
       if(hash === undefined || forge.md[hash] === undefined) {
-        var error = new Error('Unsupported RSASSA-PSS hash function.');
-        error.oid = cert.signatureParameters.hash.algorithmOid;
-        error.name = hash;
-        throw error;
+        var pssHashError = new Error('Unsupported RSASSA-PSS hash function.');
+        pssHashError.oid = cert.signatureParameters.hash.algorithmOid;
+        pssHashError.name = hash;
+        throw pssHashError;
       }
 
       scheme = forge.pss.create(
@@ -1954,9 +1954,9 @@ function _fillMissingFields(attrs) {
       if(attr.name && attr.name in pki.oids) {
         attr.type = pki.oids[attr.name];
       } else {
-        var error = new Error('Attribute type not specified.');
-        error.attribute = attr;
-        throw error;
+        var attrTypeError = new Error('Attribute type not specified.');
+        attrTypeError.attribute = attr;
+        throw attrTypeError;
       }
     }
 
@@ -1981,9 +1981,9 @@ function _fillMissingFields(attrs) {
     }
 
     if(typeof attr.value === 'undefined') {
-      var error = new Error('Attribute value not specified.');
-      error.attribute = attr;
-      throw error;
+      var attrValueError = new Error('Attribute value not specified.');
+      attrValueError.attribute = attr;
+      throw attrValueError;
     }
   }
 }
@@ -2012,9 +2012,9 @@ function _fillMissingExtensionFields(e, options) {
     if(e.name && e.name in pki.oids) {
       e.id = pki.oids[e.name];
     } else {
-      var error = new Error('Extension ID not specified.');
-      error.extension = e;
-      throw error;
+      var extensionIdError = new Error('Extension ID not specified.');
+      extensionIdError.extension = e;
+      throw extensionIdError;
     }
   }
 
@@ -2027,55 +2027,55 @@ function _fillMissingExtensionFields(e, options) {
   // value is a BIT STRING
   if(e.name === 'keyUsage') {
     // build flags
-    var unused = 0;
+    var keyUsageUnused = 0;
     var b2 = 0x00;
     var b3 = 0x00;
     if(e.digitalSignature) {
       b2 |= 0x80;
-      unused = 7;
+      keyUsageUnused = 7;
     }
     if(e.nonRepudiation) {
       b2 |= 0x40;
-      unused = 6;
+      keyUsageUnused = 6;
     }
     if(e.keyEncipherment) {
       b2 |= 0x20;
-      unused = 5;
+      keyUsageUnused = 5;
     }
     if(e.dataEncipherment) {
       b2 |= 0x10;
-      unused = 4;
+      keyUsageUnused = 4;
     }
     if(e.keyAgreement) {
       b2 |= 0x08;
-      unused = 3;
+      keyUsageUnused = 3;
     }
     if(e.keyCertSign) {
       b2 |= 0x04;
-      unused = 2;
+      keyUsageUnused = 2;
     }
     if(e.cRLSign) {
       b2 |= 0x02;
-      unused = 1;
+      keyUsageUnused = 1;
     }
     if(e.encipherOnly) {
       b2 |= 0x01;
-      unused = 0;
+      keyUsageUnused = 0;
     }
     if(e.decipherOnly) {
       b3 |= 0x80;
-      unused = 7;
+      keyUsageUnused = 7;
     }
 
     // create bit string
-    var value = String.fromCharCode(unused);
+    var keyUsageValue = String.fromCharCode(keyUsageUnused);
     if(b3 !== 0) {
-      value += String.fromCharCode(b2) + String.fromCharCode(b3);
+      keyUsageValue += String.fromCharCode(b2) + String.fromCharCode(b3);
     } else if(b2 !== 0) {
-      value += String.fromCharCode(b2);
+      keyUsageValue += String.fromCharCode(b2);
     }
     e.value = asn1.create(
-      asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, value);
+      asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, keyUsageValue);
   } else if(e.name === 'basicConstraints') {
     // basicConstraints is a SEQUENCE
     e.value = asn1.create(
@@ -2095,96 +2095,96 @@ function _fillMissingExtensionFields(e, options) {
     // extKeyUsage is a SEQUENCE of OIDs
     e.value = asn1.create(
       asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
-    var seq = e.value.value;
+    var extKeyUsageSeq = e.value.value;
     for(var key in e) {
       if(e[key] !== true) {
         continue;
       }
       // key is name in OID map
       if(key in oids) {
-        seq.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID,
+        extKeyUsageSeq.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID,
           false, asn1.oidToDer(oids[key]).getBytes()));
       } else if(key.indexOf('.') !== -1) {
         // assume key is an OID
-        seq.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID,
+        extKeyUsageSeq.push(asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID,
           false, asn1.oidToDer(key).getBytes()));
       }
     }
   } else if(e.name === 'nsCertType') {
     // nsCertType is a BIT STRING
     // build flags
-    var unused = 0;
-    var b2 = 0x00;
+    var nsCertUnused = 0;
+    var nsCertB2 = 0x00;
 
     if(e.client) {
-      b2 |= 0x80;
-      unused = 7;
+      nsCertB2 |= 0x80;
+      nsCertUnused = 7;
     }
     if(e.server) {
-      b2 |= 0x40;
-      unused = 6;
+      nsCertB2 |= 0x40;
+      nsCertUnused = 6;
     }
     if(e.email) {
-      b2 |= 0x20;
-      unused = 5;
+      nsCertB2 |= 0x20;
+      nsCertUnused = 5;
     }
     if(e.objsign) {
-      b2 |= 0x10;
-      unused = 4;
+      nsCertB2 |= 0x10;
+      nsCertUnused = 4;
     }
     if(e.reserved) {
-      b2 |= 0x08;
-      unused = 3;
+      nsCertB2 |= 0x08;
+      nsCertUnused = 3;
     }
     if(e.sslCA) {
-      b2 |= 0x04;
-      unused = 2;
+      nsCertB2 |= 0x04;
+      nsCertUnused = 2;
     }
     if(e.emailCA) {
-      b2 |= 0x02;
-      unused = 1;
+      nsCertB2 |= 0x02;
+      nsCertUnused = 1;
     }
     if(e.objCA) {
-      b2 |= 0x01;
-      unused = 0;
+      nsCertB2 |= 0x01;
+      nsCertUnused = 0;
     }
 
     // create bit string
-    var value = String.fromCharCode(unused);
-    if(b2 !== 0) {
-      value += String.fromCharCode(b2);
+    var nsCertValue = String.fromCharCode(nsCertUnused);
+    if(nsCertB2 !== 0) {
+      nsCertValue += String.fromCharCode(nsCertB2);
     }
     e.value = asn1.create(
-      asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, value);
+      asn1.Class.UNIVERSAL, asn1.Type.BITSTRING, false, nsCertValue);
   } else if(e.name === 'subjectAltName' || e.name === 'issuerAltName') {
     // SYNTAX SEQUENCE
     e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
 
-    var altName;
+    var sanEntry;
     for(var n = 0; n < e.altNames.length; ++n) {
-      altName = e.altNames[n];
-      var value = altName.value;
+      sanEntry = e.altNames[n];
+      var sanValue = sanEntry.value;
       // handle IP
-      if(altName.type === 7 && altName.ip) {
-        value = forge.util.bytesFromIP(altName.ip);
-        if(value === null) {
-          var error = new Error(
+      if(sanEntry.type === 7 && sanEntry.ip) {
+        sanValue = forge.util.bytesFromIP(sanEntry.ip);
+        if(sanValue === null) {
+          var sanIpError = new Error(
             'Extension "ip" value is not a valid IPv4 or IPv6 address.');
-          error.extension = e;
-          throw error;
+          sanIpError.extension = e;
+          throw sanIpError;
         }
-      } else if(altName.type === 8) {
+      } else if(sanEntry.type === 8) {
         // handle OID
-        if(altName.oid) {
-          value = asn1.oidToDer(asn1.oidToDer(altName.oid));
+        if(sanEntry.oid) {
+          sanValue = asn1.oidToDer(asn1.oidToDer(sanEntry.oid));
         } else {
           // deprecated ... convert value to OID
-          value = asn1.oidToDer(value);
+          sanValue = asn1.oidToDer(sanValue);
         }
       }
       e.value.value.push(asn1.create(
-        asn1.Class.CONTEXT_SPECIFIC, altName.type, false,
-        value));
+        asn1.Class.CONTEXT_SPECIFIC, sanEntry.type, false,
+        sanValue));
     }
   } else if(e.name === 'nsComment' && options.cert) {
     // sanity check value is ASCII (req'd) and not too big
@@ -2204,13 +2204,13 @@ function _fillMissingExtensionFields(e, options) {
   } else if(e.name === 'authorityKeyIdentifier' && options.cert) {
     // SYNTAX SEQUENCE
     e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
-    var seq = e.value.value;
+    var akiSeq = e.value.value;
 
     if(e.keyIdentifier) {
       var keyIdentifier = (e.keyIdentifier === true ?
         options.cert.generateSubjectKeyIdentifier().getBytes() :
         e.keyIdentifier);
-      seq.push(
+      akiSeq.push(
         asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, false, keyIdentifier));
     }
 
@@ -2221,19 +2221,19 @@ function _fillMissingExtensionFields(e, options) {
             options.cert.issuer : e.authorityCertIssuer)
         ])
       ];
-      seq.push(
+      akiSeq.push(
         asn1.create(asn1.Class.CONTEXT_SPECIFIC, 1, true, authorityCertIssuer));
     }
 
     if(e.serialNumber) {
       var serialNumber = forge.util.hexToBytes(e.serialNumber === true ?
         options.cert.serialNumber : e.serialNumber);
-      seq.push(
+      akiSeq.push(
         asn1.create(asn1.Class.CONTEXT_SPECIFIC, 2, false, serialNumber));
     }
   } else if(e.name === 'cRLDistributionPoints') {
     e.value = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, []);
-    var seq = e.value.value;
+    var crlSeq = e.value.value;
 
     // Create sub SEQUENCE of DistributionPointName
     var subSeq = asn1.create(
@@ -2242,44 +2242,44 @@ function _fillMissingExtensionFields(e, options) {
     // Create fullName CHOICE
     var fullNameGeneralNames = asn1.create(
       asn1.Class.CONTEXT_SPECIFIC, 0, true, []);
-    var altName;
+    var crlAltName;
     for(var n = 0; n < e.altNames.length; ++n) {
-      altName = e.altNames[n];
-      var value = altName.value;
+      crlAltName = e.altNames[n];
+      var crlAltValue = crlAltName.value;
       // handle IP
-      if(altName.type === 7 && altName.ip) {
-        value = forge.util.bytesFromIP(altName.ip);
-        if(value === null) {
-          var error = new Error(
+      if(crlAltName.type === 7 && crlAltName.ip) {
+        crlAltValue = forge.util.bytesFromIP(crlAltName.ip);
+        if(crlAltValue === null) {
+          var crlIpError = new Error(
             'Extension "ip" value is not a valid IPv4 or IPv6 address.');
-          error.extension = e;
-          throw error;
+          crlIpError.extension = e;
+          throw crlIpError;
         }
-      } else if(altName.type === 8) {
+      } else if(crlAltName.type === 8) {
         // handle OID
-        if(altName.oid) {
-          value = asn1.oidToDer(asn1.oidToDer(altName.oid));
+        if(crlAltName.oid) {
+          crlAltValue = asn1.oidToDer(asn1.oidToDer(crlAltName.oid));
         } else {
           // deprecated ... convert value to OID
-          value = asn1.oidToDer(value);
+          crlAltValue = asn1.oidToDer(crlAltValue);
         }
       }
       fullNameGeneralNames.value.push(asn1.create(
-        asn1.Class.CONTEXT_SPECIFIC, altName.type, false,
-        value));
+        asn1.Class.CONTEXT_SPECIFIC, crlAltName.type, false,
+        crlAltValue));
     }
 
     // Add to the parent SEQUENCE
     subSeq.value.push(asn1.create(
       asn1.Class.CONTEXT_SPECIFIC, 0, true, [fullNameGeneralNames]));
-    seq.push(subSeq);
+    crlSeq.push(subSeq);
   }
 
   // ensure value has been defined by now
   if(typeof e.value === 'undefined') {
-    var error = new Error('Extension value not specified.');
-    error.extension = e;
-    throw error;
+    var extensionValueError = new Error('Extension value not specified.');
+    extensionValueError.extension = e;
+    throw extensionValueError;
   }
 
   return e;

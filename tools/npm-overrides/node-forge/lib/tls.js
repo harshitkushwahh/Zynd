@@ -358,7 +358,8 @@ var prf_TLS1 = function(secret, label, seed, length) {
  * @return the pseudo random bytes in a byte buffer.
  */
 var prf_sha256 = function(secret, label, seed, length) {
-   // FIXME: implement me for TLS 1.2
+  // FIXME: implement me for TLS 1.2
+  return forge.util.createBuffer();
 };
 
 /**
@@ -2200,6 +2201,7 @@ var CCC = 4; // rcv change cipher spec
 var CFI = 5; // rcv finished
 var CAD = 6; // rcv application data
 var CER = 7; // not expecting any messages at this point
+tls._clientExpectCER = CER;
 
 // map client current expect state and content type to function
 var __ = tls.handleUnexpected;
@@ -3661,13 +3663,13 @@ tls.createSessionCache = function(cache, capacity) {
     rval.setSession = function(sessionId, session) {
       // remove session from cache if at capacity
       if(rval.order.length === rval.capacity) {
-        var key = rval.order.shift();
-        delete rval.cache[key];
+        var evictedKey = rval.order.shift();
+        delete rval.cache[evictedKey];
       }
       // add session to cache
-      var key = forge.util.bytesToHex(sessionId);
-      rval.order.push(key);
-      rval.cache[key] = session;
+      var sessionKey = forge.util.bytesToHex(sessionId);
+      rval.order.push(sessionKey);
+      rval.cache[sessionKey] = session;
     };
   }
 
