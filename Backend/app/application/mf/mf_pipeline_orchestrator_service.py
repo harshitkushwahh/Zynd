@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_health_service import get_catalog_health
@@ -38,7 +38,10 @@ from app.application.mf.mf_pipeline_store import (
     recover_interrupted_pipeline_runs,
     save_pipeline_run,
 )
-from app.application.mf.nav_cold_start_backfill_service import cold_start_resume_date_from_logs
+from app.application.mf.nav_cold_start_backfill_service import (
+    cold_start_resume_date_from_logs,
+    usable_cold_start_resume,
+)
 from app.application.mf.mf_pipeline_types import (
     BACKFILL_STOPPED_MESSAGE,
     BOOTSTRAP_AFTER_INGEST_JOBS,
@@ -73,7 +76,7 @@ from app.application.mf.scheme_staging_promote_service import run_cybrilla_schem
 from app.application.mf.scheme_staging_validate_service import run_cybrilla_scheme_validate
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
-from app.infrastructure.persistence.mf_models import IngestionRunLog
+from app.infrastructure.persistence.mf_models import IngestionRunLog, SchemeNav
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +138,15 @@ async def _cold_start_job_kwargs(
     cursor = cold_start_resume_date_from_logs([line.message for line in run.logs])
     if cursor is None:
         cursor = await latest_cold_start_resume_date(session, exclude_run_id=run.run_id)
-    if cursor is None or cursor > date.today():
+    settings = get_settings()
+    oldest_nav_date = await session.scalar(select(func.min(SchemeNav.nav_date)))
+    cursor = usable_cold_start_resume(
+        cursor,
+        target_from=date.fromisoformat(settings.zynd_mf_cold_start_backfill_from_date),
+        oldest_nav_date=oldest_nav_date,
+        today=date.today(),
+    )
+    if cursor is None:
         return None
     return {"from_date": cursor}
 
