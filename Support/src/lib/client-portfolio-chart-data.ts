@@ -269,7 +269,7 @@ export function resolveClientPortfolioChartSeries(
 
 export function portfolioChartHistoryDays(points: readonly PortfolioChartPoint[]): number {
   const dated = points.filter((point) => point.date);
-  if (dated.length < 2) return dated.length > 0 ? 0 : 0;
+  if (dated.length < 2) return 0;
 
   const start = new Date(dated[0].date!);
   const end = new Date(dated[dated.length - 1].date!);

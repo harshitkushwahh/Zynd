@@ -17,10 +17,6 @@ var asn1Validator = require('./asn1-validator');
 var publicKeyValidator = asn1Validator.publicKeyValidator;
 var privateKeyValidator = asn1Validator.privateKeyValidator;
 
-if(typeof BigInteger === 'undefined') {
-  var BigInteger = forge.jsbn.BigInteger;
-}
-
 var ByteBuffer = forge.util.ByteBuffer;
 var NativeBuffer = typeof Buffer === 'undefined' ? Uint8Array : Buffer;
 

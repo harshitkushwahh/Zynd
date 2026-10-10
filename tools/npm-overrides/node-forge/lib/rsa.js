@@ -70,9 +70,7 @@ require('./prime');
 require('./random');
 require('./util');
 
-if(typeof BigInteger === 'undefined') {
-  var BigInteger = forge.jsbn.BigInteger;
-}
+var BigInteger = forge.jsbn.BigInteger;
 
 var _crypto = forge.util.isNodejs ? require('crypto') : null;
 
@@ -1173,11 +1171,11 @@ pki.setRsaPublicKey = pki.rsa.setPublicKey = function(n, e) {
           var errors = [];
           if(!asn1.validate(obj, digestInfoValidator, capture, errors) ||
             obj.value.length !== 2) {
-            var error = new Error(
+            var digestInfoError = new Error(
               'ASN.1 object does not contain a valid RSASSA-PKCS1-v1_5 ' +
               'DigestInfo value.');
-            error.errors = errors;
-            throw error;
+            digestInfoError.errors = errors;
+            throw digestInfoError;
           }
           var digestAlgorithm = obj.value[0];
           if(!digestAlgorithm || !digestAlgorithm.value ||
@@ -1199,10 +1197,10 @@ pki.setRsaPublicKey = pki.rsa.setPublicKey = function(n, e) {
             oid === forge.oids.sha512 ||
             oid === forge.oids['sha512-224'] ||
             oid === forge.oids['sha512-256'])) {
-            var error = new Error(
+            var digestOidError = new Error(
               'Unknown RSASSA-PKCS1-v1_5 DigestAlgorithm identifier.');
-            error.oid = oid;
-            throw error;
+            digestOidError.oid = oid;
+            throw digestOidError;
           }
 
           // special check for md2 and md5 that NULL parameters exist
@@ -1486,9 +1484,9 @@ pki.publicKeyFromAsn1 = function(obj) {
     // get oid
     var oid = asn1.derToOid(capture.publicKeyOid);
     if(oid !== pki.oids.rsaEncryption) {
-      var error = new Error('Cannot read public key. Unknown OID.');
-      error.oid = oid;
-      throw error;
+      var publicKeyOidError = new Error('Cannot read public key. Unknown OID.');
+      publicKeyOidError.oid = oid;
+      throw publicKeyOidError;
     }
     obj = capture.rsaPublicKey;
   }
@@ -1496,10 +1494,10 @@ pki.publicKeyFromAsn1 = function(obj) {
   // get RSA params
   errors = [];
   if(!asn1.validate(obj, rsaPublicKeyValidator, capture, errors)) {
-    var error = new Error('Cannot read public key. ' +
+    var rsaPublicKeyError = new Error('Cannot read public key. ' +
       'ASN.1 object does not contain an RSAPublicKey.');
-    error.errors = errors;
-    throw error;
+    rsaPublicKeyError.errors = errors;
+    throw rsaPublicKeyError;
   }
 
   // FIXME: inefficient, get a BigInteger that uses byte strings

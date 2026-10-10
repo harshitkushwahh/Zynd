@@ -265,7 +265,7 @@ const parse = (input, options = {}) => {
     if (value === CHAR_DOT && depth > 0 && block.commas === 0) {
       const siblings = block.nodes;
 
-      if (depth === 0 || siblings.length === 0) {
+      if (siblings.length === 0) {
         push({ type: 'text', value });
         continue;
       }
@@ -317,7 +317,7 @@ const parse = (input, options = {}) => {
         if (!node.nodes) {
           if (node.type === 'open') node.isOpen = true;
           if (node.type === 'close') node.isClose = true;
-          if (!node.nodes) node.type = 'text';
+          node.type = 'text';
           node.invalid = true;
         }
       });

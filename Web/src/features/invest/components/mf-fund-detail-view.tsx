@@ -150,7 +150,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     );
   }
 
-  const investmentDetails = fund ? resolveInvestmentDetailsForDisplay(fund) : null;
+  const investmentDetails = resolveInvestmentDetailsForDisplay(fund);
 
   const investCard = (
     <MfInvestPaymentCard

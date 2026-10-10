@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveCybrillaOrderStatusLabel } from "@/features/invest/lib/mf-cybrilla-status";
-import { copy } from "@/shared/config/copy";
 
 describe("resolveCybrillaOrderStatusLabel", () => {
   it("shows gateway payment status before payment completes", () => {

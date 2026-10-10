@@ -210,8 +210,7 @@ forge.aes.Algorithm.prototype.initialize = function(options) {
   }
 
   // key must be an array of 32-bit integers by now
-  if(!forge.util.isArray(key) ||
-    !(key.length === 4 || key.length === 6 || key.length === 8)) {
+  if(key.length !== 4 && key.length !== 6 && key.length !== 8) {
     throw new Error('Invalid key parameter.');
   }
 

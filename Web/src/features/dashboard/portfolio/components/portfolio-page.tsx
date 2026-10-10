@@ -92,7 +92,6 @@ function PortfolioOverviewPanel() {
   const portfolioCopy = copy.dashboard.portfolio;
   const {
     showUninvestedEmpty,
-    isProcessing,
     processingTitle,
     processingDescription,
   } = usePortfolioUninvestedEmpty();

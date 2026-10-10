@@ -54,7 +54,7 @@ const expand = (ast, options = {}) => {
       return;
     }
 
-    if (node.type === 'brace' && node.invalid !== true && node.nodes.length === 2) {
+    if (node.type === 'brace' && node.nodes.length === 2) {
       q.push(append(q.pop(), ['{}']));
       return;
     }

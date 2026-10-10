@@ -838,7 +838,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         !digilockerReturnActive &&
         shouldFocusReviewAfterPartnerReturn(payload, {
           esignReturnActive: esignReturn.kind !== "none",
-          pendingEsignResume: digilockerReturnActive ? false : pendingEsignResume,
+          pendingEsignResume,
         });
       if (pendingEsignResume && !focusReviewStep && shouldBlockAddressStep(payload)) {
         clearPendingEsignResume();
@@ -1762,9 +1762,6 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const activeStepId = journeySteps[activeStepIndex]?.id;
   const showVerifiedOutcome =
     kraVerifiedOutcomeShown || (open && status === "complete");
-  const showSubmittedOutcome =
-    submittedOutcomeShown ||
-    (open && overallStatus === "submitted" && status !== "complete");
   const panVerified =
     bootstrap?.pan_verification_status === "verified" ||
     Boolean(

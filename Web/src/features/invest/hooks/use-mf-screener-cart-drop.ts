@@ -11,7 +11,7 @@ import {
   upsertMfCartItem,
   type MfCart,
 } from "@/features/invest/api/invest-api";
-import { setMfCartQueryData, syncMfCartQueryData } from "@/features/invest/hooks/use-mf-cart-query";
+import { syncMfCartQueryData } from "@/features/invest/hooks/use-mf-cart-query";
 import type { MfFundScreenerSelectionItem } from "@/features/invest/contexts/mf-fund-screener-selection-context";
 import {
   resolveScreenerCartLumpsumAmount,

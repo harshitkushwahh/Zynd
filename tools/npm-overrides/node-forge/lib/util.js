@@ -79,10 +79,10 @@ var util = module.exports = forge.util = forge.util || {};
     var now = Date.now();
     var attr = true;
     var div = document.createElement('div');
-    var callbacks = [];
+    var moCallbacks = [];
     new MutationObserver(function() {
-      var copy = callbacks.slice();
-      callbacks.length = 0;
+      var copy = moCallbacks.slice();
+      moCallbacks.length = 0;
       copy.forEach(function(callback) {
         callback();
       });
@@ -93,10 +93,10 @@ var util = module.exports = forge.util = forge.util || {};
         now = Date.now();
         oldSetImmediate(callback);
       } else {
-        callbacks.push(callback);
+        moCallbacks.push(callback);
         // only trigger observer when it hasn't been triggered in
         // the current turn of the event loop
-        if(callbacks.length === 1) {
+        if(moCallbacks.length === 1) {
           div.setAttribute('a', attr = !attr);
         }
       }
@@ -873,21 +873,21 @@ util.DataBuffer.prototype.fillWithByte = function(b, n) {
  */
 util.DataBuffer.prototype.putBytes = function(bytes, encoding) {
   if(util.isArrayBufferView(bytes)) {
-    var src = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    var len = src.byteLength - src.byteOffset;
+    var viewSrc = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    var len = viewSrc.byteLength - viewSrc.byteOffset;
     this.accommodate(len);
-    var dst = new Uint8Array(this.data.buffer, this.write);
-    dst.set(src);
+    var viewDst = new Uint8Array(this.data.buffer, this.write);
+    viewDst.set(viewSrc);
     this.write += len;
     return this;
   }
 
   if(util.isArrayBuffer(bytes)) {
-    var src = new Uint8Array(bytes);
-    this.accommodate(src.byteLength);
-    var dst = new Uint8Array(this.data.buffer);
-    dst.set(src, this.write);
-    this.write += src.byteLength;
+    var bufferSrc = new Uint8Array(bytes);
+    this.accommodate(bufferSrc.byteLength);
+    var bufferDst = new Uint8Array(this.data.buffer);
+    bufferDst.set(bufferSrc, this.write);
+    this.write += bufferSrc.byteLength;
     return this;
   }
 
@@ -896,11 +896,11 @@ util.DataBuffer.prototype.putBytes = function(bytes, encoding) {
     (typeof bytes === 'object' &&
     typeof bytes.read === 'number' && typeof bytes.write === 'number' &&
     util.isArrayBufferView(bytes.data))) {
-    var src = new Uint8Array(bytes.data.byteLength, bytes.read, bytes.length());
-    this.accommodate(src.byteLength);
-    var dst = new Uint8Array(bytes.data.byteLength, this.write);
-    dst.set(src);
-    this.write += src.byteLength;
+    var dataSrc = new Uint8Array(bytes.data.byteLength, bytes.read, bytes.length());
+    this.accommodate(dataSrc.byteLength);
+    var dataDst = new Uint8Array(bytes.data.byteLength, this.write);
+    dataDst.set(dataSrc);
+    this.write += dataSrc.byteLength;
     return this;
   }
 
@@ -1324,7 +1324,7 @@ util.DataBuffer.prototype.compact = function() {
     var src = new Uint8Array(this.data.buffer, this.read);
     var dst = new Uint8Array(src.byteLength);
     dst.set(src);
-    this.data = new DataView(dst);
+    this.data = new DataView(dst.buffer, dst.byteOffset, dst.byteLength);
     this.write -= this.read;
     this.read = 0;
   }
@@ -1493,7 +1493,7 @@ util.hexToBytes = function(hex) {
   // TODO: deprecate: "Deprecated. Use util.binary.hex.decode instead."
   var rval = '';
   var i = 0;
-  if(hex.length & 1 == 1) {
+  if((hex.length & 1) === 1) {
     // odd number of characters, convert first character alone
     i = 1;
     rval += String.fromCharCode(parseInt(hex[0], 16));

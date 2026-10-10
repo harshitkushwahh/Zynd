@@ -19,7 +19,7 @@ if(forge.prime) {
 }
 
 /* PRIME API */
-var prime = module.exports = forge.prime = forge.prime || {};
+var prime = module.exports = forge.prime = {};
 
 var BigInteger = forge.jsbn.BigInteger;
 

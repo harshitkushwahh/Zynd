@@ -58,10 +58,6 @@ export function sortMfTransactions(orders: MfOrder[]) {
   });
 }
 
-function normalizeOrderStatus(status: string) {
-  return status.trim().toUpperCase();
-}
-
 export function isAwaitingAllotmentOrder(order: MfOrder) {
   return isOrderAwaitingAllotment(order);
 }

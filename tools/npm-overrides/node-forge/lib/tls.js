@@ -357,8 +357,9 @@ var prf_TLS1 = function(secret, label, seed, length) {
  *
  * @return the pseudo random bytes in a byte buffer.
  */
-var prf_sha256 = function(secret, label, seed, length) {
-   // FIXME: implement me for TLS 1.2
+var prf_sha256 = function(_secret, _label, _seed, _length) {
+  // FIXME: implement me for TLS 1.2
+  return forge.util.createBuffer();
 };
 
 /**
@@ -2200,6 +2201,7 @@ var CCC = 4; // rcv change cipher spec
 var CFI = 5; // rcv finished
 var CAD = 6; // rcv application data
 var CER = 7; // not expecting any messages at this point
+tls._clientExpectCER = CER;
 
 // map client current expect state and content type to function
 var __ = tls.handleUnexpected;
@@ -3536,9 +3538,6 @@ tls.verifyCertificateChain = function(c, chain) {
     }
 
     options.verify = function(vfd, depth, chain) {
-      // convert pki.certificateError to tls alert description
-      var desc = _certErrorToAlertDesc(vfd);
-
       // call application callback
       var ret = c.verify(c, vfd, depth, chain);
       if(ret !== true) {
@@ -3661,13 +3660,13 @@ tls.createSessionCache = function(cache, capacity) {
     rval.setSession = function(sessionId, session) {
       // remove session from cache if at capacity
       if(rval.order.length === rval.capacity) {
-        var key = rval.order.shift();
-        delete rval.cache[key];
+        var evictedKey = rval.order.shift();
+        delete rval.cache[evictedKey];
       }
       // add session to cache
-      var key = forge.util.bytesToHex(sessionId);
-      rval.order.push(key);
-      rval.cache[key] = session;
+      var sessionKey = forge.util.bytesToHex(sessionId);
+      rval.order.push(sessionKey);
+      rval.cache[sessionKey] = session;
     };
   }
 
@@ -4171,6 +4170,9 @@ for(var key in tls) {
 
 // expose prf_tls1 for testing
 forge.tls.prf_tls1 = prf_TLS1;
+
+// expose TLS 1.2 PRF stub for testing / future use
+forge.tls.prf_sha256 = prf_sha256;
 
 // expose sha1 hmac method
 forge.tls.hmac_sha1 = hmac_sha1;

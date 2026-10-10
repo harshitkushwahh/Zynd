@@ -30,10 +30,6 @@ require('./rc2');
 require('./rsa');
 require('./util');
 
-if(typeof BigInteger === 'undefined') {
-  var BigInteger = forge.jsbn.BigInteger;
-}
-
 // shortcut for asn.1 API
 var asn1 = forge.asn1;
 
@@ -260,9 +256,9 @@ pki.encryptPrivateKeyInfo = function(obj, password, options) {
       cipherFn = forge.des.createEncryptionCipher;
       break;
     default:
-      var error = new Error('Cannot encrypt private key. Unknown encryption algorithm.');
-      error.algorithm = options.algorithm;
-      throw error;
+      var switchAlgorithmError = new Error('Cannot encrypt private key. Unknown encryption algorithm.');
+      switchAlgorithmError.algorithm = options.algorithm;
+      throw switchAlgorithmError;
     }
 
     // get PRF message digest
@@ -310,11 +306,11 @@ pki.encryptPrivateKeyInfo = function(obj, password, options) {
     var saltBytes = new forge.util.ByteBuffer(salt);
     var dk = pki.pbe.generatePkcs12Key(password, saltBytes, 1, count, dkLen);
     var iv = pki.pbe.generatePkcs12Key(password, saltBytes, 2, count, dkLen);
-    var cipher = forge.des.createEncryptionCipher(dk);
-    cipher.start(iv);
-    cipher.update(asn1.toDer(obj));
-    cipher.finish();
-    encryptedData = cipher.output.getBytes();
+    var tripleDesCipher = forge.des.createEncryptionCipher(dk);
+    tripleDesCipher.start(iv);
+    tripleDesCipher.update(asn1.toDer(obj));
+    tripleDesCipher.finish();
+    encryptedData = tripleDesCipher.output.getBytes();
 
     encryptionAlgorithm = asn1.create(
       asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [
@@ -330,9 +326,9 @@ pki.encryptPrivateKeyInfo = function(obj, password, options) {
       ])
     ]);
   } else {
-    var error = new Error('Cannot encrypt private key. Unknown encryption algorithm.');
-    error.algorithm = options.algorithm;
-    throw error;
+    var unknownAlgorithmError = new Error('Cannot encrypt private key. Unknown encryption algorithm.');
+    unknownAlgorithmError.algorithm = options.algorithm;
+    throw unknownAlgorithmError;
   }
 
   // EncryptedPrivateKeyInfo
@@ -542,10 +538,10 @@ pki.decryptRsaPrivateKey = function(pem, password) {
   if(msg.type !== 'ENCRYPTED PRIVATE KEY' &&
     msg.type !== 'PRIVATE KEY' &&
     msg.type !== 'RSA PRIVATE KEY') {
-    var error = new Error('Could not convert private key from PEM; PEM header type ' +
+    var headerTypeError = new Error('Could not convert private key from PEM; PEM header type ' +
       'is not "ENCRYPTED PRIVATE KEY", "PRIVATE KEY", or "RSA PRIVATE KEY".');
-    error.headerType = error;
-    throw error;
+    headerTypeError.headerType = msg.type;
+    throw headerTypeError;
   }
 
   if(msg.procType && msg.procType.type === 'ENCRYPTED') {
@@ -591,10 +587,10 @@ pki.decryptRsaPrivateKey = function(pem, password) {
       };
       break;
     default:
-      var error = new Error('Could not decrypt private key; unsupported ' +
+      var decryptAlgorithmError = new Error('Could not decrypt private key; unsupported ' +
         'encryption algorithm "' + msg.dekInfo.algorithm + '".');
-      error.algorithm = msg.dekInfo.algorithm;
-      throw error;
+      decryptAlgorithmError.algorithm = msg.dekInfo.algorithm;
+      throw decryptAlgorithmError;
     }
 
     // use OpenSSL legacy key derivation
@@ -798,11 +794,11 @@ pki.pbe.getCipherForPBES2 = function(oid, params, password) {
   // check oids
   oid = asn1.derToOid(capture.kdfOid);
   if(oid !== pki.oids['pkcs5PBKDF2']) {
-    var error = new Error('Cannot read encrypted private key. ' +
+    var kdfOidError = new Error('Cannot read encrypted private key. ' +
       'Unsupported key derivation function OID.');
-    error.oid = oid;
-    error.supportedOids = ['pkcs5PBKDF2'];
-    throw error;
+    kdfOidError.oid = oid;
+    kdfOidError.supportedOids = ['pkcs5PBKDF2'];
+    throw kdfOidError;
   }
   oid = asn1.derToOid(capture.encOid);
   if(oid !== pki.oids['aes128-CBC'] &&
@@ -810,12 +806,12 @@ pki.pbe.getCipherForPBES2 = function(oid, params, password) {
     oid !== pki.oids['aes256-CBC'] &&
     oid !== pki.oids['des-EDE3-CBC'] &&
     oid !== pki.oids['desCBC']) {
-    var error = new Error('Cannot read encrypted private key. ' +
+    var     encOidError = new Error('Cannot read encrypted private key. ' +
       'Unsupported encryption scheme OID.');
-    error.oid = oid;
-    error.supportedOids = [
+    encOidError.oid = oid;
+    encOidError.supportedOids = [
       'aes128-CBC', 'aes192-CBC', 'aes256-CBC', 'des-EDE3-CBC', 'desCBC'];
-    throw error;
+    throw encOidError;
   }
 
   // set PBE params
@@ -905,9 +901,9 @@ pki.pbe.getCipherForPKCS12PBE = function(oid, params, password) {
       break;
 
     default:
-      var error = new Error('Cannot read PKCS #12 PBE data block. Unsupported OID.');
-      error.oid = oid;
-      throw error;
+      var pkcs12OidError = new Error('Cannot read PKCS #12 PBE data block. Unsupported OID.');
+      pkcs12OidError.oid = oid;
+      throw pkcs12OidError;
   }
 
   // get PRF message digest
@@ -975,6 +971,8 @@ function prfAlgorithmToMessageDigest(prfAlgorithm) {
   switch(prfAlgorithm) {
   case 'hmacWithSHA224':
     factory = forge.md.sha512;
+    prfAlgorithm = prfAlgorithm.substr(8).toLowerCase();
+    break;
   case 'hmacWithSHA1':
   case 'hmacWithSHA256':
   case 'hmacWithSHA384':

@@ -176,8 +176,8 @@ if(!forge.random) {
   forge.random = _ctx;
 } else {
   // extend forge.random with _ctx
-  for(var key in _ctx) {
-    forge.random[key] = _ctx[key];
+  for(var ctxKey in _ctx) {
+    forge.random[ctxKey] = _ctx[ctxKey];
   }
 }
 

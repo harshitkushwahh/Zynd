@@ -120,7 +120,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           onOpenChange={(open) => (open ? kyc.openDialog() : kyc.closeDialog())}
         />
       ) : null}
-      {user ? <ConsentReacceptDialog context="login" enabled={!loading} /> : null}
+      <ConsentReacceptDialog context="login" enabled={!loading} />
         <div
         className={cn(
           "flex h-full min-h-0 flex-col",

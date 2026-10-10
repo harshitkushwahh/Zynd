@@ -1,8 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BadgeCheck,
   ClipboardCheck,
-  FilePenLine,
   Home,
   Landmark,
   PenLine,
@@ -56,14 +54,6 @@ const PAN_STEP: AddInvestorJourneyStep = {
   phase: "compliance",
 };
 
-const DIGILOCKER_STEP: AddInvestorJourneyStep = {
-  id: "digilocker",
-  label: "DigiLocker",
-  description: "Aadhaar KYC fetch",
-  icon: BadgeCheck,
-  phase: "compliance",
-};
-
 const SIGNATURE_STEP: AddInvestorJourneyStep = {
   id: "signature-upload",
   label: "Signature",
@@ -102,14 +92,6 @@ const BANK_STEP: AddInvestorJourneyStep = {
   label: "Bank",
   description: "Payout account",
   icon: Landmark,
-  phase: "compliance",
-};
-
-const ESIGN_STEP: AddInvestorJourneyStep = {
-  id: "esign",
-  label: "E-sign",
-  description: "Aadhaar OTP sign",
-  icon: FilePenLine,
   phase: "compliance",
 };
 

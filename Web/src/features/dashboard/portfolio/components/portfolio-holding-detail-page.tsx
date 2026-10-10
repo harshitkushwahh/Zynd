@@ -664,6 +664,21 @@ export function PortfolioHoldingDetailPage({ holdingId }: PortfolioHoldingDetail
   return <PortfolioHoldingDetailPageContent holdingId={route.holdingId} />;
 }
 
+function requirePortfolioHoldingDetail(
+  holding: PortfolioHoldingDetail | null | undefined,
+  status: string | null,
+): PortfolioHoldingDetail {
+  if (
+    !holding ||
+    status == null ||
+    status === "not_found" ||
+    status === "invalid_holding_id"
+  ) {
+    notFound();
+  }
+  return holding;
+}
+
 function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string }) {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -741,13 +756,11 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
     );
   }
 
-  if (!holding || status === "not_found" || status === "invalid_holding_id") {
-    notFound();
-  }
+  const activeHolding = requirePortfolioHoldingDetail(holding, status);
 
   const canInvest = Boolean(user?.fund_movement_eligible && investConfig?.orders_enabled);
-  const sipEnabled = Boolean(investConfig?.sip_enabled) && holding.sipAllowed;
-  const pendingAction = holding.pendingAction;
+  const sipEnabled = Boolean(investConfig?.sip_enabled) && activeHolding.sipAllowed;
+  const pendingAction = activeHolding.pendingAction;
   const actionsLocked = pendingAction != null;
   const pendingLockCopy =
     pendingAction?.kind === "redeem"
@@ -762,7 +775,7 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
 
   const paymentInner = (
     <PortfolioHoldingPaymentCard
-      holding={holding}
+      holding={activeHolding}
       paymentMode={paymentMode}
       canInvest={canInvest && !actionsLocked}
       sipEnabled={sipEnabled && !actionsLocked}
@@ -793,14 +806,14 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
       <DashboardBreadcrumb
         items={[
           { label: portfolioCopy.pageTitle, href: "/dashboard/portfolio" },
-          { label: holding.fundName },
+          { label: activeHolding.fundName },
         ]}
       />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1 space-y-4">
-          <HoldingOverviewCard holding={holding} showDayChange={showDayChange} />
-          <HoldingSipSummaryCard holding={holding} />
+          <HoldingOverviewCard holding={activeHolding} showDayChange={showDayChange} />
+          <HoldingSipSummaryCard holding={activeHolding} />
           <div className="lg:hidden">{paymentCard}</div>
           <HoldingQuickActions
             paymentMode={paymentMode}
@@ -811,7 +824,7 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
             onStp={() => setPaymentMode("stp")}
             onSwp={() => setPaymentMode("swp")}
           />
-          <HoldingTransactionsTable transactions={holding.transactions} />
+          <HoldingTransactionsTable transactions={activeHolding.transactions} />
         </div>
 
         <aside className={cn(MF_INVEST_SIDEBAR_WIDTH_CLASS, MF_INVEST_SIDEBAR_STICKY_CLASS, "hidden lg:block")}>

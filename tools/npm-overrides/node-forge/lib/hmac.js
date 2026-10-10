@@ -60,18 +60,17 @@ hmac.create = function() {
     }
 
     if(key === null) {
-      // reuse previous key
-      key = _key;
+      // reuse previous key (_ipadding/_opadding from prior start)
     } else {
       if(typeof key === 'string') {
         // convert string into byte buffer
         key = forge.util.createBuffer(key);
       } else if(forge.util.isArray(key)) {
         // convert byte array into byte buffer
-        var tmp = key;
+        var keyBytes = key;
         key = forge.util.createBuffer();
-        for(var i = 0; i < tmp.length; ++i) {
-          key.putByte(tmp[i]);
+        for(var i = 0; i < keyBytes.length; ++i) {
+          key.putByte(keyBytes[i]);
         }
       }
 
@@ -90,15 +89,15 @@ hmac.create = function() {
       _opadding = forge.util.createBuffer();
       keylen = key.length();
       for(var i = 0; i < keylen; ++i) {
-        var tmp = key.at(i);
-        _ipadding.putByte(0x36 ^ tmp);
-        _opadding.putByte(0x5C ^ tmp);
+        var keyByte = key.at(i);
+        _ipadding.putByte(0x36 ^ keyByte);
+        _opadding.putByte(0x5C ^ keyByte);
       }
 
       // if key is shorter than blocksize, add additional padding
       if(keylen < _md.blockLength) {
-        var tmp = _md.blockLength - keylen;
-        for(var i = 0; i < tmp; ++i) {
+        var padCount = _md.blockLength - keylen;
+        for(var i = 0; i < padCount; ++i) {
           _ipadding.putByte(0x36);
           _opadding.putByte(0x5C);
         }

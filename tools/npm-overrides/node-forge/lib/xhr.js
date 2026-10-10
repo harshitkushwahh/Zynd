@@ -63,13 +63,6 @@ var HEADERS_RECEIVED = 2;
 var LOADING = 3;
 var DONE = 4;
 
-// exceptions
-var INVALID_STATE_ERR = 11;
-var SYNTAX_ERR = 12;
-var SECURITY_ERR = 18;
-var NETWORK_ERR = 19;
-var ABORT_ERR = 20;
-
 // private flash socket pool vars
 var _sp = null;
 var _policyPort = 0;

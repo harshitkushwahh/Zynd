@@ -12,9 +12,6 @@ require('./util');
 // define http namespace
 var http = module.exports = forge.http = forge.http || {};
 
-// logging category
-var cat = 'forge.http';
-
 // normalizes an http header field name
 var _normalize = function(name) {
   return name.toLowerCase().replace(/(^.)|(-.)/g,
@@ -358,7 +355,6 @@ var _hasCookieExpired = function(cookie) {
  */
 var _writeCookies = function(client, request) {
   var expired = [];
-  var url = client.url;
   var cookies = client.cookies;
   for(var name in cookies) {
     // get cookie paths
@@ -377,8 +373,8 @@ var _writeCookies = function(client, request) {
 
   // clean up expired cookies
   for(var i = 0; i < expired.length; ++i) {
-    var cookie = expired[i];
-    client.removeCookie(cookie.name, cookie.path);
+    var expiredCookie = expired[i];
+    client.removeCookie(expiredCookie.name, expiredCookie.path);
   }
 };
 
@@ -682,11 +678,11 @@ http.createClient = function(options) {
         }
         // make sure url host is within cookie.domain
         if(!http.withinCookieDomain(client.url, cookie)) {
-          var error = new Error('Http client url scheme is incompatible ' +
-            'with cookie secure flag.');
-          error.url = client.url;
-          error.cookie = cookie;
-          throw error;
+          var domainError = new Error('Http client url host is outside ' +
+            'cookie domain.');
+          domainError.url = client.url;
+          domainError.cookie = cookie;
+          throw domainError;
         }
 
         // add new cookie
@@ -842,7 +838,7 @@ var _createHeader = function() {
  */
 var _getUtcTime = function(d) {
   var utc = +d + d.getTimezoneOffset() * 60000;
-  return Math.floor(+new Date() / 1000);
+  return Math.floor(utc / 1000);
 };
 
 /**
@@ -891,9 +887,6 @@ http.createRequest = function(options) {
       // separate cookies by semi-colons
       value = field + '; ';
     }
-
-    // get current time in utc seconds
-    var now = _getUtcTime(new Date());
 
     // output cookie name and value
     value += cookie.name + '=' + cookie.value;
