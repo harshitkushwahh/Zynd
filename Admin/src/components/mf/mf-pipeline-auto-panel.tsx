@@ -653,9 +653,28 @@ export function MfPipelineAutoPanel({
     }
   };
 
-  const handleStartRequest = () => {
+  const handleStartRequest = async () => {
     if (!canRun) return;
-    if (env.appEnv === "production" || preview?.flags.requires_production_confirm) {
+    let requiresConfirm =
+      env.appEnv === "production" || Boolean(preview?.flags.requires_production_confirm);
+    if (!requiresConfirm && !preview) {
+      setStarting(true);
+      setError("");
+      try {
+        const next = isNfo
+          ? await previewNfoPipeline(mode as NfoPipelineMode, skipSteps)
+          : await previewMfPipeline(mode as MfPipelineMode, skipSteps);
+        setPreview(next);
+        setExcludedSteps(new Set(next.skip_steps));
+        requiresConfirm = Boolean(next.flags.requires_production_confirm);
+      } catch (err) {
+        setError(getErrorMessage(err, "Could not preview pipeline."));
+        setStarting(false);
+        return;
+      }
+      setStarting(false);
+    }
+    if (requiresConfirm) {
       setConfirmOpen(true);
       return;
     }
