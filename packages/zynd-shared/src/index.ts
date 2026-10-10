@@ -18,6 +18,8 @@ export {
   isAuthFailure,
   isBackendConnectionError,
   isBackendConnectionStatus,
+  markBackendConnectionReady,
+  markBackendConnectionWaiting,
   parseApiError,
   refreshSession,
   setAccessToken,

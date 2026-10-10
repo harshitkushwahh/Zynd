@@ -18,7 +18,30 @@ def normalize_scheme_name(name: str) -> str:
     for token in (" - regular plan", " - direct plan", " regular plan", " direct plan"):
         cleaned = cleaned.replace(token, "")
     cleaned = re.sub(r"[^a-z0-9 ]+", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
+
+
+def _ter_isin(row: dict, *keys: str) -> str | None:
+    for key in keys:
+        raw = row.get(key)
+        if raw is None:
+            continue
+        value = str(raw).strip().upper()
+        if value.startswith("INF") and len(value) >= 12:
+            return value
+    return None
+
+
+def _ter_scheme_code(row: dict) -> str | None:
+    for key in ("Scheme_Code", "scheme_code", "AMFI_Code", "amfi_code", "SchemeCode"):
+        raw = row.get(key)
+        if raw is None:
+            continue
+        value = str(raw).strip()
+        if SCHEME_CODE_RE.match(value):
+            return value
+    return None
 
 
 def parse_ter_rows(rows: list[dict]) -> list[dict[str, Any]]:
@@ -28,13 +51,30 @@ def parse_ter_rows(rows: list[dict]) -> list[dict[str, Any]]:
         if not scheme_name:
             continue
         as_of = _parse_ter_date(row.get("TER_Date"))
+        scheme_code = _ter_scheme_code(row)
         regular_ter = _parse_decimal(row.get("R_TER"))
+        direct_ter = _parse_decimal(row.get("D_TER"))
+        regular_isin = _ter_isin(row, "R_ISIN", "ISIN_Regular", "Regular_ISIN", "ISIN")
+        direct_isin = _ter_isin(row, "D_ISIN", "ISIN_Direct", "Direct_ISIN")
         if regular_ter is not None:
             parsed.append(
                 {
                     "scheme_name": scheme_name,
+                    "scheme_code": scheme_code,
+                    "isin": regular_isin,
                     "plan_type": "REGULAR",
                     "ter_percent": regular_ter,
+                    "as_of_date": as_of,
+                }
+            )
+        if direct_ter is not None:
+            parsed.append(
+                {
+                    "scheme_name": scheme_name,
+                    "scheme_code": scheme_code,
+                    "isin": direct_isin,
+                    "plan_type": "DIRECT",
+                    "ter_percent": direct_ter,
                     "as_of_date": as_of,
                 }
             )
@@ -52,6 +92,11 @@ def parse_ter_tracker_csv(body: bytes) -> list[dict[str, Any]]:
         (fields[k] for k in fields if "regular plan" in k and "total ter" in k),
         None,
     )
+    direct_col = next(
+        (fields[k] for k in fields if "direct plan" in k and "total ter" in k),
+        None,
+    )
+    isin_col = next((fields[k] for k in fields if fields and "isin" in k), None)
     if not name_col or not regular_col:
         return []
 
@@ -59,13 +104,28 @@ def parse_ter_tracker_csv(body: bytes) -> list[dict[str, Any]]:
     parsed: list[dict[str, Any]] = []
     for row in reader:
         scheme_name = (row.get(name_col) or "").strip()
-        ter = _parse_decimal(row.get(regular_col))
-        if scheme_name and ter is not None:
+        isin = _ter_isin(row, isin_col) if isin_col else None
+        regular = _parse_decimal(row.get(regular_col))
+        if scheme_name and regular is not None:
             parsed.append(
                 {
                     "scheme_name": scheme_name,
+                    "scheme_code": None,
+                    "isin": isin,
                     "plan_type": "REGULAR",
-                    "ter_percent": ter,
+                    "ter_percent": regular,
+                    "as_of_date": as_of,
+                }
+            )
+        direct = _parse_decimal(row.get(direct_col)) if direct_col else None
+        if scheme_name and direct is not None:
+            parsed.append(
+                {
+                    "scheme_name": scheme_name,
+                    "scheme_code": None,
+                    "isin": isin,
+                    "plan_type": "DIRECT",
+                    "ter_percent": direct,
                     "as_of_date": as_of,
                 }
             )

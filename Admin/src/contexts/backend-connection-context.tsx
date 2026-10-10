@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
-import { BackendConnectionDialog } from "@/components/backend-connection-dialog";
 import { fetchBackendHealthOk } from "@/components/maintenance-screen";
 import {
   getBackendConnectionState,
@@ -18,6 +11,7 @@ import {
   subscribeBackendConnectionState,
   type BackendConnectionState,
 } from "@/lib/api-client";
+import { MaintenanceScreen } from "@/components/maintenance-screen";
 
 type BackendConnectionContextValue = BackendConnectionState;
 
@@ -55,7 +49,21 @@ export function BackendConnectionProvider({ children }: { children: ReactNode })
   return (
     <BackendConnectionContext.Provider value={state}>
       {children}
-      <BackendConnectionDialog open={state.isWaiting && pathname !== "/maintenance"} />
+      {state.isWaiting && pathname !== "/maintenance" ? (
+        <div
+          className="fixed inset-0 z-[200] overflow-y-auto"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="zynd-maintenance-title"
+        >
+          <MaintenanceScreen
+            onBackOnline={() => {
+              markBackendConnectionReady();
+              window.location.reload();
+            }}
+          />
+        </div>
+      ) : null}
     </BackendConnectionContext.Provider>
   );
 }
@@ -66,8 +74,4 @@ export function useBackendConnection() {
     throw new Error("useBackendConnection must be used within BackendConnectionProvider");
   }
   return context;
-}
-
-export function useBackendConnectionOptional() {
-  return useContext(BackendConnectionContext);
 }

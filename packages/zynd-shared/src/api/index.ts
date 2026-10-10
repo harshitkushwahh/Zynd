@@ -3,6 +3,8 @@ export {
   getBackendConnectionState,
   isBackendConnectionError,
   isBackendConnectionStatus,
+  markBackendConnectionReady,
+  markBackendConnectionWaiting,
   subscribeBackendConnectionState,
   type BackendConnectionState,
 } from "./connection-state";

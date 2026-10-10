@@ -680,6 +680,8 @@ class NfoSchedulerStatusResponse(BaseModel):
     last_nfo_success_date: Optional[str] = None
     last_trigger_kind: Optional[str] = None
     mf_boundary_succeeded_today: bool
+    mf_ready_for_auto_nfo: bool = False
+    mf_ready_reason: Optional[str] = None
     nfo_succeeded_today: bool
     fallback_cron: str
     timezone: str
