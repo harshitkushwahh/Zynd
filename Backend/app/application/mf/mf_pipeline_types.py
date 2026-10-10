@@ -74,6 +74,9 @@ class MfPipelineRunState:
     _cancel_requested: bool = False
     log_sink: Callable[[str, str], None] | None = field(default=None, repr=False)
 
+    def has_started_a_step(self) -> bool:
+        return any(step.status != MfPipelineStepStatus.pending for step in self.steps)
+
     def to_dict(self) -> dict[str, Any]:
         completed = sum(
             1
@@ -82,6 +85,7 @@ class MfPipelineRunState:
         )
         total = len(self.steps)
         pause_reason = self.context.get("pause_reason")
+        never_started = not self.has_started_a_step()
         promote_step = next((step for step in self.steps if step.key == "cybrilla-scheme-promote"), None)
         promote_still_open = promote_step is not None and promote_step.status in {
             MfPipelineStepStatus.pending,
@@ -118,7 +122,11 @@ class MfPipelineRunState:
             "error": self.error,
             "can_resume": self.status
             in {MfPipelineRunStatus.paused, MfPipelineRunStatus.failed, MfPipelineRunStatus.cancelled}
-            and pause_reason != PAUSE_REASON_JOB_STILL_RUNNING,
+            and pause_reason != PAUSE_REASON_JOB_STILL_RUNNING
+            and not (
+                never_started
+                and self.status in {MfPipelineRunStatus.cancelled, MfPipelineRunStatus.failed}
+            ),
             "pause_reason": pause_reason,
             "staging_batch_uuid": staging_batch_uuid,
             "can_approve_staging": awaiting_staging,

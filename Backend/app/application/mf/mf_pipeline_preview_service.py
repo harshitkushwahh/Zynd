@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.mf.catalog_health_service import get_catalog_health
-from app.application.mf.mf_pipeline_store import get_running_pipeline_run
+from app.application.mf.mf_pipeline_store import get_running_pipeline_run, running_pipeline_blocks_new_start
 from app.application.mf.mf_pipeline_types import PIPELINE_MODES
 from app.application.mf.mf_pipeline_window_service import pipeline_manual_window_status
 from app.application.mf.mf_scheduler_skip_service import count_stuck_ingestion_runs, scheduler_job_key_for_pipeline_step
@@ -83,7 +83,7 @@ async def preview_mf_pipeline(mode: str, *, skip_steps: list[str] | None = None)
 
     async with AsyncSessionLocal() as session:
         running = await get_running_pipeline_run(session)
-        if running:
+        if running_pipeline_blocks_new_start(running):
             blockers.append("Another MF pipeline run is already in progress")
         stuck_count = await count_stuck_ingestion_runs(
             session,

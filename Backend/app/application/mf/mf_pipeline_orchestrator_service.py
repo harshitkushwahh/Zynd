@@ -26,6 +26,7 @@ from app.application.mf.mf_pipeline_window_service import assert_admin_pipeline_
 from app.application.mf.mf_pipeline_store import (
     create_pipeline_run,
     get_latest_resumable_pipeline_run,
+    get_latest_visible_pipeline_run,
     get_pipeline_run,
     get_running_pipeline_run,
     latest_cold_start_resume_date,
@@ -33,6 +34,7 @@ from app.application.mf.mf_pipeline_store import (
     list_running_pipeline_runs,
     pipeline_cancel_requested,
     pipeline_run_awaits_worker,
+    running_pipeline_blocks_new_start,
     recover_interrupted_pipeline_runs,
     save_pipeline_run,
 )
@@ -304,7 +306,11 @@ async def _check_blockers(*, auto_cleanup_stale: bool = False, except_run_id: st
     settings = get_settings()
     async with AsyncSessionLocal() as session:
         running = await get_running_pipeline_run(session)
-        if running and (except_run_id is None or running.run_id != except_run_id):
+        if (
+            running
+            and (except_run_id is None or running.run_id != except_run_id)
+            and running_pipeline_blocks_new_start(running)
+        ):
             raise RuntimeError("Another MF pipeline run is already in progress")
 
         waiting = await get_latest_resumable_pipeline_run(session)
@@ -816,6 +822,7 @@ async def _execute_pipeline_run(run: MfPipelineRunState, *, from_step_key: str |
 
 async def _mark_run_running(run: MfPipelineRunState) -> None:
     run.status = MfPipelineRunStatus.running
+    run._cancel_requested = False
     run.error = None
     run.finished_at = None
     if not run.started_at:
@@ -1024,6 +1031,11 @@ async def resume_mf_pipeline_run(run_id: str) -> MfPipelineRunState:
                 raise RuntimeError("Pipeline run is already in progress")
             if run.status == MfPipelineRunStatus.succeeded:
                 raise RuntimeError("Pipeline run already completed successfully")
+            if (
+                run.status in {MfPipelineRunStatus.cancelled, MfPipelineRunStatus.failed}
+                and not run.has_started_a_step()
+            ):
+                raise RuntimeError("This pipeline was stopped before any step started. Start a new run instead.")
             if run.context.get("pause_reason") == PAUSE_REASON_JOB_STILL_RUNNING:
                 await _release_stale_backfill(session, run)
                 run.context.pop("pause_reason", None)
@@ -1082,7 +1094,7 @@ async def get_active_mf_pipeline_run() -> MfPipelineRunState | None:
         if running:
             return running
         return await _load_reconciled_run(
-            session, await get_latest_resumable_pipeline_run(session, nfo_only=False)
+            session, await get_latest_visible_pipeline_run(session, nfo_only=False)
         )
 
 
@@ -1092,7 +1104,7 @@ async def get_active_nfo_pipeline_run() -> MfPipelineRunState | None:
         if running:
             return running
         return await _load_reconciled_run(
-            session, await get_latest_resumable_pipeline_run(session, nfo_only=True)
+            session, await get_latest_visible_pipeline_run(session, nfo_only=True)
         )
 
 
