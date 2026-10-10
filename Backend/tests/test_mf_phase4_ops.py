@@ -5,6 +5,7 @@ from datetime import date
 from app.application.mf.nav_cold_start_backfill_service import (
     evaluate_nav_history_depth,
     resolve_gap_fill_bounds,
+    usable_cold_start_resume,
 )
 
 
@@ -87,6 +88,55 @@ def test_resolve_gap_fill_bounds_stops_before_existing_rows() -> None:
     )
     assert backfill_from == date(2006, 4, 1)
     assert backfill_to == date(2025, 9, 30)
+
+
+def test_usable_resume_drops_cursor_after_existing_oldest() -> None:
+    assert (
+        usable_cold_start_resume(
+            date(2026, 10, 5),
+            target_from=date(2006, 4, 1),
+            oldest_nav_date=date(2025, 6, 20),
+            today=date(2026, 10, 11),
+        )
+        is None
+    )
+
+
+def test_usable_resume_keeps_cursor_inside_missing_gap() -> None:
+    assert usable_cold_start_resume(
+        date(2023, 7, 1),
+        target_from=date(2006, 4, 1),
+        oldest_nav_date=date(2025, 6, 20),
+        today=date(2026, 10, 11),
+    ) == date(2023, 7, 1)
+
+
+def test_resolve_gap_fill_bounds_ignores_stale_resume_after_oldest() -> None:
+    backfill_from, backfill_to = resolve_gap_fill_bounds(
+        target_from=date(2006, 4, 1),
+        oldest_nav_date=date(2025, 6, 20),
+        newest_nav_date=date(2026, 10, 11),
+        today=date(2026, 10, 11),
+        force=False,
+        from_date=date(2026, 10, 5),
+        to_date=None,
+    )
+    assert backfill_from == date(2006, 4, 1)
+    assert backfill_to == date(2025, 6, 19)
+
+
+def test_resolve_gap_fill_bounds_resumes_inside_missing_gap() -> None:
+    backfill_from, backfill_to = resolve_gap_fill_bounds(
+        target_from=date(2006, 4, 1),
+        oldest_nav_date=date(2025, 6, 20),
+        newest_nav_date=date(2026, 10, 11),
+        today=date(2026, 10, 11),
+        force=False,
+        from_date=date(2023, 7, 1),
+        to_date=None,
+    )
+    assert backfill_from == date(2023, 7, 1)
+    assert backfill_to == date(2025, 6, 19)
 
 
 def test_resolve_gap_fill_bounds_force_runs_through_today() -> None:

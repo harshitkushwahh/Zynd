@@ -125,6 +125,38 @@ def evaluate_nav_history_depth(
     return False, stats
 
 
+def history_starts_after_target(*, oldest_nav_date: date | None, target_from: date) -> bool:
+    if oldest_nav_date is None:
+        return True
+    return (oldest_nav_date - target_from).days > HISTORY_DEPTH_SLACK_DAYS
+
+
+def usable_cold_start_resume(
+    from_date: date | None,
+    *,
+    target_from: date,
+    oldest_nav_date: date | None,
+    today: date,
+) -> date | None:
+    """Keep a resume cursor only while it still sits inside the missing past-NAV gap.
+
+    A succeeded recent-window run leaves a cursor *after* ``oldest_nav_date``
+    (e.g. 2026-10-05 when history starts 2025-06-20). That must not override
+    ``target_from`` or the 2006→oldest gap is skipped and the job reports success.
+    """
+    if from_date is None or from_date > today:
+        return None
+    if from_date < target_from:
+        return None
+    if oldest_nav_date is None:
+        return from_date
+    if history_starts_after_target(oldest_nav_date=oldest_nav_date, target_from=target_from):
+        gap_to = oldest_nav_date - timedelta(days=1)
+        if from_date > gap_to:
+            return None
+    return from_date
+
+
 def resolve_gap_fill_bounds(
     *,
     target_from: date,
@@ -135,19 +167,31 @@ def resolve_gap_fill_bounds(
     from_date: date | None,
     to_date: date | None,
 ) -> tuple[date, date]:
-    backfill_from = from_date or target_from
+    resume = usable_cold_start_resume(
+        from_date,
+        target_from=target_from,
+        oldest_nav_date=oldest_nav_date,
+        today=today,
+    )
+    past_gap = history_starts_after_target(oldest_nav_date=oldest_nav_date, target_from=target_from)
+    backfill_from = resume or target_from
+
     if to_date is not None:
         backfill_to = min(to_date, today)
     elif force or oldest_nav_date is None:
         backfill_to = today
-    elif (oldest_nav_date - target_from).days > HISTORY_DEPTH_SLACK_DAYS:
+    elif past_gap:
         backfill_to = min(today, oldest_nav_date - timedelta(days=1))
     else:
         backfill_to = today
 
-    if backfill_from > backfill_to and newest_nav_date is not None and newest_nav_date < today:
-        backfill_from = newest_nav_date + timedelta(days=1)
-        backfill_to = today
+    if backfill_from > backfill_to:
+        if past_gap and oldest_nav_date is not None:
+            backfill_from = target_from
+            backfill_to = min(today, oldest_nav_date - timedelta(days=1))
+        elif newest_nav_date is not None and newest_nav_date < today:
+            backfill_from = newest_nav_date + timedelta(days=1)
+            backfill_to = today
     if backfill_to > today:
         backfill_to = today
     return backfill_from, backfill_to
@@ -232,6 +276,14 @@ async def run_nav_cold_start_backfill(
             backfill_to,
             days_per_window=max(settings.zynd_mf_cold_start_backfill_days_per_window, 1),
         )
+        if not windows:
+            still_needed, depth_stats = await needs_cold_start_backfill(session)
+            if still_needed:
+                raise RuntimeError(
+                    "NAV cold-start resolved an empty window "
+                    f"{backfill_from}..{backfill_to} while history is still short "
+                    f"({depth_stats.get('reason')})"
+                )
         await emit_pipeline_progress(
             f"NAV cold-start backfill: {len(windows)} windows "
             f"from {backfill_from} to {backfill_to}",
