@@ -15,6 +15,7 @@ from app.application.mf.mf_pipeline_orchestrator_service import (
     _pipeline_triggered_by,
     _queue_or_launch,
     _step_is_complete,
+    cancel_mf_pipeline_run,
     start_mf_pipeline_run,
 )
 from app.application.mf.mf_pipeline_store import pipeline_run_awaits_worker
@@ -447,6 +448,44 @@ async def test_queue_or_launch_runs_nfo_in_api(monkeypatch):
     await _queue_or_launch(run)
     assert logged == ["Running NFO pipeline in API"]
     assert launched == ["nfo-run"]
+
+
+@pytest.mark.asyncio
+async def test_cancel_queued_pipeline_finalizes_immediately(monkeypatch):
+    run = MfPipelineRunState(
+        run_id="queued-cancel",
+        mode="full",
+        triggered_by="ADMIN",
+        status=MfPipelineRunStatus.running,
+        started_at="2026-10-06T07:25:43+00:00",
+        steps=[MfPipelineStepState(key="cleanup-stale-runs", label="Clean")],
+    )
+
+    async def fake_get(run_id: str):
+        return run if run_id == run.run_id else None
+
+    logged: list[str] = []
+
+    async def fake_append(target, message, *, level="info"):
+        _ = target
+        _ = level
+        logged.append(message)
+
+    monkeypatch.setattr(
+        "app.application.mf.mf_pipeline_orchestrator_service.get_mf_pipeline_run",
+        fake_get,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.mf_pipeline_orchestrator_service._append_log",
+        fake_append,
+    )
+
+    cancelled = await cancel_mf_pipeline_run(run.run_id)
+    assert cancelled is not None
+    assert cancelled.status == MfPipelineRunStatus.cancelled
+    assert cancelled.finished_at
+    assert cancelled.error == "Cancelled by operator"
+    assert any("never started" in line for line in logged)
 
 
 def test_controlled_pause_carries_reason():

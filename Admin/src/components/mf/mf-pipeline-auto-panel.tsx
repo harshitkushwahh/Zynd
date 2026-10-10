@@ -690,6 +690,12 @@ export function MfPipelineAutoPanel({
         ? await cancelNfoPipelineRun(run.run_id)
         : await cancelMfPipelineRun(run.run_id);
       setRun(cancelledRun);
+      if (preview) {
+        const next = isNfo
+          ? await previewNfoPipeline(mode as NfoPipelineMode, skipSteps)
+          : await previewMfPipeline(mode as MfPipelineMode, skipSteps);
+        setPreview(next);
+      }
     } catch (err) {
       setError(getErrorMessage(err, "Could not cancel pipeline."));
     } finally {
@@ -760,6 +766,22 @@ export function MfPipelineAutoPanel({
     try {
       const result = isNfo ? await clearStuckNfoPipelineRuns() : await clearStuckMfPipelineRuns();
       setStuckCleared(result.cleaned);
+      try {
+        const active = isNfo ? await fetchActiveNfoPipelineRun() : await fetchActiveMfPipelineRun();
+        setRun(active);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          setRun(null);
+        } else {
+          throw err;
+        }
+      }
+      if (preview) {
+        const next = isNfo
+          ? await previewNfoPipeline(mode as NfoPipelineMode, skipSteps)
+          : await previewMfPipeline(mode as MfPipelineMode, skipSteps);
+        setPreview(next);
+      }
     } catch (err) {
       setError(getErrorMessage(err, "Could not clear stuck ingestion runs."));
     } finally {
@@ -1169,7 +1191,7 @@ export function MfPipelineAutoPanel({
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={starting} onClick={() => void handleStart(true)}>
+            <Button disabled={starting || startBlocked} onClick={() => void handleStart(true)}>
               {starting ? (
                 <>
                   <LoaderCircle className="size-3.5 animate-spin" />
