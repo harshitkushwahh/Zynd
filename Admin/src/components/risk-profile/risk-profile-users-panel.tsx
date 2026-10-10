@@ -108,8 +108,8 @@ export function RiskProfileUsersPanel({
 
   useEffect(() => {
     if (refreshKey == null || refreshKey === 0) return;
-    void queryClient.invalidateQueries({ queryKey: riskProfileUsersQueryKey(queryParams) });
-  }, [queryClient, queryParams, refreshKey]);
+    void queryClient.invalidateQueries({ queryKey: ["risk-profile-users"] });
+  }, [queryClient, refreshKey]);
 
   useEffect(() => {
     setOffset(0);

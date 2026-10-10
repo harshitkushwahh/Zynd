@@ -9,6 +9,7 @@ import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-el
 import {
   fetchInvestFunds,
   fetchInvestHome,
+  fetchInvestNfos,
   type InvestCategory,
   type InvestFundSummary,
 } from "@/features/invest/api/invest-api";
@@ -148,12 +149,15 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
       setError(null);
 
       try {
-        const response = await fetchInvestFunds({
-          category: categorySlug ?? undefined,
-          page: nextPage,
-          page_size: MF_ALL_FUNDS_PAGE_SIZE,
-          sort: resolveInvestFundsApiSort(sort) ?? "return_3y",
-        });
+        const response =
+          categorySlug === "nfo"
+            ? await fetchInvestNfos({ page: nextPage, page_size: MF_ALL_FUNDS_PAGE_SIZE })
+            : await fetchInvestFunds({
+                category: categorySlug ?? undefined,
+                page: nextPage,
+                page_size: MF_ALL_FUNDS_PAGE_SIZE,
+                sort: resolveInvestFundsApiSort(sort) ?? "return_3y",
+              });
 
         let previousCount = 0;
         let mergedCount = 0;

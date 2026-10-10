@@ -36,6 +36,9 @@ export const MF_COLLECTION_CARD_MIN_HEIGHT_CLASS = "min-h-[9.75rem] sm:min-h-[10
 /** Fixed width for fund cards inside a horizontal scroll row. */
 export const MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS = "w-[17.5rem] shrink-0";
 
+/** Slightly wider so NFO date ranges stay on one line. */
+export const MF_NFO_CARD_HORIZONTAL_WIDTH_CLASS = "w-[20rem] shrink-0";
+
 /** Invest payment card surface — 2xl radius token, border only (no shadow). */
 export const MF_INVEST_PAYMENT_CARD_CLASS =
   "rounded-invest-card border border-zinc-200 bg-card dark:border-zinc-700/80";

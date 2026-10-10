@@ -21,6 +21,13 @@ export function isDistributorConsoleOnlyUser(roleKeys: string[]): boolean {
   return hasDistributorRole && !hasAdminConsoleAccess(roleKeys);
 }
 
+const SUPPORT_CONSOLE_ROLE_KEYS = new Set(["support_agent", "support_lead"]);
+
+export function isSupportConsoleOnlyUser(roleKeys: string[]): boolean {
+  const hasSupportRole = roleKeys.some((key) => SUPPORT_CONSOLE_ROLE_KEYS.has(key));
+  return hasSupportRole && !hasAdminConsoleAccess(roleKeys) && !isDistributorConsoleOnlyUser(roleKeys);
+}
+
 export type MitraHierarchyPersona = "super_head" | "state_head";
 
 export function resolveMitraHierarchyPersona(roleKeys: string[]): MitraHierarchyPersona | null {

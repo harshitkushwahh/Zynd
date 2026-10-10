@@ -1,6 +1,6 @@
 import type { SortDescriptor } from "react-aria-components";
 
-import { fetchInvestFunds, type InvestFundSummary } from "@/features/invest/api/invest-api";
+import { fetchInvestFunds, fetchInvestNfos, type InvestFundSummary } from "@/features/invest/api/invest-api";
 
 /** Number of funds surfaced per category on the browse home page. */
 export const MF_TOP_FUNDS_PER_CATEGORY = 5;
@@ -130,6 +130,10 @@ export function resolveInvestFundsPageHasMore(
  * (matches backend `list_invest_funds` with `category` + `sort=rank`).
  */
 export async function fetchTopFundsForCategory(categorySlug: string, limit = MF_TOP_FUNDS_PER_CATEGORY) {
+  if (categorySlug === "nfo") {
+    const response = await fetchInvestNfos({ page: 1, page_size: limit });
+    return response.items;
+  }
   const response = await fetchInvestFunds({
     category: categorySlug,
     page: 1,

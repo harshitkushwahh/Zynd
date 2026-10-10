@@ -1,9 +1,10 @@
 import { SupportLoginCard } from "@/components/auth/support-login-card";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+};
 
 export default function SupportLoginPage() {
-  return (
-    <div className="flex min-h-full flex-1 items-center justify-center bg-gradient-to-b from-muted/40 to-background px-4 py-10">
-      <SupportLoginCard />
-    </div>
-  );
+  return <SupportLoginCard />;
 }

@@ -36,6 +36,8 @@ def scheduler_job_key_for_pipeline_step(step_key: str) -> str | None:
         "seed-tax-compliance",
         "final-counts",
         "catalog-health",
+        "nfo-category-approve",
+        "nfo-final-counts",
     }:
         return None
     return step_key

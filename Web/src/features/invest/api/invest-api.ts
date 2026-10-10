@@ -256,6 +256,15 @@ export function fetchInvestConfig() {
   return apiRequest<InvestConfig>("/invest/config");
 }
 
+export function fetchInvestNfos(params?: { status?: string; page?: number; page_size?: number }) {
+  const search = new URLSearchParams();
+  if (params?.status) search.set("status", params.status);
+  if (params?.page) search.set("page", String(params.page));
+  if (params?.page_size) search.set("page_size", String(params.page_size));
+  const query = search.toString();
+  return apiRequest<InvestFundListResponse>(`/invest/nfo${query ? `?${query}` : ""}`);
+}
+
 export function fetchInvestFunds(params?: {
   category?: string;
   page?: number;

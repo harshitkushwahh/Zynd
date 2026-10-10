@@ -12,6 +12,28 @@ SEBI_CATEGORY_TO_SLUG: dict[str, str] = {
 }
 
 
+SCHEME_CATEGORY_LABELS: dict[str, str] = {
+    "equity-funds": "Equity",
+    "debt-funds": "Debt",
+    "hybrid-funds": "Hybrid",
+    "elss-tax-saving": "ELSS",
+    "index-funds": "Index",
+    "liquid-funds": "Liquid",
+}
+
+
+def scheme_category_for_nfo(sebi_category: str | None) -> dict[str, str | None]:
+    raw = (sebi_category or "").strip() or None
+    if raw is None:
+        return {"scheme_category_slug": None, "scheme_category_name": "Unclassified", "sebi_category": None}
+    slug = category_slug_for_sebi(raw)
+    return {
+        "scheme_category_slug": slug,
+        "scheme_category_name": SCHEME_CATEGORY_LABELS.get(slug, raw),
+        "sebi_category": raw,
+    }
+
+
 def category_slug_for_sebi(sebi_category: str | None) -> str:
     if not sebi_category:
         return "equity-funds"

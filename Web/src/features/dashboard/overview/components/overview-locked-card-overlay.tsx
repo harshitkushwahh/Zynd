@@ -30,7 +30,7 @@ export function OverviewLockedCardOverlay({
         className={cn(
           "flex max-w-full border border-border bg-card/95 shadow-zynd-mid backdrop-blur-sm sip-lock-panel",
           stacked
-            ? "flex-col items-center gap-2 rounded-[1.25rem] px-3 py-3 text-center"
+            ? "w-full max-w-md flex-col items-center gap-2 rounded-[1.25rem] px-5 py-4 text-center"
             : cn(
                 "items-center gap-2.5",
                 compact
@@ -45,11 +45,9 @@ export function OverviewLockedCardOverlay({
               <Lock className="size-4" strokeWidth={2.25} aria-hidden />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold leading-none text-foreground">{title}</p>
+              <p className="text-compact font-semibold leading-snug text-foreground">{title}</p>
               {subtitle ? (
-                <p className="mt-1 line-clamp-3 text-[10px] leading-snug text-muted-foreground">
-                  {subtitle}
-                </p>
+                <p className="mt-1 text-caption leading-relaxed text-muted-foreground">{subtitle}</p>
               ) : null}
             </div>
           </>

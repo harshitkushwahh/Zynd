@@ -7,6 +7,7 @@ import {
   Info,
 } from "lucide-react";
 
+import { DISTRIBUTOR_SELECTION_BADGE_CLASS } from "@/lib/distributor-layout";
 import { cn } from "@/lib/utils";
 
 export type StatusBadgeVariant =
@@ -45,11 +46,13 @@ const variantConfig: Record<
 type StatusBadgeProps = {
   variant: StatusBadgeVariant;
   children: React.ReactNode;
+  /** Optional icon override (defaults to the variant icon). */
   icon?: LucideIcon;
   showIcon?: boolean;
   className?: string;
 };
 
+/** Compact status chip with icon — single badge UI for tables and profile hero. */
 export function StatusBadge({
   variant,
   children,
@@ -63,7 +66,8 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center gap-1 rounded-[var(--radius-control)] border px-2 text-tiny font-medium leading-none capitalize",
+        "group/badge inline-flex h-5 w-fit shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-tiny font-medium leading-none capitalize",
+        DISTRIBUTOR_SELECTION_BADGE_CLASS,
         config.className,
         className,
       )}

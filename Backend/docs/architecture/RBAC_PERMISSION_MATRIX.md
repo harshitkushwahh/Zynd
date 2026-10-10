@@ -68,8 +68,15 @@ Enforcement helper: `require_permission(key)` in `app/api/v1/auth/deps.py`
 | `mitra_state_head` | Mitra State Head | State-scoped hierarchy read, branch/manager provisioning in assigned state, and HO partner review |
 | `mitra_manager` | Mitra Manager | Distributor console client + partner management |
 | `mitra` | Mitra | Distributor console masked client profiles |
+| `support_agent` | Support Agent | Support console read access (users, audit, documents, tickets read) |
+| `support_lead` | Support Lead | Support agent permissions plus ticket management |
 
-Legacy role keys `distributor_console` and `distributor_manager` are migrated to `mitra` and `mitra_manager` during RBAC seed. Removed built-in roles (`compliance_officer`, `support_agent`, `operations`, `catalog_publisher`) are deleted on seed; affected users fall back to `super_admin` when they would otherwise have no team role.
+| Permission | Status | Routes | Notes |
+|------------|--------|--------|-------|
+| `support.tickets.read` | planned | — | Support console ticket APIs (phase 2) |
+| `support.tickets.manage` | planned | — | Support console ticket assign/reply (phase 2) |
+
+Legacy role keys `distributor_console` and `distributor_manager` are migrated to `mitra` and `mitra_manager` during RBAC seed. Removed built-in roles (`compliance_officer`, `operations`, `catalog_publisher`) are deleted on seed; affected users fall back to `super_admin` when they would otherwise have no team role.
 
 ## Non-RBAC admin routes
 

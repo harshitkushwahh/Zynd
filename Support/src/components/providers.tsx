@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/api-client";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupportAuthProvider } from "@/contexts/support-auth-context";
 import { ThemeProvider } from "@/contexts/theme-context";

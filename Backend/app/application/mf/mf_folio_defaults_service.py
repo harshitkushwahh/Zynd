@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.infrastructure.kyc.cybrilla_terminal_log import log_exception_dump
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
+    NOMINATION_INFO_VISIBILITY_SHOW,
     create_mf_investment_account,
     get_mf_investment_account,
     update_mf_investment_account,
@@ -117,6 +118,25 @@ def _resolve_payout_bank(
     return _primary_bank(banks, fp_enabled=fp_enabled)
 
 
+def folio_defaults_have_nominees(folio_defaults: dict[str, Any] | None) -> bool:
+    if not isinstance(folio_defaults, dict):
+        return False
+    return any(folio_defaults.get(f"nominee{index}") for index in (1, 2, 3))
+
+
+def folio_defaults_need_nomination_visibility(folio_defaults: dict[str, Any] | None) -> bool:
+    if not folio_defaults_have_nominees(folio_defaults):
+        return False
+    value = folio_defaults.get("nomination_info_visibility") if folio_defaults else None
+    return not (isinstance(value, str) and value.strip())
+
+
+def apply_nomination_visibility(folio_defaults: dict[str, Any]) -> dict[str, Any]:
+    if folio_defaults_have_nominees(folio_defaults):
+        folio_defaults.setdefault("nomination_info_visibility", NOMINATION_INFO_VISIBILITY_SHOW)
+    return folio_defaults
+
+
 def build_folio_defaults(
     profile: InvestorProfile,
     *,
@@ -149,7 +169,7 @@ def build_folio_defaults(
     chosen = select_mfia_nominee_parties(profile.related_parties)
     if chosen:
         folio_defaults.update(build_nominee_slot_defaults(chosen))
-    return folio_defaults
+    return apply_nomination_visibility(folio_defaults)
 
 
 def _is_payout_bank_not_found_error(exc: Exception) -> bool:
@@ -251,7 +271,22 @@ async def ensure_mfia_folio_defaults(
         return False
 
     metadata = mfia.metadata_ or {}
+    stored_defaults = metadata.get("folio_defaults") if isinstance(metadata.get("folio_defaults"), dict) else {}
     if metadata.get("folio_defaults_set") and not force:
+        stored_visibility = stored_defaults.get("nomination_info_visibility")
+        if isinstance(stored_visibility, str) and stored_visibility.strip():
+            return True
+        try:
+            remote_defaults = _extract_remote_folio_defaults(await get_mf_investment_account(mfia.fp_mfia_id))
+        except Exception:
+            remote_defaults = {}
+        merged_defaults = {**remote_defaults, **stored_defaults}
+        if folio_defaults_need_nomination_visibility(merged_defaults) or merged_defaults.get("skip_nomination") is False:
+            return await patch_mfia_folio_defaults(
+                session,
+                user_id=user_id,
+                updates={"nomination_info_visibility": NOMINATION_INFO_VISIBILITY_SHOW},
+            )
         return True
 
     profile = await session.scalar(
@@ -433,7 +468,7 @@ def build_nominee_slot_defaults_from_links(links: list[tuple[str, int]]) -> dict
     for index, (related_party_id, share) in enumerate(links[:MFIA_NOMINEE_LIMIT], start=1):
         folio_defaults[f"nominee{index}"] = related_party_id
         folio_defaults[f"nominee{index}_allocation_percentage"] = int(share)
-    return folio_defaults
+    return apply_nomination_visibility(folio_defaults)
 
 
 def build_nominee_folio_defaults(

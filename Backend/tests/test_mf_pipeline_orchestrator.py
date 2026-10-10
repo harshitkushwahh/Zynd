@@ -36,6 +36,48 @@ def test_pipeline_modes_include_phase_b():
     assert "health-repair" in PIPELINE_MODES
     assert "staging-only" in PIPELINE_MODES
     assert "after-ingest" in PIPELINE_MODES
+    assert "nfo" in PIPELINE_MODES
+    assert "nfo-lifecycle" in PIPELINE_MODES
+    assert "nfo-category" in PIPELINE_MODES
+
+
+@pytest.mark.asyncio
+async def test_execute_mf_job_dispatches_nfo_lifecycle(monkeypatch):
+    from app.application.mf.mf_job_runner_service import execute_mf_job
+
+    async def fake_nfo(session, job_name, **kwargs):
+        return {"job": job_name, "dispatched": True, **kwargs}
+
+    monkeypatch.setattr(
+        "app.application.mf.nfo_job_runner_service.execute_nfo_job",
+        fake_nfo,
+    )
+    result = await execute_mf_job(object(), "nfo-lifecycle-sync", triggered_by="PIPELINE:abc")
+    assert result["dispatched"] is True
+    assert result["job"] == "nfo-lifecycle-sync"
+    assert result["skip_mutex"] is True
+
+
+def test_build_step_plan_nfo_pauses_for_category_approval():
+    keys = [key for key, _ in _build_step_plan("nfo")]
+    assert keys == [
+        "cleanup-stale-runs",
+        "nfo-lifecycle-sync",
+        "nfo-category-approve",
+        "nfo-collection-assign-sync",
+        "nfo-final-counts",
+    ]
+    assert [key for key, _ in _build_step_plan("nfo-lifecycle")] == [
+        "cleanup-stale-runs",
+        "nfo-lifecycle-sync",
+        "nfo-final-counts",
+    ]
+    assert [key for key, _ in _build_step_plan("nfo-category")] == [
+        "cleanup-stale-runs",
+        "nfo-category-approve",
+        "nfo-collection-assign-sync",
+        "nfo-final-counts",
+    ]
 
 
 def test_job_step_was_skipped_distinguishes_bailout_from_record_counts():
@@ -368,6 +410,43 @@ async def test_queue_or_launch_does_not_start_in_api_process(monkeypatch):
     assert logged == ["Queued for MF scheduler"]
     existing = _execution_tasks.get(run.run_id)
     assert existing is None or existing.done()
+
+
+@pytest.mark.asyncio
+async def test_queue_or_launch_runs_nfo_in_api(monkeypatch):
+    launched: list[str] = []
+    logged: list[str] = []
+
+    async def fake_append(run, message, *, level="info"):
+        _ = run
+        _ = level
+        logged.append(message)
+
+    async def fake_launch(run, *, from_step_key=None):
+        _ = from_step_key
+        launched.append(run.run_id)
+
+    monkeypatch.setattr(
+        "app.application.mf.mf_pipeline_orchestrator_service.pipeline_executes_in_this_process",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.mf_pipeline_orchestrator_service._append_log",
+        fake_append,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.mf_pipeline_orchestrator_service._launch_execution",
+        fake_launch,
+    )
+    run = MfPipelineRunState(
+        run_id="nfo-run",
+        mode="nfo",
+        triggered_by="TEST",
+        status=MfPipelineRunStatus.running,
+    )
+    await _queue_or_launch(run)
+    assert logged == ["Running NFO pipeline in API"]
+    assert launched == ["nfo-run"]
 
 
 def test_controlled_pause_carries_reason():

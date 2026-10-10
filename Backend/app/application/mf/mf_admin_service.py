@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.mf.ingestion_run_service import latest_run_for_job, list_recent_runs
 from app.application.mf.mf_scheduler_jobs import build_scheduled_jobs, list_jobs_for_cli
 from app.application.mf.mf_job_runner_service import execute_mf_job
+from app.application.mf.nfo_scheduler_jobs import nfo_jobs_for_cli
 from app.infrastructure.persistence.mf_models import IngestionRunLog, IngestionRunStatus
 
 
@@ -35,6 +36,14 @@ async def list_mf_jobs_with_status(session: AsyncSession) -> list[dict]:
     return payload
 
 
+async def list_nfo_jobs_with_status(session: AsyncSession) -> list[dict]:
+    payload: list[dict] = []
+    for job in nfo_jobs_for_cli():
+        latest = await latest_run_for_job(session, job["name"])
+        payload.append({**job, "last_run": _serialize_run(latest)})
+    return payload
+
+
 async def trigger_mf_job(
     session: AsyncSession,
     job_name: str,
@@ -42,7 +51,9 @@ async def trigger_mf_job(
     triggered_by: str = "ADMIN",
     skip_dependency_check: bool = False,
 ) -> dict:
-    known = {job.name for job in build_scheduled_jobs()}
+    from app.application.mf.nfo_detection_service import NFO_JOB_NAMES
+
+    known = {job.name for job in build_scheduled_jobs()} | set(NFO_JOB_NAMES)
     if job_name not in known:
         raise ValueError(f"Unknown MF job: {job_name}")
     return await execute_mf_job(

@@ -1,9 +1,9 @@
 let apiUrl = "/api/v1";
-let clientKind: "web" | "admin" | "distributor" = "web";
+let clientKind: "web" | "admin" | "distributor" | "support" = "web";
 
 export function configureApiClient(config: {
   apiUrl: string;
-  clientKind?: "web" | "admin" | "distributor";
+  clientKind?: "web" | "admin" | "distributor" | "support";
 }) {
   apiUrl = config.apiUrl;
   if (config.clientKind) {

@@ -41,6 +41,7 @@ from app.api.v1.admin.schemas import (
     MfFundNavHistoryResponse,
     MfIngestionRunListResponse,
     MfIngestionRunResponse,
+    NfoCategoryBreakdownResponse,
     NfoOfferAdminListResponse,
     NfoOfferAdminResponse,
     NfoOfferPatchRequest,
@@ -52,6 +53,7 @@ from app.api.v1.admin.schemas import (
     MfPipelineRunResponse,
     MfPipelineStartRequest,
     MfPipelineStartResponse,
+    NfoPipelineStartRequest,
     MfPipelineRetryStepRequest,
     MfPipelineClearStuckResponse,
     MfStagingBatchListResponse,
@@ -128,14 +130,17 @@ from app.infrastructure.persistence.models import AdminActionType, User
 from app.application.mf.mf_admin_service import (
     list_mf_ingestion_runs,
     list_mf_jobs_with_status,
+    list_nfo_jobs_with_status,
     trigger_mf_job,
 )
 from app.application.mf.mf_pipeline_preview_service import preview_mf_pipeline
 from app.application.mf.mf_pipeline_orchestrator_service import (
     approve_mf_pipeline_staging,
+    approve_nfo_pipeline_category,
     cancel_mf_pipeline_run,
     clear_stuck_ingestion_runs,
     get_active_mf_pipeline_run,
+    get_active_nfo_pipeline_run,
     get_mf_pipeline_run,
     resume_mf_pipeline_run,
     retry_mf_pipeline_step,
@@ -1124,6 +1129,163 @@ async def list_nfo_offers_admin_route(
 
     payload = await list_nfo_offers_admin(db)
     return NfoOfferAdminListResponse(**payload)
+
+
+@router.get("/nfo/pipeline/preview", response_model=MfPipelinePreviewResponse)
+async def preview_nfo_pipeline_admin(
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+    mode: str = Query(default="nfo"),
+    skip_steps: str | None = Query(default=None, description="Comma-separated pipeline step keys to skip"),
+) -> MfPipelinePreviewResponse:
+    from app.application.mf.mf_pipeline_types import is_nfo_pipeline_mode
+
+    if not is_nfo_pipeline_mode(mode):
+        raise HTTPException(status_code=400, detail="Unknown NFO pipeline mode")
+    skip_list = [item.strip() for item in (skip_steps or "").split(",") if item.strip()]
+    try:
+        preview = await preview_mf_pipeline(mode, skip_steps=skip_list)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return MfPipelinePreviewResponse(**preview)
+
+
+@router.post("/nfo/pipeline/run", response_model=MfPipelineStartResponse)
+async def start_nfo_pipeline_admin(
+    body: NfoPipelineStartRequest,
+    admin: Annotated[User, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineStartResponse:
+    settings = get_settings()
+    if settings.app_env == "production" and not body.confirm_production:
+        raise HTTPException(
+            status_code=400,
+            detail="Production pipeline runs require confirm_production=true",
+        )
+    try:
+        run = await start_mf_pipeline_run(
+            mode=body.mode,
+            triggered_by="ADMIN",
+            actor_user_id=str(admin.id),
+            skip_steps=body.skip_steps,
+            auto_resume=body.auto_resume,
+        )
+    except RuntimeError as exc:
+        status_code = 403 if "IST" in str(exc) else 409
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return MfPipelineStartResponse(run=_serialize_pipeline_run(run))
+
+
+@router.get("/nfo/pipeline/runs/active", response_model=MfPipelineRunGetResponse)
+async def get_active_nfo_pipeline_admin(
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+) -> MfPipelineRunGetResponse:
+    run = await get_active_nfo_pipeline_run()
+    if not run:
+        raise HTTPException(status_code=404, detail="No active NFO pipeline run")
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.get("/nfo/pipeline/runs/{run_id}", response_model=MfPipelineRunGetResponse)
+async def get_nfo_pipeline_run_admin(
+    run_id: str,
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+) -> MfPipelineRunGetResponse:
+    run = await get_mf_pipeline_run(run_id)
+    if not run or not str(run.mode).startswith("nfo"):
+        raise HTTPException(status_code=404, detail="NFO pipeline run not found")
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.post("/nfo/pipeline/runs/{run_id}/cancel", response_model=MfPipelineRunGetResponse)
+async def cancel_nfo_pipeline_run_admin(
+    run_id: str,
+    admin: Annotated[User, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    run = await get_mf_pipeline_run(run_id)
+    if not run or not str(run.mode).startswith("nfo"):
+        raise HTTPException(status_code=404, detail="NFO pipeline run not found")
+    cancelled = await cancel_mf_pipeline_run(run_id)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="NFO pipeline run not found")
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(cancelled))
+
+
+@router.post("/nfo/pipeline/runs/{run_id}/resume", response_model=MfPipelineRunGetResponse)
+async def resume_nfo_pipeline_admin(
+    run_id: str,
+    _: Annotated[object, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    existing = await get_mf_pipeline_run(run_id)
+    if not existing or not str(existing.mode).startswith("nfo"):
+        raise HTTPException(status_code=404, detail="NFO pipeline run not found")
+    try:
+        run = await resume_mf_pipeline_run(run_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.post("/nfo/pipeline/runs/{run_id}/retry-step", response_model=MfPipelineRunGetResponse)
+async def retry_nfo_pipeline_step_admin(
+    run_id: str,
+    body: MfPipelineRetryStepRequest,
+    _: Annotated[object, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    existing = await get_mf_pipeline_run(run_id)
+    if not existing or not str(existing.mode).startswith("nfo"):
+        raise HTTPException(status_code=404, detail="NFO pipeline run not found")
+    try:
+        run = await retry_mf_pipeline_step(run_id, body.step_key)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.post("/nfo/pipeline/clear-stuck", response_model=MfPipelineClearStuckResponse)
+async def clear_stuck_nfo_pipeline_admin(
+    _: Annotated[object, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineClearStuckResponse:
+    cleaned = await clear_stuck_ingestion_runs()
+    return MfPipelineClearStuckResponse(cleaned=cleaned)
+
+
+@router.post("/nfo/pipeline/runs/{run_id}/approve-category", response_model=MfPipelineRunGetResponse)
+async def approve_nfo_pipeline_category_admin(
+    run_id: str,
+    _: Annotated[object, Depends(require_permission("mf.pipeline.run"))],
+) -> MfPipelineRunGetResponse:
+    try:
+        run = await approve_nfo_pipeline_category(run_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MfPipelineRunGetResponse(run=_serialize_pipeline_run(run))
+
+
+@router.get("/nfo/jobs", response_model=MfJobListResponse)
+async def list_nfo_jobs(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[object, Depends(require_permission("mf.jobs.read"))],
+) -> MfJobListResponse:
+    jobs = await list_nfo_jobs_with_status(db)
+    return MfJobListResponse(jobs=[MfJobResponse(**job) for job in jobs])
+
+
+@router.get("/nfo/category", response_model=NfoCategoryBreakdownResponse)
+async def list_nfo_category_funds(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[object, Depends(require_permission("mf.catalog.read"))],
+) -> NfoCategoryBreakdownResponse:
+    from app.application.mf.nfo_offer_service import list_nfo_category_breakdown
+
+    payload = await list_nfo_category_breakdown(db)
+    return NfoCategoryBreakdownResponse(**payload)
 
 
 @router.patch("/nfo/{product_id}", response_model=NfoOfferAdminResponse)

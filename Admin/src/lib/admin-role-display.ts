@@ -7,6 +7,8 @@ export const MITRA_SUPER_HEAD_ROLE_KEY = "mitra_super_head";
 export const MITRA_STATE_HEAD_ROLE_KEY = "mitra_state_head";
 export const MITRA_MANAGER_ROLE_KEY = "mitra_manager";
 export const MITRA_ROLE_KEY = "mitra";
+export const SUPPORT_AGENT_ROLE_KEY = "support_agent";
+export const SUPPORT_LEAD_ROLE_KEY = "support_lead";
 
 const BUILTIN_ROLE_KEYS = new Set([
   SUPER_ADMIN_ROLE_KEY,
@@ -14,6 +16,8 @@ const BUILTIN_ROLE_KEYS = new Set([
   MITRA_STATE_HEAD_ROLE_KEY,
   MITRA_MANAGER_ROLE_KEY,
   MITRA_ROLE_KEY,
+  SUPPORT_AGENT_ROLE_KEY,
+  SUPPORT_LEAD_ROLE_KEY,
 ]);
 
 export function isBuiltinTeamRole(roleKey: string) {
@@ -32,6 +36,10 @@ export function teamRoleBadgeVariant(roleKey: string): StatusBadgeVariant {
       return "success";
     case MITRA_ROLE_KEY:
       return "neutral";
+    case SUPPORT_LEAD_ROLE_KEY:
+      return "warning";
+    case SUPPORT_AGENT_ROLE_KEY:
+      return "info";
     default:
       return "info";
   }

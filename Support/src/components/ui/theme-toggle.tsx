@@ -2,52 +2,91 @@
 
 import { Moon, Sun } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { DistributorActionButton } from "@/components/ui/distributor-action-button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTheme } from "@/contexts/theme-context";
 import { cn } from "@/lib/utils";
 
 type ThemeToggleProps = {
-  theme: "light" | "dark";
-  onThemeChange: (theme: "light" | "dark") => void;
   className?: string;
+  /** Match navbar pill icon controls */
+  variant?: "default" | "distributor";
+  /** @deprecated Use ThemeProvider + variant distributor */
+  theme?: "light" | "dark";
+  /** @deprecated Use ThemeProvider */
+  onThemeChange?: (theme: "light" | "dark") => void;
 };
 
-export function ThemeToggle({ theme, onThemeChange, className }: ThemeToggleProps) {
+function ThemeToggleIcons({ isDark }: { isDark: boolean }) {
+  return (
+    <span className="relative flex size-5 items-center justify-center">
+      <Sun
+        className={cn(
+          "absolute size-[1.125rem] text-amber-500 transition-all duration-500 ease-[cubic-bezier(0.34,1.2,0.64,1)]",
+          isDark ? "scale-50 -rotate-90 opacity-0" : "scale-100 rotate-0 opacity-100",
+        )}
+        strokeWidth={2.25}
+      />
+      <Moon
+        className={cn(
+          "absolute size-[1.125rem] transition-all duration-500 ease-[cubic-bezier(0.34,1.2,0.64,1)]",
+          isDark ? "scale-100 rotate-0 opacity-100" : "scale-50 rotate-90 opacity-0",
+        )}
+        strokeWidth={2.25}
+      />
+    </span>
+  );
+}
+
+export function ThemeToggle({
+  className,
+  variant = "default",
+  theme: legacyTheme,
+  onThemeChange,
+}: ThemeToggleProps) {
+  const context = useTheme();
+  const theme = legacyTheme ?? context.theme;
+  const setTheme =
+    onThemeChange ??
+    ((next: "light" | "dark") => {
+      context.setTheme(next);
+    });
+
   const isDark = theme === "dark";
+  const nextTheme = isDark ? "light" : "dark";
+  const label = isDark ? "Switch to light mode" : "Switch to dark mode";
 
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={isDark}
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      onClick={() => onThemeChange(isDark ? "light" : "dark")}
-      className={cn(
-        "relative inline-flex h-9 w-theme-toggle shrink-0 cursor-pointer items-center rounded-full bg-transparent p-1 transition-colors hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
-        className,
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute top-1 left-1 size-7 rounded-full bg-background shadow-zynd-low transition-transform duration-300 ease-[cubic-bezier(0.34,1.3,0.64,1)]",
-          isDark ? "translate-x-9" : "translate-x-0",
-        )}
-      />
-      <span className="relative z-10 flex w-full items-center justify-between px-2">
-        <Sun
-          className={cn(
-            "size-4 transition-all duration-300",
-            isDark ? "text-muted-foreground/45" : "text-foreground",
-          )}
-          strokeWidth={2.25}
-        />
-        <Moon
-          className={cn(
-            "size-4 transition-all duration-300",
-            isDark ? "text-foreground" : "text-muted-foreground/45",
-          )}
-          strokeWidth={2.25}
-        />
-      </span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          variant === "distributor" ? (
+            <DistributorActionButton
+              type="button"
+              variant="icon"
+              className={cn("relative overflow-hidden", className)}
+              aria-label={label}
+              onClick={() => setTheme(nextTheme)}
+            />
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "relative size-10 overflow-hidden rounded-full text-muted-foreground hover:bg-muted hover:text-foreground",
+                className,
+              )}
+              aria-label={label}
+              onClick={() => setTheme(nextTheme)}
+            />
+          )
+        }
+      >
+        <ThemeToggleIcons isDark={isDark} />
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
   );
 }

@@ -111,7 +111,7 @@ export const ADMIN_NAV_ROUTES: AdminNavRoute[] = [
     id: "nfo",
     label: "NFO",
     href: "/dashboard/mutual-funds/nfo",
-    icon: TrendingUp,
+    icon: Sparkles,
     description: "New fund offers, NFO scheduler, and category membership",
     permissions: ["mf.catalog.read", "mf.jobs.read"],
   },
@@ -247,7 +247,15 @@ export function isAdminRouteActive(pathname: string, route: AdminNavRoute) {
   if (route.href === "/dashboard") {
     return pathname === "/dashboard";
   }
-  return pathname === route.href || pathname.startsWith(`${route.href}/`);
+  const matches = pathname === route.href || pathname.startsWith(`${route.href}/`);
+  if (!matches) return false;
+  return !ADMIN_NAV_ROUTES.some(
+    (other) =>
+      other.id !== route.id &&
+      other.href !== route.href &&
+      other.href.startsWith(`${route.href}/`) &&
+      (pathname === other.href || pathname.startsWith(`${other.href}/`)),
+  );
 }
 
 export function resolveAdminNavRouteLabel(route: AdminNavRoute, roleKeys: string[] = []) {
@@ -287,7 +295,7 @@ export function getVisibleAdminRoutes(hasPermission: (key: string) => boolean) {
   return ADMIN_NAV_ROUTES.filter((route) => canAccessAdminRoute(route, hasPermission));
 }
 
-const ADMIN_PLATFORM_LEADING_ROUTE_IDS = ["users", "compliance", "mutual-funds"] as const;
+const ADMIN_PLATFORM_LEADING_ROUTE_IDS = ["users", "compliance", "mutual-funds", "nfo"] as const;
 
 const ADMIN_PLATFORM_TRAILING_ROUTE_IDS = [
   "bulk-order",

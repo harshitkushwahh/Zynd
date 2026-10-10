@@ -5,7 +5,7 @@
 # 4. Bluehost VPS backend deployment, only after the earlier stages succeed
 #
 # Frontend apps stay on Vercel. This pipeline never deploys them.
-# Alembic is not invoked here. A development API still migrates on its own startup.
+# Production deploy runs `alembic upgrade head` in the API container after recreate.
 
 name: ZYND • Pipeline
 
@@ -665,6 +665,9 @@ jobs:
             section "[8/15] Deploy API and backend workers"
             compose up -d --no-deps --force-recreate api
             echo "api recreated. Infrastructure dependencies were left running."
+            echo "Applying pending Alembic migrations"
+            compose exec -T api python -m alembic upgrade head
+            compose exec -T api python -m alembic current
 
             # Background workers run the same Backend image as the API. If they are
             # not recreated here they keep running the previous build forever
@@ -886,7 +889,7 @@ jobs:
             echo "  CORS"
             echo "  Container stability"
             echo "Deployment duration: ${SECONDS} seconds"
-            echo "Alembic was not run by this workflow."
+            echo "Alembic upgrade head was applied in the API container."
             write_summary success
             end_section
 
@@ -961,5 +964,5 @@ jobs:
               echo "The deployment stopped before every check could pass. Diagnostics are in the deploy log."
             fi
             echo ""
-            echo "Alembic is not executed by this workflow. A development API still applies pending migrations itself during startup."
+            echo "Alembic upgrade head ran in the API container after it was recreated."
           } >> "${GITHUB_STEP_SUMMARY}"

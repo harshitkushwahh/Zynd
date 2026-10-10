@@ -105,8 +105,8 @@ export function RiskProfileAuditPanel({
 
   useEffect(() => {
     if (refreshKey == null || refreshKey === 0) return;
-    void queryClient.invalidateQueries({ queryKey: riskAuditLogsQueryKey(queryParams) });
-  }, [queryClient, queryParams, refreshKey]);
+    void queryClient.invalidateQueries({ queryKey: ["risk-profile-audit-logs"] });
+  }, [queryClient, refreshKey]);
 
   useEffect(() => {
     setOffset(0);

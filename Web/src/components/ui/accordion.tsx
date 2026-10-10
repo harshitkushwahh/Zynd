@@ -52,15 +52,17 @@ function AccordionTrigger({
 
 function AccordionContent({
   className,
+  panelClassName,
   children,
   ...props
-}: AccordionPrimitive.Panel.Props) {
+}: AccordionPrimitive.Panel.Props & { panelClassName?: string }) {
   return (
     <AccordionPrimitive.Panel
       data-slot="accordion-content"
       keepMounted
       className={cn(
         "h-(--accordion-panel-height) overflow-hidden text-compact transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0",
+        panelClassName,
       )}
       {...props}
     >

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { SupportGlobalLoading } from "@/components/auth/support-global-loading";
 import { useSupportAuth } from "@/contexts/support-auth-context";
 
 export function SupportShell({ children }: { children: React.ReactNode }) {
@@ -16,11 +17,7 @@ export function SupportShell({ children }: { children: React.ReactNode }) {
   }, [loading, router, user]);
 
   if (loading) {
-    return (
-      <div className="flex h-dvh items-center justify-center bg-background">
-        <p className="text-compact text-muted-foreground">Loading support console…</p>
-      </div>
-    );
+    return <SupportGlobalLoading />;
   }
 
   if (!user) {

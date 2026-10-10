@@ -40,29 +40,46 @@ import { env } from "@/lib/env";
 import { getErrorMessage } from "@/lib/errors";
 import {
   approveMfPipelineStaging,
+  approveNfoPipelineCategory,
   cancelMfPipelineRun,
+  cancelNfoPipelineRun,
   clearStuckMfPipelineRuns,
+  clearStuckNfoPipelineRuns,
   fetchActiveMfPipelineRun,
+  fetchActiveNfoPipelineRun,
   fetchMfPipelineRun,
+  fetchNfoPipelineRun,
   previewMfPipeline,
+  previewNfoPipeline,
   resumeMfPipelineRun,
+  resumeNfoPipelineRun,
   retryMfPipelineStep,
+  retryNfoPipelineStep,
   startMfPipeline,
+  startNfoPipeline,
   type MfPipelineHealthDiff,
   type MfPipelineMode,
   type MfPipelinePreview,
   type MfPipelineRun,
+  type NfoPipelineMode,
 } from "@/lib/mf-admin-api";
 import { cn } from "@/lib/utils";
 
+type PipelineFamily = "mf" | "nfo";
+
 type MfPipelineAutoPanelProps = {
   canRun: boolean;
+  family?: PipelineFamily;
   onCompleted?: () => void;
   onOpenStagingTab?: () => void;
+  onOpenCategoryTab?: () => void;
 };
 
 const PIPELINE_INFO_DESCRIPTION =
   "Runs MF ingestion jobs from the admin console, same orchestration as terminal scripts, with pause/resume and staging approval when manual promote is required.";
+
+const NFO_PIPELINE_INFO_DESCRIPTION =
+  "Runs NFO lifecycle and category assignment from the admin console, same orchestration as the MF Auto bootstrap, with pause/resume and category approval.";
 
 const PIPELINE_MODE_OPTIONS: { value: MfPipelineMode; label: string; description: string }[] = [
   { value: "full", label: "Full bootstrap", description: "Staging, all scheduler jobs, compliance, health" },
@@ -75,6 +92,23 @@ const PIPELINE_MODE_OPTIONS: { value: MfPipelineMode; label: string; description
   },
   { value: "health-repair", label: "Health repair", description: "Lifecycle, NAV, metrics, min amounts, health" },
   { value: "bootstrap", label: "Bootstrap (legacy)", description: "Same as after-ingest mode name" },
+];
+
+const NFO_PIPELINE_MODE_OPTIONS: { value: NfoPipelineMode; label: string; description: string }[] = [
+  { value: "nfo", label: "NFO full", description: "Lifecycle sync, category approve, collection assign" },
+  { value: "nfo-lifecycle", label: "Lifecycle only", description: "Detect and sync NFO offers" },
+  { value: "nfo-category", label: "Category assign", description: "Approve category, then assign offers" },
+];
+
+const NFO_FINAL_COUNT_FIELDS: { key: string; label: string }[] = [
+  { key: "total", label: "Total offers" },
+  { key: "OPEN", label: "Open" },
+  { key: "UPCOMING", label: "Upcoming" },
+  { key: "CLOSED", label: "Closed" },
+  { key: "ALLOTTED", label: "Allotted" },
+  { key: "featured", label: "Featured" },
+  { key: "hidden", label: "Hidden" },
+  { key: "stale_oms", label: "Stale OMS" },
 ];
 
 const POLL_STOP_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
@@ -121,7 +155,13 @@ function healthDeltaTone(delta: number, severity?: string | null) {
   return "text-warning";
 }
 
-function PipelineFinalCountsCard({ counts }: { counts: Record<string, unknown> }) {
+function PipelineFinalCountsCard({
+  counts,
+  fields = FINAL_COUNT_FIELDS,
+}: {
+  counts: Record<string, unknown>;
+  fields?: { key: string; label: string }[];
+}) {
   return (
     <Card className={cn(PIPELINE_INNER_CARD_CLASS, "h-full")}>
       <CardContent className="flex h-full flex-col gap-4 p-4">
@@ -130,7 +170,7 @@ function PipelineFinalCountsCard({ counts }: { counts: Record<string, unknown> }
           <p className="text-caption text-muted-foreground">Catalog snapshot after pipeline completion</p>
         </div>
         <dl className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-3">
-          {FINAL_COUNT_FIELDS.map(({ key, label }) => (
+          {fields.map(({ key, label }) => (
             <div
               key={key}
               className="rounded-2xl border border-border/70 bg-muted/15 px-3 py-2.5"
@@ -373,20 +413,22 @@ function PipelineDryRunPreview({
 function PipelineModeSelect({
   value,
   disabled,
+  options,
   onValueChange,
 }: {
-  value: MfPipelineMode;
+  value: string;
   disabled: boolean;
-  onValueChange: (value: MfPipelineMode) => void;
+  options: { value: string; label: string; description: string }[];
+  onValueChange: (value: string) => void;
 }) {
-  const selected = PIPELINE_MODE_OPTIONS.find((item) => item.value === value);
+  const selected = options.find((item) => item.value === value);
 
   return (
     <Select
       value={value}
       disabled={disabled}
       onValueChange={(next) => {
-        if (next) onValueChange(next as MfPipelineMode);
+        if (next) onValueChange(next);
       }}
     >
       <SelectTrigger
@@ -399,7 +441,7 @@ function PipelineModeSelect({
         </SelectValue>
       </SelectTrigger>
         <SelectContent align="end" className="rounded-2xl">
-          {PIPELINE_MODE_OPTIONS.map((option) => (
+          {options.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
@@ -412,9 +454,11 @@ function PipelineModeSelect({
 function PipelineInfoTooltip({
   selectedMode,
   showIdleHint,
+  description,
 }: {
-  selectedMode?: (typeof PIPELINE_MODE_OPTIONS)[number];
+  selectedMode?: { value: string; label: string; description: string };
   showIdleHint: boolean;
+  description: string;
 }) {
   return (
     <Tooltip>
@@ -437,7 +481,7 @@ function PipelineInfoTooltip({
         className="flex w-80 max-w-[min(20rem,calc(100vw-2rem))] flex-col items-start gap-0 px-3.5 py-3 text-xs leading-relaxed"
       >
         <div className="space-y-3">
-          <p className="text-pretty text-background/95">{PIPELINE_INFO_DESCRIPTION}</p>
+          <p className="text-pretty text-background/95">{description}</p>
 
           {selectedMode ? (
             <div className="space-y-1.5 border-t border-background/20 pt-3">
@@ -470,9 +514,17 @@ function logTone(level: string) {
   return "text-muted-foreground";
 }
 
-export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: MfPipelineAutoPanelProps) {
+export function MfPipelineAutoPanel({
+  canRun,
+  family = "mf",
+  onCompleted,
+  onOpenStagingTab,
+  onOpenCategoryTab,
+}: MfPipelineAutoPanelProps) {
+  const isNfo = family === "nfo";
+  const modeOptions = isNfo ? NFO_PIPELINE_MODE_OPTIONS : PIPELINE_MODE_OPTIONS;
   const [run, setRun] = useState<MfPipelineRun | null>(null);
-  const [mode, setMode] = useState<MfPipelineMode>("full");
+  const [mode, setMode] = useState<MfPipelineMode | NfoPipelineMode>(isNfo ? "nfo" : "full");
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -489,11 +541,14 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
   const completedNotifiedRef = useRef<string | null>(null);
   const logContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const refreshRun = useCallback(async (runId: string) => {
-    const next = await fetchMfPipelineRun(runId);
-    setRun(next);
-    return next;
-  }, []);
+  const refreshRun = useCallback(
+    async (runId: string) => {
+      const next = isNfo ? await fetchNfoPipelineRun(runId) : await fetchMfPipelineRun(runId);
+      setRun(next);
+      return next;
+    },
+    [isNfo]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -502,7 +557,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
       setLoading(true);
       setError("");
       try {
-        const active = await fetchActiveMfPipelineRun();
+        const active = isNfo ? await fetchActiveNfoPipelineRun() : await fetchActiveMfPipelineRun();
         if (!cancelled) setRun(active);
       } catch (err) {
         if (!cancelled && !(err instanceof ApiError && err.status === 404)) {
@@ -517,7 +572,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isNfo]);
 
   useEffect(() => {
     if (!run || POLL_STOP_STATUSES.has(run.status)) return;
@@ -555,7 +610,9 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     setPreviewing(true);
     setError("");
     try {
-      const next = await previewMfPipeline(mode, skipSteps);
+      const next = isNfo
+        ? await previewNfoPipeline(mode as NfoPipelineMode, skipSteps)
+        : await previewMfPipeline(mode as MfPipelineMode, skipSteps);
       setPreview(next);
       setExcludedSteps(new Set(next.skip_steps));
     } catch (err) {
@@ -584,11 +641,13 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     setStuckCleared(null);
     setConfirmOpen(false);
     try {
-      const started = await startMfPipeline(mode, confirmProduction, skipSteps, true);
+      const started = isNfo
+        ? await startNfoPipeline(mode as NfoPipelineMode, confirmProduction, skipSteps, true)
+        : await startMfPipeline(mode as MfPipelineMode, confirmProduction, skipSteps, true);
       setPreview(null);
       setRun(await refreshRun(started.run_id));
     } catch (err) {
-      setError(getErrorMessage(err, "Could not start MF pipeline."));
+      setError(getErrorMessage(err, isNfo ? "Could not start NFO pipeline." : "Could not start MF pipeline."));
     } finally {
       setStarting(false);
     }
@@ -608,7 +667,9 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     setCancelling(true);
     setError("");
     try {
-      const cancelledRun = await cancelMfPipelineRun(run.run_id);
+      const cancelledRun = isNfo
+        ? await cancelNfoPipelineRun(run.run_id)
+        : await cancelMfPipelineRun(run.run_id);
       setRun(cancelledRun);
     } catch (err) {
       setError(getErrorMessage(err, "Could not cancel pipeline."));
@@ -623,7 +684,11 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     setError("");
     setStuckCleared(null);
     try {
-      await resumeMfPipelineRun(run.run_id);
+      if (isNfo) {
+        await resumeNfoPipelineRun(run.run_id);
+      } else {
+        await resumeMfPipelineRun(run.run_id);
+      }
       setRun(await refreshRun(run.run_id));
     } catch (err) {
       setError(getErrorMessage(err, "Could not resume pipeline."));
@@ -638,7 +703,11 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     setError("");
     setStuckCleared(null);
     try {
-      await retryMfPipelineStep(run.run_id, stepKey);
+      if (isNfo) {
+        await retryNfoPipelineStep(run.run_id, stepKey);
+      } else {
+        await retryMfPipelineStep(run.run_id, stepKey);
+      }
       setRun(await refreshRun(run.run_id));
     } catch (err) {
       setError(getErrorMessage(err, "Could not retry pipeline step."));
@@ -652,10 +721,14 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     setApprovingStaging(true);
     setError("");
     try {
-      const approved = await approveMfPipelineStaging(run.run_id);
+      const approved = isNfo
+        ? await approveNfoPipelineCategory(run.run_id)
+        : await approveMfPipelineStaging(run.run_id);
       setRun(await refreshRun(approved.run_id));
     } catch (err) {
-      setError(getErrorMessage(err, "Could not approve staging batch."));
+      setError(
+        getErrorMessage(err, isNfo ? "Could not approve NFO category." : "Could not approve staging batch.")
+      );
     } finally {
       setApprovingStaging(false);
     }
@@ -666,7 +739,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
     setClearingStuck(true);
     setError("");
     try {
-      const result = await clearStuckMfPipelineRuns();
+      const result = isNfo ? await clearStuckNfoPipelineRuns() : await clearStuckMfPipelineRuns();
       setStuckCleared(result.cleaned);
     } catch (err) {
       setError(getErrorMessage(err, "Could not clear stuck ingestion runs."));
@@ -687,13 +760,15 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
 
   const isRunning = run?.status === "running" || run?.status === "pending";
   const awaitingStaging = Boolean(run?.can_approve_staging && run.staging_batch_uuid && !isRunning);
+  const awaitingCategory = Boolean(run?.can_approve_category && !isRunning);
+  const awaitingApproval = awaitingStaging || awaitingCategory;
   const waitingOnJob = run?.pause_reason === "job_still_running";
-  const showResume = Boolean(run?.can_resume && !isRunning && !awaitingStaging && !waitingOnJob);
+  const showResume = Boolean(run?.can_resume && !isRunning && !awaitingApproval && !waitingOnJob);
   const failedStep = run?.steps.find((step) => step.status === "failed") ?? null;
   const maintenanceWindow = preview?.flags.maintenance_window;
   const startBlocked = preview ? !preview.can_start : false;
 
-  const selectedMode = PIPELINE_MODE_OPTIONS.find((item) => item.value === mode);
+  const selectedMode = modeOptions.find((item) => item.value === mode);
 
   return (
     <div className={cn("overflow-hidden border border-border/80 bg-card shadow-sm", PIPELINE_PANEL_RADIUS)}>
@@ -703,7 +778,9 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
             <Terminal className="size-4" />
           </div>
           <div className="min-w-0 space-y-1">
-            <h3 className="font-heading text-body font-semibold text-foreground">Auto bootstrap</h3>
+            <h3 className="font-heading text-body font-semibold text-foreground">
+              {isNfo ? "NFO Auto bootstrap" : "Auto bootstrap"}
+            </h3>
             {selectedMode ? (
               <p className="text-caption leading-relaxed text-muted-foreground">{selectedMode.description}</p>
             ) : null}
@@ -714,8 +791,9 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
           {canRun ? (
             <PipelineModeSelect
               value={mode}
-              disabled={starting || isRunning || showResume || awaitingStaging || waitingOnJob}
-              onValueChange={setMode}
+              options={modeOptions}
+              disabled={starting || isRunning || showResume || awaitingApproval || waitingOnJob}
+              onValueChange={(next) => setMode(next as MfPipelineMode | NfoPipelineMode)}
             />
           ) : null}
           {canRun ? (
@@ -740,7 +818,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
               </Button>
               <Button
                 size="sm"
-                disabled={starting || isRunning || showResume || awaitingStaging || waitingOnJob || startBlocked}
+                disabled={starting || isRunning || showResume || awaitingApproval || waitingOnJob || startBlocked}
                 onClick={() => handleStartRequest()}
               >
                 {starting ? (
@@ -755,7 +833,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
                   </>
                 )}
               </Button>
-              {awaitingStaging ? (
+              {awaitingApproval ? (
                 <Button size="sm" disabled={approvingStaging} onClick={() => void handleApproveStaging()}>
                   {approvingStaging ? (
                     <>
@@ -827,7 +905,11 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
           ) : (
             <p className="text-caption text-muted-foreground">Requires mf.pipeline.run permission.</p>
           )}
-          <PipelineInfoTooltip selectedMode={selectedMode} showIdleHint={!run && !loading} />
+          <PipelineInfoTooltip
+            selectedMode={selectedMode}
+            showIdleHint={!run && !loading}
+            description={isNfo ? NFO_PIPELINE_INFO_DESCRIPTION : PIPELINE_INFO_DESCRIPTION}
+          />
         </div>
       </div>
 
@@ -864,6 +946,22 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
             {onOpenStagingTab ? (
               <Button size="sm" variant="outline" onClick={onOpenStagingTab}>
                 Open Staging tab
+              </Button>
+            ) : null}
+          </div>
+        </AdminFeedbackMessage>
+      ) : null}
+
+      {awaitingCategory ? (
+        <AdminFeedbackMessage variant="warning">
+          <div className="space-y-2">
+            <p>
+              Pipeline paused for NFO category approval. Review featured and hidden offers, then Approve
+              to assign the collection.
+            </p>
+            {onOpenCategoryTab ? (
+              <Button size="sm" variant="outline" onClick={onOpenCategoryTab}>
+                Open Category tab
               </Button>
             ) : null}
           </div>
@@ -911,7 +1009,7 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
                 Current step: <span className="font-mono text-foreground">{run.current_step_key}</span>
               </p>
             ) : null}
-            {run.error && !awaitingStaging ? (
+            {run.error && !awaitingApproval ? (
               <AdminFeedbackMessage variant={waitingOnJob ? "warning" : "destructive"}>
                 {run.error}
               </AdminFeedbackMessage>
@@ -1010,7 +1108,12 @@ export function MfPipelineAutoPanel({ canRun, onCompleted, onOpenStagingTab }: M
 
           {run.final_counts || run.health_diff ? (
             <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
-              {run.final_counts ? <PipelineFinalCountsCard counts={run.final_counts} /> : null}
+              {run.final_counts ? (
+                <PipelineFinalCountsCard
+                  counts={run.final_counts}
+                  fields={isNfo ? NFO_FINAL_COUNT_FIELDS : FINAL_COUNT_FIELDS}
+                />
+              ) : null}
               {run.health_diff ? <PipelineHealthDiffCard diff={run.health_diff} /> : null}
             </div>
           ) : null}

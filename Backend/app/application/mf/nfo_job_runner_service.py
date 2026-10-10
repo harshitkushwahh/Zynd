@@ -40,9 +40,11 @@ async def execute_nfo_job(
         if not satisfied:
             return {"skipped": 1, "reason": reason, "job": job.name}
 
+    logger.info("NFO job starting job=%s triggered_by=%s", job.name, triggered_by)
     result = await job.runner(session, triggered_by=triggered_by)
     payload = dict(result)
     payload.setdefault("job", job.name)
+    logger.info("NFO job finished job=%s result=%s", job.name, payload)
     return payload
 
 

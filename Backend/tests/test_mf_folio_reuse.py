@@ -90,6 +90,7 @@ async def test_create_mf_purchase_includes_folio_only_when_set() -> None:
             folio_number="61576584",
         )
         assert captured["folio_number"] == "61576584"
+        assert "nomination_info_visibility" not in captured
         captured.clear()
         await create_mf_purchase(
             fp_mfia_id="mfia",
@@ -98,6 +99,7 @@ async def test_create_mf_purchase_includes_folio_only_when_set() -> None:
             source_ref_id="order-2",
         )
         assert "folio_number" not in captured
+        assert "nomination_info_visibility" not in captured
 
 
 async def test_create_mf_purchases_batch_includes_folio_only_when_set() -> None:
@@ -131,4 +133,6 @@ async def test_create_mf_purchases_batch_includes_folio_only_when_set() -> None:
             ]
         )
     assert captured[0]["folio_number"] == "111"
+    assert "nomination_info_visibility" not in captured[0]
     assert "folio_number" not in captured[1]
+    assert "nomination_info_visibility" not in captured[1]

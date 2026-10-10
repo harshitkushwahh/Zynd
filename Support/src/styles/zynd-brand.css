@@ -230,7 +230,13 @@
   --sidebar-accent-foreground: var(--zynd-dark-foreground);
   --sidebar-border: var(--zynd-dark-border);
   --sidebar-ring: var(--zynd-blue);
-  --overlay-backdrop-opacity: var(--opacity-medium);
+  /* Backdrop: near-black tint; keep translucent so the dialog reads above the page. */
+  --overlay-backdrop-opacity: 58%;
+  --overlay-backdrop-color: color-mix(
+    in srgb,
+    var(--background) var(--overlay-backdrop-opacity),
+    transparent
+  );
   --shadow-low: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-mid: 0 4px 12px rgb(0 0 0 / 0.5);
   --shadow-high: 0 8px 24px rgb(0 0 0 / 0.6);

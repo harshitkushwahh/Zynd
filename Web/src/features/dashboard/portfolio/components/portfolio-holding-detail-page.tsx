@@ -741,11 +741,8 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
     );
   }
 
-  if (!holding) {
-    notFound();
-  }
-  if (status === "not_found" || status === "invalid_holding_id") {
-    notFound();
+  if (!holding || status === "not_found" || status === "invalid_holding_id") {
+    return notFound();
   }
 
   const canInvest = Boolean(user?.fund_movement_eligible && investConfig?.orders_enabled);

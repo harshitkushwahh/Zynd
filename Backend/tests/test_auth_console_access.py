@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.admin.rbac_service import (
     DISTRIBUTOR_MANAGER_ROLE_KEY,
+    SUPPORT_AGENT_ROLE_KEY,
     ensure_rbac_seed,
     set_admin_user_roles,
 )
@@ -83,6 +84,77 @@ async def test_mitra_manager_can_login_to_distributor_client(db_session: AsyncSe
         user_agent="pytest",
         ip="127.0.0.1",
         auth_client="distributor",
+    )
+
+    assert result["next"] == "authenticated"
+
+
+@pytest.mark.asyncio
+async def test_support_agent_cannot_login_to_admin_client(db_session: AsyncSession) -> None:
+    await ensure_rbac_seed(db_session)
+    now = datetime.now(timezone.utc)
+    user = User(
+        email=f"support-{uuid4()}@example.com",
+        password_hash=hash_password("StrongPass123!"),
+        first_name="Support",
+        last_name="Agent",
+        role=UserRole.admin,
+        status=UserStatus.active,
+        email_verified_at=now,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    await set_admin_user_roles(
+        db_session,
+        user_id=user.id,
+        role_keys=[SUPPORT_AGENT_ROLE_KEY],
+    )
+
+    with pytest.raises(AuthError) as exc:
+        await login_with_email(
+            db_session,
+            email=user.email,
+            password="StrongPass123!",
+            turnstile_token=None,
+            device_fingerprint="admin-console",
+            user_agent="pytest",
+            ip="127.0.0.1",
+            auth_client="admin",
+        )
+
+    assert exc.value.code == "support_console_required"
+
+
+@pytest.mark.asyncio
+async def test_support_agent_can_login_to_support_client(db_session: AsyncSession) -> None:
+    await ensure_rbac_seed(db_session)
+    now = datetime.now(timezone.utc)
+    user = User(
+        email=f"support-{uuid4()}@example.com",
+        password_hash=hash_password("StrongPass123!"),
+        first_name="Support",
+        last_name="Agent",
+        role=UserRole.admin,
+        status=UserStatus.active,
+        email_verified_at=now,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    await set_admin_user_roles(
+        db_session,
+        user_id=user.id,
+        role_keys=[SUPPORT_AGENT_ROLE_KEY],
+    )
+
+    result = await login_with_email(
+        db_session,
+        email=user.email,
+        password="StrongPass123!",
+        turnstile_token=None,
+        device_fingerprint="support-console",
+        user_agent="pytest",
+        ip="127.0.0.1",
+        auth_client="support",
     )
 
     assert result["next"] == "authenticated"

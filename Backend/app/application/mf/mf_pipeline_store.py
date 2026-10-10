@@ -126,13 +126,24 @@ async def get_pipeline_run(session: AsyncSession, run_id: str) -> MfPipelineRunS
     return state_from_row(row) if row else None
 
 
-async def get_running_pipeline_run(session: AsyncSession) -> MfPipelineRunState | None:
-    row = await session.scalar(
-        select(MfPipelineRun)
-        .where(MfPipelineRun.status == DbMfPipelineRunStatus.running)
-        .order_by(desc(MfPipelineRun.started_at))
-        .limit(1)
-    )
+def _mode_family_filter(*, nfo_only: bool | None):
+    if nfo_only is True:
+        return MfPipelineRun.mode.like("nfo%")
+    if nfo_only is False:
+        return ~MfPipelineRun.mode.like("nfo%")
+    return None
+
+
+async def get_running_pipeline_run(
+    session: AsyncSession,
+    *,
+    nfo_only: bool | None = None,
+) -> MfPipelineRunState | None:
+    query = select(MfPipelineRun).where(MfPipelineRun.status == DbMfPipelineRunStatus.running)
+    family = _mode_family_filter(nfo_only=nfo_only)
+    if family is not None:
+        query = query.where(family)
+    row = await session.scalar(query.order_by(desc(MfPipelineRun.started_at)).limit(1))
     return state_from_row(row) if row else None
 
 
@@ -169,17 +180,20 @@ def pipeline_run_awaits_worker(run: MfPipelineRunState) -> bool:
     }
 
 
-async def get_latest_resumable_pipeline_run(session: AsyncSession) -> MfPipelineRunState | None:
-    row = await session.scalar(
-        select(MfPipelineRun)
-        .where(
-            MfPipelineRun.status.in_(
-                [DbMfPipelineRunStatus.paused, DbMfPipelineRunStatus.failed, DbMfPipelineRunStatus.cancelled]
-            )
+async def get_latest_resumable_pipeline_run(
+    session: AsyncSession,
+    *,
+    nfo_only: bool | None = None,
+) -> MfPipelineRunState | None:
+    query = select(MfPipelineRun).where(
+        MfPipelineRun.status.in_(
+            [DbMfPipelineRunStatus.paused, DbMfPipelineRunStatus.failed, DbMfPipelineRunStatus.cancelled]
         )
-        .order_by(desc(MfPipelineRun.updated_at))
-        .limit(1)
     )
+    family = _mode_family_filter(nfo_only=nfo_only)
+    if family is not None:
+        query = query.where(family)
+    row = await session.scalar(query.order_by(desc(MfPipelineRun.updated_at)).limit(1))
     return state_from_row(row) if row else None
 
 

@@ -28,6 +28,6 @@ Start here before large refactors:
 
 ## Lifespan seeds
 
-`app/main.py` seeds RBAC, security config, risk profile questionnaire data, retention schedule, and (development only) the admin user.
+`app/main.py` seeds RBAC, security config, risk profile questionnaire data, retention schedule, and (development only) the admin user and Support console dev users.
 
 Run manually: `python -m app.jobs.run_risk_profile_seed`

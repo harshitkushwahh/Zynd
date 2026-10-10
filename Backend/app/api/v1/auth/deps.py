@@ -14,6 +14,7 @@ from app.application.auth.auth_client_policy import (
     AuthClientKind,
     is_admin_auth_header,
     is_distributor_auth_header,
+    is_support_auth_header,
     refresh_cookie_name_for_client,
     resolve_auth_client_kind,
     validate_user_role_for_client,
@@ -37,6 +38,10 @@ def is_distributor_auth_client(request: Request) -> bool:
     return is_distributor_auth_header(request.headers.get("x-zynd-client"))
 
 
+def is_support_auth_client(request: Request) -> bool:
+    return is_support_auth_header(request.headers.get("x-zynd-client"))
+
+
 def resolve_auth_client_from_request(request: Request, device_fingerprint: str | None) -> AuthClientKind:
     try:
         return resolve_auth_client_kind(
@@ -49,6 +54,12 @@ def resolve_auth_client_from_request(request: Request, device_fingerprint: str |
 
 def get_refresh_token_from_request(request: Request) -> tuple[str | None, AuthClientKind | None]:
     settings = get_settings()
+
+    if is_support_auth_client(request):
+        token = request.cookies.get(settings.refresh_cookie_name_support)
+        if token:
+            return token, "support"
+        return None, None
 
     if is_distributor_auth_client(request):
         token = request.cookies.get(settings.refresh_cookie_name_distributor)

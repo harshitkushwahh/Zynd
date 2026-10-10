@@ -92,6 +92,10 @@ class MfPipelineRunState:
             and self.status == MfPipelineRunStatus.paused
             and promote_still_open
         )
+        awaiting_category = (
+            pause_reason == "awaiting_category_approval"
+            and self.status == MfPipelineRunStatus.paused
+        )
         staging_batch_uuid = self.context.get("batch_uuid") if awaiting_staging else None
         auto_resume_enabled = self.context.get("auto_resume", True) is not False
         return {
@@ -118,10 +122,11 @@ class MfPipelineRunState:
             "pause_reason": pause_reason,
             "staging_batch_uuid": staging_batch_uuid,
             "can_approve_staging": awaiting_staging,
+            "can_approve_category": awaiting_category,
             "health_diff": self.context.get("health_diff"),
             "skip_steps": list(self.context.get("skip_steps") or []),
             "auto_resume": auto_resume_enabled,
-            "auto_resume_pending": awaiting_staging and auto_resume_enabled,
+            "auto_resume_pending": (awaiting_staging or awaiting_category) and auto_resume_enabled,
         }
 
 
@@ -150,8 +155,19 @@ PIPELINE_MODES: frozenset[str] = frozenset(
         "nav-analytics-only",
         "health-repair",
         "staging-only",
+        "nfo",
+        "nfo-lifecycle",
+        "nfo-category",
     }
 )
+
+NFO_PIPELINE_MODES: frozenset[str] = frozenset({"nfo", "nfo-lifecycle", "nfo-category"})
+PAUSE_REASON_CATEGORY_APPROVAL = "awaiting_category_approval"
+NFO_PIPELINE_STEP_JOBS: tuple[str, ...] = ("nfo-lifecycle-sync", "nfo-collection-assign-sync")
+
+
+def is_nfo_pipeline_mode(mode: str) -> bool:
+    return mode.startswith("nfo")
 
 
 def normalize_pipeline_mode(mode: str) -> str:

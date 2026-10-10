@@ -18,6 +18,7 @@ import {
 } from "@/features/invest/lib/mf-format";
 import { MF_FUND_DETAIL_METRIC_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
 import { cn } from "@/lib/utils";
+import { isInvestNfo, nfoStatusLabel } from "@/features/invest/lib/mf-nfo";
 import { copy } from "@/shared/config/copy";
 
 type MfFundDetailHeaderProps = {
@@ -98,7 +99,15 @@ export function MfFundDetailHeader({ fund }: MfFundDetailHeaderProps) {
                   {fund.content.hero_badge}
                 </Badge>
               ) : null}
-              {fund.health_badges?.map((flag) => (
+              {isInvestNfo(fund) ? (
+                <Badge variant="secondary" className="text-[11px]">
+                  NFO · {nfoStatusLabel(fund.nfo?.status)}
+                </Badge>
+              ) : null}
+              {(isInvestNfo(fund)
+                ? []
+                : fund.health_badges ?? []
+              ).map((flag) => (
                 <StatusBadge key={flag} variant="warning" className="text-[11px]">
                   {healthBadgeLabel(flag)}
                 </StatusBadge>
@@ -115,34 +124,36 @@ export function MfFundDetailHeader({ fund }: MfFundDetailHeaderProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard
-          label="Latest NAV"
-          value={metricNa(formatNav(fund.latest_nav))}
-          sub={metricNa(formatDate(fund.latest_nav_date))}
-          valueClassName="text-foreground"
-        />
-        <MetricCard
-          label="1 day change"
-          value={metricNa(dayReturn.text)}
-          sub={fund.returns.return_1d != null ? copy.mutualFunds.fundDayChangeSub : "NA"}
-          valueClassName={cn(
-            dayReturn.tone === "positive" && "text-success",
-            dayReturn.tone === "negative" && "text-destructive",
-            dayReturn.tone === "muted" && "text-muted-foreground",
-          )}
-        />
-        <MetricCard
-          label="AUM"
-          value={metricNa(formatInr(fund.aum_inr, { compact: true }))}
-          sub={fund.aum_as_of ? `as of ${formatDate(fund.aum_as_of)}` : "NA"}
-        />
-        <MetricCard
-          label="TER"
-          value={fund.ter_percent != null ? `${fund.ter_percent.toFixed(2)}%` : "NA"}
-          sub={fund.ter_as_of ? `as of ${formatDate(fund.ter_as_of)}` : "NA"}
-        />
-      </div>
+      {isInvestNfo(fund) ? null : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <MetricCard
+            label="Latest NAV"
+            value={metricNa(formatNav(fund.latest_nav))}
+            sub={metricNa(formatDate(fund.latest_nav_date))}
+            valueClassName="text-foreground"
+          />
+          <MetricCard
+            label="1 day change"
+            value={metricNa(dayReturn.text)}
+            sub={fund.returns.return_1d != null ? copy.mutualFunds.fundDayChangeSub : "NA"}
+            valueClassName={cn(
+              dayReturn.tone === "positive" && "text-success",
+              dayReturn.tone === "negative" && "text-destructive",
+              dayReturn.tone === "muted" && "text-muted-foreground",
+            )}
+          />
+          <MetricCard
+            label="AUM"
+            value={metricNa(formatInr(fund.aum_inr, { compact: true }))}
+            sub={fund.aum_as_of ? `as of ${formatDate(fund.aum_as_of)}` : "NA"}
+          />
+          <MetricCard
+            label="TER"
+            value={fund.ter_percent != null ? `${fund.ter_percent.toFixed(2)}%` : "NA"}
+            sub={fund.ter_as_of ? `as of ${formatDate(fund.ter_as_of)}` : "NA"}
+          />
+        </div>
+      )}
     </div>
   );
 }

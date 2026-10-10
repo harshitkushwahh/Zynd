@@ -1,5 +1,5 @@
-import { SupportUsersPanel } from "@/components/users/support-users-panel";
+import { SupportUsersBookPage } from "@/components/users/support-users-book-page";
 
 export default function SupportUsersPage() {
-  return <SupportUsersPanel />;
+  return <SupportUsersBookPage />;
 }

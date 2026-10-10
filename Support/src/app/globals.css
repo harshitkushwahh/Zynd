@@ -2,6 +2,13 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/zynd-brand.css";
+@import "../styles/support-login-shell.css";
+@import "../styles/support-sidebar-badge.css";
+@import "../../../Distributor/src/styles/distributor.css";
+@import "../styles/support-overview-metrics.css";
+@import "../styles/support-page-metrics.css";
+@import "../styles/support-client-kyc-partner.css";
+@import "../styles/support-client-profile-tab.css";
 
 @layer base {
   * {

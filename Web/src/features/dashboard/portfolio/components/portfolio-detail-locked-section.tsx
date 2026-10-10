@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 type PortfolioDetailLockedSectionProps = {
   title: string;
   subtitle?: string;
+  stacked?: boolean;
   children: ReactNode;
   className?: string;
 };
@@ -18,6 +19,7 @@ type PortfolioDetailLockedSectionProps = {
 export function PortfolioDetailLockedSection({
   title,
   subtitle,
+  stacked = false,
   children,
   className,
 }: PortfolioDetailLockedSectionProps) {
@@ -25,7 +27,12 @@ export function PortfolioDetailLockedSection({
     <div className={cn("relative overflow-hidden rounded-[1.75rem]", className)}>
       <div className="pointer-events-none select-none blur-[5px]">{children}</div>
       <OverviewLockedCardBackdrop className="pointer-events-auto inset-0" />
-      <OverviewLockedCardOverlay className="inset-0" title={title} subtitle={subtitle} />
+      <OverviewLockedCardOverlay
+        stacked={stacked}
+        className="inset-0 px-4"
+        title={title}
+        subtitle={subtitle}
+      />
     </div>
   );
 }

@@ -26,16 +26,17 @@ export function getSystematicPlansForListScope(
 
 export function getTxnRequestsForListScope(
   requests: DistributorTxnRequest[],
-  _scope: TxnRequestsListScope,
+  scope: TxnRequestsListScope,
 ): DistributorTxnRequest[] {
-  const book = requests.filter((request) => request.inDistributorBook !== false);
-  return book;
+  if (scope === "all") return requests;
+  return requests.filter((request) => request.inDistributorBook !== false);
 }
 
 export function getTransactionGroupsForListScope(
   groups: DistributorTransactionGroup[],
-  _scope: TransactionGroupsListScope,
+  scope: TransactionGroupsListScope,
 ): DistributorTransactionGroup[] {
+  if (scope === "all") return groups;
   return groups.filter((group) => group.inDistributorBook !== false);
 }
 

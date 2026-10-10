@@ -9,6 +9,8 @@ import { DashboardContentFade } from "@/components/dashboard/dashboard-content-f
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { MfFundDetailHeader } from "@/features/invest/components/mf-fund-detail-header";
 import { MfFundCalculatorCard } from "@/features/invest/components/mf-fund-calculator-card";
+import { MfNfoCalculatorDisabled } from "@/features/invest/components/mf-nfo-calculator-disabled";
+import { MfNfoOfferPanel } from "@/features/invest/components/mf-nfo-offer-panel";
 import { MfFundDetailSkeleton } from "@/features/invest/components/mf-fund-detail-skeleton";
 import { MfFundPerformanceSection } from "@/features/invest/components/mf-fund-performance-section";
 import { MfFundReturnsCard } from "@/features/invest/components/mf-fund-returns-card";
@@ -17,7 +19,11 @@ import { MfFundDisclaimerNotice } from "@/features/invest/components/mf-fund-dis
 import { MfFundFactsCard, shouldShowFundFacts } from "@/features/invest/components/mf-fund-facts-card";
 import { MfInvestmentDetailsCard } from "@/features/invest/components/mf-investment-details-card";
 import { resolveInvestmentDetailsForDisplay } from "@/features/invest/lib/mf-investment-details-display";
-import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
+import {
+  MfInvestPaymentCard,
+  type MfInvestPaymentMode,
+} from "@/features/invest/components/mf-invest-payment-card";
+import { resolveMinLumpsumAmount } from "@/features/invest/lib/mf-lumpsum-calculator";
 import { MF_PAGE_SECTION_CLASS, MF_FUND_DETAIL_RADIUS_CLASS, MF_INVEST_SIDEBAR_STICKY_CLASS, MF_INVEST_SIDEBAR_WIDTH_CLASS } from "@/features/invest/lib/mf-ui";
 import { mfFundHref, isFundUuid } from "@/features/invest/lib/mf-fund-url";
 import type { MfNavRange } from "@/features/invest/lib/mf-nav-history";
@@ -32,6 +38,7 @@ import {
   type InvestReturnCalculator,
 } from "@/features/invest/api/invest-api";
 import { useAuth } from "@/contexts/auth-context";
+import { isInvestNfo } from "@/features/invest/lib/mf-nfo";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +67,8 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [investMode, setInvestMode] = useState<MfInvestPaymentMode>("lumpsum");
+  const [investAmount, setInvestAmount] = useState(0);
 
   useEffect(() => {
     if (sessionRestoring) {
@@ -73,15 +82,19 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
     setNavHistory(null);
     setCalculator(null);
 
-    Promise.all([
-      fetchInvestFundDetail(fundSlug),
-      fetchInvestFundNavs(fundSlug, NAV_HISTORY_LIMIT),
-      fetchInvestReturnCalculator(fundSlug, { amount_inr: 10_000, mode: "lumpsum" }),
-      fetchInvestConfig(),
-    ])
-      .then(([detail, navs, calc, investConfig]) => {
+    fetchInvestFundDetail(fundSlug)
+      .then(async (detail) => {
         if (cancelled) return;
         setFund(detail);
+        const nfo = isInvestNfo(detail);
+        const [navs, calc, investConfig] = await Promise.all([
+          nfo ? Promise.resolve(null) : fetchInvestFundNavs(fundSlug, NAV_HISTORY_LIMIT),
+          nfo
+            ? Promise.resolve(null)
+            : fetchInvestReturnCalculator(fundSlug, { amount_inr: 10_000, mode: "lumpsum" }),
+          fetchInvestConfig(),
+        ]);
+        if (cancelled) return;
         setNavHistory(navs);
         setCalculator(calc);
         setConfig(investConfig);
@@ -151,6 +164,10 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
       preview={false}
       canInvest={canInvest}
       sipEnabled={(config?.sip_enabled ?? false) && fund.sip_allowed === true}
+      mode={investMode}
+      onModeChange={setInvestMode}
+      amount={investAmount}
+      onAmountChange={setInvestAmount}
       className={cn(MF_FUND_DETAIL_RADIUS_CLASS, "w-full")}
     />
   );
@@ -165,39 +182,47 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
         <div className="min-w-0 flex-1 space-y-6">
           <MfFundDetailHeader fund={fund} />
 
-          {fund.nfo ? (
-            <div className={cn("border border-border bg-muted/20 px-4 py-3", MF_FUND_DETAIL_RADIUS_CLASS)}>
-              <p className="text-compact font-semibold">NFO · {fund.nfo.status}</p>
-              {fund.nfo.subscription_close_date ? (
-                <p className="mt-1 text-caption text-muted-foreground">
-                  Offer window closes {fund.nfo.subscription_close_date}
-                </p>
-              ) : null}
-              <p className="mt-1 text-caption text-muted-foreground">
-                {fund.nfo.disclaimer ?? copy.mutualFunds.nfoDisclaimer}
-              </p>
-            </div>
+          {isInvestNfo(fund) ? (
+            <MfNfoOfferPanel
+              fund={fund}
+              onInvest={() => {
+                setInvestMode("lumpsum");
+                setInvestAmount(resolveMinLumpsumAmount(fund.min_lumpsum_amount_inr));
+                const target = Array.from(document.querySelectorAll<HTMLElement>("[data-mf-invest-card]")).find(
+                  (node) => node.getClientRects().length > 0,
+                );
+                target?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            />
           ) : null}
 
-          <div className="lg:hidden">{investCard}</div>
+          <div data-mf-invest-card className="lg:hidden">
+            {investCard}
+          </div>
 
-          <MfFundPerformanceSection
-            fund={fund}
-            navHistory={navHistory}
-            chartRange={chartRange}
-            onChartRangeChange={setChartRange}
-          />
+          {isInvestNfo(fund) ? null : (
+            <MfFundPerformanceSection
+              fund={fund}
+              navHistory={navHistory}
+              chartRange={chartRange}
+              onChartRangeChange={setChartRange}
+            />
+          )}
 
-          {fund.nfo && fund.latest_nav == null ? null : (
+          {isInvestNfo(fund) ? (
+            <MfNfoCalculatorDisabled />
+          ) : (
             <MfFundCalculatorCard fund={fund} initialCalculator={calculator} />
           )}
 
-          <MfFundReturnsCard
-            returns={fund.returns}
-            selectedRange={chartRange}
-            onRangeSelect={setChartRange}
-            navPoints={navHistory?.points}
-          />
+          {isInvestNfo(fund) ? null : (
+            <MfFundReturnsCard
+              returns={fund.returns}
+              selectedRange={chartRange}
+              onRangeSelect={setChartRange}
+              navPoints={navHistory?.points}
+            />
+          )}
 
           {investmentDetails ? <MfInvestmentDetailsCard details={investmentDetails} /> : null}
 
@@ -213,6 +238,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
         </div>
 
         <aside
+          data-mf-invest-card
           className={cn(
             MF_INVEST_SIDEBAR_WIDTH_CLASS,
             MF_INVEST_SIDEBAR_STICKY_CLASS,
