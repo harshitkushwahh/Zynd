@@ -157,9 +157,9 @@ function JourneyEventRow({
       <div
         className={cn(
           "mb-5 min-w-0 flex-1 rounded-[var(--radius-control)] border px-3 py-3",
-          isFailed
+          isTerminal && isFailed
             ? "border-destructive/35 bg-destructive/5"
-            : isCancelled
+            : isTerminal && isCancelled
               ? "border-border/70 bg-muted/20"
               : "border-border/70 bg-muted/10",
         )}

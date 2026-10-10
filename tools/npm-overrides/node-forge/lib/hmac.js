@@ -60,8 +60,7 @@ hmac.create = function() {
     }
 
     if(key === null) {
-      // reuse previous key
-      key = _key;
+      // reuse previous key (_ipadding/_opadding from prior start)
     } else {
       if(typeof key === 'string') {
         // convert string into byte buffer

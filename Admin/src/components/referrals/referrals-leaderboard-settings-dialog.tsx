@@ -6,7 +6,6 @@ import { Settings2 } from "lucide-react";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminFormDialog, AdminDialogFooterActions } from "@/components/ui/admin-dialog-presets";
 import { AdminSelect, type AdminSelectOption } from "@/components/ui/admin-select";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";

@@ -2803,6 +2803,7 @@ pki.createCaStore = function(certs) {
       if(der1 === der2) {
         result = match[i];
         match.splice(i, 1);
+        i -= 1;
       }
     }
     if(match.length === 0) {

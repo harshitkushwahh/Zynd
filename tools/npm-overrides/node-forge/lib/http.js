@@ -12,9 +12,6 @@ require('./util');
 // define http namespace
 var http = module.exports = forge.http = forge.http || {};
 
-// logging category
-var cat = 'forge.http';
-
 // normalizes an http header field name
 var _normalize = function(name) {
   return name.toLowerCase().replace(/(^.)|(-.)/g,
@@ -376,8 +373,8 @@ var _writeCookies = function(client, request) {
 
   // clean up expired cookies
   for(var i = 0; i < expired.length; ++i) {
-    var cookie = expired[i];
-    client.removeCookie(cookie.name, cookie.path);
+    var expiredCookie = expired[i];
+    client.removeCookie(expiredCookie.name, expiredCookie.path);
   }
 };
 
@@ -890,9 +887,6 @@ http.createRequest = function(options) {
       // separate cookies by semi-colons
       value = field + '; ';
     }
-
-    // get current time in utc seconds
-    var now = _getUtcTime(new Date());
 
     // output cookie name and value
     value += cookie.name + '=' + cookie.value;

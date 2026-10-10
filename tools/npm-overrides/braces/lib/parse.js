@@ -317,7 +317,7 @@ const parse = (input, options = {}) => {
         if (!node.nodes) {
           if (node.type === 'open') node.isOpen = true;
           if (node.type === 'close') node.isClose = true;
-          if (!node.nodes) node.type = 'text';
+          node.type = 'text';
           node.invalid = true;
         }
       });

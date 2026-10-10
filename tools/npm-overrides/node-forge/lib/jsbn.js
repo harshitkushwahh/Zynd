@@ -117,13 +117,11 @@ if(typeof(navigator) === 'undefined')
 {
    BigInteger.prototype.am = am3;
    dbits = 28;
-} else if(typeof navigator !== 'undefined' &&
-  navigator.appName == "Microsoft Internet Explorer") {
+} else if(navigator.appName == "Microsoft Internet Explorer") {
   BigInteger.prototype.am = am2;
   dbits = 30;
 }
-else if(typeof navigator !== 'undefined' &&
-  navigator.appName != "Netscape") {
+else if(navigator.appName != "Netscape") {
   BigInteger.prototype.am = am1;
   dbits = 26;
 }
@@ -276,7 +274,7 @@ function nbits(x) {
   if((t=x>>8) != 0) { x = t; r += 8; }
   if((t=x>>4) != 0) { x = t; r += 4; }
   if((t=x>>2) != 0) { x = t; r += 2; }
-  if((t=x>>1) != 0) { r += 1; }
+  if((x>>1) != 0) { r += 1; }
   return r;
 }
 

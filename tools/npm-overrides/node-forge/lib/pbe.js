@@ -30,8 +30,6 @@ require('./rc2');
 require('./rsa');
 require('./util');
 
-var BigInteger = forge.jsbn.BigInteger;
-
 // shortcut for asn.1 API
 var asn1 = forge.asn1;
 
@@ -540,10 +538,10 @@ pki.decryptRsaPrivateKey = function(pem, password) {
   if(msg.type !== 'ENCRYPTED PRIVATE KEY' &&
     msg.type !== 'PRIVATE KEY' &&
     msg.type !== 'RSA PRIVATE KEY') {
-    var error = new Error('Could not convert private key from PEM; PEM header type ' +
+    var headerTypeError = new Error('Could not convert private key from PEM; PEM header type ' +
       'is not "ENCRYPTED PRIVATE KEY", "PRIVATE KEY", or "RSA PRIVATE KEY".');
-    error.headerType = error;
-    throw error;
+    headerTypeError.headerType = msg.type;
+    throw headerTypeError;
   }
 
   if(msg.procType && msg.procType.type === 'ENCRYPTED') {
@@ -589,10 +587,10 @@ pki.decryptRsaPrivateKey = function(pem, password) {
       };
       break;
     default:
-      var error = new Error('Could not decrypt private key; unsupported ' +
+      var decryptAlgorithmError = new Error('Could not decrypt private key; unsupported ' +
         'encryption algorithm "' + msg.dekInfo.algorithm + '".');
-      error.algorithm = msg.dekInfo.algorithm;
-      throw error;
+      decryptAlgorithmError.algorithm = msg.dekInfo.algorithm;
+      throw decryptAlgorithmError;
     }
 
     // use OpenSSL legacy key derivation

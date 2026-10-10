@@ -579,18 +579,15 @@ function _fromDer(bytes, remaining, depth, options) {
     // save read position
     var savedRead = bytes.read;
     var savedRemaining = remaining;
-    var unused = 0;
-    if(type === asn1.Type.BITSTRING) {
-      /* The first octet gives the number of bits by which the length of the
-        bit string is less than the next multiple of eight (this is called
-        the "number of unused bits").
+    /* The first octet gives the number of bits by which the length of the
+      bit string is less than the next multiple of eight (this is called
+      the "number of unused bits").
 
-        The second and following octets give the value of the bit string
-        converted to an octet string. */
-      _checkBufferLength(bytes, remaining, 1);
-      unused = bytes.getByte();
-      remaining--;
-    }
+      The second and following octets give the value of the bit string
+      converted to an octet string. */
+    _checkBufferLength(bytes, remaining, 1);
+    var unused = bytes.getByte();
+    remaining--;
     // if all bits are used, maybe the BIT/OCTET STRING holds ASN.1 objs
     if(unused === 0) {
       try {
@@ -647,7 +644,6 @@ function _fromDer(bytes, remaining, depth, options) {
       }
     } else {
       value = bytes.getBytes(length);
-      remaining -= length;
     }
   }
 
@@ -1011,7 +1007,7 @@ asn1.generalizedTimeToDate = function(gentime) {
 
   // check for second fraction
   if(gentime.charAt(14) === '.') {
-    fff = parseFloat(gentime.substr(14), 10) * 1000;
+    fff = parseFloat(gentime.substr(14)) * 1000;
   }
 
   if(isUTC) {

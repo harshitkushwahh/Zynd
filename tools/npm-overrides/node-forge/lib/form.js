@@ -71,11 +71,11 @@ var _addField = function(obj, names, value, dict) {
   names = tmp;
 
   // split out array indexes
-  var tmp = [];
+  var parsedNames = [];
   $.each(names, function(n, name) {
-    tmp = tmp.concat(_parseName(name));
+    parsedNames = parsedNames.concat(_parseName(name));
   });
-  names = tmp;
+  names = parsedNames;
 
   // iterate over object property names until value is set
   $.each(names, function(n, name) {

@@ -417,11 +417,9 @@ export function MfSipMandateView({ planId, onClose }: MfSipMandateViewProps) {
       setPlan(updatedPlan);
       setError(null);
 
-      if (authUrl) {
-        redirectedRef.current = true;
-        if (!launchSipGatewayUrl(authUrl, "mandate")) {
-          redirectedRef.current = false;
-        }
+      redirectedRef.current = true;
+      if (!launchSipGatewayUrl(authUrl, "mandate")) {
+        redirectedRef.current = false;
       }
     } catch (err) {
       markMfSipMandateAutoRedirectBlocked(planId);
