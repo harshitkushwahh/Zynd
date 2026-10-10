@@ -180,7 +180,38 @@ def pipeline_run_awaits_worker(run: MfPipelineRunState) -> bool:
     }
 
 
+def running_pipeline_blocks_new_start(run: MfPipelineRunState | None) -> bool:
+    """Queued cancel leftovers must not block Dry run or Auto run."""
+    if run is None or run.status != MfPipelineRunStatus.running:
+        return False
+    if run._cancel_requested and pipeline_run_awaits_worker(run):
+        return False
+    return True
+
+
 async def get_latest_resumable_pipeline_run(
+    session: AsyncSession,
+    *,
+    nfo_only: bool | None = None,
+) -> MfPipelineRunState | None:
+    query = select(MfPipelineRun).where(
+        MfPipelineRun.status.in_(
+            [DbMfPipelineRunStatus.paused, DbMfPipelineRunStatus.failed, DbMfPipelineRunStatus.cancelled]
+        )
+    )
+    family = _mode_family_filter(nfo_only=nfo_only)
+    if family is not None:
+        query = query.where(family)
+    rows = await session.scalars(query.order_by(desc(MfPipelineRun.updated_at)).limit(8))
+    for row in rows:
+        run = state_from_row(row)
+        if run.status in {MfPipelineRunStatus.cancelled, MfPipelineRunStatus.failed} and not run.has_started_a_step():
+            continue
+        return run
+    return None
+
+
+async def get_latest_visible_pipeline_run(
     session: AsyncSession,
     *,
     nfo_only: bool | None = None,

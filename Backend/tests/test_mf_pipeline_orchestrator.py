@@ -18,7 +18,7 @@ from app.application.mf.mf_pipeline_orchestrator_service import (
     cancel_mf_pipeline_run,
     start_mf_pipeline_run,
 )
-from app.application.mf.mf_pipeline_store import pipeline_run_awaits_worker
+from app.application.mf.mf_pipeline_store import pipeline_run_awaits_worker, running_pipeline_blocks_new_start
 from app.application.mf.mf_pipeline_types import (
     PAUSE_REASON_JOB_STILL_RUNNING,
     MfPipelineControlledPause,
@@ -234,6 +234,63 @@ def test_run_state_hides_resume_while_backfill_is_still_running():
     payload = run.to_dict()
     assert payload["can_resume"] is False
     assert payload["pause_reason"] == PAUSE_REASON_JOB_STILL_RUNNING
+
+
+def test_run_state_hides_resume_when_cancelled_before_any_step():
+    run = MfPipelineRunState(
+        run_id="run-never-started",
+        mode="full",
+        triggered_by="ADMIN",
+        status=MfPipelineRunStatus.cancelled,
+        error="Cancelled by operator",
+        steps=[
+            MfPipelineStepState(key="cleanup-stale-runs", label="Clean stale ingestion runs"),
+            MfPipelineStepState(key="cybrilla-scheme-ingest", label="Cybrilla scheme ingest"),
+        ],
+    )
+    payload = run.to_dict()
+    assert payload["can_resume"] is False
+    assert run.has_started_a_step() is False
+
+
+def test_queued_cancel_does_not_block_a_new_start():
+    queued = MfPipelineRunState(
+        run_id="zombie-queue",
+        mode="full",
+        triggered_by="ADMIN",
+        status=MfPipelineRunStatus.running,
+        _cancel_requested=True,
+        steps=[MfPipelineStepState(key="cleanup-stale-runs", label="Clean stale ingestion runs")],
+    )
+    assert pipeline_run_awaits_worker(queued) is True
+    assert running_pipeline_blocks_new_start(queued) is False
+    assert running_pipeline_blocks_new_start(None) is False
+
+
+def test_run_state_keeps_resume_when_cancelled_after_a_step():
+    run = MfPipelineRunState(
+        run_id="run-mid",
+        mode="full",
+        triggered_by="ADMIN",
+        status=MfPipelineRunStatus.cancelled,
+        current_step_key="amfi-nav-daily",
+        error="Cancelled by operator",
+        steps=[
+            MfPipelineStepState(
+                key="cleanup-stale-runs",
+                label="Clean stale ingestion runs",
+                status=MfPipelineStepStatus.succeeded,
+            ),
+            MfPipelineStepState(
+                key="amfi-nav-daily",
+                label="amfi nav daily",
+                status=MfPipelineStepStatus.running,
+            ),
+        ],
+    )
+    payload = run.to_dict()
+    assert payload["can_resume"] is True
+    assert run.has_started_a_step() is True
 
 
 def test_already_running_skip_is_not_a_finished_step():

@@ -601,6 +601,14 @@ export function MfPipelineAutoPanel({
 
   const skipSteps = useMemo(() => Array.from(excludedSteps), [excludedSteps]);
 
+  const refreshPreview = useCallback(async () => {
+    const next = isNfo
+      ? await previewNfoPipeline(mode as NfoPipelineMode, skipSteps)
+      : await previewMfPipeline(mode as MfPipelineMode, skipSteps);
+    setPreview(next);
+    return next;
+  }, [isNfo, mode, skipSteps]);
+
   useEffect(() => {
     setPreview(null);
     setExcludedSteps(new Set());
@@ -691,10 +699,7 @@ export function MfPipelineAutoPanel({
         : await cancelMfPipelineRun(run.run_id);
       setRun(cancelledRun);
       if (preview) {
-        const next = isNfo
-          ? await previewNfoPipeline(mode as NfoPipelineMode, skipSteps)
-          : await previewMfPipeline(mode as MfPipelineMode, skipSteps);
-        setPreview(next);
+        await refreshPreview();
       }
     } catch (err) {
       setError(getErrorMessage(err, "Could not cancel pipeline."));
@@ -715,6 +720,9 @@ export function MfPipelineAutoPanel({
         await resumeMfPipelineRun(run.run_id);
       }
       setRun(await refreshRun(run.run_id));
+      if (preview) {
+        await refreshPreview();
+      }
     } catch (err) {
       setError(getErrorMessage(err, "Could not resume pipeline."));
     } finally {
@@ -777,10 +785,7 @@ export function MfPipelineAutoPanel({
         }
       }
       if (preview) {
-        const next = isNfo
-          ? await previewNfoPipeline(mode as NfoPipelineMode, skipSteps)
-          : await previewMfPipeline(mode as MfPipelineMode, skipSteps);
-        setPreview(next);
+        await refreshPreview();
       }
     } catch (err) {
       setError(getErrorMessage(err, "Could not clear stuck ingestion runs."));
@@ -804,7 +809,14 @@ export function MfPipelineAutoPanel({
   const awaitingCategory = Boolean(run?.can_approve_category && !isRunning);
   const awaitingApproval = awaitingStaging || awaitingCategory;
   const waitingOnJob = run?.pause_reason === "job_still_running";
-  const showResume = Boolean(run?.can_resume && !isRunning && !awaitingApproval && !waitingOnJob);
+  const neverStarted = Boolean(
+    run &&
+      run.progress.completed_steps === 0 &&
+      run.steps.every((step) => step.status === "pending")
+  );
+  const showResume = Boolean(
+    run?.can_resume && !neverStarted && !isRunning && !awaitingApproval && !waitingOnJob
+  );
   const failedStep = run?.steps.find((step) => step.status === "failed") ?? null;
   const maintenanceWindow = preview?.flags.maintenance_window;
   const startBlocked = preview ? !preview.can_start : false;
@@ -1051,8 +1063,12 @@ export function MfPipelineAutoPanel({
               </p>
             ) : null}
             {run.error && !awaitingApproval ? (
-              <AdminFeedbackMessage variant={waitingOnJob ? "warning" : "destructive"}>
-                {run.error}
+              <AdminFeedbackMessage
+                variant={waitingOnJob || (run.status === "cancelled" && neverStarted) ? "warning" : "destructive"}
+              >
+                {run.status === "cancelled" && neverStarted
+                  ? "Cancelled before any step started. Use Auto run to start a new bootstrap."
+                  : run.error}
               </AdminFeedbackMessage>
             ) : null}
             {run.can_resume && failedStep && canRun ? (
