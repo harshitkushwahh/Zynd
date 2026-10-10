@@ -12,19 +12,25 @@ from app.application.mf.amfi_parsers import (
 )
 
 
-def test_parse_ter_rows_regular_only() -> None:
+def test_parse_ter_rows_regular_and_direct() -> None:
     rows = [
         {
             "Scheme_Name": "Test Fund - Growth",
             "R_TER": "1.94",
             "D_TER": "0.45",
+            "R_ISIN": "INF123A01016",
+            "D_ISIN": "INF123A01024",
             "TER_Date": "2026-03-01T00:00:00.000Z",
         }
     ]
     parsed = parse_ter_rows(rows)
-    assert len(parsed) == 1
-    assert parsed[0]["plan_type"] == "REGULAR"
-    assert parsed[0]["ter_percent"] == Decimal("1.94")
+    assert len(parsed) == 2
+    regular = next(item for item in parsed if item["plan_type"] == "REGULAR")
+    direct = next(item for item in parsed if item["plan_type"] == "DIRECT")
+    assert regular["ter_percent"] == Decimal("1.94")
+    assert regular["isin"] == "INF123A01016"
+    assert direct["ter_percent"] == Decimal("0.45")
+    assert direct["isin"] == "INF123A01024"
 
 
 def test_parse_aaum_json_blocks() -> None:

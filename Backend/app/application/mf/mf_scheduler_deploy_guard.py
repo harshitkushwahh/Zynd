@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.mf.mf_pipeline_store import list_running_pipeline_runs
+from app.application.mf.mf_pipeline_store import list_running_pipeline_runs, pipeline_run_awaits_worker
 from app.infrastructure.persistence.mf_models import IngestionRunLog, IngestionRunStatus
 
 SCHEDULER_WORKER = "mf-scheduler"
@@ -20,6 +20,8 @@ async def live_mf_scheduler_work(session: AsyncSession) -> tuple[bool, list[str]
     for name in sorted({str(job) for job in jobs}):
         reasons.append(f"ingestion:{name}")
     for run in await list_running_pipeline_runs(session):
+        if pipeline_run_awaits_worker(run):
+            continue
         step = run.current_step_key or "queued"
         reasons.append(f"pipeline:{run.run_id}:{step}")
     return bool(reasons), reasons

@@ -10,6 +10,7 @@ from app.application.mf.mf_scheduler_jobs import last_scheduled_time
 from app.application.mf.nfo_chain_trigger_service import (
     consume_pending_chain,
     get_or_create_state,
+    mf_ready_for_auto_nfo,
     nfo_already_succeeded_today,
     nfo_scheduler_timezone,
 )
@@ -55,6 +56,13 @@ async def _tick(fired_fallback: dict[str, datetime]) -> None:
         state = await get_or_create_state(session)
         pending = state.pending_after_mf
         await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        ready, ready_reason = await mf_ready_for_auto_nfo(session)
+        await session.commit()
+    if not ready:
+        logger.info("NFO scheduler waiting for MF scheduler reason=%s", ready_reason)
+        return
 
     if pending:
         async with AsyncSessionLocal() as session:

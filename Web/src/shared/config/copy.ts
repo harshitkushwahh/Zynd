@@ -40,10 +40,14 @@ export const copy = {
     referralCodeInvalid: "Enter a valid referral code (6–16 letters or numbers).",
   },
   backendConnection: {
-    title: "Waiting for connection",
+    title: "We'll be right back",
     description:
-      "We can't reach the server right now. Your requests will keep retrying in the background.",
+      "ZYND is updating or restarting. This usually takes a few minutes. Your work is saved — check again when the server is back.",
     progressLabel: "Waiting for backend connection",
+    checkStatus: "Fetch latest status",
+    checking: "Checking status…",
+    stillUpdating: "Still updating. Try again in a moment.",
+    backOnline: "We're back. Reloading…",
   },
   account: {
     profileOnApp: `Your profile information on ${APP_NAME}.`,
