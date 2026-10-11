@@ -9,8 +9,12 @@ type BackendConnectionListener = (state: BackendConnectionState) => void;
 
 const listeners = new Set<BackendConnectionListener>();
 
+/** Ignore a single wake/sleep blip; real API downtime still shows after this. */
+export const BACKEND_WAITING_CONFIRM_MS = 3000;
+
 let pendingCount = 0;
 let isWaiting = false;
+let waitingConfirmTimer: ReturnType<typeof setTimeout> | null = null;
 
 function emit() {
   const state = getBackendConnectionState();
@@ -41,13 +45,25 @@ export function endBackendRequest(): void {
   emit();
 }
 
+function clearWaitingConfirmTimer(): void {
+  if (waitingConfirmTimer === null) return;
+  clearTimeout(waitingConfirmTimer);
+  waitingConfirmTimer = null;
+}
+
 export function markBackendConnectionWaiting(): void {
   if (isWaiting) return;
-  isWaiting = true;
-  emit();
+  if (waitingConfirmTimer !== null) return;
+  waitingConfirmTimer = setTimeout(() => {
+    waitingConfirmTimer = null;
+    if (isWaiting) return;
+    isWaiting = true;
+    emit();
+  }, BACKEND_WAITING_CONFIRM_MS);
 }
 
 export function markBackendConnectionReady(): void {
+  clearWaitingConfirmTimer();
   if (!isWaiting) return;
   isWaiting = false;
   emit();

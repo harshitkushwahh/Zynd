@@ -658,8 +658,18 @@ jobs:
             echo "Infrastructure containers were not restarted."
             end_section
 
-            section "[7/15] Build API"
-            compose build api
+            section "[7/15] Build API and backend workers"
+            # Always rebuild worker images here. Recreate may be skipped while a
+            # pipeline is live; without this, mf-scheduler keeps an old image and
+            # Admin Auto bootstrap runs stale code (e.g. empty NAV cold-start).
+            worker_build=""
+            for worker in api mf-scheduler nfo-scheduler mf-order-worker mf-cas-worker event-worker outbox-relay document-scan-worker deletion-cron; do
+              if printf '%s\n' "${compose_services[@]}" | grep -qx "${worker}"; then
+                worker_build="${worker_build} ${worker}"
+              fi
+            done
+            # shellcheck disable=SC2086
+            compose build ${worker_build}
             end_section
 
             section "[8/15] Deploy API and backend workers"

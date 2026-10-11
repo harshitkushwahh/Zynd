@@ -42,13 +42,24 @@ export function BackendConnectionProvider({ children }: { children: ReactNode })
       }
     }
 
+    function onResume() {
+      if (document.visibilityState === "hidden") return;
+      void pollHealth();
+    }
+
     void pollHealth();
     const timer = window.setInterval(() => {
       void pollHealth();
     }, 12000);
+    window.addEventListener("online", onResume);
+    window.addEventListener("pageshow", onResume);
+    document.addEventListener("visibilitychange", onResume);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.removeEventListener("online", onResume);
+      window.removeEventListener("pageshow", onResume);
+      document.removeEventListener("visibilitychange", onResume);
     };
   }, []);
 
