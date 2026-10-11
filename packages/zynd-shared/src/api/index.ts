@@ -1,5 +1,6 @@
 export { configureApiClient, getApiUrl } from "./configure";
 export {
+  BACKEND_WAITING_CONFIRM_MS,
   getBackendConnectionState,
   isBackendConnectionError,
   isBackendConnectionStatus,

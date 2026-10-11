@@ -103,6 +103,9 @@ def main() -> int:
     if "check_mf_worker_recreate" not in pipeline:
         print("Deploy must skip mf-scheduler recreate while ingestion is live.")
         failed = True
+    if "Always rebuild worker images here" not in pipeline:
+        print("Deploy must rebuild mf-scheduler image even when recreate is skipped.")
+        failed = True
     return 1 if failed else 0
 
 
