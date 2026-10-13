@@ -12,6 +12,7 @@ from app.application.mf.mf_pipeline_store import get_running_pipeline_run
 from app.application.mf.mf_scheduler_jobs import build_scheduled_jobs, last_scheduled_time
 from app.application.mf.mf_scheduler_skip_service import is_scheduler_job_skipped_today
 from app.application.mf.nfo_ingestion_mutex_service import running_mf_family_jobs
+from app.application.mf.nfo_dates import nfo_scheduler_timezone, today_ist
 from app.application.mf.nfo_detection_service import NFO_JOB_NAMES
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import NfoSchedulerState
@@ -19,19 +20,6 @@ from app.infrastructure.persistence.mf_models import NfoSchedulerState
 logger = logging.getLogger(__name__)
 
 STATE_ID = 1
-
-
-def nfo_scheduler_timezone():
-    settings = get_settings()
-    try:
-        return ZoneInfo(settings.zynd_nfo_scheduler_timezone or "Asia/Kolkata")
-    except ZoneInfoNotFoundError:
-        return ZoneInfo("Asia/Kolkata")
-
-
-def today_ist(now: datetime | None = None) -> date:
-    current = now or datetime.now(timezone.utc)
-    return current.astimezone(nfo_scheduler_timezone()).date()
 
 
 def mf_boundary_job_names() -> list[str]:
