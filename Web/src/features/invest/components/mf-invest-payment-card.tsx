@@ -109,9 +109,6 @@ export type MfInvestPaymentCardProps = {
   exitLoadPct?: number;
   onRedeemProceed?: (payload: MfRedeemProceedPayload) => void | Promise<void>;
   onRedeemBack?: () => void;
-  redeemConsentOrderId?: string | null;
-  onRedeemConsentConfirmed?: () => void;
-  onRedeemConsentDismiss?: () => void;
   folioNumber?: string | null;
 };
 
@@ -601,9 +598,6 @@ export function MfInvestPaymentCard({
   exitLoadPct,
   onRedeemProceed,
   onRedeemBack,
-  redeemConsentOrderId,
-  onRedeemConsentConfirmed,
-  onRedeemConsentDismiss,
   folioNumber,
 }: MfInvestPaymentCardProps) {
   const hasFundForUi = Boolean(fundName?.trim());
@@ -644,9 +638,6 @@ export function MfInvestPaymentCard({
           exitLoadPct={exitLoadPct}
           onProceed={onRedeemProceed}
           onBack={onRedeemBack}
-          redeemConsentOrderId={redeemConsentOrderId}
-          onRedeemConsentConfirmed={onRedeemConsentConfirmed}
-          onRedeemConsentDismiss={onRedeemConsentDismiss}
         />
       </div>
     );

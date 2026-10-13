@@ -45,10 +45,6 @@ function formatOrderType(orderType: string) {
   return orderType.replaceAll("_", " ");
 }
 
-function isSwitchOrder(order: MfOrder) {
-  return order.order_type?.trim().toUpperCase() === "SWITCH";
-}
-
 function SwitchPathSummary({ order, className }: { order: MfOrder; className?: string }) {
   const names = switchFundNames(order);
   if (!names) return null;
