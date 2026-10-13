@@ -31,6 +31,7 @@ export function MfCartAmcAvatarStack({
           >
             <MfFundAmcAvatar
               amcLogoUrl={item.amc_logo_url}
+              amcSlug={item.amc_slug}
               amcName={amcName}
               size="sm"
               className="size-6 p-0.5 ring-2 ring-card"

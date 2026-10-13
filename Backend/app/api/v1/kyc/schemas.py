@@ -387,6 +387,21 @@ class InvestorSettingsStateResponse(BaseModel):
     nominees: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class MfFolioNominationItemResponse(BaseModel):
+    folio_number: str
+    amc_code: Optional[str] = None
+    amc_name: str
+    amc_slug: Optional[str] = None
+    nominee_count: int = 0
+    nominee_status: str
+    primary_nominee_name: Optional[str] = None
+
+
+class MfFolioNominationListResponse(BaseModel):
+    available: bool
+    folios: list[MfFolioNominationItemResponse] = Field(default_factory=list)
+
+
 class InvestorProfileSettingsUpdateRequest(BaseModel):
     income_slab: Optional[str] = None
     pep_details: Optional[str] = None

@@ -8,6 +8,7 @@ from app.application.mf.catalog_health_service import (
     health_blocks_public_display,
     invest_health_sql_clause,
 )
+from app.application.mf.ondc_lumpsum_eligibility import fund_allows_ondc_lumpsum
 from app.core.config import get_settings
 
 from app.infrastructure.persistence.mf_models import (

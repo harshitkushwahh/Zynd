@@ -10,6 +10,7 @@ import {
   SIP_FREQUENCY_MONTHLY,
   type SipFrequency,
 } from "@/features/invest/lib/mf-sip-frequency";
+import { MfFolioNominationInfoButton } from "@/features/invest/components/mf-folio-nomination-info";
 
 type InvestMode = "sip" | "lumpsum";
 type InvestTab = "monthly" | "daily" | "lumpsum";
@@ -22,6 +23,7 @@ export type MfInvestModeToggleProps = {
   monthlySipAllowed: boolean;
   dailySipAllowed: boolean;
   disabled?: boolean;
+  showFolioNominationInfo?: boolean;
 };
 
 function activeTab(mode: InvestMode, sipFrequency: SipFrequency): InvestTab {
@@ -40,6 +42,7 @@ export function MfInvestModeToggle({
   monthlySipAllowed,
   dailySipAllowed,
   disabled = false,
+  showFolioNominationInfo = false,
 }: MfInvestModeToggleProps) {
   const selected = activeTab(mode, sipFrequency);
 
@@ -61,11 +64,12 @@ export function MfInvestModeToggle({
   }
 
   return (
-    <div
-      role="tablist"
-      aria-label={copy.mutualFunds.paymentCardTitle}
-      className="grid grid-cols-3 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
-    >
+    <div className="flex items-center gap-2">
+      <div
+        role="tablist"
+        aria-label={copy.mutualFunds.paymentCardTitle}
+        className="grid min-w-0 flex-1 grid-cols-3 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
+      >
       <button
         type="button"
         role="tab"
@@ -122,6 +126,8 @@ export function MfInvestModeToggle({
         <CreditCard className="size-3.5 shrink-0 opacity-90" aria-hidden />
         {copy.mutualFunds.paymentCardOneTime}
       </button>
+      </div>
+      {showFolioNominationInfo ? <MfFolioNominationInfoButton /> : null}
     </div>
   );
 }

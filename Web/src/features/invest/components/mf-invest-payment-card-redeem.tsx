@@ -21,7 +21,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { MfTransactionConsentOtpSection } from "@/features/invest/components/mf-transaction-consent-otp-section";
 import { formatInr } from "@/features/invest/lib/mf-format";
+import {
+  confirmMfRedemption,
+  fetchMfRedemptionConsent,
+  sendMfRedemptionConsentOtp,
+} from "@/features/dashboard/portfolio/lib/portfolio-api";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 

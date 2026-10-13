@@ -7,6 +7,7 @@ PLATFORM_TERMS_OF_SERVICE = "platform.terms_of_service"
 PLATFORM_PRIVACY_POLICY = "platform.privacy_policy"
 KYC_NOMINATION_OPT_OUT = "kyc.nomination_opt_out"
 DISTRIBUTOR_CLIENT_NOMINATION_OPT_OUT = "distributor.client_nomination_opt_out"
+MF_TRANSACTION_AUTHORIZATION = "mf.transaction_authorization"
 
 ALL_SEED_KEYS = (
     PLATFORM_SIGNUP_LEGAL,
@@ -14,6 +15,7 @@ ALL_SEED_KEYS = (
     PLATFORM_PRIVACY_POLICY,
     KYC_NOMINATION_OPT_OUT,
     DISTRIBUTOR_CLIENT_NOMINATION_OPT_OUT,
+    MF_TRANSACTION_AUTHORIZATION,
 )
 
 __all__ = [

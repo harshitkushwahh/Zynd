@@ -56,6 +56,42 @@ def test_category_assignment() -> None:
     assert should_assign_nfo_category(NfoOfferStatus.open, hidden=False)
     assert not should_assign_nfo_category(NfoOfferStatus.allotted, hidden=False)
     assert not should_assign_nfo_category(NfoOfferStatus.open, hidden=True)
+    assert not should_assign_nfo_category(NfoOfferStatus.closed, hidden=False)
+
+
+def test_category_assignment_requires_invest_eligibility() -> None:
+    import uuid
+    from datetime import date
+
+    from app.infrastructure.persistence.mf_models import NfoOffer
+
+    eligible = NfoOffer(
+        id=uuid.uuid4(),
+        product_id=uuid.uuid4(),
+        mutual_fund_id=1,
+        status=NfoOfferStatus.open,
+        subscription_open_date=date(2026, 10, 1),
+        subscription_close_date=date(2026, 10, 19),
+        source="AMFI",
+        is_hidden=False,
+        is_featured=False,
+        admin_override=False,
+    )
+    assert should_assign_nfo_category(NfoOfferStatus.open, hidden=False, offer=eligible)
+
+    heuristic = NfoOffer(
+        id=uuid.uuid4(),
+        product_id=uuid.uuid4(),
+        mutual_fund_id=2,
+        status=NfoOfferStatus.open,
+        subscription_open_date=date(2026, 10, 1),
+        subscription_close_date=date(2026, 10, 19),
+        source="HEURISTIC",
+        is_hidden=False,
+        is_featured=False,
+        admin_override=False,
+    )
+    assert not should_assign_nfo_category(NfoOfferStatus.open, hidden=False, offer=heuristic)
 
 
 def test_nfo_scheme_category_comes_from_sebi() -> None:

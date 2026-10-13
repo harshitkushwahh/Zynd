@@ -66,6 +66,23 @@ function isSwitchOrder(order: Pick<MfOrder, "order_type">) {
   return order.order_type?.trim().toUpperCase() === "SWITCH";
 }
 
+export function switchFundNames(order: MfOrder): { from: string; to: string } | null {
+  const from = (order.switch_out_product_name ?? order.product_name)?.trim();
+  const to = order.switch_in_product_name?.trim();
+  if (!from || !to) return null;
+  return { from, to };
+}
+
+export function hasSwitchPath(order: MfOrder): boolean {
+  return isSwitchOrder(order) && switchFundNames(order) !== null;
+}
+
+function switchDescription(template: string, order: MfOrder, fallback: string) {
+  const names = switchFundNames(order);
+  if (!names) return fallback;
+  return template.replace("{from}", names.from).replace("{to}", names.to);
+}
+
 function isConsentFundOrder(order: Pick<MfOrder, "order_type">) {
   return isRedemptionOrder(order) || isSwitchOrder(order);
 }
@@ -372,7 +389,11 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
     buildStep({
       title: isSwitch ? portfolioCopy.holdingSwitchJourneyStepPlaced : portfolioCopy.redeemJourneyStepPlaced,
       description: isSwitch
-        ? portfolioCopy.holdingSwitchJourneyPlacedDescription
+        ? switchDescription(
+            copy.transactions.journeySwitchPlacedDescription,
+            order,
+            portfolioCopy.holdingSwitchJourneyPlacedDescription,
+          )
         : portfolioCopy.redeemJourneyPlacedDescription,
       toStatus: copy.transactions.journeyStatusDone,
       badgeVariant: "success",
@@ -439,7 +460,11 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
               : portfolioCopy.redeemJourneyStepProcessing,
           description: isSubmitted
             ? isSwitch
-              ? portfolioCopy.holdingSwitchJourneyAmcSubmittedDescription
+              ? switchDescription(
+                  copy.transactions.journeySwitchSubmittedDescription,
+                  order,
+                  portfolioCopy.holdingSwitchJourneyAmcSubmittedDescription,
+                )
               : portfolioCopy.redeemJourneyAmcSubmittedDescription
             : isSwitch
               ? portfolioCopy.holdingSwitchJourneyProcessingDescription
@@ -474,7 +499,11 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
           : portfolioCopy.redeemJourneyStepProcessing,
       description: isSubmitted
         ? isSwitch
-          ? portfolioCopy.holdingSwitchJourneyAmcSubmittedDescription
+          ? switchDescription(
+              copy.transactions.journeySwitchSubmittedDescription,
+              order,
+              portfolioCopy.holdingSwitchJourneyAmcSubmittedDescription,
+            )
           : portfolioCopy.redeemJourneyAmcSubmittedDescription
         : isSwitch
           ? portfolioCopy.holdingSwitchJourneyProcessingDescription

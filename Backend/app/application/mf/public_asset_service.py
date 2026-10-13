@@ -78,11 +78,34 @@ def resolve_amc_logo_url(stored_url: str | None, slug: str, settings: Settings |
 
 
 def enrich_fund_summary_logo(item: dict, settings: Settings | None = None) -> dict:
+    from app.application.mf.amfi_fund_bridge_service import UNKNOWN_AMC_SLUG
+    from app.application.mf.invest_amc_display import resolve_invest_amc_display
+
     settings = settings or get_settings()
+    scheme_name = str(item.get("name") or "")
+    amc_name = str(item.get("amc_name") or "")
     slug = str(item.get("amc_slug") or "")
+    logo_url = item.get("amc_logo_url")
+
+    stale_unknown = slug == UNKNOWN_AMC_SLUG or amc_name.lower() == "unknown amc"
+    if scheme_name and (stale_unknown or not logo_url):
+        resolved_name, resolved_slug, resolved_logo = resolve_invest_amc_display(
+            amc_name=amc_name or "Unknown AMC",
+            amc_slug=slug or UNKNOWN_AMC_SLUG,
+            amc_logo_url=logo_url if isinstance(logo_url, str) else None,
+            scheme_name=scheme_name,
+            settings=settings,
+        )
+        return {
+            **item,
+            "amc_name": resolved_name,
+            "amc_slug": resolved_slug,
+            "amc_logo_url": resolved_logo,
+        }
+
     if not slug:
         return item
-    resolved = resolve_amc_logo_url(item.get("amc_logo_url"), slug, settings)
+    resolved = resolve_amc_logo_url(logo_url if isinstance(logo_url, str) else None, slug, settings)
     if item.get("amc_logo_url") == resolved:
         return item
     return {**item, "amc_logo_url": resolved}

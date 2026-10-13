@@ -14,10 +14,10 @@ from app.infrastructure.security.rate_limit import check_rate_limit
 logger = logging.getLogger(__name__)
 
 OTP_TTL_SECONDS = 600
+FUND_CONFIRMATION_OTP_TTL_SECONDS = 90
 OTP_MAX_ATTEMPTS = 5
 OTP_RESEND_BASE_SECONDS = 30
 OTP_RESEND_MAX_SECONDS = 300
-OTP_RESEND_MULTIPLIER = 2
 
 
 class OtpRateLimitError(Exception):
@@ -40,9 +40,15 @@ def _cooldown_key(purpose: str, identifier: str) -> str:
     return f"otp_resend_cooldown:{purpose}:{identifier.lower()}"
 
 
+def otp_ttl_seconds(purpose: str) -> int:
+    if purpose == "fund_confirmation":
+        return FUND_CONFIRMATION_OTP_TTL_SECONDS
+    return OTP_TTL_SECONDS
+
+
 def _calc_retry_after(resend_count: int) -> int:
-    exponent = max(resend_count - 1, 0)
-    delay = OTP_RESEND_BASE_SECONDS * (OTP_RESEND_MULTIPLIER**exponent)
+    # 30s after first send, then +30s each resend (60s, 90s, … capped at 5 min).
+    delay = OTP_RESEND_BASE_SECONDS * max(resend_count, 1)
     return min(int(delay), OTP_RESEND_MAX_SECONDS)
 
 
@@ -85,7 +91,7 @@ async def send_otp(
     await redis.setex(cooldown_key, max(retry_after_seconds + 300, 3600), json.dumps(payload))
     return {
         "retry_after_seconds": retry_after_seconds,
-        "expires_in": OTP_TTL_SECONDS,
+        "expires_in": otp_ttl_seconds(purpose),
     }
 
 
@@ -119,7 +125,7 @@ async def generate_otp(
     code = dev_code if dev_code else f"{random.randint(0, 999999):06d}"
     redis = await get_redis(settings.redis_cache_db)
     payload = {"code": code, "attempts": 0}
-    await redis.setex(_otp_key(purpose, identifier), OTP_TTL_SECONDS, json.dumps(payload))
+    await redis.setex(_otp_key(purpose, identifier), otp_ttl_seconds(purpose), json.dumps(payload))
 
     if settings.debug:
         logger.info("[DEV OTP] purpose=%s identifier=%s code=%s", purpose, identifier, code)

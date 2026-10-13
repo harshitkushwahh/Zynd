@@ -398,13 +398,17 @@ async def send_plan_consent_otp(
     if plan.status in _TERMINAL:
         raise MfOrderError(code="plan_terminal", message="This plan is already closed", status_code=409)
     email, mobile = await _consent_contacts(session, plan)
-    try:
-        otp_meta = await request_otp(OtpPurpose.fund_confirmation, str(plan.id), ip=ip, destination=mobile)
-    except (OtpCooldownError, OtpRateLimitError) as exc:
-        raise MfOrderError(code="otp_rate_limited", message=str(exc), status_code=429) from exc
+    from app.application.mf.mf_transaction_consent_service import send_mf_transaction_consent_otp
+
+    otp_payload = await send_mf_transaction_consent_otp(
+        identifier=str(plan.id),
+        email=email,
+        mobile=mobile,
+        ip=ip,
+    )
     plan.metadata_ = {**_plan_meta(plan), "consent_otp_sent": True, "consent_email": email, "consent_mobile": mobile}
     await session.flush()
-    return {"plan_id": str(plan.id), "masked_mobile": _mask_mobile(mobile), **otp_meta}
+    return {"plan_id": str(plan.id), **otp_payload}
 
 
 async def confirm_systematic_plan(
@@ -412,14 +416,36 @@ async def confirm_systematic_plan(
     plan: MfSwpPlan | MfStpPlan,
     *,
     otp: str,
+    ip: str | None = None,
+    user_agent: str | None = None,
 ) -> MfSwpPlan | MfStpPlan:
     if plan.status in _TERMINAL:
         raise MfOrderError(code="plan_terminal", message="This plan is already closed", status_code=409)
     meta = _plan_meta(plan)
     if not meta.get("consent_otp_sent"):
         raise MfOrderError(code="consent_otp_required", message="Send OTP before confirming", status_code=409)
-    if not await verify_otp(OtpPurpose.fund_confirmation, str(plan.id), otp.strip()):
-        raise MfOrderError(code="invalid_otp", message="Invalid or expired OTP", status_code=400)
+    from app.application.mf.mf_transaction_consent_service import (
+        merge_platform_consent_metadata,
+        verify_mf_transaction_consent_otp,
+    )
+    from app.infrastructure.persistence.models import User
+
+    user = await session.get(User, plan.user_id)
+    if not user:
+        raise MfOrderError(code="plan_not_found", message="Plan not found", status_code=404)
+    plan_kind = "swp" if isinstance(plan, MfSwpPlan) else "stp"
+    consent_record_id = await verify_mf_transaction_consent_otp(
+        session,
+        user=user,
+        identifier=str(plan.id),
+        otp=otp,
+        transaction_kind=plan_kind,
+        subject_id=plan.id,
+        ip=ip,
+        user_agent=user_agent,
+        extra_metadata={"plan_kind": plan_kind, "amount_inr": float(plan.amount_inr)},
+    )
+    meta = merge_platform_consent_metadata(meta, consent_record_id=consent_record_id)
     if not plan.fp_plan_id:
         raise MfOrderError(code="plan_not_ready", message="Plan is not ready for confirmation", status_code=409)
     body = {

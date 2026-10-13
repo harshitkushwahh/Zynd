@@ -10,13 +10,8 @@ from typing import Any, Literal
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.identity.otp_app_service import (
-    OtpCooldownError,
-    OtpPurpose,
-    OtpRateLimitError,
-    request_otp,
-    verify_otp,
-)
+from app.application.mf.mf_consent_contact_mask import mask_mf_consent_email as _mask_email
+from app.application.mf.mf_consent_contact_mask import mask_mf_consent_mobile as _mask_mobile
 from app.application.mf.investment_constraints import extract_investment_constraints_from_scheme
 from app.application.mf.mf_fp_state import map_fp_redemption_state_to_order
 from app.application.mf.mf_order_errors import MfOrderError
@@ -138,24 +133,6 @@ def _normalize_folio_mobile(raw: str | None) -> str | None:
     if cleaned.startswith("91") and len(cleaned) > 10:
         cleaned = cleaned[2:]
     return cleaned if len(cleaned) >= 10 else None
-
-
-def _mask_email(email: str) -> str:
-    local, _, domain = email.partition("@")
-    if not domain:
-        return email
-    if len(local) <= 2:
-        masked_local = local[0] + "•••"
-    else:
-        masked_local = local[0] + "•••" + local[-1]
-    return f"{masked_local}@{domain}"
-
-
-def _mask_mobile(mobile: str) -> str:
-    digits = re.sub(r"\D", "", mobile)
-    if len(digits) < 4:
-        return mobile
-    return f"+91 •••• ••{digits[-4:]}"
 
 
 def _extract_folio_consent_contacts(folio_payload: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -601,16 +578,15 @@ async def send_redemption_consent_otp(
     if not mobile:
         raise MfOrderError(code="consent_contact_missing", message="Folio registered mobile is unavailable", status_code=409)
 
+    from app.application.mf.mf_transaction_consent_service import send_mf_transaction_consent_otp
+
     identifier = str(order.id)
-    try:
-        otp_meta = await request_otp(
-            OtpPurpose.fund_confirmation,
-            identifier,
-            ip=ip,
-            destination=mobile,
-        )
-    except (OtpCooldownError, OtpRateLimitError) as exc:
-        raise MfOrderError(code="otp_rate_limited", message=str(exc), status_code=429) from exc
+    otp_payload = await send_mf_transaction_consent_otp(
+        identifier=identifier,
+        email=email,
+        mobile=mobile,
+        ip=ip,
+    )
 
     order.metadata_ = {
         **meta,
@@ -619,7 +595,7 @@ async def send_redemption_consent_otp(
         "consent_mobile": mobile,
     }
     await session.flush()
-    return {"order_id": str(order.id), "masked_mobile": _mask_mobile(mobile), **otp_meta}
+    return {"order_id": str(order.id), **otp_payload}
 
 
 async def confirm_redemption_order(
@@ -629,8 +605,8 @@ async def confirm_redemption_order(
     order_id: uuid.UUID,
     otp: str,
     ip: str | None = None,
+    user_agent: str | None = None,
 ) -> MfOrder:
-    del ip
     order = await get_redemption_order(session, user_id=user_id, order_id=order_id)
     if not order:
         raise MfOrderError(code="order_not_found", message="Redemption order not found", status_code=404)
@@ -641,9 +617,28 @@ async def confirm_redemption_order(
     if not meta.get("consent_otp_sent"):
         raise MfOrderError(code="consent_otp_required", message="Send OTP before confirming redemption", status_code=409)
 
+    from app.application.mf.mf_transaction_consent_service import (
+        merge_platform_consent_metadata,
+        verify_mf_transaction_consent_otp,
+    )
+    from app.infrastructure.persistence.models import User
+
+    user = await session.get(User, user_id)
+    if not user:
+        raise MfOrderError(code="order_not_found", message="Redemption order not found", status_code=404)
     identifier = str(order.id)
-    if not await verify_otp(OtpPurpose.fund_confirmation, identifier, otp.strip()):
-        raise MfOrderError(code="invalid_otp", message="Invalid or expired OTP", status_code=400)
+    consent_record_id = await verify_mf_transaction_consent_otp(
+        session,
+        user=user,
+        identifier=identifier,
+        otp=otp,
+        transaction_kind="redemption",
+        subject_id=order.id,
+        ip=ip,
+        user_agent=user_agent,
+        extra_metadata={"order_type": order.order_type.value, "amount_inr": float(order.amount_inr)},
+    )
+    meta = merge_platform_consent_metadata(meta, consent_record_id=consent_record_id)
 
     fp_redemption_id = _fp_redemption_id(order)
     email = meta.get("consent_email")

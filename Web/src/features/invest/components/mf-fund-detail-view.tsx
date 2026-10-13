@@ -180,7 +180,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1 space-y-6">
-          <MfFundDetailHeader fund={fund} />
+          {isInvestNfo(fund) ? null : <MfFundDetailHeader fund={fund} />}
 
           {isInvestNfo(fund) ? (
             <MfNfoOfferPanel

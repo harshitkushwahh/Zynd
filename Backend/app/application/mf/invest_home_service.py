@@ -13,7 +13,7 @@ from app.application.mf.catalog_display_service import (
     product_category_effective_clause,
 )
 from app.application.mf.catalog_governance_service import invest_visibility_sql_clause
-from app.application.mf.public_asset_service import resolve_amc_logo_url
+from app.application.mf.invest_amc_display import resolve_invest_amc_display
 from app.application.mf.product_content_service import (
     get_compliance_settings_public,
     get_product_content_for_invest,
@@ -63,11 +63,14 @@ async def list_invest_categories(session: AsyncSession) -> list[dict]:
             .order_by(Category.display_order, Category.name)
         )
     ).all()
-    items = [
-        {"id": category_id, "slug": slug, "name": name, "fund_count": count}
-        for category_id, slug, name, count in rows
-    ]
+    from app.application.mf.invest_nfo_eligibility import count_investable_nfo_offers
     from app.application.mf.nfo_detection_service import NFO_CATEGORY_SLUG
+
+    items = []
+    for category_id, slug, name, count in rows:
+        if slug == NFO_CATEGORY_SLUG:
+            count = await count_investable_nfo_offers(session)
+        items.append({"id": category_id, "slug": slug, "name": name, "fund_count": count})
 
     if not any(item["slug"] == NFO_CATEGORY_SLUG for item in items):
         nfo = await session.scalar(select(Category).where(Category.slug == NFO_CATEGORY_SLUG))
@@ -76,7 +79,7 @@ async def list_invest_categories(session: AsyncSession) -> list[dict]:
                 "id": nfo.id if nfo else 0,
                 "slug": NFO_CATEGORY_SLUG,
                 "name": nfo.name if nfo else "NFO",
-                "fund_count": 0,
+                "fund_count": await count_investable_nfo_offers(session),
             }
         )
     return items
@@ -569,6 +572,22 @@ async def get_invest_config(session: AsyncSession) -> dict:
     }
 
 
+def _resolve_invest_amc_display(
+    *,
+    amc: FundAmc,
+    fund: MutualFund,
+    product: Product,
+    settings,
+) -> tuple[str, str, str | None]:
+    return resolve_invest_amc_display(
+        amc_name=amc.name,
+        amc_slug=amc.slug,
+        amc_logo_url=amc.logo_url,
+        scheme_name=product.name or fund.scheme_name or "",
+        settings=settings,
+    )
+
+
 def _serialize_fund_summary(
     product: Product,
     fund: MutualFund,
@@ -583,14 +602,20 @@ def _serialize_fund_summary(
     health_badges: list[str] | None = None,
     display_content: ProductDisplayContent | None = None,
 ) -> dict:
+    amc_name, amc_slug, amc_logo_url = _resolve_invest_amc_display(
+        amc=amc,
+        fund=fund,
+        product=product,
+        settings=settings,
+    )
     payload = {
         "product_id": str(product.id),
         "product_code": product.code,
         "name": product.name,
         "provider": product.provider,
-        "amc_name": amc.name,
-        "amc_slug": amc.slug,
-        "amc_logo_url": resolve_amc_logo_url(amc.logo_url, amc.slug, settings),
+        "amc_name": amc_name,
+        "amc_slug": amc_slug,
+        "amc_logo_url": amc_logo_url,
         "category_slug": category_slug,
         "isin": fund.isin_growth,
         "rank_position": rank_position,

@@ -55,12 +55,60 @@ from app.infrastructure.persistence.mf_transaction_models import (
 
 logger = logging.getLogger(__name__)
 
+_ISIN_RE = re.compile(r"^INF[A-Z0-9]{9}\d$", re.IGNORECASE)
+_FP_SCHEME_LABEL_KEYS = ("name", "scheme_name", "legal_name", "display_name")
+
 SwitchMode = Literal["amount", "units", "all"]
 map_fp_switch_state_to_order = map_fp_redemption_state_to_order
 
 
 def _order_meta(order: MfOrder) -> dict[str, Any]:
     return order.metadata_ if isinstance(order.metadata_, dict) else {}
+
+
+def _pick_display_name(*candidates: str | None) -> str | None:
+    for value in candidates:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _looks_like_isin(value: str) -> bool:
+    return bool(_ISIN_RE.match(value.strip()))
+
+
+def _fp_scheme_label(value: Any) -> str | None:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or _looks_like_isin(stripped):
+            return None
+        return stripped
+    if isinstance(value, dict):
+        for key in _FP_SCHEME_LABEL_KEYS:
+            label = value.get(key)
+            if isinstance(label, str) and label.strip() and not _looks_like_isin(label):
+                return label.strip()
+    return None
+
+
+def _enrich_switch_metadata_from_fp(meta: dict[str, Any], fp: dict[str, Any]) -> dict[str, Any]:
+    updated = dict(meta)
+    for meta_key, fp_key in (
+        ("switch_out_scheme_name", "switch_out_scheme"),
+        ("switch_in_scheme_name", "switch_in_scheme"),
+    ):
+        if updated.get(meta_key):
+            continue
+        label = _fp_scheme_label(fp.get(fp_key))
+        if label:
+            updated[meta_key] = label
+    for meta_key in ("switch_out_scheme_name", "switch_in_scheme_name"):
+        if updated.get(meta_key):
+            continue
+        raw = fp.get(meta_key)
+        if isinstance(raw, str) and raw.strip():
+            updated[meta_key] = raw.strip()
+    return updated
 
 
 def _fp_switch_id(order: MfOrder) -> str | None:
@@ -279,6 +327,8 @@ async def create_switch_order(
             "switch_confirmed": False,
             "switch_out_scheme": out_scheme,
             "switch_in_scheme": in_scheme,
+            "switch_out_product_name": _pick_display_name(out_product.name, out_fund.scheme_name),
+            "switch_in_product_name": _pick_display_name(in_product.name, in_fund.scheme_name),
             "switch_in_product_id": str(in_product.id),
             "switch_in_fund_id": in_fund.id,
         },
@@ -398,13 +448,17 @@ async def send_switch_consent_otp(
     email, mobile = _extract_folio_consent_contacts(folio_payload)
     if not mobile:
         raise MfOrderError(code="consent_contact_missing", message="Folio registered mobile is unavailable", status_code=409)
-    try:
-        otp_meta = await request_otp(OtpPurpose.fund_confirmation, str(order.id), ip=ip, destination=mobile)
-    except (OtpCooldownError, OtpRateLimitError) as exc:
-        raise MfOrderError(code="otp_rate_limited", message=str(exc), status_code=429) from exc
+    from app.application.mf.mf_transaction_consent_service import send_mf_transaction_consent_otp
+
+    otp_payload = await send_mf_transaction_consent_otp(
+        identifier=str(order.id),
+        email=email,
+        mobile=mobile,
+        ip=ip,
+    )
     order.metadata_ = {**meta, "consent_otp_sent": True, "consent_email": email, "consent_mobile": mobile}
     await session.flush()
-    return {"order_id": str(order.id), "masked_mobile": _mask_mobile(mobile), **otp_meta}
+    return {"order_id": str(order.id), **otp_payload}
 
 
 async def _create_fp_switch_after_otp(session: AsyncSession, order: MfOrder) -> str:
@@ -467,8 +521,8 @@ async def confirm_switch_order(
     order_id: uuid.UUID,
     otp: str,
     ip: str | None = None,
+    user_agent: str | None = None,
 ) -> MfOrder:
-    del ip
     order = await get_switch_order(session, user_id=user_id, order_id=order_id)
     if not order:
         raise MfOrderError(code="order_not_found", message="Switch order not found", status_code=404)
@@ -477,8 +531,27 @@ async def confirm_switch_order(
     meta = _order_meta(order)
     if not meta.get("consent_otp_sent"):
         raise MfOrderError(code="consent_otp_required", message="Send OTP before confirming switch", status_code=409)
-    if not await verify_otp(OtpPurpose.fund_confirmation, str(order.id), otp.strip()):
-        raise MfOrderError(code="invalid_otp", message="Invalid or expired OTP", status_code=400)
+    from app.application.mf.mf_transaction_consent_service import (
+        merge_platform_consent_metadata,
+        verify_mf_transaction_consent_otp,
+    )
+    from app.infrastructure.persistence.models import User
+
+    user = await session.get(User, user_id)
+    if not user:
+        raise MfOrderError(code="order_not_found", message="Switch order not found", status_code=404)
+    consent_record_id = await verify_mf_transaction_consent_otp(
+        session,
+        user=user,
+        identifier=str(order.id),
+        otp=otp,
+        transaction_kind="switch",
+        subject_id=order.id,
+        ip=ip,
+        user_agent=user_agent,
+        extra_metadata={"order_type": order.order_type.value, "amount_inr": float(order.amount_inr)},
+    )
+    meta = merge_platform_consent_metadata(meta, consent_record_id=consent_record_id)
     email = meta.get("consent_email")
     mobile = meta.get("consent_mobile")
     if not email or not mobile:
@@ -527,9 +600,13 @@ async def apply_switch_fp_state(
     if order.status in TERMINAL_STATUSES:
         return False
     mapped = map_fp_switch_state_to_order(fp_state)
-    if mapped == order.status and fp_state == order.fp_state:
+    meta_before = _order_meta(order)
+    meta_after = _enrich_switch_metadata_from_fp(meta_before, payload) if payload else meta_before
+    if mapped == order.status and fp_state == order.fp_state and meta_after == meta_before:
         return False
     previous = order.status.value
+    if meta_after != meta_before:
+        order.metadata_ = meta_after
     order.fp_state = str(fp_state) if fp_state is not None else order.fp_state
     order.status = mapped
     if mapped == MfOrderStatus.succeeded:
@@ -608,6 +685,155 @@ async def get_switch_journey(
                 for event in events
             ],
         },
+    }
+
+
+def switch_in_product_id(order: MfOrder) -> uuid.UUID | None:
+    if order.order_type != MfOrderType.switch:
+        return None
+    raw = _order_meta(order).get("switch_in_product_id")
+    if not raw:
+        return None
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError:
+        return None
+
+
+async def load_switch_order_leg_names(
+    session: AsyncSession,
+    orders: list[MfOrder],
+    *,
+    switch_out_product_names: dict[uuid.UUID, str | None] | None = None,
+) -> dict[uuid.UUID, tuple[str | None, str | None]]:
+    switch_orders = [order for order in orders if order.order_type == MfOrderType.switch]
+    if not switch_orders:
+        return {}
+
+    product_ids: set[uuid.UUID] = set()
+    fund_ids: set[int] = set()
+    isins: set[str] = set()
+
+    for order in switch_orders:
+        product_ids.add(order.product_id)
+        switch_in_id = switch_in_product_id(order)
+        if switch_in_id:
+            product_ids.add(switch_in_id)
+        meta = _order_meta(order)
+        fund_ids.add(order.fund_id)
+        in_fund_id = meta.get("switch_in_fund_id")
+        if in_fund_id is not None:
+            try:
+                fund_ids.add(int(in_fund_id))
+            except (TypeError, ValueError):
+                pass
+        for scheme_key in ("switch_out_scheme", "switch_in_scheme"):
+            raw = meta.get(scheme_key)
+            if isinstance(raw, str) and _looks_like_isin(raw):
+                isins.add(raw.strip().upper())
+
+    product_name_by_id: dict[uuid.UUID, str | None] = {}
+    if product_ids:
+        rows = (
+            await session.execute(
+                select(Product.id, Product.name, MutualFund.scheme_name)
+                .outerjoin(MutualFund, MutualFund.product_id == Product.id)
+                .where(Product.id.in_(product_ids))
+            )
+        ).all()
+        for product_id, name, scheme_name in rows:
+            product_name_by_id[product_id] = _pick_display_name(name, scheme_name)
+
+    fund_name_by_id: dict[int, str] = {}
+    if fund_ids:
+        rows = (
+            await session.execute(select(MutualFund.id, MutualFund.scheme_name).where(MutualFund.id.in_(fund_ids)))
+        ).all()
+        fund_name_by_id = {fund_id: scheme_name for fund_id, scheme_name in rows}
+
+    isin_name_by_isin: dict[str, str] = {}
+    if isins:
+        rows = (
+            await session.execute(
+                select(MutualFund.isin_growth, MutualFund.scheme_name).where(MutualFund.isin_growth.in_(isins))
+            )
+        ).all()
+        isin_name_by_isin = {isin.upper(): scheme_name for isin, scheme_name in rows}
+
+    resolved: dict[uuid.UUID, tuple[str | None, str | None]] = {}
+    out_overrides = switch_out_product_names or {}
+    for order in switch_orders:
+        meta = _order_meta(order)
+        switch_in_id = switch_in_product_id(order)
+        out_scheme = meta.get("switch_out_scheme")
+        in_scheme = meta.get("switch_in_scheme")
+        in_fund_id = meta.get("switch_in_fund_id")
+        in_fund_name: str | None = None
+        if in_fund_id is not None:
+            try:
+                in_fund_name = fund_name_by_id.get(int(in_fund_id))
+            except (TypeError, ValueError):
+                in_fund_name = None
+
+        out_name = _pick_display_name(
+            out_overrides.get(order.id),
+            product_name_by_id.get(order.product_id),
+            meta.get("switch_out_product_name"),
+            meta.get("switch_out_scheme_name"),
+            fund_name_by_id.get(order.fund_id),
+            isin_name_by_isin.get(str(out_scheme).upper()) if isinstance(out_scheme, str) else None,
+        )
+        in_name = _pick_display_name(
+            product_name_by_id.get(switch_in_id) if switch_in_id else None,
+            meta.get("switch_in_product_name"),
+            meta.get("switch_in_scheme_name"),
+            in_fund_name,
+            isin_name_by_isin.get(str(in_scheme).upper()) if isinstance(in_scheme, str) else None,
+        )
+        resolved[order.id] = (out_name, in_name)
+    return resolved
+
+
+async def load_switch_in_product_names(
+    session: AsyncSession,
+    orders: list[MfOrder],
+) -> dict[str, str]:
+    leg_names = await load_switch_order_leg_names(session, orders)
+    names: dict[str, str] = {}
+    for order in orders:
+        if order.order_type != MfOrderType.switch:
+            continue
+        _out, in_name = leg_names.get(order.id, (None, None))
+        switch_in_id = switch_in_product_id(order)
+        if switch_in_id and in_name:
+            names[str(switch_in_id)] = in_name
+    return names
+
+
+def switch_order_serialization_extras(
+    order: MfOrder,
+    *,
+    switch_out_product_name: str | None,
+    switch_in_product_name: str | None,
+) -> dict[str, Any]:
+    if order.order_type != MfOrderType.switch:
+        return {}
+    meta = _order_meta(order)
+    return {
+        "switch_out_product_id": str(order.product_id),
+        "switch_out_product_name": _pick_display_name(
+            switch_out_product_name,
+            meta.get("switch_out_product_name"),
+            meta.get("switch_out_scheme_name"),
+        ),
+        "switch_in_product_id": meta.get("switch_in_product_id"),
+        "switch_in_product_name": _pick_display_name(
+            switch_in_product_name,
+            meta.get("switch_in_product_name"),
+            meta.get("switch_in_scheme_name"),
+        ),
+        "switch_mode": meta.get("switch_mode"),
+        "switch_units": meta.get("units"),
     }
 
 

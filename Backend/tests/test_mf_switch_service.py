@@ -13,6 +13,7 @@ from app.application.mf.mf_switch_service import (
     confirm_switch_order,
     create_switch_order,
     list_switch_destinations,
+    load_switch_order_leg_names,
 )
 from app.infrastructure.mf.fp_oms_client import create_mf_switch
 from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product, ProductType
@@ -193,7 +194,10 @@ async def test_create_and_confirm_switch_with_stub_fp(db_session) -> None:
     await db_session.flush()
     with (
         patch("app.application.mf.mf_switch_service.verify_otp", new=AsyncMock(return_value=True)),
-        patch("app.application.mf.mf_switch_service.invalidate_user_portfolio_cache", new=AsyncMock()),
+        patch(
+            "app.application.mf.mf_transaction_consent_service.verify_mf_transaction_consent_otp",
+            new=AsyncMock(return_value=uuid4()),
+        ),
         patch(
             "app.application.mf.mf_switch_service.create_mf_switch",
             new=AsyncMock(return_value={"fp_switch_id": "stub-mfs-id", "state": "pending"}),
@@ -244,6 +248,36 @@ async def test_list_switch_destinations_includes_amc_logo_fields(db_session) -> 
 
 
 def test_closed_maturity_scheme_detects_fmp_series_name() -> None:
+@pytest.mark.asyncio
+async def test_load_switch_order_leg_names_resolves_from_isin_and_fund_id(db_session) -> None:
+    user, mfia, out_product, in_product, _other, out_fund, in_fund = await _seed_switch_funds(db_session)
+    order = MfOrder(
+        user_id=user.id,
+        product_id=out_product.id,
+        fund_id=out_fund.id,
+        mf_investment_account_id=mfia.id,
+        checkout_id=None,
+        line_index=0,
+        order_type=MfOrderType.switch,
+        amount_inr=Decimal("1000"),
+        status=MfOrderStatus.submitted,
+        idempotency_key=str(uuid4()),
+        metadata_={
+            "switch_out_scheme": "INF109K01RT3",
+            "switch_in_scheme": "INF109K01TP7",
+            "switch_in_product_id": str(in_product.id),
+            "switch_in_fund_id": in_fund.id,
+        },
+    )
+    db_session.add(order)
+    await db_session.flush()
+
+    leg_names = await load_switch_order_leg_names(db_session, [order])
+    out_name, in_name = leg_names[order.id]
+    assert out_name == "Out Fund"
+    assert in_name == "In Fund"
+
+
     fund = SimpleNamespace(
         scheme_name="HDFC FMP 92D March 2016 (2) - Regular Growth-Series 36",
         sebi_category=None,

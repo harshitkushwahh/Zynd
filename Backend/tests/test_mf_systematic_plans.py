@@ -159,8 +159,8 @@ async def test_create_swp_confirm_cancel_monthly(db_session) -> None:
     }
     await db_session.flush()
     with patch(
-        "app.application.mf.mf_systematic_plan_service.verify_otp",
-        new=AsyncMock(return_value=True),
+        "app.application.mf.mf_transaction_consent_service.verify_mf_transaction_consent_otp",
+        new=AsyncMock(return_value=uuid4()),
     ):
         confirmed = await confirm_systematic_plan(db_session, plan, otp="123456")
     assert confirmed.metadata_["plan_confirmed"] is True
@@ -241,8 +241,8 @@ async def test_create_stp_confirm_cancel(db_session) -> None:
     }
     await db_session.flush()
     with patch(
-        "app.application.mf.mf_systematic_plan_service.verify_otp",
-        new=AsyncMock(return_value=True),
+        "app.application.mf.mf_transaction_consent_service.verify_mf_transaction_consent_otp",
+        new=AsyncMock(return_value=uuid4()),
     ):
         confirmed = await confirm_systematic_plan(db_session, plan, otp="123456")
     assert confirmed.metadata_["plan_confirmed"] is True

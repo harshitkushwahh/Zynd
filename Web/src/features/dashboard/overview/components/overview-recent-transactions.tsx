@@ -14,7 +14,7 @@ import { OverviewCompactCardHeader } from "@/features/dashboard/overview/compone
 import { OVERVIEW_TRANSACTIONS_LOCKED_PREVIEW } from "@/features/dashboard/overview/lib/overview-locked-preview-data";
 import { type MfOrder } from "@/features/invest/api/invest-api";
 import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
-import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { MfOrderAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import {
   MfOrderStatusBadge,
   mfOrderRowAvatarClass,
@@ -49,11 +49,7 @@ function RecentTransactionRowPreview({ order }: { order: MfOrder }) {
           mfOrderRowAvatarClass(order.status, order.fp_state, order.payment_completed, order.order_type),
         )}
       >
-        <MfFundAmcAvatar
-          amcLogoUrl={order.amc_logo_url}
-          amcName={order.amc_name ?? copy.mutualFunds.unknownAmc}
-          className="rounded-full"
-        />
+        <MfOrderAmcAvatar order={order} className="rounded-full" />
       </span>
 
       <p className="col-start-2 min-w-0 truncate text-compact font-semibold text-foreground">
@@ -109,11 +105,7 @@ function RecentTransactionRow({
           mfOrderRowAvatarClass(order.status, order.fp_state, order.payment_completed, order.order_type),
         )}
       >
-        <MfFundAmcAvatar
-          amcLogoUrl={order.amc_logo_url}
-          amcName={order.amc_name ?? copy.mutualFunds.unknownAmc}
-          className="rounded-full"
-        />
+        <MfOrderAmcAvatar order={order} className="rounded-full" />
       </span>
 
       <p className="col-start-2 min-w-0 truncate text-compact font-semibold text-foreground">

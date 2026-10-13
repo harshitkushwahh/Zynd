@@ -246,7 +246,12 @@ export function fetchMfRedemptionConsent(orderId: string) {
 }
 
 export function sendMfRedemptionConsentOtp(orderId: string) {
-  return apiRequest<{ order_id: string; masked_mobile: string; retry_after_seconds: number }>(
+  return apiRequest<{
+    order_id: string;
+    masked_mobile: string;
+    retry_after_seconds: number;
+    expires_in: number;
+  }>(
     `/invest/redemptions/${orderId}/consent/send-otp`,
     { method: "POST" },
   );
@@ -354,7 +359,12 @@ export function fetchMfSwitchConsent(orderId: string) {
 }
 
 export function sendMfSwitchConsentOtp(orderId: string) {
-  return apiRequest<{ order_id: string; masked_mobile: string; retry_after_seconds: number }>(
+  return apiRequest<{
+    order_id: string;
+    masked_mobile: string;
+    retry_after_seconds: number;
+    expires_in: number;
+  }>(
     `/invest/switches/${orderId}/consent/send-otp`,
     { method: "POST" },
   );

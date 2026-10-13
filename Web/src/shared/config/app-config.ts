@@ -6,6 +6,9 @@ export const appConfig = {
   bootstrapRetryAttempts: 3,
   bootstrapRetryBaseDelayMs: 400,
   otpLength: 6,
+  /** Matches Backend FUND_CONFIRMATION_OTP_TTL_SECONDS (1:30) for transaction consent UI. */
+  otpExpiresInSeconds: 90,
+  otpResendCooldownSeconds: 30,
   pinLength: 4,
   pinIdleTimeoutMs: 60 * 60 * 1000,
   deletionGracePeriodDays: 30,

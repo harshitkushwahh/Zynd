@@ -8,7 +8,6 @@ import {
   CircleCheck,
   Clock,
   IndianRupee,
-  Info,
   Loader2,
   ReceiptIndianRupee,
   ShoppingCart,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { MfFolioNominationInfoButton } from "@/features/invest/components/mf-folio-nomination-info";
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { PageTitle } from "@/components/ui/page-title";
 import { MfCartPageSkeleton } from "@/features/invest/components/mf-cart-page-skeleton";
@@ -187,7 +186,9 @@ function CartItemRow({
     >
       <MfFundAmcAvatar
         amcLogoUrl={item.amc_logo_url}
+        amcSlug={item.amc_slug}
         amcName={amcName}
+        schemeName={name}
         className="size-11 shrink-0 text-caption"
       />
 
@@ -406,24 +407,7 @@ function CartCheckoutPanel({
             {isSip ? sipCountLabel : copy.mutualFunds.cartItemCount.replace("{count}", String(activeCount))}
           </p>
         </div>
-        <Tooltip>
-          <TooltipTrigger
-            type="button"
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-            aria-label={
-              tab === "lumpsum"
-                ? copy.mutualFunds.cartSinglePaymentHint
-                : copy.mutualFunds.cartSipCheckoutHint
-            }
-          >
-            <Info className="size-4" strokeWidth={2.25} aria-hidden />
-          </TooltipTrigger>
-          <TooltipContent side="top" align="end" className="max-w-[16rem] text-pretty">
-            {tab === "lumpsum"
-              ? copy.mutualFunds.cartSinglePaymentHint
-              : copy.mutualFunds.cartSipCheckoutHint}
-          </TooltipContent>
-        </Tooltip>
+        <MfFolioNominationInfoButton className="size-8 border-0 bg-transparent hover:bg-muted/60" />
       </div>
 
       <div className="flex flex-col gap-5 p-5 sm:p-6">

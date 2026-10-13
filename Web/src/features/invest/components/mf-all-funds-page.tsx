@@ -27,6 +27,7 @@ import {
   hasClientOnlyMfFundFilters,
   type MfFundFilters,
 } from "@/features/invest/lib/mf-fund-filters";
+import { isInvestNfo } from "@/features/invest/lib/mf-nfo";
 import {
   MF_ALL_FUNDS_PAGE_SIZE,
   MF_FUNDS_TABLE_DEFAULT_SORT,
@@ -163,9 +164,11 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
         let mergedCount = 0;
         setFunds((current) => {
           previousCount = current.length;
+          const incoming =
+            categorySlug === "nfo" ? response.items.filter(isInvestNfo) : response.items;
           const merged = append
-            ? mergeInvestFunds(current, response.items)
-            : mergeInvestFunds([], response.items);
+            ? mergeInvestFunds(current, incoming)
+            : mergeInvestFunds([], incoming);
           mergedCount = merged.length;
           return merged;
         });
@@ -285,9 +288,10 @@ export function MfAllFundsPage({ initialCategorySlug = null }: MfAllFundsPagePro
                 loadingMore={loadingMore}
                 hasMore={hasMore}
                 virtualized
+                variant={filters.categorySlug === "nfo" ? "nfo" : "default"}
                 draggableRows
                 screenerSelectionEnabled
-                serverSorted={serverSorted}
+                serverSorted={filters.categorySlug === "nfo" ? false : serverSorted}
                 sortDescriptor={sortDescriptor}
                 onSortChange={setSortDescriptor}
                 scrollContainerRef={scrollContainerRef}

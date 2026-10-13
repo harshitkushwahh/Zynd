@@ -39,6 +39,7 @@ export type SettingsKycProfile = {
   bank: SettingsKycBank | null;
   canEditProfile: boolean;
   canAddNominee: boolean;
+  hasMfInvestmentAccount: boolean;
   nominees: KycNomineeRecord[];
   maxNominees: number;
 };

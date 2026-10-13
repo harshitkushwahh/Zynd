@@ -298,6 +298,13 @@ class MfOrderResponse(BaseModel):
     payout_bank_account_masked: Optional[str] = None
     payout_bank_ifsc_code: Optional[str] = None
     payout_bank_name: Optional[str] = None
+    switch_out_product_id: Optional[str] = None
+    switch_out_product_name: Optional[str] = None
+    switch_in_product_id: Optional[str] = None
+    switch_in_product_name: Optional[str] = None
+    switch_mode: Optional[str] = None
+    switch_units: Optional[float] = None
+    transaction_consent: Optional["MfPurchaseConsentResponse"] = None
 
 
 class MfPaymentStatusResponse(BaseModel):
@@ -331,6 +338,7 @@ class MfCartItemResponse(BaseModel):
     product_name: Optional[str] = None
     fund_id: int
     amc_name: Optional[str] = None
+    amc_slug: Optional[str] = None
     amc_logo_url: Optional[str] = None
     amount_inr: float
     investment_type: Literal["lumpsum", "sip"] = "lumpsum"
@@ -787,6 +795,31 @@ class MfRedemptionOtpSendResponse(BaseModel):
     order_id: str
     masked_mobile: str
     retry_after_seconds: int
+    expires_in: int
+
+
+class MfPurchaseConsentResponse(BaseModel):
+    order_id: str
+    status: str
+    masked_email: str
+    masked_mobile: str
+    consent_otp_sent: bool = False
+    platform_consent_accepted: bool = False
+
+
+MfOrderResponse.model_rebuild()
+
+
+class ConfirmMfPurchaseConsentRequest(BaseModel):
+    otp: str = Field(min_length=4, max_length=8)
+
+
+class MfPurchaseOtpSendResponse(BaseModel):
+    order_id: str
+    masked_mobile: str
+    masked_email: Optional[str] = None
+    retry_after_seconds: int
+    expires_in: int
 
 
 class MfSwitchDestinationResponse(BaseModel):
@@ -858,6 +891,7 @@ class MfSwitchOtpSendResponse(BaseModel):
     order_id: str
     masked_mobile: str
     retry_after_seconds: int
+    expires_in: int
 
 
 class CreateMfSwpPlanRequest(BaseModel):
@@ -926,6 +960,7 @@ class MfSystematicPlanOtpSendResponse(BaseModel):
     plan_id: str
     masked_mobile: str
     retry_after_seconds: int
+    expires_in: int
 
 
 class MfCasImportResponse(BaseModel):

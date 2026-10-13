@@ -19,10 +19,19 @@ from app.application.mf.mf_fp_review_poll import (
     purchase_not_ready_error,
 )
 from app.application.mf.mf_fp_state import map_fp_purchase_state, map_fp_purchase_state_to_checkout
-from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
+from app.application.mf.mf_folio_defaults_service import (
+    _is_nomination_visibility_purchase_error,
+    ensure_mfia_folio_defaults,
+    ensure_mfia_nomination_visibility_for_purchase,
+    repair_mfia_nomination_visibility_after_purchase_error,
+)
 from app.application.mf.mf_folio_reuse_service import resolve_existing_folio_for_scheme
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, get_or_create_mf_investment_account
-from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
+from app.application.mf.mf_scheme_resolution import (
+    is_scheme_unavailable_for_transaction,
+    resolve_mf_purchase_scheme,
+)
+from app.application.mf.ondc_lumpsum_eligibility import record_ondc_lumpsum_scheme_unavailable
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
 from app.application.referral.referral_investment_service import record_referral_investment_activity
 from app.core.config import get_settings
@@ -35,6 +44,7 @@ from app.infrastructure.mf.fp_oms_client import (
     extract_fp_old_id,
     extract_fp_state,
     get_mf_purchase,
+    get_mf_purchase_by_source_ref,
     update_mf_purchase,
     update_mf_purchases_batch,
 )
@@ -75,6 +85,107 @@ _PAYMENT_PIPELINE_STATES = {"pending", "confirmed"}
 def _purchase_scheme(order: MfOrder, fund: MutualFund | None) -> str | None:
     primary, _fallback = resolve_mf_purchase_scheme(fund, stored_scheme=order.fp_scheme_id)
     return primary
+
+
+def _scheme_unavailable_user_message() -> str:
+    return (
+        "This fund is not available to buy through ONDC for your account right now. "
+        "Remove it from the cart or try again later."
+    )
+
+
+def _purchase_failure_from_exception(exc: Exception) -> tuple[str, str]:
+    if is_scheme_unavailable_for_transaction(exc):
+        return "scheme_not_available", _scheme_unavailable_user_message()
+    message = str(exc)
+    if isinstance(exc, FpClientError) and exc.message:
+        message = exc.message
+    return "fp_submit_failed", message
+
+
+def _is_duplicate_source_ref_purchase_error(exc: FpClientError) -> bool:
+    message = (exc.message or "").lower()
+    return "source_ref_id" in message and "unique" in message
+
+
+async def _create_purchase_with_scheme_fallback(
+    session: AsyncSession,
+    *,
+    order: MfOrder,
+    fund: MutualFund | None,
+    fp_mfia_id: str,
+    folio_number: str | None,
+    user_ip: str | None,
+    mfia: MfInvestmentAccount,
+) -> dict[str, Any]:
+    from app.application.mf.mf_purchase_consent_gates import lumpsum_blocks_fp_pipeline
+
+    if lumpsum_blocks_fp_pipeline(order):
+        raise FpClientError(
+            "Transaction OTP consent is required before creating the purchase",
+            code="platform_consent_required",
+        )
+
+    primary, fallback = resolve_mf_purchase_scheme(fund, stored_scheme=order.fp_scheme_id)
+    last_exc: Exception | None = None
+    nomination_repaired = False
+
+    for candidate in (primary, fallback):
+        if not candidate:
+            continue
+        for attempt in range(2):
+            try:
+                result = await create_mf_purchase(
+                    fp_mfia_id=fp_mfia_id,
+                    scheme=candidate,
+                    amount_inr=float(order.amount_inr),
+                    source_ref_id=str(order.id),
+                    user_ip=user_ip,
+                    gateway=get_settings().zynd_mf_order_payment_gateway,
+                    folio_number=folio_number,
+                )
+                if candidate != primary:
+                    order.fp_scheme_id = candidate
+                    order.metadata_ = {**_order_metadata(order), "scheme": candidate}
+                    await session.flush()
+                return result
+            except FpClientError as exc:
+                last_exc = exc
+                if _is_duplicate_source_ref_purchase_error(exc):
+                    recovered = await get_mf_purchase_by_source_ref(str(order.id))
+                    if recovered and recovered.get("fp_purchase_id"):
+                        logger.info(
+                            "Recovered existing FP purchase for order=%s fp_purchase_id=%s",
+                            order.id,
+                            recovered.get("fp_purchase_id"),
+                        )
+                        return recovered
+                if (
+                    attempt == 0
+                    and not nomination_repaired
+                    and _is_nomination_visibility_purchase_error(exc)
+                ):
+                    nomination_repaired = await repair_mfia_nomination_visibility_after_purchase_error(
+                        session,
+                        user_id=order.user_id,
+                        mfia=mfia,
+                    )
+                    if nomination_repaired:
+                        continue
+                if is_scheme_unavailable_for_transaction(exc) and fallback and candidate != fallback:
+                    logger.warning(
+                        "Purchase rejected for scheme=%s order=%s; retrying fallback scheme=%s",
+                        candidate,
+                        order.id,
+                        fallback,
+                    )
+                    break
+                raise
+    if last_exc and is_scheme_unavailable_for_transaction(last_exc):
+        await record_ondc_lumpsum_scheme_unavailable(session, fund)
+    if last_exc:
+        raise last_exc
+    raise FpClientError("Scheme missing for purchase", "invalid_scheme", 400)
 
 
 def _order_metadata(order: MfOrder) -> dict[str, Any]:
@@ -333,8 +444,20 @@ async def submit_pending_order(
     user_ip: str | None = None,
     force: bool = False,
 ) -> bool:
+    from app.application.mf.mf_purchase_consent_gates import order_awaiting_transaction_consent
+    from sqlalchemy import select
+
     if order.status != MfOrderStatus.pending:
         return False
+
+    locked = await session.scalar(select(MfOrder).where(MfOrder.id == order.id).with_for_update())
+    if not locked:
+        return False
+    order = locked
+    if order_awaiting_transaction_consent(order):
+        return False
+    if order.fp_purchase_id:
+        return True
     if not force and should_skip_retry(order.metadata_):
         return False
 
@@ -418,15 +541,21 @@ async def submit_pending_order(
         order.metadata_ = meta
         await session.flush()
 
+    await ensure_mfia_nomination_visibility_for_purchase(
+        session,
+        user_id=order.user_id,
+        mfia=mfia,
+    )
+
     try:
-        result = await create_mf_purchase(
+        result = await _create_purchase_with_scheme_fallback(
+            session,
+            order=order,
+            fund=fund,
             fp_mfia_id=fp_mfia_id,
-            scheme=scheme,
-            amount_inr=float(order.amount_inr),
-            source_ref_id=str(order.id),
-            user_ip=user_ip or (_order_metadata(order).get("user_ip")),
-            gateway=get_settings().zynd_mf_order_payment_gateway,
             folio_number=folio_number,
+            user_ip=user_ip or (_order_metadata(order).get("user_ip")),
+            mfia=mfia,
         )
     except Exception as exc:
         logger.exception("MF purchase submit failed order=%s", order.id)
@@ -438,10 +567,11 @@ async def submit_pending_order(
             )
             await session.flush()
             return not terminal
+        failure_code, failure_reason = _purchase_failure_from_exception(exc)
         previous = order.status.value
         order.status = MfOrderStatus.failed
-        order.failure_code = "fp_submit_failed"
-        order.failure_reason = str(exc)
+        order.failure_code = failure_code
+        order.failure_reason = failure_reason
         await _record_order_event(
             session,
             order,
@@ -545,8 +675,18 @@ async def submit_pending_cart_checkout(
     if len(purchases) != len(orders):
         return False
 
+    await ensure_mfia_nomination_visibility_for_purchase(
+        session,
+        user_id=user_id,
+        mfia=mfia,
+    )
+
+    results: list[dict[str, Any]] = []
     try:
-        results = await create_mf_purchases_batch(purchases=purchases, user_ip=resolved_ip)
+        results = await create_mf_purchases_batch(
+            purchases=purchases,
+            user_ip=resolved_ip,
+        )
     except Exception as exc:
         logger.exception("MF cart batch submit failed checkout=%s", checkout.id)
         if is_transient_error(exc):
@@ -557,24 +697,45 @@ async def submit_pending_cart_checkout(
             )
             await session.flush()
             return not terminal
+
+        results = []
         for order in orders:
-            previous = order.status.value
-            order.status = MfOrderStatus.failed
-            order.failure_code = "fp_batch_submit_failed"
-            order.failure_reason = str(exc)
-            await _record_order_event(
-                session,
-                order,
-                from_status=previous,
-                to_status=order.status.value,
-                source="WORKER",
-                payload={"error": str(exc)},
-            )
-        checkout.status = MfCheckoutStatus.failed
-        checkout.failure_code = "fp_batch_submit_failed"
-        checkout.failure_reason = str(exc)
-        await session.flush()
-        return True
+            fund = funds.get(order.fund_id)
+            order_meta = dict(order.metadata_ or {})
+            folio_number = str(order_meta.get("folio_number") or "").strip() or None
+            try:
+                result = await _create_purchase_with_scheme_fallback(
+                    session,
+                    order=order,
+                    fund=fund,
+                    fp_mfia_id=fp_mfia_id,
+                    folio_number=folio_number,
+                    user_ip=resolved_ip,
+                    mfia=mfia,
+                )
+                results.append({**result, "source_ref_id": str(order.id)})
+            except Exception as order_exc:
+                failure_code, failure_reason = _purchase_failure_from_exception(order_exc)
+                previous = order.status.value
+                order.status = MfOrderStatus.failed
+                order.failure_code = failure_code
+                order.failure_reason = failure_reason
+                await _record_order_event(
+                    session,
+                    order,
+                    from_status=previous,
+                    to_status=order.status.value,
+                    source="WORKER",
+                    payload={"error": failure_reason, "scheme": _purchase_scheme(order, fund)},
+                )
+
+        if not results:
+            checkout.status = MfCheckoutStatus.failed
+            checkout.failure_code = "fp_batch_submit_failed"
+            failure_code, failure_reason = _purchase_failure_from_exception(exc)
+            checkout.failure_reason = failure_reason
+            await session.flush()
+            return True
 
     by_source_ref = {
         str(result.get("source_ref_id")): result
@@ -622,8 +783,11 @@ async def submit_pending_cart_checkout(
             },
         )
 
-    if orders:
-        checkout.status = map_fp_purchase_state_to_checkout(orders[0].fp_state)
+    submitted_orders = [order for order in orders if order.status != MfOrderStatus.failed and order.fp_state]
+    if submitted_orders:
+        checkout.status = map_fp_purchase_state_to_checkout(submitted_orders[0].fp_state)
+    elif all(order.status == MfOrderStatus.failed for order in orders):
+        checkout.status = MfCheckoutStatus.failed
     await session.flush()
     return True
 
@@ -1039,7 +1203,11 @@ async def advance_ondc_cart_checkout(session: AsyncSession, checkout: MfCheckout
 
 
 async def advance_ondc_order(session: AsyncSession, order: MfOrder, *, force: bool = False) -> bool:
+    from app.application.mf.mf_purchase_consent_gates import lumpsum_blocks_fp_pipeline
+
     if order.status in TERMINAL_STATUSES or not order.fp_purchase_id:
+        return False
+    if lumpsum_blocks_fp_pipeline(order):
         return False
     if not force and should_skip_retry(order.metadata_):
         return False
@@ -1233,6 +1401,12 @@ async def process_pending_orders(session: AsyncSession, *, batch_size: int = 20)
             ).scalars()
         )
         for order in single_orders:
+            from app.application.mf.mf_purchase_consent_gates import order_awaiting_transaction_consent
+
+            if order_awaiting_transaction_consent(order):
+                skipped += 1
+                processed += 1
+                continue
             if await submit_pending_order(session, order):
                 submitted += 1
             else:

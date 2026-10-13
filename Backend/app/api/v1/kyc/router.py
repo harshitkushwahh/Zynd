@@ -39,6 +39,8 @@ from app.api.v1.kyc.schemas import (
     InvestorNomineeCreateRequest,
     InvestorProfileSettingsUpdateRequest,
     InvestorSettingsStateResponse,
+    MfFolioNominationItemResponse,
+    MfFolioNominationListResponse,
     KycIfscResponse,
     KycPincodeResponse,
     KycReadinessCheckResponse,
@@ -287,6 +289,18 @@ async def post_kyc_settings_nominee(
         raise
     await db.commit()
     return InvestorSettingsStateResponse(**state)
+
+
+@router.get("/settings/mf-folios", response_model=MfFolioNominationListResponse)
+async def get_kyc_settings_mf_folios(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MfFolioNominationListResponse:
+    from app.application.mf.mf_folio_nomination_service import list_user_mf_folio_nominations
+
+    payload = await list_user_mf_folio_nominations(db, user_id=current_user.id)
+    folios = [MfFolioNominationItemResponse(**item) for item in payload.get("folios", [])]
+    return MfFolioNominationListResponse(available=bool(payload.get("available")), folios=folios)
 
 
 @router.post("/pan/verify", response_model=KycPanVerifyResponse)

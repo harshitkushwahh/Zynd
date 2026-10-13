@@ -1,6 +1,13 @@
+import { Agent } from "undici";
 import { NextRequest, NextResponse } from "next/server";
 
 import { serverEnv } from "@/shared/config/server-env";
+
+const backendFetchAgent = new Agent({
+  connect: { timeout: 10_000 },
+  headersTimeout: serverEnv.backendProxyTimeoutMs,
+  bodyTimeout: serverEnv.backendProxyTimeoutMs,
+});
 
 function resolveClientIp(request: NextRequest): string | null {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -41,7 +48,27 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
     init.body = await request.arrayBuffer();
   }
 
-  const backendResponse = await fetch(targetUrl, init);
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetch(targetUrl, {
+      ...init,
+      dispatcher: backendFetchAgent,
+      signal: AbortSignal.timeout(serverEnv.backendProxyTimeoutMs),
+    });
+  } catch (error) {
+    const timedOut =
+      error instanceof Error &&
+      (error.name === "TimeoutError" ||
+        error.name === "AbortError" ||
+        (error as { code?: string }).code === "UND_ERR_HEADERS_TIMEOUT");
+    if (timedOut) {
+      return NextResponse.json(
+        { detail: "Backend request timed out. Try again in a moment." },
+        { status: 504 },
+      );
+    }
+    throw error;
+  }
   const responseHeaders = new Headers(backendResponse.headers);
   responseHeaders.delete("content-encoding");
   responseHeaders.delete("content-length");

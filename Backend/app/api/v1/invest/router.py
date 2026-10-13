@@ -94,10 +94,13 @@ from app.api.v1.invest.schemas import (
     MfRedemptionJourneyResponse,
     MfRedemptionJourneyEventResponse,
     CreateMfRedemptionRequest,
+    ConfirmMfPurchaseConsentRequest,
     ConfirmMfRedemptionRequest,
     MfRedemptionOrderResponse,
     MfRedemptionConsentResponse,
     MfRedemptionOtpSendResponse,
+    MfPurchaseConsentResponse,
+    MfPurchaseOtpSendResponse,
     CreateMfSwitchRequest,
     ConfirmMfSwitchRequest,
     MfSwitchOrderResponse,
@@ -246,6 +249,12 @@ from app.application.mf.mf_sip_plan_service import (
     load_sip_plan_fund_metadata,
     serialize_sip_plan,
 )
+from app.application.mf.mf_purchase_consent_service import (
+    confirm_purchase_consent_and_advance,
+    get_purchase_consent_context,
+    send_purchase_consent_otp,
+    snapshot_purchase_consent_for_order,
+)
 from app.application.mf.mf_order_service import (
     TERMINAL_STATUSES,
     create_lumpsum_order,
@@ -328,6 +337,8 @@ async def _order_response(
     amc_logo_url: str | None = None,
     amc_slug: str | None = None,
     product_slug: str | None = None,
+    switch_in_product_name: str | None = None,
+    include_transaction_consent: bool = False,
 ) -> MfOrderResponse:
     if amc_name is None and amc_logo_url is None and amc_slug is None:
         amc_names, amc_logos, amc_slugs = await load_order_fund_metadata(db, [order])
@@ -342,17 +353,30 @@ async def _order_response(
         )
         product_slug = product_slugs.get(order.product_id)
     checkout = await db.get(MfCheckout, order.checkout_id) if order.checkout_id else None
-    return MfOrderResponse(
-        **serialize_order(
-            order,
-            product_name=product_name,
-            checkout=checkout,
-            amc_name=amc_name,
-            amc_logo_url=amc_logo_url,
-            amc_slug=amc_slug,
-            product_slug=product_slug,
-        )
+    payload = serialize_order(
+        order,
+        product_name=product_name,
+        checkout=checkout,
+        amc_name=amc_name,
+        amc_logo_url=amc_logo_url,
+        amc_slug=amc_slug,
+        product_slug=product_slug,
+        switch_in_product_name=switch_in_product_name,
     )
+    transaction_consent = None
+    if include_transaction_consent:
+        from app.application.mf.mf_purchase_consent_gates import (
+            lumpsum_has_platform_consent,
+            lumpsum_order_needs_platform_consent,
+        )
+
+        if lumpsum_order_needs_platform_consent(order) and not lumpsum_has_platform_consent(order):
+            transaction_consent = await snapshot_purchase_consent_for_order(
+                db,
+                user_id=order.user_id,
+                order_id=order.id,
+            )
+    return MfOrderResponse(**payload, transaction_consent=transaction_consent)
 
 
 def _payment_status_message(outcome: str) -> str | None:
@@ -409,10 +433,14 @@ async def invest_nfo_list(
 ) -> InvestFundListResponse:
     from app.application.mf.nfo_list_service import list_invest_nfo
 
+    from app.application.mf.public_asset_service import enrich_fund_list_payload
+    from app.core.config import get_settings
+
     try:
         payload = await list_invest_nfo(db, status=status, page=page, page_size=page_size)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    payload = enrich_fund_list_payload(payload, get_settings())
     return InvestFundListResponse(**payload)
 
 
@@ -686,20 +714,73 @@ async def create_mf_order(
             folio_number=body.folio_number,
         )
         product = await db.get(Product, order.product_id)
+        product_name = product.name if product else None
         await db.commit()
     except MfOrderError:
         await db.rollback()
         raise
 
-    user_ip = get_client_ip(request)
-    try:
-        if await advance_order_for_payment(db, order, user_ip=user_ip):
-            await db.commit()
-        await db.refresh(order)
-    except Exception:
-        await db.rollback()
+    return await _order_response(
+        db,
+        order,
+        product_name=product_name,
+        include_transaction_consent=True,
+    )
 
-    return await _order_response(db, order, product_name=product.name if product else None)
+
+@router.get("/orders/{order_id}/consent", response_model=MfPurchaseConsentResponse)
+async def get_mf_purchase_consent_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> MfPurchaseConsentResponse:
+    payload = await get_purchase_consent_context(db, user_id=current_user.id, order_id=order_id)
+    return MfPurchaseConsentResponse(**payload)
+
+
+@router.post("/orders/{order_id}/consent/send-otp", response_model=MfPurchaseOtpSendResponse)
+async def send_mf_purchase_consent_otp_route(
+    order_id: UUID,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfPurchaseOtpSendResponse:
+    try:
+        payload = await send_purchase_consent_otp(
+            db,
+            user_id=current_user.id,
+            order_id=order_id,
+            ip=get_client_ip(request),
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return MfPurchaseOtpSendResponse(**payload)
+
+
+@router.post("/orders/{order_id}/consent/confirm", response_model=MfOrderResponse)
+async def confirm_mf_purchase_consent_route(
+    order_id: UUID,
+    body: ConfirmMfPurchaseConsentRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfOrderResponse:
+    try:
+        order = await confirm_purchase_consent_and_advance(
+            db,
+            user_id=current_user.id,
+            order_id=order_id,
+            otp=body.otp,
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _order_response_with_product(db, order)
 
 
 @router.get("/cart", response_model=MfCartResponse)
@@ -933,7 +1014,12 @@ async def get_mf_cart_checkout_payment_status(
     if not result:
         raise HTTPException(status_code=404, detail="Checkout not found")
     checkout, orders = result
-    reconcile = await reconcile_checkout_payment(db, checkout, user_ip=get_client_ip(request))
+    reconcile = await reconcile_checkout_payment(
+        db,
+        checkout,
+        user_ip=get_client_ip(request),
+        payment_poll=True,
+    )
     await db.commit()
     product_ids = {order.product_id for order in orders}
     products = {
@@ -1456,8 +1542,13 @@ async def list_mf_orders(
     } if product_ids else {}
     amc_names, amc_logos, amc_slugs = await load_order_fund_metadata(db, orders)
     product_slugs = await load_order_product_slugs(db, orders, product_names=products)
+    from app.application.mf.mf_switch_service import load_switch_order_leg_names
+
+    switch_out_names = {order.id: products.get(order.product_id) for order in orders}
+    switch_leg_names = await load_switch_order_leg_names(db, orders, switch_out_product_names=switch_out_names)
     responses: list[MfOrderResponse] = []
     for order in orders:
+        _resolved_out, switch_in_name = switch_leg_names.get(order.id, (products.get(order.product_id), None))
         responses.append(
             await _order_response(
                 db,
@@ -1467,6 +1558,7 @@ async def list_mf_orders(
                 amc_logo_url=amc_logos.get(order.fund_id),
                 amc_slug=amc_slugs.get(order.fund_id),
                 product_slug=product_slugs.get(order.product_id),
+                switch_in_product_name=switch_in_name,
             )
         )
     return MfOrderListResponse(orders=responses)
@@ -1490,6 +1582,25 @@ async def get_mf_order_journey(
     return MfOrderJourneyResponse(**payload)
 
 
+async def _order_response_with_product(db: AsyncSession, order) -> MfOrderResponse:
+    product = await db.get(Product, order.product_id)
+    product_name = product.name if product else None
+    from app.application.mf.mf_switch_service import load_switch_order_leg_names
+
+    switch_leg_names = await load_switch_order_leg_names(
+        db,
+        [order],
+        switch_out_product_names={order.id: product_name},
+    )
+    _resolved_out, switch_in_name = switch_leg_names.get(order.id, (product_name, None))
+    return await _order_response(
+        db,
+        order,
+        product_name=product_name,
+        switch_in_product_name=switch_in_name,
+    )
+
+
 @router.get("/orders/{order_id}", response_model=MfOrderResponse)
 async def get_mf_order(
     order_id: UUID,
@@ -1502,8 +1613,7 @@ async def get_mf_order(
         raise HTTPException(status_code=404, detail="Order not found")
     if await advance_order_for_payment(db, order, user_ip=get_client_ip(request)):
         await db.commit()
-    product = await db.get(Product, order.product_id)
-    return await _order_response(db, order, product_name=product.name if product else None)
+    return await _order_response_with_product(db, order)
 
 
 @router.get("/orders/{order_id}/payment-status", response_model=MfPaymentStatusResponse)
@@ -1520,7 +1630,8 @@ async def get_mf_order_payment_status(
         db,
         order,
         user_ip=get_client_ip(request),
-        force=True,
+        force=False,
+        payment_poll=True,
     )
     await db.commit()
     product = await db.get(Product, order.product_id)
@@ -1755,6 +1866,7 @@ async def confirm_mf_redemption_route(
             order_id=order_id,
             otp=body.otp,
             ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
         )
         await db.commit()
     except MfOrderError:
@@ -1866,6 +1978,7 @@ async def confirm_mf_switch_route(
             order_id=order_id,
             otp=body.otp,
             ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
         )
         await db.commit()
     except MfOrderError:
@@ -2004,6 +2117,7 @@ async def send_mf_swp_otp_route(
 async def confirm_mf_swp_plan_route(
     plan_id: UUID,
     body: ConfirmMfSystematicPlanRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_invest_eligible_user)],
 ) -> MfSystematicPlanResponse:
@@ -2011,7 +2125,13 @@ async def confirm_mf_swp_plan_route(
     if not plan:
         raise HTTPException(status_code=404, detail="SWP plan not found")
     try:
-        plan = await confirm_systematic_plan(db, plan, otp=body.otp)
+        plan = await confirm_systematic_plan(
+            db,
+            plan,
+            otp=body.otp,
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
         await db.commit()
     except MfOrderError:
         await db.rollback()
@@ -2136,6 +2256,7 @@ async def send_mf_stp_otp_route(
 async def confirm_mf_stp_plan_route(
     plan_id: UUID,
     body: ConfirmMfSystematicPlanRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_invest_eligible_user)],
 ) -> MfSystematicPlanResponse:
@@ -2143,7 +2264,13 @@ async def confirm_mf_stp_plan_route(
     if not plan:
         raise HTTPException(status_code=404, detail="STP plan not found")
     try:
-        plan = await confirm_systematic_plan(db, plan, otp=body.otp)
+        plan = await confirm_systematic_plan(
+            db,
+            plan,
+            otp=body.otp,
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
         await db.commit()
     except MfOrderError:
         await db.rollback()

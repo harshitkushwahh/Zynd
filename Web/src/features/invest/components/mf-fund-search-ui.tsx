@@ -12,27 +12,42 @@ import {
 import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import { MF_FUND_SEARCH_MIN_CHARS } from "@/features/invest/lib/mf-fund-search";
+import {
+  enrichInvestAmcDisplay,
+  enrichInvestAmcFromOrder,
+  type InvestAmcOrderLike,
+} from "@/features/invest/lib/mf-amc-display";
 import { resolveAmcLogoUrl } from "@/features/invest/lib/mf-format";
 import { resolveFundCardReturn } from "@/features/invest/lib/mf-fund-card-return";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type MfFundAmcAvatarProps = {
-  amcLogoUrl: string | null;
+  amcLogoUrl?: string | null;
   amcName: string;
   amcSlug?: string | null;
+  /** Scheme / product name — used to infer AMC when catalog rows are Unknown AMC. */
+  schemeName?: string | null;
   size?: "sm" | "md";
   className?: string;
 };
 
 export function MfFundAmcAvatar({
-  amcLogoUrl,
+  amcLogoUrl = null,
   amcName,
   amcSlug,
+  schemeName,
   size = "md",
   className,
 }: MfFundAmcAvatarProps) {
-  const logoUrl = resolveAmcLogoUrl(amcLogoUrl, amcSlug);
+  const resolved = enrichInvestAmcDisplay({
+    amcName,
+    amcSlug,
+    amcLogoUrl,
+    schemeName,
+  });
+  const logoUrl = resolveAmcLogoUrl(resolved.amcLogoUrl, resolved.amcSlug);
+  const displayName = resolved.amcName;
   const sizeClass = size === "sm" ? "size-7 text-[10px]" : "size-8 text-[10px]";
 
   if (logoUrl) {
@@ -58,8 +73,26 @@ export function MfFundAmcAvatar({
         className,
       )}
     >
-      {amcName.slice(0, 2).toUpperCase()}
+      {displayName.slice(0, 2).toUpperCase()}
     </div>
+  );
+}
+
+type MfOrderAmcAvatarProps = Omit<MfFundAmcAvatarProps, "amcLogoUrl" | "amcName" | "amcSlug" | "schemeName"> & {
+  order: InvestAmcOrderLike;
+};
+
+/** AMC avatar for orders / transactions — enriches from product name when catalog AMC is missing. */
+export function MfOrderAmcAvatar({ order, ...props }: MfOrderAmcAvatarProps) {
+  const amc = enrichInvestAmcFromOrder(order);
+  return (
+    <MfFundAmcAvatar
+      {...props}
+      amcName={amc.amcName}
+      amcSlug={amc.amcSlug}
+      amcLogoUrl={amc.amcLogoUrl}
+      schemeName={order.product_name}
+    />
   );
 }
 
@@ -78,7 +111,13 @@ export function MfFundSearchResultItem({
 
   return (
     <div className={cn("flex min-w-0 flex-1 items-start gap-3", className)}>
-      <MfFundAmcAvatar amcLogoUrl={fund.amc_logo_url} amcSlug={fund.amc_slug} amcName={fund.amc_name} className="mt-0.5" />
+      <MfFundAmcAvatar
+        amcLogoUrl={fund.amc_logo_url}
+        amcSlug={fund.amc_slug}
+        amcName={fund.amc_name}
+        schemeName={fund.name}
+        className="mt-0.5"
+      />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium leading-snug text-foreground">{fund.name}</p>
         <p className="truncate text-caption text-muted-foreground">{fund.amc_name}</p>

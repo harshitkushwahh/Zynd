@@ -36,7 +36,6 @@ import {
 } from "@/features/dashboard/portfolio/components/portfolio-action-consent-dialog";
 import { MF_INVEST_PAYMENT_CARD_CLASS } from "@/features/invest/lib/mf-ui";
 import { TabPanel } from "@/shared/ui/tab-panel";
-import { PortfolioRedeemConsentDialog } from "@/features/dashboard/portfolio/components/portfolio-redeem-consent-dialog";
 import { PortfolioHoldingDetailSkeleton } from "@/features/dashboard/portfolio/components/portfolio-holding-detail-skeleton";
 import { PortfolioUpcomingHoldingDetailPage } from "@/features/dashboard/portfolio/components/portfolio-upcoming-holding-detail-page";
 import { PortfolioDetailLockedSection } from "@/features/dashboard/portfolio/components/portfolio-detail-locked-section";
@@ -44,7 +43,6 @@ import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/component
 import { usePortfolioHoldingDetailQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
 import {
   createMfRedemption,
-  type MfRedemptionOrder,
   type MfSwitchOrder,
   type MfSystematicPlan,
 } from "@/features/dashboard/portfolio/lib/portfolio-api";
@@ -788,6 +786,12 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
       }}
       onPlanCreated={(kind: "swp" | "stp", plan: MfSystematicPlan) => {
         setActionConsentTarget({ kind, id: plan.plan_id });
+      redeemConsentOrderId={pendingRedemptionOrderId}
+      onRedeemConsentConfirmed={() => {
+        setPendingRedemptionOrderId(null);
+        void invalidateInvestAndPortfolioQueries(queryClient);
+      }}
+      onRedeemConsentDismiss={() => setPendingRedemptionOrderId(null)}
         setActionConsentOpen(true);
         void invalidateInvestAndPortfolioQueries(queryClient);
       }}
@@ -836,14 +840,6 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
         open={consentOpen}
         order={pendingRedemption}
         onOpenChange={setConsentOpen}
-        onConfirmed={() => {
-          void invalidateInvestAndPortfolioQueries(queryClient);
-        }}
-      />
-      <PortfolioActionConsentDialog
-        open={actionConsentOpen}
-        target={actionConsentTarget}
-        onOpenChange={setActionConsentOpen}
         onConfirmed={() => {
           void invalidateInvestAndPortfolioQueries(queryClient);
         }}

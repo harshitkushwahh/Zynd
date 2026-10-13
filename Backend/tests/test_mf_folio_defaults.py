@@ -5,6 +5,7 @@ from uuid import uuid4
 from app.application.mf.mf_folio_defaults_service import (
     build_folio_defaults,
     build_nominee_slot_defaults,
+    mfia_requires_nomination_visibility,
     select_mfia_nominee_parties,
 )
 from app.infrastructure.persistence.investor_models import (
@@ -82,7 +83,8 @@ def test_build_folio_defaults_includes_nominees() -> None:
     assert folio["payout_bank_account"] == "bac_1"
     assert folio["nominee1"] == "relp_1"
     assert folio["nominee1_allocation_percentage"] == 100
-    assert folio["nomination_info_visibility"] == "SHOW"
+    assert folio["nominations_info_visibility"] == "show_all_nominee_names"
+    assert "nomination_info_visibility" not in folio
 
 
 def test_build_folio_defaults_prefers_selected_bank() -> None:
@@ -216,6 +218,12 @@ def _party(*, name: str, relp: str, share: int, status=InvestorObjectSyncStatus.
     )
 
 
+def test_mfia_requires_nomination_visibility_when_skip_false() -> None:
+    assert mfia_requires_nomination_visibility({"skip_nomination": False})
+    assert not mfia_requires_nomination_visibility({"skip_nomination": True})
+    assert mfia_requires_nomination_visibility({"nominee1": "relp_x"})
+
+
 def test_mfia_links_at_most_three_related_parties_totaling_100() -> None:
     extra = [
         _party(name="One", relp="relp_1", share=40),
@@ -232,7 +240,7 @@ def test_mfia_links_at_most_three_related_parties_totaling_100() -> None:
     assert slots["nominee2_allocation_percentage"] == 30
     assert slots["nominee3"] == "relp_3"
     assert slots["nominee3_allocation_percentage"] == 30
-    assert slots["nomination_info_visibility"] == "SHOW"
+    assert slots["nominations_info_visibility"] == "show_all_nominee_names"
     assert (
         slots["nominee1_allocation_percentage"]
         + slots["nominee2_allocation_percentage"]

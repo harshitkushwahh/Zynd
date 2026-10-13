@@ -362,6 +362,15 @@ export function compareMfFunds(productIds: string[]) {
   });
 }
 
+export type MfPurchaseConsentContext = {
+  order_id: string;
+  status: string;
+  masked_email: string;
+  masked_mobile: string;
+  consent_otp_sent?: boolean;
+  platform_consent_accepted?: boolean;
+};
+
 export type MfOrder = {
   order_id: string;
   checkout_id: string | null;
@@ -391,6 +400,13 @@ export type MfOrder = {
   payout_bank_account_masked?: string | null;
   payout_bank_ifsc_code?: string | null;
   payout_bank_name?: string | null;
+  switch_out_product_id?: string | null;
+  switch_out_product_name?: string | null;
+  switch_in_product_id?: string | null;
+  switch_in_product_name?: string | null;
+  switch_mode?: string | null;
+  switch_units?: number | null;
+  transaction_consent?: MfPurchaseConsentContext | null;
 };
 
 export type MfOrderListResponse = {
@@ -425,6 +441,27 @@ export function createMfOrder(body: {
   return apiRequest<MfOrder>("/invest/orders", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export function fetchMfPurchaseConsent(orderId: string) {
+  return apiRequest<MfPurchaseConsentContext>(`/invest/orders/${orderId}/consent`);
+}
+
+export function sendMfPurchaseConsentOtp(orderId: string) {
+  return apiRequest<{
+    order_id: string;
+    masked_mobile: string;
+    masked_email?: string | null;
+    retry_after_seconds: number;
+    expires_in: number;
+  }>(`/invest/orders/${orderId}/consent/send-otp`, { method: "POST" });
+}
+
+export function confirmMfPurchaseConsent(orderId: string, otp: string) {
+  return apiRequest<MfOrder>(`/invest/orders/${orderId}/consent/confirm`, {
+    method: "POST",
+    body: JSON.stringify({ otp }),
   });
 }
 
@@ -472,6 +509,7 @@ export type MfCartItem = {
   product_name: string | null;
   fund_id: number;
   amc_name: string | null;
+  amc_slug: string | null;
   amc_logo_url: string | null;
   amount_inr: number;
   investment_type: "lumpsum" | "sip";

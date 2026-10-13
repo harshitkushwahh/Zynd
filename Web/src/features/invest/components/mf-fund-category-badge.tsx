@@ -57,6 +57,7 @@ type MfFundCategoryBadgeProps = {
   kind: MfFundCategoryKind;
   label?: string;
   showLabel?: boolean;
+  showIcon?: boolean;
   className?: string;
   iconClassName?: string;
   labelClassName?: string;
@@ -66,6 +67,7 @@ export function MfFundCategoryBadge({
   kind,
   label,
   showLabel = false,
+  showIcon = true,
   className,
   iconClassName,
   labelClassName,
@@ -73,6 +75,7 @@ export function MfFundCategoryBadge({
   const meta = mfFundCategoryMetaFor(kind);
   const Icon = meta.icon;
   const accessibleLabel = label ?? meta.label;
+  const displayLabel = label ?? meta.label;
 
   return (
     <span
@@ -86,11 +89,13 @@ export function MfFundCategoryBadge({
         className,
       )}
     >
-      <Icon
-        className={cn("size-3 shrink-0 text-muted-foreground", iconClassName)}
-        strokeWidth={2}
-        aria-hidden
-      />
+      {showIcon ? (
+        <Icon
+          className={cn("size-3 shrink-0 text-muted-foreground", iconClassName)}
+          strokeWidth={2}
+          aria-hidden
+        />
+      ) : null}
       {showLabel ? (
         <span
           className={cn(
@@ -98,7 +103,7 @@ export function MfFundCategoryBadge({
             labelClassName,
           )}
         >
-          {meta.label}
+          {displayLabel}
         </span>
       ) : null}
     </span>

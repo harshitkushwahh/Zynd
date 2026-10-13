@@ -244,12 +244,16 @@ export function OtpInput({
   error,
   id,
   variant = "default",
+  className,
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   error?: boolean;
   id?: string;
   variant?: "default" | "square";
+  className?: string;
+  disabled?: boolean;
 }) {
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const digits = value.padEnd(6, " ").split("").slice(0, 6);
@@ -288,9 +292,12 @@ export function OtpInput({
   const isSquare = variant === "square";
 
   return (
-    <div className={cn(isSquare ? "w-full" : "space-y-2")}>
+    <div className={cn(isSquare ? "w-full" : "space-y-2", className)}>
       <div
-        className={cn("flex w-full", isSquare ? "gap-2 sm:gap-2.5" : "justify-between gap-2")}
+        className={cn(
+          "flex w-full",
+          isSquare ? "justify-center gap-2 sm:gap-2.5" : "justify-between gap-2",
+        )}
         onPaste={handlePaste}
       >
         {digits.map((digit, index) => (
@@ -304,13 +311,14 @@ export function OtpInput({
             inputMode="numeric"
             maxLength={1}
             value={digit.trim()}
+            disabled={disabled}
             aria-invalid={error}
             onChange={(event) => updateDigit(index, event.target.value)}
             onKeyDown={(event) => handleKeyDown(index, event)}
             className={cn(
               "text-center text-body font-semibold text-foreground shadow-zynd-low outline-none transition-all focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-ring/30",
               isSquare
-                ? "aspect-square min-w-0 flex-1 rounded-[var(--radius-md)] border border-border bg-muted/15"
+                ? "aspect-square min-w-0 flex-1 rounded-[var(--radius-control)] border border-border/80 bg-muted/20"
                 : "h-11 w-full rounded-[var(--radius-control)] border border-input bg-muted/20 font-medium",
               error && "border-destructive focus-visible:ring-destructive/20"
             )}
