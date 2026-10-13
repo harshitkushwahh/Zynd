@@ -48,6 +48,24 @@ PaymentReconcileOutcome = Literal["success", "failed", "pending", "unclear"]
 _REPAIRABLE_CANCEL_FAILURE_CODES = frozenset({None, "payment_abandoned", "payment_expired"})
 
 
+def should_run_ondc_pipeline_advance_on_payment_poll(order: MfOrder) -> bool:
+    """User payment-status polls should sync PG truth, not re-run consent/review loops."""
+    if order.status == MfOrderStatus.pending:
+        return True
+    if order.status not in {
+        MfOrderStatus.payment_pending,
+        MfOrderStatus.submitted,
+        MfOrderStatus.processing,
+    }:
+        return True
+    ondc = _ondc_metadata(order)
+    if ondc.get("payment_created") or ondc.get("fp_payment_id") is not None:
+        return False
+    if _resolve_order_payment_id(order) is not None:
+        return False
+    return True
+
+
 def _metadata_payment_succeeded(order: MfOrder) -> bool:
     ondc = _ondc_metadata(order)
     if not ondc.get("payment_success"):
@@ -515,6 +533,7 @@ async def reconcile_order_payment(
     *,
     user_ip: str | None = None,
     force: bool = False,
+    payment_poll: bool = False,
 ) -> dict[str, Any]:
     if order.order_type in {MfOrderType.redemption, MfOrderType.switch}:
         return {
@@ -583,7 +602,9 @@ async def reconcile_order_payment(
     if order.status not in TERMINAL_STATUSES:
         if order.fp_purchase_id and await sync_order_from_fp(session, order):
             advanced = True
-        if await advance_ondc_order(session, order, force=force):
+        run_pipeline_advance = (not payment_poll) or should_run_ondc_pipeline_advance_on_payment_poll(order)
+        advance_force = force if not payment_poll else False
+        if run_pipeline_advance and await advance_ondc_order(session, order, force=advance_force):
             advanced = True
 
     truth = await fetch_order_fp_truth(order, checkout=checkout)
@@ -607,6 +628,7 @@ async def reconcile_checkout_payment(
     checkout: MfCheckout,
     *,
     user_ip: str | None = None,
+    payment_poll: bool = False,
 ) -> dict[str, Any]:
     if not _ondc_gateway_enabled():
         return {
@@ -634,11 +656,18 @@ async def reconcile_checkout_payment(
         MfCheckoutStatus.cancelled,
     }:
         if checkout.checkout_type == MfCheckoutType.cart:
-            if await advance_ondc_cart_checkout(session, checkout):
+            payment_known = _resolve_checkout_payment_id(checkout, orders) is not None
+            if (not payment_poll or not payment_known) and await advance_ondc_cart_checkout(session, checkout):
                 advanced = True
         else:
             for order in orders:
-                result = await reconcile_order_payment(session, order, user_ip=user_ip)
+                result = await reconcile_order_payment(
+                    session,
+                    order,
+                    user_ip=user_ip,
+                    payment_poll=payment_poll,
+                    force=False,
+                )
                 if result.get("advanced") or result.get("repaired"):
                     advanced = True
 

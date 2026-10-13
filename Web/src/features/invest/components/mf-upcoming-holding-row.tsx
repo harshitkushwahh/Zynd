@@ -1,4 +1,4 @@
-import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { MfOrderAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import type { MfOrder } from "@/features/invest/api/invest-api";
 import { truncateHoldingFundName } from "@/features/dashboard/overview/lib/overview-holdings-preview";
 import {
@@ -35,12 +35,7 @@ export function MfUpcomingHoldingRow({ order, index = 0, className }: MfUpcoming
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <MfFundAmcAvatar
-          amcLogoUrl={order.amc_logo_url}
-          amcName={order.amc_name ?? copy.mutualFunds.unknownAmc}
-          size="sm"
-          className={cn("rounded-full", styles.avatar)}
-        />
+        <MfOrderAmcAvatar order={order} size="sm" className={cn("rounded-full", styles.avatar)} />
         <div className="min-w-0">
           <p className={cn("truncate text-compact font-semibold", styles.title)}>
             {truncateHoldingFundName(order.product_name ?? copy.mutualFunds.unknownFund)}

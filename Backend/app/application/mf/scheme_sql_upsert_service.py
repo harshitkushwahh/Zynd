@@ -56,6 +56,8 @@ async def upsert_fund_from_normalized(
         existing.option_type = payload["option_type"]
         if payload["scheme_code"]:
             existing.scheme_code = payload["scheme_code"]
+        if payload["amc_name"].lower() != "unknown amc":
+            existing.amc_id = amc.id
         fund = existing
         action = "updated"
     else:

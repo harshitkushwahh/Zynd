@@ -25,6 +25,7 @@ from app.application.mf.mf_scheme_resolution import (
 from app.application.mf.investment_constraints import fund_allows_sip, investment_details_for_fund
 from app.application.mf.mf_investment_account_service import ensure_fp_mfia, ensure_mfia_old_id
 from app.application.mf.mf_order_service import get_or_create_mf_investment_account
+from app.application.mf.invest_amc_display import resolve_invest_amc_display
 from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.core.config import Settings, get_settings
 from app.core.redis import get_redis
@@ -866,12 +867,19 @@ async def _load_fund_metadata(
 
     metadata: dict[str, dict[str, Any]] = {}
     for isin_growth, isin_div, scheme_name, sebi_category, amc_name, logo_url, slug in result:
+        resolved_name, resolved_slug, resolved_logo = resolve_invest_amc_display(
+            amc_name=amc_name,
+            amc_slug=slug,
+            amc_logo_url=logo_url,
+            scheme_name=scheme_name or "",
+            settings=settings,
+        )
         payload = {
             "matched_fund_name": scheme_name,
             "sebi_category": sebi_category,
-            "amc_name": amc_name,
-            "amc_slug": slug,
-            "amc_logo_url": resolve_amc_logo_url(logo_url, slug, settings),
+            "amc_name": resolved_name,
+            "amc_slug": resolved_slug,
+            "amc_logo_url": resolved_logo,
         }
         for key in matching_fund_isins(
             isin_growth=isin_growth,

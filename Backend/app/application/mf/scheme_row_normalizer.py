@@ -3,7 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from app.application.mf.amc_name_parser import normalize_amc_display_name, parse_amc_from_scheme_name
+from app.application.mf.amc_name_parser import (
+    canonical_amc_display_name,
+    normalize_amc_display_name,
+    parse_amc_from_scheme_name,
+)
 from app.application.mf.category_mapping import should_exclude_from_catalog
 
 
@@ -67,6 +71,8 @@ def normalize_scheme_row(raw: dict[str, Any]) -> dict[str, Any] | None:
         amc_name = parse_amc_from_scheme_name(scheme_name) or "Unknown AMC"
     else:
         amc_name = normalize_amc_display_name(amc_name) or amc_name
+    if amc_name != "Unknown AMC":
+        amc_name = canonical_amc_display_name(amc_name)
     fp_amc_id = str(raw.get("amc_id") or amc_block.get("id") or "").strip() or None
 
     if should_exclude_from_catalog(scheme_name=scheme_name, plan_type=plan_type):

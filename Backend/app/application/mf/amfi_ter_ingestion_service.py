@@ -105,6 +105,18 @@ def resolve_ter_fund_id(
     return None
 
 
+def dedupe_ter_candidates(candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """One row per (fund_id, as_of_date). Postgres rejects duplicate conflict keys in one INSERT."""
+    merged: dict[tuple[int, date], dict[str, Any]] = {}
+    duplicates = 0
+    for row in candidates:
+        key = (int(row["fund_id"]), row["as_of_date"])
+        if key in merged:
+            duplicates += 1
+        merged[key] = row
+    return list(merged.values()), duplicates
+
+
 def filter_new_ter_rows(
     candidates: list[dict[str, Any]],
     existing: set[tuple[int, date]],

@@ -2,7 +2,7 @@
 
 import { Calculator, CalendarClock, IndianRupee } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { PortfolioDetailLockedSection } from "@/features/dashboard/portfolio/components/portfolio-detail-locked-section";
 import { formatInr } from "@/features/invest/lib/mf-format";
 import { MF_FUND_DETAIL_RADIUS_CLASS } from "@/features/invest/lib/mf-ui";
@@ -114,27 +114,37 @@ function DummyCalculatorPreview() {
   );
 }
 
+function CalculatorSectionHeader() {
+  return (
+    <div className="border-b border-border/60 bg-muted/10 px-4 py-4">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+          <Calculator className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+        </div>
+        <div className="min-w-0">
+          <CardTitle>{copy.mutualFunds.fundCalculatorTitle}</CardTitle>
+          <CardDescription>{copy.mutualFunds.fundCalculatorDescription}</CardDescription>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MfNfoCalculatorDisabled() {
   return (
     <Card className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
-      <CardHeader className="border-b border-border/60 bg-muted/10">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-            <Calculator className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
-          </div>
-          <div className="min-w-0">
-            <CardTitle>{copy.mutualFunds.fundCalculatorTitle}</CardTitle>
-            <CardDescription>{copy.mutualFunds.fundCalculatorDescription}</CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="px-4 py-4">
+      <CardContent className="p-4">
         <PortfolioDetailLockedSection
           stacked
           title={copy.mutualFunds.nfoCalculatorDisabledTitle}
           subtitle={copy.mutualFunds.nfoCalculatorDisabledBody}
         >
-          <DummyCalculatorPreview />
+          <div>
+            <CalculatorSectionHeader />
+            <div className="px-4 py-4">
+              <DummyCalculatorPreview />
+            </div>
+          </div>
         </PortfolioDetailLockedSection>
       </CardContent>
     </Card>

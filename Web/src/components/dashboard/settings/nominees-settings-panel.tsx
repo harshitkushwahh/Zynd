@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, UserPlus, UserRound, UsersRound } from "lucide-react";
 
 import { AddSettingsNomineeDialog } from "@/components/dashboard/settings/add-settings-nominee-dialog";
+import { MfFolioNominationTable } from "@/components/dashboard/settings/mf-folio-nomination-table";
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
 import { SETTINGS_NAV } from "@/components/dashboard/settings/settings-sidebar";
@@ -102,6 +104,7 @@ export function NomineesSettingsPanel({
 }: NomineesSettingsPanelProps) {
   const sectionMeta = SETTINGS_NAV.find((item) => item.id === "nominees")!;
   const kyc = useKycOptional();
+  const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -118,6 +121,7 @@ export function NomineesSettingsPanel({
     try {
       await addInvestorNominee(nomineesToSave);
       await onKycProfileReload?.();
+      void queryClient.invalidateQueries({ queryKey: ["kyc", "mf-folio-nominations"] });
       setAddOpen(false);
       setSuccess(copy.settings.nomineeAdded);
     } catch (err) {
@@ -188,28 +192,31 @@ export function NomineesSettingsPanel({
 
     if (nominees.length === 0) {
       return (
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          className={cn(
-            "group flex w-full flex-col items-center gap-4 rounded-[var(--radius-card)] border border-dashed border-primary/30 bg-primary/[0.03] px-6 py-10 text-center transition-colors",
-            "hover:border-primary/45 hover:bg-primary/[0.06]",
-          )}
-        >
-          <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 transition-transform group-hover:scale-105">
-            <UserPlus className="size-5" strokeWidth={2} />
-          </div>
-          <div className="space-y-1">
-            <p className="text-body font-semibold text-foreground">{copy.settings.nomineesEmptyTitle}</p>
-            <p className="max-w-sm text-caption leading-relaxed text-muted-foreground">
-              {copy.settings.nomineesEmptyDescription}
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-full)] bg-foreground px-3 py-1.5 text-[11px] font-medium text-background">
-            <Plus className="size-3.5" />
-            {copy.settings.nomineesAddCta}
-          </span>
-        </button>
+        <div className="space-y-5">
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className={cn(
+              "group flex w-full flex-col items-center gap-4 rounded-[var(--radius-card)] border border-dashed border-primary/30 bg-primary/[0.03] px-6 py-10 text-center transition-colors",
+              "hover:border-primary/45 hover:bg-primary/[0.06]",
+            )}
+          >
+            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 transition-transform group-hover:scale-105">
+              <UserPlus className="size-5" strokeWidth={2} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-body font-semibold text-foreground">{copy.settings.nomineesEmptyTitle}</p>
+              <p className="max-w-sm text-caption leading-relaxed text-muted-foreground">
+                {copy.settings.nomineesEmptyDescription}
+              </p>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-full)] bg-foreground px-3 py-1.5 text-[11px] font-medium text-background">
+              <Plus className="size-3.5" />
+              {copy.settings.nomineesAddCta}
+            </span>
+          </button>
+          <MfFolioNominationTable enabled={Boolean(kycProfile.hasMfInvestmentAccount)} />
+        </div>
       );
     }
 
@@ -232,6 +239,7 @@ export function NomineesSettingsPanel({
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           {copy.settings.nomineesFolioDisclaimer}
         </p>
+        <MfFolioNominationTable enabled={Boolean(kycProfile?.hasMfInvestmentAccount)} />
       </div>
     );
   };

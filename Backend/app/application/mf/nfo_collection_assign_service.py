@@ -58,7 +58,7 @@ async def run_nfo_collection_assign_sync(
         offers = list(await session.scalars(select(NfoOffer)))
         position = 0
         for offer in offers:
-            if not should_assign_nfo_category(offer.status, hidden=offer.is_hidden):
+            if not should_assign_nfo_category(offer.status, hidden=offer.is_hidden, offer=offer):
                 continue
             position += 1
             session.add(

@@ -128,7 +128,7 @@ export function PortfolioRedeemConsentDialog({
         ? portfolioCopy.redeemConsentDoneTitle
         : portfolioCopy.redeemConsentTitle;
 
-  async function handleSendOtp(): Promise<number | void> {
+  async function handleSendOtp() {
     if (!order) return;
     setSendingOtp(true);
     setError("");
@@ -137,7 +137,10 @@ export function PortfolioRedeemConsentDialog({
       setMaskedMobile(result.masked_mobile);
       setOtpSent(true);
       toast.success(portfolioCopy.redeemConsentOtpSent);
-      return result.retry_after_seconds || 30;
+      return {
+        retry_after_seconds: result.retry_after_seconds,
+        expires_in: result.expires_in,
+      };
     } catch (err) {
       setError(err instanceof Error ? err.message : portfolioCopy.redeemConsentOtpSendFailed);
     } finally {
@@ -151,7 +154,7 @@ export function PortfolioRedeemConsentDialog({
       return;
     }
     const sent = await handleSendOtp();
-    if (typeof sent === "number") setStep("verify");
+    if (sent) setStep("verify");
   }
 
   async function handleConfirm() {

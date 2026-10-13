@@ -34,9 +34,9 @@ import {
   PortfolioActionConsentDialog,
   type ActionConsentTarget,
 } from "@/features/dashboard/portfolio/components/portfolio-action-consent-dialog";
+import { PortfolioRedeemConsentDialog } from "@/features/dashboard/portfolio/components/portfolio-redeem-consent-dialog";
 import { MF_INVEST_PAYMENT_CARD_CLASS } from "@/features/invest/lib/mf-ui";
 import { TabPanel } from "@/shared/ui/tab-panel";
-import { PortfolioRedeemConsentDialog } from "@/features/dashboard/portfolio/components/portfolio-redeem-consent-dialog";
 import { PortfolioHoldingDetailSkeleton } from "@/features/dashboard/portfolio/components/portfolio-holding-detail-skeleton";
 import { PortfolioUpcomingHoldingDetailPage } from "@/features/dashboard/portfolio/components/portfolio-upcoming-holding-detail-page";
 import { PortfolioDetailLockedSection } from "@/features/dashboard/portfolio/components/portfolio-detail-locked-section";

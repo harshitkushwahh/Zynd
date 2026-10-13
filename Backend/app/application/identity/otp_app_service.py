@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from app.application.identity.otp_purposes import OtpPurpose, build_otp_message, get_purpose_definition, resolve_purpose
+from app.application.identity.otp_purposes import (
+    OtpChannel,
+    OtpPurpose,
+    build_otp_message,
+    get_purpose_definition,
+    resolve_purpose,
+)
 from app.application.messaging.otp_events import schedule_otp_requested
 from app.infrastructure.otp.service import (
     OtpCooldownError,
@@ -14,7 +20,9 @@ __all__ = [
     "OtpPurpose",
     "OtpRateLimitError",
     "request_otp",
+    "request_otp_mobile_and_email",
     "resend_otp",
+    "schedule_otp_delivery",
     "verify_otp",
 ]
 

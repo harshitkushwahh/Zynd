@@ -6,7 +6,7 @@ import { CalendarClock, Check, Copy, Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MfOrder } from "@/features/invest/api/invest-api";
-import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { MfOrderAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfOrderStatusBadge } from "@/features/invest/components/mf-order-status-badge";
 import { isOrderAwaitingAllotment } from "@/features/invest/lib/mf-order-payment-status";
 import { resolveCybrillaOrderStatusLabel } from "@/features/invest/lib/mf-cybrilla-status";
@@ -58,9 +58,8 @@ export function PortfolioUpcomingOrderSummaryCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <MfFundAmcAvatar
-            amcLogoUrl={order.amc_logo_url}
-            amcName={amcName}
+          <MfOrderAmcAvatar
+            order={order}
             size="md"
             className="size-12 shrink-0 rounded-[var(--radius-control)]"
           />

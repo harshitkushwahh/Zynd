@@ -21,7 +21,6 @@ import {
   type PortfolioHoldingItem,
 } from "@/features/dashboard/portfolio/lib/portfolio-types";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
-import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -46,10 +45,11 @@ type PortfolioHoldingsTableProps = {
   className?: string;
 };
 
-const TABLE_LAYOUT_CLASS = "w-full min-w-[760px] table-fixed border-collapse border-spacing-0";
-const COL_FUND = "w-[38%]";
-const COL_VALUE = "w-[22%]";
-const COL_RETURNS = "w-[22%]";
+const TABLE_LAYOUT_CLASS = "w-full min-w-[820px] table-fixed border-collapse border-spacing-0";
+const COL_FUND = "w-[32%]";
+const COL_SIP = "w-[14%]";
+const COL_VALUE = "w-[18%]";
+const COL_RETURNS = "w-[18%]";
 const COL_ALLOCATION = "w-[18%]";
 const HEADER_SURFACE_CLASS = "bg-muted/30";
 const HEADER_ROW_CLASS =
@@ -68,24 +68,17 @@ function toneClass(tone: "positive" | "negative" | "muted") {
   );
 }
 
-function HoldingFundCell({
-  holding,
-  sipPlans = [],
-}: {
-  holding: PortfolioHoldingTableRow;
-  sipPlans?: MfSipPlan[];
-}) {
-  const sipPool = poolSipsForHolding(
-    { fundName: holding.fundName, isin: holding.isin },
-    sipPlans,
-  );
-  const sipSummary = sipPool ? formatHoldingSipPoolSummary(sipPool) : null;
+function holdingSipPool(holding: PortfolioHoldingTableRow, sipPlans: MfSipPlan[]) {
+  return poolSipsForHolding({ fundName: holding.fundName, isin: holding.isin }, sipPlans);
+}
 
+function HoldingFundCell({ holding }: { holding: PortfolioHoldingTableRow }) {
   return (
     <div className="flex min-w-0 items-start gap-3">
       <MfFundAmcAvatar
         amcLogoUrl={holding.amcLogoUrl}
         amcName={holding.amcName}
+        schemeName={holding.fundName}
         size="sm"
         className="mt-0.5 shrink-0 rounded-[var(--radius-control)]"
       />
@@ -94,18 +87,57 @@ function HoldingFundCell({
           {holding.fundName}
         </p>
         <p className="mt-0.5 text-caption text-muted-foreground">{holding.amcName}</p>
-        {sipSummary ? (
-          <p className="mt-1 text-caption text-primary">
-            {copy.dashboard.portfolio.holdingSipMonthlyTotal.replace(
-              "{amount}",
-              sipSummary.monthlyEquivalent,
-            )}
-            {sipSummary.nextDate
-              ? ` · ${copy.dashboard.portfolio.holdingSipNextDebit.replace("{date}", sipSummary.nextDate)}`
-              : ""}
-          </p>
-        ) : null}
       </div>
+    </div>
+  );
+}
+
+function HoldingSipCell({
+  holding,
+  sipPlans,
+}: {
+  holding: PortfolioHoldingTableRow;
+  sipPlans: MfSipPlan[];
+}) {
+  const sipPool = holdingSipPool(holding, sipPlans);
+  if (!sipPool) {
+    return <span className="text-caption text-muted-foreground">—</span>;
+  }
+
+  const sipSummary = formatHoldingSipPoolSummary(sipPool);
+  const hasDaily = sipPool.dailySipInr > 0;
+  const hasMonthly = sipPool.monthlySipInr > 0;
+
+  return (
+    <div className="text-right">
+      {hasMonthly ? (
+        <p className="font-semibold tabular-nums text-foreground">
+          {copy.dashboard.portfolio.holdingSipMonthlyTotal.replace("{amount}", sipSummary.monthly)}
+        </p>
+      ) : null}
+      {hasDaily ? (
+        <p
+          className={cn(
+            "tabular-nums text-foreground",
+            hasMonthly ? "mt-0.5 text-caption text-muted-foreground" : "font-semibold",
+          )}
+        >
+          {copy.dashboard.portfolio.holdingSipDailyTotal.replace("{amount}", sipSummary.daily)}
+        </p>
+      ) : null}
+      {!hasMonthly && !hasDaily ? (
+        <p className="font-semibold tabular-nums text-foreground">
+          {copy.dashboard.portfolio.holdingSipMonthlyTotal.replace(
+            "{amount}",
+            sipSummary.monthlyEquivalent,
+          )}
+        </p>
+      ) : null}
+      {sipSummary.nextDate ? (
+        <p className="mt-0.5 text-caption text-muted-foreground">
+          {copy.dashboard.portfolio.holdingSipNextDebit.replace("{date}", sipSummary.nextDate)}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -194,6 +226,11 @@ function rowAllocationPct(row: PortfolioHoldingsTableRow) {
   return row.kind === "holding" ? row.allocationPct : -1;
 }
 
+function rowSipMonthlyEquivalent(row: PortfolioHoldingsTableRow, sipPlans: MfSipPlan[]) {
+  if (row.kind !== "holding") return -1;
+  return holdingSipPool(row, sipPlans)?.monthlyEquivalentInr ?? -1;
+}
+
 export function PortfolioHoldingsTable({
   holdings,
   upcomingOrders = [],
@@ -240,23 +277,25 @@ export function PortfolioHoldingsTable({
       if (column === "allocation") {
         return (rowAllocationPct(a) - rowAllocationPct(b)) * direction;
       }
+      if (column === "sip") {
+        return (rowSipMonthlyEquivalent(a, sipPlans) - rowSipMonthlyEquivalent(b, sipPlans)) * direction;
+      }
       return 0;
     });
-  }, [rows, sortDescriptor]);
+  }, [rows, sortDescriptor, sipPlans]);
 
   if (rows.length === 0) {
     return null;
   }
 
   return (
-    <div className={cn("min-w-0 overflow-hidden", className)}>
-      <TableCard.Root
-        size="sm"
-        className={cn(
-          ZYND_3XL_RADIUS_CLASS,
-          "overflow-hidden border-border/60 shadow-zynd-low",
-        )}
-      >
+    <div
+      className={cn(
+        "min-w-0 overflow-hidden rounded-[var(--radius-card)] border border-border bg-card",
+        className,
+      )}
+    >
+      <TableCard.Root size="sm" className="overflow-hidden rounded-none border-0 shadow-none">
         <div className="overflow-x-auto overscroll-x-contain">
           <Table
             aria-label={portfolioCopy.holdingsTitle}
@@ -274,6 +313,18 @@ export function PortfolioHoldingsTable({
               >
                 {copy.mySips.tableFund}
               </Table.Head>
+              <Table.Head
+                id="sip"
+                label={copy.dashboard.overview.portfolioMonthlySip}
+                allowsSorting
+                className={cn(
+                  COL_SIP,
+                  HEADER_CELL_CLASS,
+                  HEADER_SURFACE_CLASS,
+                  HEADER_LABEL_CLASS,
+                  RIGHT_HEAD_CLASS,
+                )}
+              />
               <Table.Head
                 id="value"
                 label={copy.dashboard.overview.portfolioCurrentValue}
@@ -330,9 +381,16 @@ export function PortfolioHoldingsTable({
                 >
                   <Table.Cell className={BODY_CELL_CLASS}>
                     {row.kind === "holding" ? (
-                      <HoldingFundCell holding={row} sipPlans={sipPlans} />
+                      <HoldingFundCell holding={row} />
                     ) : (
                       <UpcomingFundCell order={row.order} />
+                    )}
+                  </Table.Cell>
+                  <Table.Cell className={cn(BODY_CELL_CLASS, "text-right")}>
+                    {row.kind === "holding" ? (
+                      <HoldingSipCell holding={row} sipPlans={sipPlans} />
+                    ) : (
+                      <span className="text-caption text-muted-foreground">—</span>
                     )}
                   </Table.Cell>
                   <Table.Cell className={BODY_CELL_CLASS}>

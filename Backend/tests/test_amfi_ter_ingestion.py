@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from app.application.mf.amfi_ter_ingestion_service import (
+    dedupe_ter_candidates,
     filter_new_ter_rows,
     resolve_ter_fund_id,
     ter_ingestion_refreshes_existing,

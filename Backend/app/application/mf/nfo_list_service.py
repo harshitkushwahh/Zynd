@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.catalog_governance_service import invest_visibility_sql_clause
 from app.application.mf.invest_home_service import _serialize_fund_summary
+from app.application.mf.invest_nfo_eligibility import is_invest_nfo_offer
 from app.application.mf.invest_nfo_mappers import INVEST_NFO_STATUSES, serialize_nfo_block
+from app.application.mf.nfo_dates import today_ist
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
     FundAmc,
@@ -50,7 +52,12 @@ async def load_nfo_by_product_ids(
             )
         )
     ).scalars()
-    return {row.product_id: row for row in rows}
+    day = today_ist()
+    return {
+        row.product_id: row
+        for row in rows
+        if is_invest_nfo_offer(row, today=day)
+    }
 
 
 async def list_invest_nfo(
@@ -78,13 +85,18 @@ async def list_invest_nfo(
             raise ValueError("invalid_nfo_status")
         stmt = stmt.where(NfoOffer.status == mapped)
     else:
-        stmt = stmt.where(
-            NfoOffer.status.in_(
-                (NfoOfferStatus.open, NfoOfferStatus.upcoming, NfoOfferStatus.closed)
-            )
-        )
+        stmt = stmt.where(NfoOffer.status.in_(tuple(INVEST_NFO_STATUSES)))
 
-    rows = list((await session.execute(stmt.order_by(NfoOffer.is_featured.desc(), Product.name))).all())
+    raw_rows = list((await session.execute(stmt.order_by(NfoOffer.is_featured.desc(), Product.name))).all())
+    today = today_ist()
+    if status and STATUS_FILTERS.get(status.lower()) in {NfoOfferStatus.closed, NfoOfferStatus.allotted}:
+        rows = raw_rows
+    else:
+        rows = [
+            row
+            for row in raw_rows
+            if is_invest_nfo_offer(row[4], today=today)
+        ]
     total = len(rows)
     offset = (page - 1) * page_size
     page_rows = rows[offset : offset + page_size]
@@ -121,6 +133,8 @@ async def get_invest_nfo_detail(session: AsyncSession, product_id: uuid.UUID) ->
     if not payload:
         return None
     offer = await session.scalar(select(NfoOffer).where(NfoOffer.product_id == product_id))
+    if offer and not is_invest_nfo_offer(offer):
+        offer = None
     return attach_nfo(payload, offer)
 
 

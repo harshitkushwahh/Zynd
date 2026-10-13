@@ -143,7 +143,7 @@ def build_otp_message(*, purpose: OtpPurpose, code: str) -> str:
     if purpose == OtpPurpose.step_up_sms:
         return f"Your ZYND verification code is {code}. It expires in 10 minutes."
     if purpose == OtpPurpose.fund_confirmation:
-        return f"Your ZYND transaction confirmation code is {code}. It expires in 10 minutes."
+        return f"Your ZYND transaction confirmation code is {code}. It expires in 1 minute 30 seconds."
     if purpose == OtpPurpose.partner_onboarding_email:
         return f"Your Zynd Mitra work email verification code is {code}. It expires in 10 minutes."
     if purpose == OtpPurpose.partner_onboarding_mobile:

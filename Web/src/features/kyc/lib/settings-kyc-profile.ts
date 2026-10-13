@@ -39,6 +39,7 @@ export type SettingsKycProfile = {
   bank: SettingsKycBank | null;
   canEditProfile: boolean;
   canAddNominee: boolean;
+  hasMfInvestmentAccount: boolean;
   nominees: KycNomineeRecord[];
   maxNominees: number;
 };
@@ -168,6 +169,7 @@ export function mapBootstrapToKycProfile(
       : null,
     canEditProfile: Boolean(investorSettings?.can_edit_profile),
     canAddNominee: Boolean(investorSettings?.can_add_nominee),
+    hasMfInvestmentAccount: Boolean(investorSettings?.has_mf_investment_account),
     nominees,
     maxNominees: investorSettings?.max_nominees ?? 3,
   });

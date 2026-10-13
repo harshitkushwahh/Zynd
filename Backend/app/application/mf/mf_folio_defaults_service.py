@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.infrastructure.kyc.cybrilla_terminal_log import log_exception_dump
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
-    NOMINATION_INFO_VISIBILITY_SHOW,
+    NOMINATIONS_INFO_VISIBILITY_DEFAULT,
     create_mf_investment_account,
     get_mf_investment_account,
     update_mf_investment_account,
@@ -124,17 +124,64 @@ def folio_defaults_have_nominees(folio_defaults: dict[str, Any] | None) -> bool:
     return any(folio_defaults.get(f"nominee{index}") for index in (1, 2, 3))
 
 
+def _nomination_visibility_value(folio_defaults: dict[str, Any] | None) -> str | None:
+    if not isinstance(folio_defaults, dict):
+        return None
+    value = folio_defaults.get("nominations_info_visibility")
+    if isinstance(value, str) and value.strip() and value.strip().upper() != "SHOW":
+        return value.strip()
+    return None
+
+
+def _sanitize_folio_nomination_fields(folio_defaults: dict[str, Any]) -> dict[str, Any]:
+    """Drop legacy keys/values Finprim rejects on PATCH."""
+    cleaned = dict(folio_defaults)
+    cleaned.pop("nomination_info_visibility", None)
+    plural = cleaned.get("nominations_info_visibility")
+    if plural in {None, "", "SHOW"}:
+        cleaned.pop("nominations_info_visibility", None)
+    return cleaned
+
+
 def folio_defaults_need_nomination_visibility(folio_defaults: dict[str, Any] | None) -> bool:
-    if not folio_defaults_have_nominees(folio_defaults):
+    if not mfia_requires_nomination_visibility(folio_defaults):
         return False
-    value = folio_defaults.get("nomination_info_visibility") if folio_defaults else None
-    return not (isinstance(value, str) and value.strip())
+    return _nomination_visibility_value(folio_defaults) is None
+
+
+def mfia_requires_nomination_visibility(folio_defaults: dict[str, Any] | None) -> bool:
+    if not isinstance(folio_defaults, dict):
+        return False
+    if folio_defaults.get("skip_nomination") is True:
+        return False
+    if folio_defaults.get("skip_nomination") is False:
+        return True
+    return folio_defaults_have_nominees(folio_defaults)
+
+
+def nomination_visibility_for_folio(folio_defaults: dict[str, Any] | None) -> str | None:
+    if not mfia_requires_nomination_visibility(folio_defaults):
+        return None
+    return _nomination_visibility_value(folio_defaults) or NOMINATIONS_INFO_VISIBILITY_DEFAULT
 
 
 def apply_nomination_visibility(folio_defaults: dict[str, Any]) -> dict[str, Any]:
+    folio_defaults = _sanitize_folio_nomination_fields(folio_defaults)
     if folio_defaults_have_nominees(folio_defaults):
-        folio_defaults.setdefault("nomination_info_visibility", NOMINATION_INFO_VISIBILITY_SHOW)
+        folio_defaults["nominations_info_visibility"] = NOMINATIONS_INFO_VISIBILITY_DEFAULT
     return folio_defaults
+
+
+def _nomination_visibility_folio_patch(visibility: str = NOMINATIONS_INFO_VISIBILITY_DEFAULT) -> dict[str, str]:
+    return {"nominations_info_visibility": visibility}
+
+
+def _is_nomination_visibility_purchase_error(exc: Exception) -> bool:
+    message = str(getattr(exc, "message", None) or exc).lower()
+    return (
+        ("nomination_info_visibility" in message or "nominations_info_visibility" in message)
+        and "skip nomination" in message
+    )
 
 
 def build_folio_defaults(
@@ -273,19 +320,18 @@ async def ensure_mfia_folio_defaults(
     metadata = mfia.metadata_ or {}
     stored_defaults = metadata.get("folio_defaults") if isinstance(metadata.get("folio_defaults"), dict) else {}
     if metadata.get("folio_defaults_set") and not force:
-        stored_visibility = stored_defaults.get("nomination_info_visibility")
-        if isinstance(stored_visibility, str) and stored_visibility.strip():
-            return True
         try:
             remote_defaults = _extract_remote_folio_defaults(await get_mf_investment_account(mfia.fp_mfia_id))
         except Exception:
             remote_defaults = {}
         merged_defaults = {**remote_defaults, **stored_defaults}
-        if folio_defaults_need_nomination_visibility(merged_defaults) or merged_defaults.get("skip_nomination") is False:
-            return await patch_mfia_folio_defaults(
+        if folio_defaults_need_nomination_visibility(merged_defaults):
+            visibility = nomination_visibility_for_folio(merged_defaults) or NOMINATIONS_INFO_VISIBILITY_DEFAULT
+            return await patch_mfia_folio_nomination_visibility(
                 session,
                 user_id=user_id,
-                updates={"nomination_info_visibility": NOMINATION_INFO_VISIBILITY_SHOW},
+                mfia=mfia,
+                visibility=visibility,
             )
         return True
 
@@ -538,24 +584,142 @@ async def patch_mfia_folio_defaults(
             mfia=mfia.fp_mfia_id,
         )
 
-    folio_defaults = {
-        **_folio_defaults_for_patch(remote_defaults),
-        **_folio_defaults_for_patch(stored_defaults),
-        **updates,
-    }
+    folio_defaults = apply_nomination_visibility(
+        _sanitize_folio_nomination_fields(
+            {
+                **_folio_defaults_for_patch(remote_defaults),
+                **_folio_defaults_for_patch(stored_defaults),
+                **updates,
+            }
+        )
+    )
     print(
         f"[MFIA] PATCH folio_defaults mfia={mfia.fp_mfia_id} payload={folio_defaults}",
         flush=True,
     )
-    await update_mf_investment_account(
-        fp_mfia_id=mfia.fp_mfia_id,
-        body={"folio_defaults": folio_defaults},
-    )
+    try:
+        await update_mf_investment_account(
+            fp_mfia_id=mfia.fp_mfia_id,
+            body={"folio_defaults": folio_defaults},
+        )
+    except FpClientError as exc:
+        log_exception_dump(
+            "Finprim rejected MFIA folio_defaults PATCH",
+            exc,
+            user_id=str(user_id),
+            mfia=mfia.fp_mfia_id,
+            folio_defaults=folio_defaults,
+        )
+        return False
     merged_defaults = stored_defaults if isinstance(stored_defaults, dict) else {}
     merged_defaults.update(folio_defaults)
     mfia.metadata_ = {**metadata, "folio_defaults_set": True, "folio_defaults": merged_defaults}
     await session.flush()
     return True
+
+
+async def _fetch_remote_folio_defaults(fp_mfia_id: str) -> dict[str, Any]:
+    try:
+        return _extract_remote_folio_defaults(await get_mf_investment_account(fp_mfia_id))
+    except Exception:
+        return {}
+
+
+async def patch_mfia_folio_nomination_visibility(
+    session: AsyncSession,
+    *,
+    user_id,
+    mfia: MfInvestmentAccount,
+    visibility: str = NOMINATIONS_INFO_VISIBILITY_DEFAULT,
+) -> bool:
+    """PATCH only nomination visibility on Finprim (partial folio_defaults update)."""
+    if not mfia.fp_mfia_id:
+        return False
+
+    visibility_patch = _nomination_visibility_folio_patch(visibility)
+    print(
+        f"[MFIA] PATCH nomination visibility mfia={mfia.fp_mfia_id} payload={visibility_patch}",
+        flush=True,
+    )
+    try:
+        await update_mf_investment_account(
+            fp_mfia_id=mfia.fp_mfia_id,
+            body={"folio_defaults": visibility_patch},
+        )
+    except FpClientError as exc:
+        log_exception_dump(
+            "Finprim rejected MFIA nomination visibility patch",
+            exc,
+            user_id=str(user_id),
+            mfia=mfia.fp_mfia_id,
+            folio_defaults=visibility_patch,
+        )
+        return await patch_mfia_folio_defaults(
+            session,
+            user_id=user_id,
+            updates=visibility_patch,
+        )
+
+    metadata = mfia.metadata_ or {}
+    stored_defaults = metadata.get("folio_defaults") if isinstance(metadata.get("folio_defaults"), dict) else {}
+    merged_defaults = {**stored_defaults, **visibility_patch}
+    mfia.metadata_ = {
+        **metadata,
+        "folio_defaults_set": True,
+        "folio_defaults": merged_defaults,
+    }
+    await session.flush()
+    return True
+
+
+async def ensure_mfia_nomination_visibility_for_purchase(
+    session: AsyncSession,
+    *,
+    user_id,
+    mfia: MfInvestmentAccount,
+) -> bool:
+    """Ensure Finprim MFIA folio_defaults include nomination visibility before mf_purchase."""
+    if not mfia.fp_mfia_id:
+        return False
+
+    remote_defaults = await _fetch_remote_folio_defaults(mfia.fp_mfia_id)
+    visibility = nomination_visibility_for_folio(remote_defaults)
+    if not visibility:
+        return True
+    if not folio_defaults_need_nomination_visibility(remote_defaults):
+        return True
+
+    patched = await patch_mfia_folio_nomination_visibility(
+        session,
+        user_id=user_id,
+        mfia=mfia,
+        visibility=visibility,
+    )
+    if not patched:
+        return False
+
+    remote_after = await _fetch_remote_folio_defaults(mfia.fp_mfia_id)
+    if folio_defaults_need_nomination_visibility(remote_after):
+        return await patch_mfia_folio_defaults(
+            session,
+            user_id=user_id,
+            updates=_nomination_visibility_folio_patch(visibility),
+        )
+    return True
+
+
+async def repair_mfia_nomination_visibility_after_purchase_error(
+    session: AsyncSession,
+    *,
+    user_id,
+    mfia: MfInvestmentAccount,
+) -> bool:
+    return await patch_mfia_folio_nomination_visibility(
+        session,
+        user_id=user_id,
+        mfia=mfia,
+        visibility=NOMINATIONS_INFO_VISIBILITY_DEFAULT,
+    )
 
 
 async def refresh_mfia_communication_email(

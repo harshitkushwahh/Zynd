@@ -7,7 +7,8 @@ import { Loader2 } from "lucide-react";
 import { Table, TableCard } from "@/components/core/table";
 import type { MfOrder } from "@/features/invest/api/invest-api";
 import { MfOrderStatusBadge, mfOrderRowHoverClass } from "@/features/invest/components/mf-order-status-badge";
-import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { MfOrderAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { enrichInvestAmcFromOrder } from "@/features/invest/lib/mf-amc-display";
 import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -49,19 +50,16 @@ function formatOrderType(orderType: string) {
   if (normalized === "LUMPSUM") return copy.transactions.typeLumpsum;
   if (normalized === "SIP") return copy.transactions.typeSip;
   if (normalized === "REDEMPTION") return copy.transactions.typeRedemption;
+  if (normalized === "SWITCH") return copy.transactions.typeSwitch;
   return orderType.replaceAll("_", " ");
 }
 
 function FundCell({ order }: { order: MfOrder }) {
-  const amcName = order.amc_name ?? copy.mutualFunds.unknownAmc;
+  const amcName = enrichInvestAmcFromOrder(order).amcName;
 
   return (
     <div className="flex min-w-0 items-start gap-3">
-      <MfFundAmcAvatar
-        amcLogoUrl={order.amc_logo_url}
-        amcName={amcName}
-        className="mt-0.5"
-      />
+      <MfOrderAmcAvatar order={order} className="mt-0.5" />
       <div className="min-w-0">
         <p className="font-medium leading-snug break-words whitespace-normal text-foreground">
           {order.product_name ?? copy.mutualFunds.unknownFund}

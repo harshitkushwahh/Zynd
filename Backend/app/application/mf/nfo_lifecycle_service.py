@@ -14,7 +14,7 @@ from app.application.mf.nfo_calendar_service import (
     fetch_nfo_calendar_windows,
     match_nfo_calendar_window,
 )
-from app.application.mf.nfo_chain_trigger_service import today_ist
+from app.application.mf.nfo_dates import today_ist
 from app.application.mf.nfo_detection_service import NfoSignals, classify_nfo_status, name_looks_like_nfo
 from app.core.config import get_settings
 from app.infrastructure.persistence.mf_models import (
@@ -29,6 +29,43 @@ from app.infrastructure.persistence.mf_models import (
 
 logger = logging.getLogger(__name__)
 
+_INVEST_STATUSES = frozenset({NfoOfferStatus.upcoming, NfoOfferStatus.open})
+
+
+def _apply_status_timestamps(
+    offer: NfoOffer,
+    *,
+    previous: NfoOfferStatus | None,
+    new_status: NfoOfferStatus,
+    today,
+) -> None:
+    if new_status in _INVEST_STATUSES and offer.first_listed_at is None:
+        offer.first_listed_at = today
+    if new_status == NfoOfferStatus.closed and previous != NfoOfferStatus.closed:
+        offer.subscription_closed_at = today
+    if new_status == NfoOfferStatus.allotted and offer.graduated_at is None:
+        offer.graduated_at = today
+
+
+def _finalize_status_for_nav(
+    status: NfoOfferStatus | None,
+    *,
+    nav_count: int,
+    allotted_nav_min: int,
+    close_date,
+    today,
+) -> NfoOfferStatus | None:
+    if status is None:
+        return None
+    if status == NfoOfferStatus.open and close_date and today > close_date:
+        status = NfoOfferStatus.closed
+    if nav_count >= allotted_nav_min:
+        if status == NfoOfferStatus.closed:
+            status = NfoOfferStatus.allotted
+        elif status == NfoOfferStatus.open and close_date and today > close_date:
+            status = NfoOfferStatus.allotted
+    return status
+
 
 async def run_nfo_lifecycle_sync(
     session: AsyncSession,
@@ -42,7 +79,7 @@ async def run_nfo_lifecycle_sync(
         return {"skipped": 1, "reason": "already_running"}
 
     run = await begin_ingestion_run(session, job_name="nfo-lifecycle-sync", triggered_by=triggered_by)
-    upserted = skipped = processed = 0
+    upserted = skipped = processed = graduated = 0
     logger.info("nfo-lifecycle-sync started run=%s triggered_by=%s", run.run_uuid, triggered_by)
     try:
         rows = (
@@ -72,7 +109,7 @@ async def run_nfo_lifecycle_sync(
             age_days = (now - product.created_at).days if product.created_at else None
             window = match_nfo_calendar_window(scheme_name, calendar_windows)
             scheme_dates = extract_nfo_dates_from_scheme(fund.investment_constraints)
-            status = None
+            status: NfoOfferStatus | None = None
             source = "HEURISTIC"
             if window:
                 mapped = calendar_status_for_window(window, today)
@@ -93,12 +130,39 @@ async def run_nfo_lifecycle_sync(
                 )
                 if status is not None and not name_looks_like_nfo(scheme_name) and window is None:
                     status = None
+
+            close_date = window.close_date if window else scheme_dates["close_date"]
+            status = _finalize_status_for_nav(
+                status,
+                nav_count=int(nav_count or 0),
+                allotted_nav_min=settings.zynd_nfo_allotted_nav_min,
+                close_date=close_date,
+                today=today,
+            )
+
             offer = existing.get(product.id)
             if status is None:
                 if offer is not None and not offer.admin_override:
-                    await session.delete(offer)
+                    if offer.first_listed_at or offer.status in {
+                        NfoOfferStatus.closed,
+                        NfoOfferStatus.allotted,
+                    }:
+                        previous = offer.status
+                        offer.status = NfoOfferStatus.allotted
+                        _apply_status_timestamps(
+                            offer,
+                            previous=previous,
+                            new_status=NfoOfferStatus.allotted,
+                            today=today,
+                        )
+                        graduated += 1
+                        upserted += 1
+                    else:
+                        await session.delete(offer)
+                        existing.pop(product.id, None)
                     skipped += 1
                 continue
+
             if offer is None:
                 offer = NfoOffer(
                     product_id=product.id,
@@ -108,16 +172,20 @@ async def run_nfo_lifecycle_sync(
                 )
                 session.add(offer)
                 existing[product.id] = offer
+                _apply_status_timestamps(offer, previous=None, new_status=status, today=today)
                 upserted += 1
             elif offer.admin_override:
                 skipped += 1
                 continue
             else:
+                previous = offer.status
                 offer.status = status
                 offer.mutual_fund_id = fund.id
                 if offer.source != "ADMIN":
                     offer.source = source
+                _apply_status_timestamps(offer, previous=previous, new_status=status, today=today)
                 upserted += 1
+
             if not offer.admin_override:
                 open_date = window.open_date if window else scheme_dates["open_date"]
                 close_date = window.close_date if window else scheme_dates["close_date"]
@@ -136,19 +204,21 @@ async def run_nfo_lifecycle_sync(
             records_processed=processed,
             records_inserted=upserted,
             records_skipped=skipped,
-            metadata={"upserted": upserted, "removed_or_skipped": skipped},
+            metadata={"upserted": upserted, "graduated": graduated, "removed_or_skipped": skipped},
         )
         await notify_invest_catalog_changed(session, refresh_search_vectors=False)
         logger.info(
-            "nfo-lifecycle-sync succeeded run=%s processed=%s upserted=%s skipped=%s",
+            "nfo-lifecycle-sync succeeded run=%s processed=%s upserted=%s skipped=%s graduated=%s",
             run.run_uuid,
             processed,
             upserted,
             skipped,
+            graduated,
         )
         return {
             "processed": processed,
             "upserted": upserted,
+            "graduated": graduated,
             "removed_or_skipped": skipped,
             "run_uuid": str(run.run_uuid),
         }

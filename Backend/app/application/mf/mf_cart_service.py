@@ -26,7 +26,7 @@ from app.application.mf.mf_sip_plan_service import (
     default_installments,
     validate_sip_cart_line,
 )
-from app.application.mf.public_asset_service import resolve_amc_logo_url
+from app.application.mf.invest_amc_display import load_fund_amc_display_by_fund_id
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
 from app.core.config import get_settings
 from app.infrastructure.persistence.investor_models import InvestorProvisionTrigger
@@ -50,6 +50,7 @@ def serialize_cart_item(
     product_name: str | None = None,
     amc_name: str | None = None,
     amc_logo_url: str | None = None,
+    amc_slug: str | None = None,
 ) -> dict:
     return {
         "product_id": str(item.product_id),
@@ -57,6 +58,7 @@ def serialize_cart_item(
         "fund_id": item.fund_id,
         "amc_name": amc_name,
         "amc_logo_url": amc_logo_url,
+        "amc_slug": amc_slug,
         "amount_inr": float(item.amount_inr),
         "investment_type": item.investment_type.value,
         "installment_day": item.installment_day,
@@ -144,23 +146,10 @@ async def list_cart_items(session: AsyncSession, *, user_id: uuid.UUID) -> list[
 async def _load_cart_fund_metadata(
     session: AsyncSession,
     items: list[MfCartItem],
-) -> tuple[dict[int, str], dict[int, str | None]]:
+) -> tuple[dict[int, str], dict[int, str], dict[int, str | None]]:
     fund_ids = {item.fund_id for item in items}
-    if not fund_ids:
-        return {}, {}
-
-    settings = get_settings()
-    result = await session.execute(
-        select(MutualFund.id, FundAmc.name, FundAmc.logo_url, FundAmc.slug).join(
-            FundAmc, MutualFund.amc_id == FundAmc.id
-        ).where(MutualFund.id.in_(fund_ids))
-    )
-    amc_names: dict[int, str] = {}
-    amc_logos: dict[int, str | None] = {}
-    for fund_id, name, logo_url, slug in result:
-        amc_names[fund_id] = name
-        amc_logos[fund_id] = resolve_amc_logo_url(logo_url, slug, settings)
-    return amc_names, amc_logos
+    amc_names, amc_logos, amc_slugs = await load_fund_amc_display_by_fund_id(session, fund_ids)
+    return amc_names, amc_slugs, amc_logos
 
 
 async def get_cart_summary(session: AsyncSession, *, user_id: uuid.UUID) -> dict:
@@ -172,7 +161,7 @@ async def get_cart_summary(session: AsyncSession, *, user_id: uuid.UUID) -> dict
             await session.execute(select(Product).where(Product.id.in_(product_ids)))
         ).scalars()
     } if product_ids else {}
-    amc_names, amc_logos = await _load_cart_fund_metadata(session, items)
+    amc_names, amc_slugs, amc_logos = await _load_cart_fund_metadata(session, items)
 
     serialized = [
         serialize_cart_item(
@@ -180,6 +169,7 @@ async def get_cart_summary(session: AsyncSession, *, user_id: uuid.UUID) -> dict
             product_name=products.get(item.product_id),
             amc_name=amc_names.get(item.fund_id),
             amc_logo_url=amc_logos.get(item.fund_id),
+            amc_slug=amc_slugs.get(item.fund_id),
         )
         for item in items
     ]

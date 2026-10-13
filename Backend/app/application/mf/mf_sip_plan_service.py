@@ -180,19 +180,13 @@ async def load_sip_plan_fund_metadata(
     if not fund_ids:
         return {}, {}, {}
 
-    settings = get_settings()
+    from app.application.mf.invest_amc_display import load_fund_amc_display_by_fund_id
+
+    amc_names, amc_logos, _amc_slugs = await load_fund_amc_display_by_fund_id(session, fund_ids)
     result = await session.execute(
-        select(MutualFund.id, MutualFund.isin_growth, FundAmc.name, FundAmc.logo_url, FundAmc.slug)
-        .join(FundAmc, MutualFund.amc_id == FundAmc.id)
-        .where(MutualFund.id.in_(fund_ids))
+        select(MutualFund.id, MutualFund.isin_growth).where(MutualFund.id.in_(fund_ids))
     )
-    amc_names: dict[int, str] = {}
-    amc_logos: dict[int, str | None] = {}
-    isins: dict[int, str] = {}
-    for fund_id, isin, name, logo_url, slug in result:
-        amc_names[fund_id] = name
-        amc_logos[fund_id] = resolve_amc_logo_url(logo_url, slug, settings)
-        isins[fund_id] = isin
+    isins: dict[int, str] = {fund_id: isin for fund_id, isin in result}
     return amc_names, amc_logos, isins
 
 

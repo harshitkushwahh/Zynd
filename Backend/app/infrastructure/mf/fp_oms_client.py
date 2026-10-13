@@ -17,6 +17,11 @@ from app.infrastructure.persistence.provider_log_models import ProviderLogSource
 
 logger = logging.getLogger(__name__)
 
+# Finprim folio_defaults / nomination (see MF Investment Account API).
+NOMINATIONS_INFO_VISIBILITY_SHOW_ALL = "show_all_nominee_names"
+NOMINATIONS_INFO_VISIBILITY_STATUS = "show_nomination_status"
+NOMINATIONS_INFO_VISIBILITY_DEFAULT = NOMINATIONS_INFO_VISIBILITY_SHOW_ALL
+# Legacy internal value; never send to Finprim on folio_defaults.
 NOMINATION_INFO_VISIBILITY_SHOW = "SHOW"
 
 _fp_mf_token: str | None = None
@@ -447,6 +452,19 @@ async def get_mf_purchase(fp_purchase_id: str) -> dict[str, Any]:
     return await fp_mf_get(f"/v2/mf_purchases/{fp_purchase_id}")
 
 
+async def get_mf_purchase_by_source_ref(source_ref_id: str) -> dict[str, Any] | None:
+    """Recover an existing FP purchase when create hits source_ref_id uniqueness."""
+    source_ref_id = str(source_ref_id).strip()
+    if not source_ref_id:
+        return None
+    payload = await fp_mf_get("/v2/mf_purchases", params={"source_ref_id": source_ref_id})
+    items = [_serialize_mf_purchase_item(item) for item in _parse_mf_purchase_list(payload)]
+    for item in items:
+        if str(item.get("source_ref_id") or "") == source_ref_id and item.get("fp_purchase_id"):
+            return item
+    return items[0] if items else None
+
+
 def _purchase_belongs_to_plan(item: dict[str, Any], fp_plan_id: str) -> bool:
     raw = item.get("raw") if isinstance(item.get("raw"), dict) else item
     plan_ref = raw.get("plan") or raw.get("mf_purchase_plan") or raw.get("purchase_plan")
@@ -543,6 +561,9 @@ async def create_mf_purchases_batch(
             item["distributor_arn"] = settings.zynd_distributor_arn.strip()
         if settings.zynd_distributor_euin.strip():
             item["euin"] = settings.zynd_distributor_euin.strip()
+        visibility = purchase.get("nomination_info_visibility") or nomination_info_visibility
+        if visibility:
+            item["nomination_info_visibility"] = visibility
         mf_purchases.append(item)
 
     if not is_finprim_enabled():

@@ -1,6 +1,14 @@
 "use client";
 
-import { memo, useCallback, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { SortDescriptor } from "react-aria-components";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ChevronSelectorVertical } from "@untitledui/icons";
@@ -9,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Table, TableCard } from "@/components/core/table";
+import { NfoCategoryCell, NfoOfferStatusCell } from "@/features/invest/components/mf-nfo-table-cells";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import {
   dedupeInvestFunds,
@@ -17,7 +26,7 @@ import {
   pinScreenerSelectedFundTableRows,
   sortFundTableRows,
 } from "@/features/invest/lib/mf-fund-ranking";
-import { formatSignedReturn, resolveAmcLogoUrl } from "@/features/invest/lib/mf-format";
+import { formatDate, formatInr, formatSignedReturn, resolveAmcLogoUrl } from "@/features/invest/lib/mf-format";
 import {
   beginMfFundScreenerDrag,
   endMfFundScreenerDrag,
@@ -58,14 +67,22 @@ type MfFundsTableProps = {
   screenerSelectionEnabled?: boolean;
   compact?: boolean;
   hideCategoryColumn?: boolean;
+  variant?: MfFundsTableVariant;
 };
 
+export type MfFundsTableVariant = "default" | "nfo";
+
 type FundsTableLayout = {
+  variant: MfFundsTableVariant;
   tableClass: string;
   colSelect: string;
   colName: string;
   colCategory: string;
   colReturn: string;
+  colNfoOpens: string;
+  colNfoCloses: string;
+  colNfoMin: string;
+  colNfoStatus: string;
   headerCellClass: string;
   selectHeaderCellClass: string;
   selectBodyCellClass: string;
@@ -81,16 +98,75 @@ type FundsTableLayout = {
 function resolveFundsTableLayout(options: {
   compact?: boolean;
   hideCategoryColumn?: boolean;
+  variant?: MfFundsTableVariant;
 }): FundsTableLayout {
   const hideCategoryColumn = options.hideCategoryColumn ?? false;
+  const variant = options.variant ?? "default";
+
+  if (variant === "nfo") {
+    if (options.compact) {
+      return {
+        variant: "nfo",
+        tableClass: "w-full table-fixed border-collapse border-spacing-0",
+        colSelect: "w-8 max-w-8",
+        colName: hideCategoryColumn ? "w-[46%]" : "w-[36%]",
+        colCategory: hideCategoryColumn ? "w-0" : "w-[12%]",
+        colReturn: "w-[5.75rem]",
+        colNfoOpens: "w-[12%]",
+        colNfoCloses: "w-[12%]",
+        colNfoMin: "w-[10%]",
+        colNfoStatus: "w-[18%]",
+        headerCellClass: "px-2.5 py-3 text-left",
+        selectHeaderCellClass: "py-3 pl-1.5 pr-0 text-center",
+        selectBodyCellClass: "py-2.5 pl-1.5 pr-0 text-compact text-foreground",
+        nameHeaderCellClass: "py-3 pl-2 pr-2.5 text-left",
+        nameBodyCellClass: "py-2.5 pl-2 pr-2.5 text-compact text-foreground",
+        returnHeaderCellClass: "px-1.5 py-3 text-right",
+        bodyCellClass: "px-2.5 py-2.5 text-compact text-foreground",
+        returnBodyCellClass:
+          "px-1.5 py-2.5 text-caption text-foreground text-right tabular-nums whitespace-nowrap",
+        hideCategoryColumn,
+        fundLogoSizeClass: "size-7",
+      };
+    }
+
+    return {
+      variant: "nfo",
+      tableClass: "w-full min-w-[720px] table-fixed border-collapse border-spacing-0",
+      colSelect: "w-8 max-w-8",
+      colName: hideCategoryColumn ? "w-[50%]" : "w-[39%]",
+      colCategory: hideCategoryColumn ? "w-0" : "w-[11%]",
+      colReturn: "w-[5.75rem]",
+      colNfoOpens: "w-[11%]",
+      colNfoCloses: "w-[11%]",
+      colNfoMin: "w-[9%]",
+      colNfoStatus: "w-[19%]",
+      headerCellClass: "px-4 py-4 md:px-5 text-left",
+      selectHeaderCellClass: "py-4 pl-1.5 pr-0 text-center",
+      selectBodyCellClass: "py-3 pl-1.5 pr-0 text-compact text-foreground",
+      nameHeaderCellClass: "py-4 pl-2 pr-4 text-left md:pr-5",
+      nameBodyCellClass: "py-3 pl-2 pr-4 text-compact text-foreground md:pr-5",
+      returnHeaderCellClass: "px-2 py-4 md:px-3 text-right",
+      bodyCellClass: "px-4 py-3 md:px-5 text-compact text-foreground",
+      returnBodyCellClass:
+        "px-2 py-3 md:px-3 text-compact text-foreground text-right tabular-nums whitespace-nowrap",
+      hideCategoryColumn,
+      fundLogoSizeClass: "size-8",
+    };
+  }
 
   if (options.compact) {
     return {
+      variant: "default",
       tableClass: "w-full table-fixed border-collapse border-spacing-0",
       colSelect: "w-[2rem]",
       colName: hideCategoryColumn ? "w-[58%]" : "w-[42%]",
       colCategory: hideCategoryColumn ? "w-0" : "w-[16%]",
       colReturn: "w-[14%]",
+      colNfoOpens: "w-[11%]",
+      colNfoCloses: "w-[11%]",
+      colNfoMin: "w-[9%]",
+      colNfoStatus: "w-[19%]",
       headerCellClass: "px-2.5 py-3 text-left",
       selectHeaderCellClass: "py-3 pl-1 pr-0 text-center",
       selectBodyCellClass: "py-2.5 pl-1 pr-0 text-compact text-foreground",
@@ -106,11 +182,16 @@ function resolveFundsTableLayout(options: {
   }
 
   return {
+    variant: "default",
     tableClass: "w-full min-w-[720px] table-fixed border-collapse border-spacing-0",
     colSelect: "w-[2.25rem]",
     colName: "w-[50%]",
     colCategory: "w-[10%]",
     colReturn: "w-[5.75rem]",
+    colNfoOpens: "w-[11%]",
+    colNfoCloses: "w-[11%]",
+    colNfoMin: "w-[9%]",
+    colNfoStatus: "w-[19%]",
     headerCellClass: "px-4 py-4 md:px-5 text-left",
     selectHeaderCellClass: "py-4 pl-1 pr-0 text-center",
     selectBodyCellClass: "py-3 pl-1 pr-0 text-compact text-foreground",
@@ -118,7 +199,8 @@ function resolveFundsTableLayout(options: {
     nameBodyCellClass: "py-3 pl-2 pr-4 text-compact text-foreground md:pr-5",
     returnHeaderCellClass: "px-2 py-4 md:px-3 text-right",
     bodyCellClass: "px-4 py-3 md:px-5 text-compact text-foreground",
-    returnBodyCellClass: "px-2 py-3 md:px-3 text-compact text-foreground text-right tabular-nums whitespace-nowrap",
+    returnBodyCellClass:
+      "px-2 py-3 md:px-3 text-compact text-foreground text-right tabular-nums whitespace-nowrap",
     hideCategoryColumn,
     fundLogoSizeClass: "size-8",
   };
@@ -130,8 +212,11 @@ const HEADER_ROW_CLASS =
   "sticky top-0 z-10 bg-transparent [&>th]:border-b [&>th]:border-border";
 const HEADER_CELL_CLASS = "px-4 py-4 md:px-5 text-left";
 const RETURN_HEADER_CELL_CLASS = "px-2 py-4 md:px-3 text-right";
-const VIRTUAL_ROW_HEIGHT = 60;
+const VIRTUAL_ROW_HEIGHT_DEFAULT = 60;
+const VIRTUAL_ROW_HEIGHT_NFO = 76;
 const VIRTUAL_OVERSCAN = 12;
+/** Fixed width for screener checkbox column (`table-fixed` + % cols otherwise stretch this). */
+const SCREENER_SELECT_COL_WIDTH_PX = 40;
 
 function cycleSortDescriptor(
   current: SortDescriptor,
@@ -233,6 +318,16 @@ const ReturnCell = memo(function ReturnCell({ value }: { value: number | null | 
   );
 });
 
+function MfFundsTableNfoDisclaimer({ className }: { className?: string }) {
+  return (
+    <div className={cn(className)} aria-live="polite">
+      <p className="mx-auto max-w-2xl text-[10px] italic leading-relaxed text-muted-foreground/75 sm:text-[11px]">
+        {copy.mutualFunds.nfoTableDisclaimer}
+      </p>
+    </div>
+  );
+}
+
 type FundTableDataRowProps = {
   fund: MfFundsTableRow;
   selected: boolean;
@@ -243,6 +338,7 @@ type FundTableDataRowProps = {
   onToggleSelection?: () => void;
   onNavigate: () => void;
   onDoubleClick?: () => void;
+  now: Date;
 };
 
 const FundTableDataRow = memo(function FundTableDataRow({
@@ -255,12 +351,15 @@ const FundTableDataRow = memo(function FundTableDataRow({
   onToggleSelection,
   onNavigate,
   onDoubleClick,
+  now,
 }: FundTableDataRowProps) {
   const dragStartedRef = useRef(false);
+  const isNfo = layout.variant === "nfo";
+  const minInvestment = fund.min_lumpsum_amount_inr ?? fund.min_sip_amount_inr;
 
   function handleDragStart(event: React.DragEvent<HTMLTableCellElement>) {
     const target = event.target as HTMLElement;
-    if (target.closest('input[type="checkbox"]')) {
+    if (target.closest('input[type="checkbox"]') || target.closest("button")) {
       event.preventDefault();
       return;
     }
@@ -313,12 +412,13 @@ const FundTableDataRow = memo(function FundTableDataRow({
         <td
           {...dragProps}
           className={cn(
-            "min-h-14 border-b border-border/70 align-middle",
+            "min-h-14 border-b border-border/70 align-top",
             layout.colSelect,
             layout.selectBodyCellClass,
           )}
+          style={{ width: SCREENER_SELECT_COL_WIDTH_PX, maxWidth: SCREENER_SELECT_COL_WIDTH_PX }}
         >
-          <div className="flex items-center justify-start gap-0">
+          <div className="flex h-8 items-center gap-0">
             <span
               className={cn(
                 "pointer-events-none flex size-5 shrink-0 items-center justify-center text-muted-foreground/70",
@@ -355,33 +455,81 @@ const FundTableDataRow = memo(function FundTableDataRow({
         <td
           {...dragProps}
           className={cn(
-            "min-h-14 border-b border-border/70 align-top truncate text-caption text-muted-foreground",
+            "min-h-14 border-b border-border/70 align-top",
             layout.colCategory,
             layout.bodyCellClass,
+            !isNfo && "truncate text-caption text-muted-foreground",
           )}
           title={displayCategoryLabel(fund)}
         >
-          {displayCategoryLabel(fund)}
+          {isNfo ? <NfoCategoryCell fund={fund} /> : displayCategoryLabel(fund)}
         </td>
       ) : null}
-      <td
-        {...dragProps}
-        className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
-      >
-        <ReturnCell value={fund.returns.return_1y} />
-      </td>
-      <td
-        {...dragProps}
-        className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
-      >
-        <ReturnCell value={fund.returns.return_3y} />
-      </td>
-      <td
-        {...dragProps}
-        className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
-      >
-        <ReturnCell value={fund.returns.return_5y} />
-      </td>
+      {isNfo ? (
+        <>
+          <td
+            {...dragProps}
+            className={cn(
+              "min-h-14 border-b border-border/70 align-top tabular-nums",
+              layout.colNfoOpens,
+              layout.bodyCellClass,
+            )}
+          >
+            {fund.nfo?.subscription_open_date ? formatDate(fund.nfo.subscription_open_date) : "—"}
+          </td>
+          <td
+            {...dragProps}
+            className={cn(
+              "min-h-14 border-b border-border/70 align-top tabular-nums",
+              layout.colNfoCloses,
+              layout.bodyCellClass,
+            )}
+          >
+            {fund.nfo?.subscription_close_date ? formatDate(fund.nfo.subscription_close_date) : "—"}
+          </td>
+          <td
+            {...dragProps}
+            className={cn(
+              "min-h-14 border-b border-border/70 align-top tabular-nums font-medium",
+              layout.colNfoMin,
+              layout.bodyCellClass,
+            )}
+          >
+            {formatInr(minInvestment)}
+          </td>
+          <td
+            {...dragProps}
+            className={cn(
+              "min-h-14 border-b border-border/70 align-top",
+              layout.colNfoStatus,
+              layout.bodyCellClass,
+            )}
+          >
+            <NfoOfferStatusCell fund={fund} now={now} />
+          </td>
+        </>
+      ) : (
+        <>
+          <td
+            {...dragProps}
+            className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
+          >
+            <ReturnCell value={fund.returns.return_1y} />
+          </td>
+          <td
+            {...dragProps}
+            className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
+          >
+            <ReturnCell value={fund.returns.return_3y} />
+          </td>
+          <td
+            {...dragProps}
+            className={cn("min-h-14 border-b border-border/70 align-top", layout.colReturn, layout.returnBodyCellClass)}
+          >
+            <ReturnCell value={fund.returns.return_5y} />
+          </td>
+        </>
+      )}
     </tr>
   );
 });
@@ -396,6 +544,7 @@ type VirtualFundTableRowProps = {
   onToggleScreenerSelection: (fund: MfFundsTableRow) => void;
   navigateToFund: (fund: InvestFundSummary) => void;
   onRowDoubleClick?: (fund: InvestFundSummary) => void;
+  now: Date;
 };
 
 const VirtualFundTableRow = memo(function VirtualFundTableRow({
@@ -408,6 +557,7 @@ const VirtualFundTableRow = memo(function VirtualFundTableRow({
   onToggleScreenerSelection,
   navigateToFund,
   onRowDoubleClick,
+  now,
 }: VirtualFundTableRowProps) {
   const onNavigate = useCallback(() => navigateToFund(fund), [fund, navigateToFund]);
   const onDoubleClick = useCallback(() => {
@@ -429,9 +579,29 @@ const VirtualFundTableRow = memo(function VirtualFundTableRow({
       onToggleSelection={showScreenerSelection ? onToggleSelection : undefined}
       onNavigate={onNavigate}
       onDoubleClick={onRowDoubleClick ? onDoubleClick : undefined}
+      now={now}
     />
   );
 });
+
+function PlainTableHead({
+  className,
+  cellClassName,
+  children,
+}: {
+  className?: string;
+  cellClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <th
+      scope="col"
+      className={cn(cellClassName ?? HEADER_CELL_CLASS, HEADER_SURFACE_CLASS, className)}
+    >
+      <span className="text-compact font-semibold tracking-wide text-foreground">{children}</span>
+    </th>
+  );
+}
 
 function VirtualSortHead({
   id,
@@ -524,16 +694,19 @@ export function MfFundsTable({
   screenerSelectionEnabled = false,
   compact = false,
   hideCategoryColumn = false,
+  variant = "default",
 }: MfFundsTableProps) {
   const router = useRouter();
   const screenerSelection = useMfFundScreenerSelectionOptional();
   const [internalSort, setInternalSort] = useState<SortDescriptor>(MF_FUNDS_TABLE_DEFAULT_SORT);
+  const [now] = useState(() => new Date());
   const sortDescriptor = sortDescriptorProp ?? internalSort;
   const handleSortChange = onSortChange ?? setInternalSort;
   const layout = useMemo(
-    () => resolveFundsTableLayout({ compact, hideCategoryColumn }),
-    [compact, hideCategoryColumn],
+    () => resolveFundsTableLayout({ compact, hideCategoryColumn, variant }),
+    [compact, hideCategoryColumn, variant],
   );
+  const isNfo = layout.variant === "nfo";
 
   const rows = useMemo<MfFundsTableRow[]>(
     () => dedupeInvestFunds(funds).map((fund) => ({ ...fund, tableId: fund.product_id })),
@@ -541,18 +714,19 @@ export function MfFundsTable({
   );
 
   const showScreenerSelection = screenerSelectionEnabled && screenerSelection != null;
-  const columnCount =
-    (showScreenerSelection ? 1 : 0) + (layout.hideCategoryColumn ? 4 : 5);
+  const columnCount = isNfo
+    ? (showScreenerSelection ? 1 : 0) + 6
+    : (showScreenerSelection ? 1 : 0) + (layout.hideCategoryColumn ? 4 : 5);
   const selectedProductIds = useMemo(
     () => screenerSelection?.selectedFunds.map((fund) => fund.product_id) ?? [],
     [screenerSelection?.selectedFunds],
   );
 
   const sortedRows = useMemo(() => {
-    const sorted = serverSorted ? rows : sortFundTableRows(rows, sortDescriptor);
+    const sorted = isNfo || serverSorted ? rows : sortFundTableRows(rows, sortDescriptor);
     if (!showScreenerSelection || selectedProductIds.length === 0) return sorted;
     return pinScreenerSelectedFundTableRows(sorted, selectedProductIds);
-  }, [rows, selectedProductIds, serverSorted, showScreenerSelection, sortDescriptor]);
+  }, [isNfo, rows, selectedProductIds, serverSorted, showScreenerSelection, sortDescriptor]);
 
   const handleToggleScreenerSelection = useCallback(
     (fund: MfFundsTableRow) => {
@@ -586,7 +760,7 @@ export function MfFundsTable({
   const rowVirtualizer = useVirtualizer({
     count: virtualized ? sortedRows.length : 0,
     getScrollElement: () => scrollElement,
-    estimateSize: () => VIRTUAL_ROW_HEIGHT,
+    estimateSize: () => (isNfo ? VIRTUAL_ROW_HEIGHT_NFO : VIRTUAL_ROW_HEIGHT_DEFAULT),
     overscan: VIRTUAL_OVERSCAN,
   });
 
@@ -615,12 +789,21 @@ export function MfFundsTable({
       ) : null}
 
       {!loadingMore && sortedRows.length > 0 && !hasMore ? (
-        <MfFundsTableListEnd
-          className={cn(
-            layout.tableClass,
-            "border-t border-border px-4 py-6 text-center sm:px-5",
-          )}
-        />
+        isNfo ? (
+          <MfFundsTableNfoDisclaimer
+            className={cn(
+              layout.tableClass,
+              "border-t border-border px-4 py-6 text-center sm:px-5",
+            )}
+          />
+        ) : (
+          <MfFundsTableListEnd
+            className={cn(
+              layout.tableClass,
+              "border-t border-border px-4 py-6 text-center sm:px-5",
+            )}
+          />
+        )
       ) : null}
 
       {loadingMore ? <LoadingMoreIndicator /> : null}
@@ -664,14 +847,30 @@ export function MfFundsTable({
           >
             {virtualized ? (
               <>
-                <table className={layout.tableClass} aria-label={copy.mutualFunds.allFundsTitle}>
+                <table
+                  className={layout.tableClass}
+                  aria-label={isNfo ? copy.mutualFunds.nfoFundsTitle : copy.mutualFunds.allFundsTitle}
+                >
                   <colgroup>
-                    {showScreenerSelection ? <col className={layout.colSelect} /> : null}
+                    {showScreenerSelection ? (
+                      <col style={{ width: SCREENER_SELECT_COL_WIDTH_PX }} />
+                    ) : null}
                     <col className={layout.colName} />
                     {!layout.hideCategoryColumn ? <col className={layout.colCategory} /> : null}
-                    <col className={layout.colReturn} />
-                    <col className={layout.colReturn} />
-                    <col className={layout.colReturn} />
+                    {isNfo ? (
+                      <>
+                        <col className={layout.colNfoOpens} />
+                        <col className={layout.colNfoCloses} />
+                        <col className={layout.colNfoMin} />
+                        <col className={layout.colNfoStatus} />
+                      </>
+                    ) : (
+                      <>
+                        <col className={layout.colReturn} />
+                        <col className={layout.colReturn} />
+                        <col className={layout.colReturn} />
+                      </>
+                    )}
                   </colgroup>
                   <thead className={HEADER_ROW_CLASS}>
                     <tr>
@@ -683,64 +882,95 @@ export function MfFundsTable({
                             HEADER_SURFACE_CLASS,
                             layout.colSelect,
                           )}
+                          style={{ width: SCREENER_SELECT_COL_WIDTH_PX, maxWidth: SCREENER_SELECT_COL_WIDTH_PX }}
                           aria-label={copy.mutualFunds.screenerSelectColumnLabel}
                         />
                       ) : null}
-                      <VirtualSortHead
-                        id="name"
-                        sortDescriptor={sortDescriptor}
-                        onSortChange={handleSortChange}
-                        className={layout.colName}
-                        cellClassName={
-                          showScreenerSelection ? layout.nameHeaderCellClass : layout.headerCellClass
-                        }
-                      >
-                        <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
-                          <span className="text-compact font-semibold tracking-tight text-foreground">
-                            Fund Name
-                          </span>
-                          <span className="text-caption font-medium text-muted-foreground tabular-nums">
-                            ({totalCount} results)
-                          </span>
-                        </span>
-                      </VirtualSortHead>
-                      {!layout.hideCategoryColumn ? (
-                        <VirtualSortHead
-                          id="category"
-                          label={copy.mutualFunds.tableCategory}
-                          sortDescriptor={sortDescriptor}
-                          onSortChange={handleSortChange}
-                          className={layout.colCategory}
-                          cellClassName={layout.headerCellClass}
-                        />
-                      ) : null}
-                      <VirtualSortHead
-                        id="return_1y"
-                        label={copy.mutualFunds.tableReturn1y}
-                        sortDescriptor={sortDescriptor}
-                        onSortChange={handleSortChange}
-                        className={layout.colReturn}
-                        cellClassName={layout.returnHeaderCellClass}
-                        align="right"
-                      />
-                      <VirtualSortHead
-                        id="return_3y"
-                        label={copy.mutualFunds.tableReturn3y}
-                        sortDescriptor={sortDescriptor}
-                        onSortChange={handleSortChange}
-                        className={layout.colReturn}
-                        cellClassName={layout.returnHeaderCellClass}
-                        align="right"
-                      />
-                      <VirtualSortHead
-                        id="return_5y"
-                        label={copy.mutualFunds.tableReturn5y}
-                        sortDescriptor={sortDescriptor}
-                        onSortChange={handleSortChange}
-                        className={layout.colReturn}
-                        cellClassName={layout.returnHeaderCellClass}
-                        align="right"
-                      />
+                      {isNfo ? (
+                        <>
+                          <PlainTableHead
+                            className={layout.colName}
+                            cellClassName={
+                              showScreenerSelection ? layout.nameHeaderCellClass : layout.headerCellClass
+                            }
+                          >
+                            {copy.mutualFunds.tableFundName.replace("{count}", String(totalCount))}
+                          </PlainTableHead>
+                          <PlainTableHead className={layout.colCategory} cellClassName={layout.headerCellClass}>
+                            {copy.mutualFunds.tableCategory}
+                          </PlainTableHead>
+                          <PlainTableHead className={layout.colNfoOpens} cellClassName={layout.headerCellClass}>
+                            {copy.mutualFunds.tableNfoOpens}
+                          </PlainTableHead>
+                          <PlainTableHead className={layout.colNfoCloses} cellClassName={layout.headerCellClass}>
+                            {copy.mutualFunds.tableNfoCloses}
+                          </PlainTableHead>
+                          <PlainTableHead className={layout.colNfoMin} cellClassName={layout.headerCellClass}>
+                            {copy.mutualFunds.tableNfoMinInvestment}
+                          </PlainTableHead>
+                          <PlainTableHead className={layout.colNfoStatus} cellClassName={layout.headerCellClass}>
+                            {copy.mutualFunds.tableNfoOfferStatus}
+                          </PlainTableHead>
+                        </>
+                      ) : (
+                        <>
+                          <VirtualSortHead
+                            id="name"
+                            sortDescriptor={sortDescriptor}
+                            onSortChange={handleSortChange}
+                            className={layout.colName}
+                            cellClassName={
+                              showScreenerSelection ? layout.nameHeaderCellClass : layout.headerCellClass
+                            }
+                          >
+                            <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+                              <span className="text-compact font-semibold tracking-tight text-foreground">
+                                Fund Name
+                              </span>
+                              <span className="text-caption font-medium text-muted-foreground tabular-nums">
+                                ({totalCount} results)
+                              </span>
+                            </span>
+                          </VirtualSortHead>
+                          {!layout.hideCategoryColumn ? (
+                            <VirtualSortHead
+                              id="category"
+                              label={copy.mutualFunds.tableCategory}
+                              sortDescriptor={sortDescriptor}
+                              onSortChange={handleSortChange}
+                              className={layout.colCategory}
+                              cellClassName={layout.headerCellClass}
+                            />
+                          ) : null}
+                          <VirtualSortHead
+                            id="return_1y"
+                            label={copy.mutualFunds.tableReturn1y}
+                            sortDescriptor={sortDescriptor}
+                            onSortChange={handleSortChange}
+                            className={layout.colReturn}
+                            cellClassName={layout.returnHeaderCellClass}
+                            align="right"
+                          />
+                          <VirtualSortHead
+                            id="return_3y"
+                            label={copy.mutualFunds.tableReturn3y}
+                            sortDescriptor={sortDescriptor}
+                            onSortChange={handleSortChange}
+                            className={layout.colReturn}
+                            cellClassName={layout.returnHeaderCellClass}
+                            align="right"
+                          />
+                          <VirtualSortHead
+                            id="return_5y"
+                            label={copy.mutualFunds.tableReturn5y}
+                            sortDescriptor={sortDescriptor}
+                            onSortChange={handleSortChange}
+                            className={layout.colReturn}
+                            cellClassName={layout.returnHeaderCellClass}
+                            align="right"
+                          />
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -769,6 +999,7 @@ export function MfFundsTable({
                           onToggleScreenerSelection={handleToggleScreenerSelection}
                           navigateToFund={navigateToFund}
                           onRowDoubleClick={onRowDoubleClick}
+                          now={now}
                         />
                       );
                     })}

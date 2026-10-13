@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Check, Copy } from "lucide-react";
+import { ArrowDown, CalendarClock, Check, Copy } from "lucide-react";
 
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   type MfOrder,
   type MfOrderJourneyResponse,
 } from "@/features/invest/api/invest-api";
-import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { MfOrderAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { MfOrderStatusBadge } from "@/features/invest/components/mf-order-status-badge";
 import {
   MF_JOURNEY_DIALOG_BODY_SHELL_CLASS,
@@ -20,7 +20,12 @@ import {
   MF_JOURNEY_DIALOG_SCROLL_PANEL_CLASS,
   MfJourneyDialogSkeleton,
 } from "@/features/invest/components/payment-dialog/mf-journey-dialog-skeleton";
-import { buildOrderJourneyView, type JourneyDisplayStep } from "@/features/invest/lib/mf-order-journey-copy";
+import {
+  buildOrderJourneyView,
+  hasSwitchPath,
+  switchFundNames,
+  type JourneyDisplayStep,
+} from "@/features/invest/lib/mf-order-journey-copy";
 import { formatDateTime, formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -36,7 +41,39 @@ function formatOrderType(orderType: string) {
   if (normalized === "LUMPSUM") return copy.transactions.typeLumpsum;
   if (normalized === "SIP") return copy.transactions.typeSip;
   if (normalized === "REDEMPTION") return copy.transactions.typeRedemption;
+  if (normalized === "SWITCH") return copy.transactions.typeSwitch;
   return orderType.replaceAll("_", " ");
+}
+
+function SwitchPathSummary({ order, className }: { order: MfOrder; className?: string }) {
+  const names = switchFundNames(order);
+  if (!names) return null;
+  const { from: fromName, to: toName } = names;
+
+  return (
+    <div className={cn("rounded-2xl border border-border/60 bg-muted/20 p-3.5", className)}>
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {copy.transactions.journeySwitchPath}
+      </p>
+      <div className="mt-2.5 space-y-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+            {copy.transactions.journeySwitchFrom}
+          </p>
+          <p className="mt-0.5 text-compact font-medium leading-snug text-foreground">{fromName}</p>
+        </div>
+        <div className="flex justify-center py-0.5 text-muted-foreground/70" aria-hidden>
+          <ArrowDown className="size-4" strokeWidth={2.25} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80">
+            {copy.transactions.journeySwitchTo}
+          </p>
+          <p className="mt-0.5 text-compact font-medium leading-snug text-foreground">{toName}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function JourneyStepRow({ step, isLast }: { step: JourneyDisplayStep; isLast: boolean }) {
@@ -91,6 +128,7 @@ function OrderJourneySummaryPanel({ order }: { order: MfOrder }) {
   const [copied, setCopied] = useState(false);
   const amcName = order.amc_name ?? copy.mutualFunds.unknownAmc;
   const orderTypeLabel = formatOrderType(order.order_type);
+  const showSwitchPath = hasSwitchPath(order);
 
   const handleCopy = async () => {
     try {
@@ -109,18 +147,24 @@ function OrderJourneySummaryPanel({ order }: { order: MfOrder }) {
         MF_JOURNEY_DIALOG_SCROLL_PANEL_CLASS,
       )}
     >
-      <div className="flex flex-col items-center text-center md:items-start md:text-left">
-        <MfFundAmcAvatar
-          amcLogoUrl={order.amc_logo_url}
-          amcName={amcName}
-          size="md"
-          className="size-14 text-caption"
-        />
-        <p className="mt-4 text-body font-semibold leading-snug text-foreground">
-          {order.product_name ?? copy.mutualFunds.unknownFund}
-        </p>
-        <p className="mt-1 text-caption text-muted-foreground">{amcName}</p>
-      </div>
+      {showSwitchPath ? (
+        <SwitchPathSummary order={order} />
+      ) : (
+        <div className="flex flex-col items-center text-center md:items-start md:text-left">
+          <MfOrderAmcAvatar order={order} size="md" className="size-14 text-caption" />
+          <p className="mt-4 text-body font-semibold leading-snug text-foreground">
+            {order.product_name ?? copy.mutualFunds.unknownFund}
+          </p>
+          <p className="mt-1 text-caption text-muted-foreground">{amcName}</p>
+        </div>
+      )}
+
+      {showSwitchPath ? (
+        <div className="mt-3 flex items-center gap-2.5 md:mt-4">
+          <MfOrderAmcAvatar order={order} size="sm" className="size-9 shrink-0" />
+          <p className="min-w-0 text-caption text-muted-foreground">{amcName}</p>
+        </div>
+      ) : null}
 
       <div className="mt-5 space-y-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -200,9 +244,13 @@ function OrderJourneySummaryPanel({ order }: { order: MfOrder }) {
 
 function OrderJourneyTimelinePanel({
   journey,
+  order,
 }: {
   journey: NonNullable<ReturnType<typeof buildOrderJourneyView>>;
+  order: MfOrder;
 }) {
+  const showSwitchPath = hasSwitchPath(order);
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col md:overflow-hidden">
       <div className="shrink-0 p-5 pb-0 sm:p-6 sm:pb-0">
@@ -225,6 +273,7 @@ function OrderJourneyTimelinePanel({
           "md:flex-1",
         )}
       >
+        {showSwitchPath ? <SwitchPathSummary order={order} className="mb-4" /> : null}
         {journey.steps.length === 0 ? (
           <p className="text-compact text-muted-foreground">{copy.transactions.journeyEmpty}</p>
         ) : (
@@ -301,7 +350,7 @@ export function MfOrderJourneyDialog({ open, orderId, onOpenChange }: MfOrderJou
             )}
           >
             <OrderJourneySummaryPanel order={detail.order} />
-            <OrderJourneyTimelinePanel journey={journey} />
+            <OrderJourneyTimelinePanel journey={journey} order={detail.order} />
           </div>
         ) : null}
       </div>

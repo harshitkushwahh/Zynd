@@ -27,6 +27,19 @@ Zynd already shares most of that stack (Cybrilla scheme sync/staging, `fp_oms_pu
 
 ---
 
+## Post-deploy ops (invest-visible NFOs)
+
+After deploy or catalog changes, run on production (Admin NFO panel or `nfo-scheduler`):
+
+1. **`nfo-lifecycle-sync`** — refreshes `nfo_offers` from AMFI calendar windows + Cybrilla catalog; auto-closes past close date; graduates to `ALLOTTED` when NAV depth is sufficient; retains audit rows (`first_listed_at`, `subscription_closed_at`, `graduated_at`).
+2. **`nfo-collection-assign-sync`** — rebuilds browse category `nfo` using invest eligibility only (OPEN/UPCOMING, AMFI/ADMIN source, subscription window, empanelled + purchase allowed).
+
+Investors see offers via `GET /invest/nfo` and category counts only when all gates pass. Admin retains full `nfo_offers` history including CLOSED/ALLOTTED.
+
+Apply migration **`101_nfo_offer_audit`** before the first lifecycle run on an existing database.
+
+---
+
 ## Glossary
 
 | Term | Meaning |

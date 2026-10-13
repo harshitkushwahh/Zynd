@@ -556,6 +556,9 @@ class NfoOffer(Base):
     marketing_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(32), default="HEURISTIC", nullable=False)
     admin_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    first_listed_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    subscription_closed_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    graduated_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

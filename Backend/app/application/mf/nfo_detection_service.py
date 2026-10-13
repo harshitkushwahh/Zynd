@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.infrastructure.persistence.mf_models import NfoOfferStatus
+from app.application.mf.invest_nfo_eligibility import is_invest_nfo_offer
+from app.infrastructure.persistence.mf_models import NfoOffer, NfoOfferStatus
 
 NFO_NAME_TOKENS = ("nfo", "new fund offer")
 NFO_CATEGORY_SLUG = "nfo"
 NFO_JOB_NAMES: tuple[str, ...] = ("nfo-lifecycle-sync", "nfo-collection-assign-sync")
+# Browse category `nfo` is for live subscription only; CLOSED stays in nfo_offers for audit.
 LISTABLE_STATUSES = (
     NfoOfferStatus.upcoming,
     NfoOfferStatus.open,
-    NfoOfferStatus.closed,
 )
 
 
@@ -50,5 +51,14 @@ def classify_nfo_status(signals: NfoSignals) -> NfoOfferStatus | None:
     return None
 
 
-def should_assign_nfo_category(status: NfoOfferStatus | None, *, hidden: bool) -> bool:
-    return status in LISTABLE_STATUSES and not hidden
+def should_assign_nfo_category(
+    status: NfoOfferStatus | None,
+    *,
+    hidden: bool,
+    offer: NfoOffer | None = None,
+) -> bool:
+    if status not in LISTABLE_STATUSES or hidden:
+        return False
+    if offer is None:
+        return True
+    return is_invest_nfo_offer(offer)

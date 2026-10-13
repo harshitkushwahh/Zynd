@@ -19,6 +19,7 @@ import {
   createMfSipPlan,
   validateMfSipPlan,
   upsertMfCartItem,
+  type MfPurchaseConsentContext,
   type InvestSipOption,
   type MfMandateType,
   type MfPaymentMethod,
@@ -29,6 +30,8 @@ import { MfFamilyGoalLinkPicker } from "@/features/invest/components/mf-family-g
 import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
 import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
+import { MfFolioNominationInfoButton } from "@/features/invest/components/mf-folio-nomination-info";
+import { MfInvestPaymentConsentStep } from "@/features/invest/components/mf-invest-payment-consent-step";
 import { MfInvestModeToggle } from "@/features/invest/components/mf-invest-mode-toggle";
 import { MfAmountRollDisplay } from "@/features/invest/components/mf-amount-roll-display";
 import { MfSipInstallmentsInput } from "@/features/invest/components/mf-sip-installments-input";
@@ -671,7 +674,14 @@ export function MfInvestPaymentCard({
   const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
   const [mandateType, setMandateType] = useState<MfMandateType>("upi");
   const [selectedFamilyGoalId, setSelectedFamilyGoalId] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [cartSubmitting, setCartSubmitting] = useState(false);
+  const [primarySubmitting, setPrimarySubmitting] = useState(false);
+  const formLocked = cartSubmitting || primarySubmitting;
+  const [investConsent, setInvestConsent] = useState<{
+    orderId: string;
+    amountInr: number;
+    initial?: MfPurchaseConsentContext | null;
+  } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showAmountValidation, setShowAmountValidation] = useState(false);
   const chipRollIdRef = useRef(0);
@@ -838,7 +848,7 @@ export function MfInvestPaymentCard({
       return;
     }
 
-    setSubmitting(true);
+    setPrimarySubmitting(true);
     setActionError(null);
     try {
       clearMfPaymentSessionBeforeNewInvest();
@@ -851,11 +861,15 @@ export function MfInvestPaymentCard({
         payment_method: paymentMethod,
         folio_number: folioNumber?.trim() || undefined,
       });
-      openOrderPayment(order.order_id);
+      setInvestConsent({
+        orderId: order.order_id,
+        amountInr: amount,
+        initial: order.transaction_consent ?? null,
+      });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : copy.mutualFunds.orderFailed);
     } finally {
-      setSubmitting(false);
+      setPrimarySubmitting(false);
     }
   }
 
@@ -884,7 +898,7 @@ export function MfInvestPaymentCard({
       }
     }
 
-    setSubmitting(true);
+    setCartSubmitting(true);
     setActionError(null);
     try {
       const nextCart = await upsertMfCartItem({
@@ -912,7 +926,7 @@ export function MfInvestPaymentCard({
     } catch (err) {
       setActionError(err instanceof Error ? err.message : copy.mutualFunds.cartAddFailed);
     } finally {
-      setSubmitting(false);
+      setCartSubmitting(false);
     }
   }
 
@@ -928,7 +942,7 @@ export function MfInvestPaymentCard({
       return;
     }
 
-    setSubmitting(true);
+    setPrimarySubmitting(true);
     setActionError(null);
     try {
       await validateMfSipPlan({
@@ -964,7 +978,7 @@ export function MfInvestPaymentCard({
       }
       setActionError(err instanceof Error ? err.message : copy.mutualFunds.sipFailed);
     } finally {
-      setSubmitting(false);
+      setPrimarySubmitting(false);
     }
   }
 
@@ -979,6 +993,51 @@ export function MfInvestPaymentCard({
   const showFamilyGoalLink = interactive && canInvest;
   const spaciousAmountLayout = relaxedAmountSpacing || (!showFundName && hasFundForUi);
   const isSipCard = mode === "sip" && showSip;
+  if (investConsent) {
+    const investConsentCard = (
+      <div
+        className={cn(
+          MF_INVEST_PAYMENT_CARD_CLASS,
+          "flex w-full min-w-0 flex-col overflow-x-hidden px-4 pb-4 pt-4",
+          !showFundName && sticky && "lg:sticky lg:top-6",
+          !showFundName && className,
+        )}
+      >
+        <MfInvestPaymentConsentStep
+          orderId={investConsent.orderId}
+          amountInr={investConsent.amountInr}
+          initialConsent={investConsent.initial}
+          onBack={() => setInvestConsent(null)}
+          onConfirmed={(orderId) => {
+            openOrderPayment(orderId);
+            setInvestConsent(null);
+          }}
+        />
+      </div>
+    );
+
+    if (showFundName) {
+      return (
+        <div
+          className={cn(
+            "flex w-full min-w-0 flex-col gap-3",
+            sticky && "lg:sticky lg:top-6",
+            className,
+          )}
+        >
+          <MfInvestSelectedFundCard
+            fundName={fundName}
+            amcLogoUrl={amcLogoUrl}
+            amcName={amcName}
+            amcSlug={amcSlug}
+            selected={hasFundForUi}
+          />
+          {investConsentCard}
+        </div>
+      );
+    }
+    return investConsentCard;
+  }
 
   const paymentCard = (
     <div
@@ -1022,8 +1081,13 @@ export function MfInvestPaymentCard({
               onSipFrequencyChange={handleSipFrequencyChange}
               monthlySipAllowed={monthlySipAllowed}
               dailySipAllowed={dailySipAllowed}
-              disabled={!interactive || submitting}
+              disabled={!interactive || formLocked}
+              showFolioNominationInfo={interactive && canInvest}
             />
+          ) : interactive && canInvest ? (
+            <div className="flex justify-end">
+              <MfFolioNominationInfoButton />
+            </div>
           ) : null}
 
           <div className="space-y-3.5">
@@ -1059,14 +1123,14 @@ export function MfInvestPaymentCard({
                   maxDay={SIP_MAX_INSTALLMENT_DAY}
                   value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
                   onChange={setInstallmentDay}
-                  disabled={submitting}
+                  disabled={formLocked}
                 />
               ) : null}
               <MfSipInstallmentsInput
                 compact
                 value={numberOfInstallments}
                 onChange={setNumberOfInstallments}
-                disabled={submitting}
+                disabled={formLocked}
               />
             </div>
           ) : null}
@@ -1075,7 +1139,7 @@ export function MfInvestPaymentCard({
             <MfFamilyGoalLinkPicker
               selectedGoalId={selectedFamilyGoalId}
               onSelect={setSelectedFamilyGoalId}
-              disabled={submitting}
+              disabled={formLocked}
             />
           ) : null}
 
@@ -1085,7 +1149,7 @@ export function MfInvestPaymentCard({
                 <MfMandateTypePicker
                   value={mandateType}
                   onChange={setMandateType}
-                  disabled={!interactive || submitting}
+                  disabled={!interactive || formLocked}
                   compact
                 />
                 {interactive && canInvest ? (
@@ -1095,7 +1159,7 @@ export function MfInvestPaymentCard({
                     onSelect={setSelectedBankAccountId}
                     loading={banksLoading}
                     error={banksError}
-                    disabled={submitting}
+                    disabled={formLocked}
                     {...bankPickerProps}
                   />
                 ) : (
@@ -1111,7 +1175,7 @@ export function MfInvestPaymentCard({
                 <MfPaymentMethodPicker
                   value={paymentMethod}
                   onChange={setPaymentMethod}
-                  disabled={!interactive || submitting}
+                  disabled={!interactive || formLocked}
                 />
                 {interactive && canInvest ? (
                   <MfBankAccountPicker
@@ -1120,7 +1184,7 @@ export function MfInvestPaymentCard({
                     onSelect={setSelectedBankAccountId}
                     loading={banksLoading}
                     error={banksError}
-                    disabled={submitting}
+                    disabled={formLocked}
                     {...bankPickerProps}
                   />
                 ) : (
@@ -1143,28 +1207,28 @@ export function MfInvestPaymentCard({
               <Button
                 variant="outline"
                 className="h-9.5 gap-1.5 rounded-[var(--radius-control)] border-success/25 bg-success/5 text-success hover:bg-success/10 hover:text-success"
-                disabled={!interactive || !canSubmit || submitting || banksLoading || !hasPaymentReadyAccount}
+                disabled={!interactive || !canSubmit || formLocked || banksLoading || !hasPaymentReadyAccount}
                 onClick={() => void handleAddToCart()}
               >
-                {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <ShoppingCart className="size-3.5" />}
+                {cartSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : <ShoppingCart className="size-3.5" />}
                 {copy.mutualFunds.paymentCardAddToCart}
               </Button>
               <Button
                 className="h-9.5 rounded-[var(--radius-control)] shadow-zynd-low"
-                disabled={!interactive || !canSubmit || submitting || banksLoading || !hasPaymentReadyAccount}
+                disabled={!interactive || !canSubmit || formLocked || banksLoading || !hasPaymentReadyAccount}
                 onClick={() => void handlePrimaryAction()}
               >
-                {submitting ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {primarySubmitting ? <Loader2 className="size-3.5 animate-spin" /> : null}
                 {primaryCta}
               </Button>
             </div>
           ) : (
             <Button
               className="h-9.5 w-full rounded-[var(--radius-control)] shadow-zynd-low"
-              disabled={!interactive || !canSubmit || submitting || banksLoading || !hasPaymentReadyAccount}
+              disabled={!interactive || !canSubmit || formLocked || banksLoading || !hasPaymentReadyAccount}
               onClick={() => void handlePrimaryAction()}
             >
-              {submitting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
+              {primarySubmitting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
               {primaryCta}
             </Button>
           )}

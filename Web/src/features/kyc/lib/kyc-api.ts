@@ -464,3 +464,22 @@ export async function addInvestorNominee(nominee: object | object[]) {
     }),
   });
 }
+
+export type MfFolioNominationItem = {
+  folio_number: string;
+  amc_code?: string | null;
+  amc_name: string;
+  amc_slug?: string | null;
+  nominee_count: number;
+  nominee_status: string;
+  primary_nominee_name?: string | null;
+};
+
+export type MfFolioNominationListResponse = {
+  available: boolean;
+  folios: MfFolioNominationItem[];
+};
+
+export async function fetchMfFolioNominations() {
+  return apiRequest<MfFolioNominationListResponse>("/kyc/settings/mf-folios");
+}

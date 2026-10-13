@@ -19,7 +19,7 @@ from app.application.goals.errors import GoalError
 from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
 from app.application.mf.mf_order_errors import MfOrderError
-from app.application.mf.public_asset_service import resolve_amc_logo_url
+from app.application.mf.invest_amc_display import load_fund_amc_display_by_fund_id
 from app.core.config import get_settings
 from app.infrastructure.persistence.investor_models import InvestorProfileStatus, InvestorProvisionTrigger
 from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product, ProductDisplayContent, ProductLifecycleStatus
@@ -95,6 +95,9 @@ async def _load_order_context(
         raise MfOrderError(code="fund_not_investable", message="Fund is not available for investment")
     if not fund.fp_scheme_id:
         raise MfOrderError(code="scheme_not_ready", message="Scheme is not synced for orders yet")
+    from app.application.mf.ondc_lumpsum_eligibility import ensure_fund_ondc_lumpsum_allowed
+
+    ensure_fund_ondc_lumpsum_allowed(fund)
     return product, fund, amc
 
 
@@ -177,6 +180,7 @@ async def create_lumpsum_order(
         fp_scheme_id=fund.fp_scheme_id,
         idempotency_key=idempotency_key,
         metadata_={
+            "awaiting_transaction_consent": True,
             "investor_profile_status": profile.status.value,
             "mfia_status": mfia.status.value,
             "user_ip": user_ip,
@@ -239,16 +243,26 @@ async def get_user_order_journey(
     amc_names, amc_logos, amc_slugs = await load_order_fund_metadata(session, [order])
     product_slugs = await load_order_product_slugs(session, [order], product_names={order.product_id: product.name if product else None})
     checkout = await session.get(MfCheckout, order.checkout_id) if order.checkout_id else None
+    from app.application.mf.mf_switch_service import load_switch_order_leg_names
+
+    switch_out_name = product.name if product else None
+    switch_leg_names = await load_switch_order_leg_names(
+        session,
+        [order],
+        switch_out_product_names={order.id: switch_out_name},
+    )
+    _resolved_out, switch_in_name = switch_leg_names.get(order.id, (switch_out_name, None))
 
     return {
         "order": serialize_order(
             order,
-            product_name=product.name if product else None,
+            product_name=switch_out_name,
             checkout=checkout,
             amc_name=amc_names.get(order.fund_id),
             amc_logo_url=amc_logos.get(order.fund_id),
             amc_slug=amc_slugs.get(order.fund_id),
             product_slug=product_slugs.get(order.product_id),
+            switch_in_product_name=switch_in_name,
         ),
         "events": [
             {
@@ -307,23 +321,7 @@ async def load_order_fund_metadata(
     orders: list[MfOrder],
 ) -> tuple[dict[int, str], dict[int, str | None], dict[int, str]]:
     fund_ids = {order.fund_id for order in orders}
-    if not fund_ids:
-        return {}, {}, {}
-
-    settings = get_settings()
-    result = await session.execute(
-        select(MutualFund.id, FundAmc.name, FundAmc.logo_url, FundAmc.slug)
-        .join(FundAmc, MutualFund.amc_id == FundAmc.id)
-        .where(MutualFund.id.in_(fund_ids))
-    )
-    amc_names: dict[int, str] = {}
-    amc_logos: dict[int, str | None] = {}
-    amc_slugs: dict[int, str] = {}
-    for fund_id, name, logo_url, slug in result:
-        amc_names[fund_id] = name
-        amc_logos[fund_id] = resolve_amc_logo_url(logo_url, slug, settings)
-        amc_slugs[fund_id] = slug
-    return amc_names, amc_logos, amc_slugs
+    return await load_fund_amc_display_by_fund_id(session, fund_ids)
 
 
 async def load_order_product_slugs(
@@ -372,6 +370,7 @@ def serialize_order(
     amc_logo_url: str | None = None,
     amc_slug: str | None = None,
     product_slug: str | None = None,
+    switch_in_product_name: str | None = None,
 ) -> dict:
     payment_url = checkout.token_url if checkout else None
     metadata = checkout.metadata_ if checkout and isinstance(checkout.metadata_, dict) else {}
@@ -413,4 +412,14 @@ def serialize_order(
         payload["payout_bank_account_masked"] = metadata.get("payout_bank_account_masked")
         payload["payout_bank_ifsc_code"] = metadata.get("payout_bank_ifsc_code")
         payload["payout_bank_name"] = metadata.get("payout_bank_name")
+    if order.order_type == MfOrderType.switch:
+        from app.application.mf.mf_switch_service import switch_order_serialization_extras
+
+        payload.update(
+            switch_order_serialization_extras(
+                order,
+                switch_out_product_name=product_name,
+                switch_in_product_name=switch_in_product_name,
+            )
+        )
     return payload

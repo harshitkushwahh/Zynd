@@ -31,6 +31,9 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfOrderType,
 )
 
+
+from app.application.mf.mf_purchase_consent_gates import order_awaiting_transaction_consent
+
 _ABANDONABLE_ORDER_STATUSES = {
     MfOrderStatus.payment_pending,
     MfOrderStatus.processing,
@@ -64,6 +67,9 @@ async def advance_order_for_payment(
     if not _ondc_gateway_enabled():
         return False
 
+    if order_awaiting_transaction_consent(order):
+        return False
+
     if order.status == MfOrderStatus.pending:
         if await submit_pending_order(session, order, user_ip=user_ip, force=True):
             pass
@@ -84,6 +90,9 @@ async def advance_checkout_for_payment(
         return False
 
     orders = await _load_checkout_orders(session, checkout.id)
+
+    if orders and any(order_awaiting_transaction_consent(order) for order in orders):
+        return False
 
     if checkout.status == MfCheckoutStatus.pending and orders and all(
         order.status == MfOrderStatus.pending for order in orders
