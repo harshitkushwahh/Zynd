@@ -1,13 +1,6 @@
-import { Agent } from "undici";
 import { NextRequest, NextResponse } from "next/server";
 
 import { serverEnv } from "@/shared/config/server-env";
-
-const backendFetchAgent = new Agent({
-  connect: { timeout: 10_000 },
-  headersTimeout: serverEnv.backendProxyTimeoutMs,
-  bodyTimeout: serverEnv.backendProxyTimeoutMs,
-});
 
 function resolveClientIp(request: NextRequest): string | null {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -52,7 +45,6 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   try {
     backendResponse = await fetch(targetUrl, {
       ...init,
-      dispatcher: backendFetchAgent,
       signal: AbortSignal.timeout(serverEnv.backendProxyTimeoutMs),
     });
   } catch (error) {
