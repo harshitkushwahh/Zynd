@@ -128,7 +128,7 @@ export const NfoOfferStatusCell = memo(function NfoOfferStatusCell({
   const status = (fund.nfo?.status ?? "").toUpperCase();
 
   const countdown = useMemo(
-    () => (closeDate ? nfoCloseCountdown(closeDate, now, countdownLabels()) : null),
+    () => (closeDate ? nfoCloseCountdown(closeDate, countdownLabels(), now) : null),
     [closeDate, now],
   );
 

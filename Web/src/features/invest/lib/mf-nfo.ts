@@ -84,8 +84,7 @@ function parseDateOnlyLocal(value: string) {
 }
 
 export function nfoCloseCountdown(
-  closeDate?: string | null,
-  now: Date = new Date(),
+  closeDate: string | null | undefined,
   labels: {
     closed: string;
     today: string;
@@ -93,6 +92,7 @@ export function nfoCloseCountdown(
     days: (count: number) => string;
     expiringSoon: string;
   },
+  now: Date = new Date(),
 ): NfoCloseCountdown | null {
   if (!closeDate) return null;
   const close = parseDateOnlyLocal(closeDate);
@@ -211,13 +211,17 @@ export function nfoOfferStatusPresentation(
   }
 
   const countdown = nfo?.subscription_close_date
-    ? nfoCloseCountdown(nfo.subscription_close_date, now, {
-        closed: "",
-        today: "",
-        oneDay: labels.oneDay,
-        days: labels.days,
-        expiringSoon: "",
-      })
+    ? nfoCloseCountdown(
+        nfo.subscription_close_date,
+        {
+          closed: "",
+          today: "",
+          oneDay: labels.oneDay,
+          days: labels.days,
+          expiringSoon: "",
+        },
+        now,
+      )
     : null;
   const tier = countdown ? nfoClosingUrgencyTier(countdown) : null;
   let hint: string | null = null;

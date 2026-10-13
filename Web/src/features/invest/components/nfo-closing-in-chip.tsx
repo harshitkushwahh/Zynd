@@ -65,7 +65,7 @@ export function NfoClosingInChip({ closeDate, className }: NfoClosingInChipProps
   const [now, setNow] = useState(() => new Date());
 
   const countdown = useMemo(
-    () => (closeDate ? nfoCloseCountdown(closeDate, now, countdownLabels()) : null),
+    () => (closeDate ? nfoCloseCountdown(closeDate, countdownLabels(), now) : null),
     [closeDate, now],
   );
 
@@ -129,7 +129,7 @@ export function NfoClosingInChip({ closeDate, className }: NfoClosingInChipProps
 /** Plain closing line for detail panel when outside the urgency window (e.g. 10+ days). */
 export function nfoClosingInPlainValue(closeDate: string | null | undefined, now: Date = new Date()): string {
   if (!closeDate) return "—";
-  const countdown = nfoCloseCountdown(closeDate, now, countdownLabels());
+  const countdown = nfoCloseCountdown(closeDate, countdownLabels(), now);
   if (!countdown || countdown.phase === "closed") return copy.mutualFunds.nfoClosingClosed;
   if (nfoClosingUrgencyTier(countdown)) {
     const timePart = nfoClosesInTimePart(countdown, now, {
@@ -150,7 +150,7 @@ export function nfoClosingInPlainValue(closeDate: string | null | undefined, now
 export function useNfoClosingUrgencyTier(closeDate?: string | null) {
   const [now, setNow] = useState(() => new Date());
   const countdown = useMemo(
-    () => (closeDate ? nfoCloseCountdown(closeDate, now, countdownLabels()) : null),
+    () => (closeDate ? nfoCloseCountdown(closeDate, countdownLabels(), now) : null),
     [closeDate, now],
   );
   const tier = countdown ? nfoClosingUrgencyTier(countdown) : null;

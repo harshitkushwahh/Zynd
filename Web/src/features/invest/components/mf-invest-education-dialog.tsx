@@ -104,7 +104,7 @@ function StepPagination({
   activeIndex,
   onSelect,
 }: {
-  steps: { id: string; title: string }[];
+  steps: ReadonlyArray<{ readonly id: string; readonly title: string }>;
   activeIndex: number;
   onSelect: (index: number) => void;
 }) {

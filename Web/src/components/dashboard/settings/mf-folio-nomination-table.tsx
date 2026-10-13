@@ -66,7 +66,7 @@ export function MfFolioNominationTable({ enabled = true, className }: MfFolioNom
                 const nomineeLabel =
                   folio.primary_nominee_name?.trim() ||
                   folio.nominee_status ||
-                  copy.portfolio.holdingNomineeEmpty;
+                  copy.dashboard.portfolio.holdingNomineeEmpty;
                 return (
                   <tr key={`${folio.amc_code ?? "amc"}-${folio.folio_number}`}>
                     <td className="px-3 py-2.5">
