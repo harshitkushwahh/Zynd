@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
+import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
 
 function PortfolioRedeemUnitsRowSkeleton() {
@@ -22,7 +22,7 @@ export function PortfolioRedeemUnitsSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div
       className={cn(
-        ZYND_3XL_RADIUS_CLASS,
+        ZYND_CARD_RADIUS_CLASS,
         "overflow-hidden border border-border/60 bg-card shadow-zynd-low",
       )}
       aria-busy="true"

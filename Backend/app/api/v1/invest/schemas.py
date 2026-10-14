@@ -304,6 +304,8 @@ class MfOrderResponse(BaseModel):
     switch_in_product_name: Optional[str] = None
     switch_mode: Optional[str] = None
     switch_units: Optional[float] = None
+    switch_confirmed: bool = False
+    platform_consent_accepted: bool = False
     transaction_consent: Optional["MfPurchaseConsentResponse"] = None
 
 
@@ -645,6 +647,9 @@ class PortfolioHoldingTransactionResponse(BaseModel):
     units: float
     nav: float
     value_inr: float
+    order_id: Optional[str] = None
+    status: Optional[str] = None
+    order_type: Optional[str] = None
 
 
 class PortfolioHoldingPendingActionResponse(BaseModel):
@@ -773,6 +778,7 @@ class MfRedemptionOrderResponse(BaseModel):
     next_action: Optional[str] = None
     consent_otp_sent: bool = False
     redemption_confirmed: bool = False
+    platform_consent_accepted: bool = False
     failure_code: Optional[str] = None
     failure_reason: Optional[str] = None
     created_at: Optional[str] = None
@@ -782,7 +788,7 @@ class MfRedemptionOrderResponse(BaseModel):
 
 class MfRedemptionConsentResponse(BaseModel):
     order_id: str
-    fp_redemption_id: str
+    fp_redemption_id: Optional[str] = None
     status: str
     fp_state: Optional[str] = None
     masked_email: str
@@ -932,6 +938,7 @@ class MfSystematicPlanResponse(BaseModel):
     next_action: Optional[str] = None
     consent_otp_sent: bool = False
     plan_confirmed: bool = False
+    platform_consent_accepted: bool = False
     switch_in_product_id: Optional[str] = None
     switch_in_name: Optional[str] = None
     failure_code: Optional[str] = None

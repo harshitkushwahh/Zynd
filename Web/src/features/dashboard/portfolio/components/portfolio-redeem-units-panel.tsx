@@ -16,7 +16,7 @@ import { getPortfolioTabMeta } from "@/features/dashboard/portfolio/lib/portfoli
 import type { PortfolioRedeemUnitsRow } from "@/features/dashboard/portfolio/lib/portfolio-redeem-mapper";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
 import { formatInr } from "@/features/invest/lib/mf-format";
-import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
+import { ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -105,7 +105,7 @@ export function PortfolioRedeemUnitsPanel() {
     <>
       <TableCard.Root
         size="sm"
-        className={cn(ZYND_3XL_RADIUS_CLASS, "overflow-hidden border-border/60 shadow-zynd-low")}
+        className={cn(ZYND_CARD_RADIUS_CLASS, "overflow-hidden border-border/60 shadow-zynd-low")}
       >
         <div className="overflow-x-auto overscroll-x-contain">
           <Table aria-label={portfolioCopy.tabRedeemUnits} size="sm" className={TABLE_LAYOUT_CLASS}>
@@ -155,8 +155,9 @@ export function PortfolioRedeemUnitsPanel() {
                       <MfFundAmcAvatar
                         amcLogoUrl={holding.amcLogoUrl}
                         amcName={holding.amcName}
+                        schemeName={holding.fundName}
                         size="sm"
-                        className="mt-0.5 shrink-0 rounded-[var(--radius-control)]"
+                        className="mt-0.5 shrink-0"
                       />
                       <div className="min-w-0">
                         <p className="font-medium leading-snug break-words whitespace-normal text-foreground">

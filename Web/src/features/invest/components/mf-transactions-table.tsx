@@ -228,6 +228,9 @@ export function MfTransactionsTable({
                       paymentCompleted={order.payment_completed}
                       orderType={order.order_type}
                       failureCode={order.failure_code}
+                      platformConsentAccepted={order.platform_consent_accepted}
+                      switchConfirmed={order.switch_confirmed}
+                      redemptionConfirmed={order.redemption_confirmed}
                       className="max-w-none"
                     />
                   </Table.Cell>

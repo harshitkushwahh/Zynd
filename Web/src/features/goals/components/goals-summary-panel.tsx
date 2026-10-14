@@ -335,10 +335,11 @@ function GoalsSummaryPreviewContent() {
     <div className="space-y-4 px-1 py-1">
       <TopPrioritySummaryCardContent
         priority={2}
-        title="Home down payment"
-        progress={65}
-        iconKey="home"
-        templateSlug="home"
+        title="Europe trip"
+        familyGroup={{ title: "Sharma Family" }}
+        progress={18}
+        iconKey="plane"
+        templateSlug="travel"
       />
 
       <div className="relative mx-auto size-[11.5rem] shrink-0">

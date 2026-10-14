@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.application.mf.investment_constraints import (
     extract_investment_constraints_from_scheme,
     is_min_amount_fallback_details,
@@ -71,6 +73,20 @@ def test_stp_allowed_from_stp_in_or_out_flags() -> None:
     )
     assert payload is not None
     assert "stp" in payload["transaction_types"]
+
+
+def test_validate_switch_order_limits_rejects_below_min_out() -> None:
+    from app.application.mf.investment_constraints import validate_switch_order_limits
+    from app.application.mf.mf_order_errors import MfOrderError
+
+    out = {"switch": {"min_out_inr": 100.0, "out_multiples_inr": 1.0}}
+    with pytest.raises(MfOrderError) as exc:
+        validate_switch_order_limits(
+            switch_out_amount_inr=98.57,
+            out_constraints=out,
+            in_constraints=None,
+        )
+    assert exc.value.code == "below_minimum"
 
 
 def test_extract_investment_constraints_returns_none_when_empty() -> None:

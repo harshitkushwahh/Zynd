@@ -145,6 +145,11 @@ def extract_investment_constraints_from_scheme(raw: dict[str, Any]) -> dict[str,
             additional["min_inr"],
             redemption["min_inr"],
             redemption["min_units"],
+            switch_constraints["min_out_inr"],
+            switch_constraints["min_out_units"],
+            switch_constraints["min_in_inr"],
+            swp_constraints["min_inr"],
+            stp_constraints["min_inr"],
             sip_options,
             transaction_types,
         ]
@@ -371,6 +376,65 @@ def resolve_min_installments_for_frequency(
     if block is None:
         return None
     return _to_api_int(block.get("min_installments"))
+
+
+def _amount_matches_multiple(amount: float, multiple: float | None) -> bool:
+    if multiple is None or multiple <= 0:
+        return True
+    remainder = amount % multiple
+    return remainder < 0.01 or (multiple - remainder) < 0.01
+
+
+def _units_matches_multiple(units: float, multiple: float | None) -> bool:
+    if multiple is None or multiple <= 0:
+        return True
+    remainder = units % multiple
+    return remainder < 0.0001 or (multiple - remainder) < 0.0001
+
+
+def validate_switch_order_limits(
+    *,
+    switch_out_amount_inr: float,
+    out_constraints: dict[str, Any] | None,
+    in_constraints: dict[str, Any] | None,
+    units: float | None = None,
+) -> None:
+    """Validate switch-out amount/units and switch-in minimums per FinPrim scheme master."""
+    if switch_out_amount_inr <= 0:
+        raise MfOrderError(code="invalid_amount", message="Switch amount must be positive")
+
+    out_switch = (out_constraints or {}).get("switch") if isinstance(out_constraints, dict) else {}
+    out_switch = out_switch if isinstance(out_switch, dict) else {}
+    in_switch = (in_constraints or {}).get("switch") if isinstance(in_constraints, dict) else {}
+    in_switch = in_switch if isinstance(in_switch, dict) else {}
+
+    min_out_inr = out_switch.get("min_out_inr")
+    if min_out_inr is not None and switch_out_amount_inr < float(min_out_inr):
+        raise MfOrderError(
+            code="below_minimum",
+            message=f"Minimum switch-out amount is INR {min_out_inr}",
+        )
+    out_multiples = out_switch.get("out_multiples_inr")
+    if not _amount_matches_multiple(switch_out_amount_inr, out_multiples):
+        raise MfOrderError(code="invalid_multiple", message="Amount must match switch-out multiples")
+
+    if units is not None:
+        min_out_units = out_switch.get("min_out_units")
+        if min_out_units is not None and units < float(min_out_units):
+            raise MfOrderError(
+                code="below_minimum",
+                message=f"Minimum switch-out units is {min_out_units}",
+            )
+        unit_multiples = out_switch.get("out_unit_multiples")
+        if not _units_matches_multiple(units, unit_multiples):
+            raise MfOrderError(code="invalid_multiple", message="Units must match switch-out multiples")
+
+    min_in_inr = in_switch.get("min_in_inr")
+    if min_in_inr is not None and switch_out_amount_inr < float(min_in_inr):
+        raise MfOrderError(
+            code="below_minimum",
+            message=f"Minimum switch-in amount is INR {min_in_inr}",
+        )
 
 
 def validate_sip_amount_for_frequency(

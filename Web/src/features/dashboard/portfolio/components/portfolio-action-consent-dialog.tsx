@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 import { BrandDialog } from "@/components/ui/brand-dialog";
 import { MfTransactionConsentOtpSection } from "@/features/invest/components/mf-transaction-consent-otp-section";
@@ -23,6 +23,7 @@ type PortfolioActionConsentDialogProps = {
   target: ActionConsentTarget | null;
   onOpenChange: (open: boolean) => void;
   onConfirmed?: () => void;
+  onAbandon?: (target: ActionConsentTarget) => void;
 };
 
 export function PortfolioActionConsentDialog({
@@ -30,8 +31,10 @@ export function PortfolioActionConsentDialog({
   target,
   onOpenChange,
   onConfirmed,
+  onAbandon,
 }: PortfolioActionConsentDialogProps) {
   const portfolioCopy = copy.dashboard.portfolio;
+  const confirmedRef = useRef(false);
 
   const handlers = useMemo(() => {
     if (!target) return null;
@@ -52,8 +55,18 @@ export function PortfolioActionConsentDialog({
     };
   }, [target]);
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) {
+      if (!confirmedRef.current && target && onAbandon) {
+        onAbandon(target);
+      }
+      confirmedRef.current = false;
+    }
+    onOpenChange(nextOpen);
+  }
+
   return (
-    <BrandDialog open={open} onOpenChange={onOpenChange} title={portfolioCopy.holdingConsentTitle} maxWidth="md">
+    <BrandDialog open={open} onOpenChange={handleOpenChange} title={portfolioCopy.holdingConsentTitle} maxWidth="md">
       <div className="px-1 pb-1 pt-0 sm:px-2">
         {handlers ? (
           <MfTransactionConsentOtpSection
@@ -61,8 +74,11 @@ export function PortfolioActionConsentDialog({
             loadConsent={handlers.loadConsent}
             sendOtp={handlers.sendOtp}
             confirmOtp={handlers.confirmOtp}
-            onConfirmed={onConfirmed}
-            onDismiss={() => onOpenChange(false)}
+            onConfirmed={() => {
+              confirmedRef.current = true;
+              onConfirmed?.();
+            }}
+            onDismiss={() => handleOpenChange(false)}
             className="px-3 sm:px-4"
           />
         ) : null}

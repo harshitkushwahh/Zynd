@@ -406,6 +406,9 @@ export type MfOrder = {
   switch_in_product_name?: string | null;
   switch_mode?: string | null;
   switch_units?: number | null;
+  switch_confirmed?: boolean;
+  redemption_confirmed?: boolean;
+  platform_consent_accepted?: boolean;
   transaction_consent?: MfPurchaseConsentContext | null;
 };
 

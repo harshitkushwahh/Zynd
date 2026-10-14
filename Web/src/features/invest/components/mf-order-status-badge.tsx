@@ -13,6 +13,9 @@ type MfOrderStatusBadgeProps = {
   paymentCompleted?: boolean;
   orderType?: string | null;
   failureCode?: string | null;
+  platformConsentAccepted?: boolean;
+  switchConfirmed?: boolean;
+  redemptionConfirmed?: boolean;
 };
 
 export function mfOrderStatusVariant(
@@ -65,6 +68,9 @@ export function MfOrderStatusBadge({
   paymentCompleted,
   orderType,
   failureCode,
+  platformConsentAccepted,
+  switchConfirmed,
+  redemptionConfirmed,
 }: MfOrderStatusBadgeProps) {
   const order = {
     fp_state: fpState ?? null,
@@ -73,6 +79,11 @@ export function MfOrderStatusBadge({
     payment_completed: paymentCompleted,
     order_type: orderType ?? "",
     ...(failureCode != null ? { failure_code: failureCode } : {}),
+    ...(platformConsentAccepted != null
+      ? { platform_consent_accepted: platformConsentAccepted }
+      : {}),
+    ...(switchConfirmed != null ? { switch_confirmed: switchConfirmed } : {}),
+    ...(redemptionConfirmed != null ? { redemption_confirmed: redemptionConfirmed } : {}),
   };
 
   return (

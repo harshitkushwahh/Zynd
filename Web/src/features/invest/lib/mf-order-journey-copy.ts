@@ -25,6 +25,8 @@ export type JourneyDisplayStep = {
   event: MfOrderEvent | null;
   title: string;
   description: string | null;
+  /** Compact from→to fund names shown inside the first switch timeline step. */
+  switchPath?: { from: string; to: string };
   actor: string;
   toStatus: string;
   badgeVariant: StatusBadgeVariant;
@@ -106,19 +108,85 @@ function isRedemptionAwaitingConsent(order: Pick<MfOrder, "status" | "fp_state">
   return normalized === "PAYMENT_PENDING" || normalized === "PENDING" || fpState === "pending";
 }
 
+function orderHasPlatformConsent(order: MfOrder, events: MfOrderEvent[]): boolean {
+  if (order.platform_consent_accepted) return true;
+  if (order.switch_confirmed) return true;
+  if (order.redemption_confirmed) return true;
+  return events.some((event) => payloadString(event.payload?.stage) === "confirmed");
+}
+
+function switchAwaitingOtp(order: MfOrder, events: MfOrderEvent[]): boolean {
+  if (!isSwitchOrder(order)) return false;
+  if (orderHasPlatformConsent(order, events)) return false;
+  const status = order.status?.trim().toUpperCase() ?? "";
+  return status !== "SUCCEEDED";
+}
+
+function redemptionAwaitingOtp(order: MfOrder, events: MfOrderEvent[]): boolean {
+  if (!isRedemptionOrder(order)) return false;
+  if (orderHasPlatformConsent(order, events)) return false;
+  if (isTerminalRedemptionFpFailure(order)) return false;
+  const status = order.status?.trim().toUpperCase() ?? "";
+  if (status === "SUCCEEDED") return false;
+  const fpState = redemptionFpState(order);
+  if (status === "SUBMITTED" || fpState === "submitted") return false;
+  return isRedemptionAwaitingConsent(order);
+}
+
+function consentOrderAwaitingOtpFromOrder(order: MfOrderInvestorStatusContext): boolean {
+  if (!isConsentFundOrder(order)) return false;
+  if (order.platform_consent_accepted || order.switch_confirmed || order.redemption_confirmed) {
+    return false;
+  }
+  if (isTerminalRedemptionFpFailure(order)) return false;
+  const status = order.status?.trim().toUpperCase() ?? "";
+  if (status === "SUCCEEDED") return false;
+  if (isSwitchOrder(order)) return true;
+  return isRedemptionAwaitingConsent(order);
+}
+
 function isRedemptionOrderFailed(order: Pick<MfOrder, "status" | "fp_state">) {
   if (isTerminalRedemptionFpFailure(order)) return true;
   const status = order.status?.trim().toUpperCase() ?? "";
   return (status === "FAILED" || status === "CANCELLED") && !isLiveRedemptionFpState(order);
 }
 
-function redemptionFailureLabel(
-  order: Pick<MfOrder, "fp_state"> & { failure_reason?: string | null },
+/** Long-form copy for journey timeline steps only — not for status badges. */
+function consentOrderFailureDescription(
+  order: Pick<MfOrder, "fp_state" | "order_type" | "failure_code"> & {
+    failure_reason?: string | null;
+  },
 ) {
+  const code = order.failure_code?.trim().toLowerCase();
+  const portfolioCopy = copy.dashboard.portfolio;
+  if (code === "amount_invalid" || code === "below_minimum") {
+    return isSwitchOrder(order)
+      ? portfolioCopy.holdingSwitchFailureAmountInvalid
+      : portfolioCopy.redeemFailureAmountInvalid;
+  }
+  if (code === "units_invalid") {
+    return isSwitchOrder(order)
+      ? portfolioCopy.holdingSwitchFailureUnitsInvalid
+      : portfolioCopy.redeemFailureUnitsInvalid;
+  }
   const reason = order.failure_reason?.trim();
   if (reason && reason.toLowerCase() !== redemptionFpState(order)) {
     return reason;
   }
+  return formatCybrillaStatusLabel(order.fp_state) ?? copy.transactions.journeyStatusFailed;
+}
+
+function redemptionFailureLabel(
+  order: Pick<MfOrder, "fp_state" | "order_type" | "failure_code"> & {
+    failure_reason?: string | null;
+  },
+) {
+  return consentOrderFailureDescription(order);
+}
+
+function consentOrderFailureBadgeLabel(
+  order: Pick<MfOrder, "fp_state" | "status">,
+) {
   return formatCybrillaStatusLabel(order.fp_state) ?? copy.transactions.journeyStatusFailed;
 }
 
@@ -182,6 +250,7 @@ function syntheticEvent(createdAt: string | null): MfOrderEvent {
 function buildStep(args: {
   title: string;
   description: string | null;
+  switchPath?: { from: string; to: string };
   actor?: string;
   toStatus: string;
   badgeVariant: StatusBadgeVariant;
@@ -193,6 +262,7 @@ function buildStep(args: {
     event: syntheticEvent(args.createdAt),
     title: args.title,
     description: args.description,
+    switchPath: args.switchPath,
     actor: args.actor ?? "Zynd",
     toStatus: args.toStatus,
     badgeVariant: args.badgeVariant,
@@ -385,22 +455,66 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
     fpState === "under_review" ||
     fpState === "review";
 
+  const switchPath = isSwitch ? switchFundNames(order) : null;
+  const awaitingSwitchOtp = switchAwaitingOtp(order, events);
+  const awaitingRedemptionOtp = redemptionAwaitingOtp(order, events);
+  const awaitingConsentOtp = awaitingSwitchOtp || awaitingRedemptionOtp;
+
   const steps: JourneyDisplayStep[] = [
     buildStep({
-      title: isSwitch ? portfolioCopy.holdingSwitchJourneyStepPlaced : portfolioCopy.redeemJourneyStepPlaced,
+      title: isSwitch
+        ? awaitingSwitchOtp
+          ? portfolioCopy.holdingSwitchJourneyStepDraft
+          : portfolioCopy.holdingSwitchJourneyStepPlaced
+        : awaitingRedemptionOtp
+          ? portfolioCopy.redeemJourneyStepDraft
+          : portfolioCopy.redeemJourneyStepPlaced,
       description: isSwitch
-        ? switchDescription(
-            copy.transactions.journeySwitchPlacedDescription,
-            order,
-            portfolioCopy.holdingSwitchJourneyPlacedDescription,
-          )
-        : portfolioCopy.redeemJourneyPlacedDescription,
+        ? awaitingSwitchOtp
+          ? portfolioCopy.holdingSwitchJourneyDraftDescription
+          : portfolioCopy.holdingSwitchJourneyPlacedDescription
+        : awaitingRedemptionOtp
+          ? portfolioCopy.redeemJourneyDraftDescription
+          : portfolioCopy.redeemJourneyPlacedDescription,
+      switchPath: switchPath ?? undefined,
       toStatus: copy.transactions.journeyStatusDone,
       badgeVariant: "success",
       isComplete: true,
       createdAt: placedAt,
     }),
   ];
+
+  if (awaitingConsentOtp) {
+    if (isFailed && !isSubmitted && status !== "SUCCEEDED") {
+      steps.push(
+        buildStep({
+          title: isSwitch
+            ? portfolioCopy.holdingSwitchJourneyStepFailed
+            : portfolioCopy.redeemJourneyStepFailed,
+          description: redemptionFailureLabel(order),
+          toStatus: copy.transactions.journeyStatusFailed,
+          badgeVariant: "destructive",
+          isTerminal: true,
+          isComplete: false,
+          createdAt: events.at(-1)?.created_at ?? placedAt,
+        }),
+      );
+      return { steps };
+    }
+    steps.push(
+      buildStep({
+        title: portfolioCopy.redeemJourneyStepAwaitingConsent,
+        description: isSwitch
+          ? portfolioCopy.holdingSwitchJourneyAwaitingConsentDescription
+          : portfolioCopy.redeemJourneyAwaitingConsentDescription,
+        toStatus: portfolioCopy.redeemJourneyStatusAwaitingConsent,
+        badgeVariant: "warning",
+        isComplete: false,
+        createdAt: placedAt,
+      }),
+    );
+    return { steps };
+  }
 
   if (isFailed && !isSubmitted && status !== "SUCCEEDED") {
     steps.push(
@@ -412,20 +526,6 @@ function buildRedemptionOrderJourney(order: MfOrder, events: MfOrderEvent[]): Or
         isTerminal: true,
         isComplete: false,
         createdAt: events.at(-1)?.created_at ?? placedAt,
-      }),
-    );
-    return { steps };
-  }
-
-  if (isRedemptionAwaitingConsent(order) && status !== "SUCCEEDED" && !isSubmitted) {
-    steps.push(
-      buildStep({
-        title: portfolioCopy.redeemJourneyStepAwaitingConsent,
-        description: portfolioCopy.redeemJourneyAwaitingConsentDescription,
-        toStatus: portfolioCopy.redeemJourneyStatusAwaitingConsent,
-        badgeVariant: "warning",
-        isComplete: false,
-        createdAt: placedAt,
       }),
     );
     return { steps };
@@ -537,14 +637,14 @@ export function formatMfOrderStatusLabel(
   const normalized = (order?.status ?? status).trim().toUpperCase();
 
   if (order && isConsentFundOrder(order)) {
-    if (isTerminalRedemptionFpFailure(order)) {
-      return redemptionFailureLabel(order);
+    if (isTerminalRedemptionFpFailure(order) || isRedemptionOrderFailed(order)) {
+      return consentOrderFailureBadgeLabel(order);
     }
     const fpState = redemptionFpState(order);
     if (fpState === "submitted" || normalized === "SUBMITTED") {
       return formatCybrillaStatusLabel(order.fp_state) ?? "Submitted";
     }
-    if (isRedemptionAwaitingConsent(order)) {
+    if (consentOrderAwaitingOtpFromOrder(order)) {
       return copy.dashboard.portfolio.redeemJourneyStatusAwaitingConsent;
     }
   }
@@ -591,7 +691,7 @@ export function mfOrderStatusVariantForInvestor(
       return "destructive";
     }
     if (normalized === "SUBMITTED" || redemptionFpState(order) === "submitted") return "info";
-    if (isRedemptionAwaitingConsent(order)) return "warning";
+    if (consentOrderAwaitingOtpFromOrder(order)) return "warning";
     return "info";
   }
   if (normalized === "SUCCEEDED") return "success";

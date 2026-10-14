@@ -39,6 +39,7 @@ type PortfolioRedeemConsentDialogProps = {
   order: MfRedemptionOrder | null;
   onOpenChange: (open: boolean) => void;
   onConfirmed?: (order: MfRedemptionOrder) => void;
+  onAbandon?: (order: MfRedemptionOrder) => void;
 };
 
 function RedeemConsentProgress({ step, compact = false }: { step: ConsentStep; compact?: boolean }) {
@@ -72,6 +73,7 @@ export function PortfolioRedeemConsentDialog({
   order,
   onOpenChange,
   onConfirmed,
+  onAbandon,
 }: PortfolioRedeemConsentDialogProps) {
   const router = useRouter();
   const portfolioCopy = copy.dashboard.portfolio;
@@ -184,8 +186,15 @@ export function PortfolioRedeemConsentDialog({
     router.push("/dashboard/portfolio?tab=redeem-units");
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && order && step !== "done" && onAbandon) {
+      onAbandon(order);
+    }
+    onOpenChange(nextOpen);
+  }
+
   return (
-    <BrandDialog open={open} onOpenChange={onOpenChange} title={dialogTitle} maxWidth="lg">
+    <BrandDialog open={open} onOpenChange={handleOpenChange} title={dialogTitle} maxWidth="lg">
       <div className={cn("px-5 pb-5 sm:px-6", step === "review" || loading ? "pt-4" : "pt-1")}>
         {loading ? (
           <OtpConsentVerifySkeleton />
