@@ -164,6 +164,7 @@ from app.application.mf.portfolio_holdings_service import (
     list_user_redeemable_holdings,
 )
 from app.application.mf.mf_redemption_service import (
+    cancel_initiated_redemption_order,
     confirm_redemption_order,
     create_redemption_order,
     get_redemption_consent_context,
@@ -173,6 +174,7 @@ from app.application.mf.mf_redemption_service import (
     sync_redemption_order_from_fp,
 )
 from app.application.mf.mf_switch_service import (
+    cancel_initiated_switch_order,
     confirm_switch_order,
     create_switch_order,
     get_switch_consent_context,
@@ -1876,6 +1878,25 @@ async def confirm_mf_redemption_route(
     return await _redemption_order_response(db, order)
 
 
+@router.post("/redemptions/{order_id}/cancel", response_model=MfRedemptionOrderResponse)
+async def cancel_mf_redemption_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfRedemptionOrderResponse:
+    try:
+        order = await cancel_initiated_redemption_order(
+            db,
+            user_id=current_user.id,
+            order_id=order_id,
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _redemption_order_response(db, order)
+
+
 @router.get("/redemptions/{order_id}", response_model=MfRedemptionOrderResponse)
 async def get_mf_redemption_order_route(
     order_id: UUID,
@@ -1979,6 +2000,25 @@ async def confirm_mf_switch_route(
             otp=body.otp,
             ip=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
+        )
+        await db.commit()
+    except MfOrderError:
+        await db.rollback()
+        raise
+    return await _switch_order_response(db, order)
+
+
+@router.post("/switches/{order_id}/cancel", response_model=MfSwitchOrderResponse)
+async def cancel_mf_switch_route(
+    order_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfSwitchOrderResponse:
+    try:
+        order = await cancel_initiated_switch_order(
+            db,
+            user_id=current_user.id,
+            order_id=order_id,
         )
         await db.commit()
     except MfOrderError:

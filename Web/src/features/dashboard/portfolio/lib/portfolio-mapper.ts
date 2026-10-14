@@ -6,7 +6,10 @@ import type {
   PortfolioHoldingResponse,
   PortfolioSummaryResponse,
 } from "@/features/dashboard/portfolio/lib/portfolio-api";
-import type { PortfolioHoldingDetail } from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
+import {
+  resolveHoldingTxnDisplayType,
+  type PortfolioHoldingDetail,
+} from "@/features/dashboard/portfolio/lib/portfolio-holding-detail-data";
 import type { PortfolioHoldingItem } from "@/features/dashboard/portfolio/lib/portfolio-types";
 
 export function mapPortfolioSummaryToPreview(
@@ -145,10 +148,16 @@ export function mapPortfolioHoldingDetail(
     transactions: holding.transactions.map((txn) => ({
       id: txn.id,
       date: txn.date,
-      type: txn.type as PortfolioHoldingDetail["transactions"][number]["type"],
+      type: resolveHoldingTxnDisplayType({
+        type: txn.type as PortfolioHoldingDetail["transactions"][number]["type"],
+        orderType: txn.order_type ?? null,
+      }),
       units: txn.units,
       nav: txn.nav,
       valueInr: txn.value_inr,
+      orderId: txn.order_id ?? null,
+      status: txn.status ?? null,
+      orderType: txn.order_type ?? null,
     })),
   };
 }

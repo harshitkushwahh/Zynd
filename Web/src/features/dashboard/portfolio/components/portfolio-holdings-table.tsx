@@ -80,7 +80,7 @@ function HoldingFundCell({ holding }: { holding: PortfolioHoldingTableRow }) {
         amcName={holding.amcName}
         schemeName={holding.fundName}
         size="sm"
-        className="mt-0.5 shrink-0 rounded-[var(--radius-control)]"
+        className="mt-0.5 shrink-0"
       />
       <div className="min-w-0">
         <p className="font-medium leading-snug break-words whitespace-normal text-foreground">
@@ -151,7 +151,7 @@ function UpcomingFundCell({ order }: { order: MfOrder }) {
         amcLogoUrl={order.amc_logo_url}
         amcName={amcName}
         size="sm"
-        className="mt-0.5 shrink-0 rounded-[var(--radius-control)]"
+        className="mt-0.5 shrink-0"
       />
       <div className="min-w-0">
         <p className="font-medium leading-snug break-words whitespace-normal text-foreground">

@@ -5,7 +5,16 @@ export type MfOrderInvestorStatusContext = Pick<
   MfOrder,
   "status" | "fp_state" | "fp_payment_status" | "payment_completed" | "order_type"
 > &
-  Partial<Pick<MfOrder, "failure_code">>;
+  Partial<
+    Pick<
+      MfOrder,
+      | "failure_code"
+      | "platform_consent_accepted"
+      | "switch_confirmed"
+      | "redemption_confirmed"
+      | "failure_reason"
+    >
+  >;
 
 function payloadString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;

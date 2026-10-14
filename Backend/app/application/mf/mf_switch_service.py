@@ -17,9 +17,14 @@ from app.application.identity.otp_app_service import (
     request_otp,
     verify_otp,
 )
-from app.application.mf.investment_constraints import extract_investment_constraints_from_scheme, investment_details_for_fund
+from app.application.mf.investment_constraints import (
+    extract_investment_constraints_from_scheme,
+    investment_details_for_fund,
+    validate_switch_order_limits,
+)
 from app.application.mf.mf_fp_state import map_fp_redemption_state_to_order
 from app.application.mf.mf_order_errors import MfOrderError
+from app.application.mf.mf_purchase_consent_gates import platform_consent_accepted_from_meta
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event
 from app.application.mf.mf_redemption_service import (
     _extract_folio_consent_contacts,
@@ -27,7 +32,6 @@ from app.application.mf.mf_redemption_service import (
     _load_holding_row,
     _mask_email,
     _mask_mobile,
-    _units_matches_multiple,
 )
 from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
 from app.application.mf.portfolio_holdings_service import invalidate_user_portfolio_cache, parse_holding_id
@@ -255,29 +259,25 @@ async def create_switch_order(
     redeemable_units = float(row.get("redeemable_units") or 0)
     redeemable_amount_inr = float(row.get("redeemable_amount_inr") or row.get("current_value_inr") or 0)
     nav = float(row.get("nav") or 0)
-    constraints = None
-    try:
-        constraints = extract_investment_constraints_from_scheme(await get_fund_scheme_by_isin(isin))
-    except FpClientError:
-        constraints = investment_details_for_fund(out_fund)
+
+    async def _constraints_for_fund(fund_isin: str, fund: MutualFund) -> dict[str, Any] | None:
+        try:
+            return extract_investment_constraints_from_scheme(await get_fund_scheme_by_isin(fund_isin))
+        except FpClientError:
+            return investment_details_for_fund(fund)
+
+    out_constraints = await _constraints_for_fund(isin, out_fund)
+    in_constraints = await _constraints_for_fund(in_fund.isin_growth, in_fund)
 
     fp_amount: float | None = None
     fp_units: float | None = None
     order_amount = Decimal("0")
-    switch = (constraints or {}).get("switch") if isinstance(constraints, dict) else {}
-    switch = switch if isinstance(switch, dict) else {}
 
     if switch_mode == "amount":
         if amount_inr is None:
             raise MfOrderError(code="invalid_amount", message="Amount is required")
         if float(amount_inr) > redeemable_amount_inr + 0.01:
             raise MfOrderError(code="above_holding", message="Amount exceeds redeemable holding value")
-        min_out = switch.get("min_out_inr")
-        if min_out is not None and float(amount_inr) < float(min_out):
-            raise MfOrderError(code="below_minimum", message=f"Minimum switch amount is {min_out}")
-        multiples = switch.get("out_multiples_inr")
-        if multiples and float(multiples) > 0 and float(amount_inr) % float(multiples) != 0:
-            raise MfOrderError(code="invalid_multiple", message="Amount must match switch multiples")
         fp_amount = float(amount_inr)
         order_amount = amount_inr
     elif switch_mode == "units":
@@ -285,18 +285,21 @@ async def create_switch_order(
             raise MfOrderError(code="invalid_units", message="Units are required")
         if units > redeemable_units + 0.0001:
             raise MfOrderError(code="above_holding", message="Units exceed redeemable holding")
-        min_units = switch.get("min_out_units")
-        if min_units is not None and units < float(min_units):
-            raise MfOrderError(code="below_minimum", message=f"Minimum switch units is {min_units}")
-        unit_multiples = switch.get("out_unit_multiples")
-        if unit_multiples is not None and not _units_matches_multiple(units, unit_multiples):
-            raise MfOrderError(code="invalid_multiple", message="Units must match switch multiples")
         fp_units = units
         order_amount = Decimal(str(round(units * nav, 2))) if nav > 0 else Decimal("0")
     elif switch_mode == "all":
+        if redeemable_amount_inr <= 0 or redeemable_units <= 0:
+            raise MfOrderError(code="invalid_amount", message="Nothing redeemable to switch")
         order_amount = Decimal(str(round(redeemable_amount_inr, 2)))
     else:
         raise MfOrderError(code="invalid_switch_mode", message="Invalid switch mode")
+
+    validate_switch_order_limits(
+        switch_out_amount_inr=float(order_amount),
+        out_constraints=out_constraints,
+        in_constraints=in_constraints,
+        units=fp_units,
+    )
 
     resumable = await find_resumable_switch_order(session, user_id=user_id, holding_id=holding_id)
     if resumable:
@@ -587,6 +590,39 @@ async def confirm_switch_order(
     return order
 
 
+async def cancel_initiated_switch_order(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> MfOrder:
+    order = await get_switch_order(session, user_id=user_id, order_id=order_id)
+    if not order:
+        raise MfOrderError(code="order_not_found", message="Switch order not found", status_code=404)
+    if order.status in TERMINAL_STATUSES:
+        raise MfOrderError(code="order_terminal", message="This switch order is already closed", status_code=409)
+    meta = _order_meta(order)
+    if platform_consent_accepted_from_meta(meta) or _fp_switch_id(order):
+        raise MfOrderError(
+            code="order_not_cancellable",
+            message="This switch can no longer be cancelled from the app",
+            status_code=409,
+        )
+    previous = order.status.value
+    order.status = MfOrderStatus.cancelled
+    await session.flush()
+    await _record_order_event(
+        session,
+        order,
+        from_status=previous,
+        to_status=order.status.value,
+        source="USER",
+        payload={"stage": "abandoned"},
+    )
+    await invalidate_user_portfolio_cache(user_id)
+    return order
+
+
 async def apply_switch_fp_state(
     session: AsyncSession,
     order: MfOrder,
@@ -834,6 +870,7 @@ def switch_order_serialization_extras(
         ),
         "switch_mode": meta.get("switch_mode"),
         "switch_units": meta.get("units"),
+        "switch_confirmed": bool(meta.get("switch_confirmed")),
     }
 
 

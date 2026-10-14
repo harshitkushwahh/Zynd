@@ -78,6 +78,9 @@ export type PortfolioHoldingTransactionResponse = {
   units: number;
   nav: number;
   value_inr: number;
+  order_id?: string | null;
+  status?: string | null;
+  order_type?: string | null;
 };
 
 export type PortfolioHoldingSipOption = {
@@ -208,6 +211,7 @@ export type MfRedemptionOrder = {
   next_action: string | null;
   consent_otp_sent: boolean;
   redemption_confirmed: boolean;
+  platform_consent_accepted?: boolean;
   failure_code: string | null;
   failure_reason: string | null;
   created_at: string | null;
@@ -217,7 +221,7 @@ export type MfRedemptionOrder = {
 
 export type MfRedemptionConsent = {
   order_id: string;
-  fp_redemption_id: string;
+  fp_redemption_id: string | null;
   status: string;
   fp_state: string | null;
   masked_email: string;
@@ -261,6 +265,12 @@ export function confirmMfRedemption(orderId: string, otp: string) {
   return apiRequest<MfRedemptionOrder>(`/invest/redemptions/${orderId}/confirm`, {
     method: "POST",
     body: JSON.stringify({ otp }),
+  });
+}
+
+export function cancelMfRedemption(orderId: string) {
+  return apiRequest<MfRedemptionOrder>(`/invest/redemptions/${orderId}/cancel`, {
+    method: "POST",
   });
 }
 
@@ -377,6 +387,12 @@ export function confirmMfSwitch(orderId: string, otp: string) {
   });
 }
 
+export function cancelMfSwitch(orderId: string) {
+  return apiRequest<MfSwitchOrder>(`/invest/switches/${orderId}/cancel`, {
+    method: "POST",
+  });
+}
+
 export function createMfSwpPlan(payload: {
   holding_id: string;
   idempotency_key: string;
@@ -425,5 +441,11 @@ export function confirmMfSystematicPlan(kind: "swp" | "stp", planId: string, otp
   return apiRequest<MfSystematicPlan>(`/invest/${kind}/plans/${planId}/confirm`, {
     method: "POST",
     body: JSON.stringify({ otp }),
+  });
+}
+
+export function cancelMfSystematicPlan(kind: "swp" | "stp", planId: string) {
+  return apiRequest<MfSystematicPlan>(`/invest/${kind}/plans/${planId}/cancel`, {
+    method: "POST",
   });
 }

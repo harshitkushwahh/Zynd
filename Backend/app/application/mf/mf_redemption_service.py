@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.mf_consent_contact_mask import mask_mf_consent_email as _mask_email
 from app.application.mf.mf_consent_contact_mask import mask_mf_consent_mobile as _mask_mobile
+from app.application.mf.mf_purchase_consent_gates import platform_consent_accepted_from_meta
 from app.application.mf.investment_constraints import extract_investment_constraints_from_scheme
 from app.application.mf.mf_fp_state import map_fp_redemption_state_to_order
 from app.application.mf.mf_order_errors import MfOrderError
@@ -358,6 +359,14 @@ async def create_redemption_order(
         user_id=user_id,
         holding_id=holding_id,
     )
+    resumable = await find_resumable_redemption_order(
+        session,
+        user_id=user_id,
+        holding_id=holding_id,
+    )
+    if resumable:
+        return resumable
+
     if active_row:
         existing_active = await find_resumable_redemption_order(
             session,
@@ -427,18 +436,45 @@ async def create_redemption_order(
             "folio_number": folio_number,
             "isin": isin,
             "redeem_mode": redeem_mode,
+            "amount": fp_amount,
             "units": fp_units,
             "user_ip": user_ip,
+            "fp_mfia_id": fp_mfia_id,
+            "fallback_scheme": fallback_scheme,
             "consent_otp_sent": False,
             "redemption_confirmed": False,
             "scheme": scheme_id,
+            "transaction_initiated_at": datetime.now(timezone.utc).isoformat(),
         },
     )
     session.add(order)
     await session.flush()
 
+    await _record_order_event(session, order, from_status=None, to_status=order.status.value)
+    await invalidate_user_portfolio_cache(user_id)
+    return order
+
+
+async def _create_fp_redemption_after_otp(session: AsyncSession, order: MfOrder) -> str:
+    meta = _order_meta(order)
+    folio_number = str(meta.get("folio_number") or "")
+    scheme_id = str(meta.get("scheme") or order.fp_scheme_id or "")
+    fallback_scheme = meta.get("fallback_scheme")
+    mfia = await session.get(MfInvestmentAccount, order.mf_investment_account_id) if order.mf_investment_account_id else None
+    fp_mfia_id = str(meta.get("fp_mfia_id") or (mfia.fp_mfia_id if mfia else "") or "")
+    if not folio_number or not scheme_id or not fp_mfia_id:
+        raise MfOrderError(code="order_not_ready", message="Redemption order is not ready to submit", status_code=409)
+
+    redeem_mode = str(meta.get("redeem_mode") or "")
+    amount = meta.get("amount")
+    units = meta.get("units")
+    fp_amount = float(amount) if amount is not None and redeem_mode == "amount" else None
+    fp_units = float(units) if units is not None and redeem_mode == "units" else None
+    user_ip = str(meta.get("user_ip") or "") or None
+
     fp_result: dict[str, Any] | None = None
     last_fp_error: FpClientError | None = None
+    resolved_scheme = scheme_id
     for candidate in (scheme_id, fallback_scheme):
         if not candidate:
             continue
@@ -452,18 +488,15 @@ async def create_redemption_order(
                 units=fp_units,
                 user_ip=user_ip,
             )
-            if candidate != scheme_id:
-                scheme_id = candidate
-                order.fp_scheme_id = candidate
-                order.metadata_ = {**_order_meta(order), "scheme": candidate}
+            resolved_scheme = candidate
             break
         except FpClientError as exc:
             last_fp_error = exc
             if is_scheme_unavailable_for_transaction(exc) and fallback_scheme and candidate != fallback_scheme:
                 logger.warning(
-                    "Redemption rejected for scheme=%s holding=%s; retrying with fallback scheme=%s",
+                    "Redemption rejected for scheme=%s order=%s; retrying with fallback scheme=%s",
                     candidate,
-                    holding_id,
+                    order.id,
                     fallback_scheme,
                 )
                 continue
@@ -480,7 +513,7 @@ async def create_redemption_order(
         order.failure_code = code
         order.failure_reason = message
         await session.flush()
-        raise MfOrderError(code=code, message=message, status_code=exc.status_code) from exc
+        raise MfOrderError(code=code, message=message, status_code=getattr(exc, "status_code", 502)) from exc
 
     fp_redemption_id = fp_result.get("fp_redemption_id")
     if not fp_redemption_id:
@@ -492,16 +525,16 @@ async def create_redemption_order(
 
     order.fp_state = str(fp_result.get("state") or "pending")
     order.status = map_fp_redemption_state_to_order(order.fp_state)
+    if resolved_scheme != order.fp_scheme_id:
+        order.fp_scheme_id = resolved_scheme
     order.metadata_ = {
-        **(_order_meta(order)),
+        **meta,
+        "scheme": resolved_scheme,
         "fp_redemption_id": fp_redemption_id,
     }
     _maybe_mark_redemption_submitted(order)
     await session.flush()
-
-    await _record_order_event(session, order, from_status=None, to_status=order.status.value)
-    await invalidate_user_portfolio_cache(user_id)
-    return order
+    return str(fp_redemption_id)
 
 
 async def get_redemption_order(session: AsyncSession, *, user_id: uuid.UUID, order_id: uuid.UUID) -> MfOrder | None:
@@ -523,9 +556,9 @@ async def get_redemption_consent_context(
 
     meta = _order_meta(order)
     folio_number = str(meta.get("folio_number") or "")
-    fp_redemption_id = _fp_redemption_id(order)
-    if not folio_number or not fp_redemption_id:
+    if not folio_number:
         raise MfOrderError(code="order_not_ready", message="Redemption order is missing folio details", status_code=409)
+    fp_redemption_id = _fp_redemption_id(order)
 
     mfia = await session.get(MfInvestmentAccount, order.mf_investment_account_id) if order.mf_investment_account_id else None
     fp_mfia_id = mfia.fp_mfia_id if mfia else None
@@ -543,7 +576,7 @@ async def get_redemption_consent_context(
 
     return {
         "order_id": str(order.id),
-        "fp_redemption_id": fp_redemption_id,
+        "fp_redemption_id": fp_redemption_id or "",
         "status": order.status.value,
         "fp_state": order.fp_state,
         "masked_email": _mask_email(email),
@@ -639,12 +672,18 @@ async def confirm_redemption_order(
         extra_metadata={"order_type": order.order_type.value, "amount_inr": float(order.amount_inr)},
     )
     meta = merge_platform_consent_metadata(meta, consent_record_id=consent_record_id)
+    order.metadata_ = meta
+    await session.flush()
 
-    fp_redemption_id = _fp_redemption_id(order)
     email = meta.get("consent_email")
     mobile = meta.get("consent_mobile")
-    if not fp_redemption_id or not email or not mobile:
+    if not email or not mobile:
         raise MfOrderError(code="order_not_ready", message="Redemption consent details are incomplete", status_code=409)
+
+    fp_redemption_id = _fp_redemption_id(order)
+    if not fp_redemption_id:
+        fp_redemption_id = await _create_fp_redemption_after_otp(session, order)
+        meta = _order_meta(order)
 
     try:
         result = await update_mf_redemption(
@@ -780,10 +819,46 @@ async def sync_open_redemption_orders(session: AsyncSession, *, batch_size: int 
     return {"processed": len(orders), "updated": updated}
 
 
+async def cancel_initiated_redemption_order(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    order_id: uuid.UUID,
+) -> MfOrder:
+    order = await get_redemption_order(session, user_id=user_id, order_id=order_id)
+    if not order:
+        raise MfOrderError(code="order_not_found", message="Redemption order not found", status_code=404)
+    if order.status in TERMINAL_STATUSES:
+        raise MfOrderError(code="order_terminal", message="This redemption order is already closed", status_code=409)
+    meta = _order_meta(order)
+    if platform_consent_accepted_from_meta(meta) or _fp_redemption_id(order):
+        raise MfOrderError(
+            code="order_not_cancellable",
+            message="This redemption can no longer be cancelled from the app",
+            status_code=409,
+        )
+    previous = order.status.value
+    order.status = MfOrderStatus.cancelled
+    await session.flush()
+    await _record_order_event(
+        session,
+        order,
+        from_status=previous,
+        to_status=order.status.value,
+        source="USER",
+        payload={"stage": "abandoned"},
+    )
+    await invalidate_user_portfolio_cache(user_id)
+    return order
+
+
 def serialize_redemption_order(order: MfOrder, *, product_name: str | None = None) -> dict[str, Any]:
     meta = _order_meta(order)
+    platform_consent = platform_consent_accepted_from_meta(meta)
     next_action = "complete"
-    if order.status == MfOrderStatus.payment_pending:
+    if not meta.get("redemption_confirmed") and order.status not in TERMINAL_STATUSES:
+        next_action = "confirm_consent"
+    elif order.status == MfOrderStatus.payment_pending:
         next_action = "confirm_consent"
     elif order.status in {MfOrderStatus.pending, MfOrderStatus.processing}:
         next_action = "wait_review"
@@ -809,6 +884,7 @@ def serialize_redemption_order(order: MfOrder, *, product_name: str | None = Non
         "next_action": next_action,
         "consent_otp_sent": bool(meta.get("consent_otp_sent")),
         "redemption_confirmed": bool(meta.get("redemption_confirmed")),
+        "platform_consent_accepted": platform_consent,
         "failure_code": order.failure_code,
         "failure_reason": order.failure_reason,
         "created_at": order.created_at.isoformat() if order.created_at else None,

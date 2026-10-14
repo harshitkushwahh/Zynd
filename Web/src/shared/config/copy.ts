@@ -1485,9 +1485,15 @@ export const copy = {
       holdingTxnUnits: "Units",
       holdingTxnNav: "NAV",
       holdingTxnValue: "Value",
+      holdingTxnStatus: "Status",
+      holdingSwitchJourneyStepDraft: "Switch request saved",
+      holdingSwitchJourneyDraftDescription:
+        "Complete OTP verification on your folio registered contact to submit this switch to the fund house.",
+      holdingSwitchJourneyAwaitingConsentDescription:
+        "SEBI requires OTP verification on your folio registered contact before this switch is submitted.",
       holdingSwitchJourneyStepPlaced: "Switch placed",
       holdingSwitchJourneyPlacedDescription:
-        "Your switch request was saved. Confirm with OTP before it is sent to the fund house.",
+        "OTP verified on your folio registered contact. Your switch was submitted to the fund house for processing.",
       holdingSwitchJourneyStepProcessing: "Sent for processing",
       holdingSwitchJourneyProcessingDescription:
         "The fund house is processing your switch. This usually takes a few working days.",
@@ -1496,6 +1502,14 @@ export const copy = {
       holdingSwitchJourneyStepCompleted: "Switch completed",
       holdingSwitchJourneyCompletedDescription: "Units were moved to the destination scheme.",
       holdingSwitchJourneyStepFailed: "Switch failed",
+      holdingSwitchFailureAmountInvalid:
+        "The switch amount did not meet the fund house minimum or amount-multiple rules for this scheme. Try a higher amount or switch all units if your balance allows.",
+      holdingSwitchFailureUnitsInvalid:
+        "The switch units did not meet the fund house minimum or unit-multiple rules for this scheme.",
+      redeemFailureAmountInvalid:
+        "The redemption amount did not meet the fund house minimum or amount-multiple rules for this scheme.",
+      redeemFailureUnitsInvalid:
+        "The redemption units did not meet the fund house minimum or unit-multiple rules for this scheme.",
       holdingPendingSwitchTitle: "Switch in progress",
       holdingPendingSwitchDescription:
         "This holding is being switched to another scheme. Invest, redeem, switch, STP, and SWP stay paused until the fund house completes it.",
@@ -1508,7 +1522,9 @@ export const copy = {
       holdingUpcomingViewJourney: "View order journey",
       holdingTxnInvested: "Invested",
       holdingTxnRedeemed: "Redeemed",
+      holdingTxnSwitch: "Switch",
       holdingTxnDividend: "Dividend",
+      holdingTxnNotAvailable: "NA",
       tabsLabel: "Portfolio sections",
       tabOverview: "Overview",
       tabSips: "SIPs",
@@ -1531,6 +1547,9 @@ export const copy = {
       redeemJourneyUnitsLabel: "Redeem units",
       redeemJourneyWhatHappened: "What happened",
       redeemJourneyEmpty: "No status changes recorded yet.",
+      redeemJourneyStepDraft: "Redemption request saved",
+      redeemJourneyDraftDescription:
+        "Complete OTP verification on your folio registered contact to submit this redemption to the fund house.",
       redeemJourneyStepPlaced: "Redemption placed",
       redeemJourneyStepAwaitingConsent: "Awaiting OTP confirmation",
       redeemJourneyAwaitingConsentDescription:
@@ -1543,7 +1562,8 @@ export const copy = {
       redeemJourneyStepPayoutCredited: "Credited to bank",
       redeemJourneyStepFailed: "Redemption failed",
       redeemJourneyStepCancelled: "Redemption cancelled",
-      redeemJourneyPlacedDescription: "Your redemption request was recorded and queued for processing.",
+      redeemJourneyPlacedDescription:
+        "OTP verified on your folio registered contact. Your redemption was submitted to the fund house for processing.",
       redeemJourneyAmcSubmittedDescription: "The fund house received your redemption order and started processing.",
       redeemJourneyUnitsRedeemedDescription: "Units were deducted from your folio at NAV ₹{nav}.",
       redeemJourneyUnitsRedeemedDescriptionGeneric: "Units were deducted from your folio at the applicable NAV.",
@@ -2399,7 +2419,7 @@ export const copy = {
     journeySwitchFrom: "From",
     journeySwitchTo: "To",
     journeySwitchPlacedDescription:
-      "Moving units from {from} to {to}. Confirm with OTP before it is sent to the fund house.",
+      "OTP verified. Moving units from {from} to {to}; the fund house is processing your switch.",
     journeySwitchSubmittedDescription:
       "The fund house received your switch from {from} to {to} and started moving units.",
     loading: "Loading transactions…",

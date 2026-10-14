@@ -23,6 +23,7 @@ from app.application.mf.mf_scheme_resolution import (
     mutual_fund_isin_in,
 )
 from app.application.mf.investment_constraints import fund_allows_sip, investment_details_for_fund
+from app.application.mf.mf_fp_state import FP_FAILURE_STATES
 from app.application.mf.mf_investment_account_service import ensure_fp_mfia, ensure_mfia_old_id
 from app.application.mf.mf_order_service import get_or_create_mf_investment_account
 from app.application.mf.invest_amc_display import resolve_invest_amc_display
@@ -80,6 +81,16 @@ _HOLDING_PENDING_ORDER_STATUSES = {
 }
 
 
+def _order_blocks_holding_actions(order: MfOrder) -> bool:
+    """In-flight switch/redemption only — terminal failures must not lock the holding."""
+    if order.status in {MfOrderStatus.failed, MfOrderStatus.cancelled}:
+        return False
+    fp_state = (order.fp_state or "").strip().lower()
+    if fp_state in FP_FAILURE_STATES:
+        return False
+    return True
+
+
 async def _load_holding_pending_action(
     session: AsyncSession,
     *,
@@ -106,6 +117,8 @@ async def _load_holding_pending_action(
         )
     ).scalars().all()
     for order in rows:
+        if not _order_blocks_holding_actions(order):
+            continue
         meta = order.metadata_ if isinstance(order.metadata_, dict) else {}
         if not _pending_order_matches_holding(meta, holding_id):
             continue
@@ -223,12 +236,15 @@ def parse_scheme_wise_returns(payload: dict[str, Any], *, isin: str) -> dict[str
 
 
 _FP_INVESTED_TXN_TYPES = {"purchase", "sip", "switch_in", "transfer_in", "bonus", "additional_purchase"}
-_FP_REDEEMED_TXN_TYPES = {"redemption", "switch_out", "transfer_out"}
+_FP_REDEEMED_TXN_TYPES = {"redemption", "transfer_out"}
+_FP_SWITCH_TXN_TYPES = {"switch_out", "switch", "switch-out"}
 _FP_DIVIDEND_TXN_TYPES = {"dividend_payout", "dividend_reinvestment"}
 
 
 def _map_fp_transaction_type(raw_type: str | None) -> str:
-    normalized = str(raw_type or "").lower()
+    normalized = str(raw_type or "").lower().replace("-", "_")
+    if normalized in _FP_SWITCH_TXN_TYPES or "switch" in normalized:
+        return "switch"
     if normalized in _FP_REDEEMED_TXN_TYPES:
         return "redeemed"
     if normalized in _FP_DIVIDEND_TXN_TYPES:
@@ -261,10 +277,22 @@ def parse_mf_transactions(payload: dict[str, Any], *, isin: str) -> list[dict[st
             continue
 
         units = _safe_float(row.get("units")) or 0.0
-        nav = _safe_float(row.get("price") or row.get("nav")) or 0.0
+        nav = (
+            _safe_float(
+                row.get("price")
+                or row.get("nav")
+                or row.get("purchase_price")
+                or row.get("nav_per_unit")
+                or row.get("switch_out_price")
+                or row.get("switch_in_price")
+            )
+            or 0.0
+        )
         amount = _safe_float(row.get("amount"))
         if amount is None:
             amount = abs(units * nav)
+        if nav <= 0 and units > 0 and amount and amount > 0:
+            nav = round(abs(amount) / abs(units), 4)
 
         txn_type = _map_fp_transaction_type(row.get("type"))
         txn_id = str(row.get("id") or row.get("transaction_id") or f"txn-{index}")
@@ -282,6 +310,379 @@ def parse_mf_transactions(payload: dict[str, Any], *, isin: str) -> list[dict[st
 
     parsed.sort(key=lambda item: item["date"], reverse=True)
     return parsed
+
+
+def _holding_txn_value_inr(value: float) -> float:
+    return round(float(value), 2)
+
+
+def _holding_txn_date(value: str) -> date:
+    return date.fromisoformat(str(value)[:10])
+
+
+def _holding_txn_types_compatible(fp_type: str | None, order_type: str | None) -> bool:
+    if not fp_type or not order_type:
+        return True
+    return fp_type == order_type
+
+
+def _find_matching_order_txn(
+    fp_txn: dict[str, Any],
+    order_transactions: list[dict[str, Any]],
+    *,
+    used_order_ids: set[str],
+    max_day_delta: int = 7,
+) -> dict[str, Any] | None:
+    target_value = _holding_txn_value_inr(fp_txn["value_inr"])
+    fp_day = _holding_txn_date(fp_txn["date"])
+    fp_type = fp_txn.get("type")
+    fp_has_units = float(fp_txn.get("units") or 0) > 0
+    succeeded_status = MfOrderStatus.succeeded.value.upper()
+
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for order_txn in order_transactions:
+        order_id = str(order_txn.get("order_id") or "")
+        if not order_id or order_id in used_order_ids:
+            continue
+        if _holding_txn_value_inr(order_txn["value_inr"]) != target_value:
+            continue
+        if not _holding_txn_types_compatible(fp_type, order_txn.get("type")):
+            continue
+        order_day = _holding_txn_date(order_txn["date"])
+        day_delta = abs((fp_day - order_day).days)
+        if day_delta <= max_day_delta:
+            candidates.append((day_delta, order_txn))
+
+    if not candidates:
+        return None
+
+    if fp_has_units:
+        settled = [
+            (delta, txn)
+            for delta, txn in candidates
+            if str(txn.get("status") or "").upper() == succeeded_status
+        ]
+        if settled:
+            candidates = settled
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1]
+
+
+def _normalize_holding_txn_type(txn: dict[str, Any]) -> dict[str, Any]:
+    order_type = str(txn.get("order_type") or "").strip().lower()
+    if order_type == "switch":
+        txn["type"] = "switch"
+    elif order_type == "redemption":
+        txn["type"] = "redeemed"
+    elif order_type in {"lumpsum", "sip"}:
+        txn["type"] = "invested"
+    return txn
+
+
+def _map_order_type_to_holding_txn_type(order_type: MfOrderType) -> str | None:
+    if order_type in {MfOrderType.lumpsum, MfOrderType.sip}:
+        return "invested"
+    if order_type == MfOrderType.redemption:
+        return "redeemed"
+    if order_type == MfOrderType.switch:
+        return "switch"
+    return None
+
+
+def _order_belongs_to_holding(
+    order: MfOrder,
+    *,
+    fund_isin: str,
+    holding_id: str,
+    folio_number: str,
+    isin: str,
+) -> bool:
+    if fund_isin.upper() != isin.upper():
+        return False
+    meta = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    if _pending_order_matches_holding(meta, holding_id):
+        return True
+    order_holding = str(meta.get("holding_id") or "").strip()
+    if order_holding:
+        if order_holding == holding_id:
+            return True
+        parsed = parse_holding_id(holding_id)
+        stored_parsed = parse_holding_id(order_holding)
+        if parsed and stored_parsed and parsed == stored_parsed:
+            return True
+    meta_folio = str(meta.get("folio_number") or "").strip()
+    meta_isin = str(meta.get("isin") or "").strip().upper()
+    if meta_folio == folio_number and (not meta_isin or meta_isin == isin.upper()):
+        return True
+    return False
+
+
+def _order_to_holding_transaction(order: MfOrder) -> dict[str, Any] | None:
+    txn_type = _map_order_type_to_holding_txn_type(order.order_type)
+    if txn_type is None:
+        return None
+    meta = order.metadata_ if isinstance(order.metadata_, dict) else {}
+    if order.order_type == MfOrderType.redemption and not meta.get("redemption_confirmed"):
+        return None
+    if order.order_type == MfOrderType.switch and not meta.get("switch_confirmed"):
+        return None
+    txn_date = order.settled_at or order.submitted_at or order.created_at
+    if txn_date is None:
+        return None
+    amount = float(order.amount_inr)
+    units = (
+        _safe_float(meta.get("units"))
+        or _safe_float(meta.get("switch_units"))
+        or _safe_float(meta.get("allotted_units"))
+        or 0.0
+    )
+    nav = _safe_float(meta.get("nav")) or _safe_float(meta.get("allotment_nav")) or 0.0
+    if nav <= 0 and units > 0 and amount > 0:
+        nav = round(amount / abs(units), 4)
+    return _normalize_holding_txn_type(
+        {
+            "id": str(order.id),
+            "order_id": str(order.id),
+            "status": order.status.value,
+            "order_type": order.order_type.value,
+            "date": txn_date.date().isoformat(),
+            "type": txn_type,
+            "units": abs(units),
+            "nav": nav or 0.0,
+            "value_inr": round(amount, 2),
+        }
+    )
+
+
+async def _load_holding_order_transactions(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    holding_id: str,
+) -> list[dict[str, Any]]:
+    parsed = parse_holding_id(holding_id)
+    if parsed is None:
+        return []
+    folio_number, isin = parsed
+
+    rows = (
+        await session.execute(
+            select(MfOrder, MutualFund.isin_growth)
+            .join(MutualFund, MutualFund.id == MfOrder.fund_id)
+            .where(
+                MfOrder.user_id == user_id,
+                mutual_fund_isin_equals(MutualFund.isin_growth, isin),
+                MfOrder.order_type.in_(
+                    (MfOrderType.lumpsum, MfOrderType.sip, MfOrderType.redemption, MfOrderType.switch)
+                ),
+            )
+            .order_by(MfOrder.created_at.desc())
+            .limit(200)
+        )
+    ).all()
+    transactions: list[dict[str, Any]] = []
+    for order, fund_isin in rows:
+        if not _order_belongs_to_holding(
+            order,
+            fund_isin=str(fund_isin or ""),
+            holding_id=holding_id,
+            folio_number=folio_number,
+            isin=isin,
+        ):
+            continue
+        txn = _order_to_holding_transaction(order)
+        if txn:
+            transactions.append(txn)
+    return transactions
+
+
+def _merge_holding_transactions(
+    fp_transactions: list[dict[str, Any]],
+    order_transactions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    used_order_ids: set[str] = set()
+    succeeded_status = MfOrderStatus.succeeded.value.upper()
+
+    for fp_txn in fp_transactions:
+        order_txn = _find_matching_order_txn(
+            fp_txn,
+            order_transactions,
+            used_order_ids=used_order_ids,
+        )
+        if order_txn:
+            used_order_ids.add(str(order_txn["order_id"]))
+            units = fp_txn.get("units") or order_txn.get("units") or 0.0
+            value_inr = fp_txn.get("value_inr") or order_txn.get("value_inr") or 0.0
+            nav = fp_txn.get("nav") or order_txn.get("nav") or 0.0
+            if nav <= 0 and units > 0 and value_inr > 0:
+                nav = round(float(value_inr) / float(units), 4)
+            merged_status = order_txn["status"]
+            if float(units or 0) > 0 and str(merged_status or "").upper() != succeeded_status:
+                merged_status = MfOrderStatus.succeeded.value
+            merged.append(
+                _normalize_holding_txn_type(
+                    {
+                        **fp_txn,
+                        "order_id": order_txn["order_id"],
+                        "status": merged_status,
+                        "order_type": order_txn.get("order_type"),
+                        "type": order_txn.get("type") or fp_txn.get("type"),
+                        "units": units,
+                        "nav": nav,
+                        "value_inr": value_inr,
+                        "id": order_txn["order_id"],
+                        "date": order_txn.get("date") or fp_txn.get("date"),
+                    }
+                )
+            )
+            continue
+        merged.append(_normalize_holding_txn_type(dict(fp_txn)))
+
+    for order_txn in order_transactions:
+        if str(order_txn.get("order_id")) in used_order_ids:
+            continue
+        merged.append(_normalize_holding_txn_type(dict(order_txn)))
+
+    merged.sort(key=lambda item: item["date"], reverse=True)
+    return _dedupe_holding_transactions(merged)
+
+
+def _holding_txn_display_key(txn: dict[str, Any]) -> tuple[str, float, str]:
+    return (
+        str(txn.get("type") or ""),
+        _holding_txn_value_inr(txn["value_inr"]),
+        str(txn.get("date") or "")[:10],
+    )
+
+
+def _holding_txn_is_settled(txn: dict[str, Any]) -> bool:
+    units = float(txn.get("units") or 0)
+    if units > 0:
+        return True
+    if not txn.get("order_id"):
+        return False
+    status = str(txn.get("status") or "").upper()
+    return status == MfOrderStatus.succeeded.value.upper()
+
+
+def _unique_holding_transactions(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for txn in transactions:
+        txn_id = str(txn.get("order_id") or txn.get("id") or "")
+        if txn_id:
+            if txn_id in seen:
+                continue
+            seen.add(txn_id)
+        unique.append(dict(txn))
+    return unique
+
+
+def _enrich_linked_with_orphan_fp_units(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach folio (FP) units/NAV to the closest matching Zynd order row; keep unmatched rows."""
+    grouped: dict[tuple[str, float], list[dict[str, Any]]] = {}
+    for txn in transactions:
+        key = (str(txn.get("type") or ""), _holding_txn_value_inr(txn["value_inr"]))
+        grouped.setdefault(key, []).append(txn)
+
+    enriched: list[dict[str, Any]] = []
+    for group in grouped.values():
+        linked = [dict(txn) for txn in group if txn.get("order_id")]
+        orphans = [dict(txn) for txn in group if not txn.get("order_id")]
+        if not linked:
+            enriched.extend(orphans)
+            continue
+        if not orphans:
+            enriched.extend(linked)
+            continue
+
+        used_order_ids: set[str] = set()
+        for orphan in orphans:
+            order_txn = _find_matching_order_txn(
+                orphan,
+                linked,
+                used_order_ids=used_order_ids,
+            )
+            if order_txn:
+                used_order_ids.add(str(order_txn["order_id"]))
+                units = orphan.get("units") or order_txn.get("units") or 0.0
+                value_inr = orphan.get("value_inr") or order_txn.get("value_inr") or 0.0
+                nav = orphan.get("nav") or order_txn.get("nav") or 0.0
+                if nav <= 0 and units > 0 and value_inr > 0:
+                    nav = round(float(value_inr) / float(units), 4)
+                merged_status = order_txn.get("status")
+                if float(units or 0) > 0 and str(merged_status or "").upper() != MfOrderStatus.succeeded.value.upper():
+                    merged_status = MfOrderStatus.succeeded.value
+                enriched.append(
+                    _normalize_holding_txn_type(
+                        {
+                            **orphan,
+                            "order_id": order_txn["order_id"],
+                            "status": merged_status,
+                            "order_type": order_txn.get("order_type"),
+                            "type": order_txn.get("type") or orphan.get("type"),
+                            "units": units,
+                            "nav": nav,
+                            "value_inr": value_inr,
+                            "id": order_txn["order_id"],
+                            "date": order_txn.get("date") or orphan.get("date"),
+                        }
+                    )
+                )
+            else:
+                enriched.append(orphan)
+
+        for order_txn in linked:
+            order_id = str(order_txn.get("order_id") or "")
+            if order_id and order_id not in used_order_ids:
+                enriched.append(order_txn)
+    return enriched
+
+
+def _suppress_redundant_order_attempts(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    settled_keys = {_holding_txn_display_key(txn) for txn in transactions if _holding_txn_is_settled(txn)}
+    settled_type_amount = {
+        (str(txn.get("type") or ""), _holding_txn_value_inr(txn["value_inr"]))
+        for txn in transactions
+        if _holding_txn_is_settled(txn)
+    }
+    filtered: list[dict[str, Any]] = []
+    open_order_by_key: dict[tuple[str, float, str], dict[str, Any]] = {}
+    succeeded = MfOrderStatus.succeeded.value.upper()
+
+    for txn in transactions:
+        order_id = txn.get("order_id")
+        if not order_id:
+            filtered.append(txn)
+            continue
+
+        key = _holding_txn_display_key(txn)
+        type_amount = (str(txn.get("type") or ""), _holding_txn_value_inr(txn["value_inr"]))
+        units = float(txn.get("units") or 0)
+        status = str(txn.get("status") or "").upper()
+
+        if units > 0 or status == succeeded:
+            filtered.append(txn)
+            continue
+
+        if key in settled_keys or type_amount in settled_type_amount:
+            continue
+
+        if key not in open_order_by_key:
+            open_order_by_key[key] = txn
+
+    filtered.extend(open_order_by_key.values())
+    return filtered
+
+
+def _dedupe_holding_transactions(transactions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    pipeline = _enrich_linked_with_orphan_fp_units(transactions)
+    pipeline = _unique_holding_transactions(pipeline)
+    pipeline = _suppress_redundant_order_attempts(pipeline)
+    pipeline.sort(key=lambda item: (item["date"], str(item.get("order_id") or item.get("id") or "")), reverse=True)
+    return pipeline
 
 
 def _months_invested(first_investment_date: str | None) -> int | None:
@@ -1343,44 +1744,6 @@ async def _load_primary_nominee_name(session: AsyncSession, *, user_id: uuid.UUI
     return str(row) if row else None
 
 
-async def _load_local_order_transactions(
-    session: AsyncSession,
-    *,
-    user_id: uuid.UUID,
-    isin: str,
-) -> list[dict[str, Any]]:
-    rows = (
-        await session.execute(
-            select(MfOrder.amount_inr, MfOrder.order_type, MfOrder.settled_at, MfOrder.created_at, MfOrder.id)
-            .join(MutualFund, MutualFund.id == MfOrder.fund_id)
-            .where(
-                MfOrder.user_id == user_id,
-                mutual_fund_isin_equals(isin),
-                MfOrder.status == MfOrderStatus.succeeded,
-            )
-            .order_by(MfOrder.settled_at.desc().nullslast(), MfOrder.created_at.desc())
-        )
-    ).all()
-
-    transactions: list[dict[str, Any]] = []
-    for amount_inr, order_type, settled_at, created_at, order_id in rows:
-        txn_date = settled_at or created_at
-        if txn_date is None:
-            continue
-        txn_type = "redeemed" if str(order_type.value).lower() == "redemption" else "invested"
-        transactions.append(
-            {
-                "id": str(order_id),
-                "date": txn_date.date().isoformat(),
-                "type": txn_type,
-                "units": 0.0,
-                "nav": 0.0,
-                "value_inr": round(float(amount_inr), 2),
-            }
-        )
-    return transactions
-
-
 async def get_user_portfolio_holding_detail(
     session: AsyncSession,
     *,
@@ -1388,7 +1751,7 @@ async def get_user_portfolio_holding_detail(
     holding_id: str,
 ) -> dict[str, Any]:
     settings = get_settings()
-    cache_key = f"portfolio:holding_detail:v4:{user_id}:{holding_id}"
+    cache_key = f"portfolio:holding_detail:v10:{user_id}:{holding_id}"
     cached = await _get_cached_portfolio(cache_key, settings=settings)
     if cached is not None:
         return cached
@@ -1449,9 +1812,11 @@ async def get_user_portfolio_holding_detail(
         fp_mfia_id=fp_mfia_id,
         types="purchase,sip,redemption,dividend_payout,dividend_reinvestment,switch_in,switch_out,transfer_in,transfer_out,bonus",
     )
-    transactions = parse_mf_transactions(txn_payload, isin=isin)
-    if not transactions:
-        transactions = await _load_local_order_transactions(session, user_id=user_id, isin=isin)
+    fp_transactions = parse_mf_transactions(txn_payload, isin=isin)
+    order_transactions = await _load_holding_order_transactions(
+        session, user_id=user_id, holding_id=resolved_holding_id
+    )
+    transactions = _merge_holding_transactions(fp_transactions, order_transactions)
 
     scheme_returns = parse_scheme_wise_returns(
         await get_scheme_wise_returns(fp_mfia_id=fp_mfia_id),

@@ -22,7 +22,8 @@ import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Table, TableCard } from "@/components/core/table";
+import { PaginationPageMinimalCenter, Table, TableCard } from "@/components/core/table";
+import { paginateItems } from "@/features/family-groups/lib/family-group-table-pagination";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
 import type { MfRedeemProceedPayload } from "@/features/invest/components/mf-invest-payment-card-redeem";
 import type { MfPaymentCardVariant } from "@/features/invest/components/mf-invest-payment-card";
@@ -43,14 +44,25 @@ import { PortfolioDetailLockedSection } from "@/features/dashboard/portfolio/com
 import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
 import { usePortfolioHoldingDetailQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
 import {
+  cancelMfRedemption,
+  cancelMfSwitch,
+  cancelMfSystematicPlan,
   createMfRedemption,
   type MfRedemptionOrder,
   type MfSwitchOrder,
   type MfSystematicPlan,
 } from "@/features/dashboard/portfolio/lib/portfolio-api";
 import { MfFundAmcAvatar } from "@/features/invest/components/mf-fund-search-ui";
+import { isFundUuid } from "@/features/invest/lib/mf-fund-url";
+import {
+  MfOrderStatusBadge,
+  mfOrderRowHoverClass,
+} from "@/features/invest/components/mf-order-status-badge";
+import { MfOrderJourneyDialog } from "@/features/invest/components/payment-dialog";
 import { MfSipPlanDetailDialog } from "@/features/invest/components/mf-sip-plan-detail-dialog";
 import {
+  holdingPendingActionBlocksActions,
+  resolveHoldingTxnDisplayType,
   parsePortfolioHoldingRouteParam,
   type PortfolioHoldingDetail,
   type PortfolioHoldingTransaction,
@@ -68,7 +80,7 @@ import {
   MF_PAGE_SECTION_CLASS,
 } from "@/features/invest/lib/mf-ui";
 import { formatInr, formatSignedReturn } from "@/features/invest/lib/mf-format";
-import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
+import { ZYND_3XL_RADIUS_CLASS, ZYND_CARD_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { fetchInvestConfig, type InvestConfig } from "@/features/invest/api/invest-api";
 import { invalidateInvestAndPortfolioQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import { useAuth } from "@/contexts/auth-context";
@@ -80,6 +92,8 @@ type PortfolioHoldingDetailPageProps = {
 };
 
 type HoldingPaymentMode = MfPaymentCardVariant | HoldingActionMode;
+
+const HOLDING_TXN_PAGE_SIZE = 10;
 
 function toneClass(tone: "positive" | "negative" | "muted") {
   return cn(
@@ -97,11 +111,33 @@ function formatTxnDate(isoDate: string) {
   });
 }
 
-function formatTxnType(type: PortfolioHoldingTransaction["type"]) {
+function formatTxnType(txn: PortfolioHoldingTransaction) {
   const portfolioCopy = copy.dashboard.portfolio;
+  const type = resolveHoldingTxnDisplayType(txn);
   if (type === "invested") return portfolioCopy.holdingTxnInvested;
   if (type === "redeemed") return portfolioCopy.holdingTxnRedeemed;
+  if (type === "switch") return portfolioCopy.holdingTxnSwitch;
   return portfolioCopy.holdingTxnDividend;
+}
+
+function HoldingTxnPlaceholder() {
+  return (
+    <span className="text-compact text-muted-foreground">{copy.dashboard.portfolio.holdingTxnNotAvailable}</span>
+  );
+}
+
+function resolveHoldingTxnOrderId(txn: PortfolioHoldingTransaction): string | null {
+  if (txn.orderId) return txn.orderId;
+  if (isFundUuid(txn.id)) return txn.id;
+  return null;
+}
+
+function holdingTxnOrderType(txn: PortfolioHoldingTransaction) {
+  if (txn.orderType) return txn.orderType;
+  if (txn.type === "switch") return "SWITCH";
+  if (txn.type === "invested") return "LUMPSUM";
+  if (txn.type === "redeemed") return "REDEMPTION";
+  return "LUMPSUM";
 }
 
 function MetricCell({
@@ -169,7 +205,7 @@ function HoldingOverviewCard({
   return (
     <section
       className={cn(
-        ZYND_3XL_RADIUS_CLASS,
+        ZYND_CARD_RADIUS_CLASS,
         "border border-border/60 bg-card p-4 shadow-zynd-low sm:p-5",
       )}
     >
@@ -179,8 +215,9 @@ function HoldingOverviewCard({
             amcLogoUrl={holding.amcLogoUrl}
             amcSlug={holding.amcSlug}
             amcName={holding.amcName}
+            schemeName={holding.fundName}
             size="md"
-            className="size-10 shrink-0 rounded-[var(--radius-control)]"
+            className="size-10 shrink-0"
           />
           <div className="min-w-0">
             <h1 className="text-body font-semibold leading-snug text-foreground">{holding.fundName}</h1>
@@ -510,8 +547,24 @@ function HoldingQuickActions({
   );
 }
 
-function HoldingTransactionsTable({ transactions }: { transactions: PortfolioHoldingTransaction[] }) {
+function HoldingTransactionsTable({
+  transactions,
+  onOrderClick,
+}: {
+  transactions: PortfolioHoldingTransaction[];
+  onOrderClick: (orderId: string) => void;
+}) {
   const portfolioCopy = copy.dashboard.portfolio;
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [transactions]);
+
+  const pagination = useMemo(
+    () => paginateItems(transactions, page, HOLDING_TXN_PAGE_SIZE),
+    [page, transactions],
+  );
 
   if (transactions.length === 0) {
     return (
@@ -524,11 +577,12 @@ function HoldingTransactionsTable({ transactions }: { transactions: PortfolioHol
   }
 
   const TABLE_LAYOUT_CLASS = "w-full table-fixed border-collapse border-spacing-0";
-  const COL_DATE = "w-[22%]";
-  const COL_TYPE = "w-[18%]";
-  const COL_UNITS = "w-[18%]";
-  const COL_NAV = "w-[18%]";
-  const COL_VALUE = "w-[24%]";
+  const COL_DATE = "w-[16%]";
+  const COL_TYPE = "w-[14%]";
+  const COL_UNITS = "w-[14%]";
+  const COL_NAV = "w-[14%]";
+  const COL_VALUE = "w-[16%]";
+  const COL_STATUS = "w-[26%]";
   const HEADER_ROW_CLASS =
     "sticky top-0 z-10 !h-auto !bg-transparent [&>tr>th]:after:!hidden [&>tr]:border-b [&>tr]:border-border";
   const HEADER_CELL_CLASS = "px-4 py-3.5 md:px-5";
@@ -559,7 +613,7 @@ function HoldingTransactionsTable({ transactions }: { transactions: PortfolioHol
       <TableCard.Root
         size="sm"
         className={cn(
-          ZYND_3XL_RADIUS_CLASS,
+          ZYND_CARD_RADIUS_CLASS,
           "overflow-hidden border-border/60 shadow-zynd-low",
         )}
       >
@@ -619,37 +673,90 @@ function HoldingTransactionsTable({ transactions }: { transactions: PortfolioHol
               >
                 {portfolioCopy.holdingTxnValue}
               </Table.Head>
+              <Table.Head
+                id="status"
+                className={cn(
+                  COL_STATUS,
+                  HEADER_CELL_CLASS,
+                  HEADER_SURFACE_CLASS,
+                  HEADER_LABEL_CLASS,
+                )}
+              >
+                {portfolioCopy.holdingTxnStatus}
+              </Table.Head>
             </Table.Header>
 
-            <Table.Body className="[&>tr:first-child>td]:border-t-0" items={transactions}>
-              {(txn) => (
-                <Table.Row id={txn.id}>
+            <Table.Body className="[&>tr:first-child>td]:border-t-0" items={pagination.pageItems}>
+              {(txn) => {
+                const displayType = resolveHoldingTxnDisplayType(txn);
+                const isOutflow = displayType === "redeemed" || displayType === "switch";
+                const journeyOrderId = resolveHoldingTxnOrderId(txn);
+                const clickable = Boolean(journeyOrderId);
+                return (
+                <Table.Row
+                  id={txn.id}
+                  className={cn(
+                    clickable &&
+                      cn(
+                        "cursor-pointer",
+                        mfOrderRowHoverClass(
+                          txn.status ?? "SUCCEEDED",
+                          null,
+                          txn.type === "invested" || txn.type === "dividend",
+                          holdingTxnOrderType(txn),
+                        ),
+                      ),
+                  )}
+                  onAction={clickable ? () => onOrderClick(journeyOrderId!) : undefined}
+                >
                   <Table.Cell className={cn(COL_DATE, BODY_CELL_CLASS)}>
                     {formatTxnDate(txn.date)}
                   </Table.Cell>
                   <Table.Cell className={cn(COL_TYPE, BODY_CELL_CLASS)}>
-                    {formatTxnType(txn.type)}
+                    {formatTxnType(txn)}
                   </Table.Cell>
                   <Table.Cell className={cn(COL_UNITS, BODY_CELL_CLASS, "text-right tabular-nums")}>
-                    {txn.units > 0 ? txn.units.toFixed(3) : "—"}
+                    {txn.units > 0 ? txn.units.toFixed(3) : <HoldingTxnPlaceholder />}
                   </Table.Cell>
                   <Table.Cell className={cn(COL_NAV, BODY_CELL_CLASS, "text-right tabular-nums")}>
-                    {txn.nav > 0 ? txn.nav.toFixed(2) : "—"}
+                    {txn.nav > 0 ? `₹${txn.nav.toFixed(2)}` : <HoldingTxnPlaceholder />}
                   </Table.Cell>
                   <Table.Cell
                     className={cn(
                       COL_VALUE,
                       BODY_CELL_CLASS,
-                      "text-right font-medium tabular-nums text-success",
+                      "text-right font-medium tabular-nums",
+                      isOutflow ? "text-destructive" : "text-success",
                     )}
                   >
-                    +{formatInr(txn.valueInr)}
+                    {isOutflow ? "−" : "+"}
+                    {formatInr(txn.valueInr)}
+                  </Table.Cell>
+                  <Table.Cell className={cn(COL_STATUS, BODY_CELL_CLASS, "min-w-[6.5rem]")}>
+                    {txn.status ? (
+                      <MfOrderStatusBadge
+                        status={txn.status}
+                        orderType={holdingTxnOrderType(txn)}
+                        paymentCompleted={txn.type === "invested" || txn.type === "dividend"}
+                        className="max-w-none"
+                      />
+                    ) : (
+                      <HoldingTxnPlaceholder />
+                    )}
                   </Table.Cell>
                 </Table.Row>
-              )}
+              );
+              }}
             </Table.Body>
           </Table>
         </div>
+        {pagination.showPagination ? (
+          <PaginationPageMinimalCenter
+            page={pagination.page}
+            total={pagination.totalPages}
+            onPageChange={setPage}
+          />
+        ) : null}
       </TableCard.Root>
     </div>
   );
@@ -701,6 +808,14 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
   const [pendingRedemption, setPendingRedemption] = useState<MfRedemptionOrder | null>(null);
   const [actionConsentOpen, setActionConsentOpen] = useState(false);
   const [actionConsentTarget, setActionConsentTarget] = useState<ActionConsentTarget | null>(null);
+  const [txnJourneyOpen, setTxnJourneyOpen] = useState(false);
+  const [txnJourneyOrderId, setTxnJourneyOrderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (txnJourneyOpen) return;
+    const timer = window.setTimeout(() => setTxnJourneyOrderId(null), 320);
+    return () => window.clearTimeout(timer);
+  }, [txnJourneyOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -735,6 +850,25 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
     await invalidateInvestAndPortfolioQueries(queryClient);
   }
 
+  function abandonInitiatedRedemption(order: MfRedemptionOrder) {
+    if (order.redemption_confirmed || order.platform_consent_accepted) return;
+    void cancelMfRedemption(order.order_id)
+      .then(() => invalidateInvestAndPortfolioQueries(queryClient))
+      .catch(() => undefined);
+  }
+
+  function abandonInitiatedAction(target: ActionConsentTarget) {
+    if (target.kind === "switch") {
+      void cancelMfSwitch(target.id)
+        .then(() => invalidateInvestAndPortfolioQueries(queryClient))
+        .catch(() => undefined);
+      return;
+    }
+    void cancelMfSystematicPlan(target.kind, target.id)
+      .then(() => invalidateInvestAndPortfolioQueries(queryClient))
+      .catch(() => undefined);
+  }
+
   if (showSkeleton) {
     return <PortfolioHoldingDetailSkeleton />;
   }
@@ -761,7 +895,7 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
   const canInvest = Boolean(user?.fund_movement_eligible && investConfig?.orders_enabled);
   const sipEnabled = Boolean(investConfig?.sip_enabled) && activeHolding.sipAllowed;
   const pendingAction = activeHolding.pendingAction;
-  const actionsLocked = pendingAction != null;
+  const actionsLocked = holdingPendingActionBlocksActions(pendingAction);
   const pendingLockCopy =
     pendingAction?.kind === "redeem"
       ? {
@@ -824,7 +958,13 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
             onStp={() => setPaymentMode("stp")}
             onSwp={() => setPaymentMode("swp")}
           />
-          <HoldingTransactionsTable transactions={activeHolding.transactions} />
+          <HoldingTransactionsTable
+            transactions={activeHolding.transactions}
+            onOrderClick={(orderId) => {
+              setTxnJourneyOrderId(orderId);
+              setTxnJourneyOpen(true);
+            }}
+          />
         </div>
 
         <aside className={cn(MF_INVEST_SIDEBAR_WIDTH_CLASS, MF_INVEST_SIDEBAR_STICKY_CLASS, "hidden lg:block")}>
@@ -835,7 +975,11 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
       <PortfolioRedeemConsentDialog
         open={consentOpen}
         order={pendingRedemption}
-        onOpenChange={setConsentOpen}
+        onOpenChange={(open) => {
+          setConsentOpen(open);
+          if (!open) setPendingRedemption(null);
+        }}
+        onAbandon={abandonInitiatedRedemption}
         onConfirmed={() => {
           void invalidateInvestAndPortfolioQueries(queryClient);
         }}
@@ -843,10 +987,19 @@ function PortfolioHoldingDetailPageContent({ holdingId }: { holdingId: string })
       <PortfolioActionConsentDialog
         open={actionConsentOpen}
         target={actionConsentTarget}
-        onOpenChange={setActionConsentOpen}
+        onOpenChange={(open) => {
+          setActionConsentOpen(open);
+          if (!open) setActionConsentTarget(null);
+        }}
+        onAbandon={abandonInitiatedAction}
         onConfirmed={() => {
           void invalidateInvestAndPortfolioQueries(queryClient);
         }}
+      />
+      <MfOrderJourneyDialog
+        open={txnJourneyOpen}
+        orderId={txnJourneyOrderId}
+        onOpenChange={setTxnJourneyOpen}
       />
     </DashboardContentFade>
   );

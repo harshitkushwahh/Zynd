@@ -2,7 +2,20 @@ import type { MfOrder } from "@/features/invest/api/invest-api";
 import { getUpcomingHoldingOrders } from "@/features/invest/lib/mf-transaction-filters";
 import { isFundUuid, slugifyFundName } from "@/features/invest/lib/mf-fund-url";
 
-export type PortfolioHoldingTransactionType = "invested" | "redeemed" | "dividend";
+export type PortfolioHoldingTransactionType = "invested" | "redeemed" | "switch" | "dividend";
+
+export function resolveHoldingTxnDisplayType(
+  txn: Pick<PortfolioHoldingTransaction, "type" | "orderType">,
+): PortfolioHoldingTransactionType {
+  const orderType = txn.orderType?.trim().toUpperCase();
+  if (orderType === "SWITCH") return "switch";
+  if (orderType === "REDEMPTION") return "redeemed";
+  if (orderType === "LUMPSUM" || orderType === "SIP") return "invested";
+  if (txn.type === "switch" || txn.type === "redeemed" || txn.type === "invested" || txn.type === "dividend") {
+    return txn.type;
+  }
+  return "invested";
+}
 
 export type PortfolioHoldingTransaction = {
   id: string;
@@ -11,6 +24,9 @@ export type PortfolioHoldingTransaction = {
   units: number;
   nav: number;
   valueInr: number;
+  orderId?: string | null;
+  status?: string | null;
+  orderType?: string | null;
 };
 
 export type PortfolioHoldingDetail = {
@@ -61,6 +77,15 @@ export type PortfolioHoldingDetail = {
 
 export function portfolioHoldingDetailHref(holdingId: string) {
   return `/dashboard/portfolio/${encodeURIComponent(holdingId)}`;
+}
+
+/** Pending switch/redeem that still blocks invest/redeem/switch actions on the holding. */
+export function holdingPendingActionBlocksActions(
+  pending: PortfolioHoldingDetail["pendingAction"],
+): boolean {
+  if (!pending) return false;
+  const status = pending.status.trim().toUpperCase();
+  return status !== "FAILED" && status !== "CANCELLED";
 }
 
 export const PORTFOLIO_UPCOMING_HOLDING_ROUTE_PREFIX = "upcoming:";

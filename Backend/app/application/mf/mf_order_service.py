@@ -406,6 +406,7 @@ def serialize_order(
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "submitted_at": order.submitted_at.isoformat() if order.submitted_at else None,
         "settled_at": order.settled_at.isoformat() if order.settled_at else None,
+        "platform_consent_accepted": bool(order_metadata.get("platform_consent_record_id")),
     }
     if metadata.get("investor_bank_account_id") or metadata.get("payout_bank_account_masked"):
         payload["payout_bank_account_id"] = metadata.get("investor_bank_account_id")
@@ -422,4 +423,6 @@ def serialize_order(
                 switch_in_product_name=switch_in_product_name,
             )
         )
+    elif order.order_type == MfOrderType.redemption:
+        payload["redemption_confirmed"] = bool(order_metadata.get("redemption_confirmed"))
     return payload

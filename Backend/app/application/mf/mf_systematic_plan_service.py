@@ -28,6 +28,7 @@ from app.application.mf.mf_redemption_service import (
     _mask_mobile,
 )
 from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
+from app.application.mf.mf_purchase_consent_gates import platform_consent_accepted_from_meta
 from app.application.mf.mf_switch_service import _is_switch_in_destination, _load_destination_fund
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
@@ -108,7 +109,9 @@ def serialize_systematic_plan(
 ) -> dict[str, Any]:
     meta = _plan_meta(plan)
     next_action = "complete"
-    if plan.status == MfSipPlanStatus.consent_pending:
+    if not plan.fp_plan_id and not meta.get("plan_confirmed") and plan.status not in _TERMINAL:
+        next_action = "confirm_consent"
+    elif plan.status == MfSipPlanStatus.consent_pending:
         next_action = "confirm_consent"
     elif plan.status in {MfSipPlanStatus.pending, MfSipPlanStatus.review}:
         next_action = "wait_review"
@@ -131,6 +134,7 @@ def serialize_systematic_plan(
         "next_action": next_action,
         "consent_otp_sent": bool(meta.get("consent_otp_sent")),
         "plan_confirmed": bool(meta.get("plan_confirmed")),
+        "platform_consent_accepted": platform_consent_accepted_from_meta(meta),
         "failure_code": plan.failure_code,
         "failure_reason": plan.failure_reason,
         "created_at": plan.created_at.isoformat() if plan.created_at else None,
@@ -194,40 +198,17 @@ async def create_swp_plan(
         folio_number=folio_number,
         status=MfSipPlanStatus.pending,
         idempotency_key=idempotency_key,
-        metadata_={"holding_id": holding_id, "isin": isin, "scheme": scheme, "user_ip": user_ip},
+        metadata_={
+            "holding_id": holding_id,
+            "isin": isin,
+            "scheme": scheme,
+            "user_ip": user_ip,
+            "fp_mfia_id": fp_mfia_id,
+            "plan_confirmed": False,
+            "transaction_initiated_at": datetime.now(timezone.utc).isoformat(),
+        },
     )
     session.add(plan)
-    await session.flush()
-
-    body = {
-        "mf_investment_account": fp_mfia_id,
-        "folio_number": folio_number,
-        "scheme": scheme,
-        "frequency": MONTHLY_FREQUENCY,
-        "installment_day": installment_day,
-        "amount": float(amount_inr),
-        "number_of_installments": number_of_installments,
-        "systematic": True,
-        "auto_generate_installments": True,
-        "source_ref_id": str(plan.id),
-        "initiated_by": "investor",
-        "initiated_via": "web",
-    }
-    user_ip_resolved = await resolve_fp_user_ip(user_ip)
-    if user_ip_resolved:
-        body["user_ip"] = user_ip_resolved
-    try:
-        result = await create_mf_redemption_plan(body=body)
-    except FpClientError as exc:
-        plan.status = MfSipPlanStatus.failed
-        plan.failure_code = exc.code or "fp_plan_submit_failed"
-        plan.failure_reason = exc.message
-        await session.flush()
-        raise MfOrderError(code=plan.failure_code, message=exc.message, status_code=exc.status_code) from exc
-
-    plan.fp_plan_id = result.get("fp_plan_id")
-    plan.fp_state = result.get("state")
-    plan.status = map_fp_plan_state(plan.fp_state)
     await session.flush()
     await _record_event(session, plan, from_status=None, to_status=plan.status.value)
     return plan
@@ -301,26 +282,86 @@ async def create_stp_plan(
             "switch_out_scheme": out_scheme,
             "switch_in_scheme": in_scheme,
             "user_ip": user_ip,
+            "fp_mfia_id": fp_mfia_id,
+            "plan_confirmed": False,
+            "transaction_initiated_at": datetime.now(timezone.utc).isoformat(),
         },
     )
     session.add(plan)
     await session.flush()
+    await _record_event(session, plan, from_status=None, to_status=plan.status.value)
+    return plan
 
+
+async def _create_fp_swp_plan_after_otp(session: AsyncSession, plan: MfSwpPlan) -> str:
+    meta = _plan_meta(plan)
+    fp_mfia_id = str(meta.get("fp_mfia_id") or "")
+    scheme = str(meta.get("scheme") or "")
+    if not fp_mfia_id or not scheme or not plan.folio_number:
+        raise MfOrderError(code="plan_not_ready", message="Plan is not ready to submit", status_code=409)
     body = {
         "mf_investment_account": fp_mfia_id,
-        "folio_number": folio_number,
-        "switch_out_scheme": out_scheme,
-        "switch_in_scheme": in_scheme,
+        "folio_number": plan.folio_number,
+        "scheme": scheme,
         "frequency": MONTHLY_FREQUENCY,
-        "installment_day": installment_day,
-        "amount": float(amount_inr),
-        "number_of_installments": number_of_installments,
+        "installment_day": plan.installment_day,
+        "amount": float(plan.amount_inr),
+        "number_of_installments": plan.number_of_installments,
         "systematic": True,
         "auto_generate_installments": True,
         "source_ref_id": str(plan.id),
         "initiated_by": "investor",
         "initiated_via": "web",
     }
+    user_ip = str(meta.get("user_ip") or "") or None
+    user_ip_resolved = await resolve_fp_user_ip(user_ip)
+    if user_ip_resolved:
+        body["user_ip"] = user_ip_resolved
+    try:
+        result = await create_mf_redemption_plan(body=body)
+    except FpClientError as exc:
+        plan.status = MfSipPlanStatus.failed
+        plan.failure_code = exc.code or "fp_plan_submit_failed"
+        plan.failure_reason = exc.message
+        await session.flush()
+        raise MfOrderError(code=plan.failure_code, message=exc.message, status_code=exc.status_code) from exc
+    fp_plan_id = result.get("fp_plan_id")
+    if not fp_plan_id:
+        plan.status = MfSipPlanStatus.failed
+        plan.failure_code = "fp_plan_submit_failed"
+        plan.failure_reason = "FinPrim did not return a plan id"
+        await session.flush()
+        raise MfOrderError(code="fp_plan_submit_failed", message="FinPrim did not return a plan id", status_code=502)
+    plan.fp_plan_id = fp_plan_id
+    plan.fp_state = result.get("state")
+    plan.status = map_fp_plan_state(plan.fp_state)
+    await session.flush()
+    return str(fp_plan_id)
+
+
+async def _create_fp_stp_plan_after_otp(session: AsyncSession, plan: MfStpPlan) -> str:
+    meta = _plan_meta(plan)
+    fp_mfia_id = str(meta.get("fp_mfia_id") or "")
+    out_scheme = str(meta.get("switch_out_scheme") or "")
+    in_scheme = str(meta.get("switch_in_scheme") or "")
+    if not fp_mfia_id or not out_scheme or not in_scheme or not plan.folio_number:
+        raise MfOrderError(code="plan_not_ready", message="Plan is not ready to submit", status_code=409)
+    body = {
+        "mf_investment_account": fp_mfia_id,
+        "folio_number": plan.folio_number,
+        "switch_out_scheme": out_scheme,
+        "switch_in_scheme": in_scheme,
+        "frequency": MONTHLY_FREQUENCY,
+        "installment_day": plan.installment_day,
+        "amount": float(plan.amount_inr),
+        "number_of_installments": plan.number_of_installments,
+        "systematic": True,
+        "auto_generate_installments": True,
+        "source_ref_id": str(plan.id),
+        "initiated_by": "investor",
+        "initiated_via": "web",
+    }
+    user_ip = str(meta.get("user_ip") or "") or None
     user_ip_resolved = await resolve_fp_user_ip(user_ip)
     if user_ip_resolved:
         body["user_ip"] = user_ip_resolved
@@ -332,13 +373,18 @@ async def create_stp_plan(
         plan.failure_reason = exc.message
         await session.flush()
         raise MfOrderError(code=plan.failure_code, message=exc.message, status_code=exc.status_code) from exc
-
-    plan.fp_plan_id = result.get("fp_plan_id")
+    fp_plan_id = result.get("fp_plan_id")
+    if not fp_plan_id:
+        plan.status = MfSipPlanStatus.failed
+        plan.failure_code = "fp_plan_submit_failed"
+        plan.failure_reason = "FinPrim did not return a plan id"
+        await session.flush()
+        raise MfOrderError(code="fp_plan_submit_failed", message="FinPrim did not return a plan id", status_code=502)
+    plan.fp_plan_id = fp_plan_id
     plan.fp_state = result.get("state")
     plan.status = map_fp_plan_state(plan.fp_state)
     await session.flush()
-    await _record_event(session, plan, from_status=None, to_status=plan.status.value)
-    return plan
+    return str(fp_plan_id)
 
 
 async def get_swp_plan(session: AsyncSession, *, user_id: uuid.UUID, plan_id: uuid.UUID) -> MfSwpPlan | None:
@@ -446,8 +492,14 @@ async def confirm_systematic_plan(
         extra_metadata={"plan_kind": plan_kind, "amount_inr": float(plan.amount_inr)},
     )
     meta = merge_platform_consent_metadata(meta, consent_record_id=consent_record_id)
+    plan.metadata_ = meta
+    await session.flush()
     if not plan.fp_plan_id:
-        raise MfOrderError(code="plan_not_ready", message="Plan is not ready for confirmation", status_code=409)
+        if isinstance(plan, MfSwpPlan):
+            await _create_fp_swp_plan_after_otp(session, plan)
+        else:
+            await _create_fp_stp_plan_after_otp(session, plan)
+        meta = _plan_meta(plan)
     body = {
         "id": plan.fp_plan_id,
         "state": "confirmed",
@@ -473,6 +525,22 @@ async def confirm_systematic_plan(
     await session.flush()
     await _record_event(session, plan, from_status=previous, to_status=plan.status.value, source="USER")
     return plan
+
+
+async def cancel_initiated_systematic_plan(
+    session: AsyncSession,
+    plan: MfSwpPlan | MfStpPlan,
+) -> MfSwpPlan | MfStpPlan:
+    if plan.status in _TERMINAL:
+        return plan
+    meta = _plan_meta(plan)
+    if platform_consent_accepted_from_meta(meta) or plan.fp_plan_id:
+        raise MfOrderError(
+            code="plan_not_cancellable",
+            message="This plan can no longer be cancelled from the app",
+            status_code=409,
+        )
+    return await cancel_systematic_plan(session, plan)
 
 
 async def cancel_systematic_plan(session: AsyncSession, plan: MfSwpPlan | MfStpPlan) -> MfSwpPlan | MfStpPlan:

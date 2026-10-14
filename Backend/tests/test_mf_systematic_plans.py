@@ -135,6 +135,29 @@ def _holding_patch(mfia):
 
 
 @pytest.mark.asyncio
+async def test_create_swp_does_not_call_finprim(db_session) -> None:
+    user, mfia, _in_product, _other = await _seed_plans(db_session)
+    with (
+        _holding_patch(mfia),
+        patch(
+            "app.application.mf.mf_systematic_plan_service.create_mf_redemption_plan",
+            new=AsyncMock(),
+        ) as create_fp,
+    ):
+        plan = await create_swp_plan(
+            db_session,
+            user_id=user.id,
+            holding_id="61576584::INF109K01RT3",
+            idempotency_key=str(uuid4()),
+            amount_inr=Decimal("1000"),
+            installment_day=5,
+            number_of_installments=12,
+        )
+    create_fp.assert_not_called()
+    assert plan.fp_plan_id is None
+
+
+@pytest.mark.asyncio
 async def test_create_swp_confirm_cancel_monthly(db_session) -> None:
     user, mfia, _in_product, _other = await _seed_plans(db_session)
     with _holding_patch(mfia):
@@ -149,7 +172,7 @@ async def test_create_swp_confirm_cancel_monthly(db_session) -> None:
         )
     assert plan.frequency == "monthly"
     assert plan.folio_number == "61576584"
-    assert plan.fp_plan_id == "stub-mfrp-id"
+    assert plan.fp_plan_id is None
 
     plan.metadata_ = {
         **(plan.metadata_ or {}),
@@ -158,11 +181,19 @@ async def test_create_swp_confirm_cancel_monthly(db_session) -> None:
         "consent_mobile": "9876543210",
     }
     await db_session.flush()
-    with patch(
-        "app.application.mf.mf_transaction_consent_service.verify_mf_transaction_consent_otp",
-        new=AsyncMock(return_value=uuid4()),
+    with (
+        patch(
+            "app.application.mf.mf_transaction_consent_service.verify_mf_transaction_consent_otp",
+            new=AsyncMock(return_value=uuid4()),
+        ),
+        patch(
+            "app.application.mf.mf_systematic_plan_service.create_mf_redemption_plan",
+            new=AsyncMock(return_value={"fp_plan_id": "stub-mfrp-id", "state": "pending"}),
+        ) as create_fp,
     ):
         confirmed = await confirm_systematic_plan(db_session, plan, otp="123456")
+    create_fp.assert_awaited_once()
+    assert confirmed.fp_plan_id == "stub-mfrp-id"
     assert confirmed.metadata_["plan_confirmed"] is True
     cancelled = await cancel_systematic_plan(db_session, confirmed)
     assert cancelled.status == MfSipPlanStatus.cancelled
@@ -232,7 +263,7 @@ async def test_create_stp_confirm_cancel(db_session) -> None:
         )
     assert plan.frequency == "monthly"
     assert plan.folio_number == "61576584"
-    assert plan.fp_plan_id == "stub-mfsp-id"
+    assert plan.fp_plan_id is None
     plan.metadata_ = {
         **(plan.metadata_ or {}),
         "consent_otp_sent": True,
@@ -240,11 +271,19 @@ async def test_create_stp_confirm_cancel(db_session) -> None:
         "consent_mobile": "9876543210",
     }
     await db_session.flush()
-    with patch(
-        "app.application.mf.mf_transaction_consent_service.verify_mf_transaction_consent_otp",
-        new=AsyncMock(return_value=uuid4()),
+    with (
+        patch(
+            "app.application.mf.mf_transaction_consent_service.verify_mf_transaction_consent_otp",
+            new=AsyncMock(return_value=uuid4()),
+        ),
+        patch(
+            "app.application.mf.mf_systematic_plan_service.create_mf_switch_plan",
+            new=AsyncMock(return_value={"fp_plan_id": "stub-mfsp-id", "state": "pending"}),
+        ) as create_fp,
     ):
         confirmed = await confirm_systematic_plan(db_session, plan, otp="123456")
+    create_fp.assert_awaited_once()
+    assert confirmed.fp_plan_id == "stub-mfsp-id"
     assert confirmed.metadata_["plan_confirmed"] is True
     cancelled = await cancel_systematic_plan(db_session, confirmed)
     assert cancelled.status == MfSipPlanStatus.cancelled

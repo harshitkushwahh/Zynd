@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { MfFamilyGoalLinkPicker } from "@/features/invest/components/mf-family-goal-link-picker";
 import { MfFolioNominationInfoButton } from "@/features/invest/components/mf-folio-nomination-info";
 import { FundEligibilityBanner } from "@/features/account/mfa/components/fund-eligibility-banner";
 import { PageTitle } from "@/components/ui/page-title";
@@ -342,6 +343,8 @@ function CartCheckoutPanel({
   onAddAccount,
   canAddAccount,
   isEmpty = false,
+  selectedFamilyGoalId,
+  onSelectFamilyGoalId,
   className,
 }: {
   tab: CartTab;
@@ -362,6 +365,8 @@ function CartCheckoutPanel({
   onAddAccount?: () => void;
   canAddAccount?: boolean;
   isEmpty?: boolean;
+  selectedFamilyGoalId: string | null;
+  onSelectFamilyGoalId: (goalId: string | null) => void;
   className?: string;
 }) {
   const checkoutDisabled = isEmpty || checkingOut || banksLoading || !hasPaymentReadyAccount;
@@ -468,6 +473,14 @@ function CartCheckoutPanel({
           </div>
         ) : null}
 
+        {!isEmpty ? (
+          <MfFamilyGoalLinkPicker
+            selectedGoalId={selectedFamilyGoalId}
+            onSelect={onSelectFamilyGoalId}
+            disabled={checkoutDisabled}
+          />
+        ) : null}
+
         <div className="grid [&>*]:col-start-1 [&>*]:row-start-1">
           <div
             className={cn(
@@ -535,6 +548,7 @@ export function MfCartView() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
   const [mandateType, setMandateType] = useState<MfMandateType>("upi");
+  const [selectedFamilyGoalId, setSelectedFamilyGoalId] = useState<string | null>(null);
   const {
     accounts,
     allAccounts,
@@ -654,6 +668,7 @@ export function MfCartView() {
           idempotency_key: crypto.randomUUID(),
           bank_account_id: selectedBankAccountId,
           payment_method: paymentMethod,
+          family_goal_id: selectedFamilyGoalId ?? undefined,
         });
         openCartCheckoutPayment(checkout.checkout_id);
         return;
@@ -663,6 +678,7 @@ export function MfCartView() {
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
         mandate_type: mandateType,
+        family_goal_id: selectedFamilyGoalId ?? undefined,
       });
       const firstPlan = result.plans[0];
       if (!firstPlan) {
@@ -809,6 +825,8 @@ export function MfCartView() {
             onMandateTypeChange={setMandateType}
             {...bankPickerProps}
             isEmpty={lumpsumCount === 0}
+            selectedFamilyGoalId={selectedFamilyGoalId}
+            onSelectFamilyGoalId={setSelectedFamilyGoalId}
             className={cn(
               "transition-opacity duration-200 ease-out motion-reduce:transition-none",
               tab === "lumpsum" ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
@@ -832,6 +850,8 @@ export function MfCartView() {
             onMandateTypeChange={setMandateType}
             {...bankPickerProps}
             isEmpty={(tab === "daily" ? dailyCount : monthlyCount) === 0}
+            selectedFamilyGoalId={selectedFamilyGoalId}
+            onSelectFamilyGoalId={setSelectedFamilyGoalId}
             className={cn(
               "transition-opacity duration-200 ease-out motion-reduce:transition-none",
               isSipCartTab(tab) ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",

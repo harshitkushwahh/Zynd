@@ -78,6 +78,24 @@ def test_multiple_checks() -> None:
     assert _units_matches_multiple(10.001, 0.001) is True
 
 
+def test_resumable_redemption_without_fp_id() -> None:
+    from types import SimpleNamespace
+
+    holding_id = "599399301625::INF789F1AYM2"
+    order = SimpleNamespace(
+        order_type=MfOrderType.redemption,
+        status=MfOrderStatus.pending,
+        fp_state=None,
+        metadata_={
+            "holding_id": holding_id,
+            "folio_number": "599399301625",
+            "isin": "INF789F1AYM2",
+            "redemption_confirmed": False,
+        },
+    )
+    assert _is_resumable_redemption_order(order, holding_id=holding_id, fp_redemption_id=None) is True
+
+
 def test_resumable_redemption_matches_unconfirmed_holding() -> None:
     from types import SimpleNamespace
 

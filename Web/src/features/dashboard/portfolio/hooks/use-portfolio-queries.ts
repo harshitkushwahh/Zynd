@@ -103,7 +103,13 @@ export function usePortfolioHoldingDetailQuery(holdingId: string) {
     enabled: Boolean(holdingId),
     staleTime: PORTFOLIO_QUERY_STALE_MS,
     placeholderData: keepPreviousQueryData,
-    refetchInterval: (current) => (current.state.data?.holding?.pending_action ? 8_000 : false),
+    refetchInterval: (current) => {
+      const pending = current.state.data?.holding?.pending_action;
+      if (!pending) return false;
+      const status = pending.status?.trim().toUpperCase() ?? "";
+      if (status === "FAILED" || status === "CANCELLED") return false;
+      return 8_000;
+    },
   });
 
   const holding = query.data?.holding ? mapPortfolioHoldingDetail(query.data.holding) : null;
