@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
+function resolveBackendOrigin(): string {
+  const raw = process.env.BACKEND_URL?.trim() || "http://localhost:8000";
+  let origin = raw.replace(/\/+$/, "");
+  if (origin.endsWith("/api/v1")) {
+    origin = origin.slice(0, -"/api/v1".length);
+  }
+  return origin;
+}
 
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join("/");
-  const targetUrl = `${BACKEND_URL}/api/v1/${path}${request.nextUrl.search}`;
+  const targetUrl = `${resolveBackendOrigin()}/api/v1/${path}${request.nextUrl.search}`;
 
   const headers = new Headers(request.headers);
   headers.delete("host");
@@ -20,7 +27,24 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
     init.body = await request.arrayBuffer();
   }
 
-  const backendResponse = await fetch(targetUrl, init);
+  let backendResponse: Response;
+  try {
+    backendResponse = await fetch(targetUrl, init);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Backend request failed";
+    console.error("[support-api-proxy]", targetUrl, message);
+    return NextResponse.json(
+      {
+        detail: {
+          code: "backend_unreachable",
+          message:
+            "Support API proxy could not reach the backend. Set BACKEND_URL on the server (e.g. https://api.zynd.shop).",
+        },
+      },
+      { status: 502 },
+    );
+  }
   const responseHeaders = new Headers(backendResponse.headers);
   responseHeaders.delete("content-encoding");
   responseHeaders.delete("content-length");
