@@ -19,8 +19,32 @@ function maskPhone(phone: string): string {
   return `${phone.slice(0, 3)}${"•".repeat(Math.max(4, digits.length - 5))}${digits.slice(-4)}`;
 }
 
+const NOT_CAPTURED = "Not captured";
+
+function pickPersonalField(
+  personal: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): string {
+  if (!personal) return NOT_CAPTURED;
+  for (const key of keys) {
+    const raw = personal[key];
+    if (raw == null) continue;
+    const text = String(raw).trim();
+    if (text) return text;
+  }
+  return NOT_CAPTURED;
+}
+
+function formatPersonalDate(raw: string): string {
+  if (!raw || raw === NOT_CAPTURED) return NOT_CAPTURED;
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    return formatDistributorDate(raw);
+  }
+  return raw;
+}
+
 function formatAddressBlock(address: DistributorClientAddress | undefined): string {
-  if (!address) return "Not captured";
+  if (!address) return NOT_CAPTURED;
   return [
     [address.line1, address.line2].filter(Boolean).join(", "),
     [address.city, address.state, address.postalCode].filter(Boolean).join(", "),
@@ -89,10 +113,17 @@ function buildCorrespondenceSlides(
     pushSlide("correspondence-same-as-permanent", copy.correspondenceMatchesPermanent, false);
   }
 
-  if (slides.length === 0) {
+  if (slides.length === 0 && permanentText !== NOT_CAPTURED) {
     slides.push({
       id: "correspondence-fallback",
       fields: [{ label: copy.correspondence, value: copy.correspondenceMatchesPermanent }],
+    });
+  }
+
+  if (slides.length === 0) {
+    slides.push({
+      id: "correspondence-empty",
+      fields: [{ label: copy.correspondence, value: NOT_CAPTURED }],
     });
   }
 
@@ -101,6 +132,7 @@ function buildCorrespondenceSlides(
 
 export function buildSupportClientCapturedProfile(
   profile: DistributorClientProfile,
+  kycPersonal?: Record<string, unknown> | null,
 ): SupportClientCapturedProfile {
   const { investor, displayName, emailDisplay, contactPhone, personalInfo } = profile;
   const cardCopy = DISTRIBUTOR_CLIENT_COPY.capturedProfile.cards;
@@ -121,13 +153,9 @@ export function buildSupportClientCapturedProfile(
       ? personalInfo.bankAccounts.map((account) => buildBankSlide(profile, account))
       : [
           {
-            id: "bank-fallback",
-            verified: investor.complianceStatus === "Compliant",
-            fields: [
-              { label: cardCopy.bankAccount, value: "•••• 7890", mono: true },
-              { label: identityCopy.ifsc, value: "HDFC0001234", mono: true },
-              { label: cardCopy.bankName, value: "HDFC Bank" },
-            ],
+            id: "bank-empty",
+            verified: false,
+            fields: [{ label: cardCopy.bankAccount, value: NOT_CAPTURED }],
           },
         ];
 
@@ -141,35 +169,32 @@ export function buildSupportClientCapturedProfile(
   const signIn = {
     google: {
       connected: google.connected,
-      linkedEmailMasked: google.connected
-        ? google.emailMasked?.trim() || maskEmail("priya.sharma@gmail.com")
-        : null,
+      linkedEmailMasked: google.connected ? google.emailMasked?.trim() || NOT_CAPTURED : null,
     },
     apple: {
       connected: apple.connected,
-      linkedEmailMasked: apple.connected
-        ? apple.emailMasked?.trim() || maskEmail("priya@privaterelay.appleid.com")
-        : null,
+      linkedEmailMasked: apple.connected ? apple.emailMasked?.trim() || NOT_CAPTURED : null,
     },
   };
 
+  const dobRaw = pickPersonalField(kycPersonal, "date_of_birth", "dateOfBirth", "dob");
   const identity = {
     legalFullName: displayName,
-    dateOfBirth: "14 Aug 1992",
-    panMasked: investor.panMasked,
-    panCategory: "Individual",
+    dateOfBirth: formatPersonalDate(dobRaw),
+    panMasked: investor.panMasked || NOT_CAPTURED,
+    panCategory: pickPersonalField(kycPersonal, "pan_category", "panCategory") || "Individual",
   };
 
   const personal = {
-    fathersName: "Ravi Nair",
-    gender: "Female",
-    incomeSlab: "₹10 lakhs – ₹25 lakhs",
-    occupation: "Salaried",
-    maritalStatus: "Married",
-    spouseName: "Arjun Nair",
-    pepExposed: "No",
-    placeOfBirth: "Kochi",
-    nationality: "India",
+    fathersName: pickPersonalField(kycPersonal, "fathersName", "father_name", "fatherName"),
+    gender: pickPersonalField(kycPersonal, "gender"),
+    incomeSlab: pickPersonalField(kycPersonal, "income_slab", "incomeSlab"),
+    occupation: pickPersonalField(kycPersonal, "occupation"),
+    maritalStatus: pickPersonalField(kycPersonal, "marital_status", "maritalStatus"),
+    spouseName: pickPersonalField(kycPersonal, "spouse_name", "spouseName"),
+    pepExposed: pickPersonalField(kycPersonal, "pep_exposed", "pepExposed"),
+    placeOfBirth: pickPersonalField(kycPersonal, "place_of_birth", "placeOfBirth"),
+    nationality: pickPersonalField(kycPersonal, "nationality", "country_of_origin", "countryOfOrigin"),
   };
 
   const detailRows: SupportClientCapturedProfile["detailRows"] = [
@@ -204,7 +229,7 @@ export function buildSupportClientCapturedProfile(
     { id: "income", label: "Income slab", value: personal.incomeSlab },
     { id: "occupation", label: "Occupation", value: personal.occupation },
     { id: "marital", label: "Marital status", value: personal.maritalStatus },
-    ...(personal.spouseName
+    ...(personal.spouseName !== NOT_CAPTURED
       ? [{ id: "spouse", label: "Spouse name", value: personal.spouseName }]
       : []),
     { id: "nationality", label: "Nationality", value: personal.nationality },

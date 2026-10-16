@@ -30,11 +30,14 @@ export function formatTicketTopic(topic: string): string {
 }
 
 const TICKET_TOPIC_LABELS: Record<string, string> = {
-  payment: "Redemption",
+  payment: "Payment",
   kyc: "KYC",
   sip: "SIP",
   account: "Account",
   goals: "Goals",
+  family: "Family",
+  portfolio: "Portfolio",
+  referrals: "Referrals",
   other: "Other",
 };
 

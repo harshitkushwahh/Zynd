@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileBarChart, FolderOpen, Play, Search } from "lucide-react";
+import { AlertCircle, Download, FileBarChart, FolderOpen, Play, Search } from "lucide-react";
 import Image from "next/image";
 
 import { Table, TableCard } from "@/components/core/table";
@@ -27,6 +27,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 import { cn } from "@/lib/utils";
+import { ApiError } from "@/lib/api-client";
 import { toast } from "sonner";
 
 type ReportKind = InvestorReportKind | "cas";
@@ -89,6 +90,7 @@ function ReportTypeCard({
   body,
   imageSrc,
   locked,
+  runDisabled,
   generating,
   onRun,
 }: {
@@ -96,6 +98,7 @@ function ReportTypeCard({
   body: string;
   imageSrc?: string;
   locked?: boolean;
+  runDisabled?: boolean;
   generating?: boolean;
   onRun: () => void;
 }) {
@@ -124,7 +127,12 @@ function ReportTypeCard({
       )}
       <h2 className="mt-4 text-body font-semibold tracking-tight text-foreground">{title}</h2>
       <p className="mt-1.5 flex-1 text-caption leading-relaxed text-muted-foreground">{body}</p>
-      <Button type="button" className="mt-4 w-full gap-2" disabled={locked || generating} onClick={onRun}>
+      <Button
+        type="button"
+        className="mt-4 w-full gap-2"
+        disabled={locked || runDisabled || generating}
+        onClick={onRun}
+      >
         <Play className="size-3.5 fill-current" aria-hidden />
         {generating ? copy.reports.generatingLabel : copy.reports.runLabel}
       </Button>
@@ -163,7 +171,21 @@ export function ReportsPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.invest.reports() });
     },
-    onError: () => {
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        if (error.code === "kyc_required") {
+          toast.error(copy.reports.generateBlockedKyc);
+          return;
+        }
+        if (error.code === "no_holdings") {
+          toast.error(copy.reports.generateBlockedNoHoldings);
+          return;
+        }
+        if (error.message.trim()) {
+          toast.error(error.message);
+          return;
+        }
+      }
       toast.error(copy.reports.runFailed);
     },
     onSettled: () => {
@@ -172,6 +194,15 @@ export function ReportsPage() {
   });
 
   const generated = reportsQuery.data?.reports ?? [];
+  const eligibility = reportsQuery.data?.eligibility;
+  const canGenerateReports = eligibility?.can_generate ?? false;
+  const generateBlockedMessage =
+    eligibility?.message ??
+    (eligibility?.code === "kyc_required"
+      ? copy.reports.generateBlockedKyc
+      : eligibility?.code === "no_holdings"
+        ? copy.reports.generateBlockedNoHoldings
+        : null);
   const query = search.trim().toLowerCase();
   const visibleGenerated = query
     ? generated.filter((row) => {
@@ -195,6 +226,26 @@ export function ReportsPage() {
       <DashboardBreadcrumb items={[{ label: copy.reports.pageTitle }]} />
       <PageHeader icon={REPORTS_ROUTE.icon} title={copy.reports.pageTitle} />
       <div className="flex min-h-0 flex-col gap-6">
+        {!canGenerateReports && generateBlockedMessage ? (
+          <div
+            role="status"
+            className={cn(
+              ZYND_3XL_RADIUS_CLASS,
+              "flex gap-3 border border-border/80 bg-muted/15 px-4 py-3.5 dark:bg-muted/10",
+            )}
+          >
+            <div
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+              aria-hidden
+            >
+              <AlertCircle className="size-4" strokeWidth={2.1} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-compact font-semibold text-foreground">{copy.reports.generateBlockedTitle}</p>
+              <p className="mt-1 text-caption leading-relaxed text-muted-foreground">{generateBlockedMessage}</p>
+            </div>
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {REPORT_TYPES.map((item) => (
             <ReportTypeCard
@@ -203,9 +254,10 @@ export function ReportsPage() {
               body={item.body}
               imageSrc={item.imageSrc}
               locked={item.locked}
+              runDisabled={!canGenerateReports}
               generating={item.kind !== "cas" && runningKind === item.kind}
               onRun={() => {
-                if (item.kind === "cas") return;
+                if (item.kind === "cas" || !canGenerateReports) return;
                 generateMutation.mutate(item.kind);
               }}
             />

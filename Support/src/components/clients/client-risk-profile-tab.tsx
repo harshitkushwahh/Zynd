@@ -17,8 +17,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
+import { buildClientRiskAssessmentFromProfile } from "@/lib/client-risk-assessments";
 import { fetchDistributorClientRiskAssessments } from "@/lib/distributor-client-risk-api";
 import type { DistributorClientProfile, DistributorClientRiskAssessment } from "@/lib/distributor-types";
+import { supportUserPathRef } from "@/lib/support-users-api";
 
 type ClientRiskProfileTabProps = {
   profile: DistributorClientProfile;
@@ -42,7 +44,7 @@ export function ClientRiskProfileTab({ profile, clientReference }: ClientRiskPro
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void fetchDistributorClientRiskAssessments(clientReference)
+    void fetchDistributorClientRiskAssessments(supportUserPathRef(clientReference))
       .then((items) => {
         if (!cancelled) setAssessments(items);
       })
@@ -58,7 +60,9 @@ export function ClientRiskProfileTab({ profile, clientReference }: ClientRiskPro
     };
   }, [clientReference, profile.investor.id]);
 
-  const currentAssessment = resolveCurrentAssessment(assessments);
+  const profileSummaryAssessment = buildClientRiskAssessmentFromProfile(profile);
+  const currentAssessment =
+    resolveCurrentAssessment(assessments) ?? profileSummaryAssessment;
   const pastAssessments = currentAssessment
     ? assessments.filter((row) => row.assessmentId !== currentAssessment.assessmentId)
     : assessments;

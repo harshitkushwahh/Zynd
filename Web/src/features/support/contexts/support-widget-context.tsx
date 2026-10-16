@@ -5,6 +5,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -49,8 +50,11 @@ export function SupportWidgetProvider({ children }: { children: ReactNode }) {
   const [panelView, setPanelView] = useState<SupportPanelView>("help");
   const [helpTab, setHelpTab] = useState<SupportHelpTab>("home");
   const chat = useSupportChat();
+  const preferHelpHomeRef = useRef(false);
 
   const isHelpPage = pathname.startsWith(HELP_PAGE_HREF);
+  const isHelpRootPage =
+    pathname === HELP_PAGE_HREF || pathname === `${HELP_PAGE_HREF}/`;
 
   const resetHelp = useCallback(() => {
     setPanelView("help");
@@ -105,7 +109,26 @@ export function SupportWidgetProvider({ children }: { children: ReactNode }) {
   }, [resetHelp]);
 
   const openChat = useCallback(() => setPanelView("chat"), []);
-  const backToHelp = useCallback(() => setPanelView("help"), []);
+  const backToHelp = useCallback(() => {
+    preferHelpHomeRef.current = true;
+    setPanelView("help");
+  }, []);
+
+  useEffect(() => {
+    if (!isHelpRootPage) {
+      preferHelpHomeRef.current = false;
+      return;
+    }
+    if (preferHelpHomeRef.current) return;
+    if (!chat.conversationReady) return;
+    if (chat.hasEstablishedThread) {
+      setPanelView("chat");
+    }
+  }, [
+    chat.conversationReady,
+    chat.hasEstablishedThread,
+    isHelpRootPage,
+  ]);
 
   const value = useMemo(
     () => ({

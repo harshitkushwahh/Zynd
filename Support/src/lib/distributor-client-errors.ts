@@ -2,11 +2,8 @@ import { ApiError } from "@/lib/api-client";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 
 export function isClientNotFoundError(error: unknown) {
-  if (
-    error instanceof ApiError &&
-    (error.status === 404 || error.code === "client_not_found")
-  ) {
-    return true;
+  if (error instanceof ApiError) {
+    return error.code === "client_not_found";
   }
   return (
     error instanceof Error &&
@@ -14,8 +11,16 @@ export function isClientNotFoundError(error: unknown) {
   );
 }
 
+/** FastAPI plain `Not Found` when the support console user API is not on the running backend. */
+export function isSupportUserDirectoryUnavailable(error: unknown) {
+  return error instanceof ApiError && error.status === 404 && error.code === "api_error";
+}
+
 export function getClientDetailErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
+    if (isSupportUserDirectoryUnavailable(error)) {
+      return "User profile API is unavailable. Restart Backend (Backend/run.sh) and reload this page.";
+    }
     if (isClientNotFoundError(error)) {
       return DISTRIBUTOR_CLIENT_COPY.clientNotFound;
     }

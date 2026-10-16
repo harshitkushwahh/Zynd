@@ -1,11 +1,13 @@
 import type { SupportTicket } from "@/lib/support-types";
-import { SUPPORT_OVERVIEW_AGENT_ASSIGNEE } from "@/lib/support-overview-analytics-data";
 
-export function filterTicketsForAgentQueue(tickets: SupportTicket[]): SupportTicket[] {
-  return tickets.filter(
-    (ticket) =>
-      ticket.assigneeId === SUPPORT_OVERVIEW_AGENT_ASSIGNEE || ticket.assigneeId === null,
-  );
+export function filterTicketsForAgentQueue(
+  tickets: SupportTicket[],
+  agentId?: string | null,
+): SupportTicket[] {
+  return tickets.filter((ticket) => {
+    if (ticket.handledBy === "bot") return false;
+    return ticket.assigneeId === null || (agentId != null && ticket.assigneeId === agentId);
+  });
 }
 
 export function summarizeAgentTicketQueue(tickets: SupportTicket[]) {

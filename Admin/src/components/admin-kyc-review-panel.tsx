@@ -48,6 +48,7 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   signature: "Signature",
   address_proof: "Address proof",
   nominee_id: "Nominee ID",
+  support_attachment: "Support ticket",
 };
 
 

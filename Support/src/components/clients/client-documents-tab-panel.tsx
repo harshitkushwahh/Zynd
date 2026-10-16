@@ -14,7 +14,6 @@ import { DistributorTableToolbar } from "@/components/dashboard/distributor-tabl
 import { StatusFilterSelect } from "@/components/dashboard/status-filter-select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
-  buildClientDocumentsForInvestor,
   documentFileLabel,
   documentIdentifierLabel,
   documentUploadedLabel,
@@ -28,7 +27,6 @@ import type {
   DistributorClientDocumentStatus,
   DistributorClientProfile,
 } from "@/lib/distributor-types";
-import { env } from "@/lib/env";
 import { formatDistributorDate } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 
@@ -57,20 +55,7 @@ type ClientDocumentsTabPanelProps = {
 };
 
 function resolveDocuments(profile: DistributorClientProfile): DistributorClientDocument[] {
-  let docs: DistributorClientDocument[];
-  if (env.useBackendClients && profile.clientDocuments.length > 0) {
-    docs = profile.clientDocuments;
-  } else if (profile.clientDocuments.length > 0) {
-    docs = profile.clientDocuments;
-  } else {
-    docs = buildClientDocumentsForInvestor(
-      profile.investor,
-      profile.kycSteps,
-      undefined,
-      profile.investor.complianceStatus === "Compliant",
-    );
-  }
-  return docs.filter((doc) => !HIDDEN_DOCUMENT_CATEGORIES.has(doc.category));
+  return profile.clientDocuments.filter((doc) => !HIDDEN_DOCUMENT_CATEGORIES.has(doc.category));
 }
 
 function statusLabel(

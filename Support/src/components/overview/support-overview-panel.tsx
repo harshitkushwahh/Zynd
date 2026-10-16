@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Layers3, Ticket } from "lucide-react";
 
 import { DistributorOverviewSection } from "@/components/overview/distributor-overview-section";
@@ -24,18 +24,34 @@ import {
   sortTicketsByRecentActivity,
   summarizeAgentTicketQueue,
 } from "@/lib/support-overview-ticket-stats";
-import { SUPPORT_DUMMY_TICKETS } from "@/lib/support-tickets-dummy-data";
+import { listSupportTickets } from "@/lib/support-tickets-api";
+import type { SupportTicket } from "@/lib/support-types";
 import { DISTRIBUTOR_DASHBOARD_HOME_SPACER_CLASS, DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { cn } from "@/lib/utils";
 
 const RECENT_TICKET_LIMIT = 6;
 
 export function SupportOverviewPanel() {
-  const { displayName } = useSupportAuth();
+  const { displayName, user } = useSupportAuth();
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listSupportTickets({ queue: "all" })
+      .then((rows) => {
+        if (!cancelled) setTickets(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setTickets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const agentTickets = useMemo(
-    () => filterTicketsForAgentQueue(SUPPORT_DUMMY_TICKETS),
-    [],
+    () => filterTicketsForAgentQueue(tickets, user?.id),
+    [tickets, user?.id],
   );
 
   const queueSummary = useMemo(() => summarizeAgentTicketQueue(agentTickets), [agentTickets]);

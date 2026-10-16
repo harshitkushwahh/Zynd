@@ -1000,8 +1000,15 @@ class InvestorReportResponse(BaseModel):
     downloadable: bool = False
 
 
+class InvestorReportEligibilityResponse(BaseModel):
+    can_generate: bool
+    code: Optional[str] = None
+    message: Optional[str] = None
+
+
 class InvestorReportListResponse(BaseModel):
     reports: list[InvestorReportResponse]
+    eligibility: InvestorReportEligibilityResponse
 
 
 class InvestorBankAccountFailure(BaseModel):

@@ -28,7 +28,11 @@ from app.application.mf.investor_report_mappers import (
 from app.application.mf.investor_report_pdf import InvestorReportDocument, generate_investor_report_pdf
 from app.application.mf.mf_investment_account_service import ensure_fp_mfia, ensure_mfia_old_id
 from app.application.mf.mf_order_service import get_or_create_mf_investment_account
-from app.application.mf.portfolio_holdings_service import parse_holdings_report, parse_investment_account_returns
+from app.application.mf.portfolio_holdings_service import (
+    get_user_portfolio_summary,
+    parse_holdings_report,
+    parse_investment_account_returns,
+)
 from app.core.config import Settings, get_settings
 from app.infrastructure.kyc.fp_clients import FpClientError
 from app.infrastructure.mf.fp_oms_client import (
@@ -44,7 +48,7 @@ from app.infrastructure.persistence.mf_transaction_models import (
     MfGeneratedReportKind,
     MfGeneratedReportStatus,
 )
-from app.infrastructure.persistence.models import KycJourneyState, User
+from app.infrastructure.persistence.models import KycJourneyState, KycOverallStatus, User, UserKycStatus
 from app.infrastructure.storage.documents.factory import get_document_storage
 
 logger = logging.getLogger(__name__)
@@ -117,6 +121,42 @@ async def list_investor_reports(db: AsyncSession, *, user_id: UUID) -> list[dict
         .order_by(MfGeneratedReport.generated_at.desc())
     )
     return [_serialize(row) for row in result.scalars().all()]
+
+
+async def investor_report_generation_eligibility(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> dict[str, Any]:
+    kyc = await db.get(UserKycStatus, user_id)
+    if kyc is None or kyc.overall_status != KycOverallStatus.completed:
+        return {
+            "can_generate": False,
+            "code": "kyc_required",
+            "message": "Complete KYC verification before generating reports.",
+        }
+
+    summary = await get_user_portfolio_summary(db, user_id=user_id)
+    holdings_count = int(summary.get("holdings_count") or 0)
+    if holdings_count <= 0:
+        return {
+            "can_generate": False,
+            "code": "no_holdings",
+            "message": "Invest and hold mutual fund units before generating reports.",
+        }
+
+    return {"can_generate": True, "code": None, "message": None}
+
+
+async def list_investor_reports_page(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+) -> dict[str, Any]:
+    return {
+        "reports": await list_investor_reports(db, user_id=user_id),
+        "eligibility": await investor_report_generation_eligibility(db, user_id=user_id),
+    }
 
 
 async def _resolve_mfia(
@@ -279,6 +319,14 @@ async def generate_investor_report(
 ) -> dict[str, Any]:
     if kind not in REPORT_TITLES:
         raise InvestorReportError("unsupported_report_kind", "This report type cannot be generated.")
+
+    eligibility = await investor_report_generation_eligibility(db, user_id=user.id)
+    if not eligibility["can_generate"]:
+        raise InvestorReportError(
+            str(eligibility["code"] or "not_eligible"),
+            str(eligibility["message"] or "You cannot generate this report yet."),
+            status_code=403,
+        )
 
     today = datetime.now(timezone.utc).date()
     period_from, period_to = current_indian_fy(today)

@@ -18,12 +18,19 @@ export function ClientSupportTicketsTabPanel({ clientId, className }: ClientSupp
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void listSupportTickets(clientId).then((rows) => {
-      if (!cancelled) {
-        setTickets(rows);
-        setLoading(false);
-      }
-    });
+    void listSupportTickets({ clientId })
+      .then((rows) => {
+        if (!cancelled) {
+          setTickets(rows);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTickets([]);
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };

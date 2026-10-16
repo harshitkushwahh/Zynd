@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, Download, Eye, FileText, UserRound } from "lucide-react";
 
 import { SupportTicketDetailField } from "@/components/tickets/support-ticket-detail-field";
-import { SupportTicketIdCopyBadge } from "@/components/tickets/support-ticket-id-copy-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -17,6 +16,7 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_LABEL_CAPS_TINY_CLASS } from "@/lib/distributor-layout";
 import { formatDistributorDateTime } from "@/lib/format";
+import { fetchSupportAttachmentBlob } from "@/lib/support-tickets-api";
 import {
   formatTicketChannel,
   formatTicketPriority,
@@ -28,8 +28,13 @@ import {
 import type { SupportTicket, SupportTicketAttachment } from "@/lib/support-types";
 import { cn } from "@/lib/utils";
 
-function downloadTicketAttachment(attachment: SupportTicketAttachment) {
-  const blob = new Blob([`Attachment: ${attachment.fileName}`], { type: "application/octet-stream" });
+async function downloadTicketAttachment(attachment: SupportTicketAttachment) {
+  let blob: Blob;
+  try {
+    blob = await fetchSupportAttachmentBlob(attachment.id);
+  } catch {
+    blob = new Blob([`Attachment: ${attachment.fileName}`], { type: "application/octet-stream" });
+  }
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -40,9 +45,35 @@ function downloadTicketAttachment(attachment: SupportTicketAttachment) {
 
 function TicketAttachmentRow({ attachment }: { attachment: SupportTicketAttachment }) {
   const [viewOpen, setViewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!viewOpen) return;
+    let revoked: string | null = null;
+    let cancelled = false;
+    void fetchSupportAttachmentBlob(attachment.id)
+      .then((blob) => {
+        if (!blob.type.startsWith("image/")) return;
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        revoked = url;
+        setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (revoked) URL.revokeObjectURL(revoked);
+      setPreviewUrl(null);
+    };
+  }, [attachment.id, viewOpen]);
 
   const onDownload = useCallback(() => {
-    downloadTicketAttachment(attachment);
+    void downloadTicketAttachment(attachment);
   }, [attachment]);
 
   return (
@@ -92,10 +123,14 @@ function TicketAttachmentRow({ attachment }: { attachment: SupportTicketAttachme
               </p>
             ) : null}
           </div>
-          <div className="flex items-center justify-center px-6 py-14">
-            <div className="flex size-16 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/15 text-muted-foreground">
-              <FileText className="size-8" strokeWidth={1.75} aria-hidden />
-            </div>
+          <div className="flex items-center justify-center px-6 py-8">
+            {previewUrl ? (
+              <img src={previewUrl} alt={attachment.fileName} className="max-h-80 w-full rounded-xl object-contain" />
+            ) : (
+              <div className="flex size-16 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/15 text-muted-foreground">
+                <FileText className="size-8" strokeWidth={1.75} aria-hidden />
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -121,8 +156,8 @@ export function SupportTicketInfoPanel({
     <Card className={cn("flex h-full min-h-0 flex-col overflow-hidden shadow-sm", className)}>
       <CardContent className="min-h-0 flex-1 overflow-y-auto p-0">
         <div className="border-b border-border/60 bg-muted/15 px-6 py-5">
-          <SupportTicketIdCopyBadge ticketId={ticket.id} />
-          <h2 className="mt-3 font-heading text-h3 font-semibold leading-snug text-foreground">
+          <p className="font-mono text-caption text-muted-foreground">{ticket.id}</p>
+          <h2 className="mt-2 font-heading text-h3 font-semibold leading-snug text-foreground">
             {ticket.subject}
           </h2>
           <div className="mt-3 flex flex-wrap items-center gap-2">

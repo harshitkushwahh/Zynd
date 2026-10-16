@@ -32,6 +32,7 @@ import {
   type SupportKycQueueStatus,
   type SupportKycReviewType,
 } from "@/lib/support-kyc-queue-dummy-data";
+import { supportUserDetailHref } from "@/lib/support-users-api";
 import { cn } from "@/lib/utils";
 
 const QUEUE_STATUS_OPTIONS: Array<{ value: SupportKycQueueStatus; label: string }> = [
@@ -60,7 +61,7 @@ function priorityVariant(priority: SupportKycQueueItem["priority"]) {
 }
 
 function supportUserKycHref(clientCode: string) {
-  return `/dashboard/users/${encodeURIComponent(clientCode)}?tab=kyc`;
+  return `${supportUserDetailHref(clientCode)}?tab=kyc`;
 }
 
 export function SupportKycVerificationsPanel() {

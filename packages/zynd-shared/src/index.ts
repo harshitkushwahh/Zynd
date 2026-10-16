@@ -14,6 +14,7 @@ export {
   configureApiClient,
   getAccessToken,
   getApiUrl,
+  getSupportWebSocketUrl,
   getBackendConnectionState,
   isAuthFailure,
   isBackendConnectionError,

@@ -54,6 +54,7 @@ _ALLOWED_MIME_BY_TYPE: dict[DocumentType, set[str]] = {
     DocumentType.signature: {"image/png", "image/jpeg", "image/webp"},
     DocumentType.address_proof: {"application/pdf", "image/png", "image/jpeg", "image/webp"},
     DocumentType.nominee_id: {"application/pdf", "image/png", "image/jpeg", "image/webp"},
+    DocumentType.support_attachment: {"image/png", "image/jpeg", "image/webp"},
 }
 
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")

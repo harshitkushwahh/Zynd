@@ -5,11 +5,15 @@ import {
   CircleDot,
   Clock3,
   Megaphone,
+  MessageCircle,
   Sparkles,
+  Ticket,
   Zap,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
+import { copy } from "@/shared/config/copy";
 import {
   formatSupportCardDate,
 } from "@/features/support/lib/support-greeting";
@@ -36,6 +40,45 @@ function supportUpdateStatusVariant(tone: SupportUpdateTone = "update"): StatusB
   if (tone === "new") return "success";
   if (tone === "improvement") return "info";
   return "neutral";
+}
+
+export function SupportTicketsEmptyState({
+  onStartChat,
+  className,
+  compact,
+  title = copy.support.noRecentTickets,
+}: {
+  onStartChat: () => void;
+  className?: string;
+  /** Tighter layout for the floating Help Center sheet */
+  compact?: boolean;
+  title?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center rounded-[1.15rem] border border-border/70 bg-muted/25 px-4 text-center",
+        compact ? "py-8" : "py-12",
+        className,
+      )}
+    >
+      <div className="flex size-11 items-center justify-center rounded-2xl bg-background text-muted-foreground shadow-zynd-low ring-1 ring-border/60">
+        <Ticket className="size-5" strokeWidth={2.1} />
+      </div>
+      <p className="mt-4 text-compact font-semibold text-foreground">{title}</p>
+      <p className="mt-1.5 max-w-[16rem] text-caption leading-relaxed text-muted-foreground">
+        {copy.support.noRecentTicketsHint}
+      </p>
+      <Button
+        type="button"
+        className={cn("mt-5 gap-2 rounded-2xl shadow-zynd-low", compact ? "h-11 w-full" : "px-5")}
+        onClick={onStartChat}
+      >
+        <MessageCircle className="size-4" />
+        {copy.support.startChat}
+      </Button>
+    </div>
+  );
 }
 
 export function SupportTicketCard({

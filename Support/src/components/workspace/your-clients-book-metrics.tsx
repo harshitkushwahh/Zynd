@@ -9,9 +9,11 @@ import {
   getDistributorClientsListScopeLeadTile,
   type DistributorClientsListScope,
 } from "@/lib/distributor-clients-list-scope";
+import type { DistributorInvestor } from "@/lib/distributor-types";
 import {
   DUMMY_INVESTORS,
   filterDistributorBookInvestors,
+  filterSystemResidentInvestors,
 } from "@/lib/distributor-investor-utils";
 import { cn } from "@/lib/utils";
 
@@ -20,15 +22,20 @@ const tileClass =
 
 type YourClientsBookMetricsProps = {
   listScope?: DistributorClientsListScope;
+  /** When set, metrics reflect loaded API rows instead of demo data. */
+  investors?: readonly DistributorInvestor[];
   className?: string;
 };
 
 export function YourClientsBookMetrics({
   listScope = "your-book",
+  investors,
   className,
 }: YourClientsBookMetricsProps) {
-  const scoped = filterDistributorBookInvestors(DUMMY_INVESTORS);
-  const leadTile = getDistributorClientsListScopeLeadTile(listScope, DUMMY_INVESTORS);
+  const source = investors ?? DUMMY_INVESTORS;
+  const scoped =
+    listScope === "all" ? filterSystemResidentInvestors([...source]) : filterDistributorBookInvestors([...source]);
+  const leadTile = getDistributorClientsListScopeLeadTile(listScope, source);
   const onboardedCount = scoped.filter((i) => i.onboardingStatus === "Onboarded").length;
   const pendingOnboardingCount = scoped.length - onboardedCount;
   const investedCount = scoped.filter((i) => i.investmentStatus === "Invested").length;

@@ -29,6 +29,7 @@ import { formatAum, formatDistributorDate } from "@/lib/format";
 import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { orderStatusVariant } from "@/lib/status-meta";
 import { SUPPORT_DUMMY_ORDERS } from "@/lib/support-transactions-dummy-data";
+import { supportUserDetailHref } from "@/lib/support-users-api";
 import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
@@ -45,10 +46,6 @@ const ORDER_TYPE_OPTIONS: Array<{ value: OrderTypeFilter; label: string }> = [
   { value: "Redeem", label: "Redeem" },
   { value: "Switch", label: "Switch" },
 ];
-
-function supportUserDetailHref(clientCode: string) {
-  return `/dashboard/users/${encodeURIComponent(clientCode)}`;
-}
 
 export function SupportTransactionsPanel() {
   const router = useRouter();
@@ -225,26 +222,22 @@ export function SupportTransactionsPanel() {
           icon={ArrowLeftRight}
           label="Transactions"
           value={String(orders.length)}
-          hint="In queue sample"
         />
         <SupportPageMetricTile
           icon={Clock3}
           label="In progress"
           value={String(pendingCount)}
-          hint="Pending or processing"
         />
         <SupportPageMetricTile
           tileTone="success"
           icon={CheckCircle2}
           label="Completed"
           value={String(completedCount)}
-          hint={`${failedCount} failed`}
         />
         <SupportPageMetricTile
           icon={Wallet}
           label="Volume"
           value={formatAum(orderVolume)}
-          hint="Sample book"
           fitTileValue
         />
       </SupportPageMetricTilesGrid>

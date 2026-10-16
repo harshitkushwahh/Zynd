@@ -12,6 +12,7 @@ import type {
 } from "@/lib/support-types";
 import { buildSupportTicketSlaTab } from "@/lib/support-ticket-sla-tab-model";
 import { formatAum, formatDistributorDate, formatDistributorDateTime } from "@/lib/format";
+import { supportUserDetailHref } from "@/lib/support-users-api";
 
 function findInvestorForTicket(ticket: SupportTicket) {
   return SUPPORT_DUMMY_INVESTORS.find((row) => row.clientCode === ticket.userId);
@@ -78,6 +79,14 @@ function teamLabelForTopic(topic: SupportTicket["topic"]): string {
       return "Investments Support";
     case "account":
       return "Account Support";
+    case "family":
+      return "Family Support";
+    case "portfolio":
+      return "Portfolio Support";
+    case "referrals":
+      return "Referral Support";
+    case "goals":
+      return "Goals Support";
     default:
       return "General Support";
   }
@@ -94,7 +103,7 @@ function buildSidebarMeta(ticket: SupportTicket): SupportTicketSidebarMeta {
 }
 
 function buildDomainContext(ticket: SupportTicket): SupportTicketDomainContext | null {
-  const userHref = `/dashboard/users/${encodeURIComponent(ticket.userId)}`;
+  const userHref = supportUserDetailHref(ticket.userId);
   const userSuffix = ticket.userId.replace(/\D/g, "").slice(-3).padStart(3, "0");
 
   if (ticket.topic === "payment") {
@@ -185,7 +194,15 @@ function buildActivityLog(ticket: SupportTicket): SupportTicketActivityEntry[] {
   }
 
   for (const message of ticket.messages) {
-    if (message.role === "agent") {
+    if (message.role === "bot") {
+      entries.push({
+        id: `${ticket.id}-${message.id}-bot`,
+        summary: "Zynd Help Bot replied",
+        actor: message.senderName ?? "Zynd Help Bot",
+        createdAt: message.createdAt,
+      });
+    }
+    if (message.role === "agent" && message.visibility !== "internal") {
       entries.push({
         id: `${ticket.id}-${message.id}-reply`,
         summary: "Reply added",
@@ -216,14 +233,24 @@ function buildActivityLog(ticket: SupportTicket): SupportTicketActivityEntry[] {
   );
 }
 
-export function buildSupportTicketDetail(ticket: SupportTicket): SupportTicketDetail {
-  const recentTickets = SUPPORT_DUMMY_TICKETS.filter(
-    (row) => row.userId === ticket.userId && row.id !== ticket.id,
-  ).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+export function buildSupportTicketDetail(
+  ticket: SupportTicket,
+  live?: {
+    customer: SupportTicketCustomerSnapshot;
+    recentTickets: SupportTicket[];
+    domain: SupportTicketDomainContext | null;
+  },
+): SupportTicketDetail {
+  const recentTickets =
+    live?.recentTickets ??
+    SUPPORT_DUMMY_TICKETS.filter((row) => row.userId === ticket.userId && row.id !== ticket.id).sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
   const userSuffix = ticket.userId.replace(/\D/g, "").slice(-3).padStart(3, "0");
 
-  const userHref = `/dashboard/users/${encodeURIComponent(ticket.userId)}`;
-  const customer = buildCustomerSnapshot(ticket);
+  const userHref = supportUserDetailHref(ticket.userId);
+  const customer = live?.customer ?? buildCustomerSnapshot(ticket);
+  const domain = live ? live.domain : buildDomainContext(ticket);
 
   return {
     ticket,
@@ -251,16 +278,18 @@ export function buildSupportTicketDetail(ticket: SupportTicket): SupportTicketDe
         {
           key: "investment",
           title: "Investment account",
-          recordId: `INV-${userSuffix}`,
+          recordId: live ? ticket.userId : `INV-${userSuffix}`,
           statusLabel: customer.kycCompliant ? "Active" : "Restricted",
-          description: "MF holdings and folio summary for support lookup.",
+          description: live
+            ? "Portfolio and payment context for this customer."
+            : "MF holdings and folio summary for support lookup.",
           apiRoute: "GET /api/v1/support/users/{client_code}/portfolio",
           dataPoints: ["folio_ids", "total_aum", "holdings_count", "last_synced_at"],
         },
         {
           key: "kyc",
           title: "KYC application",
-          recordId: `KYC-APP-${userSuffix}`,
+          recordId: live ? ticket.userId : `KYC-APP-${userSuffix}`,
           statusLabel: customer.kycStatusLabel,
           description: "Latest KYC journey tied to this investor.",
           apiRoute: "GET /api/v1/support/users/{client_code}/kyc",
@@ -288,7 +317,7 @@ export function buildSupportTicketDetail(ticket: SupportTicket): SupportTicketDe
     sla: buildSlaSummary(ticket),
     slaTab: buildSupportTicketSlaTab(ticket),
     sidebarMeta: buildSidebarMeta(ticket),
-    domain: buildDomainContext(ticket),
+    domain,
     activityLog: buildActivityLog(ticket),
   };
 }

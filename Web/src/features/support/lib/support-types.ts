@@ -8,6 +8,9 @@ export type SupportMessage = {
   senderName?: string;
   imageUrl?: string;
   imageName?: string;
+  attachmentId?: string;
+  kind?: "text" | "resolution_prompt";
+  resolutionActive?: boolean;
 };
 
 export type SupportImageAttachment = {
@@ -29,6 +32,8 @@ export type SupportAgent = {
   initials: string;
   status: "online" | "away";
   statusLabel: string;
+  participant?: "bot" | "human";
+  showPresence?: boolean;
 };
 
 export type SupportViewMode = "closed" | "popover" | "fullscreen";

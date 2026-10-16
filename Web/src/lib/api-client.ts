@@ -8,6 +8,7 @@ export {
   apiRequest,
   getAccessToken,
   getApiUrl,
+  getSupportWebSocketUrl,
   getBackendConnectionState,
   isAuthFailure,
   isBackendConnectionError,

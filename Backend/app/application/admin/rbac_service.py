@@ -192,12 +192,13 @@ ROLES: dict[str, dict[str, object]] = {
     },
     SUPPORT_AGENT_ROLE_KEY: {
         "name": "Support Agent",
-        "description": "Zynd Support console access for customer assistance.",
+        "description": "Zynd Support console access to view customers and reply on tickets.",
         "permissions": [
             "users.read",
             "audit.read",
             "documents.read",
             "support.tickets.read",
+            "support.tickets.manage",
         ],
     },
     SUPPORT_LEAD_ROLE_KEY: {

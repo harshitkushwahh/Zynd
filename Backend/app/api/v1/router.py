@@ -14,6 +14,7 @@ from app.api.v1.distributor.router import router as distributor_router
 from app.api.v1.transactions.router import router as transactions_router
 from app.api.v1.webhooks.router import router as webhooks_router
 from app.api.v1.consent.router import router as consent_router
+from app.api.v1.support.router import router as support_router
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -30,3 +31,4 @@ api_router.include_router(goals_router)
 api_router.include_router(distributor_router)
 api_router.include_router(webhooks_router)
 api_router.include_router(consent_router)
+api_router.include_router(support_router)

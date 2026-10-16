@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { getDisplayInitials } from "@/lib/get-display-initials";
 import { DISTRIBUTOR_LABEL_CAPS_TINY_CLASS } from "@/lib/distributor-layout";
 import type { SupportTicketCustomerSnapshot } from "@/lib/support-types";
+import { supportUserDetailHref } from "@/lib/support-users-api";
 import { cn } from "@/lib/utils";
 
 type SupportTicketCustomerDetailsPanelProps = {
@@ -24,7 +25,7 @@ export function SupportTicketCustomerDetailsPanel({
   clientCode,
   className,
 }: SupportTicketCustomerDetailsPanelProps) {
-  const userHref = `/dashboard/users/${encodeURIComponent(clientCode)}`;
+  const userHref = supportUserDetailHref(clientCode);
   const initials = getDisplayInitials(customer.displayName);
 
   return (

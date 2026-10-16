@@ -140,7 +140,7 @@ from app.application.mf.investor_report_service import (
     InvestorReportError,
     download_investor_report,
     generate_investor_report,
-    list_investor_reports,
+    list_investor_reports_page,
 )
 from app.infrastructure.persistence.mf_transaction_models import MfGeneratedReportKind
 from app.application.mf.invest_cached_read_service import (
@@ -2419,8 +2419,11 @@ async def get_investor_reports(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> InvestorReportListResponse:
-    reports = await list_investor_reports(db, user_id=current_user.id)
-    return InvestorReportListResponse(reports=[InvestorReportResponse(**item) for item in reports])
+    payload = await list_investor_reports_page(db, user_id=current_user.id)
+    return InvestorReportListResponse(
+        reports=[InvestorReportResponse(**item) for item in payload["reports"]],
+        eligibility=payload["eligibility"],
+    )
 
 
 @router.get("/reports/{report_id}/download")

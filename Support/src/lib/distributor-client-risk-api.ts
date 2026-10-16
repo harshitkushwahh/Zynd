@@ -1,5 +1,6 @@
 import { ApiError, apiRequest, getAccessToken } from "@/lib/api-client";
 import { env } from "@/lib/env";
+import { supportUserPathRef } from "@/lib/support-users-api";
 import type {
   DistributorClientRiskAssessment,
   DistributorClientRiskAssessmentAnswer,
@@ -42,7 +43,10 @@ function mapAssessmentItem(row: ApiAssessmentItem, index: number): DistributorCl
     completedAt: row.completed_at,
     questionsAnswered: row.questions_answered,
     totalQuestions: row.total_questions,
-    messageSummary: row.tier_config?.message_summary ?? row.tier_config?.title,
+    messageSummary:
+      row.tier_config?.message_summary ??
+      row.tier_config?.title ??
+      (row.tier_config as { message_body?: string } | undefined)?.message_body,
     messageRecommendation: row.tier_config?.message_recommendation,
     isCurrent: index === 0,
   };
@@ -59,11 +63,16 @@ function mapAnswers(rows: ApiAssessmentDetail["answers"]): DistributorClientRisk
   }));
 }
 
+function supportRiskProfileBase(clientReference: string) {
+  const ref = supportUserPathRef(clientReference);
+  return `/support/console/users/${encodeURIComponent(ref)}/risk-profile`;
+}
+
 export async function fetchDistributorClientRiskAssessments(
   clientReference: string,
 ): Promise<DistributorClientRiskAssessment[]> {
   const response = await apiRequest<{ items: ApiAssessmentItem[] }>(
-    `/distributor/clients/${encodeURIComponent(clientReference)}/risk-profile/assessments`,
+    `${supportRiskProfileBase(clientReference)}/assessments`,
   );
   return (response.items ?? []).map(mapAssessmentItem);
 }
@@ -76,7 +85,7 @@ export async function fetchDistributorClientRiskAssessmentDetail(
   answers: DistributorClientRiskAssessmentAnswer[];
 }> {
   const response = await apiRequest<ApiAssessmentDetail>(
-    `/distributor/clients/${encodeURIComponent(clientReference)}/risk-profile/assessments/${encodeURIComponent(assessmentId)}`,
+    `${supportRiskProfileBase(clientReference)}/assessments/${encodeURIComponent(assessmentId)}`,
   );
   return {
     assessment: mapAssessmentItem(response, 0),
@@ -97,7 +106,7 @@ export async function downloadDistributorClientRiskReport(
   assessmentId: string,
 ): Promise<void> {
   const response = await fetch(
-    `${env.apiUrl}/distributor/clients/${encodeURIComponent(clientReference)}/risk-profile/assessments/${encodeURIComponent(assessmentId)}/report/download`,
+    `${env.apiUrl}${supportRiskProfileBase(clientReference)}/assessments/${encodeURIComponent(assessmentId)}/report/download`,
     {
       credentials: "include",
       headers: {

@@ -47,7 +47,7 @@ export function getDistributorClientsListScopeLeadTile(
     return {
       label: "All investors",
       value: platform.length,
-      hint: "Platform-wide (demo)",
+      hint: "Platform-wide",
     };
   }
   const book = filterDistributorBookInvestors(rows);

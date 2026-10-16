@@ -44,30 +44,13 @@ function toHoldingRows(holdings: DistributorClientHolding[]): PortfolioHoldingRo
   });
 }
 
-function ReturnsCell({
-  amount,
-  pct,
-  hasCostBasis,
-}: {
-  amount: number;
-  pct: number;
-  hasCostBasis: boolean;
-}) {
+function ReturnsCell({ pct, hasCostBasis }: { pct: number; hasCostBasis: boolean }) {
   if (!hasCostBasis) {
     return <span className="text-muted-foreground">—</span>;
   }
 
-  const positive = amount >= 0;
   return (
-    <div className="flex flex-col items-end gap-1 text-right tabular-nums">
-      <p
-        className={cn(
-          "text-compact font-medium",
-          positive ? "text-[var(--distributor-growth-badge-fg)]" : "text-destructive",
-        )}
-      >
-        {formatAum(amount)}
-      </p>
+    <div className="flex justify-end tabular-nums">
       <DistributorGrowthBadge value={pct} showIcon={false} decimals={2} />
     </div>
   );
@@ -238,7 +221,6 @@ export function ClientPortfolioHoldingsList({
               <Table.Cell className="text-right tabular-nums">{formatAum(holding.redeemableValue)}</Table.Cell>
               <Table.Cell>
                 <ReturnsCell
-                  amount={holding.returnsAmount}
                   pct={holding.returnsPct}
                   hasCostBasis={holding.investedAmount > 0}
                 />

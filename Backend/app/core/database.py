@@ -35,6 +35,11 @@ async def commit_session_with_events(session: AsyncSession) -> None:
 
     await persist_scheduled_events(session)
     await session.commit()
+    from app.application.support.realtime.publisher import flush_support_realtime_events
+    from app.application.support.webhook_dispatcher import flush_support_webhooks
+
+    await flush_support_realtime_events()
+    await flush_support_webhooks()
     await flush_scheduled_events()
     discard_scheduled_events()
 
@@ -42,12 +47,19 @@ async def commit_session_with_events(session: AsyncSession) -> None:
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     from app.application.messaging.scheduled_events import begin_event_batch, discard_scheduled_events
 
+    from app.application.support.realtime.queue import begin_support_realtime_batch, discard_support_realtime_batch
+    from app.application.support.webhook_dispatcher import begin_support_webhook_batch, discard_support_webhook_batch
+
     begin_event_batch()
+    begin_support_realtime_batch()
+    begin_support_webhook_batch()
     async with AsyncSessionLocal() as session:
         try:
             yield session
             await commit_session_with_events(session)
         except Exception:
+            discard_support_realtime_batch()
+            discard_support_webhook_batch()
             await session.rollback()
             discard_scheduled_events()
             raise

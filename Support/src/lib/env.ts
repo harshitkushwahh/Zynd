@@ -3,6 +3,6 @@ export const env = {
   appEnv: process.env.NEXT_PUBLIC_APP_ENV ?? "development",
   apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "/api/v1",
   turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "",
-  /** Support user detail UI uses dummy investor profiles until support user APIs ship. */
-  useBackendClients: false,
+  /** Enables document preview and risk report download against live client APIs. */
+  useBackendClients: true,
 } as const;

@@ -3,10 +3,14 @@ export type SupportTicketPriority = "low" | "medium" | "high";
 
 export type SupportTicketMessage = {
   id: string;
-  role: "user" | "agent" | "system";
+  role: "user" | "agent" | "bot" | "system";
   body: string;
   createdAt: string;
   senderName?: string;
+  visibility?: "customer" | "internal";
+  attachmentFileName?: string;
+  kind?: "text" | "resolution_prompt";
+  resolutionActive?: boolean;
 };
 
 export type SupportTicketAttachment = {
@@ -20,7 +24,7 @@ export type SupportTicket = {
   subject: string;
   /** Short summary shown under the ticket title on the detail page. */
   description: string;
-  topic: "kyc" | "sip" | "payment" | "account" | "goals" | "other";
+  topic: "kyc" | "sip" | "payment" | "account" | "goals" | "family" | "portfolio" | "referrals" | "other";
   status: SupportTicketStatus;
   priority: SupportTicketPriority;
   userId: string;
@@ -29,6 +33,7 @@ export type SupportTicket = {
   createdAt: string;
   updatedAt: string;
   channel: "web_chat" | "email";
+  handledBy?: "bot" | "human";
   messages: SupportTicketMessage[];
   attachments: SupportTicketAttachment[];
 };

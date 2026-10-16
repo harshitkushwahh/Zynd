@@ -5,7 +5,8 @@ export type DocumentType =
   | "bank_statement"
   | "signature"
   | "address_proof"
-  | "nominee_id";
+  | "nominee_id"
+  | "support_attachment";
 
 export type UserDocument = {
   id: string;

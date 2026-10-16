@@ -23,6 +23,7 @@ import {
   ticketStatusVariant,
 } from "@/lib/support-ticket-display";
 import type { SupportTicketDetail } from "@/lib/support-types";
+import { supportUserDetailHref } from "@/lib/support-users-api";
 import { cn } from "@/lib/utils";
 
 type SupportTicketDetailAsideProps = {
@@ -61,7 +62,7 @@ function AsideCard({
 
 export function SupportTicketDetailAside({ detail, className }: SupportTicketDetailAsideProps) {
   const { ticket, customer, domain, sidebarMeta } = detail;
-  const userHref = `/dashboard/users/${encodeURIComponent(ticket.userId)}`;
+  const userHref = supportUserDetailHref(ticket.userId);
   const initials = getDisplayInitials(customer.displayName);
   const kycBadgeVariant = customer.kycCompliant ? "success" : "destructive";
 
@@ -72,7 +73,19 @@ export function SupportTicketDetailAside({ detail, className }: SupportTicketDet
         className,
       )}
     >
-      <AsideCard title="Customer" icon={UserRound}>
+      <AsideCard
+        title="Customer"
+        icon={UserRound}
+        action={
+          <Link
+            href={userHref}
+            className="inline-flex shrink-0 items-center gap-1 text-caption font-medium text-primary hover:underline"
+          >
+            Open profile
+            <ArrowUpRight className="size-3.5" strokeWidth={2.25} aria-hidden />
+          </Link>
+        }
+      >
         <div className="flex items-start gap-3">
           <Avatar className="size-12 border border-border/80">
             <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
@@ -112,10 +125,10 @@ export function SupportTicketDetailAside({ detail, className }: SupportTicketDet
             domain.viewInHref ? (
               <Link
                 href={domain.viewInHref}
-                className="distributor-operations-team-card__nav"
-                aria-label={domain.viewInLabel ?? "View linked record"}
+                className="inline-flex shrink-0 items-center gap-1 text-caption font-medium text-primary hover:underline"
               >
-                <ArrowUpRight className="size-4" strokeWidth={2.25} aria-hidden />
+                {domain.viewInLabel ?? "Open profile"}
+                <ArrowUpRight className="size-3.5" strokeWidth={2.25} aria-hidden />
               </Link>
             ) : null
           }
