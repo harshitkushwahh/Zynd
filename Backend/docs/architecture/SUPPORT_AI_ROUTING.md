@@ -45,3 +45,5 @@ Ticket payloads include:
 ## Operations
 
 Run migration `105_support_ai_routing` before deploying. If Ollama is down, routing continues via fallback; assignee selection uses weighted backlog and presence.
+
+Production deploys (`.github/workflows/zynd-pipeline.yml`) start the **`ollama`** Compose service and run `Backend/scripts/ensure-ollama-production.sh` before recreating the API. Server `Backend/.env` should define `OLLAMA_MODEL`; deploy sets `OLLAMA_BASE_URL=http://ollama:11434`. The VPS needs enough RAM plus swap for the chosen model (default `qwen3.5:4b`).
