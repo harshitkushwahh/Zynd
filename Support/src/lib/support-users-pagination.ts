@@ -1,2 +1,1 @@
 export const SUPPORT_USERS_LIST_PAGE_SIZE = 50;
-export const SUPPORT_USERS_LIST_MAX_ROWS = 2000;

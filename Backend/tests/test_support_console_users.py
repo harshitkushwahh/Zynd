@@ -30,3 +30,19 @@ async def test_support_console_user_kyc_registry_requires_auth() -> None:
             "/api/v1/support/console/users/habawakesa9382202302/kyc-registry",
         )
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_support_console_kyc_verifications_requires_auth() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/support/console/kyc-verifications")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_support_console_transactions_requires_auth() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/support/console/transactions")
+    assert response.status_code == 401

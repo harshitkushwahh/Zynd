@@ -74,6 +74,67 @@ class SupportConsoleUserListOut(BaseModel):
     next_offset: int = 0
 
 
+class SupportKycQueueMetricsOut(BaseModel):
+    pending_review: int
+    in_progress: int
+    escalated: int
+    approved: int
+    not_started: int = 0
+    total_investors: int
+
+
+class SupportKycQueueItemOut(BaseModel):
+    id: str
+    client_code: str
+    display_name: str
+    email_masked: str
+    queue_status: str
+    review_type: str
+    partner_status: str | None = None
+    cybrilla_form_type: str | None = None
+    submitted_at: datetime | None = None
+    priority: str
+    overall_status: str
+
+
+class SupportKycQueueListOut(BaseModel):
+    items: list[SupportKycQueueItemOut]
+    has_more: bool = False
+    next_offset: int = 0
+    total_count: int = 0
+    metrics: SupportKycQueueMetricsOut | None = None
+
+
+class SupportTransactionMetricsOut(BaseModel):
+    total_transactions: int
+    in_progress: int
+    completed: int
+    failed: int
+    volume_inr: float
+
+
+class SupportTransactionListItemOut(BaseModel):
+    id: str
+    order_ref: str
+    client_code: str
+    investor_email_masked: str
+    scheme_name: str
+    order_type: str
+    amount_inr: float
+    status: str
+    raw_status: str
+    created_at: datetime | None = None
+    fp_purchase_id: str | None = None
+
+
+class SupportTransactionListOut(BaseModel):
+    items: list[SupportTransactionListItemOut]
+    has_more: bool = False
+    next_offset: int = 0
+    total_count: int = 0
+    metrics: SupportTransactionMetricsOut | None = None
+
+
 class SupportKycRegistryFieldOut(BaseModel):
     label: str
     value: str | None = None
@@ -100,10 +161,10 @@ class SupportKycRegistrySnapshotOut(BaseModel):
 
 class CustomerSnapshotOut(BaseModel):
     display_name: str
-    email_masked: str
-    mobile_masked: str
-    pan_masked: str
-    aadhaar_masked: str
+    email_masked: str | None = None
+    mobile_masked: str | None = None
+    pan_masked: str | None = None
+    aadhaar_masked: str | None = None
     kyc_status_label: str
     kyc_compliant: bool
     client_type: str
@@ -112,7 +173,7 @@ class CustomerSnapshotOut(BaseModel):
 
 class DomainFieldOut(BaseModel):
     label: str
-    value: str
+    value: str | None = None
 
 
 class DomainOut(BaseModel):

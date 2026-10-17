@@ -1,5 +1,5 @@
-import { SupportAuditLogsPanel } from "@/components/audit/support-audit-logs-panel";
+import { redirect } from "next/navigation";
 
 export default function SupportActivityLogsPage() {
-  return <SupportAuditLogsPanel />;
+  redirect("/dashboard");
 }

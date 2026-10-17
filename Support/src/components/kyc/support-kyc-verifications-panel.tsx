@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Clock3 } from "lucide-react";
-import type { SortDescriptor } from "react-aria-components";
 
-import { Table, useDistributorTablePagination } from "@/components/application/table";
+import { Table } from "@/components/application/table";
+import {
+  DISTRIBUTOR_TABLE_PAGE_SIZE,
+  DISTRIBUTOR_TABLE_PAGE_SIZE_OPTIONS,
+  type TablePaginationProps,
+} from "@/components/application/table/pagination";
 import {
   SupportPageMetricTile,
   SupportPageMetricTilesGrid,
@@ -14,6 +18,7 @@ import { DistributorPageHeader } from "@/components/dashboard/distributor-page-h
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
+import { SupportMetricsTilesSkeleton, SupportTableSkeleton } from "@/components/dashboard/support-table-skeleton";
 import { SupportFilterSelect } from "@/components/ui/support-filter-select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
@@ -22,20 +27,19 @@ import {
   DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS,
   DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
 } from "@/lib/distributor-layout";
-import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatDistributorDate } from "@/lib/format";
-import { sortByDescriptor } from "@/lib/sort-by-descriptor";
-import {
-  SUPPORT_DUMMY_KYC_QUEUE,
-  type SupportKycQueueItem,
-  type SupportKycQueueStatus,
-  type SupportKycReviewType,
+import { fetchSupportKycQueuePage, type SupportKycQueueMetrics } from "@/lib/support-kyc-queue-api";
+import type {
+  SupportKycQueueItem,
+  SupportKycQueueStatus,
+  SupportKycReviewType,
 } from "@/lib/support-kyc-queue-dummy-data";
 import { supportUserDetailHref } from "@/lib/support-users-api";
 import { cn } from "@/lib/utils";
 
 const QUEUE_STATUS_OPTIONS: Array<{ value: SupportKycQueueStatus; label: string }> = [
+  { value: "Not started", label: "Not started" },
   { value: "Pending review", label: "Pending review" },
   { value: "In progress", label: "In progress" },
   { value: "Escalated", label: "Escalated" },
@@ -43,16 +47,27 @@ const QUEUE_STATUS_OPTIONS: Array<{ value: SupportKycQueueStatus; label: string 
 ];
 
 const REVIEW_TYPE_OPTIONS: Array<{ value: SupportKycReviewType; label: string }> = [
-  { value: "New KYC", label: "New KYC" },
+  { value: "Not started", label: "Not started" },
+  { value: "Fresh KYC", label: "Fresh KYC" },
   { value: "Re-KYC", label: "Re-KYC" },
   { value: "Document refresh", label: "Document refresh" },
   { value: "Address update", label: "Address update" },
 ];
 
+const EMPTY_METRICS: SupportKycQueueMetrics = {
+  pendingReview: 0,
+  inProgress: 0,
+  escalated: 0,
+  approved: 0,
+  notStarted: 0,
+  totalInvestors: 0,
+};
+
 function queueStatusVariant(status: SupportKycQueueStatus) {
   if (status === "Approved") return "success";
   if (status === "Escalated") return "destructive";
   if (status === "In progress") return "info";
+  if (status === "Not started") return "neutral";
   return "warning";
 }
 
@@ -64,43 +79,81 @@ function supportUserKycHref(clientCode: string) {
   return `${supportUserDetailHref(clientCode)}?tab=kyc`;
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 export function SupportKycVerificationsPanel() {
   const router = useRouter();
-  const items = SUPPORT_DUMMY_KYC_QUEUE;
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search.trim(), 350);
   const [statusFilter, setStatusFilter] = useState<SupportKycQueueStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<SupportKycReviewType | "all">("all");
-  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
-    column: "submittedAt",
-    direction: "descending",
-  });
+  const [items, setItems] = useState<SupportKycQueueItem[]>([]);
+  const [metrics, setMetrics] = useState<SupportKycQueueMetrics>(EMPTY_METRICS);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DISTRIBUTOR_TABLE_PAGE_SIZE);
 
-  const pendingCount = items.filter((row) => row.queueStatus === "Pending review").length;
-  const inProgressCount = items.filter((row) => row.queueStatus === "In progress").length;
-  const escalatedCount = items.filter((row) => row.queueStatus === "Escalated").length;
-  const approvedCount = items.filter((row) => row.queueStatus === "Approved").length;
+  const offset = (page - 1) * pageSize;
 
-  const filtered = useMemo(() => {
-    return items.filter((row) => {
-      if (statusFilter !== "all" && row.queueStatus !== statusFilter) return false;
-      if (typeFilter !== "all" && row.reviewType !== typeFilter) return false;
-      return distributorTableSearchMatch(
-        search,
-        row.clientCode,
-        row.displayName,
-        row.emailMasked,
-        row.reviewType,
-        row.queueStatus,
-      );
-    });
-  }, [items, search, statusFilter, typeFilter]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, typeFilter, pageSize]);
 
-  const sorted = useMemo(
-    () => sortByDescriptor(filtered, sortDescriptor),
-    [filtered, sortDescriptor],
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError("");
+    void fetchSupportKycQueuePage({
+      search: debouncedSearch || undefined,
+      queueStatus: statusFilter,
+      reviewType: typeFilter,
+      limit: pageSize,
+      offset,
+    })
+      .then((result) => {
+        setItems(result.items);
+        if (result.metrics) setMetrics(result.metrics);
+        setTotalCount(result.totalCount);
+      })
+      .catch(() => {
+        setItems([]);
+        setMetrics(EMPTY_METRICS);
+        setTotalCount(0);
+        setLoadError("Could not load KYC verifications. Try again in a moment.");
+      })
+      .finally(() => setLoading(false));
+  }, [debouncedSearch, statusFilter, typeFilter, pageSize, offset]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const pagination = useMemo<TablePaginationProps>(
+    () => ({
+      page: Math.min(page, totalPages),
+      totalPages,
+      onPageChange: setPage,
+      pageSize,
+      pageSizeOptions: DISTRIBUTOR_TABLE_PAGE_SIZE_OPTIONS,
+      onPageSizeChange: (next) => {
+        setPageSize(next);
+        setPage(1);
+      },
+      totalItemCount: totalCount,
+      alwaysVisible: totalCount > 0,
+    }),
+    [page, totalPages, pageSize, totalCount],
   );
-
-  const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
   const clearDisabled =
     statusFilter === "all" && typeFilter === "all" && search.trim() === "";
@@ -122,7 +175,7 @@ export function SupportKycVerificationsPanel() {
             setSearch(value);
             setPage(1);
           }}
-          placeholder="Search KYC queue…"
+          placeholder="Search by name, email, Zynd ID…"
           aria-label="Search KYC queue"
         />
       }
@@ -152,29 +205,25 @@ export function SupportKycVerificationsPanel() {
     <Table
       aria-label="KYC verification queue"
       className="min-w-[var(--table-min-width-5xl)]"
-      sortDescriptor={sortDescriptor}
-      onSortChange={setSortDescriptor}
       pagination={pagination}
     >
       <Table.Header>
-        <Table.Head id="displayName" label="Investor" isRowHeader allowsSorting />
+        <Table.Head id="displayName" label="Investor" isRowHeader />
         <Table.Head
           id="clientCode"
           label="Zynd ID"
-          allowsSorting
           className={DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS}
         />
-        <Table.Head id="reviewType" label="Review type" allowsSorting />
-        <Table.Head id="queueStatus" label="Status" allowsSorting />
-        <Table.Head id="priority" label="Priority" allowsSorting />
+        <Table.Head id="reviewType" label="Review type" />
+        <Table.Head id="queueStatus" label="Status" />
+        <Table.Head id="priority" label="Priority" />
         <Table.Head
           id="submittedAt"
           label="Submitted"
-          allowsSorting
           className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}
         />
       </Table.Header>
-      <Table.Body items={pageItems}>
+      <Table.Body items={items}>
         {(row) => (
           <Table.Row
             id={row.id}
@@ -190,7 +239,20 @@ export function SupportKycVerificationsPanel() {
             <Table.Cell className={cn("font-mono text-caption", DISTRIBUTOR_TABLE_CLIENT_CODE_COLUMN_CLASS)}>
               {row.clientCode}
             </Table.Cell>
-            <Table.Cell className="text-muted-foreground">{row.reviewType}</Table.Cell>
+            <Table.Cell>
+              <div className="min-w-0">
+                <p className="truncate text-muted-foreground">{row.reviewType}</p>
+                {row.partnerStatus ? (
+                  <p className="truncate text-caption text-muted-foreground/80">
+                    Cybrilla: {row.partnerStatus}
+                  </p>
+                ) : row.cybrillaFormType ? (
+                  <p className="truncate text-caption text-muted-foreground/80">
+                    Form: {row.cybrillaFormType}
+                  </p>
+                ) : null}
+              </div>
+            </Table.Cell>
             <Table.Cell>
               <StatusBadge variant={queueStatusVariant(row.queueStatus)}>{row.queueStatus}</StatusBadge>
             </Table.Cell>
@@ -200,7 +262,9 @@ export function SupportKycVerificationsPanel() {
               </StatusBadge>
             </Table.Cell>
             <Table.Cell className={cn("text-muted-foreground", DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS)}>
-              {formatDistributorDate(row.submittedAt)}
+              {row.submittedAt && row.submittedAt !== new Date(0).toISOString()
+                ? formatDistributorDate(row.submittedAt)
+                : "—"}
             </Table.Cell>
           </Table.Row>
         )}
@@ -212,36 +276,40 @@ export function SupportKycVerificationsPanel() {
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
       <DistributorPageHeader title="KYC & Verifications" />
 
-      <SupportPageMetricTilesGrid>
-        <SupportPageMetricTile
-          tileTone="accent"
-          icon={ClipboardCheck}
-          label="Pending review"
-          value={String(pendingCount)}
-        />
-        <SupportPageMetricTile
-          icon={Clock3}
-          label="In progress"
-          value={String(inProgressCount)}
-        />
-        <SupportPageMetricTile
-          icon={AlertTriangle}
-          label="Escalated"
-          value={String(escalatedCount)}
-        />
-        <SupportPageMetricTile
-          tileTone="success"
-          icon={CheckCircle2}
-          label="Approved"
-          value={String(approvedCount)}
-        />
-      </SupportPageMetricTilesGrid>
+      {loading && items.length === 0 ? (
+        <SupportMetricsTilesSkeleton />
+      ) : (
+        <SupportPageMetricTilesGrid>
+          <SupportPageMetricTile
+            tileTone="accent"
+            icon={ClipboardCheck}
+            label="Not started"
+            value={String(metrics.notStarted)}
+          />
+          <SupportPageMetricTile icon={Clock3} label="In progress" value={String(metrics.inProgress)} />
+          <SupportPageMetricTile
+            icon={AlertTriangle}
+            label="Escalated"
+            value={String(metrics.escalated)}
+          />
+          <SupportPageMetricTile
+            tileTone="success"
+            icon={CheckCircle2}
+            label="Approved"
+            value={String(metrics.approved)}
+          />
+        </SupportPageMetricTilesGrid>
+      )}
 
       <DistributorTableOnlyShell
         toolbar={toolbar}
-        isEmpty={sorted.length === 0}
-        emptyTitle="No KYC cases match your filters"
-        emptyDescription={DISTRIBUTOR_CLIENT_COPY.activity.filtersEmptyDescription}
+        isLoading={loading}
+        loadingSkeleton={<SupportTableSkeleton rowCount={10} columnCount={6} />}
+        isEmpty={!loading && items.length === 0}
+        emptyTitle={loadError || "No KYC cases match your filters"}
+        emptyDescription={
+          loadError ? undefined : DISTRIBUTOR_CLIENT_COPY.activity.filtersEmptyDescription
+        }
       >
         {table}
       </DistributorTableOnlyShell>

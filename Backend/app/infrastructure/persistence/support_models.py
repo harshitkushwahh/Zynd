@@ -160,6 +160,7 @@ class SupportTicket(Base):
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_prompted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_choice: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    routing_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -168,6 +169,30 @@ class SupportTicket(Base):
     )
 
     conversation: Mapped[SupportConversation] = relationship(back_populates="ticket")
+    routing_events: Mapped[list["SupportTicketRoutingEvent"]] = relationship(
+        back_populates="ticket",
+        cascade="all, delete-orphan",
+        order_by="SupportTicketRoutingEvent.created_at.desc()",
+    )
+
+
+class SupportTicketRoutingEvent(Base):
+    __tablename__ = "support_ticket_routing_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ticket_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("support_tickets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    trigger: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    ticket: Mapped[SupportTicket] = relationship(back_populates="routing_events")
 
 
 class SupportResolutionExample(Base):

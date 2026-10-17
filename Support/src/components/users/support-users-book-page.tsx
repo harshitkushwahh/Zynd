@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { SortDescriptor } from "react-aria-components";
 
 import { Table, useDistributorTablePagination } from "@/components/application/table";
+import { SupportMetricsTilesSkeleton, SupportTableSkeleton } from "@/components/dashboard/support-table-skeleton";
 import { DistributorPageHeader } from "@/components/dashboard/distributor-page-header";
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
@@ -19,7 +20,6 @@ import {
 import { isSupportUserDirectoryUnavailable } from "@/lib/distributor-client-errors";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import { formatDistributorDate } from "@/lib/format";
-import { searchInvestors } from "@/lib/distributor-investor-utils";
 import type { DistributorInvestor } from "@/lib/distributor-types";
 import {
   complianceStatusVariant,
@@ -31,10 +31,7 @@ import {
   listSupportDirectoryInvestorsPage,
   supportUserDetailHref,
 } from "@/lib/support-users-api";
-import {
-  SUPPORT_USERS_LIST_MAX_ROWS,
-  SUPPORT_USERS_LIST_PAGE_SIZE,
-} from "@/lib/support-users-pagination";
+import { SUPPORT_USERS_LIST_PAGE_SIZE } from "@/lib/support-users-pagination";
 import { cn } from "@/lib/utils";
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -46,26 +43,6 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-async function fetchAllSupportDirectoryInvestors(search: string): Promise<DistributorInvestor[]> {
-  const collected: DistributorInvestor[] = [];
-  let offset = 0;
-
-  while (collected.length < SUPPORT_USERS_LIST_MAX_ROWS) {
-    const page = await listSupportDirectoryInvestorsPage({
-      search: search || undefined,
-      limit: SUPPORT_USERS_LIST_PAGE_SIZE,
-      offset,
-    });
-    collected.push(...page.items);
-    if (!page.hasMore || page.items.length === 0) {
-      break;
-    }
-    offset = page.nextOffset;
-  }
-
-  return collected;
-}
-
 export function SupportUsersBookPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -73,6 +50,7 @@ export function SupportUsersBookPage() {
   const [investors, setInvestors] = useState<DistributorInvestor[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [apiOffset, setApiOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
@@ -81,22 +59,28 @@ export function SupportUsersBookPage() {
   });
 
   useEffect(() => {
+    setApiOffset(0);
+  }, [debouncedSearch]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError("");
-    setInvestors([]);
-    setHasMore(false);
 
-    void fetchAllSupportDirectoryInvestors(debouncedSearch)
-      .then((items) => {
-        if (!cancelled) {
-          setInvestors(items);
-          setHasMore(items.length >= SUPPORT_USERS_LIST_MAX_ROWS);
-        }
+    void listSupportDirectoryInvestorsPage({
+      search: debouncedSearch || undefined,
+      limit: SUPPORT_USERS_LIST_PAGE_SIZE,
+      offset: apiOffset,
+    })
+      .then((page) => {
+        if (cancelled) return;
+        setInvestors(page.items);
+        setHasMore(page.hasMore);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         setInvestors([]);
+        setHasMore(false);
         if (isSupportUserDirectoryUnavailable(error)) {
           setLoadError(
             "User directory API is unavailable. Restart Backend (Backend/run.sh) and reload this page.",
@@ -112,35 +96,52 @@ export function SupportUsersBookPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, apiOffset]);
 
   const reload = useCallback(() => {
     setLoadingMore(true);
     setLoadError("");
-    void fetchAllSupportDirectoryInvestors(debouncedSearch)
-      .then(setInvestors)
+    void listSupportDirectoryInvestorsPage({
+      search: debouncedSearch || undefined,
+      limit: SUPPORT_USERS_LIST_PAGE_SIZE,
+      offset: apiOffset,
+    })
+      .then((page) => {
+        setInvestors(page.items);
+        setHasMore(page.hasMore);
+      })
       .catch(() => setLoadError("Could not load users. Try again in a moment."))
       .finally(() => setLoadingMore(false));
-  }, [debouncedSearch]);
+  }, [apiOffset, debouncedSearch]);
 
-  const rows = useMemo(() => {
-    const filtered = debouncedSearch ? searchInvestors(investors, search) : investors;
-    return sortByDescriptor(filtered, sortDescriptor);
-  }, [investors, debouncedSearch, search, sortDescriptor]);
+  const rows = useMemo(
+    () => sortByDescriptor(investors, sortDescriptor),
+    [investors, sortDescriptor],
+  );
 
-  const { pageItems, pagination, setPage } = useDistributorTablePagination(rows);
+  const { pageItems, pagination, setPage } = useDistributorTablePagination(rows, {
+    initialPageSize: 25,
+  });
 
   const openUser = (investor: DistributorInvestor) => {
     router.push(supportUserDetailHref(investor.clientCode));
   };
 
+  const serverPage = Math.floor(apiOffset / SUPPORT_USERS_LIST_PAGE_SIZE) + 1;
+
   return (
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
       <DistributorPageHeader title="Users" />
 
-      <YourClientsBookMetrics listScope="all" investors={investors} />
+      {loading ? (
+        <SupportMetricsTilesSkeleton />
+      ) : (
+        <YourClientsBookMetrics listScope="all" investors={investors} />
+      )}
 
       <DistributorTableOnlyShell
+        isLoading={loading}
+        loadingSkeleton={<SupportTableSkeleton rowCount={10} columnCount={5} />}
         isEmpty={!loading && rows.length === 0}
         emptyTitle={loadError || "No users match your search"}
         emptyDescription={
@@ -153,7 +154,10 @@ export function SupportUsersBookPage() {
         toolbar={
           <DistributorTableSearchCard
             value={search}
-            onChange={setSearch}
+            onChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
             placeholder="Search by email or Zynd ID…"
           />
         }
@@ -187,7 +191,7 @@ export function SupportUsersBookPage() {
                 className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}
               />
             </Table.Header>
-            <Table.Body items={loading ? [] : pageItems}>
+            <Table.Body items={pageItems}>
               {(investor) => (
                 <Table.Row
                   id={investor.id}
@@ -238,10 +242,28 @@ export function SupportUsersBookPage() {
         </div>
       ) : null}
 
-      {hasMore && !loadError ? (
-        <p className="text-center text-caption text-muted-foreground">
-          Showing the first {SUPPORT_USERS_LIST_MAX_ROWS} users. Refine search to find others.
-        </p>
+      {!loading && !loadError && (hasMore || apiOffset > 0) ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={apiOffset === 0 || loadingMore}
+            onClick={() => setApiOffset((value) => Math.max(0, value - SUPPORT_USERS_LIST_PAGE_SIZE))}
+          >
+            Previous {SUPPORT_USERS_LIST_PAGE_SIZE}
+          </Button>
+          <span className="text-caption text-muted-foreground tabular-nums">Page {serverPage}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!hasMore || loadingMore}
+            onClick={() => setApiOffset((value) => value + SUPPORT_USERS_LIST_PAGE_SIZE)}
+          >
+            Next {SUPPORT_USERS_LIST_PAGE_SIZE}
+          </Button>
+        </div>
       ) : null}
     </div>
   );

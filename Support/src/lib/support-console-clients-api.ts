@@ -86,6 +86,12 @@ type ApiClientDetail = {
     investor_addresses?: Array<Record<string, unknown>>;
     bank_accounts?: Array<Record<string, unknown>>;
     personal?: Record<string, unknown> | null;
+    pan?: {
+      full_name?: string | null;
+      date_of_birth?: string | null;
+      pan_category?: string | null;
+      pan_last4?: string | null;
+    } | null;
   } | null;
   connected_accounts?: {
     google?: { connected?: boolean; email?: string | null };
@@ -749,7 +755,11 @@ export function mapApiClientDetail(payload: ApiClientDetail): DistributorClientP
 
   return {
     ...profile,
-    capturedProfile: buildSupportClientCapturedProfile(profile, payload.kyc?.personal),
+    capturedProfile: buildSupportClientCapturedProfile(
+      profile,
+      payload.kyc?.personal,
+      payload.kyc?.pan,
+    ),
     kycRegistrySnapshot,
   };
 }

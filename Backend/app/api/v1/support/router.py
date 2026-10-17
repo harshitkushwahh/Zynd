@@ -16,7 +16,9 @@ from app.api.v1.support.schemas import (
     ResolutionChoiceRequest,
     CustomerTicketListOut,
     SupportConsoleUserListOut,
+    SupportKycQueueListOut,
     SupportKycRegistrySnapshotOut,
+    SupportTransactionListOut,
     TicketDetailOut,
     TicketListOut,
     UpdateTicketRequest,
@@ -231,6 +233,56 @@ async def get_support_console_users(
     )
     await db.commit()
     return SupportConsoleUserListOut(**payload)
+
+
+@router.get("/console/kyc-verifications", response_model=SupportKycQueueListOut)
+async def get_support_console_kyc_verifications(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("support.tickets.read"))],
+    search: Annotated[str | None, Query()] = None,
+    queue_status: Annotated[str | None, Query()] = None,
+    review_type: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> SupportKycQueueListOut:
+    from app.application.support.support_console_directory_service import (
+        list_support_kyc_verifications_page,
+    )
+
+    payload = await list_support_kyc_verifications_page(
+        db,
+        search=search,
+        queue_status=queue_status,
+        review_type=review_type,
+        limit=limit,
+        offset=offset,
+    )
+    await db.commit()
+    return SupportKycQueueListOut(**payload)
+
+
+@router.get("/console/transactions", response_model=SupportTransactionListOut)
+async def get_support_console_transactions(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_permission("support.tickets.read"))],
+    search: Annotated[str | None, Query()] = None,
+    status: Annotated[str | None, Query()] = None,
+    order_type: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> SupportTransactionListOut:
+    from app.application.support.support_console_directory_service import list_support_transactions_page
+
+    payload = await list_support_transactions_page(
+        db,
+        search=search,
+        status=status,
+        order_type=order_type,
+        limit=limit,
+        offset=offset,
+    )
+    await db.commit()
+    return SupportTransactionListOut(**payload)
 
 
 @router.get(

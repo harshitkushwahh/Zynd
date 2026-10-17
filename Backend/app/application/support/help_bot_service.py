@@ -169,6 +169,15 @@ async def post_customer_message(
         if ticket is not None:
             ticket.description = text[:500]
             ticket.updated_at = utcnow()
+            from app.application.support.support_intelligence_router import apply_support_intelligence
+
+            await apply_support_intelligence(
+                db,
+                ticket,
+                user,
+                trigger="customer_message",
+                force=True,
+            )
         return await serialize_customer_conversation(db, user, conversation)
 
     if not decision.in_scope:
@@ -288,6 +297,26 @@ async def _escalate(db, user, conversation, body: str, topics, reason: str) -> N
         visibility="internal",
         sender_name=BOT_NAME,
     )
+    pm_handling = (
+        ticket.routing_metadata.get("pm_co_handling")
+        if isinstance(ticket.routing_metadata, dict)
+        else None
+    )
+    if isinstance(pm_handling, dict) and pm_handling.get("mitra_display_name"):
+        action = pm_handling.get("recommended_action") or "notify"
+        mitra_name = pm_handling.get("mitra_display_name")
+        mitra_client = pm_handling.get("mitra_client_id") or "—"
+        await add_message(
+            db,
+            conversation,
+            role="system",
+            body=(
+                f"PM co-handling ({action}): consult {mitra_name} "
+                f"(book client {mitra_client}) if investor context requires Mitra alignment."
+            ),
+            visibility="internal",
+            sender_name=BOT_NAME,
+        )
     from app.application.support.ticket_service import schedule_conversation_realtime_snapshot
 
     snapshot = await serialize_customer_conversation(db, user, conversation)

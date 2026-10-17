@@ -1,11 +1,13 @@
 export type SupportKycQueueStatus =
+  | "Not started"
   | "Pending review"
   | "In progress"
   | "Escalated"
   | "Approved";
 
 export type SupportKycReviewType =
-  | "New KYC"
+  | "Not started"
+  | "Fresh KYC"
   | "Re-KYC"
   | "Document refresh"
   | "Address update";
@@ -17,6 +19,8 @@ export type SupportKycQueueItem = {
   emailMasked: string;
   queueStatus: SupportKycQueueStatus;
   reviewType: SupportKycReviewType;
+  partnerStatus?: string | null;
+  cybrillaFormType?: string | null;
   submittedAt: string;
   priority: "Normal" | "High";
 };

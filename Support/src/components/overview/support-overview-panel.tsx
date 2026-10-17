@@ -13,17 +13,8 @@ import { DistributorActionButton } from "@/components/ui/distributor-action-butt
 import { SupportOverviewTicketTrendsCard } from "@/components/overview/support-overview-ticket-trends-card";
 import { SupportTicketsTable } from "@/components/tickets/support-tickets-table";
 import { useSupportAuth } from "@/contexts/support-auth-context";
-import {
-  SUPPORT_OVERVIEW_CATEGORY_SEGMENTS,
-  SUPPORT_OVERVIEW_METRIC_TRENDS,
-  SUPPORT_OVERVIEW_SPARKLINE,
-  SUPPORT_OVERVIEW_TICKET_TRENDS,
-} from "@/lib/support-overview-analytics-data";
-import {
-  filterTicketsForAgentQueue,
-  sortTicketsByRecentActivity,
-  summarizeAgentTicketQueue,
-} from "@/lib/support-overview-ticket-stats";
+import { buildSupportOverviewAnalytics } from "@/lib/support-overview-analytics";
+import { filterTicketsForAgentQueue, sortTicketsByRecentActivity } from "@/lib/support-overview-ticket-stats";
 import { listSupportTickets } from "@/lib/support-tickets-api";
 import type { SupportTicket } from "@/lib/support-types";
 import { DISTRIBUTOR_DASHBOARD_HOME_SPACER_CLASS, DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
@@ -34,27 +25,35 @@ const RECENT_TICKET_LIMIT = 6;
 export function SupportOverviewPanel() {
   const { displayName, user } = useSupportAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setTicketsLoading(true);
     void listSupportTickets({ queue: "all" })
       .then((rows) => {
         if (!cancelled) setTickets(rows);
       })
       .catch(() => {
         if (!cancelled) setTickets([]);
+      })
+      .finally(() => {
+        if (!cancelled) setTicketsLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const analytics = useMemo(
+    () => buildSupportOverviewAnalytics(tickets, user?.id),
+    [tickets, user?.id],
+  );
+
   const agentTickets = useMemo(
     () => filterTicketsForAgentQueue(tickets, user?.id),
     [tickets, user?.id],
   );
-
-  const queueSummary = useMemo(() => summarizeAgentTicketQueue(agentTickets), [agentTickets]);
 
   const recentTickets = useMemo(
     () => sortTicketsByRecentActivity(agentTickets).slice(0, RECENT_TICKET_LIMIT),
@@ -62,10 +61,10 @@ export function SupportOverviewPanel() {
   );
 
   const metricValues = {
-    total: String(queueSummary.total),
-    open: String(queueSummary.open),
-    inProgress: String(queueSummary.inProgress),
-    resolved: String(queueSummary.resolved),
+    total: String(analytics.summary.total),
+    open: String(analytics.summary.open),
+    inProgress: String(analytics.summary.inProgress),
+    resolved: String(analytics.summary.resolved),
   };
 
   return (
@@ -83,8 +82,8 @@ export function SupportOverviewPanel() {
           icon={Layers3}
           label="My queue"
           value={metricValues.total}
-          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.total}
-          sparkline={SUPPORT_OVERVIEW_SPARKLINE.total}
+          trendPct={analytics.metricTrends.total}
+          sparkline={analytics.sparklines.total}
           href="/dashboard/tickets"
           tileTone="accent"
         />
@@ -92,24 +91,24 @@ export function SupportOverviewPanel() {
           icon={Ticket}
           label="Open tickets"
           value={metricValues.open}
-          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.open}
-          sparkline={SUPPORT_OVERVIEW_SPARKLINE.open}
+          trendPct={analytics.metricTrends.open}
+          sparkline={analytics.sparklines.open}
           href="/dashboard/tickets"
         />
         <SupportOverviewMetricTile
           icon={Clock3}
           label="In progress"
           value={metricValues.inProgress}
-          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.inProgress}
-          sparkline={SUPPORT_OVERVIEW_SPARKLINE.inProgress}
+          trendPct={analytics.metricTrends.inProgress}
+          sparkline={analytics.sparklines.inProgress}
           href="/dashboard/tickets"
         />
         <SupportOverviewMetricTile
           icon={CheckCircle2}
           label="Resolved"
           value={metricValues.resolved}
-          trendPct={SUPPORT_OVERVIEW_METRIC_TRENDS.resolved}
-          sparkline={SUPPORT_OVERVIEW_SPARKLINE.resolved}
+          trendPct={analytics.metricTrends.resolved}
+          sparkline={analytics.sparklines.resolved}
           href="/dashboard/tickets"
         />
       </div>
@@ -118,18 +117,18 @@ export function SupportOverviewPanel() {
         <div className="flex min-h-0 min-w-0 xl:col-span-2">
           <SupportOverviewTicketTrendsCard
             className="min-w-0 flex-1"
-            series={SUPPORT_OVERVIEW_TICKET_TRENDS}
+            series={analytics.trends}
           />
         </div>
         <div className="flex min-h-0 min-w-0">
           <SupportOverviewCategoryCard
             className="min-w-0 flex-1"
-            segments={SUPPORT_OVERVIEW_CATEGORY_SEGMENTS}
+            segments={analytics.categories}
           />
         </div>
       </div>
 
-      <SupportOverviewPerformanceCards />
+      <SupportOverviewPerformanceCards performance={analytics.performance} />
 
       <DistributorOverviewSection
         title="Recent tickets"
@@ -141,6 +140,7 @@ export function SupportOverviewPanel() {
       >
         <SupportTicketsTable
           tickets={recentTickets}
+          isLoading={ticketsLoading}
           showToolbar={false}
           showUserColumn
           emptyTitle="No tickets in your queue"

@@ -30,6 +30,7 @@ export function SupportOverviewCategoryCard({
     () => segments.reduce((sum, segment) => sum + segment.count, 0),
     [segments],
   );
+  const isEmpty = total === 0;
 
   return (
     <article
@@ -53,33 +54,39 @@ export function SupportOverviewCategoryCard({
         </Link>
       </div>
 
-      <div className="distributor-operations-team-card__gauge" role="img" aria-label="Ticket category distribution">
-        <div className="distributor-operations-team-card__gauge-chart">
-          <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
-            <PieChart>
-              <Pie
-                data={chartData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={INNER_RADIUS}
-                outerRadius={OUTER_RADIUS}
-                paddingAngle={2}
-                stroke="none"
-              >
-                {chartData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.fill} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+      {isEmpty ? (
+        <p className="px-1 py-8 text-center text-caption text-muted-foreground">
+          No tickets in your queue yet — category mix will appear here.
+        </p>
+      ) : (
+        <div className="distributor-operations-team-card__gauge" role="img" aria-label="Ticket category distribution">
+          <div className="distributor-operations-team-card__gauge-chart">
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={INNER_RADIUS}
+                  outerRadius={OUTER_RADIUS}
+                  paddingAngle={2}
+                  stroke="none"
+                >
+                  {chartData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="distributor-operations-team-card__gauge-center">
+            <p className="distributor-operations-team-card__gauge-value tabular-nums">{total}</p>
+            <p className="distributor-operations-team-card__gauge-caption">Total tickets</p>
+          </div>
         </div>
-        <div className="distributor-operations-team-card__gauge-center">
-          <p className="distributor-operations-team-card__gauge-value tabular-nums">{total}</p>
-          <p className="distributor-operations-team-card__gauge-caption">Total tickets</p>
-        </div>
-      </div>
+      )}
 
       <ul className="distributor-operations-team-card__legend support-overview-category-card__legend">
         {segments.map((segment) => (

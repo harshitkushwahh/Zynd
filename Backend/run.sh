@@ -143,6 +143,73 @@ asyncio.run(main())
 PY
 }
 
+parse_ollama_target() {
+  local url="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
+  OLLAMA_HOST="127.0.0.1"
+  OLLAMA_PORT="11434"
+  if [[ "$url" =~ ^https?://([^:/]+)(:([0-9]+))? ]]; then
+    OLLAMA_HOST="${BASH_REMATCH[1]}"
+    if [ -n "${BASH_REMATCH[3]:-}" ]; then
+      OLLAMA_PORT="${BASH_REMATCH[3]}"
+    fi
+  fi
+}
+
+ollama_tags_reachable() {
+  local url="${OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
+  if command -v curl >/dev/null 2>&1; then
+    curl -sf --max-time 2 "${url%/}/api/tags" >/dev/null 2>&1
+    return $?
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    nc -z "$OLLAMA_HOST" "$OLLAMA_PORT" 2>/dev/null
+    return $?
+  fi
+  return 1
+}
+
+ensure_ollama() {
+  if [ "${OLLAMA_AUTOSTART:-true}" != "true" ]; then
+    return 0
+  fi
+
+  parse_ollama_target
+
+  if ollama_tags_reachable; then
+    echo "Ollama is reachable at ${OLLAMA_BASE_URL:-http://127.0.0.1:11434} (Help Bot + support routing)."
+    return 0
+  fi
+
+  echo "Ollama is not reachable at ${OLLAMA_BASE_URL:-http://127.0.0.1:11434}; attempting to start..."
+
+  if [[ "$(uname -s)" == "Darwin" ]] && [ -d "/Applications/Ollama.app" ]; then
+    open -a Ollama >/dev/null 2>&1 || true
+  elif command -v ollama >/dev/null 2>&1; then
+    if ! pgrep -x ollama >/dev/null 2>&1 && ! pgrep -f "[o]llama serve" >/dev/null 2>&1; then
+      mkdir -p logs
+      echo "Starting ollama serve in background (logs: logs/ollama.log)..."
+      nohup ollama serve >> logs/ollama.log 2>&1 &
+    fi
+  else
+    echo "WARNING: Ollama is not running and 'ollama' CLI was not found."
+    echo "  Install from https://ollama.com or brew install ollama"
+    echo "  Help Bot and AI ticket routing will use analytics fallback until Ollama is up."
+    return 0
+  fi
+
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    sleep 2
+    if ollama_tags_reachable; then
+      echo "Ollama is ready (model: ${OLLAMA_MODEL:-qwen3.5:4b}; pull with: ollama pull ${OLLAMA_MODEL:-qwen3.5:4b})"
+      return 0
+    fi
+  done
+
+  echo "WARNING: Ollama did not become ready within ~30s."
+  echo "  Check logs/ollama.log or run: ollama serve"
+  echo "  Support routing will use fallback scoring until Ollama responds."
+}
+
 run_migrations() {
   echo "Applying database migrations..."
   if ! .venv/bin/alembic upgrade head; then
@@ -195,6 +262,7 @@ echo "Checking database connection (${DB_HOST}:${DB_PORT}/${DB_NAME})..."
 check_database_connection
 ensure_alembic_version_column
 run_migrations
+ensure_ollama
 
 if [ "${ZYND_MF_WORKER_AUTOSTART:-true}" = "true" ]; then
   if pgrep -f "app.jobs.run_mf_transaction_workers" >/dev/null 2>&1; then

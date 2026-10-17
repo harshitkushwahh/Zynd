@@ -1,16 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Star } from "lucide-react";
 import { useMemo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
 import { DistributorGrowthBadge } from "@/components/ui/distributor-growth-badge";
 import { DistributorInsightCardHeader } from "@/components/ui/distributor-insight-card-header";
-import {
-  SUPPORT_OVERVIEW_PERFORMANCE,
-  SUPPORT_OVERVIEW_SLA,
-} from "@/lib/support-overview-analytics-data";
+import type { SupportOverviewPerformance } from "@/lib/support-overview-analytics";
 
 function PerformanceStatCard({
   eyebrow,
@@ -22,7 +18,7 @@ function PerformanceStatCard({
   eyebrow: string;
   title: string;
   value: string;
-  trendPct: number;
+  trendPct: number | null;
   trailing?: ReactNode;
 }) {
   return (
@@ -32,21 +28,32 @@ function PerformanceStatCard({
         <p className="distributor-operations-insight-card__value tabular-nums">{value}</p>
         {trailing}
       </div>
-      <div className="mt-2">
-        <DistributorGrowthBadge value={trendPct} suffix=" vs last week" />
-      </div>
+      {trendPct != null ? (
+        <div className="mt-2">
+          <DistributorGrowthBadge value={trendPct} suffix=" vs last week" />
+        </div>
+      ) : (
+        <p className="mt-2 text-micro text-muted-foreground">Not enough history for a weekly trend</p>
+      )}
     </article>
   );
 }
 
-export function SupportOverviewPerformanceCards() {
-  const sla = SUPPORT_OVERVIEW_SLA;
-  const performance = SUPPORT_OVERVIEW_PERFORMANCE;
+type SupportOverviewPerformanceCardsProps = {
+  performance: SupportOverviewPerformance;
+};
+
+export function SupportOverviewPerformanceCards({ performance }: SupportOverviewPerformanceCardsProps) {
+  const sla = performance.sla;
 
   const gaugeData = useMemo(
     () => [
       { name: "Within SLA", value: sla.compliancePct, fill: "var(--chart-2)" },
-      { name: "Remaining", value: 100 - sla.compliancePct, fill: "color-mix(in srgb, var(--muted) 80%, transparent)" },
+      {
+        name: "Remaining",
+        value: Math.max(0, 100 - sla.compliancePct),
+        fill: "color-mix(in srgb, var(--muted) 80%, transparent)",
+      },
     ],
     [sla.compliancePct],
   );
@@ -88,7 +95,7 @@ export function SupportOverviewPerformanceCards() {
             </li>
             <li className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-destructive" aria-hidden />
-              <span className="text-muted-foreground">{sla.breachedSla} breached SLA</span>
+              <span className="text-muted-foreground">{sla.breachedSla} at risk or breached</span>
             </li>
           </ul>
         </div>
@@ -96,22 +103,21 @@ export function SupportOverviewPerformanceCards() {
 
       <PerformanceStatCard
         eyebrow="Responsiveness"
-        title="First response time"
+        title="Avg first response time"
         value={performance.firstResponse.label}
         trendPct={performance.firstResponse.trendPct}
       />
       <PerformanceStatCard
         eyebrow="Resolution"
-        title="Average resolution time"
+        title="Avg resolution time"
         value={performance.avgResolution.label}
         trendPct={performance.avgResolution.trendPct}
       />
       <PerformanceStatCard
-        eyebrow="Quality"
-        title="Customer satisfaction"
-        value={performance.satisfaction.label}
-        trendPct={performance.satisfaction.trendPct}
-        trailing={<Star className="size-5 text-warning" fill="currentColor" aria-hidden />}
+        eyebrow="Queue pressure"
+        title="Avg urgency (open)"
+        value={performance.avgUrgency.label === "NA" ? performance.avgUrgency.label : `${performance.avgUrgency.label} / 100`}
+        trendPct={performance.avgUrgency.trendPct}
       />
     </div>
   );

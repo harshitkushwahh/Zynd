@@ -21,6 +21,34 @@ function maskPhone(phone: string): string {
 
 const NOT_CAPTURED = "Not captured";
 
+export type SupportKycPanIdentitySlice = {
+  full_name?: string | null;
+  date_of_birth?: string | null;
+  pan_category?: string | null;
+};
+
+function pickStringField(
+  source: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): string {
+  if (!source) return NOT_CAPTURED;
+  for (const key of keys) {
+    const raw = source[key];
+    if (raw == null) continue;
+    const text = String(raw).trim();
+    if (text) return text;
+  }
+  return NOT_CAPTURED;
+}
+
+function formatPanCategory(raw: string): string {
+  if (!raw || raw === NOT_CAPTURED) return NOT_CAPTURED;
+  const normalized = raw.toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalized === "individual") return "Individual";
+  if (normalized === "corporate") return "Corporate";
+  return raw.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function pickPersonalField(
   personal: Record<string, unknown> | null | undefined,
   ...keys: string[]
@@ -133,6 +161,7 @@ function buildCorrespondenceSlides(
 export function buildSupportClientCapturedProfile(
   profile: DistributorClientProfile,
   kycPersonal?: Record<string, unknown> | null,
+  kycPan?: SupportKycPanIdentitySlice | null,
 ): SupportClientCapturedProfile {
   const { investor, displayName, emailDisplay, contactPhone, personalInfo } = profile;
   const cardCopy = DISTRIBUTOR_CLIENT_COPY.capturedProfile.cards;
@@ -177,12 +206,26 @@ export function buildSupportClientCapturedProfile(
     },
   };
 
-  const dobRaw = pickPersonalField(kycPersonal, "date_of_birth", "dateOfBirth", "dob");
+  const panRecord = kycPan as Record<string, unknown> | null | undefined;
+  const dobFromPan = pickStringField(panRecord, "date_of_birth", "dateOfBirth");
+  const dobRaw =
+    dobFromPan !== NOT_CAPTURED
+      ? dobFromPan
+      : pickPersonalField(kycPersonal, "date_of_birth", "dateOfBirth", "dob");
+  const categoryFromPan = pickStringField(panRecord, "pan_category", "panCategory");
+  const panCategoryRaw =
+    categoryFromPan !== NOT_CAPTURED
+      ? categoryFromPan
+      : pickPersonalField(kycPersonal, "pan_category", "panCategory");
+  const panCategory =
+    panCategoryRaw === NOT_CAPTURED ? NOT_CAPTURED : formatPanCategory(panCategoryRaw);
+  const legalFullName =
+    (kycPan?.full_name?.trim() || displayName?.trim() || NOT_CAPTURED) as string;
   const identity = {
-    legalFullName: displayName,
+    legalFullName,
     dateOfBirth: formatPersonalDate(dobRaw),
     panMasked: investor.panMasked || NOT_CAPTURED,
-    panCategory: pickPersonalField(kycPersonal, "pan_category", "panCategory") || "Individual",
+    panCategory,
   };
 
   const personal = {

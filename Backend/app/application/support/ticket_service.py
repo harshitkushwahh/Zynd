@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -18,8 +17,6 @@ from app.infrastructure.persistence.support_models import (
 )
 
 BOT_SENDER = "Zynd Help Bot"
-FIRST_RESPONSE_HOURS = 2
-RESOLUTION_HOURS = 24
 AUTO_CLOSE_HOURS = 24
 RESOLUTION_PROMPT_BODY = "Is this ticket resolved?"
 AUTO_CLOSE_BODY = "This ticket was closed automatically after 24 hours with no reply."
@@ -79,6 +76,21 @@ def mask_phone(phone: str | None) -> str:
     if len(digits) < 4:
         return "—"
     return f"••••••{digits[-4:]}"
+
+
+def _optional_masked(value: str | None) -> str | None:
+    if not value or value.strip() in {"—", "-", ""}:
+        return None
+    return value
+
+
+def _optional_field(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text in {"—", "-", "none", "unknown"}:
+        return None
+    return text
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -181,18 +193,6 @@ async def _next_public_id(db: AsyncSession) -> str:
     return f"TKT-{int(value)}"
 
 
-def _priority_for(body: str, topics: tuple[str, ...] | list[str]) -> str:
-    if any(topic in topics for topic in ("payment", "portfolio")) and re.search(
-        r"debit|fail|missing|not showing|not show|didn't receive|did not receive",
-        body,
-        re.I,
-    ):
-        return "high"
-    if any(topic in topics for topic in ("payment", "kyc", "portfolio")):
-        return "medium"
-    return "low"
-
-
 async def ensure_ticket(
     db: AsyncSession,
     conversation: SupportConversation,
@@ -204,6 +204,8 @@ async def ensure_ticket(
     status: str,
     escalation_reason: str | None = None,
 ) -> SupportTicket:
+    from app.application.support.support_intelligence_router import apply_support_intelligence
+
     now = utcnow()
     topic_list = [topic for topic in topics if topic] or ["other"]
     primary = topic_list[0]
@@ -218,13 +220,13 @@ async def ensure_ticket(
             topic=primary,
             topics=topic_list,
             status=status,
-            priority=_priority_for(body, topic_list),
+            priority="medium",
             channel="web_chat",
             handled_by=handled_by,
             escalation_reason=escalation_reason,
-            first_response_due_at=now + timedelta(hours=FIRST_RESPONSE_HOURS),
-            resolution_due_at=now + timedelta(hours=RESOLUTION_HOURS),
-            first_responded_at=now,
+            first_response_due_at=None,
+            resolution_due_at=None,
+            first_responded_at=now if status == "resolved" else None,
             resolved_at=now if status == "resolved" else None,
             created_at=now,
             updated_at=now,
@@ -240,11 +242,18 @@ async def ensure_ticket(
         ticket.updated_at = now
         if escalation_reason:
             ticket.escalation_reason = escalation_reason
-        if ticket.first_responded_at is None:
+        if status == "resolved":
+            ticket.resolved_at = now
+            if ticket.first_responded_at is None:
+                ticket.first_responded_at = now
+        else:
+            ticket.resolved_at = None
+        if handled_by == "bot" and status == "pending" and ticket.first_responded_at is None:
             ticket.first_responded_at = now
-        ticket.resolved_at = now if status == "resolved" else None
-        if _priority_for(body, topic_list) == "high":
-            ticket.priority = "high"
+    await db.flush()
+    if ticket.handled_by == "human" or escalation_reason:
+        trigger = "escalation" if escalation_reason else "ensure_ticket"
+        await apply_support_intelligence(db, ticket, user, trigger=trigger, force=True)
     await db.flush()
     from app.application.support.ticket_list_cache import bump_customer_ticket_list_cache_version
 
@@ -457,8 +466,11 @@ def serialize_ticket(
     client_code: str,
     assignee_name: str | None,
     messages: list[dict[str, Any]] | None = None,
+    include_sla: bool = False,
 ) -> dict[str, Any]:
-    return {
+    from app.application.support.ticket_routing_service import sla_snapshot
+
+    payload: dict[str, Any] = {
         "id": ticket.public_id,
         "subject": ticket.subject,
         "description": ticket.description,
@@ -473,6 +485,10 @@ def serialize_ticket(
         "channel": ticket.channel,
         "handled_by": ticket.handled_by,
         "escalation_reason": ticket.escalation_reason,
+        "first_response_due_at": _iso(ticket.first_response_due_at),
+        "resolution_due_at": _iso(ticket.resolution_due_at),
+        "first_responded_at": _iso(ticket.first_responded_at),
+        "resolved_at": _iso(ticket.resolved_at),
         "messages": messages or [],
         "attachments": [
             {
@@ -483,6 +499,15 @@ def serialize_ticket(
             if message.get("attachment_document_id")
         ],
     }
+    if include_sla:
+        payload["sla"] = sla_snapshot(ticket)
+    from app.application.support.support_intelligence_router import serialize_routing_metadata, ticket_urgency_score
+
+    routing = serialize_routing_metadata(ticket)
+    if routing is not None:
+        payload["routing"] = routing
+    payload["urgency_score"] = ticket_urgency_score(ticket)
+    return payload
 
 
 CUSTOMER_TICKET_LIST_MAX_LIMIT = 50
@@ -561,6 +586,19 @@ async def list_console_tickets(
         query = query.join(User, User.id == SupportTicket.user_id).where(User.client_id == client_id.strip())
     result = await db.execute(query.order_by(SupportTicket.updated_at.desc()).limit(200))
     tickets = list(result.scalars())
+    from app.application.support.support_intelligence_router import ticket_urgency_score
+    from app.application.support.ticket_routing_service import PRIORITY_RANK
+
+    # List is read-only: use persisted routing_metadata for urgency sort. Intelligence runs on
+    # ticket detail, escalation, and customer messages — not on every console list poll.
+    tickets.sort(
+        key=lambda row: (
+            ticket_urgency_score(row),
+            PRIORITY_RANK.get(row.priority, 0),
+            _aware(row.updated_at) if row.updated_at else utcnow(),
+        ),
+        reverse=True,
+    )
     names = await _assignee_names(db, tickets)
     codes = await _client_codes(db, tickets)
     return [
@@ -568,6 +606,7 @@ async def list_console_tickets(
             ticket,
             client_code=codes.get(ticket.user_id, ""),
             assignee_name=names.get(ticket.assignee_id) if ticket.assignee_id else None,
+            include_sla=True,
         )
         for ticket in tickets
     ]
@@ -586,17 +625,17 @@ async def customer_snapshot(db: AsyncSession, user: User) -> dict[str, Any]:
     journey = await db.get(KycJourneyState, user.id)
     overall = status.overall_status.value if status else "none"
     label, compliant = _kyc_label(overall)
-    pan_masked = "—"
+    pan_masked: str | None = None
     if journey and isinstance(journey.pan_draft_json, dict):
         masked = mask_pan_display(str(journey.pan_draft_json.get("panNumber") or "") or None)
         if masked:
             pan_masked = masked
     return {
         "display_name": person_name(user),
-        "email_masked": mask_email(user.email),
-        "mobile_masked": mask_phone(user.phone),
+        "email_masked": _optional_masked(mask_email(user.email)),
+        "mobile_masked": _optional_masked(mask_phone(user.phone)),
         "pan_masked": pan_masked,
-        "aadhaar_masked": "—",
+        "aadhaar_masked": None,
         "kyc_status_label": label,
         "kyc_compliant": compliant,
         "client_type": "Individual",
@@ -615,10 +654,10 @@ def domain_context(topic: str, pack: dict[str, Any], client_code: str) -> dict[s
             "status_label": str(kyc.get("overall_status") or "unknown"),
             "status_variant": "success" if kyc.get("overall_status") == "completed" else "warning",
             "fields": [
-                {"label": "Overall status", "value": str(kyc.get("overall_status") or "—")},
-                {"label": "Last step", "value": str(kyc.get("last_completed_step") or "—")},
-                {"label": "PAN check", "value": str(kyc.get("pan_verification_status") or "—")},
-                {"label": "Bank check", "value": str(kyc.get("bank_verification_status") or "—")},
+                {"label": "Overall status", "value": _optional_field(kyc.get("overall_status"))},
+                {"label": "Last step", "value": _optional_field(kyc.get("last_completed_step"))},
+                {"label": "PAN check", "value": _optional_field(kyc.get("pan_verification_status"))},
+                {"label": "Bank check", "value": _optional_field(kyc.get("bank_verification_status"))},
             ],
         }
     if topic in {"payment", "portfolio"}:
@@ -880,6 +919,11 @@ async def console_ticket_detail(db: AsyncSession, public_id: str) -> dict[str, A
     user = await db.get(User, ticket.user_id)
     if user is None:
         raise SupportActionError("ticket_not_found", "Ticket not found.", 404)
+    if ticket.assignee_id is None and ticket.status in {"open", "pending"}:
+        from app.application.support.support_intelligence_router import apply_support_intelligence
+
+        await apply_support_intelligence(db, ticket, user, trigger="ticket_detail", force=False)
+        await db.flush()
     messages = [
         serialize_message(message) for message in await list_messages(db, ticket.conversation_id)
     ]
@@ -896,15 +940,20 @@ async def console_ticket_detail(db: AsyncSession, public_id: str) -> dict[str, A
 
     topics = tuple(ticket.topics or [ticket.topic])
     pack = await build_context_pack(db, user, topics)
+    from app.application.support.ticket_linked_records_service import build_ticket_linked_records
+
+    await db.refresh(ticket)
     return {
         "ticket": serialize_ticket(
             ticket,
             client_code=user.client_id,
             assignee_name=names.get(ticket.assignee_id) if ticket.assignee_id else None,
             messages=messages,
+            include_sla=True,
         ),
         "customer": await customer_snapshot(db, user),
         "domain": domain_context(ticket.topic, pack, user.client_id),
+        "linked_records": await build_ticket_linked_records(db, user=user, ticket=ticket),
         "recent_tickets": [
             serialize_ticket(
                 row,
@@ -949,6 +998,8 @@ async def add_agent_reply(
             author_user_id=agent.id,
         )
     if not internal or resolution_prompt:
+        if ticket.assignee_id is None:
+            ticket.assignee_id = agent.id
         if ticket.first_responded_at is None:
             ticket.first_responded_at = now
         ticket.updated_at = now

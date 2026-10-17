@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
 
 import { TableCard, TableEmptyState } from "@/components/application/table";
+import { SupportTableSkeleton } from "@/components/dashboard/support-table-skeleton";
 import { cn } from "@/lib/utils";
 
 export type DistributorTableCardShellProps = {
   /** Filter row rendered inside the card (above the table). */
   toolbar?: ReactNode;
   isEmpty: boolean;
+  isLoading?: boolean;
+  loadingSkeleton?: ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
   tableSize?: "sm" | "md";
@@ -20,6 +23,8 @@ export type DistributorTableCardShellProps = {
 export function DistributorTableCardShell({
   toolbar,
   isEmpty,
+  isLoading = false,
+  loadingSkeleton,
   emptyTitle = "Nothing to show",
   emptyDescription,
   tableSize = "sm",
@@ -32,7 +37,9 @@ export function DistributorTableCardShell({
         <div className="distributor-table-card-shell__toolbar-region">{toolbar}</div>
       ) : null}
       <TableCard.Root size={tableSize} variant="card-rows" className="w-full min-w-0">
-        {isEmpty ? (
+        {isLoading ? (
+          loadingSkeleton ?? <SupportTableSkeleton />
+        ) : isEmpty ? (
           <TableEmptyState title={emptyTitle} description={emptyDescription} />
         ) : (
           children

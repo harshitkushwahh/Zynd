@@ -48,14 +48,7 @@ export function SupportTicketsPanel() {
         onValueChange={(value) => setQueue(value === "bot" ? "bot" : value === "all" ? "all" : "escalated")}
       />
 
-      {loading ? (
-        <div className="space-y-3">
-          <div className="h-10 animate-pulse rounded-lg bg-muted" aria-hidden />
-          <div className="h-64 animate-pulse rounded-lg bg-muted" aria-hidden />
-        </div>
-      ) : (
-        <SupportTicketsTable tickets={tickets} showUserColumn />
-      )}
+      <SupportTicketsTable tickets={tickets} isLoading={loading} showUserColumn />
     </div>
   );
 }
