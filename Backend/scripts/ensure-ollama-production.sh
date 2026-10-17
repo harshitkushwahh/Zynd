@@ -94,6 +94,7 @@ if [ "${current}" != "${want_url}" ]; then
   else
     printf '\nOLLAMA_BASE_URL=%s\n' "${want_url}" >> "${ENV_FILE}"
   fi
+  chown root:root "${ENV_FILE}" 2>/dev/null || true
   chmod 600 "${ENV_FILE}"
 fi
 
@@ -103,6 +104,7 @@ if ! read_env OLLAMA_MODEL >/dev/null 2>&1; then
   else
     printf 'OLLAMA_MODEL=%s\n' "${model}" >> "${ENV_FILE}"
   fi
+  chown root:root "${ENV_FILE}" 2>/dev/null || true
   chmod 600 "${ENV_FILE}"
 fi
 

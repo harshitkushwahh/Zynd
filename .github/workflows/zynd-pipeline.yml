@@ -484,9 +484,15 @@ jobs:
             env_group="$(stat -c '%G' "${env_file}")"
             env_mode="$(stat -c '%a' "${env_file}")"
             echo "Backend/.env owner=${env_owner} group=${env_group} mode=${env_mode} bytes=$(stat -c '%s' "${env_file}")"
-            if [ "${env_owner}" != "root" ] || [ "${env_group}" != "root" ] || [ "${env_mode}" != "600" ]; then
+            if [ "${env_owner}" != "root" ] || [ "${env_group}" != "root" ]; then
               echo "ERROR: Backend/.env must be owned by root:root with mode 600."
               exit 1
+            fi
+            if [ "${env_mode}" != "600" ]; then
+              echo "WARNING: Backend/.env mode is ${env_mode}; correcting to 600 (common after manual edits)."
+              chmod 600 "${env_file}"
+              env_mode="$(stat -c '%a' "${env_file}")"
+              echo "Backend/.env mode is now ${env_mode}."
             fi
             end_section
 
