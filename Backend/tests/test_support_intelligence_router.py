@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from app.application.support.ollama_client import parse_routing_decision
-from app.application.support.support_intelligence_router import _fallback_decision
+from app.application.support.support_intelligence_router import _fallback_decision, _resolve_decision
 
 
 def test_parse_routing_decision_accepts_minimal_json() -> None:
@@ -31,6 +35,28 @@ def test_fallback_decision_human_request_raises_urgency() -> None:
     decision = _fallback_decision(features)
     assert decision.urgency_score >= 60
     assert decision.assignee_id == "00000000-0000-0000-0000-000000000001"
+
+
+@pytest.mark.asyncio
+async def test_resolve_decision_fallback_only_skips_ollama() -> None:
+    features = {
+        "ticket": {
+            "topic": "payment",
+            "behavior_signals": [],
+            "minutes_since_last_customer_message": 5,
+            "created_minutes_ago": 10,
+        },
+        "customer": {"in_distributor_book": False, "pm_context": None},
+        "agent_candidates": [],
+    }
+    with patch(
+        "app.application.support.support_intelligence_router.complete_routing_decision",
+        new_callable=AsyncMock,
+    ) as mock_chat:
+        _decision, source, model = await _resolve_decision(features, fallback_only=True)
+        mock_chat.assert_not_called()
+    assert source == "fallback"
+    assert model == "fallback-scorer"
 
 
 def test_fallback_pm_co_handling_for_book_client() -> None:

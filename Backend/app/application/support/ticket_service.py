@@ -203,6 +203,7 @@ async def ensure_ticket(
     handled_by: str,
     status: str,
     escalation_reason: str | None = None,
+    routing_fallback_only: bool = False,
 ) -> SupportTicket:
     from app.application.support.support_intelligence_router import apply_support_intelligence
 
@@ -253,7 +254,14 @@ async def ensure_ticket(
     await db.flush()
     if ticket.handled_by == "human" or escalation_reason:
         trigger = "escalation" if escalation_reason else "ensure_ticket"
-        await apply_support_intelligence(db, ticket, user, trigger=trigger, force=True)
+        await apply_support_intelligence(
+            db,
+            ticket,
+            user,
+            trigger=trigger,
+            force=True,
+            routing_fallback_only=routing_fallback_only,
+        )
     await db.flush()
     from app.application.support.ticket_list_cache import bump_customer_ticket_list_cache_version
 

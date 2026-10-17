@@ -137,15 +137,17 @@ async def complete_help_reply(*, system_prompt: str, user_prompt: str) -> BotDra
     settings = get_settings()
     model = await resolve_ollama_model()
     url = settings.ollama_base_url.rstrip("/") + "/api/chat"
+    trimmed_prompt = user_prompt[:12_000]
     body = {
         "model": model,
         "stream": False,
         "format": "json",
+        "keep_alive": "30m",
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user", "content": trimmed_prompt},
         ],
-        "options": {"temperature": 0.2},
+        "options": {"temperature": 0.2, "num_predict": 384, "num_ctx": 4096},
     }
     timeout = httpx.Timeout(settings.ollama_timeout_seconds, connect=5.0)
     try:
@@ -257,11 +259,12 @@ async def complete_routing_decision(*, user_prompt: str) -> RoutingDecision:
         "model": model,
         "stream": False,
         "format": "json",
+        "keep_alive": "30m",
         "messages": [
             {"role": "system", "content": _ROUTING_SYSTEM},
-            {"role": "user", "content": user_prompt[:14_000]},
+            {"role": "user", "content": user_prompt[:10_000]},
         ],
-        "options": {"temperature": 0.15},
+        "options": {"temperature": 0.15, "num_predict": 512, "num_ctx": 4096},
     }
     timeout = httpx.Timeout(settings.support_routing_timeout_seconds, connect=1.5)
     try:

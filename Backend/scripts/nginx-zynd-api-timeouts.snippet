@@ -1,0 +1,12 @@
+# Paste inside the server block that proxy_passes to the Zynd API (127.0.0.1:8000).
+# Help Bot calls Ollama on CPU and can exceed default 60s proxy limits.
+#
+#   location /api/ {
+#     include /path/to/nginx-zynd-api-timeouts.snippet;
+#     proxy_pass http://127.0.0.1:8000;
+#   }
+
+proxy_connect_timeout 30s;
+proxy_send_timeout 180s;
+proxy_read_timeout 180s;
+send_timeout 180s;

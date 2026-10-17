@@ -12,6 +12,7 @@ import {
   respondSupportResolution,
   type SupportConversationPayload,
 } from "@/features/support/lib/support-api";
+import { ApiError } from "@/lib/api-client";
 import { buildSupportChatHeader } from "@/features/support/lib/support-chat-participant";
 import {
   connectSupportRealtime,
@@ -291,13 +292,20 @@ export function useSupportChat() {
         .then((conversation) => {
           applyConversation(conversation);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
+          let body = "I couldn't send that message. Please try again in a moment.";
+          if (error instanceof ApiError && error.message.trim()) {
+            body = error.message;
+          } else if (error instanceof Error && error.message === "support_message_timeout") {
+            body =
+              "The help bot is still thinking on our server. Wait a moment and refresh the chat, or try again.";
+          }
           setMessages((current) => [
             ...current,
             {
               id: createSupportMessageId(),
               role: "system",
-              body: "I couldn't send that message. Please try again in a moment.",
+              body,
               createdAt: new Date().toISOString(),
             },
           ]);

@@ -83,20 +83,56 @@ export function getCurrentSupportConversation() {
   return apiRequest<SupportConversationPayload>("/support/conversations/current");
 }
 
+/** Help Bot may call Ollama on CPU; keep below nginx/proxy limits (see Backend/docs). */
+const SUPPORT_MESSAGE_TIMEOUT_MS = 180_000;
+
+function withSupportMessageTimeout<T>(promise: Promise<T>): Promise<T> {
+  if (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal) {
+    return promise;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error("support_message_timeout"));
+    }, SUPPORT_MESSAGE_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export function postSupportMessage(body: string, file?: File | null) {
+  const path = "/support/conversations/messages";
+  const signal =
+    typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
+      ? AbortSignal.timeout(SUPPORT_MESSAGE_TIMEOUT_MS)
+      : undefined;
+
   if (file) {
     const form = new FormData();
     form.append("body", body);
     form.append("file", file);
-    return apiRequest<SupportConversationPayload>("/support/conversations/messages", {
-      method: "POST",
-      body: form,
-    });
+    return withSupportMessageTimeout(
+      apiRequest<SupportConversationPayload>(path, {
+        method: "POST",
+        body: form,
+        signal,
+      }),
+    );
   }
-  return apiRequest<SupportConversationPayload>("/support/conversations/messages", {
-    method: "POST",
-    body: JSON.stringify({ body }),
-  });
+  return withSupportMessageTimeout(
+    apiRequest<SupportConversationPayload>(path, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+      signal,
+    }),
+  );
 }
 
 export function getSupportTicketThread(ticketId: string) {

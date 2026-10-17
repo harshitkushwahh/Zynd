@@ -208,12 +208,12 @@ async def post_customer_message(
         {"role": message.role, "body": message.body}
         for message in history
         if message.visibility == "customer" and message.kind != "resolution_prompt"
-    ][-8:]
+    ][-6:]
     user_prompt = (
         f"Playbook:\n{playbooks_for(decision.topics)}\n\n"
-        f"Customer context:\n{json.dumps(pack, default=str)[:6000]}\n\n"
-        f"Approved past answers:\n{json.dumps(examples, default=str)[:3000]}\n\n"
-        f"Conversation:\n{json.dumps(transcript, default=str)[:4000]}\n\n"
+        f"Customer context:\n{json.dumps(pack, default=str)[:3500]}\n\n"
+        f"Approved past answers:\n{json.dumps(examples, default=str)[:1500]}\n\n"
+        f"Conversation:\n{json.dumps(transcript, default=str)[:2000]}\n\n"
         f"Latest question:\n{text}"
     )
     try:
@@ -227,6 +227,7 @@ async def post_customer_message(
             text,
             decision.topics,
             "Zynd Help Bot could not reach the model.",
+            routing_fallback_only=True,
         )
         return await serialize_customer_conversation(db, user, conversation)
 
@@ -269,7 +270,16 @@ async def post_customer_message(
     return await serialize_customer_conversation(db, user, conversation)
 
 
-async def _escalate(db, user, conversation, body: str, topics, reason: str) -> None:
+async def _escalate(
+    db,
+    user,
+    conversation,
+    body: str,
+    topics,
+    reason: str,
+    *,
+    routing_fallback_only: bool = True,
+) -> None:
     ticket = await ensure_ticket(
         db,
         conversation,
@@ -279,6 +289,7 @@ async def _escalate(db, user, conversation, body: str, topics, reason: str) -> N
         handled_by="human",
         status="open",
         escalation_reason=reason[:500],
+        routing_fallback_only=routing_fallback_only,
     )
     conversation.handler = "human"
     conversation.status = "escalated"

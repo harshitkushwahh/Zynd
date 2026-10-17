@@ -119,4 +119,37 @@ with urllib.request.urlopen(base + '/api/tags', timeout=60) as resp:
 print('Ollama /api/tags OK at', base)
 "
 
+echo "Warming ${model} (loads weights into memory for faster first Help Bot reply)..."
+if ! "${COMPOSE[@]}" run --rm --no-deps \
+  -e "OLLAMA_BASE_URL=${want_url}" \
+  -e "OLLAMA_MODEL=${model}" \
+  api python -c "
+import json, os, urllib.request
+
+base = os.environ['OLLAMA_BASE_URL'].rstrip('/')
+model = os.environ['OLLAMA_MODEL']
+body = json.dumps({
+    'model': model,
+    'stream': False,
+    'keep_alive': '30m',
+    'messages': [{'role': 'user', 'content': 'ping'}],
+    'options': {'num_predict': 8},
+}).encode()
+req = urllib.request.Request(
+    base + '/api/chat',
+    data=body,
+    headers={'Content-Type': 'application/json'},
+    method='POST',
+)
+with urllib.request.urlopen(req, timeout=180) as resp:
+    resp.read()
+print('Ollama warm-up chat OK')
+"; then
+  echo "WARN: model warm-up failed; Help Bot may be slow on the first message."
+fi
+
+if [ -f "${ROOT}/Backend/scripts/nginx-zynd-api-timeouts.snippet" ]; then
+  echo "NOTE: Ensure nginx/Apache proxy_read_timeout is >= 180s for /api/ (see Backend/scripts/nginx-zynd-api-timeouts.snippet)."
+fi
+
 echo "Ollama ensure complete."
