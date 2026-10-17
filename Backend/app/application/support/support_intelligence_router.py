@@ -203,14 +203,18 @@ def _enrich_pm_co_handling(decision: RoutingDecision, features: dict[str, Any]) 
     return merged
 
 
-async def _resolve_decision(features: dict[str, Any]) -> tuple[RoutingDecision, str, str]:
+async def _resolve_decision(
+    features: dict[str, Any],
+    *,
+    fallback_only: bool = False,
+) -> tuple[RoutingDecision, str, str]:
     settings = get_settings()
     candidate_ids = {
         str(row.get("id"))
         for row in (features.get("agent_candidates") or [])
         if isinstance(row, dict) and row.get("id")
     }
-    if settings.support_ai_routing_enabled:
+    if settings.support_ai_routing_enabled and not fallback_only:
         try:
             model = await resolve_ollama_model()
             decision = await complete_routing_decision(
@@ -239,6 +243,7 @@ async def apply_support_intelligence(
     *,
     trigger: str,
     force: bool = False,
+    routing_fallback_only: bool = False,
 ) -> bool:
     """Run AI/fallback routing. Returns True if applied."""
     settings = get_settings()
@@ -253,7 +258,7 @@ async def apply_support_intelligence(
         return False
 
     features = await build_support_routing_features(db, ticket=ticket, customer=customer, trigger=trigger)
-    decision, source, model = await _resolve_decision(features)
+    decision, source, model = await _resolve_decision(features, fallback_only=routing_fallback_only)
 
     previous_priority = ticket.priority
     if trigger in {"escalation", "ensure_ticket", "customer_message"}:

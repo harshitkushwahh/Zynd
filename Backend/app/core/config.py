@@ -168,7 +168,7 @@ class Settings(BaseSettings):
     support_frontend_url: str = "http://localhost:9999"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:4b"
-    ollama_timeout_seconds: float = 45.0
+    ollama_timeout_seconds: float = 120.0
     support_ai_routing_enabled: bool = True
     support_routing_timeout_seconds: float = 20.0
     support_routing_debounce_seconds: int = 300

@@ -47,3 +47,12 @@ Ticket payloads include:
 Run migration `105_support_ai_routing` before deploying. If Ollama is down, routing continues via fallback; assignee selection uses weighted backlog and presence.
 
 Production deploys (`.github/workflows/zynd-pipeline.yml`) start the **`ollama`** Compose service and run `Backend/scripts/ensure-ollama-production.sh` before recreating the API. Server `Backend/.env` should define `OLLAMA_MODEL`; deploy sets `OLLAMA_BASE_URL=http://ollama:11434`. The VPS needs enough RAM plus swap for the chosen model (default `qwen3.5:4b`).
+
+### Reverse proxy timeouts
+
+Help Bot `POST /support/conversations/messages` waits on Ollama (`OLLAMA_TIMEOUT_SECONDS`, default **120**). If nginx/Apache in front of the API uses a **60s** read timeout, browsers see a failed send even when the API eventually escalates. Apply `Backend/scripts/nginx-zynd-api-timeouts.snippet` (or equivalent **180s** read timeout) on `/api/`.
+
+### Help Bot latency
+
+- Escalations from the bot use **fallback routing** during the HTTP request (no second Ollama call); console debounce can run AI routing later.
+- Ollama chat uses capped context, `num_predict`, and `keep_alive: 30m` to reduce cold/slow runs on small VPS hosts.
