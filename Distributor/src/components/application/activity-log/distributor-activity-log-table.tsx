@@ -123,7 +123,7 @@ export function DistributorActivityLogTable({
     <Table
       aria-label={ariaLabel}
       selectionMode="none"
-      className="min-w-0 w-full"
+      className="distributor-activity-log-table min-w-0 w-full table-fixed"
       sortDescriptor={sortDescriptor}
       onSortChange={(descriptor) => {
         setSortDescriptor(descriptor);
@@ -139,8 +139,13 @@ export function DistributorActivityLogTable({
           allowsSorting
           className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}
         />
-        <Table.Head id="summary" label="Activity" allowsSorting />
-        <Table.Head id="actor" label="Actor" allowsSorting />
+        <Table.Head id="summary" label="Activity" allowsSorting className="min-w-0" />
+        <Table.Head
+          id="actor"
+          label="Actor"
+          allowsSorting
+          className="w-[10.5rem] min-w-[10.5rem] max-w-[10.5rem] [&_.flex]:justify-end"
+        />
       </Table.Header>
       <Table.Body items={pageItems}>
         {(entry) => (
@@ -153,9 +158,13 @@ export function DistributorActivityLogTable({
             >
               {formatDistributorDateTime(entry.createdAt)}
             </Table.Cell>
-            <Table.Cell className="max-w-[28rem] font-medium text-foreground">{entry.summary}</Table.Cell>
-            <Table.Cell>
-              <StatusBadge variant={actorVariant(entry.actor)} showIcon={false}>
+            <Table.Cell className="min-w-0 font-medium text-foreground">{entry.summary}</Table.Cell>
+            <Table.Cell className="w-[10.5rem] min-w-[10.5rem] max-w-[10.5rem] whitespace-nowrap text-right align-middle">
+              <StatusBadge
+                variant={actorVariant(entry.actor)}
+                showIcon={false}
+                className="max-w-full truncate"
+              >
                 {entry.actor}
               </StatusBadge>
             </Table.Cell>

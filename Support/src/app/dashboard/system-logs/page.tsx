@@ -1,5 +1,5 @@
-import { SupportSystemLogsPanel } from "@/components/system/support-system-logs-panel";
+import { redirect } from "next/navigation";
 
 export default function SupportSystemLogsPage() {
-  return <SupportSystemLogsPanel />;
+  redirect("/dashboard");
 }

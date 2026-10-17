@@ -720,15 +720,21 @@ PERMISSION_ROUTE_MATRIX: list[PermissionRouteEntry] = [
     },
     {
         "permission": "support.tickets.read",
-        "status": "planned",
-        "routes": [],
-        "notes": "Support console ticket list and detail (phase 2).",
+        "status": "enforced",
+        "routes": [
+            "GET /support/console/tickets",
+            "GET /support/console/tickets/{ticket_id}",
+        ],
+        "notes": "Support console ticket list and detail, including Zynd Help Bot threads.",
     },
     {
         "permission": "support.tickets.manage",
-        "status": "planned",
-        "routes": [],
-        "notes": "Support console ticket assign and reply (phase 2).",
+        "status": "enforced",
+        "routes": [
+            "POST /support/console/tickets/{ticket_id}/messages",
+            "PATCH /support/console/tickets/{ticket_id}",
+        ],
+        "notes": "Assign, reply, and resolve support tickets. Resolving stores a learning example.",
     },
 ]
 

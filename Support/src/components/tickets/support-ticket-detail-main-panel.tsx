@@ -15,12 +15,16 @@ type SupportTicketDetailMainPanelProps = {
   detail: SupportTicketDetail;
   activeTab: SupportTicketDetailTabId;
   className?: string;
+  onUpdated?: (detail: SupportTicketDetail) => void;
+  notifyTyping?: (typing: boolean) => void;
 };
 
 export function SupportTicketDetailMainPanel({
   detail,
   activeTab,
   className,
+  onUpdated,
+  notifyTyping,
 }: SupportTicketDetailMainPanelProps) {
   const { ticket, customer, related, activityLog, slaTab, slaLabel } = detail;
 
@@ -32,7 +36,12 @@ export function SupportTicketDetailMainPanel({
           className,
         )}
       >
-        <SupportTicketChatPanel ticket={ticket} className="h-full min-h-0" />
+        <SupportTicketChatPanel
+          ticket={ticket}
+          className="h-full min-h-0"
+          onUpdated={onUpdated}
+          notifyTyping={notifyTyping}
+        />
       </Card>
     );
   }

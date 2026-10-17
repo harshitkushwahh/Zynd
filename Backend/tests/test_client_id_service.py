@@ -17,8 +17,18 @@ from app.application.documents.client_id_service import (
 
 def test_build_client_id_candidate_from_email_and_phone() -> None:
     assert build_client_id_candidate("rahul.sharma@example.com", "9876543210") == (
-        "rahulsharma9876543210@zynd"
+        "rahul9876543210@zynd"
     )
+
+
+def test_build_client_id_candidate_caps_email_prefix_at_five_chars() -> None:
+    assert build_client_id_candidate("verylongemailheader@example.com", "9876543210") == (
+        "veryl9876543210@zynd"
+    )
+
+
+def test_build_client_id_candidate_uses_last_ten_phone_digits() -> None:
+    assert build_client_id_candidate("rahul@example.com", "+919876543210") == "rahul9876543210@zynd"
 
 
 def test_build_client_id_candidate_single_token_email() -> None:
@@ -77,8 +87,8 @@ async def test_assign_client_id_replaces_placeholder(db_session) -> None:
     db_session.add(user)
     await db_session.flush()
     assigned = await assign_client_id(db_session, user)
-    assert assigned == "investor9876543210@zynd"
-    assert user.client_id == "investor9876543210@zynd"
+    assert assigned == "inves9876543210@zynd"
+    assert user.client_id == "inves9876543210@zynd"
 
 
 def test_is_zynd_persona_client_id() -> None:

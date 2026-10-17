@@ -1,5 +1,3 @@
-import { SUPPORT_DUMMY_INVESTORS } from "@/lib/support-users-dummy-data";
-import { SUPPORT_DUMMY_TICKETS } from "@/lib/support-tickets-dummy-data";
 import { formatTicketTopicLabel } from "@/lib/support-ticket-display";
 import type {
   SupportTicket,
@@ -7,64 +5,73 @@ import type {
   SupportTicketDetail,
   SupportTicketCustomerSnapshot,
   SupportTicketDomainContext,
+  SupportTicketLinkedRecord,
   SupportTicketSlaSummary,
   SupportTicketSidebarMeta,
 } from "@/lib/support-types";
 import { buildSupportTicketSlaTab } from "@/lib/support-ticket-sla-tab-model";
-import { formatAum, formatDistributorDate, formatDistributorDateTime } from "@/lib/format";
+import { normalizeSupportDisplayValue } from "@/lib/support-display-value";
+import { formatDistributorDateTime } from "@/lib/format";
 
-function findInvestorForTicket(ticket: SupportTicket) {
-  return SUPPORT_DUMMY_INVESTORS.find((row) => row.clientCode === ticket.userId);
-}
-
-function buildAadhaarMasked(clientCode: string): string {
-  const suffix = clientCode.replace(/\D/g, "").slice(-4).padStart(4, "0");
-  return `XXXX XXXX ${suffix}`;
-}
-
-function buildCustomerSnapshot(ticket: SupportTicket): SupportTicketCustomerSnapshot {
-  const investor = findInvestorForTicket(ticket);
-  const kycCompliant = investor?.complianceStatus === "Compliant";
-
+function buildCustomerSnapshotFallback(ticket: SupportTicket): SupportTicketCustomerSnapshot {
   return {
-    displayName: investor?.displayName ?? ticket.messages.find((m) => m.role === "user")?.senderName ?? ticket.userId,
-    emailMasked: investor?.emailMasked ?? "—",
-    mobileMasked: investor?.mobileMasked ?? "—",
-    panMasked: investor?.panMasked ?? "—",
-    aadhaarMasked: buildAadhaarMasked(ticket.userId),
-    kycStatusLabel: kycCompliant ? "Verified" : "Not verified",
-    kycCompliant,
-    clientType: investor?.investorType ?? "Individual",
-    onboardingDate: investor ? formatDistributorDate(investor.createdAt) : "—",
+    displayName:
+      ticket.messages.find((message) => message.role === "user")?.senderName ?? ticket.userId,
+    emailMasked: normalizeSupportDisplayValue(null),
+    mobileMasked: normalizeSupportDisplayValue(null),
+    panMasked: normalizeSupportDisplayValue(null),
+    aadhaarMasked: normalizeSupportDisplayValue(null),
+    kycStatusLabel: "Unknown",
+    kycCompliant: false,
+    clientType: "Individual",
+    onboardingDate: normalizeSupportDisplayValue(null),
   };
 }
 
+function formatHoursRemaining(hours: number | null | undefined): string {
+  if (hours == null) return "NA";
+  if (hours <= 0) return "Overdue";
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m remaining`;
+  return `${Math.round(hours)}h remaining`;
+}
+
 function buildSlaLabel(ticket: SupportTicket): string {
-  if (ticket.status === "resolved") return "SLA met";
-  if (ticket.priority === "high") return "12h remaining";
-  if (ticket.priority === "medium") return "24h remaining";
-  return "48h remaining";
+  const sla = ticket.sla;
+  if (ticket.status === "resolved" || sla?.resolutionMet) return "SLA met";
+  const resolutionHours = sla?.resolutionRemainingHours;
+  if (resolutionHours != null) return formatHoursRemaining(resolutionHours);
+  return "NA";
 }
 
 function buildSlaSummary(ticket: SupportTicket): SupportTicketSlaSummary {
-  if (ticket.status === "resolved") {
+  const sla = ticket.sla;
+  const responseHours = sla?.firstResponseTargetHours ?? (ticket.priority === "high" ? 1 : ticket.priority === "medium" ? 2 : 4);
+  const resolutionHours = sla?.resolutionTargetHours ?? (ticket.priority === "high" ? 8 : ticket.priority === "medium" ? 24 : 48);
+
+  if (ticket.status === "resolved" || sla?.resolutionMet) {
     return {
       remainingLabel: "SLA met",
       remainingPct: 100,
-      responseTarget: "Met within 2h",
-      resolutionTarget: "Met within 24h",
+      responseTarget: `Met within ${responseHours}h`,
+      resolutionTarget: `Met within ${resolutionHours}h`,
     };
   }
 
   const remainingLabel = buildSlaLabel(ticket);
+  const resolutionRemaining = sla?.resolutionRemainingHours;
   const remainingPct =
-    ticket.priority === "high" ? 72 : ticket.priority === "medium" ? 58 : 40;
+    resolutionRemaining == null
+      ? 0
+      : Math.max(
+          8,
+          Math.min(100, Math.round((resolutionRemaining / resolutionHours) * 100)),
+        );
 
   return {
     remainingLabel,
     remainingPct,
-    responseTarget: "2h from first touch",
-    resolutionTarget: "24h from creation",
+    responseTarget: `${responseHours}h from creation`,
+    resolutionTarget: `${resolutionHours}h from creation`,
   };
 }
 
@@ -78,6 +85,14 @@ function teamLabelForTopic(topic: SupportTicket["topic"]): string {
       return "Investments Support";
     case "account":
       return "Account Support";
+    case "family":
+      return "Family Support";
+    case "portfolio":
+      return "Portfolio Support";
+    case "referrals":
+      return "Referral Support";
+    case "goals":
+      return "Goals Support";
     default:
       return "General Support";
   }
@@ -87,85 +102,16 @@ function buildSidebarMeta(ticket: SupportTicket): SupportTicketSidebarMeta {
   return {
     typeLabel: formatTicketTopicLabel(ticket.topic),
     teamLabel: teamLabelForTopic(ticket.topic),
-    assignedTo: ticket.assigneeName ?? "Unassigned",
+    assignedTo: ticket.assigneeId
+      ? normalizeSupportDisplayValue(ticket.assigneeName)
+      : normalizeSupportDisplayValue(null),
     createdOn: formatDistributorDateTime(ticket.createdAt),
     lastUpdated: formatDistributorDateTime(ticket.updatedAt),
   };
 }
 
-function buildDomainContext(ticket: SupportTicket): SupportTicketDomainContext | null {
-  const userHref = `/dashboard/users/${encodeURIComponent(ticket.userId)}`;
-  const userSuffix = ticket.userId.replace(/\D/g, "").slice(-3).padStart(3, "0");
-
-  if (ticket.topic === "payment") {
-    return {
-      title: "Redemption details",
-      viewInHref: `${userHref}?tab=portfolio`,
-      viewInLabel: "View in Investment",
-      statusLabel: "Pending bank credit",
-      statusVariant: "warning",
-      fields: [
-        { label: "Amount", value: formatAum(125_000) },
-        { label: "Folio number", value: `FOL-${userSuffix}-HDFC` },
-        { label: "Order ID", value: `ORD-202610-001` },
-        { label: "Fund name", value: "HDFC Flexi Cap Fund" },
-        { label: "Redemption date", value: formatDistributorDate(ticket.createdAt) },
-        { label: "Expected credit", value: formatDistributorDate(ticket.updatedAt) },
-      ],
-    };
-  }
-
-  if (ticket.topic === "kyc") {
-    return {
-      title: "KYC application",
-      viewInHref: `${userHref}?tab=kyc`,
-      viewInLabel: "View KYC journey",
-      statusLabel: "Pending review",
-      statusVariant: "warning",
-      fields: [
-        { label: "Application ID", value: `KYC-APP-${userSuffix}` },
-        { label: "Document type", value: "Address proof" },
-        { label: "Submitted on", value: formatDistributorDate(ticket.createdAt) },
-        { label: "Last reviewed", value: formatDistributorDate(ticket.updatedAt) },
-      ],
-    };
-  }
-
-  if (ticket.topic === "sip") {
-    return {
-      title: "SIP mandate",
-      viewInHref: `${userHref}?tab=activity`,
-      viewInLabel: "View SIP activity",
-      statusLabel: "Mandate pending",
-      statusVariant: "warning",
-      fields: [
-        { label: "Scheme", value: "Parag Parikh Flexi Cap Fund" },
-        { label: "Installment", value: formatAum(25_000) },
-        { label: "Frequency", value: "Monthly" },
-        { label: "Next debit", value: formatDistributorDate(ticket.updatedAt) },
-      ],
-    };
-  }
-
-  if (ticket.topic === "account") {
-    return {
-      title: "Account change",
-      viewInHref: userHref,
-      viewInLabel: "View profile",
-      statusLabel: "Verification in progress",
-      statusVariant: "info",
-      fields: [
-        { label: "Change type", value: "Bank account" },
-        { label: "Reference", value: `CHG-${userSuffix}` },
-        { label: "Requested on", value: formatDistributorDate(ticket.createdAt) },
-      ],
-    };
-  }
-
-  return null;
-}
-
 function buildActivityLog(ticket: SupportTicket): SupportTicketActivityEntry[] {
+  const agentActor = ticket.assigneeName?.trim() || "NA";
   const entries: SupportTicketActivityEntry[] = [
     {
       id: `${ticket.id}-created`,
@@ -185,11 +131,19 @@ function buildActivityLog(ticket: SupportTicket): SupportTicketActivityEntry[] {
   }
 
   for (const message of ticket.messages) {
-    if (message.role === "agent") {
+    if (message.role === "bot") {
+      entries.push({
+        id: `${ticket.id}-${message.id}-bot`,
+        summary: "Zynd Help Bot replied",
+        actor: message.senderName ?? "Zynd Help Bot",
+        createdAt: message.createdAt,
+      });
+    }
+    if (message.role === "agent" && message.visibility !== "internal") {
       entries.push({
         id: `${ticket.id}-${message.id}-reply`,
         summary: "Reply added",
-        actor: message.senderName ?? ticket.assigneeName ?? "Support Agent",
+        actor: message.senderName ?? agentActor,
         createdAt: message.createdAt,
       });
     }
@@ -199,14 +153,14 @@ function buildActivityLog(ticket: SupportTicket): SupportTicketActivityEntry[] {
     entries.push({
       id: `${ticket.id}-resolved`,
       summary: "Marked resolved",
-      actor: ticket.assigneeName ?? "Support Agent",
+      actor: agentActor,
       createdAt: ticket.updatedAt,
     });
   } else {
     entries.push({
       id: `${ticket.id}-updated`,
       summary: `Status set to ${ticket.status}`,
-      actor: ticket.assigneeName ?? "Support Agent",
+      actor: agentActor,
       createdAt: ticket.updatedAt,
     });
   }
@@ -216,79 +170,32 @@ function buildActivityLog(ticket: SupportTicket): SupportTicketActivityEntry[] {
   );
 }
 
-export function buildSupportTicketDetail(ticket: SupportTicket): SupportTicketDetail {
-  const recentTickets = SUPPORT_DUMMY_TICKETS.filter(
-    (row) => row.userId === ticket.userId && row.id !== ticket.id,
-  ).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  const userSuffix = ticket.userId.replace(/\D/g, "").slice(-3).padStart(3, "0");
-
-  const userHref = `/dashboard/users/${encodeURIComponent(ticket.userId)}`;
-  const customer = buildCustomerSnapshot(ticket);
+export function buildSupportTicketDetail(
+  ticket: SupportTicket,
+  live?: {
+    customer: SupportTicketCustomerSnapshot;
+    recentTickets: SupportTicket[];
+    domain: SupportTicketDomainContext | null;
+    linkedRecords?: SupportTicketLinkedRecord[];
+  },
+): SupportTicketDetail {
+  const recentTickets = live?.recentTickets ?? [];
+  const customer = live?.customer ?? buildCustomerSnapshotFallback(ticket);
+  const domain = live?.domain ?? null;
+  const linkedRecords = live?.linkedRecords ?? [];
 
   return {
     ticket,
     customer,
     related: {
       recentTickets,
-      records: [
-        {
-          key: "user",
-          title: "Investor profile",
-          recordId: ticket.userId,
-          href: userHref,
-          statusLabel: customer.kycStatusLabel,
-          description: customer.displayName,
-          apiRoute: "GET /api/v1/support/users/{client_code}",
-          dataPoints: [
-            "client_code",
-            "display_name",
-            "email_masked",
-            "mobile_masked",
-            "compliance_status",
-            "onboarding_status",
-          ],
-        },
-        {
-          key: "investment",
-          title: "Investment account",
-          recordId: `INV-${userSuffix}`,
-          statusLabel: customer.kycCompliant ? "Active" : "Restricted",
-          description: "MF holdings and folio summary for support lookup.",
-          apiRoute: "GET /api/v1/support/users/{client_code}/portfolio",
-          dataPoints: ["folio_ids", "total_aum", "holdings_count", "last_synced_at"],
-        },
-        {
-          key: "kyc",
-          title: "KYC application",
-          recordId: `KYC-APP-${userSuffix}`,
-          statusLabel: customer.kycStatusLabel,
-          description: "Latest KYC journey tied to this investor.",
-          apiRoute: "GET /api/v1/support/users/{client_code}/kyc",
-          dataPoints: ["kyc_journey_id", "overall_status", "step_statuses", "last_updated_at"],
-        },
-        {
-          key: "ticket",
-          title: "This ticket",
-          recordId: ticket.id,
-          statusLabel: ticket.status,
-          description: ticket.subject,
-          apiRoute: "GET /api/v1/support/tickets/{ticket_id}",
-          dataPoints: [
-            "ticket_id",
-            "user_id",
-            "status",
-            "priority",
-            "assignee_id",
-            "messages",
-          ],
-        },
-      ],
+      records: linkedRecords,
     },
     slaLabel: buildSlaLabel(ticket),
     sla: buildSlaSummary(ticket),
     slaTab: buildSupportTicketSlaTab(ticket),
     sidebarMeta: buildSidebarMeta(ticket),
-    domain: buildDomainContext(ticket),
+    domain,
     activityLog: buildActivityLog(ticket),
   };
 }

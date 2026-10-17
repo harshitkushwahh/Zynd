@@ -657,7 +657,7 @@ export function MfCartView() {
   async function handleCheckout() {
     if (!cart || activeCount === 0) return;
     if (!hasPaymentReadyAccount || !selectedBankAccountId) {
-      setError(copy.mutualFunds.bankPickerEmpty);
+      setError(copy.mutualFunds.bankPickerEmptyTitle);
       return;
     }
     setCheckingOut(true);

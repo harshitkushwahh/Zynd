@@ -20,7 +20,8 @@ type ComposerMode = "reply" | "internal";
 type SupportTicketChatComposerProps = {
   value: string;
   onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (mode: "reply" | "internal") => void;
+  onAskResolved: () => void;
   disabled?: boolean;
   className?: string;
 };
@@ -29,6 +30,7 @@ export function SupportTicketChatComposer({
   value,
   onChange,
   onSend,
+  onAskResolved,
   disabled = false,
   className,
 }: SupportTicketChatComposerProps) {
@@ -50,13 +52,13 @@ export function SupportTicketChatComposer({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (canSend) onSend();
+    if (canSend) onSend(mode);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
-      if (canSend) onSend();
+      if (canSend) onSend(mode);
     }
   };
 
@@ -116,6 +118,15 @@ export function SupportTicketChatComposer({
             </button>
           ))}
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          onClick={onAskResolved}
+          className="h-10 shrink-0 rounded-full px-3"
+        >
+          Ticket resolved
+        </Button>
         <Button type="button" variant="outline" size="icon" disabled className="size-10 shrink-0 rounded-full" aria-label="Attach file">
           <Paperclip className="size-4" strokeWidth={2.25} />
         </Button>

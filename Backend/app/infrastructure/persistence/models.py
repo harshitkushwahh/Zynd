@@ -677,6 +677,7 @@ class DocumentType(str, enum.Enum):
     address_proof = "address_proof"
     nominee_id = "nominee_id"
     family_group_avatar = "family_group_avatar"
+    support_attachment = "support_attachment"
 
 
 class KycReviewStatus(str, enum.Enum):

@@ -267,10 +267,11 @@ def _serialize_list_item(
         kyc_onboarding_complete if kyc_onboarding_complete is not None else kyc_compliant
     )
     has_invested = bool(row.get("has_invested"))
+    display_name = (row.get("display_name") or "").strip() or "Investor"
     return {
         "user_id": row["user_id"],
         "client_id": row.get("client_id"),
-        "display_name": row.get("display_name"),
+        "display_name": display_name,
         "email_masked": _distributor_contact_email(str(row.get("email") or "")),
         "phone_masked": _distributor_contact_phone(row.get("phone")),
         "pan_masked": _mask_pan_display(pan_last4),
@@ -574,21 +575,10 @@ def _serialize_oauth_connections(raw: dict[str, Any]) -> dict[str, Any]:
     return serialized
 
 
-async def get_distributor_client_detail(
+async def build_investor_client_detail_payload(
     db: AsyncSession,
-    reference: str,
-    *,
-    actor: User,
+    user: User,
 ) -> dict[str, Any] | None:
-    user = await get_user_by_reference(db, reference)
-    if not user or user.role != UserRole.user:
-        return None
-
-    try:
-        await assert_actor_can_read_client_profile(db, actor=actor, client_user=user)
-    except DistributorClientBookError:
-        return None
-
     summary = await get_user_summary(db, user.id)
     if not summary:
         return None
@@ -650,6 +640,7 @@ async def get_distributor_client_detail(
     link = await get_client_link_for_user(db, client_user_id=user.id)
     list_row["service_model"] = "pm" if link else "diy"
     list_row["mitra_client_id"] = link.mitra_client_id if link else None
+    list_row["in_distributor_book"] = link is not None
 
     investments = profile.get("investments") if profile else None
     if isinstance(investments, dict):
@@ -680,6 +671,96 @@ async def get_distributor_client_detail(
         "sessions": sessions,
         "created_at": user.created_at,
         "book_link": serialize_client_link(link),
+    }
+
+
+async def get_distributor_client_detail(
+    db: AsyncSession,
+    reference: str,
+    *,
+    actor: User,
+) -> dict[str, Any] | None:
+    user = await get_user_by_reference(db, reference)
+    if not user or user.role != UserRole.user:
+        return None
+
+    try:
+        await assert_actor_can_read_client_profile(db, actor=actor, client_user=user)
+    except DistributorClientBookError:
+        return None
+
+    return await build_investor_client_detail_payload(db, user)
+
+
+async def get_support_console_user_detail(
+    db: AsyncSession,
+    reference: str,
+) -> dict[str, Any] | None:
+    user = await get_user_by_reference(db, reference)
+    if not user or user.role != UserRole.user:
+        return None
+    payload = await build_investor_client_detail_payload(db, user)
+    if payload is None:
+        return None
+
+    from app.application.support.support_kyc_registry_service import build_support_kyc_registry_snapshot
+
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    payload["kyc_registry_snapshot"] = await build_support_kyc_registry_snapshot(
+        db,
+        user.id,
+        client_code=str(summary.get("client_id") or user.client_id or reference),
+        display_name=str(payload.get("display_name") or summary.get("display_name") or "Investor"),
+        email_masked=str(payload.get("email_masked") or ""),
+        phone_masked=payload.get("phone_masked"),
+    )
+    return payload
+
+
+SUPPORT_CONSOLE_USER_LIST_MAX_LIMIT = 50
+
+
+async def list_support_console_users(
+    db: AsyncSession,
+    *,
+    actor: User,
+    email: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    return await list_distributor_clients(
+        db,
+        actor=actor,
+        scope="platform",
+        email=email,
+        limit=limit,
+        offset=offset,
+    )
+
+
+async def list_support_console_users_page(
+    db: AsyncSession,
+    *,
+    actor: User,
+    email: str | None = None,
+    offset: int = 0,
+    limit: int = 25,
+) -> dict[str, Any]:
+    safe_offset = max(0, offset)
+    safe_limit = min(max(1, limit), SUPPORT_CONSOLE_USER_LIST_MAX_LIMIT)
+    rows = await list_support_console_users(
+        db,
+        actor=actor,
+        email=email,
+        limit=safe_limit + 1,
+        offset=safe_offset,
+    )
+    has_more = len(rows) > safe_limit
+    items = rows[:safe_limit]
+    return {
+        "items": items,
+        "has_more": has_more,
+        "next_offset": safe_offset + len(items),
     }
 
 

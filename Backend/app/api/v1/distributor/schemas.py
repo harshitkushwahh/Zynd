@@ -322,6 +322,7 @@ class DistributorClientDetailResponse(BaseModel):
     sessions: list[DistributorClientSessionResponse] = Field(default_factory=list)
     created_at: datetime | None = None
     book_link: dict[str, Any] | None = None
+    kyc_registry_snapshot: dict[str, Any] | None = None
 
 
 class ClientOnboardingStartRequest(BaseModel):

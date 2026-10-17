@@ -27,6 +27,7 @@ import {
   formatSupportTransactionStatus,
   type SupportTransactionJourneyStep,
 } from "@/lib/support-transaction-detail-model";
+import { supportUserDetailHref } from "@/lib/support-users-api";
 import { cn } from "@/lib/utils";
 
 type SupportTransactionDetailDialogProps = {
@@ -183,7 +184,7 @@ export function SupportTransactionDetailDialog({
   if (!order || !detail) return null;
 
   const lastUpdated = detail.settledAt ?? detail.submittedAt ?? order.createdAt;
-  const profileHref = `/dashboard/users/${encodeURIComponent(order.clientCode)}`;
+  const profileHref = supportUserDetailHref(order.clientCode);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

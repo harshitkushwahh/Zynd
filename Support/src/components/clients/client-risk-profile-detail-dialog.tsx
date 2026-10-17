@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ClientRiskProfileViewAnswersDialog } from "@/components/clients/client-risk-profile-view-answers-dialog";
 import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
+import { RiskProfileTierBadge } from "@/components/risk-profile/risk-profile-tier-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -101,9 +102,7 @@ export function ClientRiskProfileDetailDialog({
               />
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <StatusBadge variant="neutral">
-                <span className={tierVisual.textClass}>{tierVisual.label}</span>
-              </StatusBadge>
+              <RiskProfileTierBadge tier={assessment.tier} />
               <StatusBadge variant="neutral">
                 {formatAssessmentDateTime(assessment.completedAt)}
               </StatusBadge>

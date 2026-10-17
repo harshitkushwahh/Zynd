@@ -8,9 +8,9 @@ import {
   type ReactNode,
   type UIEvent,
 } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SupportChatComposer } from "@/features/support/components/support-chat-composer";
 import { SupportMessageBubble } from "@/features/support/components/support-message-bubble";
@@ -19,6 +19,65 @@ import { cn } from "@/lib/utils";
 import { copy } from "@/shared/config/copy";
 
 const NEAR_BOTTOM_PX = 72;
+
+function SupportPresenceDot({
+  online,
+  className,
+  size = "md",
+}: {
+  online: boolean;
+  className?: string;
+  size?: "sm" | "md";
+}) {
+  const dot = size === "sm" ? "size-1.5" : "size-2.5";
+  const ping = size === "sm" ? "size-1.5" : "size-2.5";
+
+  return (
+    <span
+      className={cn(
+        "relative inline-flex shrink-0 items-center justify-center rounded-full",
+        dot,
+        className,
+      )}
+    >
+      {online ? (
+        <span
+          className={cn(
+            "motion-safe:animate-pulse absolute inset-0 rounded-full bg-emerald-500/50",
+            ping,
+          )}
+          aria-hidden
+        />
+      ) : null}
+      <span
+        className={cn(
+          "relative rounded-full",
+          dot,
+          online ? "bg-emerald-500" : "bg-amber-400",
+        )}
+      />
+    </span>
+  );
+}
+
+function SupportAvatarPresenceBadge({
+  online,
+  ringClassName,
+}: {
+  online: boolean;
+  ringClassName: string;
+}) {
+  return (
+    <AvatarBadge
+      aria-hidden
+      className={cn(
+        "size-2.5 min-h-0 min-w-0 border-0 p-0",
+        online ? "bg-emerald-500 motion-safe:animate-pulse" : "bg-amber-400",
+        ringClassName,
+      )}
+    />
+  );
+}
 
 type SupportChatPanelProps = {
   headerActions?: ReactNode;
@@ -41,17 +100,27 @@ export function SupportChatPanel({
   const { chat } = useSupportWidget();
   const {
     agent,
+    chatHeader,
     quickReplies,
     messages,
-    draft,
-    setDraft,
     attachment,
     attachImage,
     clearAttachment,
     agentTyping,
-    sendDraft,
+    canReply,
+    sendMessage,
     sendQuickReply,
+    startNewChat,
   } = chat;
+
+  const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    setDraft("");
+  }, [chat.threadKey]);
+
+  const header = chatHeader ?? agent;
+  const showPresence = Boolean(header.showPresence);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -102,8 +171,9 @@ export function SupportChatPanel({
 
   const handleSendDraft = useCallback(() => {
     stickToBottomRef.current = true;
-    sendDraft();
-  }, [sendDraft]);
+    sendMessage(draft, attachment);
+    setDraft("");
+  }, [attachment, draft, sendMessage]);
 
   const handleQuickReply = useCallback(
     (message: string) => {
@@ -114,6 +184,7 @@ export function SupportChatPanel({
   );
 
   const showSuggestions =
+    canReply &&
     showQuickReplies &&
     !agentTyping &&
     messages.filter((message) => message.role === "user").length <= 2;
@@ -121,47 +192,64 @@ export function SupportChatPanel({
   const isPageHeader = headerVariant === "page";
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col bg-background", className)}>
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 flex-col bg-background",
+        isPageHeader && "overflow-hidden rounded-[inherit]",
+        !canReply && isPageHeader && "bg-muted/10",
+        className,
+      )}
+    >
       {showHeader ? (
         isPageHeader ? (
           <div className="shrink-0 border-b border-border/70">
-            <div className="flex w-full items-center justify-between gap-3 px-1 py-3">
+            <div className="flex w-full items-center justify-between gap-3 px-4 py-3.5 md:px-5">
               <div className="flex min-w-0 shrink-0 items-center gap-3">
                 <div className="relative shrink-0">
                   <Avatar size="lg" className="border border-border/80 shadow-zynd-low">
                     <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
-                      {agent.initials}
+                      {header.initials}
                     </AvatarFallback>
+                    {showPresence ? (
+                      <SupportAvatarPresenceBadge
+                        online={header.status === "online"}
+                        ringClassName="ring-background"
+                      />
+                    ) : null}
                   </Avatar>
-                  <span
-                    className={cn(
-                      "absolute bottom-0 right-0 size-2.5 rounded-full ring-2 ring-background",
-                      agent.status === "online" ? "bg-emerald-500" : "bg-amber-400",
-                    )}
-                    aria-hidden
-                  />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-body font-semibold text-foreground">
                     {copy.support.title}
                   </p>
                   <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
-                    <span className="truncate">{agent.name}</span>
-                    <span aria-hidden>·</span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 font-medium",
-                        agent.status === "online" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "size-1.5 rounded-full",
-                          agent.status === "online" ? "bg-emerald-500" : "bg-amber-400",
-                        )}
-                      />
-                      {agent.status === "online" ? copy.support.agentOnline : copy.support.agentAway}
-                    </span>
+                    <span className="truncate">{header.name}</span>
+                    {showPresence ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 font-medium",
+                            header.status === "online"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-amber-600 dark:text-amber-400",
+                          )}
+                        >
+                          <SupportPresenceDot
+                            online={header.status === "online"}
+                            size="sm"
+                          />
+                          {header.status === "online"
+                            ? copy.support.agentOnline
+                            : copy.support.agentAway}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="truncate">{header.statusLabel}</span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -200,23 +288,22 @@ export function SupportChatPanel({
               <div className="relative shrink-0">
                 <Avatar size="lg" className="border border-primary-foreground/25">
                   <AvatarFallback className="bg-primary-foreground/15 text-caption font-semibold text-primary-foreground">
-                    {agent.initials}
+                    {header.initials}
                   </AvatarFallback>
+                  {showPresence ? (
+                    <SupportAvatarPresenceBadge
+                      online={header.status === "online"}
+                      ringClassName="ring-[color-mix(in_oklch,var(--primary),black_12%)]"
+                    />
+                  ) : null}
                 </Avatar>
-                <span
-                  className={cn(
-                    "absolute bottom-0 right-0 size-2.5 rounded-full ring-2 ring-[color-mix(in_oklch,var(--primary),black_12%)]",
-                    agent.status === "online" ? "bg-emerald-400" : "bg-amber-400",
-                  )}
-                  aria-hidden
-                />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-body font-semibold text-primary-foreground">
                   {copy.support.title}
                 </p>
                 <p className="truncate text-caption text-primary-foreground/85">
-                  {agent.name} · {agent.statusLabel}
+                  {header.name} · {showPresence ? (header.status === "online" ? copy.support.agentOnline : copy.support.agentAway) : header.statusLabel}
                 </p>
               </div>
             </div>
@@ -298,20 +385,43 @@ export function SupportChatPanel({
         </div>
       ) : null}
 
-      <SupportChatComposer
-        value={draft}
-        onChange={setDraft}
-        onSend={handleSendDraft}
-        attachment={attachment}
-        onAttachImage={attachImage}
-        onClearAttachment={clearAttachment}
-        disabled={agentTyping}
-        className={cn(
-          isPageHeader &&
-            // Clear the fixed support FAB (size-14 + right offset) so send isn't covered
-            "border-border/70 bg-background px-1 py-3 pr-20 md:pr-24",
-        )}
-      />
+      {canReply ? (
+        <SupportChatComposer
+          value={draft}
+          onChange={setDraft}
+          onSend={handleSendDraft}
+          attachment={attachment}
+          onAttachImage={attachImage}
+          onClearAttachment={clearAttachment}
+          disabled={agentTyping}
+          className={cn(
+            isPageHeader &&
+              "rounded-b-[var(--radius-xl)] border-t border-border/70 bg-background px-3 py-3 md:px-5",
+          )}
+        />
+      ) : (
+        <div
+          className={cn(
+            "shrink-0 border-t border-border/70 bg-muted/25 px-3 py-3",
+            isPageHeader && "px-4 md:px-5",
+          )}
+        >
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
+            <div
+              className="flex min-h-11 flex-1 items-center gap-2.5 rounded-[var(--radius-control)] border border-border/70 bg-background/60 px-3 py-2.5"
+              aria-disabled="true"
+            >
+              <Lock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <p className="text-caption leading-snug text-muted-foreground">
+                {copy.support.ticketResolvedComposerLocked}
+              </p>
+            </div>
+            <Button type="button" size="sm" className="h-11 shrink-0 px-4" onClick={startNewChat}>
+              {copy.support.startChat}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

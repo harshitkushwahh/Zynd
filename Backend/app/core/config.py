@@ -166,6 +166,20 @@ class Settings(BaseSettings):
     admin_frontend_url: str = "http://localhost:8888"
     distributor_frontend_url: str = "http://localhost:9900"
     support_frontend_url: str = "http://localhost:9999"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen3.5:4b"
+    ollama_timeout_seconds: float = 45.0
+    support_ai_routing_enabled: bool = True
+    support_routing_timeout_seconds: float = 20.0
+    support_routing_debounce_seconds: int = 300
+    support_routing_reassign_when_away: bool = True
+    support_realtime_enabled: bool = True
+    support_webhook_secret: str = ""
+    support_webhook_urls: str = ""
+
+    @property
+    def support_webhook_url_list(self) -> list[str]:
+        return [part.strip() for part in self.support_webhook_urls.split(",") if part.strip()]
     referral_min_first_investment_inr: int = 1000
     referral_qualification_hold_days: int = 30
     referral_min_engagement_investment_inr: int = 1000

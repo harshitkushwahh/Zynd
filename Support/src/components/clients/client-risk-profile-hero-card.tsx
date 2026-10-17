@@ -6,7 +6,7 @@ import { useState } from "react";
 import { ClientRiskProfileDetailDialog } from "@/components/clients/client-risk-profile-detail-dialog";
 import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { RiskProfileTierBadge } from "@/components/risk-profile/risk-profile-tier-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import { downloadDistributorClientRiskReport } from "@/lib/distributor-client-risk-api";
 import type { DistributorClientRiskAssessment } from "@/lib/distributor-types";
@@ -82,7 +82,7 @@ export function ClientRiskProfileHeroCard({
             ) : null}
           </div>
           <div className="distributor-client-risk-hero-card__meta">
-            <StatusBadge variant="info">{tierVisual.label}</StatusBadge>
+            <RiskProfileTierBadge tier={assessment.tier} />
           </div>
           {summary || recommendation ? (
             <div className="distributor-client-risk-hero-card__copy">

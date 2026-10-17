@@ -9978,6 +9978,15 @@
     display: none;
   }
 
+  .distributor-activity-log-table[data-slot="distributor-table"][data-table-variant="card-rows"]
+    [role="row"]
+    [role="gridcell"]:last-child::after,
+  .distributor-activity-log-table[data-slot="distributor-table"][data-table-variant="card-rows"]
+    [role="row"]
+    td:last-child::after {
+    display: block;
+  }
+
   .distributor-table--with-selection .distributor-table__selection-head,
   .distributor-table--with-selection .distributor-table__selection-cell {
     width: 2.5rem;

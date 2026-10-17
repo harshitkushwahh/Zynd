@@ -1,7 +1,7 @@
 "use client";
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { Loader2, Plus } from "lucide-react";
+import { Landmark, Loader2, Plus } from "lucide-react";
 
 import { BankLogo } from "@/components/banking/bank-logo";
 import { Badge } from "@/components/ui/badge";
@@ -130,6 +130,53 @@ function BankAccountSelectItem({
   );
 }
 
+function BankAccountEmptyState({
+  onAddAccount,
+  addLabel,
+  showAddAction,
+  className,
+}: {
+  onAddAccount?: () => void;
+  addLabel: string;
+  showAddAction: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex gap-3 rounded-[var(--radius-card)] border border-border/80 bg-muted/15 px-4 py-3.5 dark:bg-muted/10",
+        className,
+      )}
+    >
+      <div
+        className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success text-success-foreground shadow-zynd-low"
+        aria-hidden
+      >
+        <Landmark className="size-5" strokeWidth={2.1} />
+      </div>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <p className="text-compact font-semibold leading-snug text-foreground">
+          {copy.mutualFunds.bankPickerEmptyTitle}
+        </p>
+        <p className="text-caption leading-relaxed text-muted-foreground">
+          {copy.mutualFunds.bankPickerEmpty}
+        </p>
+        {showAddAction && onAddAccount ? (
+          <button
+            type="button"
+            className="mt-1 inline-flex items-center gap-1.5 rounded-[var(--radius-control)] text-compact font-medium text-primary transition-colors hover:text-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={onAddAccount}
+          >
+            <Plus className="size-4 shrink-0" aria-hidden />
+            {addLabel}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function AddAccountDropdownAction({
   onClick,
   label,
@@ -201,24 +248,12 @@ export function MfBankAccountPicker({
 
   if (sortedAccounts.length === 0) {
     return (
-      <div
-        className={cn(
-          "space-y-3 rounded-[var(--radius-card)] border border-dashed border-border px-4 py-4",
-          className,
-        )}
-      >
-        <p className="text-compact text-muted-foreground">{copy.mutualFunds.bankPickerEmpty}</p>
-        {showAddInDropdown ? (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-compact font-medium text-primary hover:underline"
-            onClick={onAddAccount}
-          >
-            <Plus className="size-4" aria-hidden />
-            {addLabel}
-          </button>
-        ) : null}
-      </div>
+      <BankAccountEmptyState
+        className={className}
+        addLabel={addLabel}
+        showAddAction={showAddInDropdown}
+        onAddAccount={onAddAccount}
+      />
     );
   }
 

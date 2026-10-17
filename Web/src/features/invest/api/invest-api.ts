@@ -908,8 +908,15 @@ export type InvestorReport = {
   downloadable: boolean;
 };
 
+export type InvestorReportEligibility = {
+  can_generate: boolean;
+  code: string | null;
+  message: string | null;
+};
+
 export type InvestorReportListResponse = {
   reports: InvestorReport[];
+  eligibility: InvestorReportEligibility;
 };
 
 export function fetchInvestorReports() {

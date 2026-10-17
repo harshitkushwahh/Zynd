@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  Bot,
   Search,
   ShoppingCart,
 } from "lucide-react";
+import { HelpBotNavbarButton } from "@/components/dashboard/help-bot-navbar-button";
 import { RecommendFundsNavbarButton } from "@/components/dashboard/recommend-funds-navbar-button";
 import { DashboardActivePageCard } from "@/components/dashboard/dashboard-active-page-card";
 import { DashboardSearchDialog } from "@/components/dashboard/dashboard-search-dialog";
@@ -147,32 +147,7 @@ export function DashboardNavbar() {
         <div className="ml-auto flex shrink-0 items-center gap-2 md:gap-3">
         <RecommendFundsNavbarButton />
 
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                className="zynd-ai-bot-button"
-                aria-label={copy.navbar.aiBotLabel}
-                aria-disabled="true"
-              >
-                <span className="zynd-ai-bot-aurora" aria-hidden />
-                <span className="zynd-ai-bot-surface">
-                  <span className="zynd-ai-bot-fold" aria-hidden />
-                  <span className="zynd-ai-bot-points" aria-hidden>
-                    {Array.from({ length: 10 }, (_, index) => (
-                      <i key={index} className="zynd-ai-bot-point" />
-                    ))}
-                  </span>
-                  <span className="zynd-ai-bot-inner">
-                    <Bot className="zynd-ai-bot-icon" strokeWidth={2.5} />
-                  </span>
-                </span>
-              </button>
-            }
-          />
-          <TooltipContent side="bottom">{copy.navbar.aiBotComingSoon}</TooltipContent>
-        </Tooltip>
+        <HelpBotNavbarButton />
 
         <DashboardActivePageCard />
 

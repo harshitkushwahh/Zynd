@@ -10,9 +10,12 @@ import { SupportTicketDetailSectionTabs } from "@/components/tickets/support-tic
 import type { SupportTicketDetailTabId } from "@/components/tickets/support-ticket-detail-tab-ids";
 import { DISTRIBUTOR_PAGE_STACK_CLASS } from "@/lib/distributor-layout";
 import { SUPPORT_TICKET_DETAIL_WORKSPACE_HEIGHT_CLASS } from "@/lib/support-layout";
+import { useSupportAuth } from "@/contexts/support-auth-context";
+import { useSupportTicketRealtime } from "@/hooks/use-support-ticket-realtime";
 import {
   fetchSupportTicketDetail,
   isSupportTicketNotFoundError,
+  updateSupportTicket,
 } from "@/lib/support-tickets-api";
 import type { SupportTicketDetail } from "@/lib/support-types";
 import { cn } from "@/lib/utils";
@@ -22,6 +25,8 @@ type SupportTicketDetailPageProps = {
 };
 
 export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPageProps) {
+  const { permissions } = useSupportAuth();
+  const canManage = permissions.includes("support.tickets.manage");
   const [detail, setDetail] = useState<SupportTicketDetail | null>(null);
   const [activeTab, setActiveTab] = useState<SupportTicketDetailTabId>("conversation");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "not_found" | "error">(
@@ -54,6 +59,52 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
       cancelled = true;
     };
   }, [ticketId]);
+
+  const refreshDetail = () => {
+    void fetchSupportTicketDetail(ticketId)
+      .then((payload) => {
+        setDetail(payload);
+        setLoadState("ready");
+      })
+      .catch(() => {
+        // Keep the open ticket in place if a refresh fails.
+      });
+  };
+
+  const { wsConnected, notifyTyping } = useSupportTicketRealtime({
+    ticketId,
+    enabled: loadState === "ready",
+    onEvent: (event) => {
+      if (event.type === "message:new" || event.type === "ticket:updated") {
+        refreshDetail();
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (loadState !== "ready" || wsConnected) return;
+    const timer = window.setInterval(() => {
+      void fetchSupportTicketDetail(ticketId)
+        .then((payload) => {
+          setDetail(payload);
+        })
+        .catch(() => {
+          // Keep the ticket on screen if a refresh fails.
+        });
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [loadState, ticketId, wsConnected]);
+
+  const applyUpdate = (patch: { status?: SupportTicketDetail["ticket"]["status"]; assignToSelf?: boolean }) => {
+    void updateSupportTicket(ticketId, patch)
+      .then((payload) => {
+        setDetail(payload);
+        setLoadState("ready");
+      })
+      .catch(() => {
+        // Leave the open ticket in place when the update fails.
+      });
+  };
 
   if (loadState === "loading") {
     return (
@@ -92,7 +143,12 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
 
   return (
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
-      <SupportTicketDetailHeader detail={detail} />
+      <SupportTicketDetailHeader
+        detail={detail}
+        canManage={canManage}
+        onAssign={() => applyUpdate({ assignToSelf: true })}
+        onSetStatus={(status) => applyUpdate({ status })}
+      />
 
       <div
         className={cn(
@@ -107,6 +163,8 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
               detail={detail}
               activeTab={activeTab}
               className="h-full min-h-0"
+              onUpdated={setDetail}
+              notifyTyping={notifyTyping}
             />
           </div>
         </div>

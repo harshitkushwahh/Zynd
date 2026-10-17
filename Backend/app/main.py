@@ -106,7 +106,17 @@ async def lifespan(_: FastAPI):
     from app.application.mf.mf_pipeline_orchestrator_service import initialize_pipeline_orchestrator
 
     await initialize_pipeline_orchestrator()
+    import asyncio
+
+    from app.application.support.realtime.publisher import run_support_realtime_subscriber
+
+    subscriber_task = asyncio.create_task(run_support_realtime_subscriber())
     yield
+    subscriber_task.cancel()
+    try:
+        await subscriber_task
+    except asyncio.CancelledError:
+        pass
     await close_redis()
 
 

@@ -8,7 +8,8 @@ import { SupportTicketMessageBubble } from "@/components/tickets/support-ticket-
 import { useSupportAuth } from "@/contexts/support-auth-context";
 import { formatDistributorDate } from "@/lib/format";
 import { getDisplayInitials } from "@/lib/get-display-initials";
-import type { SupportTicket, SupportTicketMessage } from "@/lib/support-types";
+import { replyToSupportTicket } from "@/lib/support-tickets-api";
+import type { SupportTicket, SupportTicketDetail, SupportTicketMessage } from "@/lib/support-types";
 import { cn } from "@/lib/utils";
 
 function createMessageId(): string {
@@ -18,6 +19,8 @@ function createMessageId(): string {
 type SupportTicketChatPanelProps = {
   ticket: SupportTicket;
   className?: string;
+  onUpdated?: (detail: SupportTicketDetail) => void;
+  notifyTyping?: (typing: boolean) => void;
 };
 
 function messageDayKey(iso: string): string {
@@ -26,11 +29,18 @@ function messageDayKey(iso: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function SupportTicketChatPanel({ ticket, className }: SupportTicketChatPanelProps) {
+export function SupportTicketChatPanel({
+  ticket,
+  className,
+  onUpdated,
+  notifyTyping,
+}: SupportTicketChatPanelProps) {
   const { displayName } = useSupportAuth();
   const [messages, setMessages] = useState<SupportTicketMessage[]>(ticket.messages);
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const typingTimerRef = useRef<number | null>(null);
 
   const agentName = ticket.assigneeName ?? displayName ?? "Support Agent";
   const agentDisplayLabel = `${agentName} (You)`;
@@ -41,8 +51,11 @@ export function SupportTicketChatPanel({ ticket, className }: SupportTicketChatP
 
   useEffect(() => {
     setMessages(ticket.messages);
+  }, [ticket.messages]);
+
+  useEffect(() => {
     setDraft("");
-  }, [ticket.id, ticket.messages]);
+  }, [ticket.id]);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -50,21 +63,57 @@ export function SupportTicketChatPanel({ ticket, className }: SupportTicketChatP
     scroller.scrollTop = scroller.scrollHeight;
   }, [messages]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback((mode: "reply" | "internal") => {
     const body = draft.trim();
-    if (!body) return;
+    if (!body || sending) return;
 
-    const agentMessage: SupportTicketMessage = {
-      id: createMessageId(),
-      role: "agent",
-      body,
-      createdAt: new Date().toISOString(),
-      senderName: agentDisplayLabel,
-    };
-
-    setMessages((current) => [...current, agentMessage]);
+    setSending(true);
     setDraft("");
-  }, [agentName, draft]);
+    void replyToSupportTicket(ticket.id, body, mode === "internal" ? "internal" : "customer")
+      .then((detail) => {
+        setMessages(detail.ticket.messages);
+        onUpdated?.(detail);
+      })
+      .catch(() => {
+        setMessages((current) => [
+          ...current,
+          {
+            id: createMessageId(),
+            role: "system",
+            body: "That reply was not saved. Try again.",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        setDraft(body);
+      })
+      .finally(() => {
+        setSending(false);
+      });
+  }, [draft, onUpdated, sending, ticket.id]);
+
+  const handleAskResolved = useCallback(() => {
+    if (sending) return;
+    setSending(true);
+    void replyToSupportTicket(ticket.id, "", "customer", true)
+      .then((detail) => {
+        setMessages(detail.ticket.messages);
+        onUpdated?.(detail);
+      })
+      .catch(() => {
+        setMessages((current) => [
+          ...current,
+          {
+            id: createMessageId(),
+            role: "system",
+            body: "The resolution question was not sent. Try again.",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      })
+      .finally(() => {
+        setSending(false);
+      });
+  }, [onUpdated, sending, ticket.id]);
 
   return (
     <div
@@ -112,7 +161,7 @@ export function SupportTicketChatPanel({ ticket, className }: SupportTicketChatP
                   agentInitials={agentInitials}
                   investorInitials={investorInitials}
                 />
-                {message.role === "user" && isFirstUserMessage
+                {message.role === "user" && isFirstUserMessage && !message.attachmentFileName
                   ? ticket.attachments.map((attachment) => (
                       <div
                         key={attachment.id}
@@ -130,7 +179,23 @@ export function SupportTicketChatPanel({ ticket, className }: SupportTicketChatP
         })}
       </div>
 
-      <SupportTicketChatComposer value={draft} onChange={setDraft} onSend={handleSend} />
+      <SupportTicketChatComposer
+        value={draft}
+        onChange={(value) => {
+          setDraft(value);
+          if (!notifyTyping) return;
+          notifyTyping(true);
+          if (typingTimerRef.current) {
+            window.clearTimeout(typingTimerRef.current);
+          }
+          typingTimerRef.current = window.setTimeout(() => {
+            notifyTyping(false);
+          }, 1200);
+        }}
+        onSend={handleSend}
+        onAskResolved={handleAskResolved}
+        disabled={sending}
+      />
     </div>
   );
 }

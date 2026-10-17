@@ -1,11 +1,13 @@
 export type SupportKycQueueStatus =
+  | "Not started"
   | "Pending review"
   | "In progress"
   | "Escalated"
   | "Approved";
 
 export type SupportKycReviewType =
-  | "New KYC"
+  | "Not started"
+  | "Fresh KYC"
   | "Re-KYC"
   | "Document refresh"
   | "Address update";
@@ -17,6 +19,8 @@ export type SupportKycQueueItem = {
   emailMasked: string;
   queueStatus: SupportKycQueueStatus;
   reviewType: SupportKycReviewType;
+  partnerStatus?: string | null;
+  cybrillaFormType?: string | null;
   submittedAt: string;
   priority: "Normal" | "High";
 };
@@ -38,7 +42,7 @@ export const SUPPORT_DUMMY_KYC_QUEUE: SupportKycQueueItem[] = [
     displayName: "Priya Nair",
     emailMasked: "pri***@yahoo.com",
     queueStatus: "In progress",
-    reviewType: "New KYC",
+    reviewType: "Fresh KYC",
     submittedAt: "2026-10-08T12:30:00Z",
     priority: "High",
   },
@@ -68,7 +72,7 @@ export const SUPPORT_DUMMY_KYC_QUEUE: SupportKycQueueItem[] = [
     displayName: "Vikram Singh",
     emailMasked: "vik***@icloud.com",
     queueStatus: "Approved",
-    reviewType: "New KYC",
+    reviewType: "Fresh KYC",
     submittedAt: "2026-08-15T14:00:00Z",
     priority: "Normal",
   },

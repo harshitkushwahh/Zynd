@@ -1,7 +1,6 @@
 import {
   Banknote,
   LayoutDashboard,
-  ScrollText,
   ShieldCheck,
   Ticket,
   Users,
@@ -54,20 +53,6 @@ export const SUPPORT_NAV_ROUTES: SupportNavRoute[] = [
     href: "/dashboard/kyc-verifications",
     icon: ShieldCheck,
     description: "Identity checks and verification escalations",
-  },
-  {
-    id: "activity-logs",
-    label: "Activity logs",
-    href: "/dashboard/activity-logs",
-    icon: ScrollText,
-    description: "Support agent actions and workspace activity",
-  },
-  {
-    id: "system-logs",
-    label: "System logs",
-    href: "/dashboard/system-logs",
-    icon: ScrollText,
-    description: "Integration, webhook, and platform system events",
   },
 ];
 

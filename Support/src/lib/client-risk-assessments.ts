@@ -2,37 +2,27 @@ import type { DistributorClientProfile, DistributorClientRiskAssessment } from "
 import { hasAssessedRiskProfile, resolveClientRiskGauge } from "@/lib/client-risk-gauge";
 import { resolveRiskTierVisual } from "@/lib/risk-profile/risk-tier-ui";
 
+/** Summary row from client detail when the full assessments list is not loaded yet. */
 export function buildClientRiskAssessmentFromProfile(
   profile: DistributorClientProfile,
 ): DistributorClientRiskAssessment | null {
   if (!hasAssessedRiskProfile(profile)) return null;
 
   const current = resolveClientRiskGauge(profile);
+  if (!current) return null;
+
   const currentVisual = resolveRiskTierVisual(current.tier);
 
   return {
-    assessmentId: `${profile.investor.id}-risk-current`,
+    assessmentId: `${profile.investor.id}-risk-summary`,
     score: current.score,
     displayScore: current.displayScore,
     tier: current.tier,
-    completedAt: new Date().toISOString(),
-    questionsAnswered: 12,
-    totalQuestions: 12,
+    completedAt: null,
+    questionsAnswered: 0,
+    totalQuestions: 0,
     messageSummary: `${currentVisual.label} risk profile`,
-    messageRecommendation: `Suited to a ${currentVisual.label.toLowerCase()} allocation mix on Zynd.`,
+    messageRecommendation: undefined,
     isCurrent: true,
   };
-}
-
-export function buildDemoClientRiskAssessments(
-  profile: DistributorClientProfile,
-): DistributorClientRiskAssessment[] {
-  const current = buildClientRiskAssessmentFromProfile(profile);
-  return current ? [current] : [];
-}
-
-export function buildDemoRiskAssessmentAnswers(
-  _assessmentId: string,
-): import("@/lib/distributor-types").DistributorClientRiskAssessmentAnswer[] {
-  return [];
 }

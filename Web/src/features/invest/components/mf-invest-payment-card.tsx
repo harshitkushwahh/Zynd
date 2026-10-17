@@ -844,7 +844,7 @@ export function MfInvestPaymentCard({
       return;
     }
     if (!hasPaymentReadyAccount || !selectedBankAccountId) {
-      setActionError(copy.mutualFunds.bankPickerEmpty);
+      setActionError(copy.mutualFunds.bankPickerEmptyTitle);
       return;
     }
 
@@ -938,7 +938,7 @@ export function MfInvestPaymentCard({
       return;
     }
     if (!hasPaymentReadyAccount || !selectedBankAccountId) {
-      setActionError(copy.mutualFunds.bankPickerEmpty);
+      setActionError(copy.mutualFunds.bankPickerEmptyTitle);
       return;
     }
 

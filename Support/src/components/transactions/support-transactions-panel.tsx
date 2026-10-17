@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, CheckCircle2, Clock3, Wallet } from "lucide-react";
-import type { SortDescriptor } from "react-aria-components";
 
 import { SupportTransactionDetailDialog } from "@/components/transactions/support-transaction-detail-dialog";
-import { Table, useDistributorTablePagination } from "@/components/application/table";
+import { Table } from "@/components/application/table";
+import {
+  DISTRIBUTOR_TABLE_PAGE_SIZE,
+  DISTRIBUTOR_TABLE_PAGE_SIZE_OPTIONS,
+  type TablePaginationProps,
+} from "@/components/application/table/pagination";
 import {
   SupportPageMetricTile,
   SupportPageMetricTilesGrid,
@@ -15,6 +19,7 @@ import { DistributorPageHeader } from "@/components/dashboard/distributor-page-h
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
+import { SupportMetricsTilesSkeleton, SupportTableSkeleton } from "@/components/dashboard/support-table-skeleton";
 import { SupportFilterSelect } from "@/components/ui/support-filter-select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
@@ -22,13 +27,15 @@ import {
   DISTRIBUTOR_PAGE_STACK_CLASS,
   DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS,
 } from "@/lib/distributor-layout";
-import { distributorTableSearchMatch } from "@/lib/distributor-table-search-match";
 import { wrapDistributorTableBody } from "@/lib/distributor-table-wrap";
 import type { DistributorOrder, OrderStatus } from "@/lib/distributor-types";
 import { formatAum, formatDistributorDate } from "@/lib/format";
-import { sortByDescriptor } from "@/lib/sort-by-descriptor";
 import { orderStatusVariant } from "@/lib/status-meta";
-import { SUPPORT_DUMMY_ORDERS } from "@/lib/support-transactions-dummy-data";
+import {
+  fetchSupportTransactionsPage,
+  type SupportTransactionMetrics,
+} from "@/lib/support-transactions-api";
+import { supportUserDetailHref } from "@/lib/support-users-api";
 import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
@@ -46,58 +53,91 @@ const ORDER_TYPE_OPTIONS: Array<{ value: OrderTypeFilter; label: string }> = [
   { value: "Switch", label: "Switch" },
 ];
 
-function supportUserDetailHref(clientCode: string) {
-  return `/dashboard/users/${encodeURIComponent(clientCode)}`;
+const EMPTY_METRICS: SupportTransactionMetrics = {
+  totalTransactions: 0,
+  inProgress: 0,
+  completed: 0,
+  failed: 0,
+  volumeInr: 0,
+};
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
 }
 
 export function SupportTransactionsPanel() {
   const router = useRouter();
-  const orders = SUPPORT_DUMMY_ORDERS;
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebouncedValue(searchQuery.trim(), 350);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<OrderTypeFilter>("all");
-  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
-    column: "createdAt",
-    direction: "descending",
-  });
+  const [orders, setOrders] = useState<DistributorOrder[]>([]);
+  const [metrics, setMetrics] = useState<SupportTransactionMetrics>(EMPTY_METRICS);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DISTRIBUTOR_TABLE_PAGE_SIZE);
   const [selectedOrder, setSelectedOrder] = useState<DistributorOrder | null>(null);
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
 
-  const pendingCount = useMemo(
-    () => orders.filter((order) => order.status === "Pending" || order.status === "Processing").length,
-    [orders],
-  );
-  const completedCount = useMemo(
-    () => orders.filter((order) => order.status === "Completed").length,
-    [orders],
-  );
-  const failedCount = useMemo(
-    () => orders.filter((order) => order.status === "Failed").length,
-    [orders],
-  );
-  const orderVolume = useMemo(() => orders.reduce((sum, order) => sum + order.amount, 0), [orders]);
+  const offset = (page - 1) * pageSize;
 
-  const filtered = useMemo(() => {
-    return orders.filter((order) => {
-      if (statusFilter !== "all" && order.status !== statusFilter) return false;
-      if (typeFilter !== "all" && order.orderType !== typeFilter) return false;
-      return distributorTableSearchMatch(
-        searchQuery,
-        order.orderRef,
-        order.clientCode,
-        order.investorEmailMasked,
-        order.schemeName,
-        order.orderType,
-      );
-    });
-  }, [orders, searchQuery, statusFilter, typeFilter]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, typeFilter, pageSize]);
 
-  const sorted = useMemo(
-    () => sortByDescriptor(filtered, sortDescriptor),
-    [filtered, sortDescriptor],
+  const load = useCallback(() => {
+    setLoading(true);
+    setLoadError("");
+    void fetchSupportTransactionsPage({
+      search: debouncedSearch || undefined,
+      status: statusFilter,
+      orderType: typeFilter,
+      limit: pageSize,
+      offset,
+    })
+      .then((result) => {
+        setOrders(result.items);
+        if (result.metrics) setMetrics(result.metrics);
+        setTotalCount(result.totalCount);
+      })
+      .catch(() => {
+        setOrders([]);
+        setMetrics(EMPTY_METRICS);
+        setTotalCount(0);
+        setLoadError("Could not load transactions. Try again in a moment.");
+      })
+      .finally(() => setLoading(false));
+  }, [debouncedSearch, statusFilter, typeFilter, pageSize, offset]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  const pagination = useMemo<TablePaginationProps>(
+    () => ({
+      page: Math.min(page, totalPages),
+      totalPages,
+      onPageChange: setPage,
+      pageSize,
+      pageSizeOptions: DISTRIBUTOR_TABLE_PAGE_SIZE_OPTIONS,
+      onPageSizeChange: (next) => {
+        setPageSize(next);
+        setPage(1);
+      },
+      totalItemCount: totalCount,
+      alwaysVisible: totalCount > 0,
+    }),
+    [page, totalPages, pageSize, totalCount],
   );
-
-  const { pageItems, pagination, setPage } = useDistributorTablePagination(sorted);
 
   const clearDisabled =
     statusFilter === "all" && typeFilter === "all" && searchQuery.trim() === "";
@@ -124,7 +164,7 @@ export function SupportTransactionsPanel() {
             setSearchQuery(value);
             setPage(1);
           }}
-          placeholder="Search transactions…"
+          placeholder="Search by Zynd ID, email, order ref…"
           aria-label="Search transactions"
         />
       }
@@ -154,33 +194,22 @@ export function SupportTransactionsPanel() {
     <Table
       aria-label="Support transactions"
       className="min-w-[var(--table-min-width-4xl)]"
-      sortDescriptor={sortDescriptor}
-      onSortChange={(descriptor) => {
-        setSortDescriptor(descriptor);
-        setPage(1);
-      }}
       pagination={pagination}
     >
       <Table.Header>
-        <Table.Head id="orderRef" label="Order" isRowHeader allowsSorting />
-        <Table.Head id="clientCode" label="Client" allowsSorting />
-        <Table.Head id="schemeName" label="Scheme" allowsSorting />
-        <Table.Head id="orderType" label="Type" allowsSorting />
-        <Table.Head
-          id="amount"
-          label="Amount"
-          allowsSorting
-          className="text-right [&>div]:justify-end"
-        />
-        <Table.Head id="status" label="Status" allowsSorting />
+        <Table.Head id="orderRef" label="Order" isRowHeader />
+        <Table.Head id="clientCode" label="Client" />
+        <Table.Head id="schemeName" label="Scheme" />
+        <Table.Head id="orderType" label="Type" />
+        <Table.Head id="amount" label="Amount" className="text-right [&>div]:justify-end" />
+        <Table.Head id="status" label="Status" />
         <Table.Head
           id="createdAt"
           label="Created"
-          allowsSorting
           className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}
         />
       </Table.Header>
-      <Table.Body items={pageItems}>
+      <Table.Body items={orders}>
         {(order) => (
           <Table.Row id={order.id} className="cursor-pointer" onAction={() => openOrder(order)}>
             <Table.Cell>
@@ -219,41 +248,41 @@ export function SupportTransactionsPanel() {
     <div className={DISTRIBUTOR_PAGE_STACK_CLASS}>
       <DistributorPageHeader title="Transactions" />
 
-      <SupportPageMetricTilesGrid>
-        <SupportPageMetricTile
-          tileTone="accent"
-          icon={ArrowLeftRight}
-          label="Transactions"
-          value={String(orders.length)}
-          hint="In queue sample"
-        />
-        <SupportPageMetricTile
-          icon={Clock3}
-          label="In progress"
-          value={String(pendingCount)}
-          hint="Pending or processing"
-        />
-        <SupportPageMetricTile
-          tileTone="success"
-          icon={CheckCircle2}
-          label="Completed"
-          value={String(completedCount)}
-          hint={`${failedCount} failed`}
-        />
-        <SupportPageMetricTile
-          icon={Wallet}
-          label="Volume"
-          value={formatAum(orderVolume)}
-          hint="Sample book"
-          fitTileValue
-        />
-      </SupportPageMetricTilesGrid>
+      {loading && orders.length === 0 ? (
+        <SupportMetricsTilesSkeleton />
+      ) : (
+        <SupportPageMetricTilesGrid>
+          <SupportPageMetricTile
+            tileTone="accent"
+            icon={ArrowLeftRight}
+            label="Transactions"
+            value={String(metrics.totalTransactions)}
+          />
+          <SupportPageMetricTile icon={Clock3} label="In progress" value={String(metrics.inProgress)} />
+          <SupportPageMetricTile
+            tileTone="success"
+            icon={CheckCircle2}
+            label="Completed"
+            value={String(metrics.completed)}
+          />
+          <SupportPageMetricTile
+            icon={Wallet}
+            label="Volume (settled)"
+            value={formatAum(metrics.volumeInr)}
+            fitTileValue
+          />
+        </SupportPageMetricTilesGrid>
+      )}
 
       <DistributorTableOnlyShell
         toolbar={toolbar}
-        isEmpty={sorted.length === 0}
-        emptyTitle="No transactions match your filters"
-        emptyDescription={DISTRIBUTOR_CLIENT_COPY.activity.filtersEmptyDescription}
+        isLoading={loading}
+        loadingSkeleton={<SupportTableSkeleton rowCount={10} columnCount={7} />}
+        isEmpty={!loading && orders.length === 0}
+        emptyTitle={loadError || "No transactions match your filters"}
+        emptyDescription={
+          loadError ? undefined : DISTRIBUTOR_CLIENT_COPY.activity.filtersEmptyDescription
+        }
         tableSize="md"
       >
         {table}

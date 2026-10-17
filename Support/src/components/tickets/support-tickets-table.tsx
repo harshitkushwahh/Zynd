@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { SortDescriptor } from "react-aria-components";
 
 import { Table, useDistributorTablePagination } from "@/components/application/table";
+import { SupportTableSkeleton } from "@/components/dashboard/support-table-skeleton";
 import { DistributorTableOnlyShell } from "@/components/dashboard/distributor-table-only-shell";
 import { DistributorTableSearchCard } from "@/components/dashboard/distributor-table-search-card";
 import { DistributorTableToolbar } from "@/components/dashboard/distributor-table-toolbar";
@@ -43,6 +44,7 @@ export function supportTicketDetailHref(ticketId: string): string {
 
 type SupportTicketsTableProps = {
   tickets: SupportTicket[];
+  isLoading?: boolean;
   showUserColumn?: boolean;
   /** When false, renders the table only (no search, filters, or clear). */
   showToolbar?: boolean;
@@ -53,6 +55,7 @@ type SupportTicketsTableProps = {
 
 export function SupportTicketsTable({
   tickets,
+  isLoading = false,
   showUserColumn = false,
   showToolbar = true,
   emptyTitle,
@@ -157,6 +160,7 @@ export function SupportTicketsTable({
         {showUserColumn ? <Table.Head id="userId" label="User" allowsSorting /> : null}
         <Table.Head id="status" label="Status" allowsSorting />
         <Table.Head id="priority" label="Priority" allowsSorting />
+        <Table.Head id="urgencyScore" label="Urgency" allowsSorting />
         <Table.Head
           id="updatedAt"
           label="Updated"
@@ -186,6 +190,9 @@ export function SupportTicketsTable({
                 {formatTicketPriority(ticket.priority)}
               </StatusBadge>
             </Table.Cell>
+            <Table.Cell className="tabular-nums text-muted-foreground">
+              {ticket.urgencyScore ?? ticket.routing?.urgencyScore ?? "—"}
+            </Table.Cell>
             <Table.Cell
               className={cn(
                 "whitespace-nowrap tabular-nums text-muted-foreground",
@@ -204,7 +211,11 @@ export function SupportTicketsTable({
     <div className={className}>
       <DistributorTableOnlyShell
         toolbar={toolbar}
-        isEmpty={sorted.length === 0}
+        isLoading={isLoading}
+        loadingSkeleton={
+          <SupportTableSkeleton rowCount={10} columnCount={showUserColumn ? 6 : 5} />
+        }
+        isEmpty={!isLoading && sorted.length === 0}
         emptyTitle={emptyTitle ?? (showToolbar ? "No tickets match your filters" : "No other tickets")}
         emptyDescription={
           emptyDescription ??

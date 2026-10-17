@@ -6,7 +6,6 @@ import { ClientProfileCapturedDetailsTable } from "@/components/clients/client-p
 import { ClientProfileCapturedSummaryCards } from "@/components/clients/client-profile-captured-summary-cards";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import type { DistributorClientProfile } from "@/lib/distributor-types";
-import { buildSupportClientCapturedProfile } from "@/lib/support-client-captured-profile-dummy-data";
 import { cn } from "@/lib/utils";
 
 type ClientProfileTabPanelProps = {
@@ -17,10 +16,15 @@ type ClientProfileTabPanelProps = {
 export function ClientProfileTabPanel({ profile, className }: ClientProfileTabPanelProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.capturedProfile;
 
-  const captured = useMemo(
-    () => profile.capturedProfile ?? buildSupportClientCapturedProfile(profile),
-    [profile],
-  );
+  const captured = useMemo(() => profile.capturedProfile, [profile.capturedProfile]);
+
+  if (!captured) {
+    return (
+      <p className="text-compact text-muted-foreground">
+        Profile details will appear here once KYC personal information is captured.
+      </p>
+    );
+  }
 
   return (
     <div className={cn("support-client-profile-tab", className)}>

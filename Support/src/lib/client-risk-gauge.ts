@@ -1,44 +1,29 @@
 import type { DistributorClientProfile } from "@/lib/distributor-types";
-import {
-  tierIdFromLabel,
-  type RiskTierId,
-} from "@/lib/risk-profile/risk-tier-ui";
+import { normalizeRiskScore, tierIdFromLabel } from "@/lib/risk-profile/risk-tier-ui";
 
-export function resolveClientRiskGauge(profile: Pick<
-  DistributorClientProfile,
-  "riskProfile" | "riskProfileLabel"
->) {
-  if (profile.riskProfile?.score != null && profile.riskProfile.tier) {
+export type ClientRiskGauge = {
+  score: number;
+  tier: string;
+  displayScore: number;
+};
+
+export function resolveClientRiskGauge(
+  profile: Pick<DistributorClientProfile, "riskProfile" | "riskProfileLabel">,
+): ClientRiskGauge | null {
+  const risk = profile.riskProfile;
+  if (risk?.score != null) {
+    const tier = risk.tier?.trim() ? tierIdFromLabel(risk.tier) : tierIdFromLabel(profile.riskProfileLabel);
     return {
-      score: profile.riskProfile.score,
-      tier: profile.riskProfile.tier,
-      displayScore: profile.riskProfile.displayScore,
+      score: risk.score,
+      tier,
+      displayScore: risk.displayScore ?? normalizeRiskScore(risk.score),
     };
   }
-
-  const tier: RiskTierId = tierIdFromLabel(profile.riskProfileLabel);
-  const displayScore =
-    tier === "secure"
-      ? 18
-      : tier === "conservative"
-        ? 32
-        : tier === "moderate"
-          ? 52
-          : tier === "growth"
-            ? 68
-            : 82;
-
-  return {
-    score: displayScore * 10,
-    tier,
-    displayScore,
-  };
+  return null;
 }
 
-export function hasAssessedRiskProfile(profile: Pick<
-  DistributorClientProfile,
-  "riskProfile" | "riskProfileLabel"
->) {
-  if (profile.riskProfile?.score != null) return true;
-  return profile.riskProfileLabel.toLowerCase() !== "not assessed";
+export function hasAssessedRiskProfile(
+  profile: Pick<DistributorClientProfile, "riskProfile" | "riskProfileLabel">,
+) {
+  return profile.riskProfile?.score != null;
 }

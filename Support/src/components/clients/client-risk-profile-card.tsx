@@ -6,7 +6,7 @@ import { ArrowUpRight } from "lucide-react";
 import { useClientDetailTabNavigation } from "@/components/clients/client-detail-tab-navigation";
 import { ClientRiskProfileHeroCard } from "@/components/clients/client-risk-profile-hero-card";
 import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { RiskProfileTierBadge } from "@/components/risk-profile/risk-profile-tier-badge";
 import { buildClientRiskAssessmentFromProfile } from "@/lib/client-risk-assessments";
 import { hasAssessedRiskProfile, resolveClientRiskGauge } from "@/lib/client-risk-gauge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
@@ -29,8 +29,8 @@ export function ClientRiskProfileCard({
 }: ClientRiskProfileCardProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.overview;
   const riskGauge = resolveClientRiskGauge(profile);
-  const tierVisual = resolveRiskTierVisual(riskGauge.tier);
-  const assessed = hasAssessedRiskProfile(profile);
+  const tierVisual = riskGauge ? resolveRiskTierVisual(riskGauge.tier) : null;
+  const assessed = hasAssessedRiskProfile(profile) && riskGauge != null;
   const reference = clientReference ?? profile.investor.clientCode;
   const tabNavigation = useClientDetailTabNavigation();
   const currentAssessment = useMemo(
@@ -51,7 +51,7 @@ export function ClientRiskProfileCard({
           disabled={!assessed}
           onClick={() => assessed && openRiskProfileTab()}
           aria-label={
-            assessed
+            assessed && tierVisual && riskGauge
               ? `${tierVisual.label} risk profile, ${riskGauge.displayScore} out of 100. Open risk profile tab.`
               : copy.riskProfile
           }
@@ -77,10 +77,19 @@ export function ClientRiskProfileCard({
                 />
               </div>
               <div className="distributor-client-risk-sidebar-card__summary">
-                <StatusBadge variant="info">{tierVisual.label.toUpperCase()}</StatusBadge>
-                <p className="distributor-client-risk-sidebar-card__score tabular-nums">
-                  {riskGauge.displayScore}/100
-                </p>
+                {riskGauge && tierVisual ? (
+                  <>
+                    <RiskProfileTierBadge tier={riskGauge.tier} uppercase />
+                    <p
+                      className={cn(
+                        "distributor-client-risk-sidebar-card__score tabular-nums",
+                        tierVisual.textClass,
+                      )}
+                    >
+                      {riskGauge.displayScore}/100
+                    </p>
+                  </>
+                ) : null}
               </div>
             </>
           ) : (

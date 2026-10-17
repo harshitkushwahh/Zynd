@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { SupportTicketDetailField } from "@/components/tickets/support-ticket-detail-field";
+import { SupportTicketRoutingInsightCard } from "@/components/tickets/support-ticket-routing-insight-card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getDisplayInitials } from "@/lib/get-display-initials";
@@ -23,7 +24,20 @@ import {
   ticketStatusVariant,
 } from "@/lib/support-ticket-display";
 import type { SupportTicketDetail } from "@/lib/support-types";
+import { supportUserDetailHref } from "@/lib/support-users-api";
+import {
+  normalizeSupportDisplayValue,
+  SUPPORT_EMPTY_VALUE,
+} from "@/lib/support-display-value";
 import { cn } from "@/lib/utils";
+
+function MutedEmptyValue({ value }: { value: string }) {
+  const normalized = normalizeSupportDisplayValue(value);
+  if (normalized === SUPPORT_EMPTY_VALUE) {
+    return <span className="font-normal text-muted-foreground">{SUPPORT_EMPTY_VALUE}</span>;
+  }
+  return <>{normalized}</>;
+}
 
 type SupportTicketDetailAsideProps = {
   detail: SupportTicketDetail;
@@ -61,7 +75,7 @@ function AsideCard({
 
 export function SupportTicketDetailAside({ detail, className }: SupportTicketDetailAsideProps) {
   const { ticket, customer, domain, sidebarMeta } = detail;
-  const userHref = `/dashboard/users/${encodeURIComponent(ticket.userId)}`;
+  const userHref = supportUserDetailHref(ticket.userId);
   const initials = getDisplayInitials(customer.displayName);
   const kycBadgeVariant = customer.kycCompliant ? "success" : "destructive";
 
@@ -72,7 +86,19 @@ export function SupportTicketDetailAside({ detail, className }: SupportTicketDet
         className,
       )}
     >
-      <AsideCard title="Customer" icon={UserRound}>
+      <AsideCard
+        title="Customer"
+        icon={UserRound}
+        action={
+          <Link
+            href={userHref}
+            className="inline-flex shrink-0 items-center gap-1 text-caption font-medium text-primary hover:underline"
+          >
+            Open profile
+            <ArrowUpRight className="size-3.5" strokeWidth={2.25} aria-hidden />
+          </Link>
+        }
+      >
         <div className="flex items-start gap-3">
           <Avatar className="size-12 border border-border/80">
             <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
@@ -86,11 +112,11 @@ export function SupportTicketDetailAside({ detail, className }: SupportTicketDet
             <div className="mt-2 space-y-1.5 text-caption text-muted-foreground">
               <p className="flex items-center gap-2">
                 <Phone className="size-3.5 shrink-0" aria-hidden />
-                {customer.mobileMasked}
+                <MutedEmptyValue value={customer.mobileMasked} />
               </p>
               <p className="flex items-center gap-2 truncate">
                 <Mail className="size-3.5 shrink-0" aria-hidden />
-                {customer.emailMasked}
+                <MutedEmptyValue value={customer.emailMasked} />
               </p>
             </div>
           </div>
@@ -112,10 +138,10 @@ export function SupportTicketDetailAside({ detail, className }: SupportTicketDet
             domain.viewInHref ? (
               <Link
                 href={domain.viewInHref}
-                className="distributor-operations-team-card__nav"
-                aria-label={domain.viewInLabel ?? "View linked record"}
+                className="inline-flex shrink-0 items-center gap-1 text-caption font-medium text-primary hover:underline"
               >
-                <ArrowUpRight className="size-4" strokeWidth={2.25} aria-hidden />
+                {domain.viewInLabel ?? "Open profile"}
+                <ArrowUpRight className="size-3.5" strokeWidth={2.25} aria-hidden />
               </Link>
             ) : null
           }
@@ -134,6 +160,8 @@ export function SupportTicketDetailAside({ detail, className }: SupportTicketDet
           </div>
         </AsideCard>
       ) : null}
+
+      <SupportTicketRoutingInsightCard routing={ticket.routing} className="mb-4" />
 
       <AsideCard title="Ticket information" icon={Ticket}>
         <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">

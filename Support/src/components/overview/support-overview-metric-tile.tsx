@@ -21,7 +21,7 @@ type SupportOverviewMetricTileProps = {
   icon: LucideIcon;
   label: string;
   value: string;
-  trendPct: number;
+  trendPct: number | null;
   sparkline: number[];
   href?: string;
   tileTone?: "default" | "accent" | "success";
@@ -102,7 +102,11 @@ export function SupportOverviewMetricTile({
             {value}
           </span>
           <span className="distributor-metric-card__tile-label">{label}</span>
-          <DistributorGrowthBadge value={trendPct} suffix=" vs last week" className="mt-1" />
+          {trendPct != null ? (
+            <DistributorGrowthBadge value={trendPct} suffix=" vs last week" className="mt-1" />
+          ) : (
+            <span className="mt-1 block text-micro text-muted-foreground">Live queue snapshot</span>
+          )}
         </div>
         <div className="support-overview-metric-tile__sparkline" aria-hidden>
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>

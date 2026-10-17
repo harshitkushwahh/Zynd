@@ -3,10 +3,14 @@ export type SupportTicketPriority = "low" | "medium" | "high";
 
 export type SupportTicketMessage = {
   id: string;
-  role: "user" | "agent" | "system";
+  role: "user" | "agent" | "bot" | "system";
   body: string;
   createdAt: string;
   senderName?: string;
+  visibility?: "customer" | "internal";
+  attachmentFileName?: string;
+  kind?: "text" | "resolution_prompt";
+  resolutionActive?: boolean;
 };
 
 export type SupportTicketAttachment = {
@@ -15,12 +19,49 @@ export type SupportTicketAttachment = {
   uploadedAt?: string;
 };
 
+export type SupportTicketPmCoHandling = {
+  recommendedAction?: "notify" | "consult" | string;
+  reason?: string;
+  mitraUserId?: string;
+  mitraDisplayName?: string;
+  mitraClientId?: string;
+};
+
+export type SupportTicketRoutingInsight = {
+  urgencyScore: number | null;
+  reasonSummary: string | null;
+  priorityRationale: string | null;
+  slaRationale: string | null;
+  assigneeRationale: string | null;
+  pmCoHandling: SupportTicketPmCoHandling | null;
+  signals: string[];
+  source: "ai" | "fallback" | string | null;
+  model: string | null;
+  computedAt: string | null;
+  firstResponseHours: number | null;
+  resolutionHours: number | null;
+};
+
+export type SupportTicketSlaSnapshot = {
+  priority: SupportTicketPriority;
+  firstResponseTargetHours: number;
+  resolutionTargetHours: number;
+  firstResponseDueAt: string | null;
+  resolutionDueAt: string | null;
+  firstRespondedAt: string | null;
+  resolvedAt: string | null;
+  firstResponseMet: boolean;
+  resolutionMet: boolean;
+  firstResponseRemainingHours: number | null;
+  resolutionRemainingHours: number | null;
+};
+
 export type SupportTicket = {
   id: string;
   subject: string;
   /** Short summary shown under the ticket title on the detail page. */
   description: string;
-  topic: "kyc" | "sip" | "payment" | "account" | "goals" | "other";
+  topic: "kyc" | "sip" | "payment" | "account" | "goals" | "family" | "portfolio" | "referrals" | "other";
   status: SupportTicketStatus;
   priority: SupportTicketPriority;
   userId: string;
@@ -29,6 +70,14 @@ export type SupportTicket = {
   createdAt: string;
   updatedAt: string;
   channel: "web_chat" | "email";
+  handledBy?: "bot" | "human";
+  firstResponseDueAt?: string | null;
+  resolutionDueAt?: string | null;
+  firstRespondedAt?: string | null;
+  resolvedAt?: string | null;
+  sla?: SupportTicketSlaSnapshot;
+  routing?: SupportTicketRoutingInsight | null;
+  urgencyScore?: number | null;
   messages: SupportTicketMessage[];
   attachments: SupportTicketAttachment[];
 };

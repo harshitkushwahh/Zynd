@@ -11,7 +11,20 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { getDisplayInitials } from "@/lib/get-display-initials";
 import { DISTRIBUTOR_LABEL_CAPS_TINY_CLASS } from "@/lib/distributor-layout";
 import type { SupportTicketCustomerSnapshot } from "@/lib/support-types";
+import { supportUserDetailHref } from "@/lib/support-users-api";
+import {
+  normalizeSupportDisplayValue,
+  SUPPORT_EMPTY_VALUE,
+} from "@/lib/support-display-value";
 import { cn } from "@/lib/utils";
+
+function ContactValue({ value }: { value: string }) {
+  const normalized = normalizeSupportDisplayValue(value);
+  if (normalized === SUPPORT_EMPTY_VALUE) {
+    return <span className="font-normal text-muted-foreground">{SUPPORT_EMPTY_VALUE}</span>;
+  }
+  return <>{normalized}</>;
+}
 
 type SupportTicketCustomerDetailsPanelProps = {
   customer: SupportTicketCustomerSnapshot;
@@ -24,7 +37,7 @@ export function SupportTicketCustomerDetailsPanel({
   clientCode,
   className,
 }: SupportTicketCustomerDetailsPanelProps) {
-  const userHref = `/dashboard/users/${encodeURIComponent(clientCode)}`;
+  const userHref = supportUserDetailHref(clientCode);
   const initials = getDisplayInitials(customer.displayName);
 
   return (
@@ -70,14 +83,18 @@ export function SupportTicketCustomerDetailsPanel({
                 <Phone className="size-4 shrink-0 text-muted-foreground" strokeWidth={2.25} />
                 <div className="min-w-0">
                   <p className="text-caption text-muted-foreground">Mobile</p>
-                  <p className="text-compact font-medium tabular-nums">{customer.mobileMasked}</p>
+                  <p className="text-compact font-medium tabular-nums">
+                    <ContactValue value={customer.mobileMasked} />
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5">
                 <Mail className="size-4 shrink-0 text-muted-foreground" strokeWidth={2.25} />
                 <div className="min-w-0">
                   <p className="text-caption text-muted-foreground">Email</p>
-                  <p className="truncate text-compact font-medium">{customer.emailMasked}</p>
+                  <p className="truncate text-compact font-medium">
+                    <ContactValue value={customer.emailMasked} />
+                  </p>
                 </div>
               </div>
             </div>

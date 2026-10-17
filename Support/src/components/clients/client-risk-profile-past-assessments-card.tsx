@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 
 import { RiskProfileGauge } from "@/components/risk-profile/risk-profile-gauge";
 import { DistributorActionButton } from "@/components/ui/distributor-action-button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { RiskProfileTierBadge } from "@/components/risk-profile/risk-profile-tier-badge";
 import { DISTRIBUTOR_CLIENT_COPY } from "@/lib/distributor-client-copy";
 import type { DistributorClientRiskAssessment } from "@/lib/distributor-types";
 import { formatDistributorDate } from "@/lib/format";
@@ -64,7 +64,7 @@ export function ClientRiskProfilePastAssessmentsCard({
                         showTierScale={false}
                       />
                     </div>
-                    <StatusBadge variant="info">{visual.label}</StatusBadge>
+                    <RiskProfileTierBadge tier={row.tier} />
                     <div className="distributor-client-risk-past-card__score-box">
                       <p className={cn("distributor-client-risk-past-card__score tabular-nums", visual.textClass)}>
                         <span className="distributor-client-risk-past-card__score-value">{row.displayScore}</span>

@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.persistence.models import User
 
 _CLIENT_ID_SUFFIX = "@zynd"
-_MAX_PREFIX_LEN = 48
+_EMAIL_PREFIX_LEN = 5
+_PHONE_DIGIT_LEN = 10
 
 ZYND_PERSONA_MITRA = "M"
 ZYND_PERSONA_MANAGER = "MG"
@@ -34,15 +35,26 @@ def _sanitize_token(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
-def build_client_id_candidate(email: str, phone: str | None) -> str:
+def _email_prefix_for_client_id(email: str) -> str:
     local_part = email.split("@", 1)[0]
     tokens = [token for token in re.split(r"[._+\-]+", local_part) if token]
-    first = _sanitize_token(tokens[0]) if tokens else "user"
-    second = _sanitize_token(tokens[1]) if len(tokens) > 1 else ""
-    prefix = (first + second)[:_MAX_PREFIX_LEN] or "user"
-    phone_digits = "".join(character for character in (phone or "") if character.isdigit())
-    if not phone_digits:
-        phone_digits = secrets.token_hex(4)
+    sanitized = _sanitize_token(tokens[0]) if tokens else "user"
+    prefix = sanitized[:_EMAIL_PREFIX_LEN]
+    return prefix or "user"
+
+
+def _phone_suffix_for_client_id(phone: str | None) -> str:
+    digits = "".join(character for character in (phone or "") if character.isdigit())
+    if len(digits) >= _PHONE_DIGIT_LEN:
+        return digits[-_PHONE_DIGIT_LEN:]
+    if digits:
+        return digits.zfill(_PHONE_DIGIT_LEN)
+    return f"{secrets.randbelow(10**_PHONE_DIGIT_LEN):0{_PHONE_DIGIT_LEN}d}"
+
+
+def build_client_id_candidate(email: str, phone: str | None) -> str:
+    prefix = _email_prefix_for_client_id(email)
+    phone_digits = _phone_suffix_for_client_id(phone)
     return f"{prefix}{phone_digits}{_CLIENT_ID_SUFFIX}"
 
 
