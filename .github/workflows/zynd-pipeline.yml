@@ -484,9 +484,15 @@ jobs:
             env_group="$(stat -c '%G' "${env_file}")"
             env_mode="$(stat -c '%a' "${env_file}")"
             echo "Backend/.env owner=${env_owner} group=${env_group} mode=${env_mode} bytes=$(stat -c '%s' "${env_file}")"
-            if [ "${env_owner}" != "root" ] || [ "${env_group}" != "root" ] || [ "${env_mode}" != "600" ]; then
+            if [ "${env_owner}" != "root" ] || [ "${env_group}" != "root" ]; then
               echo "ERROR: Backend/.env must be owned by root:root with mode 600."
               exit 1
+            fi
+            if [ "${env_mode}" != "600" ]; then
+              echo "WARNING: Backend/.env mode is ${env_mode}; correcting to 600 (common after manual edits)."
+              chmod 600 "${env_file}"
+              env_mode="$(stat -c '%a' "${env_file}")"
+              echo "Backend/.env mode is now ${env_mode}."
             fi
             end_section
 
@@ -616,6 +622,9 @@ jobs:
               MONGO_SERVICE=""
             fi
             require_service api || infra_failed=1
+            if printf '%s\n' "${compose_services[@]}" | grep -qx ollama; then
+              require_service ollama || infra_failed=1
+            fi
             if [ "${infra_failed}" -ne 0 ]; then
               exit 1
             fi
@@ -670,6 +679,16 @@ jobs:
             done
             # shellcheck disable=SC2086
             compose build ${worker_build}
+            end_section
+
+            section "[7b/15] Ensure Ollama (Support AI)"
+            if printf '%s\n' "${compose_services[@]}" | grep -qx ollama; then
+              chmod +x Backend/scripts/ensure-ollama-production.sh
+              ZYND_ROOT=/opt/zynd Backend/scripts/ensure-ollama-production.sh
+            else
+              echo "ERROR: ollama service is not defined in compose; Support AI requires it."
+              exit 1
+            fi
             end_section
 
             section "[8/15] Deploy API and backend workers"
