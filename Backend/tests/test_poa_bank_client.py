@@ -4,13 +4,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.kyc.poa_client import poa_check_readiness, poa_verify_bank_account
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.poa_client import poa_check_readiness, poa_verify_bank_account
 
 
 @pytest.mark.asyncio
 async def test_poa_check_readiness_raises_when_cybrilla_not_live() -> None:
-    with patch("app.infrastructure.kyc.poa_client.is_cybrilla_poa_live", return_value=False):
+    with patch("app.infrastructure.core.kyc.poa_client.is_cybrilla_poa_live", return_value=False):
         with pytest.raises(FpClientError) as exc_info:
             await poa_check_readiness("ABCPA3753D")
     assert exc_info.value.code == "poa_not_configured"
@@ -26,9 +26,9 @@ async def test_poa_verify_bank_account_uses_bank_accounts_array() -> None:
             "bank_accounts": [{"status": "verified", "code": None, "reason": None}],
         }
     )
-    with patch("app.infrastructure.kyc.poa_client.is_cybrilla_poa_live", return_value=True):
-        with patch("app.infrastructure.kyc.poa_client.fp_post", new=fp_post), patch(
-            "app.infrastructure.kyc.poa_client.poll_poa_preverification",
+    with patch("app.infrastructure.core.kyc.poa_client.is_cybrilla_poa_live", return_value=True):
+        with patch("app.infrastructure.core.kyc.poa_client.fp_post", new=fp_post), patch(
+            "app.infrastructure.core.kyc.poa_client.poll_poa_preverification",
             new=poll,
         ):
             result = await poa_verify_bank_account(

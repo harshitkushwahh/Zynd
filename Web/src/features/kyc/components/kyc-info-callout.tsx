@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 type KycInfoCalloutProps = {
   title: string;
-  description: string;
+  description: ReactNode;
   className?: string;
   /** Optional control aligned inside the callout (e.g. DigiLocker retry). */
   action?: ReactNode;
@@ -27,7 +27,9 @@ export function KycInfoCallout({ title, description, className, action }: KycInf
       </div>
       <div className="min-w-0 flex-1 text-left leading-tight">
         <p className="text-caption font-semibold tracking-tight text-foreground">{title}</p>
-        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{description}</p>
+        <div className="mt-1 space-y-1.5 text-[11px] leading-snug text-muted-foreground">
+          {description}
+        </div>
       </div>
       {action ? <div className="shrink-0 self-center">{action}</div> : null}
     </div>

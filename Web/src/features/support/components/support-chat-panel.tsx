@@ -108,9 +108,9 @@ export function SupportChatPanel({
     clearAttachment,
     agentTyping,
     canReply,
+    resolutionOpen,
     sendMessage,
     sendQuickReply,
-    startNewChat,
   } = chat;
 
   const [draft, setDraft] = useState("");
@@ -185,24 +185,31 @@ export function SupportChatPanel({
 
   const showSuggestions =
     canReply &&
+    !resolutionOpen &&
     showQuickReplies &&
     !agentTyping &&
     messages.filter((message) => message.role === "user").length <= 2;
 
   const isPageHeader = headerVariant === "page";
+  const threadLocked = !canReply;
 
   return (
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col bg-background",
         isPageHeader && "overflow-hidden rounded-[inherit]",
-        !canReply && isPageHeader && "bg-muted/10",
+        threadLocked && "bg-muted/25",
         className,
       )}
     >
       {showHeader ? (
         isPageHeader ? (
-          <div className="shrink-0 border-b border-border/70">
+          <div
+            className={cn(
+              "shrink-0 border-b border-border/70",
+              threadLocked && "bg-muted/40",
+            )}
+          >
             <div className="flex w-full items-center justify-between gap-3 px-4 py-3.5 md:px-5">
               <div className="flex min-w-0 shrink-0 items-center gap-3">
                 <div className="relative shrink-0">
@@ -283,7 +290,12 @@ export function SupportChatPanel({
             </div>
           </div>
         ) : (
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-gradient-brand px-4 py-3.5">
+          <div
+            className={cn(
+              "flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3.5",
+              threadLocked ? "bg-muted/50" : "bg-gradient-brand",
+            )}
+          >
             <div className="flex min-w-0 items-center gap-3">
               <div className="relative shrink-0">
                 <Avatar size="lg" className="border border-primary-foreground/25">
@@ -299,10 +311,20 @@ export function SupportChatPanel({
                 </Avatar>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-body font-semibold text-primary-foreground">
+                <p
+                  className={cn(
+                    "truncate text-body font-semibold",
+                    threadLocked ? "text-muted-foreground" : "text-primary-foreground",
+                  )}
+                >
                   {copy.support.title}
                 </p>
-                <p className="truncate text-caption text-primary-foreground/85">
+                <p
+                  className={cn(
+                    "truncate text-caption",
+                    threadLocked ? "text-muted-foreground/90" : "text-primary-foreground/85",
+                  )}
+                >
                   {header.name} · {showPresence ? (header.status === "online" ? copy.support.agentOnline : copy.support.agentAway) : header.statusLabel}
                 </p>
               </div>
@@ -320,7 +342,8 @@ export function SupportChatPanel({
           onScroll={handleMessagesScroll}
           className={cn(
             "h-full space-y-3.5 overflow-y-auto px-3 py-4 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
-            isPageHeader && "bg-muted/20",
+            isPageHeader && !threadLocked && "bg-muted/20",
+            threadLocked && "bg-muted/15 opacity-[0.92] [filter:saturate(0.88)]",
             messagesClassName,
           )}
         >
@@ -385,7 +408,13 @@ export function SupportChatPanel({
         </div>
       ) : null}
 
-      {canReply ? (
+      {canReply && resolutionOpen ? (
+        <p className="shrink-0 border-t border-border/70 bg-muted/20 px-4 py-3 text-center text-caption text-muted-foreground md:px-5">
+          {copy.support.resolutionHint}
+        </p>
+      ) : null}
+
+      {canReply && !resolutionOpen ? (
         <SupportChatComposer
           value={draft}
           onChange={setDraft}
@@ -402,23 +431,19 @@ export function SupportChatPanel({
       ) : (
         <div
           className={cn(
-            "shrink-0 border-t border-border/70 bg-muted/25 px-3 py-3",
+            "shrink-0 border-t border-border/60 bg-muted/45 px-3 py-3",
             isPageHeader && "px-4 md:px-5",
           )}
         >
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-stretch">
-            <div
-              className="flex min-h-11 flex-1 items-center gap-2.5 rounded-[var(--radius-control)] border border-border/70 bg-background/60 px-3 py-2.5"
-              aria-disabled="true"
-            >
-              <Lock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <p className="text-caption leading-snug text-muted-foreground">
-                {copy.support.ticketResolvedComposerLocked}
-              </p>
-            </div>
-            <Button type="button" size="sm" className="h-11 shrink-0 px-4" onClick={startNewChat}>
-              {copy.support.startChat}
-            </Button>
+          <div
+            className="flex min-h-11 items-center gap-2.5 rounded-[var(--radius-control)] border border-border/50 bg-muted/55 px-3 py-2.5"
+            aria-disabled="true"
+            role="status"
+          >
+            <Lock className="size-4 shrink-0 text-muted-foreground/80" aria-hidden />
+            <p className="text-caption leading-snug text-muted-foreground">
+              {copy.support.ticketResolvedComposerLocked}
+            </p>
           </div>
         </div>
       )}

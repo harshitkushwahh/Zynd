@@ -437,6 +437,7 @@ export function createMfOrder(body: {
   amount_inr: number;
   idempotency_key: string;
   bank_account_id?: string;
+  family_group_id?: string;
   family_goal_id?: string;
   payment_method?: MfPaymentMethod;
   folio_number?: string;
@@ -609,6 +610,7 @@ export function clearMfCartTab(investmentType: "lumpsum" | "sip") {
 export function checkoutMfCart(body: {
   idempotency_key: string;
   bank_account_id?: string;
+  family_group_id?: string;
   family_goal_id?: string;
   payment_method?: MfPaymentMethod;
 }) {
@@ -621,6 +623,7 @@ export function checkoutMfCart(body: {
 export function checkoutMfSipCart(body: {
   idempotency_key: string;
   bank_account_id?: string;
+  family_group_id?: string;
   family_goal_id?: string;
   mandate_type?: MfMandateType;
 }) {
@@ -769,6 +772,7 @@ export function createMfSipPlan(body: {
   mandate_id?: string;
   idempotency_key: string;
   bank_account_id?: string;
+  family_group_id?: string;
   family_goal_id?: string;
   mandate_type?: MfMandateType;
   folio_number?: string;

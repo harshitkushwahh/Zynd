@@ -18,8 +18,8 @@ from app.application.mf.mf_sip_first_installment_service import (
     _payment_covers_first_installment,
     _pick_first_installment_purchase,
 )
-from app.infrastructure.mf.fp_oms_client import get_mf_purchase, list_mf_purchases_for_plan
-from app.infrastructure.mf.fp_payment_client import is_payment_success_status
+from app.infrastructure.core.mf.oms_client import get_mf_purchase, list_mf_purchases_for_plan
+from app.infrastructure.core.mf.payment_client import is_payment_success_status
 from app.infrastructure.persistence.mf_transaction_models import (
     MfOrder,
     MfOrderStatus,

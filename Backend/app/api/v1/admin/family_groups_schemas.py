@@ -218,7 +218,7 @@ class AdminFamilyGroupSipAddonResponse(BaseModel):
 
 
 class AdminFamilyGroupMfHoldingResponse(BaseModel):
-    holding_id: int
+    holding_id: str
     user_id: UUID
     member_label: str
     member_display_name: str
@@ -232,6 +232,8 @@ class AdminFamilyGroupMfHoldingResponse(BaseModel):
     as_of_date: Optional[str] = None
     amc_name: Optional[str] = None
     source: str
+    goal_id: Optional[UUID] = None
+    goal_title: Optional[str] = None
 
 
 class AdminFamilyGroupOneTimePaymentResponse(BaseModel):

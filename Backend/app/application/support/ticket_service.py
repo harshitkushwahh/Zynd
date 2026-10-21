@@ -319,6 +319,9 @@ def serialize_message(
         "attachment_document_id": str(message.attachment_document_id) if message.attachment_document_id else None,
         "attachment_filename": message.attachment_filename,
         "resolution_active": resolution_active,
+        "customer_read_at": _iso(message.customer_read_at),
+        "support_read_at": _iso(message.support_read_at),
+        "support_read_by": message.support_read_by,
     }
 
 
@@ -1005,6 +1008,15 @@ async def add_agent_reply(
             sender_name=sender,
             author_user_id=agent.id,
         )
+        if not internal:
+            from app.application.support.read_receipts import mark_all_user_messages_read_by_support
+
+            await mark_all_user_messages_read_by_support(
+                db,
+                conversation.id,
+                reader="agent",
+                ticket_public_id=ticket.public_id,
+            )
     if not internal or resolution_prompt:
         if ticket.assignee_id is None:
             ticket.assignee_id = agent.id

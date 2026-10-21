@@ -104,6 +104,13 @@ async def verify_partner_onboarding_bank(
         reason = (outcome.failure or {}).get("reason") or "Bank account requires manual verification."
         raise PartnerOnboardingError(reason, "bank_manual_required", 400)
 
+    if outcome.allows_kyc_continue and not outcome.bank_verified:
+        reason = (
+            (outcome.failure or {}).get("reason")
+            or "Bank account is pending Cybrilla manual review."
+        )
+        raise PartnerOnboardingError(reason, "bank_manual_pending", 400)
+
     if not outcome.bank_verified:
         reason = (outcome.failure or {}).get("reason") or "Bank account verification failed."
         code = str((outcome.failure or {}).get("code") or "bank_verification_failed")

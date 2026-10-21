@@ -26,6 +26,9 @@ from app.application.family_groups.admin_service import (
     get_admin_family_group_detail,
     list_admin_user_family_groups,
 )
+from app.application.family_groups.family_group_portfolio_service import (
+    get_family_group_portfolio_for_admin,
+)
 from app.application.family_groups.errors import FamilyGroupError
 from app.application.goals.errors import GoalError
 from app.application.goals.family_goal_service import list_family_goals
@@ -413,6 +416,16 @@ async def _serialize_distributor_family_group(
     if user_ids:
         member_rows = await db.execute(select(User.id, User.email).where(User.id.in_(user_ids)))
         member_emails = {row.id: row.email for row in member_rows.all()}
+    portfolio = await get_family_group_portfolio_for_admin(db, group_id=group_id)
+    linked_by_user: dict[UUID, float] = {}
+    for holding in portfolio.get("holdings") or []:
+        owner_id = holding.get("user_id")
+        if not isinstance(owner_id, UUID):
+            continue
+        linked_by_user[owner_id] = linked_by_user.get(owner_id, 0.0) + float(
+            holding.get("current_value_inr") or 0
+        )
+
     members: list[dict[str, Any]] = []
     for row in detail.get("members") or []:
         uid = row["user_id"]
@@ -426,6 +439,7 @@ async def _serialize_distributor_family_group(
                 "role": row.get("role"),
                 "badge_label": row.get("badge_label"),
                 "profile_image_url": profile_images.get(uid),
+                "linked_current_value_inr": linked_by_user.get(uid, 0.0),
             }
         )
 
@@ -440,6 +454,9 @@ async def _serialize_distributor_family_group(
         "member_count": detail.get("member_count") or len(members),
         "status": detail.get("status"),
         "client_role": client_role,
+        "total_current_value_inr": float(portfolio.get("total_current_value_inr") or 0),
+        "total_invested_inr": float(portfolio.get("total_invested_inr") or 0),
+        "active_goals_count": int(portfolio.get("active_goals_count") or 0),
         "members": members,
     }
 

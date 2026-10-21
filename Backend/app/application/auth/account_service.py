@@ -11,6 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+
+async def _invalidate_user_auth_caches(user_id: UUID) -> None:
+    from app.application.auth.auth_cache_invalidation import invalidate_auth_user_caches
+
+    await invalidate_auth_user_caches(user_id)
+
 from app.application.auth.mfa_service import (
     build_provisioning_uri,
     confirm_mfa_enrollment,
@@ -173,6 +179,7 @@ async def mfa_enroll_confirm(
         idempotency_key=f"auth.mfa.enabled:{user.id}:{user.mfa_enrolled_at.isoformat()}",
         email_subject="Two-factor authentication enabled on your ZYND account",
     )
+    await _invalidate_user_auth_caches(user.id)
     return {"enrolled": True, "backup_codes": backup_codes, "mfa_enrolled_at": user.mfa_enrolled_at}
 
 
@@ -317,6 +324,7 @@ async def mfa_reset_confirm(
         idempotency_key=f"auth.mfa.reset:{user.id}:{user.mfa_enrolled_at.isoformat()}",
         email_subject="Your ZYND authenticator app was reset",
     )
+    await _invalidate_user_auth_caches(user.id)
     return {
         "enrolled": True,
         "backup_codes": backup_codes,
@@ -378,6 +386,7 @@ async def mfa_disable(
         email_subject="Authenticator disabled on your ZYND account",
     )
     await db.flush()
+    await _invalidate_user_auth_caches(user.id)
     return {"disabled": True}
 
 
@@ -391,7 +400,7 @@ async def verify_mfa_login(
     ip: str | None,
 ) -> dict[str, Any]:
     settings = get_settings()
-    payload = await consume_pending_auth("mfa_login", mfa_token)
+    payload = await peek_pending_auth("mfa_login", mfa_token)
     if not payload:
         raise AuthError("MFA session expired. Sign in again.", "mfa_expired", 410)
 
@@ -455,6 +464,10 @@ async def verify_mfa_login(
             ip=ip,
         )
         raise AuthError("Invalid verification code.", "invalid_mfa_code", 401)
+
+    consumed = await consume_pending_auth("mfa_login", mfa_token)
+    if not consumed:
+        raise AuthError("MFA session expired. Sign in again.", "mfa_expired", 410)
 
     challenge_metadata: dict[str, Any] = {"used_backup_code": used_backup}
     if used_sms:
@@ -822,6 +835,7 @@ async def change_password(
         ),
         idempotency_key=f"auth.password.changed:{user.id}:{user.password_changed_at.isoformat()}",
     )
+    await _invalidate_user_auth_caches(user.id)
     return {"ok": True}
 
 
@@ -971,6 +985,7 @@ async def change_email_confirm(
         await sync_investor_email_after_account_change(db, user_id=user.id, new_email=new_email)
     except Exception:
         logger.exception("Failed to sync changed email onto Finprim MFIA folio_defaults user=%s", user.id)
+    await _invalidate_user_auth_caches(user.id)
     return {"ok": True}
 
 
@@ -1032,6 +1047,7 @@ async def request_account_deletion(
             "Sign in and visit Settings → Delete account to cancel before then."
         ),
     )
+    await _invalidate_user_auth_caches(user.id)
     return {"ok": True, "deletion_scheduled_at": user.deletion_scheduled_at}
 
 
@@ -1062,6 +1078,7 @@ async def cancel_account_deletion(
         user_id=user.id,
         ip=ip,
     )
+    await _invalidate_user_auth_caches(user.id)
     return {"ok": True}
 
 

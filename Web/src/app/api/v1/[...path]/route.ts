@@ -18,6 +18,10 @@ function resolveClientIp(request: NextRequest): string | null {
   return null;
 }
 
+function isLongLivedBackendStream(path: string): boolean {
+  return path === "notifications/stream" || path.endsWith("/stream");
+}
+
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const path = pathSegments.join("/");
   const targetUrl = `${serverEnv.backendUrl}/api/v1/${path}${request.nextUrl.search}`;
@@ -42,10 +46,13 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   }
 
   let backendResponse: Response;
+  const longLivedStream = isLongLivedBackendStream(path);
   try {
     backendResponse = await fetch(targetUrl, {
       ...init,
-      signal: AbortSignal.timeout(serverEnv.backendProxyTimeoutMs),
+      ...(longLivedStream
+        ? { cache: "no-store" as RequestCache }
+        : { signal: AbortSignal.timeout(serverEnv.backendProxyTimeoutMs) }),
     });
   } catch (error) {
     const timedOut =
@@ -59,7 +66,10 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
         { status: 504 },
       );
     }
-    throw error;
+    return NextResponse.json(
+      { detail: "Backend is unavailable. Try again in a moment." },
+      { status: 503 },
+    );
   }
   const responseHeaders = new Headers(backendResponse.headers);
   responseHeaders.delete("content-encoding");

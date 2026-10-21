@@ -119,6 +119,14 @@ export function mapPortfolioHoldingDetail(
     allocationPct: holding.allocation_pct,
     folioNumber: holding.folio_number,
     holdingMode: holding.holding_mode === "Demat" ? "Demat" : "Physical",
+    familyLink: holding.family_link
+      ? {
+          familyGroupId: holding.family_link.family_group_id,
+          familyGroupTitle: holding.family_link.family_group_title,
+          goalId: holding.family_link.goal_id ?? null,
+          goalTitle: holding.family_link.goal_title ?? null,
+        }
+      : null,
     investedMonths: holding.invested_months,
     currentNav: holding.current_nav ?? holding.nav ?? 0,
     avgNav: holding.avg_nav,

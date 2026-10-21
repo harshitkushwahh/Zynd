@@ -16,6 +16,7 @@ import { ApiError } from "@/lib/api-client";
 import { buildSupportChatHeader } from "@/features/support/lib/support-chat-participant";
 import {
   connectSupportRealtime,
+  emitMessagesRead,
   subscribeSupportConversation,
   type SupportRealtimeEvent,
 } from "@/features/support/lib/support-realtime";
@@ -25,6 +26,11 @@ import {
   ZYND_HELP_BOT_GREETING,
 } from "@/features/support/lib/support-dummy-data";
 import { createSupportMessageId } from "@/features/support/lib/support-format";
+import {
+  applyResolutionFlags,
+  isResolutionPromptMessage,
+  RESOLUTION_PROMPT_BODY,
+} from "@/features/support/lib/support-resolution";
 import type {
   SupportImageAttachment,
   SupportMessage,
@@ -32,6 +38,28 @@ import type {
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const POLL_MS = 4000;
+const REALTIME_REFRESH_MS = 350;
+
+function realtimeEventAppliesToThread(
+  event: SupportRealtimeEvent,
+  conversationId: string | null,
+  ticketId: string | null,
+): boolean {
+  if (event.conversation_id && conversationId && event.conversation_id === conversationId) {
+    return true;
+  }
+  if (event.ticket_id && ticketId && event.ticket_id === ticketId) {
+    return true;
+  }
+  if (!conversationId && !ticketId) {
+    return Boolean(event.conversation_id || event.ticket_id);
+  }
+  return false;
+}
+
+function threadLockedFromEvent(event: SupportRealtimeEvent): boolean {
+  return event.ticket_status === "resolved" || event.status === "closed";
+}
 
 function greetingMessage(): SupportMessage {
   return {
@@ -54,17 +82,27 @@ function messagesFromConversation(conversation: SupportConversationPayload): Sup
 
 function mapRealtimeMessage(message: Record<string, unknown>): SupportMessage | null {
   const id = typeof message.id === "string" ? message.id : null;
-  const body = typeof message.body === "string" ? message.body : "";
+  const rawBody = typeof message.body === "string" ? message.body : "";
   const createdAt = typeof message.created_at === "string" ? message.created_at : null;
   if (!id || !createdAt) return null;
   const roleRaw = message.role;
   const role =
     roleRaw === "user" ? "user" : roleRaw === "system" ? "system" : "agent";
+  const kindRaw = typeof message.kind === "string" ? message.kind : "text";
+  const isPrompt =
+    kindRaw === "resolution_prompt" ||
+    isResolutionPromptMessage({ kind: kindRaw, body: rawBody });
+  const kind = isPrompt ? "resolution_prompt" : kindRaw === "text" ? "text" : undefined;
+  const body = isPrompt && !rawBody.trim() ? RESOLUTION_PROMPT_BODY : rawBody;
+  const resolutionActive = isPrompt ? Boolean(message.resolution_active ?? true) : false;
+
   return {
     id,
     role,
     body,
     createdAt,
+    kind,
+    resolutionActive,
     senderName: typeof message.sender_name === "string" ? message.sender_name : undefined,
     attachmentId:
       typeof message.attachment_document_id === "string"
@@ -74,7 +112,20 @@ function mapRealtimeMessage(message: Record<string, unknown>): SupportMessage | 
       typeof message.attachment_filename === "string"
         ? message.attachment_filename
         : undefined,
+    customerReadAt:
+      typeof message.customer_read_at === "string" ? message.customer_read_at : undefined,
+    supportReadAt:
+      typeof message.support_read_at === "string" ? message.support_read_at : undefined,
+    supportReadBy:
+      message.support_read_by === "bot" || message.support_read_by === "agent"
+        ? message.support_read_by
+        : undefined,
   };
+}
+
+function isPersistedMessageId(id: string): boolean {
+  if (id === "zynd-help-bot-greeting") return false;
+  return !id.startsWith("msg-");
 }
 
 export function useSupportChat() {
@@ -96,6 +147,7 @@ export function useSupportChat() {
   const conversationIdRef = useRef<string | null>(null);
   const epochRef = useRef(0);
   const wsSendRef = useRef<(payload: object) => void>(() => undefined);
+  const refreshTimerRef = useRef<number | null>(null);
 
   const applyConversation = useCallback((conversation: SupportConversationPayload) => {
     ticketIdRef.current = conversation.ticket_id;
@@ -108,11 +160,37 @@ export function useSupportChat() {
     setMessages(messagesFromConversation(conversation));
   }, []);
 
+  const refreshConversation = useCallback(() => {
+    if (sendingRef.current) return Promise.resolve();
+    const ticketId = ticketIdRef.current;
+    const request = ticketId
+      ? getSupportTicketThread(ticketId)
+      : getCurrentSupportConversation();
+    return request
+      .then((conversation) => {
+        applyConversation(conversation);
+      })
+      .catch(() => undefined);
+  }, [applyConversation]);
+
+  const scheduleRefreshConversation = useCallback(() => {
+    if (refreshTimerRef.current !== null) return;
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      void refreshConversation();
+    }, REALTIME_REFRESH_MS);
+  }, [refreshConversation]);
+
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
   const handleRealtimeEvent = useCallback(
     (event: SupportRealtimeEvent) => {
+      const applies = realtimeEventAppliesToThread(
+        event,
+        conversationIdRef.current,
+        ticketIdRef.current,
+      );
       if (event.type === "agent:typing") {
         if (handlerRef.current === "human") {
           setHumanAgentTyping(Boolean(event.typing));
@@ -122,13 +200,49 @@ export function useSupportChat() {
       if (event.type === "message:new" && event.message) {
         const mapped = mapRealtimeMessage(event.message);
         if (!mapped) return;
+        if (mapped.kind === "resolution_prompt" && mapped.resolutionActive) {
+          setResolutionOpen(true);
+        }
         setMessages((current) => {
           if (current.some((row) => row.id === mapped.id)) return current;
-          return [...current.filter((row) => row.id !== "zynd-help-bot-greeting"), mapped];
+          const next = [
+            ...current.filter((row) => row.id !== "zynd-help-bot-greeting"),
+            mapped,
+          ] as SupportMessage[];
+          if (mapped.kind === "resolution_prompt" && mapped.resolutionActive) {
+            return applyResolutionFlags(next, true) as SupportMessage[];
+          }
+          return next;
         });
         return;
       }
+      if (event.type === "message:read") {
+        if (!applies) return;
+        const messageId = event.message_id;
+        if (!messageId) return;
+        setMessages((current) =>
+          current.map((row) => {
+            if (row.id !== messageId) return row;
+            if (event.side === "customer") {
+              return { ...row, customerReadAt: event.read_at ?? row.customerReadAt };
+            }
+            if (event.side === "support") {
+              return {
+                ...row,
+                supportReadAt: event.read_at ?? row.supportReadAt,
+                supportReadBy: event.support_read_by ?? row.supportReadBy,
+              };
+            }
+            return row;
+          }),
+        );
+        return;
+      }
       if (event.type === "ticket:updated") {
+        if (!applies) return;
+        const nextResolutionOpen =
+          typeof event.resolution_open === "boolean" ? event.resolution_open : null;
+        const locked = threadLockedFromEvent(event);
         setConversationMeta((current) => {
           if (!current) return current;
           return {
@@ -145,23 +259,42 @@ export function useSupportChat() {
               (event.agent_presence as SupportConversationPayload["agent_presence"]) ??
               current.agent_presence,
             resolution_open:
-              typeof event.resolution_open === "boolean"
-                ? event.resolution_open
-                : current.resolution_open,
+              nextResolutionOpen !== null ? nextResolutionOpen : current.resolution_open,
             status: event.status ?? current.status,
           };
         });
+        if (locked) {
+          setCanReply(false);
+          setResolutionOpen(false);
+          scheduleRefreshConversation();
+        } else if (nextResolutionOpen !== null) {
+          setResolutionOpen(nextResolutionOpen);
+          setMessages((current) =>
+            applyResolutionFlags(current, nextResolutionOpen) as SupportMessage[],
+          );
+        }
         if (event.handler === "human" || event.participant === "human") {
           setHandler("human");
         }
         return;
       }
       if (event.type === "conversation:locked") {
+        if (!applies) return;
         setCanReply(false);
         setResolutionOpen(false);
+        setConversationMeta((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            status: "closed",
+            ticket_status: "resolved",
+            resolution_open: false,
+          };
+        });
+        scheduleRefreshConversation();
       }
     },
-    [],
+    [scheduleRefreshConversation],
   );
 
   useEffect(() => {
@@ -188,6 +321,26 @@ export function useSupportChat() {
   }, [wsConnected, conversationMeta?.id, conversationMeta?.ticket_id]);
 
   useEffect(() => {
+    if (!wsConnected || !canReply) return;
+    const conversationId = conversationIdRef.current;
+    if (!conversationId) return;
+    const unreadInbound = messages
+      .filter(
+        (row) =>
+          row.role !== "user" &&
+          !row.customerReadAt &&
+          isPersistedMessageId(row.id),
+      )
+      .map((row) => row.id);
+    if (!unreadInbound.length) return;
+    emitMessagesRead(wsSendRef.current, {
+      conversationId,
+      ticketId: ticketIdRef.current,
+      messageIds: unreadInbound,
+    });
+  }, [messages, wsConnected, canReply]);
+
+  useEffect(() => {
     const objectUrls = objectUrlsRef.current;
     const seq = ++epochRef.current;
     let cancelled = false;
@@ -203,6 +356,10 @@ export function useSupportChat() {
       });
     return () => {
       cancelled = true;
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
       objectUrls.clear();
     };
@@ -265,7 +422,7 @@ export function useSupportChat() {
     (rawText: string, image?: SupportImageAttachment | null) => {
       const body = rawText.trim();
       const activeImage = image ?? attachment;
-      if ((!body && !activeImage) || botTyping || sendingRef.current || !canReply) {
+      if ((!body && !activeImage) || botTyping || sendingRef.current || !canReply || resolutionOpen) {
         return;
       }
 
@@ -315,7 +472,7 @@ export function useSupportChat() {
           setBotTyping(false);
         });
     },
-    [applyConversation, attachment, botTyping, canReply, handler],
+    [applyConversation, attachment, botTyping, canReply, handler, resolutionOpen],
   );
 
   const sendQuickReply = useCallback(
@@ -419,6 +576,7 @@ export function useSupportChat() {
       agentTyping,
       wsConnected,
       canReply,
+      resolutionOpen,
       conversationReady,
       hasEstablishedThread,
       threadKey: conversationMeta?.id ?? "none",
@@ -427,12 +585,14 @@ export function useSupportChat() {
       openTicket,
       respondToResolution,
       startNewChat,
+      refreshConversation,
     }),
     [
       agentTyping,
       attachImage,
       attachment,
       canReply,
+      resolutionOpen,
       chatHeader,
       clearAttachment,
       conversationReady,
@@ -444,6 +604,7 @@ export function useSupportChat() {
       sendMessage,
       sendQuickReply,
       startNewChat,
+      refreshConversation,
       wsConnected,
     ],
   );

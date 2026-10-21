@@ -30,8 +30,8 @@ from app.application.mf.invest_amc_display import resolve_invest_amc_display
 from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.core.config import Settings, get_settings
 from app.core.redis import get_redis
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     get_holdings_report,
     get_investment_account_wise_returns,
     get_mf_redemption,
@@ -472,7 +472,7 @@ async def _load_holding_order_transactions(
             .join(MutualFund, MutualFund.id == MfOrder.fund_id)
             .where(
                 MfOrder.user_id == user_id,
-                mutual_fund_isin_equals(MutualFund.isin_growth, isin),
+                mutual_fund_isin_equals(isin),
                 MfOrder.order_type.in_(
                     (MfOrderType.lumpsum, MfOrderType.sip, MfOrderType.redemption, MfOrderType.switch)
                 ),

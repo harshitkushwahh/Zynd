@@ -104,6 +104,21 @@ async def lifespan(_: FastAPI):
         await session.commit()
 
     from app.application.mf.mf_pipeline_orchestrator_service import initialize_pipeline_orchestrator
+    from app.application.support.training_loader import training_corpus_stats, warm_training_corpus
+
+    row_count = warm_training_corpus()
+    corpus = training_corpus_stats()
+    if row_count <= 0:
+        logger.warning(
+            "Help bot training corpus is empty — retrieval few-shot disabled. "
+            "Ship data/help-bot-training/batch-*.jsonl with the API image."
+        )
+    else:
+        logger.info(
+            "Help bot training corpus loaded: %s rows from %s batch files (Groq/Ollama + retrieval).",
+            corpus["training_rows"],
+            corpus["batch_files"],
+        )
 
     await initialize_pipeline_orchestrator()
     import asyncio

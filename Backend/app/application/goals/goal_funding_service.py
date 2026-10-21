@@ -34,7 +34,7 @@ from app.infrastructure.persistence.mf_transaction_models import MfOrder, MfSipP
 
 logger = logging.getLogger(__name__)
 
-from app.application.goals.constants import FAMILY_GOAL_METADATA_KEY
+from app.application.goals.constants import FAMILY_GOAL_METADATA_KEY, FAMILY_GROUP_METADATA_KEY
 
 
 def _parse_goal_id(metadata: dict[str, Any] | None) -> UUID | None:
@@ -150,8 +150,18 @@ async def _contribution_exists(
     return existing is not None
 
 
+def _metadata_has_family_link(metadata: dict[str, Any] | None) -> bool:
+    if not metadata:
+        return False
+    return bool(metadata.get(FAMILY_GOAL_METADATA_KEY) or metadata.get(FAMILY_GROUP_METADATA_KEY))
+
+
 async def record_contribution_from_order(db: AsyncSession, order: MfOrder) -> GoalContribution | None:
-    goal_id = _parse_goal_id(order.metadata_ if isinstance(order.metadata_, dict) else None)
+    metadata = order.metadata_ if isinstance(order.metadata_, dict) else None
+    # Linked funds are counted from live holding value, not a second purchase ledger.
+    if _metadata_has_family_link(metadata):
+        return None
+    goal_id = _parse_goal_id(metadata)
     if not goal_id:
         return None
 
@@ -197,7 +207,10 @@ async def record_contribution_from_order(db: AsyncSession, order: MfOrder) -> Go
 
 
 async def record_contribution_from_sip_plan(db: AsyncSession, plan: MfSipPlan) -> GoalContribution | None:
-    goal_id = _parse_goal_id(plan.metadata_ if isinstance(plan.metadata_, dict) else None)
+    metadata = plan.metadata_ if isinstance(plan.metadata_, dict) else None
+    if _metadata_has_family_link(metadata):
+        return None
+    goal_id = _parse_goal_id(metadata)
     if not goal_id:
         return None
 

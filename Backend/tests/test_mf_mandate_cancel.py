@@ -7,7 +7,7 @@ import pytest
 
 from app.application.mf.mf_mandate_service import cancel_user_mandate, refresh_mandate_status_from_fp
 from app.application.mf.mf_order_errors import MfOrderError
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.mf_transaction_models import MfMandate, MfMandateStatus
 from app.infrastructure.persistence.models import User
 

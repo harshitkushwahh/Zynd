@@ -166,6 +166,18 @@ async def db_session() -> AsyncSession:
                 text(f"ALTER TYPE auditeventtype ADD VALUE IF NOT EXISTS '{value}'")
             )
         await conn.execute(
+            text(
+                "ALTER TABLE kyc_journey_states "
+                "ADD COLUMN IF NOT EXISTS external_identity_document_json JSONB"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE kyc_journey_states "
+                "ADD COLUMN IF NOT EXISTS kyc_partner_external_refs_json JSONB"
+            )
+        )
+        await conn.execute(
             text("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS token_family_id UUID")
         )
         await conn.execute(

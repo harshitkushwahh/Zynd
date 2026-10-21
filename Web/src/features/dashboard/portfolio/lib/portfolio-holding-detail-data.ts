@@ -42,6 +42,12 @@ export type PortfolioHoldingDetail = {
   allocationPct: number;
   folioNumber: string;
   holdingMode: "Demat" | "Physical";
+  familyLink: {
+    familyGroupId: string;
+    familyGroupTitle: string;
+    goalId: string | null;
+    goalTitle: string | null;
+  } | null;
   investedMonths: number | null;
   currentNav: number;
   avgNav: number | null;

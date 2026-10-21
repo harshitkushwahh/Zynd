@@ -89,13 +89,12 @@ async def test_record_contribution_from_lumpsum_order(db_session: AsyncSession) 
     )
 
     contribution = await record_contribution_from_order(db_session, order)
-    assert contribution is not None
-    assert contribution.amount_inr == Decimal("15000")
-    assert contribution.source_type == GoalContributionSourceType.lumpsum_order
-    assert contribution.source_id == order.id
+    assert contribution is None
 
-    duplicate = await record_contribution_from_order(db_session, order)
-    assert duplicate is None
+    stored = await db_session.scalar(
+        select(GoalContribution).where(GoalContribution.source_id == order.id)
+    )
+    assert stored is None
 
     contributions = await get_family_goal_contributions(
         db_session,
@@ -103,8 +102,8 @@ async def test_record_contribution_from_lumpsum_order(db_session: AsyncSession) 
         goal_id=goal["id"],
         user_id=head.id,
     )
-    assert contributions["total_contributed_inr"] == 15_000
-    assert len(contributions["items"]) == 1
+    assert contributions["total_contributed_inr"] == 0
+    assert contributions["items"] == []
 
 
 @pytest.mark.asyncio
@@ -127,8 +126,7 @@ async def test_record_contribution_from_sip_plan(db_session: AsyncSession) -> No
     )
 
     contribution = await record_contribution_from_sip_plan(db_session, plan)
-    assert contribution is not None
-    assert contribution.source_type == GoalContributionSourceType.sip_plan
+    assert contribution is None
 
     stored = await db_session.scalar(
         select(GoalContribution).where(
@@ -136,8 +134,7 @@ async def test_record_contribution_from_sip_plan(db_session: AsyncSession) -> No
             GoalContribution.source_id == plan.id,
         )
     )
-    assert stored is not None
-    assert stored.note == "SIP plan linked"
+    assert stored is None
 
 
 @pytest.mark.asyncio

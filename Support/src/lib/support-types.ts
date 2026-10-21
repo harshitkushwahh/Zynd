@@ -11,6 +11,9 @@ export type SupportTicketMessage = {
   attachmentFileName?: string;
   kind?: "text" | "resolution_prompt";
   resolutionActive?: boolean;
+  customerReadAt?: string | null;
+  supportReadAt?: string | null;
+  supportReadBy?: "bot" | "agent" | null;
 };
 
 export type SupportTicketAttachment = {

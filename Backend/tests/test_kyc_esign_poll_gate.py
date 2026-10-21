@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.infrastructure.kyc.kyc_forms_client import should_poll_kyc_form_for_esign
+from app.infrastructure.core.kyc.kyc_forms_client import should_poll_kyc_form_for_esign
 
 
 def test_no_esign_poll_while_poa_proof_pending() -> None:

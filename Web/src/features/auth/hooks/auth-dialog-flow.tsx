@@ -58,13 +58,14 @@ import {
 } from "@/lib/turnstile-session";
 import { copy } from "@/shared/config/copy";
 import { storageKeys } from "@/shared/config/storage-keys";
+import { validateReferralCode } from "@/features/referral/api/referral-api";
 import { clearReferralCode, normalizeReferralCode, persistReferralCode, readReferralCode } from "@/features/referral/lib/referral-storage";
 
 type AuthDialogFlowContextValue = ReturnType<typeof useAuthDialogFlowState>;
 
 const AuthDialogFlowContext = createContext<AuthDialogFlowContextValue | null>(null);
 
-function useAuthDialogFlowState(onClose: () => void) {
+function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
   const router = useRouter();
   const { signIn, signInWithGoogle, signInWithApple, setUser, completeAuth } = useAuth();
   const kyc = useKycOptional();
@@ -96,12 +97,17 @@ function useAuthDialogFlowState(onClose: () => void) {
   const [forgotEmailError, setForgotEmailError] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
   const [isLoginMode, setIsLoginMode] = useState(false);
-  const [referralCodeInput, setReferralCodeInput] = useState("");
-  const [showReferralCodeInput, setShowReferralCodeInput] = useState(false);
-  const [referralCodeError, setReferralCodeError] = useState("");
+  const [appliedReferralCode, setAppliedReferralCode] = useState<string | null>(null);
+  const [referralDialogOpen, setReferralDialogOpen] = useState(false);
   const [turnstileToken, setTurnstileTokenState] = useState(() => readTurnstileSession() ?? "");
   const [turnstileError, setTurnstileError] = useState("");
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const [turnstileMountKey, setTurnstileMountKey] = useState(0);
+
+  useEffect(() => {
+    if (!surfaceOpen) return;
+    setTurnstileMountKey((key) => key + 1);
+  }, [surfaceOpen]);
   const [loginCaptchaRequired, setLoginCaptchaRequired] = useState(false);
 
   const [mfaToken, setMfaToken] = useState("");
@@ -164,38 +170,40 @@ function useAuthDialogFlowState(onClose: () => void) {
   }, []);
 
   useEffect(() => {
-    const storedReferralCode = readReferralCode();
-    if (storedReferralCode) {
-      setReferralCodeInput(storedReferralCode);
-      setShowReferralCodeInput(true);
-    }
+    setAppliedReferralCode(readReferralCode());
   }, []);
 
-  const commitReferralCodeInput = useCallback((): boolean => {
-    const trimmed = referralCodeInput.trim();
-    if (!trimmed) {
-      if (showReferralCodeInput) {
-        clearReferralCode();
+  const clearAppliedReferralCode = useCallback(() => {
+    clearReferralCode();
+    setAppliedReferralCode(null);
+  }, []);
+
+  const applyReferralCode = useCallback(
+    async (value: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (isLoginMode) {
+        return { ok: false, error: copy.auth.referralExistingUserError };
       }
-      setReferralCodeError("");
-      return true;
-    }
+      const normalized = normalizeReferralCode(value.trim());
+      if (!normalized) {
+        return { ok: false, error: copy.auth.referralCodeInvalid };
+      }
+      try {
+        const result = await validateReferralCode(normalized);
+        persistReferralCode(result.code);
+        setAppliedReferralCode(result.code);
+        return { ok: true };
+      } catch (error) {
+        if (error instanceof ApiError && error.code === "invalid_referral_code") {
+          return { ok: false, error: copy.auth.referralCodeNotFound };
+        }
+        return { ok: false, error: getAuthErrorMessage(error, copy.auth.referralCodeNotFound) };
+      }
+    },
+    [isLoginMode]
+  );
 
-    const normalized = normalizeReferralCode(trimmed);
-    if (!normalized) {
-      setReferralCodeError(copy.auth.referralCodeInvalid);
-      return false;
-    }
-
-    persistReferralCode(normalized);
-    setReferralCodeInput(normalized);
-    setReferralCodeError("");
-    return true;
-  }, [referralCodeInput, showReferralCodeInput]);
-
-  const toggleReferralCodeInput = useCallback(() => {
-    setShowReferralCodeInput((open) => !open);
-    setReferralCodeError("");
+  const openReferralDialog = useCallback(() => {
+    setReferralDialogOpen(true);
   }, []);
 
   const ensureTurnstile = useCallback(
@@ -234,10 +242,8 @@ function useAuthDialogFlowState(onClose: () => void) {
     setForgotEmailError("");
     setForgotSent(false);
     setIsLoginMode(false);
-    const storedReferralCode = readReferralCode();
-    setReferralCodeInput(storedReferralCode ?? "");
-    setShowReferralCodeInput(Boolean(storedReferralCode));
-    setReferralCodeError("");
+    setAppliedReferralCode(readReferralCode());
+    setReferralDialogOpen(false);
     setMfaToken("");
     setMfaCode("");
     setBackupCode("");
@@ -372,7 +378,6 @@ function useAuthDialogFlowState(onClose: () => void) {
       }
 
       if (!ensureTurnstile()) return;
-      if (!commitReferralCodeInput()) return;
 
       setIsSubmitting(true);
       setEmailError("");
@@ -380,6 +385,7 @@ function useAuthDialogFlowState(onClose: () => void) {
         const started = await signupStart(email, turnstileToken, readReferralCode());
         consumeTurnstileToken();
         if (started.next === "login") {
+          clearAppliedReferralCode();
           setIsLoginMode(true);
           setLoginError("");
           setEmailError("");
@@ -387,6 +393,7 @@ function useAuthDialogFlowState(onClose: () => void) {
           return;
         }
         if (!started.signup_token) {
+          clearAppliedReferralCode();
           setIsLoginMode(true);
           setLoginError("");
           setEmailError("");
@@ -419,7 +426,7 @@ function useAuthDialogFlowState(onClose: () => void) {
       turnstileToken,
       consumeTurnstileToken,
       resetTurnstile,
-      commitReferralCodeInput,
+      clearAppliedReferralCode,
     ]
   );
 
@@ -775,8 +782,6 @@ function useAuthDialogFlowState(onClose: () => void) {
       setEmailError("Google Sign-In is not configured yet.");
       return;
     }
-    if (!commitReferralCodeInput()) return;
-
     setIsSubmitting(true);
     setEmailError("");
     try {
@@ -790,15 +795,13 @@ function useAuthDialogFlowState(onClose: () => void) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [commitReferralCodeInput, handleAuthFlowResult, signInWithGoogle]);
+  }, [handleAuthFlowResult, signInWithGoogle]);
 
   const handleAppleSignIn = useCallback(async () => {
     if (!env.appleClientId) {
       setEmailError("Apple Sign-In is not configured yet.");
       return;
     }
-    if (!commitReferralCodeInput()) return;
-
     setIsSubmitting(true);
     setEmailError("");
     try {
@@ -812,7 +815,7 @@ function useAuthDialogFlowState(onClose: () => void) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [commitReferralCodeInput, handleAuthFlowResult, signInWithApple]);
+  }, [handleAuthFlowResult, signInWithApple]);
 
   const goToForgotPassword = useCallback(() => {
     setForgotEmail(email);
@@ -873,19 +876,20 @@ function useAuthDialogFlowState(onClose: () => void) {
     forgotSent,
     isLoginMode,
     setIsLoginMode,
-    referralCodeInput,
-    setReferralCodeInput,
-    showReferralCodeInput,
-    toggleReferralCodeInput,
-    referralCodeError,
-    setReferralCodeError,
-    commitReferralCodeInput,
+    appliedReferralCode,
+    referralDialogOpen,
+    setReferralDialogOpen,
+    openReferralDialog,
+    applyReferralCode,
+    clearAppliedReferralCode,
     turnstileToken,
     setTurnstileToken,
     turnstileVerified: Boolean(turnstileToken),
     turnstileError,
     turnstileResetKey,
+    turnstileMountKey,
     resetTurnstile,
+    surfaceOpen,
     loginCaptchaRequired,
     mfaCode,
     setMfaCode,
@@ -950,11 +954,13 @@ function useAuthDialogFlowState(onClose: () => void) {
 export function AuthDialogFlowProvider({
   children,
   onClose,
+  surfaceOpen = true,
 }: {
   children: ReactNode;
   onClose: () => void;
+  surfaceOpen?: boolean;
 }) {
-  const value = useAuthDialogFlowState(onClose);
+  const value = useAuthDialogFlowState(onClose, surfaceOpen);
   return (
     <AuthDialogFlowContext.Provider value={value}>{children}</AuthDialogFlowContext.Provider>
   );

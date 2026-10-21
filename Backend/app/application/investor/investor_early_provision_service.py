@@ -17,8 +17,8 @@ from app.application.investor.investor_provision_mapper import (
     build_early_investor_profile_payload,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_investor_client import create_investor_profile
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.investor_client import create_investor_profile
 from app.infrastructure.persistence.investor_models import (
     InvestorEmailAddress,
     InvestorObjectSource,

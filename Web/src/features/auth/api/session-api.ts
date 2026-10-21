@@ -39,6 +39,8 @@ export async function bootstrapSession(): Promise<{
       return { user: null, reason: "expired" };
     }
 
+    if (attempt + 1 >= appConfig.bootstrapRetryAttempts) break;
+
     await new Promise((resolve) =>
       window.setTimeout(resolve, appConfig.bootstrapRetryBaseDelayMs * (attempt + 1))
     );

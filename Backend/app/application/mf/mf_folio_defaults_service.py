@@ -13,8 +13,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.infrastructure.kyc.cybrilla_terminal_log import log_exception_dump
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     NOMINATIONS_INFO_VISIBILITY_DEFAULT,
     create_mf_investment_account,
     get_mf_investment_account,

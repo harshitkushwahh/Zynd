@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 type KycDigilockerInfoCardProps = {
   variant?: "required" | "failed";
   layout?: "inline" | "prominent";
+  /** Fresh KYC: Aadhaar address via Finprim. KRA update: Cybrilla proof_details link. */
+  flow?: "aadhaarAddress" | "kraProof";
   description?: string | null;
   onRetry?: () => void;
   retrying?: boolean;
@@ -17,6 +19,7 @@ type KycDigilockerInfoCardProps = {
 export function KycDigilockerInfoCard({
   variant = "failed",
   layout = "inline",
+  flow = "aadhaarAddress",
   description,
   onRetry,
   retrying = false,
@@ -24,13 +27,21 @@ export function KycDigilockerInfoCard({
 }: KycDigilockerInfoCardProps) {
   const isRequired = variant === "required";
   const isProminent = layout === "prominent";
-  const title = isRequired ? copy.kyc.digilocker.requiredTitle : copy.kyc.digilocker.failedTitle;
+  const flowCopy = flow === "kraProof" ? copy.kyc.kraProof : copy.kyc.digilocker;
+  const title = isRequired
+    ? (flowCopy.requiredTitle ?? copy.kyc.digilocker.requiredTitle)
+    : copy.kyc.digilocker.failedTitle;
   const body =
     description?.trim() ||
-    (isRequired ? copy.kyc.digilocker.requiredDescription : copy.kyc.digilocker.failedDescription);
+    (isRequired
+      ? (flowCopy.requiredDescription ?? copy.kyc.digilocker.requiredDescription)
+      : flow === "kraProof"
+        ? copy.kyc.kraProof.failedDescription
+        : copy.kyc.digilocker.failedDescription);
   const actionLabel = isRequired
-    ? copy.kyc.digilocker.requiredAction
+    ? (flowCopy.requiredAction ?? copy.kyc.digilocker.requiredAction)
     : copy.kyc.digilocker.retry;
+  const showAadhaarCheckboxHint = !isRequired && flow === "aadhaarAddress";
 
   if (isProminent) {
     return (
@@ -48,7 +59,7 @@ export function KycDigilockerInfoCard({
         <div className="max-w-sm space-y-2">
           <p className="text-body font-semibold tracking-tight text-foreground">{title}</p>
           <p className="text-caption leading-relaxed text-muted-foreground">{body}</p>
-          {!isRequired ? (
+          {showAadhaarCheckboxHint ? (
             <p className="text-caption font-medium leading-relaxed text-foreground">
               {copy.kyc.digilocker.aadhaarCheckboxHint}
             </p>
@@ -80,7 +91,7 @@ export function KycDigilockerInfoCard({
         <div className="min-w-0 flex-1 text-left leading-tight">
           <p className="text-caption font-semibold tracking-tight text-foreground">{title}</p>
           <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{body}</p>
-          {!isRequired ? (
+          {showAadhaarCheckboxHint ? (
             <p className="mt-2 text-[11px] font-medium leading-snug text-foreground">
               {copy.kyc.digilocker.aadhaarCheckboxHint}
             </p>

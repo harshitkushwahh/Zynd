@@ -7,6 +7,7 @@ import { formatSupportTicketMessageTime } from "@/lib/support-ticket-display";
 import { fetchSupportAttachmentBlob } from "@/lib/support-tickets-api";
 import type { SupportTicketMessage } from "@/lib/support-types";
 import { getDisplayInitials } from "@/lib/get-display-initials";
+import { SupportReadReceipt } from "@/components/tickets/support-read-receipt";
 import { cn } from "@/lib/utils";
 
 type SupportTicketMessageBubbleProps = {
@@ -157,8 +158,23 @@ export function SupportTicketMessageBubble({
             </div>
           ) : null}
         </div>
-        <span className="px-1 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
           {formatSupportTicketMessageTime(message.createdAt)}
+          {isStaff && !isInternal ? (
+            <SupportReadReceipt
+              outboundToCustomer
+              customerReadAt={message.customerReadAt}
+              tone="staff"
+            />
+          ) : null}
+          {!isStaff ? (
+            <SupportReadReceipt
+              inboundFromCustomer
+              supportReadAt={message.supportReadAt}
+              supportReadBy={message.supportReadBy}
+              tone="customer"
+            />
+          ) : null}
         </span>
       </div>
 

@@ -144,6 +144,147 @@ def test_resolve_poa_readiness_status_hydrates_kyc_incomplete_from_pan_step() ->
     assert status["code"] == "kyc_incomplete"
 
 
+def _uncertain_poa_result(*, readiness_status: str, readiness_code: str | None = None, readiness_reason: str | None = None) -> dict:
+    return {
+        "id": "pv_uncertain",
+        "status": "completed",
+        "pan": {"status": "verified"},
+        "readiness": {
+            "status": readiness_status,
+            "code": readiness_code,
+            "reason": readiness_reason,
+        },
+        "bank_accounts": [
+            {
+                "status": "failed",
+                "code": "uncertain",
+                "reason": None,
+                "value": {
+                    "account_number": "3668170369",
+                    "ifsc_code": "CBIN0284170",
+                    "account_type": "savings",
+                },
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_uncertain_bank_with_readiness_verified_allows_kyc_continue() -> None:
+    with patch(
+        "app.application.kyc.bank_verification_core.lookup_ifsc",
+        new=AsyncMock(
+            return_value={
+                "ifsc_code": "CBIN0284170",
+                "bank_name": "Central Bank of India",
+                "branch": "Test Branch",
+            }
+        ),
+    ), patch(
+        "app.application.kyc.bank_verification_core.poa_verify_bank_account",
+        new=AsyncMock(return_value=_uncertain_poa_result(readiness_status="verified")),
+    ):
+        outcome = await run_hybrid_bank_verification(
+            pan_draft={"fullName": "MITHILESH GHORKEY"},
+            pan_number="AKUPG9087H",
+            account_number="3668170369",
+            account_type="Savings",
+            ifsc_code="CBIN0284170",
+            kyc_already_registered=False,
+        )
+
+    assert outcome.requires_cybrilla_manual_review is True
+    assert outcome.allows_kyc_continue is True
+    assert outcome.requires_manual is False
+    assert outcome.requires_proof_upload is False
+    assert outcome.bank_verified is False
+
+
+@pytest.mark.asyncio
+async def test_uncertain_bank_without_poa_readiness_allows_kyc_continue_for_fresh_kyc() -> None:
+    poa_result = {
+        "id": "pv_uncertain",
+        "status": "completed",
+        "pan": {"status": "verified"},
+        "bank_accounts": [
+            {
+                "status": "failed",
+                "code": "uncertain",
+                "reason": None,
+                "value": {
+                    "account_number": "3668170369",
+                    "ifsc_code": "CBIN0284170",
+                    "account_type": "savings",
+                },
+            }
+        ],
+    }
+    with patch(
+        "app.application.kyc.bank_verification_core.lookup_ifsc",
+        new=AsyncMock(
+            return_value={
+                "ifsc_code": "CBIN0284170",
+                "bank_name": "Central Bank of India",
+                "branch": "Test Branch",
+            }
+        ),
+    ), patch(
+        "app.application.kyc.bank_verification_core.poa_verify_bank_account",
+        new=AsyncMock(return_value=poa_result),
+    ):
+        outcome = await run_hybrid_bank_verification(
+            pan_draft={"fullName": "MITHILESH GHORKEY"},
+            pan_number="AKUPG9087H",
+            account_number="3668170369",
+            account_type="Savings",
+            ifsc_code="CBIN0284170",
+            kyc_already_registered=False,
+            readiness_code="kyc_incomplete",
+            readiness_reason="KYC incomplete at KRA.",
+        )
+
+    assert outcome.requires_cybrilla_manual_review is True
+    assert outcome.allows_kyc_continue is True
+    assert outcome.readiness_verified is False
+
+
+@pytest.mark.asyncio
+async def test_uncertain_bank_without_readiness_does_not_allow_kyc_continue() -> None:
+    with patch(
+        "app.application.kyc.bank_verification_core.lookup_ifsc",
+        new=AsyncMock(
+            return_value={
+                "ifsc_code": "ICIC0000011",
+                "bank_name": "ICICI Bank",
+                "branch": "Test Branch",
+            }
+        ),
+    ), patch(
+        "app.application.kyc.bank_verification_core.poa_verify_bank_account",
+        new=AsyncMock(
+            return_value=_uncertain_poa_result(
+                readiness_status="failed",
+                readiness_code="kyc_rate_limit_exceeded",
+                readiness_reason="KYC check limit reached for this PAN",
+            )
+        ),
+    ):
+        outcome = await run_hybrid_bank_verification(
+            pan_draft={"fullName": "MITHILESH GHORKEY"},
+            pan_number="AKUPG9087H",
+            account_number="001101226843",
+            account_type="Savings",
+            ifsc_code="ICIC0000011",
+            kyc_already_registered=False,
+        )
+
+    assert outcome.requires_cybrilla_manual_review is True
+    assert outcome.allows_kyc_continue is False
+    assert outcome.failure is not None
+    assert outcome.failure["field"] == "readiness"
+    assert outcome.failure["code"] == "kyc_rate_limit_exceeded"
+
+
 def test_format_bank_verification_failure_pan_not_verified() -> None:
     failure = format_bank_verification_failure(
         bank_result={"code": "verification_failed", "reason": ""},

@@ -27,7 +27,7 @@ GitHub main
 ZYND • Pipeline
    |
    +-- Stage 1  what changed
-   +-- Stage 2  secrets, workflow syntax, compile, audits
+   +-- Stage 2  secrets, workflow syntax, compile, help-bot corpus gates, audits
    +-- Stage 3  typecheck or compile the changed areas
    |
    +-- backend change?
@@ -59,9 +59,9 @@ Production deploys use the concurrency group `zynd-production-deploy` and are no
 
 ## Bluehost VPS deploy
 
-Stage 4 keeps the existing checks: server, git, server env file, Docker, Compose, infrastructure, API build, **Ollama (Support AI)**, API recreate, Postgres, Redis, Mongo, local health, `/api/v1/health`, `/api/v1/health/redis`, HTTPS, CORS, and container stability.
+Stage 4 keeps the existing checks: server, git, server env file, Docker, Compose, infrastructure, API build, **Support LLM (Groq)**, API recreate, Postgres, Redis, Mongo, local health, `/api/v1/health`, `/api/v1/health/redis`, HTTPS, CORS, and container stability.
 
-**Ollama:** Production compose defines an `ollama` service (Docker image, persistent volume). Phase **7b** runs `Backend/scripts/ensure-ollama-production.sh`: enables swap on small VPS if needed, starts `ollama`, pulls `OLLAMA_MODEL` from server `Backend/.env` (default `qwen3.5:4b`), sets `OLLAMA_BASE_URL=http://ollama:11434`, and verifies `/api/tags` from the API network. Deploy fails if Ollama is missing or unreachable. Host `systemd` Ollama is stopped when present so it does not fight the container for port/RAM.
+**Support LLM:** Help Bot and AI ticket routing use **Groq** by default (`SUPPORT_LLM_PROVIDER=groq`, `GROQ_API_KEY` in server `Backend/.env`). Phase **7b** verifies the Groq key is present when the provider is Groq. Optional local **Ollama** remains for dev only (`SUPPORT_LLM_PROVIDER=ollama`); production compose no longer runs an Ollama container.
 
 Phase 8 also recreates the backend worker services that exist in the compose config (`mf-scheduler`, `mf-order-worker`, `mf-cas-worker`, `event-worker`, `outbox-relay`, `document-scan-worker`, `deletion-cron`) with `--no-deps`, because they run the same Backend image as the API. `mf-scheduler` is left running when an ingestion job or admin pipeline is live, so a deploy does not kill that work. Infrastructure containers (Postgres, Redis, Mongo, MinIO, ClamAV) are never restarted. Phase 14 fails the deploy if any recreated worker is not `running` with a zero restart count.
 
@@ -81,6 +81,7 @@ SSH uses `appleboy/ssh-action@v1.2.2`. The host, user, and host key fingerprint 
 | Name | Kind | Purpose |
 |------|------|---------|
 | `DEPLOY_SSH_KEY` | secret | Passphrase-less private key authorized for `root` on the VPS |
+| `GROQ_API_KEY` | secret | Optional. Used by **ZYND • Sync Help Bot env (VPS)** to upsert Groq vars on the server |
 | `ZYND_STRICT_PRODUCTION` | variable | Leave unset on the testing server. `true` fails the deploy when development runtime flags are enabled. |
 
 ## Rollback

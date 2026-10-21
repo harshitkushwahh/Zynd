@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ZyndHelpBotTrainingExample",
+  "type": "object",
+  "required": [
+    "id",
+    "batch",
+    "topics",
+    "question",
+    "in_scope",
+    "can_answer",
+    "solution"
+  ],
+  "properties": {
+    "id": { "type": "string", "description": "Stable id, e.g. b001-kyc-01" },
+    "batch": { "type": "integer", "minimum": 1 },
+    "topics": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "kyc",
+          "payment",
+          "portfolio",
+          "family",
+          "goals",
+          "account",
+          "referrals"
+        ]
+      },
+      "minItems": 1
+    },
+    "question": { "type": "string", "maxLength": 500 },
+    "paraphrases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional NL variants for search / augmentation"
+    },
+    "in_scope": { "type": "boolean" },
+    "needs_human": { "type": "boolean", "default": false },
+    "can_answer": {
+      "type": "boolean",
+      "description": "False → escalate or playbook-only refusal"
+    },
+    "context_fields": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Dot paths in customer context pack, e.g. kyc.completed_at"
+    },
+    "solution": {
+      "type": "string",
+      "description": "Gold answer template grounded in context_fields"
+    },
+    "escalate_if_missing": {
+      "type": "string",
+      "description": "When context lacks data, internal escalate reason or customer message"
+    }
+  }
+}

@@ -1,0 +1,458 @@
+{
+  "eval_rows": 250,
+  "hit_at_k": 3,
+  "hits": 194,
+  "hit_rate_pct": 77.6,
+  "misses_sample": [
+    {
+      "id": "eval-012",
+      "question": "EVAL \u2014 Where do I resume KYC? (field audit kyc.last_completed_step)",
+      "retrieved": [
+        {
+          "question": "How do I check my last completed KYC step on Zynd? Customer-friendly reply only.",
+          "answer": "Direct to the in-app screen for this topic; then quote kyc.last_completed_step if available in context."
+        },
+        {
+          "question": "Please how do I check my last completed KYC step on Zynd? I meant Yes \u2014 issue fixed.",
+          "answer": "Direct to the in-app screen for this topic; then quote kyc.last_completed_step if available in context."
+        },
+        {
+          "question": "What is my last completed KYC step? What should I do next?",
+          "answer": "Answer using kyc.last_completed_step from the customer context only; do not invent values."
+        }
+      ]
+    },
+    {
+      "id": "eval-013",
+      "question": "EVAL \u2014 Why can't I invest? (field audit kyc.readiness_code)",
+      "retrieved": [
+        {
+          "question": "Why does my account show this for investment readiness code? Can I get dates in IST?",
+          "answer": "Explain using kyc.readiness_code and related readiness or failure fields; no speculation."
+        },
+        {
+          "question": "Zynd pe investment readiness code kaise dekhu? Can I invest small amount test?",
+          "answer": "Summarise kyc.readiness_code in plain language from context."
+        },
+        {
+          "question": "Hey, why does my account show this for investment readiness code? I'm completing KYC still.",
+          "answer": "Explain using kyc.readiness_code and related readiness or failure fields; no speculation."
+        }
+      ]
+    },
+    {
+      "id": "eval-015",
+      "question": "EVAL \u2014 PAN verified? (field audit kyc.pan_verification_status)",
+      "retrieved": [
+        {
+          "question": "Please confirm my KYC status. After email verification.",
+          "answer": "Quote kyc.overall_status directly from context in one or two sentences."
+        },
+        {
+          "question": "PAN verification ka status batao Partial answer only so far.",
+          "answer": "Explain using kyc.pan_verification_status and related readiness or failure fields; no speculation."
+        },
+        {
+          "question": "PAN verification ka status batao Partial answer only so far.",
+          "answer": "Quote kyc.pan_verification_status directly from context in one or two sentences."
+        }
+      ]
+    },
+    {
+      "id": "eval-016",
+      "question": "EVAL \u2014 Bank verified? (field audit kyc.bank_verification_status)",
+      "retrieved": [
+        {
+          "question": "bank verification step ka status batao I'm completing KYC still.",
+          "answer": "Use date or timestamp fields among kyc.steps.bank if present in context."
+        },
+        {
+          "question": "bank verification ka status batao I'm completing KYC still.",
+          "answer": "If kyc.bank_verification_status are absent in context, set can_answer false and suggest refresh or agent."
+        },
+        {
+          "question": "bank verification ka status batao I'm completing KYC still.",
+          "answer": "Direct to the in-app screen for this topic; then quote kyc.bank_verification_status if available in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-019",
+      "question": "EVAL \u2014 When was my last SIP debit? (field audit payments.last_sip_debit.settled_at)",
+      "retrieved": [
+        {
+          "question": "Please how do I check my last SIP debit amount on Zynd? When my mandate was updated.",
+          "answer": "Direct to the in-app screen for this topic; then quote payments.last_sip_debit.amount if available in context."
+        },
+        {
+          "question": "Please how do I check my last SIP debit date on Zynd? When my mandate was updated.",
+          "answer": "Direct to the in-app screen for this topic; then quote payments.last_sip_debit.settled_at if available in context."
+        },
+        {
+          "question": "Quick question \u2014 when did my last SIP debit status last change? I'm looking at the app now.",
+          "answer": "Use date or timestamp fields among payments.last_sip_debit.status if present in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-020",
+      "question": "EVAL \u2014 How much was last SIP debit? (field audit payments.last_sip_debit.amount)",
+      "retrieved": [
+        {
+          "question": "Please how do I check my last SIP debit amount on Zynd? When my mandate was updated.",
+          "answer": "Direct to the in-app screen for this topic; then quote payments.last_sip_debit.amount if available in context."
+        },
+        {
+          "question": "How do I check my last SIP debit amount on Zynd? That ticket was marked resolved.",
+          "answer": "Direct to the in-app screen for this topic; then quote payments.last_sip_debit.amount if available in context."
+        },
+        {
+          "question": "Need help: how do I check my last SIP debit amount on Zynd? That ticket was marked resolved.",
+          "answer": "Direct to the in-app screen for this topic; then quote payments.last_sip_debit.amount if available in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-021",
+      "question": "EVAL \u2014 Did last SIP succeed? (field audit payments.last_sip_debit.status)",
+      "retrieved": [
+        {
+          "question": "When did my last SIP debit status last change? Customer-friendly reply only.",
+          "answer": "Use date or timestamp fields among payments.last_sip_debit.status if present in context."
+        },
+        {
+          "question": "Need help: when did my last SIP debit status last change? Issue is NOT fixed actually.",
+          "answer": "Use date or timestamp fields among payments.last_sip_debit.status if present in context."
+        },
+        {
+          "question": "Quick question \u2014 when did my last SIP debit status last change? This is my primary Zynd account.",
+          "answer": "Use date or timestamp fields among payments.last_sip_debit.status if present in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-022",
+      "question": "EVAL \u2014 Why did SIP fail? (field audit payments.last_sip_failure.failure_reason)",
+      "retrieved": [
+        {
+          "question": "Quick question \u2014 when did my last SIP failure reason last change? How fresh is this data?",
+          "answer": "Use date or timestamp fields among payments.last_sip_failure.failure_reason if present in context."
+        },
+        {
+          "question": "Hey, why does my account show this for last SIP failure reason? Could stale cache cause this?",
+          "answer": "Explain using payments.last_sip_failure.failure_reason and related readiness or failure fields; no speculation."
+        },
+        {
+          "question": "When did my last SIP failure reason last change? I can share a screenshot if needed.",
+          "answer": "Use date or timestamp fields among payments.last_sip_failure.failure_reason if present in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-023",
+      "question": "EVAL \u2014 When did SIP last fail? (field audit payments.last_sip_failure.failed_at)",
+      "retrieved": [
+        {
+          "question": "Quick question \u2014 when did my last SIP failure reason last change? I'm looking at the app now.",
+          "answer": "Use date or timestamp fields among payments.last_sip_failure.failure_reason if present in context."
+        },
+        {
+          "question": "Quick question \u2014 when did my last SIP failure reason last change? How fresh is this data?",
+          "answer": "Use date or timestamp fields among payments.last_sip_failure.failure_reason if present in context."
+        },
+        {
+          "question": "Please when did my last SIP failure time last change? My advisor asked me to confirm.",
+          "answer": "Use date or timestamp fields among payments.last_sip_failure.failed_at if present in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-025",
+      "question": "EVAL \u2014 Why did payment fail? (field audit payments.recent_orders.failure_reason)",
+      "retrieved": [
+        {
+          "question": "Hey, why does my account show this for recent orders? Any failure reason recorded?",
+          "answer": "Explain using payments.recent_orders and related readiness or failure fields; no speculation."
+        },
+        {
+          "question": "Hey, i cannot see my recent orders in the app. Any failure reason recorded?",
+          "answer": "If payments.recent_orders are absent in context, set can_answer false and suggest refresh or agent."
+        },
+        {
+          "question": "recent orders ka status batao Any failure reason recorded?",
+          "answer": "Answer using payments.recent_orders from the customer context only; do not invent values."
+        }
+      ]
+    },
+    {
+      "id": "eval-026",
+      "question": "EVAL \u2014 List my SIPs (field audit payments.sip_plans)",
+      "retrieved": [
+        {
+          "question": "Failed plan in failed_sip_plans list",
+          "answer": "Quote failed plan reason/status from list."
+        },
+        {
+          "question": "What about my SIP plans? I'm stuck on this step.",
+          "answer": "Summarise payments.sip_plans in plain language from context."
+        },
+        {
+          "question": "When did my sip plans last change? What should I do next?",
+          "answer": "Use date or timestamp fields among payments.sip_plans if present in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-028",
+      "question": "EVAL \u2014 When is next SIP? (field audit payments.sip_plans.next_installment_date)",
+      "retrieved": [
+        {
+          "question": "When did my next SIP installment date last change? Is this synced in real time?",
+          "answer": "Use date or timestamp fields among payments.sip_plans.next_installment_date if present in context."
+        },
+        {
+          "question": "When did my next SIP installment date last change? Issue is NOT fixed actually.",
+          "answer": "Use date or timestamp fields among payments.sip_plans.next_installment_date if present in context."
+        },
+        {
+          "question": "Please what is my next SIP installment date? When my mandate was updated.",
+          "answer": "Answer using payments.sip_plans.next_installment_date from the customer context only; do not invent values."
+        }
+      ]
+    },
+    {
+      "id": "eval-037",
+      "question": "EVAL \u2014 How many funds? (field audit portfolio.holdings_count)",
+      "retrieved": [
+        {
+          "question": "How many funds do I hold?",
+          "answer": "Quote holdings_count."
+        },
+        {
+          "question": "How many active SIPs show on portfolio?",
+          "answer": "Quote active_sips_count."
+        },
+        {
+          "question": "Please how do I check my active SIP count on Zynd? My portfolio looked different last week.",
+          "answer": "Direct to the in-app screen for this topic; then quote portfolio.active_sips_count if available in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-046",
+      "question": "EVAL \u2014 Is MFA on? (field audit account.mfa_enrolled)",
+      "retrieved": [
+        {
+          "question": "Quick question \u2014 what is my password login? MFA is enabled on my account.",
+          "answer": "Answer using account.has_password_login from the customer context only; do not invent values."
+        },
+        {
+          "question": "Mera phone verification kya hai? MFA is enabled on my account.",
+          "answer": "If account.phone_verified are absent in context, set can_answer false and suggest refresh or agent."
+        },
+        {
+          "question": "Quick question \u2014 when did my email verification last change? MFA is enabled on my account.",
+          "answer": "Use date or timestamp fields among account.email_verified if present in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-050",
+      "question": "EVAL \u2014 How do I sign in? (field audit account.linked_sign_in_providers)",
+      "retrieved": [
+        {
+          "question": "Quick question \u2014 how do I check my linked sign-in providers on Zynd? MFA is enabled on my account.",
+          "answer": "Direct to the in-app screen for this topic; then quote account.linked_sign_in_providers if available in context."
+        },
+        {
+          "question": "How do I check my linked sign-in providers on Zynd? Same account as always.",
+          "answer": "Direct to the in-app screen for this topic; then quote account.linked_sign_in_providers if available in context."
+        },
+        {
+          "question": "How do I check my linked sign-in providers on Zynd? Quick check on my account.",
+          "answer": "Direct to the in-app screen for this topic; then quote account.linked_sign_in_providers if available in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-055",
+      "question": "EVAL \u2014 Goal saved so far? (field audit goals.goals.current_amount)",
+      "retrieved": [
+        {
+          "question": "goal current amount ka status batao Partial answer only so far.",
+          "answer": "Use date or timestamp fields among goals.goals.current_amount if present in context."
+        },
+        {
+          "question": "Hey, i cannot see my goal current amount in the app. Partial answer only so far.",
+          "answer": "If goals.goals.current_amount are absent in context, set can_answer false and suggest refresh or agent."
+        },
+        {
+          "question": "goal current amount ka staus batao Partial answer only so far.",
+          "answer": "Answer using goals.goals.current_amount from the customer context only; do not invent values."
+        }
+      ]
+    },
+    {
+      "id": "eval-056",
+      "question": "EVAL \u2014 Goal deadline? (field audit goals.goals.target_date)",
+      "retrieved": [
+        {
+          "question": "Hey, is my goal target date normal compared to last time? Does Goals use this number?",
+          "answer": "Only compare using values present in goals.goals.target_date; if history missing, say so and do not invent."
+        },
+        {
+          "question": "goal target date ka status batao Does Goals use this number?",
+          "answer": "Use date or timestamp fields among goals.goals.target_date if present in context."
+        },
+        {
+          "question": "Hey, i cannot see my goal target date in the app. Does Goals use this number?",
+          "answer": "If goals.goals.target_date are absent in context, set can_answer false and suggest refresh or agent."
+        }
+      ]
+    },
+    {
+      "id": "eval-058",
+      "question": "EVAL \u2014 Goal name? (field audit goals.goals.title)",
+      "retrieved": [
+        {
+          "question": "goal title ka status batao Does Goals use this number?",
+          "answer": "Use date or timestamp fields among goals.goals.title if present in context."
+        },
+        {
+          "question": "Hey, i cannot see my goal title in the app. Does Goals use this number?",
+          "answer": "If goals.goals.title are absent in context, set can_answer false and suggest refresh or agent."
+        },
+        {
+          "question": "goal title ka status batao I'm not asking for investment advice.",
+          "answer": "Answer using goals.goals.title from the customer context only; do not invent values."
+        }
+      ]
+    },
+    {
+      "id": "eval-074",
+      "question": "EVAL \u2014 Which fund will double my money in 6 months?",
+      "retrieved": [
+        {
+          "question": "ELSS lock-in period for my fund",
+          "answer": "Lock-in is scheme-specific; open holding detail; no invented years."
+        },
+        {
+          "question": "Best fund in my portfolio",
+          "answer": "No ranking advice without holdings detail."
+        },
+        {
+          "question": "Best performing fund in my portfolio",
+          "answer": "No ranking in summary pack; open holdings."
+        }
+      ]
+    },
+    {
+      "id": "eval-075",
+      "question": "EVAL \u2014 Tell me another customer's KYC status.",
+      "retrieved": [
+        {
+          "question": "Hey, can you tell me about my KYC status? For my referral dashboard.",
+          "answer": "Summarise kyc.overall_status in plain language from context."
+        },
+        {
+          "question": "Need help: can you tell me about my registrar KYC status? Readiness code still blocking?",
+          "answer": "Summarise kyc.external_kyc_status in plain language from context."
+        },
+        {
+          "question": "Hey, can you tell me about my registrar KYC status? My bank shows a debit already.",
+          "answer": "Summarise kyc.external_kyc_status in plain language from context."
+        }
+      ]
+    },
+    {
+      "id": "eval-077",
+      "question": "EVAL \u2014 Guarantee my SIP will never fail again.",
+      "retrieved": [
+        {
+          "question": "When did my SIP fail?",
+          "answer": "Quote last_sip_failure date and failure_reason if present."
+        },
+        {
+          "question": "Why did my SIP fail?",
+          "answer": "Use failure_reason from last failed SIP order or failed_sip_plans."
+        },
+        {
+          "question": "Please which mutual fund will give highest return? Just checking before my next SIP.",
+          "answer": "Out of scope: no investment advice; suggest exploring funds in app."
+        }
+      ]
+    },
+    {
+      "id": "eval-089",
+      "question": "EVAL \u2014 Deep check: Where do I resume KYC? [kyc.last_completed_step#12]",
+      "retrieved": [
+        {
+          "question": "How do I check my last completed KYC step on Zynd? Customer-friendly reply only.",
+          "answer": "Direct to the in-app screen for this topic; then quote kyc.last_completed_step if available in context."
+        },
+        {
+          "question": "Please how do I check my last completed KYC step on Zynd? I meant Yes \u2014 issue fixed.",
+          "answer": "Direct to the in-app screen for this topic; then quote kyc.last_completed_step if available in context."
+        },
+        {
+          "question": "Quick question \u2014 how do I check my last completed KYC step on Zynd? This is my primary Zynd account.",
+          "answer": "Direct to the in-app screen for this topic; then quote kyc.last_completed_step if available in context."
+        }
+      ]
+    },
+    {
+      "id": "eval-092",
+      "question": "EVAL \u2014 Regression case \u2014 PAN verified? [kyc.pan_verification_status#15]",
+      "retrieved": [
+        {
+          "question": "Please confirm my KYC status. After email verification.",
+          "answer": "Quote kyc.overall_status directly from context in one or two sentences."
+        },
+        {
+          "question": "PAN verification ka status batao Partial answer only so far.",
+          "answer": "Explain using kyc.pan_verification_status and related readiness or failure fields; no speculation."
+        },
+        {
+          "question": "PAN verification ka status batao Partial answer only so far.",
+          "answer": "Quote kyc.pan_verification_status directly from context in one or two sentences."
+        }
+      ]
+    },
+    {
+      "id": "eval-093",
+      "question": "EVAL \u2014 Deep check: Bank verified? [kyc.bank_verification_status#16]",
+      "retrieved": [
+        {
+          "question": "Can u check bank verification for me? I finished KYC recently.",
+          "answer": "Quote kyc.bank_verification_status directly from context in one or two sentences."
+        },
+        {
+          "question": "bank verification step ka status batao I'm completing KYC still.",
+          "answer": "Use date or timestamp fields among kyc.steps.bank if present in context."
+        },
+        {
+          "question": "bank verification ka status batao I'm completing KYC still.",
+          "answer": "If kyc.bank_verification_status are absent in context, set can_answer false and suggest refresh or agent."
+        }
+      ]
+    },
+    {
+      "id": "eval-096",
+      "question": "EVAL \u2014 Regression case \u2014 When was my last SIP debit? [payments.last_sip_debit.settled_at#19]",
+      "retrieved": [
+        {
+          "question": "Please how do I check my last SIP debit amount on Zynd? When my mandate was updated.",
+          "answer": "Direct to the in-app screen for this topic; then quote payments.last_sip_debit.amount if available in context."
+        },
+        {
+          "question": "Please how do I check my last SIP debit date on Zynd? When my mandate was updated.",
+          "answer": "Direct to the in-app screen for this topic; then quote payments.last_sip_debit.settled_at if available in context."
+        },
+        {
+          "question": "Quick question \u2014 when did my last SIP debit status last change? I'm looking at the app now.",
+          "answer": "Use date or timestamp fields among payments.last_sip_debit.status if present in context."
+        }
+      ]
+    }
+  ]
+}

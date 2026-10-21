@@ -30,8 +30,8 @@ from app.application.mf.mf_redemption_service import (
 from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
 from app.application.mf.mf_purchase_consent_gates import platform_consent_accepted_from_meta
 from app.application.mf.mf_switch_service import _is_switch_in_destination, _load_destination_fund
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     cancel_mf_redemption_plan,
     cancel_mf_switch_plan,
     create_mf_redemption_plan,

@@ -118,6 +118,7 @@ type ApiFamilyGroupMember = {
   role: string | null;
   badge_label: string | null;
   profile_image_url: string | null;
+  linked_current_value_inr?: number;
 };
 
 type ApiFamilyGroup = {
@@ -131,6 +132,9 @@ type ApiFamilyGroup = {
   client_role: string;
   member_count: number;
   status: string | null;
+  total_current_value_inr?: number;
+  total_invested_inr?: number;
+  active_goals_count?: number;
   members: ApiFamilyGroupMember[];
 };
 
@@ -551,6 +555,7 @@ function mapFamilyMembers(rows: ApiFamilyGroupMember[]): DistributorClientFamily
     emailMasked: row.email_masked ?? undefined,
     profileImageUrl: resolveDistributorAssetUrl(row.profile_image_url),
     badgeLabel: row.badge_label,
+    portfolioContribution: Number(row.linked_current_value_inr ?? 0),
   }));
 }
 
@@ -563,8 +568,9 @@ function mapFamilyGroup(row: ApiFamilyGroup): DistributorClientFamilyGroup {
     avatarUrl: row.avatar_url,
     role: row.client_role === "owner" ? "owner" : "member",
     memberCount: row.member_count,
-    activeGoals: 0,
-    totalValue: 0,
+    activeGoals: Number(row.active_goals_count ?? 0),
+    totalValue: Number(row.total_current_value_inr ?? 0),
+    investedValue: Number(row.total_invested_inr ?? 0),
     headDisplayName: row.head_display_name,
     headUserId: row.head_user_id,
     members: mapFamilyMembers(row.members ?? []),

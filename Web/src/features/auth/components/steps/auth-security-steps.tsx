@@ -19,6 +19,10 @@ import {
 import { useAuthDialogFlow } from "@/features/auth/hooks/auth-dialog-flow";
 import { clampToMaxLength, inputRuleProps } from "@/lib/input-rules";
 import { copy } from "@/shared/config/copy";
+import { ArrowLeft, KeyRound, ShieldCheck, Smartphone } from "lucide-react";
+
+const mfaIconCircleClass =
+  "size-[3.25rem] shrink-0 rounded-full p-0 shadow-none";
 
 export function AuthMfaChallengeStep() {
   const flow = useAuthDialogFlow();
@@ -70,76 +74,105 @@ export function AuthMfaChallengeStep() {
         }
       />
       {useMfaSmsOtp ? (
-        <OtpInput
-          id="mfaSmsOtp"
-          value={mfaSmsOtp}
-          error={!!mfaError}
-          onChange={(value) => {
-            setMfaSmsOtp(value);
-            if (mfaError) setMfaError("");
-          }}
-        />
-      ) : useBackupCode ? (
-        <Input
-          placeholder="Backup code"
-          value={backupCode}
-          onChange={(event) => {
-            setBackupCode(event.target.value.toUpperCase());
-            if (mfaError) setMfaError("");
-          }}
-          className={underlineInputClass}
-        />
+        <>
+          <OtpInput
+            id="mfaSmsOtp"
+            value={mfaSmsOtp}
+            error={!!mfaError}
+            onChange={(value) => {
+              setMfaSmsOtp(value);
+              if (mfaError) setMfaError("");
+            }}
+          />
+        </>
       ) : (
-        <OtpInput
-          id="mfaCode"
-          value={mfaCode}
-          error={!!mfaError}
-          onChange={(value) => {
-            setMfaCode(value);
-            if (mfaError) setMfaError("");
-          }}
-        />
+        <>
+          {useBackupCode ? (
+            <Input
+              placeholder={copy.auth.backupCodePlaceholder}
+              value={backupCode}
+              onChange={(event) => {
+                setBackupCode(event.target.value.toUpperCase());
+                if (mfaError) setMfaError("");
+              }}
+              className={underlineInputClass}
+            />
+          ) : (
+            <OtpInput
+              id="mfaCode"
+              value={mfaCode}
+              error={!!mfaError}
+              onChange={(value) => {
+                setMfaCode(value);
+                if (mfaError) setMfaError("");
+              }}
+            />
+          )}
+        </>
       )}
       <FieldMessage message={mfaError} />
-      {!useMfaSmsOtp ? (
-        <button
-          type="button"
-          className="auth-link mt-3"
-          onClick={() => {
-            setUseBackupCode((current) => !current);
-            setMfaError("");
-          }}
-        >
-          {useBackupCode ? "Use authenticator app instead" : "Use a backup code instead"}
-        </button>
-      ) : null}
-      {mfaSmsFallbackAvailable && !useMfaSmsOtp && !useBackupCode ? (
-        <button
-          type="button"
-          className="auth-link mt-3 block"
-          disabled={isSubmitting}
-          onClick={() => void handleSendMfaLoginSms()}
-        >
-          {copy.mfa.secondFactor.stepUpSendSms}
-        </button>
-      ) : null}
-      {useMfaSmsOtp ? (
-        <button
-          type="button"
-          className="auth-link mt-3 block"
-          onClick={() => {
-            setUseMfaSmsOtp(false);
-            setMfaSmsOtp("");
-            setMfaError("");
-          }}
-        >
-          {copy.mfa.secondFactor.stepUpUseAuthenticator}
-        </button>
-      ) : null}
       <AuthSubmitFooter>
-        <Button type="submit" size="auth" disabled={isSubmitting}>
-          {isSubmitting ? copy.mfa.verifying : "Verify and sign in"}
-        </Button>
+        <div className="flex gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            {useMfaSmsOtp || useBackupCode ? (
+              <Button
+                type="button"
+                variant="auth-oauth"
+                size="icon"
+                className={mfaIconCircleClass}
+                disabled={isSubmitting}
+                aria-label={copy.mfa.secondFactor.stepUpUseAuthenticatorShort}
+                title={copy.mfa.secondFactor.stepUpUseAuthenticatorShort}
+                onClick={() => {
+                  setUseMfaSmsOtp(false);
+                  setUseBackupCode(false);
+                  setMfaSmsOtp("");
+                  setMfaError("");
+                }}
+              >
+                <ShieldCheck className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="auth-oauth"
+                size="icon"
+                className={mfaIconCircleClass}
+                disabled={isSubmitting}
+                aria-label={copy.auth.useBackupCodeShort}
+                title={copy.auth.useBackupCodeShort}
+                onClick={() => {
+                  setUseBackupCode(true);
+                  setMfaError("");
+                }}
+              >
+                <KeyRound className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+              </Button>
+            )}
+            {mfaSmsFallbackAvailable && !useMfaSmsOtp ? (
+              <Button
+                type="button"
+                variant="auth-oauth"
+                size="icon"
+                className={mfaIconCircleClass}
+                disabled={isSubmitting}
+                aria-label={copy.mfa.secondFactor.stepUpSendSmsShort}
+                title={copy.mfa.secondFactor.stepUpSendSmsShort}
+                onClick={() => void handleSendMfaLoginSms()}
+              >
+                <Smartphone className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+              </Button>
+            ) : null}
+          </div>
+          <Button
+            type="submit"
+            size="auth"
+            className="min-w-0 flex-1"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? copy.mfa.verifying : copy.auth.mfaLetsGo}
+          </Button>
+        </div>
       </AuthSubmitFooter>
     </form>
   );
@@ -187,7 +220,7 @@ export function AuthSmsOtpLoginStep() {
       <FieldMessage message={loginSmsOtpError} />
       <AuthSubmitFooter>
         <Button type="submit" size="auth" disabled={isSubmitting}>
-          {isSubmitting ? copy.mfa.verifying : "Verify and sign in"}
+          {isSubmitting ? copy.mfa.verifying : copy.auth.mfaLetsGo}
         </Button>
       </AuthSubmitFooter>
     </form>
@@ -310,30 +343,36 @@ export function AuthForgotPasswordStep() {
                 resetKey={`forgot-${turnstileResetKey}`}
                 onVerify={setTurnstileToken}
                 onExpire={() => setTurnstileToken("")}
-                className="mt-4 mb-4"
+                className="relative z-[2] mt-4 mb-4 overflow-visible"
               />
               <FieldMessage message={turnstileError} />
             </>
           ) : null}
         </>
       )}
-      <button type="button" onClick={backToSignInFromForgot} className="auth-link mt-3">
-        Back to sign in
-      </button>
       <AuthSubmitFooter>
-        {!forgotSent ? (
-          <Button type="submit" size="auth">
-            Send reset link
-          </Button>
-        ) : (
+        <div className="flex gap-2">
           <Button
             type="button"
-            size="auth"
+            variant="auth-oauth"
+            size="icon"
+            className={mfaIconCircleClass}
+            aria-label={copy.auth.backToSignIn}
+            title={copy.auth.backToSignIn}
             onClick={backToSignInFromForgot}
           >
-            Back to sign in
+            <ArrowLeft className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
           </Button>
-        )}
+          {!forgotSent ? (
+            <Button type="submit" size="auth" className="min-w-0 flex-1">
+              Send reset link
+            </Button>
+          ) : (
+            <Button type="button" size="auth" className="min-w-0 flex-1" onClick={backToSignInFromForgot}>
+              {copy.auth.backToSignIn}
+            </Button>
+          )}
+        </div>
       </AuthSubmitFooter>
     </form>
   );

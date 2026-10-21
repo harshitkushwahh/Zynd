@@ -15,15 +15,15 @@ from app.application.mf.mf_fp_state import map_fp_mandate_status
 from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_mandate_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.mandate_client import (
     authorize_mandate,
     cancel_mandate,
     create_mandate,
     extract_mandate_status,
     get_mandate,
 )
-from app.infrastructure.mf.fp_oms_client import invalidate_mf_token
+from app.infrastructure.core.mf.oms_client import invalidate_mf_token
 from app.infrastructure.persistence.mf_transaction_models import (
     MfMandate,
     MfMandateStatus,

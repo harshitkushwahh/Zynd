@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.mf.oms_client import (
     _parse_client_fp_user_ip,
     fetch_host_public_ip,
     normalize_fp_user_ip,
@@ -34,7 +34,7 @@ def test_normalize_fp_user_ip_does_not_use_documentation_fallback() -> None:
 @pytest.mark.asyncio
 async def test_resolve_fp_user_ip_fetches_public_ip_in_development() -> None:
     with patch(
-        "app.infrastructure.mf.fp_oms_client.fetch_host_public_ip",
+        "app.infrastructure.core.mf.oms_client.fetch_host_public_ip",
         new=AsyncMock(return_value="49.36.120.15"),
     ):
         resolved = await resolve_fp_user_ip("::1")
@@ -43,7 +43,7 @@ async def test_resolve_fp_user_ip_fetches_public_ip_in_development() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_host_public_ip_caches_result() -> None:
-    import app.infrastructure.mf.fp_oms_client as fp_module
+    import app.infrastructure.core.mf.oms_client as fp_module
 
     fp_module._public_ip_cache = None
     mock_response = AsyncMock()
@@ -55,7 +55,7 @@ async def test_fetch_host_public_ip_caches_result() -> None:
     mock_client.__aexit__.return_value = None
     mock_client.get = AsyncMock(return_value=mock_response)
 
-    with patch("app.infrastructure.mf.fp_oms_client.httpx.AsyncClient", return_value=mock_client):
+    with patch("app.infrastructure.core.mf.oms_client.httpx.AsyncClient", return_value=mock_client):
         first = await fetch_host_public_ip()
         second = await fetch_host_public_ip()
 

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+logger = logging.getLogger(__name__)
+
 from app.application.investor.investor_identity_uniqueness_service import (
     InvestorIdentityConflictError,
     assert_bank_not_used_by_other_user,
 )
+from app.application.kyc.cybrilla_bank_manual_service import request_cybrilla_uncertain_manual_review
 from app.application.kyc.bank_verification_core import (
     BankVerificationError,
     extract_bank_account_result,
@@ -27,7 +31,7 @@ from app.application.kyc.bank_verification_core import (
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_gate_service import require_pan_verified, require_phase1_complete
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.models import KycOverallStatus, KycStepStatus, User
 
 
@@ -95,10 +99,30 @@ async def verify_bank_hybrid(
     except BankVerificationError as exc:
         raise _map_bank_verification_error(exc) from exc
 
-    journey.poa_bank_preverify_id = outcome.preverify_id or journey.poa_bank_preverify_id
-    journey.bank_verification_status = (
-        "verified" if outcome.bank_verified else ("manual_required" if outcome.requires_manual else "failed")
-    )
+    active_preverify_id = outcome.preverify_id or journey.poa_bank_preverify_id
+    cybrilla_manual_review_requested = False
+    if outcome.allows_kyc_continue and outcome.requires_cybrilla_manual_review:
+        manual_poa = await request_cybrilla_uncertain_manual_review(
+            pan_number=pan_number,
+            account_holder_name=outcome.pan_holder_name,
+            account_number=outcome.account_number,
+            ifsc_code=outcome.ifsc_code,
+            poa_account_type=outcome.poa_account_type,
+            uncertain_preverify_id=outcome.preverify_id,
+        )
+        if manual_poa:
+            active_preverify_id = str(manual_poa.get("id") or active_preverify_id)
+            cybrilla_manual_review_requested = True
+
+    journey.poa_bank_preverify_id = active_preverify_id
+    if outcome.bank_verified:
+        journey.bank_verification_status = "verified"
+    elif outcome.allows_kyc_continue:
+        journey.bank_verification_status = "manual_pending"
+    elif outcome.requires_manual:
+        journey.bank_verification_status = "manual_required"
+    else:
+        journey.bank_verification_status = "failed"
     journey.bank_verification_failure_json = outcome.failure
     journey.bank_draft_json = {
         "accountNumber": outcome.account_number,
@@ -114,10 +138,12 @@ async def verify_bank_hybrid(
         "poaPanStatus": outcome.poa_pan_status,
         "poaBankStatus": outcome.poa_bank_status,
         "poaReadinessStatus": outcome.poa_readiness_status,
+        "cybrillaManualReviewRequested": cybrilla_manual_review_requested,
+        "poaUncertainPreverifyId": outcome.preverify_id if cybrilla_manual_review_requested else None,
     }
 
     status = await get_or_create_status(db, user.id)
-    if outcome.bank_verified:
+    if outcome.bank_verified or outcome.allows_kyc_continue:
         status.bank_step_status = KycStepStatus.verified
     elif outcome.requires_manual:
         status.bank_step_status = KycStepStatus.pending
@@ -127,7 +153,7 @@ async def verify_bank_hybrid(
     await db.flush()
 
     return {
-        "success": outcome.bank_verified,
+        "success": outcome.bank_verified or outcome.allows_kyc_continue,
         "accountHolderName": outcome.kyckart_holder_name or outcome.pan_holder_name,
         "kyckartAccountHolderName": outcome.kyckart_holder_name,
         "kyckartLookupError": outcome.kyckart_lookup_error,
@@ -139,7 +165,10 @@ async def verify_bank_hybrid(
         "readinessVerified": outcome.readiness_verified,
         "requiresManualVerification": outcome.requires_manual,
         "requiresProofUpload": outcome.requires_proof_upload,
-        "preverifyId": outcome.preverify_id,
+        "requiresCybrillaManualReview": outcome.requires_cybrilla_manual_review,
+        "allowsKycContinue": outcome.allows_kyc_continue,
+        "preverifyId": active_preverify_id,
+        "cybrillaManualReviewRequested": cybrilla_manual_review_requested,
         "failure": outcome.failure,
         "poaPanStatus": outcome.poa_pan_status,
         "poaBankStatus": outcome.poa_bank_status,
@@ -155,7 +184,7 @@ async def upload_bank_proof(
     filename: str,
     content_type: str,
 ) -> dict[str, Any]:
-    from app.infrastructure.kyc.poa_client import upload_poa_file
+    from app.infrastructure.core.kyc.poa_client import upload_poa_file
 
     journey = await get_or_create_journey(db, user.id)
     require_phase1_complete(journey)
@@ -220,7 +249,7 @@ async def verify_bank_manual(
     except InvestorIdentityConflictError as exc:
         raise KycError(exc.message, exc.code, exc.status_code) from exc
 
-    from app.infrastructure.kyc.poa_client import poa_verify_bank_account_manual
+    from app.infrastructure.core.kyc.poa_client import poa_verify_bank_account_manual
 
     try:
         poa_result = await poa_verify_bank_account_manual(
@@ -284,7 +313,7 @@ async def get_bank_preverify_status(
     user_id: UUID,
     preverify_id: str,
 ) -> dict[str, Any]:
-    from app.infrastructure.kyc.poa_client import fetch_poa_preverification
+    from app.infrastructure.core.kyc.poa_client import fetch_poa_preverification
 
     journey = await get_or_create_journey(db, user_id)
     if journey.poa_bank_preverify_id != preverify_id:

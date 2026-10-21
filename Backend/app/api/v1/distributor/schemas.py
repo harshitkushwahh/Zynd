@@ -271,6 +271,7 @@ class DistributorClientFamilyMemberResponse(BaseModel):
     role: str | None = None
     badge_label: str | None = None
     profile_image_url: str | None = None
+    linked_current_value_inr: float = 0
 
 
 class DistributorClientFamilyGroupResponse(BaseModel):
@@ -284,6 +285,9 @@ class DistributorClientFamilyGroupResponse(BaseModel):
     client_role: str
     member_count: int
     status: str | None = None
+    total_current_value_inr: float = 0
+    total_invested_inr: float = 0
+    active_goals_count: int = 0
     members: list[DistributorClientFamilyMemberResponse] = Field(default_factory=list)
 
 

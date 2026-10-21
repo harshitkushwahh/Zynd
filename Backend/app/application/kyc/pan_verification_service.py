@@ -22,8 +22,8 @@ from app.application.kyc.journey_state_service import get_or_create_journey, sav
 from app.application.kyc.kyc_notification_service import notify_kyc_initiated
 from app.application.kyc.master_data import TERMINAL_READINESS_CODES
 from app.infrastructure.kyc.date_utils import normalize_kyc_date_of_birth
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.kyc.poa_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.poa_client import (
     poa_check_readiness,
     poa_fetch_pan_validation,
     poa_fetch_readiness,

@@ -71,10 +71,37 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
       });
   };
 
-  const { wsConnected, notifyTyping } = useSupportTicketRealtime({
+  const { wsConnected, notifyTyping, markMessagesRead } = useSupportTicketRealtime({
     ticketId,
     enabled: loadState === "ready",
     onEvent: (event) => {
+      if (event.type === "message:read" && event.message_id) {
+        setDetail((current) => {
+          if (!current) return current;
+          if (event.ticket_id && event.ticket_id !== current.ticket.id) return current;
+          return {
+            ...current,
+            ticket: {
+              ...current.ticket,
+              messages: current.ticket.messages.map((message) => {
+                if (message.id !== event.message_id) return message;
+                if (event.side === "customer") {
+                  return { ...message, customerReadAt: event.read_at ?? message.customerReadAt };
+                }
+                if (event.side === "support") {
+                  return {
+                    ...message,
+                    supportReadAt: event.read_at ?? message.supportReadAt,
+                    supportReadBy: event.support_read_by ?? message.supportReadBy,
+                  };
+                }
+                return message;
+              }),
+            },
+          };
+        });
+        return;
+      }
       if (event.type === "message:new" || event.type === "ticket:updated") {
         refreshDetail();
       }
@@ -165,6 +192,8 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
               className="h-full min-h-0"
               onUpdated={setDetail}
               notifyTyping={notifyTyping}
+              markMessagesRead={markMessagesRead}
+              wsConnected={wsConnected}
             />
           </div>
         </div>

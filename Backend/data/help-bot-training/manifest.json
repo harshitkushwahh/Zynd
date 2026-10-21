@@ -1,0 +1,391 @@
+{
+  "project": "zynd-help-bot",
+  "target_total": 52000,
+  "batch_size": 1000,
+  "batches": [
+    {
+      "batch": 1,
+      "file": "batch-001.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "All product areas; NL phrasing; context-grounded solutions"
+    },
+    {
+      "batch": 2,
+      "file": "batch-002.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Paraphrases, Hinglish, redemption/switch/CAS edges, deeper multi-topic"
+    },
+    {
+      "batch": 3,
+      "file": "batch-003.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Risk/investor readiness, reports, consent OTP, STP/SWP, tax/dividend edges"
+    },
+    {
+      "batch": 4,
+      "file": "batch-004.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Typos/Hinglish, order cancel/refund, cart/NFO, goal-family-referral combos"
+    },
+    {
+      "batch": 5,
+      "file": "batch-005.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Support escalation, tickets, agent handoff, disputes, regulatory-safe tone"
+    },
+    {
+      "batch": 6,
+      "file": "batch-006.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Explore/invest, cart/NFO, notifications, holdings UX, onboarding combos"
+    },
+    {
+      "batch": 7,
+      "file": "batch-007.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Out-of-scope boundaries, compliance, fraud/phishing, no advice"
+    },
+    {
+      "batch": 8,
+      "file": "batch-008.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Sync/refresh errors, positive paths, account summary combos"
+    },
+    {
+      "batch": 9,
+      "file": "batch-009.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Hinglish/typos, redeem-STP-SWP, consent/report edges, paraphrases"
+    },
+    {
+      "batch": 10,
+      "file": "batch-010.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Capstone tone, closures, dense multi-topic snapshot for 1000 total"
+    },
+    {
+      "batch": 11,
+      "file": "batch-011.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 12,
+      "file": "batch-012.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 13,
+      "file": "batch-013.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 14,
+      "file": "batch-014.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 15,
+      "file": "batch-015.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 16,
+      "file": "batch-016.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 17,
+      "file": "batch-017.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 18,
+      "file": "batch-018.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 19,
+      "file": "batch-019.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 20,
+      "file": "batch-020.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 21,
+      "file": "batch-021.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 22,
+      "file": "batch-022.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 23,
+      "file": "batch-023.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 24,
+      "file": "batch-024.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 25,
+      "file": "batch-025.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 26,
+      "file": "batch-026.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 27,
+      "file": "batch-027.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 28,
+      "file": "batch-028.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 29,
+      "file": "batch-029.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 30,
+      "file": "batch-030.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 31,
+      "file": "batch-031.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 32,
+      "file": "batch-032.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 33,
+      "file": "batch-033.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 34,
+      "file": "batch-034.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 35,
+      "file": "batch-035.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 36,
+      "file": "batch-036.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 37,
+      "file": "batch-037.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 38,
+      "file": "batch-038.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 39,
+      "file": "batch-039.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Parametric corpus (Phase 1)"
+    },
+    {
+      "batch": 40,
+      "file": "batch-040.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 41,
+      "file": "batch-041.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 42,
+      "file": "batch-042.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 43,
+      "file": "batch-043.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 44,
+      "file": "batch-044.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 45,
+      "file": "batch-045.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 46,
+      "file": "batch-046.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 47,
+      "file": "batch-047.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 48,
+      "file": "batch-048.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 49,
+      "file": "batch-049.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 50,
+      "file": "batch-050.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Hinglish + module templates (Phase 1 expansion)"
+    },
+    {
+      "batch": 60,
+      "file": "batch-060.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Curated customer Hinglish (hand-authored corpus, not parametric)"
+    },
+    {
+      "batch": 61,
+      "file": "batch-061.jsonl",
+      "count": 1000,
+      "status": "complete",
+      "notes": "Curated Hinglish: MF modules, KYC, Account Settings"
+    }
+  ],
+  "cumulative_count": 52000,
+  "topic_quota_batch_001": {
+    "kyc": 16,
+    "payment": 20,
+    "portfolio": 12,
+    "account": 16,
+    "goals": 8,
+    "family": 8,
+    "referrals": 8,
+    "multi_topic": 12
+  },
+  "generator": "generate_help_bot_corpus.py",
+  "eval": {
+    "file": "eval/eval-set.jsonl",
+    "count": 250,
+    "held_out": true,
+    "min_coverage_pct": 100,
+    "min_retrieval_hit_at_3_pct": 75,
+    "retrieval_k": 3
+  }
+}

@@ -32,15 +32,6 @@ services:
   clamav:
     ports: []
 
-  ollama:
-    image: ollama/ollama:latest
-    environment:
-      OLLAMA_NUM_PARALLEL: "1"
-      OLLAMA_MAX_LOADED_MODELS: "1"
-    volumes:
-      - zynd_ollama_data:/root/.ollama
-    restart: unless-stopped
-
   document-scan-worker:
     volumes:
       - zynd_documents_data:/documents
@@ -76,11 +67,8 @@ services:
         condition: service_started
       clamav:
         condition: service_healthy
-      ollama:
-        condition: service_started
     restart: unless-stopped
 
 volumes:
   zynd_mongo_data:
   zynd_documents_data:
-  zynd_ollama_data:

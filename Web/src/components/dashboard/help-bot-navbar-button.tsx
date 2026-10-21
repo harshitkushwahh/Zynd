@@ -9,7 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getHelpBotStatus } from "@/features/support/lib/support-api";
+import { getHelpBotStatus, isHelpBotLlmConnected } from "@/features/support/lib/support-api";
 import { useSupportWidgetOptional } from "@/features/support/contexts/support-widget-context";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,7 @@ export function HelpBotNavbarButton() {
   const refresh = useCallback(() => {
     void getHelpBotStatus()
       .then((payload) => {
-        setConnection(payload.ollama === "connected" ? "connected" : "unavailable");
+        setConnection(isHelpBotLlmConnected(payload) ? "connected" : "unavailable");
       })
       .catch(() => {
         setConnection("unavailable");
@@ -48,7 +48,7 @@ export function HelpBotNavbarButton() {
 
   const handleClick = () => {
     router.push("/dashboard/help");
-    support?.openChat();
+    support?.openMessageSupport();
   };
 
   return (

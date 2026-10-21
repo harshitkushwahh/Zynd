@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.support.ollama_client import OllamaError, RoutingDecision, complete_routing_decision, resolve_ollama_model
+from app.application.support.ollama_client import OllamaError, RoutingDecision, complete_routing_decision, resolve_llm_model
 from app.application.support.realtime.presence import read_agent_presence
 from app.application.support.support_intelligence_features import build_support_routing_features
 from app.application.support.ticket_routing_service import PRIORITY_RANK, _merge_priority, sla_snapshot
@@ -216,7 +216,7 @@ async def _resolve_decision(
     }
     if settings.support_ai_routing_enabled and not fallback_only:
         try:
-            model = await resolve_ollama_model()
+            model = await resolve_llm_model()
             decision = await complete_routing_decision(
                 user_prompt=json.dumps(features, default=str),
             )

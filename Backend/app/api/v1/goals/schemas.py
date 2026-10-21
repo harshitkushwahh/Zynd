@@ -162,11 +162,17 @@ class FamilyGoalContributionItemResponse(BaseModel):
     contributed_at: Optional[str] = None
 
 
+class FamilyGoalMemberHoldingResponse(BaseModel):
+    scheme_name: str
+    current_value_inr: float
+
+
 class FamilyGoalMemberTotalResponse(BaseModel):
     user_id: UUID
     display_name: str
     total_inr: float
     contribution_count: int
+    holdings: list[FamilyGoalMemberHoldingResponse] = Field(default_factory=list)
 
 
 class FamilyGoalContributionsResponse(BaseModel):

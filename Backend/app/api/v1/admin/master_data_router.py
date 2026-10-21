@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.api.v1.auth.deps import require_any_permission
 from app.application.admin.admin_master_data_service import list_admin_states, lookup_admin_pincode
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.application.core.facade import FpClientError
 from app.infrastructure.persistence.models import User
 
 router = APIRouter(prefix="/master-data", tags=["admin-master-data"])

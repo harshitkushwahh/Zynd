@@ -15,6 +15,10 @@ export type SupportRealtimeEvent = {
   resolution_open?: boolean;
   status?: string;
   owner_user_id?: string;
+  message_id?: string;
+  side?: "customer" | "support";
+  read_at?: string;
+  support_read_by?: "bot" | "agent";
 };
 
 export type SupportRealtimeHandlers = {

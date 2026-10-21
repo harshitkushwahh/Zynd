@@ -99,20 +99,27 @@ async def _serialize_admin_group_summary(db: AsyncSession, group: FamilyGroup) -
 
 
 async def _family_group_aggregate_progress_pct(db: AsyncSession, group_id: UUID) -> int:
-    rows = await db.execute(
-        select(Goal.current_amount_inr, Goal.target_amount_inr).where(
-            Goal.family_group_id == group_id,
-            Goal.status.in_(
-                [GoalStatus.draft, GoalStatus.active, GoalStatus.paused, GoalStatus.achieved]
-            ),
-        )
+    from app.application.family_groups.family_holding_link_service import family_goal_funding_parts
+
+    goals = list(
+        (
+            await db.execute(
+                select(Goal).where(
+                    Goal.family_group_id == group_id,
+                    Goal.status.in_(
+                        [GoalStatus.draft, GoalStatus.active, GoalStatus.paused, GoalStatus.achieved]
+                    ),
+                )
+            )
+        ).scalars()
     )
     progress_values: list[float] = []
-    for current, target in rows.all():
-        target_amount = Decimal(str(target or 0))
+    for goal in goals:
+        target_amount = Decimal(str(goal.target_amount_inr or 0))
         if target_amount <= 0:
             continue
-        current_amount = Decimal(str(current or 0))
+        parts = await family_goal_funding_parts(db, goal)
+        current_amount = parts["effective_current_inr"]
         pct = float((current_amount / target_amount * Decimal("100")).quantize(Decimal("0.1")))
         progress_values.append(min(100.0, pct))
     if not progress_values:
@@ -314,7 +321,7 @@ async def get_admin_family_group_analytics(
     contribution_totals = await load_member_goal_contribution_totals(
         db, group_id=group_id, user_ids=user_ids
     )
-    invested_totals = await load_member_invested_totals(db, user_ids=user_ids)
+    invested_totals = await load_member_invested_totals(db, group_id=group_id, user_ids=user_ids)
     linked_sip_counts = await load_member_linked_sip_counts(db, group_id=group_id, user_ids=user_ids)
 
     group_contribution_total = sum(contribution_totals.values(), Decimal("0"))
@@ -426,6 +433,7 @@ async def get_admin_family_group_analytics(
     )
     mf_holdings = await load_family_group_mf_holdings(
         db,
+        group_id=group_id,
         member_labels=member_labels,
     )
     one_time_payments = await load_family_group_one_time_payments(

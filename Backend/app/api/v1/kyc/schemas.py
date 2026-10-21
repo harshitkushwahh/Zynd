@@ -286,6 +286,9 @@ class KycBankVerifyResponse(BaseModel):
     readiness_verified: bool = False
     requires_manual_verification: bool = False
     requires_proof_upload: bool = False
+    requires_cybrilla_manual_review: bool = False
+    allows_kyc_continue: bool = False
+    cybrilla_manual_review_requested: bool = False
     preverify_id: Optional[str] = None
     failure: Optional[KycBankFailure] = None
     poa_pan_status: Optional[PoaFieldStatus] = None
@@ -366,6 +369,9 @@ def build_kyc_bank_verify_response(result: dict) -> KycBankVerifyResponse:
         readiness_verified=bool(result.get("readinessVerified")),
         requires_manual_verification=bool(result.get("requiresManualVerification")),
         requires_proof_upload=bool(result.get("requiresProofUpload")),
+        requires_cybrilla_manual_review=bool(result.get("requiresCybrillaManualReview")),
+        allows_kyc_continue=bool(result.get("allowsKycContinue")),
+        cybrilla_manual_review_requested=bool(result.get("cybrillaManualReviewRequested")),
         preverify_id=result.get("preverifyId"),
         failure=KycBankFailure(**result["failure"]) if result.get("failure") else None,
         poa_pan_status=_poa_field_status(result.get("poaPanStatus")),

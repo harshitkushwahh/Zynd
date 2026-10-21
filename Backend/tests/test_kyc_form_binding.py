@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.application.kyc.kyc_form_service import fetch_journey_kyc_form
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 
 
 @pytest.mark.asyncio

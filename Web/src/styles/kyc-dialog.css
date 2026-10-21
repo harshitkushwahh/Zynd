@@ -160,3 +160,22 @@
     0 0 28px color-mix(in srgb, var(--destructive) 42%, transparent),
     0 0 56px color-mix(in srgb, var(--destructive) 22%, transparent);
 }
+
+/* Cybrilla manual bank review — info glow (mirrors incomplete destructive treatment) */
+.kyc-redirect-dialog-root.kyc-info-dialog-surface {
+  border: 1px solid color-mix(in srgb, var(--info) 48%, var(--border));
+  box-shadow:
+    var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.22)),
+    0 0 0 1px color-mix(in srgb, var(--info) 32%, transparent),
+    0 0 22px color-mix(in srgb, var(--info) 34%, transparent),
+    0 0 44px color-mix(in srgb, var(--info) 18%, transparent);
+}
+
+.dark .kyc-redirect-dialog-root.kyc-info-dialog-surface {
+  border-color: color-mix(in srgb, var(--info) 55%, var(--border));
+  box-shadow:
+    var(--shadow-zynd-high, 0 25px 50px -12px rgb(0 0 0 / 0.35)),
+    0 0 0 1px color-mix(in srgb, var(--info) 45%, transparent),
+    0 0 28px color-mix(in srgb, var(--info) 42%, transparent),
+    0 0 56px color-mix(in srgb, var(--info) 22%, transparent);
+}

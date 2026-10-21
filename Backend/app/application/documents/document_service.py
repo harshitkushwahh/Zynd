@@ -125,6 +125,9 @@ async def finalize_document_scans(
             )
         if user is not None and document.doc_type == DocumentType.profile_image:
             notify_profile_image_updated(user=user, document_id=document.id)
+            from app.application.auth.auth_cache_invalidation import invalidate_auth_user_caches
+
+            await invalidate_auth_user_caches(user.id)
 
 
 async def finalize_document_scan(

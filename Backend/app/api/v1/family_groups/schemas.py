@@ -142,6 +142,18 @@ class FamilyGroupPortfolioSliceResponse(BaseModel):
     value_pct: float
 
 
+class FamilyGroupPortfolioHoldingResponse(BaseModel):
+    holding_id: str
+    user_id: UUID
+    member_label: str
+    scheme_name: str
+    folio_number: str
+    current_value_inr: float
+    invested_inr: float = 0
+    goal_id: Optional[UUID] = None
+    goal_title: Optional[str] = None
+
+
 class FamilyGroupPortfolioResponse(BaseModel):
     total_current_value_inr: float
     total_invested_inr: float
@@ -150,6 +162,7 @@ class FamilyGroupPortfolioResponse(BaseModel):
     goal_funded_inr: float
     has_holdings_data: bool
     slices: list[FamilyGroupPortfolioSliceResponse] = Field(default_factory=list)
+    holdings: list[FamilyGroupPortfolioHoldingResponse] = Field(default_factory=list)
 
 
 class UpdateFamilyGroupMemberRequest(BaseModel):

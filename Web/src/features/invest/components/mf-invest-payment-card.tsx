@@ -26,13 +26,19 @@ import {
 } from "@/features/invest/api/invest-api";
 import { MfBankAccountPicker } from "@/features/invest/components/mf-bank-account-picker";
 import { MfInvestSelectedFundCard } from "@/features/invest/components/mf-invest-selected-fund-card";
-import { MfFamilyGoalLinkPicker } from "@/features/invest/components/mf-family-goal-link-picker";
+import {
+  MfFamilyGoalLinkPicker,
+  type FamilyLinkChoice,
+} from "@/features/invest/components/mf-family-goal-link-picker";
 import { MfMandateTypePicker } from "@/features/invest/components/mf-mandate-type-picker";
 import { MfPaymentMethodPicker } from "@/features/invest/components/mf-payment-method-picker";
 import { MfSipDayPicker } from "@/features/invest/components/mf-sip-day-picker";
 import { MfFolioNominationInfoButton } from "@/features/invest/components/mf-folio-nomination-info";
 import { MfInvestPaymentConsentStep } from "@/features/invest/components/mf-invest-payment-consent-step";
-import { MfInvestModeToggle } from "@/features/invest/components/mf-invest-mode-toggle";
+import {
+  MfInvestModeToggle,
+  type MfInvestTab,
+} from "@/features/invest/components/mf-invest-mode-toggle";
 import { MfAmountRollDisplay } from "@/features/invest/components/mf-amount-roll-display";
 import { MfSipInstallmentsInput } from "@/features/invest/components/mf-sip-installments-input";
 import { useMfPaymentOverlay } from "@/features/invest/contexts/mf-payment-overlay-context";
@@ -59,6 +65,8 @@ import {
   normalizeSipFrequency,
   resolveDefaultSipFrequency,
   resolveMinSipForFrequency,
+  SIP_FREQUENCY_DAILY,
+  SIP_FREQUENCY_MONTHLY,
   type SipFrequency,
   validateSipInstallmentAmount,
 } from "@/features/invest/lib/mf-sip-frequency";
@@ -110,6 +118,7 @@ export type MfInvestPaymentCardProps = {
   onRedeemProceed?: (payload: MfRedeemProceedPayload) => void | Promise<void>;
   onRedeemBack?: () => void;
   folioNumber?: string | null;
+  existingFamilyLink?: { groupTitle: string; goalTitle: string | null } | null;
 };
 
 const QUICK_AMOUNTS = [1000, 2000, 5000] as const;
@@ -361,7 +370,7 @@ function AmountInput({
 
   return (
     <div className="w-full min-w-0">
-      <div className="flex min-h-[5.5rem] w-full items-center justify-center py-1">
+      <div className="flex min-h-[4.25rem] w-full items-center justify-center py-0">
         <div className="relative inline-flex max-w-full items-center justify-center gap-1">
           <span
             ref={measureRef}
@@ -599,6 +608,7 @@ export function MfInvestPaymentCard({
   onRedeemProceed,
   onRedeemBack,
   folioNumber,
+  existingFamilyLink = null,
 }: MfInvestPaymentCardProps) {
   const hasFundForUi = Boolean(fundName?.trim());
 
@@ -673,7 +683,7 @@ export function MfInvestPaymentCard({
   );
   const [paymentMethod, setPaymentMethod] = useState<MfPaymentMethod>("upi");
   const [mandateType, setMandateType] = useState<MfMandateType>("upi");
-  const [selectedFamilyGoalId, setSelectedFamilyGoalId] = useState<string | null>(null);
+  const [familyLink, setFamilyLink] = useState<FamilyLinkChoice>(null);
   const [cartSubmitting, setCartSubmitting] = useState(false);
   const [primarySubmitting, setPrimarySubmitting] = useState(false);
   const formLocked = cartSubmitting || primarySubmitting;
@@ -761,11 +771,20 @@ export function MfInvestPaymentCard({
     });
   }, [dailySipAllowed, minSipAmountInr, monthlySipAllowed, sipEnabled, sipOptions]);
 
-  function handleSipFrequencyChange(next: SipFrequency) {
+  function handleInvestTabSelect(tab: MfInvestTab) {
     setActionError(null);
     setShowAmountValidation(false);
-    setSipFrequency(next);
-    setNumberOfInstallments(defaultInstallmentsForFrequency(next));
+    if (tab === "lumpsum") {
+      setMode("lumpsum");
+      setAmount(clampPaymentAmountInput(amount, "lumpsum"));
+      return;
+    }
+    const nextFrequency =
+      tab === "daily" ? SIP_FREQUENCY_DAILY : SIP_FREQUENCY_MONTHLY;
+    setMode("sip");
+    setSipFrequency(nextFrequency);
+    setNumberOfInstallments(defaultInstallmentsForFrequency(nextFrequency));
+    setAmount(clampPaymentAmountInput(amount, "sip"));
   }
 
   const canSubmit = useMemo(() => hasFund && amount > 0, [amount, hasFund]);
@@ -814,13 +833,6 @@ export function MfInvestPaymentCard({
     setShowAmountValidation(true);
   }
 
-  function handleModeChange(nextMode: MfInvestPaymentMode) {
-    setActionError(null);
-    setShowAmountValidation(false);
-    setMode(nextMode);
-    setAmount(clampPaymentAmountInput(amount, nextMode));
-  }
-
   function handleAmountChange(nextAmount: number) {
     setActionError(null);
     setShowAmountValidation(false);
@@ -857,7 +869,8 @@ export function MfInvestPaymentCard({
         amount_inr: amount,
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
-        family_goal_id: selectedFamilyGoalId ?? undefined,
+        family_group_id: existingFamilyLink ? undefined : familyLink?.familyGroupId,
+        family_goal_id: existingFamilyLink ? undefined : familyLink?.goalId ?? undefined,
         payment_method: paymentMethod,
         folio_number: folioNumber?.trim() || undefined,
       });
@@ -961,7 +974,8 @@ export function MfInvestPaymentCard({
         number_of_installments: numberOfInstallments,
         idempotency_key: crypto.randomUUID(),
         bank_account_id: selectedBankAccountId,
-        family_goal_id: selectedFamilyGoalId ?? undefined,
+        family_group_id: existingFamilyLink ? undefined : familyLink?.familyGroupId,
+        family_goal_id: existingFamilyLink ? undefined : familyLink?.goalId ?? undefined,
         mandate_type: mandateType,
         folio_number: folioNumber?.trim() || undefined,
       });
@@ -1044,11 +1058,7 @@ export function MfInvestPaymentCard({
       className={cn(
         MF_INVEST_PAYMENT_CARD_CLASS,
         "flex w-full min-w-0 flex-col overflow-x-hidden",
-        showPaymentSection
-          ? isSipCard
-            ? "min-h-[25.5rem]"
-            : "min-h-[26rem]"
-          : "min-h-[20rem]",
+        showPaymentSection ? "min-h-[26rem]" : "min-h-[20rem]",
         !showFundName && sticky && "lg:sticky lg:top-6",
         !showFundName && !hasFundForUi && "border-dashed",
         !showFundName && className,
@@ -1057,28 +1067,21 @@ export function MfInvestPaymentCard({
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col px-4 pb-4",
-          spaciousAmountLayout ? (isSipCard ? "pt-4" : "pt-5") : isSipCard ? "pt-3" : "pt-3.5",
+          spaciousAmountLayout ? "pt-3" : "pt-2.5",
         )}
       >
         <div
           className={cn(
-            "flex flex-col",
-            spaciousAmountLayout
-              ? isSipCard
-                ? "gap-10"
-                : "gap-12"
-              : isSipCard
-                ? "gap-5"
-                : "gap-6",
-            showSip ? null : "pt-1",
+            "flex shrink-0 flex-col",
+            showSip ? (spaciousAmountLayout ? "gap-6" : "gap-4") : spaciousAmountLayout ? "gap-9" : "gap-5",
+            showSip ? null : "pt-0.5",
           )}
         >
           {showSip ? (
             <MfInvestModeToggle
               mode={mode}
               sipFrequency={sipFrequency}
-              onModeChange={handleModeChange}
-              onSipFrequencyChange={handleSipFrequencyChange}
+              onTabSelect={handleInvestTabSelect}
               monthlySipAllowed={monthlySipAllowed}
               dailySipAllowed={dailySipAllowed}
               disabled={!interactive || formLocked}
@@ -1105,41 +1108,47 @@ export function MfInvestPaymentCard({
         <div
           className={cn(
             "mt-auto flex flex-col",
-            isSipCard ? "space-y-3 pt-3" : "space-y-3.5 pt-3.5",
+            "space-y-3 pt-3",
           )}
         >
           {isSipCard ? (
-            <div
-              className={cn(
-                "grid gap-2 [&_button]:min-h-9 [&_button]:py-1.5",
-                isDailySipFrequency(sipFrequency)
-                  ? "grid-cols-1"
-                  : "grid-cols-[minmax(0,1fr)_8.5rem]",
-              )}
-            >
-              {!isDailySipFrequency(sipFrequency) ? (
-                <MfSipDayPicker
+            <div className="min-h-[2.375rem]">
+              <div
+                className={cn(
+                  "grid gap-2 [&_button]:min-h-9 [&_button]:py-1.5",
+                  isDailySipFrequency(sipFrequency)
+                    ? "grid-cols-1"
+                    : "grid-cols-[minmax(0,1fr)_8.5rem]",
+                )}
+              >
+                {!isDailySipFrequency(sipFrequency) ? (
+                  <MfSipDayPicker
+                    compact
+                    maxDay={SIP_MAX_INSTALLMENT_DAY}
+                    value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
+                    onChange={setInstallmentDay}
+                    disabled={formLocked}
+                  />
+                ) : null}
+                <MfSipInstallmentsInput
                   compact
-                  maxDay={SIP_MAX_INSTALLMENT_DAY}
-                  value={Math.min(installmentDay, SIP_MAX_INSTALLMENT_DAY)}
-                  onChange={setInstallmentDay}
+                  value={numberOfInstallments}
+                  onChange={setNumberOfInstallments}
                   disabled={formLocked}
                 />
-              ) : null}
-              <MfSipInstallmentsInput
-                compact
-                value={numberOfInstallments}
-                onChange={setNumberOfInstallments}
-                disabled={formLocked}
-              />
+              </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="min-h-[2.375rem]" aria-hidden />
+          )}
 
           {showFamilyGoalLink ? (
             <MfFamilyGoalLinkPicker
-              selectedGoalId={selectedFamilyGoalId}
-              onSelect={setSelectedFamilyGoalId}
+              value={familyLink}
+              onChange={setFamilyLink}
               disabled={formLocked}
+              lockedLink={existingFamilyLink}
+              confirmEntireFolio={Boolean(folioNumber?.trim()) && !existingFamilyLink}
             />
           ) : null}
 
@@ -1176,6 +1185,7 @@ export function MfInvestPaymentCard({
                   value={paymentMethod}
                   onChange={setPaymentMethod}
                   disabled={!interactive || formLocked}
+                  compact
                 />
                 {interactive && canInvest ? (
                   <MfBankAccountPicker

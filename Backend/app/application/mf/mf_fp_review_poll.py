@@ -12,8 +12,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import extract_fp_state
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import extract_fp_state
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ async def poll_purchase_until_actionable(
     """
     import asyncio
 
-    from app.infrastructure.mf.fp_oms_client import get_mf_purchase
+    from app.infrastructure.core.mf.oms_client import get_mf_purchase
 
     fetch = fetch_purchase or get_mf_purchase
     pause = sleep or asyncio.sleep
@@ -126,7 +126,7 @@ async def poll_plan_until_consent_eligible(
     """GET the SIP plan until it can be confirmed, or the attempt budget ends."""
     import asyncio
 
-    from app.infrastructure.mf.fp_oms_client import get_mf_purchase_plan
+    from app.infrastructure.core.mf.oms_client import get_mf_purchase_plan
 
     fetch = fetch_plan or get_mf_purchase_plan
     pause = sleep or asyncio.sleep

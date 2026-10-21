@@ -34,6 +34,7 @@ E2E smoke covers marketing home, invalid reset-password link, and unauthenticate
 | Dashboard routing | `dashboard-routes.test.ts` |
 | Login security alerts | `login-security-alerts.test.ts` (session storage) |
 | Config guardrails | `phase0-sanity.test.ts` |
+| Marketing session restore | `landing-auth-restore-pending.test.ts` (no Get Started flash when session hint exists) |
 
 ## Error handling
 

@@ -112,9 +112,11 @@ export function KycPersonalInfoStep({
   const [errors, setErrors] = useState<Partial<Record<PersonalInfoFieldKey, string>>>({});
 
   useEffect(() => {
-    if (initialValue) {
-      setForm((current) => ({ ...current, ...initialValue }));
+    if (!initialValue || Object.keys(initialValue).length === 0) {
+      setForm(createEmptyPersonalInfo());
+      return;
     }
+    setForm((current) => ({ ...createEmptyPersonalInfo(), ...initialValue }));
   }, [initialValue]);
 
   const genderOptions = enumOptions?.gender ?? KYC_PERSONAL_INFO_FALLBACK_OPTIONS.gender;

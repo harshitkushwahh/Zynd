@@ -7,6 +7,7 @@ import { RechartsMeasuredContainer } from "@/components/ui/recharts-measured-con
 
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import {
+  type FamilyGroupPortfolioHolding,
   type FamilyGroupPortfolioSlice,
 } from "@/features/family-groups/api/family-groups-api";
 import { useFamilyGroupPortfolioQuery } from "@/features/family-groups/hooks/use-family-group-dashboard-queries";
@@ -26,6 +27,62 @@ type FamilyGroupPortfolioPanelProps = {
   groupId: string;
   className?: string;
 };
+
+function FamilyPortfolioHoldingList({
+  holdings,
+  showUnassigned,
+}: {
+  holdings: FamilyGroupPortfolioHolding[];
+  showUnassigned: boolean;
+}) {
+  const dashboard = copy.familyGroups.dashboard;
+  if (holdings.length === 0) return null;
+  const unassigned = showUnassigned ? holdings.filter((holding) => !holding.goal_id) : [];
+  const assigned = showUnassigned ? holdings.filter((holding) => holding.goal_id) : holdings;
+
+  return (
+    <div className="mt-4 w-full space-y-3 text-left">
+      {assigned.length > 0 ? (
+        <ul className="space-y-2">
+          {assigned.map((holding) => (
+            <li key={holding.holding_id} className="flex items-start justify-between gap-3 text-caption">
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-foreground">{holding.scheme_name}</span>
+                <span className="text-muted-foreground">
+                  {dashboard.portfolioHoldingMember} {holding.member_label}
+                  {holding.goal_title ? ` · ${holding.goal_title}` : ""}
+                </span>
+              </span>
+              <span className="shrink-0 font-medium tabular-nums text-foreground">
+                {formatInr(holding.current_value_inr)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {unassigned.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-caption font-medium text-muted-foreground">{dashboard.portfolioUnassignedTitle}</p>
+          <ul className="space-y-2">
+            {unassigned.map((holding) => (
+              <li key={holding.holding_id} className="flex items-start justify-between gap-3 text-caption">
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-foreground">{holding.scheme_name}</span>
+                  <span className="text-muted-foreground">
+                    {dashboard.portfolioHoldingMember} {holding.member_label}
+                  </span>
+                </span>
+                <span className="shrink-0 font-medium tabular-nums text-foreground">
+                  {formatInr(holding.current_value_inr)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function sliceColor(slice: FamilyGroupPortfolioSlice) {
   return SLICE_COLORS[slice.id] ?? SLICE_COLORS.other;
@@ -118,6 +175,10 @@ export function FamilyGroupPortfolioPanel({ groupId, className }: FamilyGroupPor
                 </span>
               ))}
             </div>
+            <FamilyPortfolioHoldingList
+              holdings={portfolio.holdings ?? []}
+              showUnassigned={(portfolio.active_goals_count ?? 0) > 0}
+            />
           </div>
         )}
       </div>

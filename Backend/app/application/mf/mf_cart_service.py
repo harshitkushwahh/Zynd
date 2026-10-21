@@ -6,8 +6,11 @@ from decimal import Decimal
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.family_groups.family_holding_link_service import (
+    apply_family_link_metadata,
+    resolve_purchase_family_link,
+)
 from app.application.goals.errors import GoalError
-from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_bank_account_resolver import (
     bank_account_metadata_snapshot,
     resolve_payment_bank_account,
@@ -371,6 +374,7 @@ async def checkout_cart(
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
+    family_group_id: uuid.UUID | None = None,
     payment_method: str = "upi",
 ) -> tuple[MfCheckout, list[MfOrder]]:
     existing = await session.scalar(select(MfCheckout).where(MfCheckout.idempotency_key == idempotency_key))
@@ -409,7 +413,12 @@ async def checkout_cart(
     )
     mfia = await get_or_create_mf_investment_account(session, user_id=user_id)
     try:
-        linked_goal = await validate_family_goal_link(session, user_id=user_id, family_goal_id=family_goal_id)
+        linked_group_id, linked_goal_id = await resolve_purchase_family_link(
+            session,
+            user_id=user_id,
+            family_group_id=family_group_id,
+            family_goal_id=family_goal_id,
+        )
     except GoalError as exc:
         raise MfOrderError(code=exc.code, message=exc.message, status_code=exc.status_code) from exc
 
@@ -453,10 +462,10 @@ async def checkout_cart(
                 "investor_profile_status": profile.status.value,
                 "mfia_status": mfia.status.value,
                 "user_ip": user_ip,
-                **(
-                    apply_family_goal_metadata({}, family_goal_id=linked_goal.id)
-                    if linked_goal
-                    else {}
+                **apply_family_link_metadata(
+                    {},
+                    family_group_id=linked_group_id,
+                    family_goal_id=linked_goal_id,
                 ),
             },
         )
@@ -479,6 +488,7 @@ async def checkout_sip_cart(
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
+    family_group_id: uuid.UUID | None = None,
     mandate_type: str = "upi",
 ) -> list[MfSipPlan]:
     items = [
@@ -513,6 +523,7 @@ async def checkout_sip_cart(
             idempotency_key=f"{idempotency_key}:{index}",
             user_ip=user_ip,
             family_goal_id=family_goal_id,
+            family_group_id=family_group_id,
             mandate_type=mandate_type,
         )
         plans.append(plan)

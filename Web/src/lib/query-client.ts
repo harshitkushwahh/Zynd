@@ -1,5 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 
+import { getBackendConnectionState, isBackendConnectionError } from "@/lib/api-client";
+
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -7,8 +9,9 @@ function makeQueryClient() {
         staleTime: 30_000,
         gcTime: 30 * 60_000,
         refetchOnMount: true,
-        refetchOnWindowFocus: true,
-        retry: 1,
+        refetchOnWindowFocus: () => !getBackendConnectionState().isWaiting,
+        retry: (failureCount, error) =>
+          !isBackendConnectionError(error) && failureCount < 1,
       },
     },
   });

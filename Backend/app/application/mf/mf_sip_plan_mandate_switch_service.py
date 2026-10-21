@@ -23,8 +23,8 @@ from app.application.mf.mf_sip_plan_service import (
     _record_plan_event,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     create_mf_plan_modification_instruction,
     get_mf_plan_modification_instruction,
 )

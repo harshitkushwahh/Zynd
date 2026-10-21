@@ -8,7 +8,8 @@ from app.application.kyc.indian_states import (
     country_from_ansi,
     names_loosely_match,
 )
-from app.infrastructure.kyc.fp_clients import FpClientError, list_states, lookup_pincode
+from app.application.master_data.finprim_reference_service import list_states, lookup_pincode
+from app.infrastructure.core.errors import FpClientError
 
 
 def _expected_city(lookup: dict[str, Any]) -> str:

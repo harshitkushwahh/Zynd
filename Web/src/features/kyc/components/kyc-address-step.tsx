@@ -423,11 +423,13 @@ export function KycAddressStep({
 
   if (digilockerBlocked) {
     return (
-      <div className="mt-3 w-full">
+      <div className="mt-3 w-full space-y-4">
         <KycDigilockerInfoCard
           variant="required"
+          flow={proofAddressOnly ? "kraProof" : "aadhaarAddress"}
           layout="prominent"
           className="mx-auto w-full max-w-lg"
+          description={digilockerFailureReason}
           onRetry={onRetryDigilocker}
           retrying={retryingDigilocker}
         />
@@ -458,8 +460,14 @@ export function KycAddressStep({
 
       {proofAddressOnly ? (
         <KycInfoCallout
-          title={copy.kyc.address.proofOnlyTitle}
-          description={copy.kyc.address.proofOnlyDescription}
+          title={copy.kyc.kraProof.prefilledTitle}
+          description={
+            <>
+              {copy.kyc.kraProof.prefilledDescriptionLines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </>
+          }
         />
       ) : null}
 

@@ -8,7 +8,7 @@ from app.application.mf.mf_transaction_retry import (
     should_skip_retry,
 )
 from app.application.mf.mf_scheduler_metrics import render_catalog_prometheus_metrics
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 
 
 def test_is_transient_error_timeout() -> None:

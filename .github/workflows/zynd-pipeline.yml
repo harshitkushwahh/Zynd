@@ -176,6 +176,9 @@ jobs:
       - name: Compile backend Python
         run: python3 -m compileall -q Backend/app Backend/alembic
 
+      - name: Help bot corpus gates (coverage + retrieval)
+        run: python3 Backend/scripts/ci_help_bot_gates.py
+
       - name: Audit Python requirements
         id: pip_audit
         continue-on-error: true
@@ -204,6 +207,7 @@ jobs:
             echo "| Tracked secret scan | completed in this job |"
             echo "| Workflow syntax | completed in this job |"
             echo "| Backend compileall | completed in this job |"
+            echo "| Help bot corpus gates | completed in this job |"
             echo "| pip-audit | ${PIP_AUDIT} |"
             echo "| npm audit | ${NPM_AUDIT} |"
             echo ""
@@ -238,6 +242,10 @@ jobs:
       - name: Compile backend Python
         if: needs.detect-changes.outputs.backend_changed == 'true'
         run: python3 -m compileall -q Backend/app Backend/alembic
+
+      - name: Validate API Cybrilla import boundaries
+        if: needs.detect-changes.outputs.backend_changed == 'true'
+        run: python3 .github/scripts/zynd-validate-api-cybrilla-imports.py
 
       - name: Validate Compose service map
         if: needs.detect-changes.outputs.infrastructure_changed == 'true'
@@ -622,9 +630,6 @@ jobs:
               MONGO_SERVICE=""
             fi
             require_service api || infra_failed=1
-            if printf '%s\n' "${compose_services[@]}" | grep -qx ollama; then
-              require_service ollama || infra_failed=1
-            fi
             if [ "${infra_failed}" -ne 0 ]; then
               exit 1
             fi
@@ -681,13 +686,19 @@ jobs:
             compose build ${worker_build}
             end_section
 
-            section "[7b/15] Ensure Ollama (Support AI)"
-            if printf '%s\n' "${compose_services[@]}" | grep -qx ollama; then
-              chmod +x Backend/scripts/ensure-ollama-production.sh
-              ZYND_ROOT=/opt/zynd Backend/scripts/ensure-ollama-production.sh
+            section "[7b/15] Verify Support LLM (Groq)"
+            llm_provider="$(grep -E '^SUPPORT_LLM_PROVIDER=' Backend/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r\"' | tr 'A-Z' 'a-z' || true)"
+            if [ -z "${llm_provider}" ]; then
+              llm_provider="groq"
+            fi
+            if [ "${llm_provider}" = "groq" ]; then
+              if ! grep -qE '^GROQ_API_KEY=.+$' Backend/.env 2>/dev/null; then
+                echo "ERROR: SUPPORT_LLM_PROVIDER=groq but GROQ_API_KEY is missing in Backend/.env on the server."
+                exit 1
+              fi
+              echo "Support LLM: Groq (GROQ_API_KEY present in server Backend/.env)."
             else
-              echo "ERROR: ollama service is not defined in compose; Support AI requires it."
-              exit 1
+              echo "Support LLM provider: ${llm_provider} (not Groq; skipping Groq key check)."
             fi
             end_section
 
@@ -697,6 +708,10 @@ jobs:
             echo "Applying pending Alembic migrations"
             compose exec -T api python -m alembic upgrade head
             compose exec -T api python -m alembic current
+
+            section "[7c/15] Verify Help Bot corpus (Groq + JSONL retrieval)"
+            compose exec -T api python scripts/verify_help_bot_production.py
+            end_section
 
             # Background workers run the same Backend image as the API. If they are
             # not recreated here they keep running the previous build forever

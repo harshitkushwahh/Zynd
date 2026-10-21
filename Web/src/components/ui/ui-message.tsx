@@ -66,16 +66,30 @@ export function FieldMessage({
   message,
   variant = "error",
   className,
+  reserveLayout = false,
+  reservePlaceholder = "This password appeared in a known data breach. Choose a different one.",
 }: {
   message?: string;
   variant?: UiMessageVariant;
   className?: string;
+  /** Keeps a fixed error slot (invisible placeholder) to avoid layout shift when errors appear. */
+  reserveLayout?: boolean;
+  reservePlaceholder?: string;
 }) {
+  if (!reserveLayout) {
+    if (!message) return null;
+    return (
+      <UiMessage variant={variant} message={message} className={cn("mt-1.5", className)} />
+    );
+  }
+
   return (
-    <UiMessage
-      variant={variant}
-      message={message}
-      className={cn("mt-1.5", className)}
-    />
+    <div className={cn("mt-1.5", className)} aria-live="polite">
+      <UiMessage
+        variant={variant}
+        message={message || reservePlaceholder}
+        className={cn("mt-0", !message && "pointer-events-none invisible")}
+      />
+    </div>
   );
 }

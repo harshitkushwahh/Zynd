@@ -512,7 +512,7 @@ def _cybrilla_runtime_for_mode(settings: Settings, mode: IntegrationEnvironment)
 
 
 def is_poa_kyc_provider_unavailable_error(exc: BaseException) -> bool:
-    from app.infrastructure.kyc.fp_clients import FpClientError
+    from app.infrastructure.core.kyc.fp_clients import FpClientError
 
     if not isinstance(exc, FpClientError):
         return False
@@ -619,8 +619,8 @@ def mask_secret(value: str) -> str:
 
 
 def invalidate_integration_clients() -> None:
-    from app.infrastructure.kyc.fp_clients import invalidate_fp_tokens
-    from app.infrastructure.mf.fp_oms_client import invalidate_mf_token
+    from app.infrastructure.core.kyc.fp_clients import invalidate_fp_tokens
+    from app.infrastructure.core.mf.oms_client import invalidate_mf_token
 
     invalidate_mf_token()
     invalidate_fp_tokens()

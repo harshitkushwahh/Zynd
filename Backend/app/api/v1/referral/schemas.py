@@ -28,6 +28,11 @@ class ReferralClickResponse(BaseModel):
     share_path: str
 
 
+class ReferralCodeValidateResponse(BaseModel):
+    ok: bool = True
+    code: str
+
+
 class ReferralListItemResponse(BaseModel):
     id: str
     name: str

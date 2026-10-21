@@ -433,6 +433,15 @@
     backdrop-filter: blur(var(--blur-overlay));
     -webkit-backdrop-filter: blur(var(--blur-overlay));
   }
+  .auth-referral-dialog-overlay {
+    z-index: 90 !important;
+    background-color: rgb(0 0 0 / 0.58) !important;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  .auth-referral-dialog-layer {
+    z-index: 91 !important;
+  }
   .scrollbar-none {
     scrollbar-width: none;
   }
@@ -487,14 +496,15 @@
     align-self: flex-start;
     text-align: left;
     font-size: var(--text-compact);
-    color: var(--primary);
+    color: var(--muted-foreground);
     text-underline-offset: 4px;
-    transition-property: opacity;
+    transition-property: color, opacity;
     transition-duration: 200ms;
   }
   .auth-link:hover {
+    color: var(--foreground);
     text-decoration-line: underline;
-    opacity: 0.8;
+    opacity: 0.9;
   }
 
   .kyc-status-ring-glow-success {

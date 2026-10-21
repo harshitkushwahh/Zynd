@@ -110,10 +110,25 @@ export function FamilyGroupGoalContributionsDialog({
               {(contributions?.member_totals ?? []).map((member) => (
                 <li
                   key={member.user_id}
-                  className="flex items-center justify-between rounded-[var(--radius-control)] border border-border/70 px-3 py-2 text-compact"
+                  className="rounded-[var(--radius-control)] border border-border/70 px-3 py-2 text-compact"
                 >
-                  <span>{member.display_name}</span>
-                  <span className="font-medium tabular-nums">{formatInr(member.total_inr)}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>{member.display_name}</span>
+                    <span className="font-medium tabular-nums">{formatInr(member.total_inr)}</span>
+                  </div>
+                  {(member.holdings ?? []).length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {member.holdings?.map((holding) => (
+                        <li
+                          key={`${member.user_id}-${holding.scheme_name}`}
+                          className="flex items-center justify-between gap-3 text-caption text-muted-foreground"
+                        >
+                          <span className="min-w-0 truncate">{holding.scheme_name}</span>
+                          <span className="shrink-0 tabular-nums">{formatInr(holding.current_value_inr)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </li>
               ))}
               {(contributions?.member_totals.length ?? 0) === 0 ? (

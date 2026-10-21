@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  AuthBrandPanel,
-  AuthFormHeader,
-  AuthProgress,
-} from "@/components/auth/auth-shared";
+import { AuthDialogIntro } from "@/components/auth/auth-dialog-intro";
 import { AuthEmailStep } from "@/features/auth/components/steps/auth-email-step";
 import {
   AuthEmailOtpStep,
@@ -25,26 +21,22 @@ export function AuthDialogSteps() {
   const { title, description, progressStep } = useAuthDialogHeader();
 
   return (
-    <>
-      <div className="grid min-h-[520px] grid-cols-1 md:grid-cols-[88fr_112fr]">
-        <AuthBrandPanel />
-        <div className="flex min-h-0 flex-col bg-popover p-6 sm:p-8">
-          <AuthProgress currentStep={progressStep} />
-          <AuthFormHeader title={title} description={description} />
-          <div className="relative flex flex-1 flex-col overflow-hidden">
-            <AuthEmailStep />
-            <AuthMfaChallengeStep />
-            <AuthSmsOtpLoginStep />
-            <AuthOAuthLinkStep />
-            <AuthEmailOtpStep />
-            <AuthPasswordStep />
-            <AuthMobileStep />
-            <AuthMobileOtpStep />
-            <AuthProfileStep />
-            <AuthForgotPasswordStep />
-          </div>
+    <div className="flex max-h-[min(90dvh,720px)] min-h-0 flex-col rounded-[inherit] bg-popover">
+      <AuthDialogIntro title={title} description={description} progressStep={progressStep} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-7 pt-5 sm:px-8 sm:pb-9 sm:pt-6">
+        <div className="relative flex flex-1 flex-col">
+          <AuthEmailStep />
+          <AuthMfaChallengeStep />
+          <AuthSmsOtpLoginStep />
+          <AuthOAuthLinkStep />
+          <AuthEmailOtpStep />
+          <AuthPasswordStep />
+          <AuthMobileStep />
+          <AuthMobileOtpStep />
+          <AuthProfileStep />
+          <AuthForgotPasswordStep />
         </div>
       </div>
-    </>
+    </div>
   );
 }

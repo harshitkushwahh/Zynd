@@ -6,7 +6,7 @@ from app.application.mf.mf_lumpsum_reconciliation_service import (
     _purchase_state_ahead_of_payment,
     _target_status_without_payment,
 )
-from app.infrastructure.mf.fp_payment_client import (
+from app.infrastructure.core.mf.payment_client import (
     is_payment_failure_status,
     is_payment_pending_status,
 )

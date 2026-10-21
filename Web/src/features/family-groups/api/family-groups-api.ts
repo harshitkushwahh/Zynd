@@ -103,6 +103,18 @@ export type FamilyGroupPortfolioSlice = {
   value_pct: number;
 };
 
+export type FamilyGroupPortfolioHolding = {
+  holding_id: string;
+  user_id: string;
+  member_label: string;
+  scheme_name: string;
+  folio_number: string;
+  current_value_inr: number;
+  invested_inr: number;
+  goal_id?: string | null;
+  goal_title?: string | null;
+};
+
 export type FamilyGroupPortfolio = {
   total_current_value_inr: number;
   total_invested_inr: number;
@@ -111,6 +123,7 @@ export type FamilyGroupPortfolio = {
   goal_funded_inr: number;
   has_holdings_data: boolean;
   slices: FamilyGroupPortfolioSlice[];
+  holdings?: FamilyGroupPortfolioHolding[];
 };
 
 export type FamilyGoal = {
@@ -152,6 +165,7 @@ export type FamilyGoalContributions = {
     display_name: string;
     total_inr: number;
     contribution_count: number;
+    holdings?: Array<{ scheme_name: string; current_value_inr: number }>;
   }>;
   items: FamilyGoalContributionItem[];
 };

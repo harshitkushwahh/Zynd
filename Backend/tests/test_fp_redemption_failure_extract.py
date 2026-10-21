@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.infrastructure.mf.fp_oms_client import extract_fp_redemption_failure
+from app.infrastructure.core.mf.oms_client import extract_fp_redemption_failure
 
 
 def test_extract_fp_redemption_failure_from_top_level_fields() -> None:

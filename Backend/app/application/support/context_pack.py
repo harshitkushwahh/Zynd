@@ -11,7 +11,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.persistence.models import KycJourneyState, User, UserKycStatus
+from app.infrastructure.persistence.models import (
+    KycJourneyState,
+    OAuthAccount,
+    OAuthProvider,
+    User,
+    UserKycStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +71,7 @@ async def build_context_pack(
     if "goals" in selected:
         pack["goals"] = await _safe("goals", lambda: _goals_slice(db, user.id))
     if "account" in selected:
-        pack["account"] = await _safe("account", lambda: _account_slice(user))
+        pack["account"] = await _safe("account", lambda: _account_slice(db, user.id))
     if "referrals" in selected:
         pack["referrals"] = await _safe("referrals", lambda: _referral_slice(db, user.id))
     return pack
@@ -87,8 +93,13 @@ async def _kyc_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
             "signature": _enum_value(status.signature_step_status),
             "review": _enum_value(status.review_step_status),
         }
+    completed_at = None
+    if status is not None and _enum_value(status.overall_status) == "completed":
+        completed_at = _iso(status.updated_at)
     return {
         "overall_status": overall,
+        "status_last_updated_at": _iso(status.updated_at) if status else None,
+        "completed_at": completed_at,
         "steps": steps,
         "last_completed_step": journey.last_completed_step if journey else None,
         "readiness_code": journey.readiness_code if journey else None,
@@ -104,9 +115,44 @@ async def _payment_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     from app.application.mf.mf_order_service import list_user_orders
     from app.application.mf.mf_sip_plan_service import list_user_sip_plans
 
-    orders = await list_user_orders(db, user_id=user_id, limit=8)
+    orders = await list_user_orders(db, user_id=user_id, limit=12)
     plans = await list_user_sip_plans(db, user_id=user_id, limit=8)
+
+    last_sip_debit = None
+    last_sip_failure = None
+    for order in orders:
+        if _enum_value(order.order_type) != "SIP":
+            continue
+        status = _enum_value(order.status)
+        row = {
+            "amount": _money(order.amount_inr),
+            "status": status,
+            "created_at": _iso(order.created_at),
+            "settled_at": _iso(order.settled_at),
+            "failure_code": order.failure_code,
+            "failure_reason": (order.failure_reason or "")[:240] or None,
+        }
+        if status == "SUCCEEDED" and order.settled_at is not None and last_sip_debit is None:
+            last_sip_debit = row
+        if status == "FAILED" and last_sip_failure is None:
+            last_sip_failure = row
+
+    failed_plans = [
+        {
+            "amount": _money(plan.amount_inr),
+            "frequency": plan.frequency,
+            "status": _enum_value(plan.status),
+            "failure_reason": (plan.failure_reason or "")[:240] or None,
+            "next_installment_date": _iso(plan.next_installment_date),
+        }
+        for plan in plans
+        if _enum_value(plan.status) == "FAILED"
+    ]
+
     return {
+        "last_sip_debit": last_sip_debit,
+        "last_sip_failure": last_sip_failure,
+        "failed_sip_plans": failed_plans[:3],
         "recent_orders": [
             {
                 "amount": _money(order.amount_inr),
@@ -117,7 +163,7 @@ async def _payment_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
                 "created_at": _iso(order.created_at),
                 "settled_at": _iso(order.settled_at),
             }
-            for order in orders
+            for order in orders[:8]
         ],
         "sip_plans": [
             {
@@ -185,12 +231,25 @@ async def _goals_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     }
 
 
-async def _account_slice(user: User) -> dict[str, Any]:
+async def _account_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    user = await db.get(User, user_id)
+    if user is None:
+        return {"available": False}
+
+    oauth_rows = await db.scalars(select(OAuthAccount).where(OAuthAccount.user_id == user_id))
+    providers = {row.provider for row in oauth_rows}
+
     return {
         "account_status": _enum_value(user.status),
         "email_verified": user.email_verified_at is not None,
+        "email_verified_at": _iso(user.email_verified_at),
         "phone_verified": user.phone_verified_at is not None,
+        "phone_verified_at": _iso(user.phone_verified_at),
         "mfa_enrolled": user.mfa_enrolled_at is not None,
+        "has_password_login": bool(user.password_hash),
+        "google_account_linked": OAuthProvider.google in providers,
+        "apple_account_linked": OAuthProvider.apple in providers,
+        "linked_sign_in_providers": sorted(_enum_value(provider) or "" for provider in providers),
         "country_code": user.country_code,
     }
 

@@ -33,7 +33,7 @@ type SupportHelpCenterProps = {
 
 export function SupportHelpCenter({ headerActions, className }: SupportHelpCenterProps) {
   const { user } = useAuth();
-  const { helpTab, setHelpTab, openChat, close, chat } = useSupportWidget();
+  const { helpTab, setHelpTab, openChat, openMessageSupport, close, chat } = useSupportWidget();
 
   return (
     <div className={cn("flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-gradient-brand", className)}>
@@ -84,7 +84,7 @@ export function SupportHelpCenter({ headerActions, className }: SupportHelpCente
               className={helpTab === "home" ? undefined : "hidden"}
             >
               <HomeTabContent
-                onOpenChat={openChat}
+                onOpenChat={openMessageSupport}
                 onOpenTicket={(ticketId) => {
                   void chat.openTicket(ticketId).then(() => openChat()).catch(() => undefined);
                 }}

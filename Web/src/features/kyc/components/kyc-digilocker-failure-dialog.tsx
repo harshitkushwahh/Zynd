@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 type KycDigilockerFailureDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  flow?: "aadhaarAddress" | "kraProof";
   description?: string | null;
   onRetry: () => void;
   retrying?: boolean;
@@ -21,11 +22,16 @@ type KycDigilockerFailureDialogProps = {
 export function KycDigilockerFailureDialog({
   open,
   onOpenChange,
+  flow = "aadhaarAddress",
   description,
   onRetry,
   retrying = false,
 }: KycDigilockerFailureDialogProps) {
-  const body = description?.trim() || copy.kyc.digilocker.failedDescription;
+  const body =
+    description?.trim() ||
+    (flow === "kraProof"
+      ? copy.kyc.kraProof.failedDescription
+      : copy.kyc.digilocker.failedDescription);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,9 +54,11 @@ export function KycDigilockerFailureDialog({
                 {copy.kyc.digilocker.failedTitle}
               </p>
               <p className="text-caption leading-relaxed text-muted-foreground">{body}</p>
-              <p className="rounded-[1rem] border border-destructive/20 bg-destructive/[0.06] px-3.5 py-3 text-left text-[11px] font-medium leading-snug text-foreground">
-                {copy.kyc.digilocker.aadhaarCheckboxHint}
-              </p>
+              {flow === "aadhaarAddress" ? (
+                <p className="rounded-[1rem] border border-destructive/20 bg-destructive/[0.06] px-3.5 py-3 text-left text-[11px] font-medium leading-snug text-foreground">
+                  {copy.kyc.digilocker.aadhaarCheckboxHint}
+                </p>
+              ) : null}
             </div>
 
             <Button type="button" className="w-full" disabled={retrying} onClick={onRetry}>

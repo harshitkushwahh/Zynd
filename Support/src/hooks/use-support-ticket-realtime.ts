@@ -6,6 +6,7 @@ import {
   connectSupportRealtime,
   emitAgentPresence,
   emitAgentTyping,
+  emitMessagesRead,
   subscribeSupportTicket,
   type SupportRealtimeEvent,
 } from "@/lib/support-realtime";
@@ -64,5 +65,9 @@ export function useSupportTicketRealtime({
     emitAgentTyping(sendRef.current, ticketId, typing);
   };
 
-  return { wsConnected, notifyTyping };
+  const markMessagesRead = (messageIds: string[]) => {
+    emitMessagesRead(sendRef.current, { ticketId, messageIds });
+  };
+
+  return { wsConnected, notifyTyping, markMessagesRead };
 }

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { SectionTitle } from "@/components/ui/page-title";
 import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestCategory, InvestFundSummary } from "@/features/invest/api/invest-api";
+import { MfCategoryBrowseEmptyState } from "@/features/invest/components/mf-category-browse-empty-state";
 import { MfFundCard } from "@/features/invest/components/mf-fund-card";
 import { fetchTopFundsForCategory } from "@/features/invest/lib/mf-fund-ranking";
 import { copy } from "@/shared/config/copy";
@@ -73,9 +74,7 @@ export function MfCategoryTopFundsSection({ category, onSelectFund }: MfCategory
       ) : null}
 
       {!loading && !error && funds.length === 0 ? (
-        <div className="flex min-h-[120px] items-center justify-center rounded-[var(--radius-medium)] border border-dashed border-border px-6 text-center">
-          <p className="text-compact text-muted-foreground">{copy.mutualFunds.categoryEmpty}</p>
-        </div>
+        <MfCategoryBrowseEmptyState categorySlug={category.slug} bordered />
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">

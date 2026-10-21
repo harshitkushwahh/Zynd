@@ -1,5 +1,5 @@
 from app.application.kyc.country_master import static_kyc_countries
-from app.infrastructure.kyc.fp_clients import list_countries
+from app.infrastructure.core.kyc.fp_clients import list_countries
 
 
 def test_static_kyc_countries_includes_india_and_broad_coverage() -> None:

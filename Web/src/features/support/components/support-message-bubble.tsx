@@ -10,6 +10,7 @@ import { useSupportWidget } from "@/features/support/contexts/support-widget-con
 import { fetchSupportAttachment } from "@/features/support/lib/support-api";
 import { isResolutionPromptMessage } from "@/features/support/lib/support-resolution";
 import { formatSupportMessageTime } from "@/features/support/lib/support-format";
+import { SupportReadReceipt } from "@/features/support/components/support-read-receipt";
 import type { SupportMessage } from "@/features/support/lib/support-types";
 import { cn } from "@/lib/utils";
 import { copy } from "@/shared/config/copy";
@@ -235,8 +236,22 @@ export function SupportMessageBubble({ message }: SupportMessageBubbleProps) {
             <p className={cn(hasImage && "px-2 pb-1.5 pt-0.5")}>{message.body}</p>
           ) : null}
         </div>
-        <span className="px-1 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
           {formatSupportMessageTime(message.createdAt)}
+          {isUser ? (
+            <SupportReadReceipt
+              outboundToSupport
+              supportReadAt={message.supportReadAt}
+              supportReadBy={message.supportReadBy}
+              tone="outbound"
+            />
+          ) : (
+            <SupportReadReceipt
+              inboundReadByCustomer
+              customerReadAt={message.customerReadAt}
+              tone="inbound"
+            />
+          )}
         </span>
       </div>
 

@@ -15,12 +15,14 @@ OUT_OF_SCOPE_REPLY = (
 
 _TOPIC_PATTERNS: dict[str, re.Pattern[str]] = {
     "kyc": re.compile(
-        r"\b(kyc|pan|aadhaar|aadhar|digilocker|e-?sign|nominee|ckyc|verification)\b",
+        r"\b(kyc|pan|aadhaar|aadhar|digilocker|e-?sign|nominee|ckyc|verif(?:y|ication|ied)|"
+        r"completed|approved|submitted|under review)\b",
         re.I,
     ),
     "payment": re.compile(
-        r"\b(payment|payments|debit|debited|order|orders|sip|mandate|transaction|"
-        r"transactions|refund|upi|netbanking|failed|failure|amount|rupees|inr|₹)\b",
+        r"\b(payment|payments|debit|debited|deduct(?:ed|ion)?|charged|charge|installment|"
+        r"order|orders|sip|sips|mandate|transaction|transactions|refund|upi|netbanking|"
+        r"failed|failure|declin(?:ed|e)|amount|rupees|inr|₹|autopay|auto-?pay)\b",
         re.I,
     ),
     "portfolio": re.compile(
@@ -30,7 +32,9 @@ _TOPIC_PATTERNS: dict[str, re.Pattern[str]] = {
     "family": re.compile(r"\b(family|families|household)\b", re.I),
     "goals": re.compile(r"\b(goal|goals|calculator|target amount|sip calculator)\b", re.I),
     "account": re.compile(
-        r"\b(setting|settings|password|mfa|otp|login|log in|sign in|account|profile|email|phone)\b",
+        r"\b(setting|settings|password|mfa|otp|login|log in|sign in|sign-?in|account|profile|"
+        r"email|phone|google|apple|oauth|social|linked|link(?:ed)?|connect(?:ed)?|"
+        r"disconnect(?:ed)?)\b",
         re.I,
     ),
     "referrals": re.compile(r"\b(referral|referrals|refer|invite code|referral code)\b", re.I),
@@ -60,6 +64,19 @@ _GREETING = re.compile(
     r"how are you|howdy)[\s?.!]*$",
     re.I,
 )
+
+# Natural-language account questions (typed free-form, not quick-reply chips).
+_PERSONAL_ACCOUNT_QUESTION = re.compile(
+    r"(?:"
+    r"\b(?:when|what|where|why|how|is|are|was|were|did|does|do|can|could|will|would|should|tell me|check|show)\b"
+    r".*\b(?:my|me|i|i'm|i've|i'd)\b"
+    r"|"
+    r"\b(?:my|me|i)\b.*\b(?:when|what|where|why|how|status|last|latest|recent|today|yesterday|date|time)\b"
+    r")",
+    re.I,
+)
+
+_DEFAULT_NL_TOPICS: tuple[str, ...] = ("kyc", "payment", "account")
 
 
 @dataclass(frozen=True)
@@ -100,5 +117,16 @@ def classify_message(text: str, *, previous_topics: tuple[str, ...] = ()) -> Sco
     word_count = len(normalized.split())
     if previous_topics and (word_count <= 12 or _FOLLOW_UP.match(normalized)):
         return ScopeDecision(in_scope=True, topics=previous_topics, needs_human=False)
+
+    if (
+        word_count <= 32
+        and _PERSONAL_ACCOUNT_QUESTION.search(normalized)
+        and not _OFF_TOPIC.search(normalized)
+    ):
+        return ScopeDecision(
+            in_scope=True,
+            topics=_DEFAULT_NL_TOPICS,
+            needs_human=needs_human,
+        )
 
     return ScopeDecision(in_scope=False, topics=(), needs_human=False)

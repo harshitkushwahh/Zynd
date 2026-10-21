@@ -241,6 +241,9 @@ async def _ensure_admin_user_has_role(
     )
     if existing.scalar_one_or_none() is None:
         db.add(AdminUserRoleAssignment(user_id=user_id, role_id=role_id))
+        from app.application.auth.auth_cache_invalidation import invalidate_rbac_permissions_cache
+
+        await invalidate_rbac_permissions_cache(user_id)
 
 
 async def _migrate_role_assignments(
@@ -375,6 +378,17 @@ async def ensure_rbac_seed(db: AsyncSession) -> None:
 
 
 async def get_user_permission_keys(db: AsyncSession, user_id: UUID) -> set[str]:
+    from app.application.auth.auth_cache_invalidation import RBAC_PERMISSIONS_PREFIX
+    from app.application.shared.redis_json_cache import get_json, set_json
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    key = f"{RBAC_PERMISSIONS_PREFIX}{user_id}"
+    if settings.rbac_permissions_cache_enabled:
+        cached = await get_json(key, settings=settings)
+        if isinstance(cached, list):
+            return set(str(item) for item in cached)
+
     result = await db.execute(
         select(AdminPermission.key)
         .join(AdminRolePermission, AdminRolePermission.permission_id == AdminPermission.id)
@@ -382,7 +396,16 @@ async def get_user_permission_keys(db: AsyncSession, user_id: UUID) -> set[str]:
         .join(AdminUserRoleAssignment, AdminUserRoleAssignment.role_id == AdminRole.id)
         .where(AdminUserRoleAssignment.user_id == user_id)
     )
-    return set(result.scalars())
+    keys = set(result.scalars())
+    if settings.rbac_permissions_cache_enabled:
+        await set_json(
+            key,
+            sorted(keys),
+            ttl_seconds=settings.rbac_permissions_cache_ttl_seconds,
+            jitter_seconds=settings.rbac_permissions_cache_jitter_seconds,
+            settings=settings,
+        )
+    return keys
 
 
 async def _role_permission_keys(db: AsyncSession, role_id: UUID) -> list[str]:

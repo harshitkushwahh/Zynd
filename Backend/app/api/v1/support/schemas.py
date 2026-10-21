@@ -19,6 +19,9 @@ class SupportMessageOut(BaseModel):
     attachment_document_id: str | None = None
     attachment_filename: str | None = None
     resolution_active: bool = False
+    customer_read_at: datetime | None = None
+    support_read_at: datetime | None = None
+    support_read_by: Literal["bot", "agent"] | None = None
 
 
 class ConversationOut(BaseModel):
@@ -208,5 +211,9 @@ class ResolutionChoiceRequest(BaseModel):
 
 
 class HelpBotStatusOut(BaseModel):
+    provider: Literal["groq", "ollama"]
+    llm: Literal["connected", "unavailable"]
     ollama: Literal["connected", "unavailable"]
     model: str
+    training_rows: int = 0
+    retrieval_ready: bool = False

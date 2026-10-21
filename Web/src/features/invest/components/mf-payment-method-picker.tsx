@@ -26,10 +26,12 @@ export function MfPaymentMethodPicker({
   value,
   onChange,
   disabled,
+  compact = false,
 }: {
   value: MfPaymentMethod;
   onChange: (value: MfPaymentMethod) => void;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   return (
     <MfPaymentOptionToggle
@@ -37,6 +39,7 @@ export function MfPaymentMethodPicker({
       onChange={onChange}
       options={PAYMENT_METHOD_OPTIONS}
       disabled={disabled}
+      compact={compact}
     />
   );
 }

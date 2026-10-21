@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from app.application.mf.mf_mandate_service import record_mandate_sync, should_skip_mandate_sync
-from app.infrastructure.mf.fp_mandate_client import extract_mandate_status
+from app.infrastructure.core.mf.mandate_client import extract_mandate_status
 
 
 def test_extract_mandate_status_reads_nested_payload() -> None:

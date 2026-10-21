@@ -6,15 +6,23 @@ import { useRouter } from "next/navigation";
 import { AuthDialog } from "@/components/auth/auth-dialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
+import { isLandingAuthRestorePending } from "@/features/marketing/lib/landing-auth-restore-pending";
 import { useResolvedDisplayName } from "@/shared/hooks/use-resolved-display-name";
 import { APP_NAME } from "@/shared/config/brand";
 
 export function AuthHeaderActions() {
   const router = useRouter();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, sessionRestoring, sessionRetrying, signOut } = useAuth();
   const resolvedDisplayName = useResolvedDisplayName();
 
-  if (loading) {
+  const restorePending = isLandingAuthRestorePending({
+    user,
+    loading,
+    sessionRestoring,
+    sessionRetrying,
+  });
+
+  if (restorePending) {
     return <div className="h-9 w-28 animate-pulse rounded-[var(--radius-control)] bg-muted" />;
   }
 
