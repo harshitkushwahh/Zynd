@@ -8,6 +8,7 @@ services:
 
   mongo:
     image: mongo:7
+    restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: zynd
       MONGO_INITDB_ROOT_PASSWORD: zynd
