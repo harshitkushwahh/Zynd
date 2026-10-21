@@ -214,6 +214,8 @@ class Settings(BaseSettings):
     refresh_cookie_name_support: str = "zynd_support_refresh_token"
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: str = "lax"
+    # Optional (e.g. .zynd.shop). Leave empty for host-only cookies on the API domain.
+    refresh_cookie_domain: str = ""
 
     smtp_host: str = ""
     smtp_port: int = 587

@@ -42,6 +42,42 @@ def test_parse_amc_from_scheme_name_kotak_index_nfo() -> None:
     )
 
 
+def test_parse_amc_from_scheme_name_quant_index_nfo() -> None:
+    assert (
+        parse_amc_from_scheme_name("QUANT NIFTY MIDCAP 150 INDEX FUND - REGULAR PLAN - GROWTH")
+        == "Quant Mutual Fund"
+    )
+    assert (
+        parse_amc_from_scheme_name("QUANTUM VALUE FUND - REGULAR PLAN GROWTH OPTION")
+        == "Quantum Mutual Fund"
+    )
+
+
+def test_resolve_invest_amc_display_from_unknown_amc_quant_scheme(tmp_path: Path) -> None:
+    settings = Settings(
+        document_storage_provider="local",
+        documents_root=str(tmp_path),
+        public_assets_bucket="zynd-public-assets",
+        api_public_url="http://localhost:8000",
+    )
+    storage_key = amc_logo_storage_key("quant-mutual-fund")
+    logo_path = tmp_path / settings.public_assets_bucket / storage_key
+    logo_path.parent.mkdir(parents=True, exist_ok=True)
+    logo_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    name, slug, logo = resolve_invest_amc_display(
+        amc_name="Unknown AMC",
+        amc_slug="unknown-amc",
+        amc_logo_url=None,
+        scheme_name="QUANT NIFTY 50 INDEX FUND - REGULAR PLAN - GROWTH",
+        settings=settings,
+    )
+
+    assert name == "Quant Mutual Fund"
+    assert slug == "quant-mutual-fund"
+    assert logo == build_public_asset_url(storage_key, settings)
+
+
 def test_resolve_invest_amc_display_from_unknown_amc_kotak_scheme(tmp_path: Path) -> None:
     settings = Settings(
         document_storage_provider="local",

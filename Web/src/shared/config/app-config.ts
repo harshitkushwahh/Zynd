@@ -4,7 +4,7 @@ import { DEFAULT_COUNTRY } from "@/lib/input-rules";
 export const appConfig = {
   sessionRetryIntervalMs: 15_000,
   sessionRetryMaxIntervalMs: 60_000,
-  bootstrapRetryAttempts: 1,
+  bootstrapRetryAttempts: 4,
   bootstrapRetryBaseDelayMs: 400,
   otpLength: 6,
   /** Matches Backend FUND_CONFIRMATION_OTP_TTL_SECONDS (1:30) for transaction consent UI. */

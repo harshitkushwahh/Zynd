@@ -11,15 +11,8 @@ import { useProfileMenuActions } from "@/features/dashboard/navigation/use-profi
 
 export function ProfileMenuShortcutListener() {
   const kyc = useKycOptional();
-  const {
-    checkingKraStatus,
-    openProfile,
-    openKyc,
-    checkKycStatus,
-    signOutAndRedirect,
-  } = useProfileMenuActions();
+  const { openProfile, openKyc, signOutAndRedirect } = useProfileMenuActions();
 
-  const showCheckKycStatus = Boolean(kyc?.overallStatus === "submitted" && kyc.kycAllowed);
   const showKycMenu = Boolean(kyc?.showKycMenu && kyc.kycAllowed && kyc.status !== "complete");
 
   useEffect(() => {
@@ -39,16 +32,6 @@ export function ProfileMenuShortcutListener() {
         return;
       }
 
-      if (
-        showCheckKycStatus &&
-        !checkingKraStatus &&
-        matchesProfileMenuShortcut(event, PROFILE_MENU_SHORTCUTS.checkKycStatus)
-      ) {
-        event.preventDefault();
-        void checkKycStatus();
-        return;
-      }
-
       if (matchesProfileMenuShortcut(event, PROFILE_MENU_SHORTCUTS.signOut)) {
         event.preventDefault();
         void signOutAndRedirect();
@@ -57,15 +40,7 @@ export function ProfileMenuShortcutListener() {
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [
-    checkKycStatus,
-    checkingKraStatus,
-    openKyc,
-    openProfile,
-    showCheckKycStatus,
-    showKycMenu,
-    signOutAndRedirect,
-  ]);
+  }, [openKyc, openProfile, showKycMenu, signOutAndRedirect]);
 
   return null;
 }

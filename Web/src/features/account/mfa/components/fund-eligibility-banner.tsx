@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { useAuth } from "@/contexts/auth-context";
 import { useFundEligibilityStatus } from "@/features/account/mfa/hooks/use-fund-eligibility-status";
 import { Button } from "@/components/ui/button";
 import { copy } from "@/shared/config/copy";
@@ -33,15 +34,22 @@ function resolveBannerCopy(reasons: string[]) {
 }
 
 export function FundEligibilityBanner({ className }: FundEligibilityBannerProps) {
-  const { data: status } = useFundEligibilityStatus();
+  const { user } = useAuth();
+  const { data: status, isPending } = useFundEligibilityStatus();
 
-  if (!status || status.eligible) {
+  if (isPending || !status || status.eligible) {
     return null;
   }
 
-  const contactReasons = status.reasons.filter((reason) =>
-    ["email_verification_required", "phone_verification_required"].includes(reason),
-  );
+  const contactReasons = status.reasons.filter((reason) => {
+    if (reason === "email_verification_required" && user?.email_verified_at) {
+      return false;
+    }
+    if (reason === "phone_verification_required" && user?.phone_verified_at) {
+      return false;
+    }
+    return ["email_verification_required", "phone_verification_required"].includes(reason);
+  });
   if (contactReasons.length === 0) {
     return null;
   }

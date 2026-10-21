@@ -60,14 +60,27 @@ async def mf_ready_for_auto_nfo(
     if running_jobs:
         return False, f"mf_job_running:{','.join(sorted(running_jobs))}"
 
+    boundary_names = set(mf_boundary_job_names())
+    jobs_by_name = {job.name: job for job in build_scheduled_jobs()}
     pending: list[str] = []
+
+    for job_name in boundary_names:
+        job = jobs_by_name.get(job_name)
+        if job is None or not job.enabled:
+            continue
+        if await is_scheduler_job_skipped_today(session, job_name):
+            continue
+        if await latest_successful_run(session, job_name, since=since) is None:
+            pending.append(job_name)
+
     for job in build_scheduled_jobs():
-        if not job.enabled or job.name in _HOUSEKEEPING_JOBS:
+        if not job.enabled or job.name in _HOUSEKEEPING_JOBS or job.name in boundary_names:
             continue
         scheduled_at = last_scheduled_time(job.cron, now=current)
         fires_today = scheduled_at.astimezone(nfo_scheduler_timezone()).date() == today
-        required_today = cron_fires_every_calendar_day(job.cron) or fires_today
-        if not required_today:
+        if cron_fires_every_calendar_day(job.cron):
+            continue
+        if not fires_today:
             continue
         if await is_scheduler_job_skipped_today(session, job.name):
             continue

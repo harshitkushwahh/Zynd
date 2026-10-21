@@ -7,7 +7,6 @@ export type ProfileMenuShortcutDef = {
 export const PROFILE_MENU_SHORTCUTS = {
   profile: { key: "p", mod: true, shift: true },
   kyc: { key: "k", mod: true, shift: true },
-  checkKycStatus: { key: "u", mod: true, shift: true },
   signOut: { key: "q", mod: true, shift: true },
 } as const satisfies Record<string, ProfileMenuShortcutDef>;
 

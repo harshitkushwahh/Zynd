@@ -82,21 +82,35 @@ def get_refresh_token_from_request(request: Request) -> tuple[str | None, AuthCl
     return None, None
 
 
+def _refresh_cookie_kwargs(*, max_age: int | None = None) -> dict[str, Any]:
+    settings = get_settings()
+    kwargs: dict[str, Any] = {
+        "httponly": True,
+        "secure": settings.refresh_cookie_secure,
+        "samesite": settings.refresh_cookie_samesite,
+        "path": "/api/v1/auth",
+    }
+    if settings.refresh_cookie_domain.strip():
+        kwargs["domain"] = settings.refresh_cookie_domain.strip()
+    if max_age is not None:
+        kwargs["max_age"] = max_age
+    return kwargs
+
+
 def set_refresh_cookie(response, refresh_token: str, *, client: AuthClientKind) -> None:
     settings = get_settings()
     response.set_cookie(
         key=refresh_cookie_name_for_client(client),
         value=refresh_token,
-        httponly=True,
-        secure=settings.refresh_cookie_secure,
-        samesite=settings.refresh_cookie_samesite,
-        max_age=settings.refresh_token_expire_days * 86400,
-        path="/api/v1/auth",
+        **_refresh_cookie_kwargs(max_age=settings.refresh_token_expire_days * 86400),
     )
 
 
 def clear_refresh_cookie(response, *, client: AuthClientKind) -> None:
-    response.delete_cookie(key=refresh_cookie_name_for_client(client), path="/api/v1/auth")
+    response.delete_cookie(
+        key=refresh_cookie_name_for_client(client),
+        **_refresh_cookie_kwargs(max_age=0),
+    )
 
 
 def get_client_ip(request: Request) -> Optional[str]:

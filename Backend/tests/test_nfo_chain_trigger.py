@@ -117,3 +117,63 @@ async def test_ready_requires_due_monthly_job_success(monkeypatch):
     )
     assert ready is False
     assert "amfi-ter-monthly" in reason
+
+
+@pytest.mark.asyncio
+async def test_ready_uses_mf_boundary_jobs_not_entire_catalog(monkeypatch):
+    now = datetime(2026, 10, 21, 18, 0, tzinfo=timezone.utc)
+
+    async def fake_running_pipeline(_session, nfo_only=False):
+        _ = nfo_only
+        return None
+
+    async def fake_running_jobs(_session):
+        return []
+
+    async def fake_skipped(_session, job_name):
+        _ = job_name
+        return False
+
+    async def fake_success(_session, job_name, since=None):
+        _ = since
+        if job_name in {"catalog-lifecycle-sync", "amfi-nav-daily", "nav-metrics-compute"}:
+            return object()
+        return None
+
+    monkeypatch.setattr(
+        "app.application.mf.nfo_chain_trigger_service.get_running_pipeline_run",
+        fake_running_pipeline,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.nfo_chain_trigger_service.running_mf_family_jobs",
+        fake_running_jobs,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.nfo_chain_trigger_service.is_scheduler_job_skipped_today",
+        fake_skipped,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.nfo_chain_trigger_service.latest_successful_run",
+        fake_success,
+    )
+    monkeypatch.setattr(
+        "app.application.mf.nfo_chain_trigger_service.mf_boundary_job_names",
+        lambda: ["catalog-lifecycle-sync", "amfi-nav-daily", "nav-metrics-compute"],
+    )
+    monkeypatch.setattr(
+        "app.application.mf.nfo_chain_trigger_service.build_scheduled_jobs",
+        lambda: [
+            SimpleNamespace(name="nav-cold-start-backfill", cron="30 18 * * *", enabled=True),
+            SimpleNamespace(name="catalog-lifecycle-sync", cron="15 20 * * *", enabled=True),
+            SimpleNamespace(name="amfi-nav-daily", cron="0 21 * * *", enabled=True),
+            SimpleNamespace(name="nav-metrics-compute", cron="0 22 * * *", enabled=True),
+        ],
+    )
+
+    ready, reason = await mf_ready_for_auto_nfo(
+        SimpleNamespace(),
+        as_of=date(2026, 10, 21),
+        now=now,
+    )
+    assert ready is True
+    assert reason == "mf_scheduler_complete"
