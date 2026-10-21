@@ -560,7 +560,9 @@ export function MfPipelineAutoPanel({
         const active = isNfo ? await fetchActiveNfoPipelineRun() : await fetchActiveMfPipelineRun();
         if (!cancelled) setRun(active);
       } catch (err) {
-        if (!cancelled && !(err instanceof ApiError && err.status === 404)) {
+        if (err instanceof ApiError && err.status === 404) {
+          if (!cancelled) setRun(null);
+        } else if (!cancelled) {
           setError(getErrorMessage(err, "Could not load pipeline status."));
         }
       } finally {

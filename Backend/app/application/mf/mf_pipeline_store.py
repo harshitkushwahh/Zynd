@@ -216,10 +216,9 @@ async def get_latest_visible_pipeline_run(
     *,
     nfo_only: bool | None = None,
 ) -> MfPipelineRunState | None:
+    # Cancelled runs are terminal; keep the Auto bootstrap panel idle after cancel/clear-stuck.
     query = select(MfPipelineRun).where(
-        MfPipelineRun.status.in_(
-            [DbMfPipelineRunStatus.paused, DbMfPipelineRunStatus.failed, DbMfPipelineRunStatus.cancelled]
-        )
+        MfPipelineRun.status.in_([DbMfPipelineRunStatus.paused, DbMfPipelineRunStatus.failed])
     )
     family = _mode_family_filter(nfo_only=nfo_only)
     if family is not None:
