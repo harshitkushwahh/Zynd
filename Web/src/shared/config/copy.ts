@@ -47,6 +47,9 @@ export const copy = {
     referralDialogApplying: "Checking…",
     referralAppliedAriaRemove: "Remove referral code",
     mfaLetsGo: "Let's go",
+    useBackupCodeShort: "Backup code",
+    backupCodePlaceholder: "Backup code",
+    backToSignIn: "Back to sign in",
   },
   backendConnection: {
     title: "We'll be right back",

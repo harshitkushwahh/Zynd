@@ -25,7 +25,7 @@ import {
   type AuthUser,
   type LoginFlowResponse,
 } from "@/lib/auth-api";
-import { clearSessionHint, hasSessionHint } from "@/features/auth/api/auth-response";
+import { hasSessionHint } from "@/features/auth/api/auth-response";
 import { revokeWebPushDevice } from "@/features/notifications/lib/push-device-registration";
 import { isAuthFailure, setAccessToken } from "@/lib/api-client";
 import {

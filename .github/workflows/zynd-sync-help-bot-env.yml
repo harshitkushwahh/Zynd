@@ -58,40 +58,9 @@ jobs:
                 bash Backend/scripts/sync-help-bot-groq-env-on-vps.sh
               fi
             elif [ -n "${FRAG}" ]; then
-              ENV_FILE="/opt/zynd/Backend/.env"
-              python3 - "${ENV_FILE}" "${FRAG}" << 'PY'
-import sys
-from pathlib import Path
-
-env_path = Path(sys.argv[1])
-frag = Path(sys.argv[2])
-updates: dict[str, str] = {}
-for line in frag.read_text(encoding="utf-8").splitlines():
-    line = line.strip()
-    if not line or "=" not in line:
-        continue
-    k, _, v = line.partition("=")
-    updates[k.strip()] = v.strip()
-lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
-out: list[str] = []
-seen: set[str] = set()
-for line in lines:
-    if "=" in line:
-        k = line.split("=", 1)[0]
-        if k in updates:
-            if k not in seen:
-                out.append(f"{k}={updates[k]}")
-                seen.add(k)
-            continue
-    out.append(line)
-for k, v in updates.items():
-    if k not in seen:
-        out.append(f"{k}={v}")
-env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
-PY
               rm -f "${FRAG}"
-              chown root:root "${ENV_FILE}"
-              chmod 600 "${ENV_FILE}"
+              echo "Backend/scripts/sync-help-bot-groq-env-on-vps.sh missing on VPS; ensure main is deployed under /opt/zynd."
+              exit 1
             else
               echo "No GROQ_API_KEY secret and no sync script; nothing to apply."
               exit 1

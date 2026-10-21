@@ -370,7 +370,6 @@ def _reason_means_existing_kyc_or_form(reason: str) -> bool:
     return any(
         token in text
         for token in (
-            "ineligible_for_fresh_kyc",
             "already exists",
             "already existed",
             "ongoing kyc form",
@@ -400,10 +399,38 @@ def _merge_kyc_form_id_candidates(*groups: list[str]) -> list[str]:
     for group in groups:
         for form_id in group:
             clean = str(form_id or "").strip()
-            if clean.startswith("kycf_") and clean not in seen:
-                seen.add(clean)
-                merged.append(clean)
+            if not clean.startswith("kycf_") or clean in seen:
+                continue
+            if _is_ephemeral_kyc_form_stub(clean):
+                continue
+            seen.add(clean)
+            merged.append(clean)
     return merged
+
+
+def _is_ephemeral_kyc_form_stub(form_id: str) -> bool:
+    """Local/dev placeholder ids that were never created at Cybrilla."""
+    return str(form_id or "").strip().startswith("kycf_stub_")
+
+
+def _has_recent_ongoing_kyc_form_conflict(journey: Any, pan: str) -> bool:
+    """True when partner history shows Cybrilla rejected create due to an open KRA application."""
+    clean_pan = pan.strip().upper()
+    if not clean_pan:
+        return False
+    for row in reversed(list(journey.kyc_partner_external_refs_json or [])):
+        if row.get("kind") != "kyc_form":
+            continue
+        row_pan = str(row.get("pan") or "").upper()
+        if row_pan and row_pan != clean_pan:
+            continue
+        if row.get("archive_reason") in {
+            "ongoing_conflict_stub",
+            "ongoing_conflict_discovery",
+            "failed_after_create",
+        }:
+            return True
+    return False
 
 
 def _kyc_form_ids_in_blob(raw: object) -> list[str]:
@@ -422,7 +449,7 @@ def _all_known_kyc_form_ids(journey: Any, *, extra_ids: list[str] | None = None)
         seen.add(bound)
         from_refs.append(bound)
     for row in reversed(list(journey.kyc_partner_external_refs_json or [])):
-        if row.get("kind") != "kyc_form":
+        if row.get("kind") != "kyc_form" or row.get("archived"):
             continue
         form_id = str(row.get("external_id") or "")
         if form_id.startswith("kycf_") and form_id not in seen:
@@ -509,12 +536,18 @@ async def _discover_live_kyc_form_for_pan(
     return None
 
 
-def _ongoing_kyc_form_user_message() -> str:
-    return (
+def _ongoing_kyc_form_user_message(*, journey: Any | None = None) -> str:
+    message = (
         "A KYC application for this PAN is already open at the KRA. "
         "Continue that application from review (we will reuse your saved form link). "
         "If you did not finish earlier, wait for it to expire (about 7 days) or contact support."
     )
+    if journey is not None and str(getattr(journey, "readiness_code", "") or "").lower() == "kyc_onhold":
+        message += (
+            " Your PAN readiness check also reported KYC on hold at the KRA; "
+            "that hold may need to clear before a new form can be created."
+        )
+    return message
 
 
 async def _try_bind_usable_kyc_form(
@@ -524,11 +557,29 @@ async def _try_bind_usable_kyc_form(
 ) -> dict[str, Any] | None:
     if not form_id:
         return None
+    if _is_ephemeral_kyc_form_stub(form_id):
+        archive_kyc_form_partner_ref(journey, form_id, reason="local_stub")
+        await db.flush()
+        await db.commit()
+        return None
     try:
         form = await fetch_kyc_form(form_id)
-    except FpClientError:
+    except FpClientError as exc:
+        if _is_kyc_form_not_found_error(exc):
+            archive_kyc_form_partner_ref(journey, form_id, reason="partner_not_found")
+            await db.flush()
+            await db.commit()
         return None
     if _is_unusable_kyc_form(form):
+        failure_text = _kyc_form_failure_text(form)
+        if _reason_means_existing_kyc_or_form(failure_text):
+            archive_kyc_form_partner_ref(
+                journey,
+                form_id,
+                reason="ongoing_conflict_discovery",
+            )
+            await db.flush()
+            await db.commit()
         return None
     await _persist_kyc_form_reference(db, journey, form)
     _validate_form_for_submission(form)
@@ -667,7 +718,7 @@ async def _recover_or_retry_failed_new_form(
         if discovered:
             return discovered
         raise KycError(
-            _ongoing_kyc_form_user_message(),
+            _ongoing_kyc_form_user_message(journey=journey),
             "kyc_form_already_exists",
             400,
         )
@@ -715,7 +766,7 @@ async def _recover_or_retry_failed_new_form(
             if discovered:
                 return discovered
             raise KycError(
-                _ongoing_kyc_form_user_message(),
+                _ongoing_kyc_form_user_message(journey=journey),
                 "kyc_form_already_exists",
                 400,
             ) from exc
@@ -842,13 +893,23 @@ async def ensure_kyc_form(db: AsyncSession, *, user: User, journey: Any) -> dict
                 if discovered:
                     return discovered
                 raise KycError(
-                    _ongoing_kyc_form_user_message(),
+                    _ongoing_kyc_form_user_message(journey=journey),
                     "kyc_form_already_exists",
                     400,
                 )
         elif form is not None:
             _validate_form_for_submission(form)
             return form
+
+    if _has_recent_ongoing_kyc_form_conflict(journey, pan):
+        discovered = await _discover_live_kyc_form_for_pan(db, journey, pan)
+        if discovered:
+            return discovered
+        raise KycError(
+            _ongoing_kyc_form_user_message(journey=journey),
+            "kyc_form_already_exists",
+            400,
+        )
 
     print(f"[KYC] Creating new KYC form | pan={pan} | form_type={form_type}", flush=True)
     logger.info("[KYC] Creating new KYC form | pan=%s | form_type=%s", pan, form_type)
@@ -912,7 +973,7 @@ async def ensure_kyc_form(db: AsyncSession, *, user: User, journey: Any) -> dict
                 return recovered
 
             raise KycError(
-                _ongoing_kyc_form_user_message(),
+                _ongoing_kyc_form_user_message(journey=journey),
                 "kyc_form_already_exists",
                 400,
             ) from exc

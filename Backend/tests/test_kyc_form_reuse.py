@@ -168,8 +168,8 @@ async def test_ensure_kyc_form_persists_form_id_before_poll(db_session) -> None:
             await ensure_kyc_form(db_session, user=user, journey=journey)
 
     assert exc.value.code == "kyc_form_create_failed"
-    assert journey.external_kyc_form_id == "kycf_early_persist"
-    assert journey.kyc_form_failure_reason == "ineligible_for_kyc_modification"
+    refs = journey.kyc_partner_external_refs_json or []
+    assert any(row.get("external_id") == "kycf_early_persist" for row in refs)
 
 
 @pytest.mark.asyncio
@@ -617,7 +617,7 @@ async def test_ensure_kyc_form_rebinds_live_form_when_fresh_stub_hits_ongoing(
     ):
         form = await ensure_kyc_form(db_session, user=user, journey=journey)
 
-    create_mock.assert_awaited_once()
+    create_mock.assert_not_awaited()
     assert form["id"] == "kycf_live_ongoing"
     assert journey.external_kyc_form_id == "kycf_live_ongoing"
 

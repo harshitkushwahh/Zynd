@@ -10,6 +10,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
+ALLOWED_WORKFLOW_FILES = frozenset(
+    {
+        "zynd-pipeline.yml",
+        "zynd-sync-help-bot-env.yml",
+    }
+)
 FORBIDDEN = (
     "ubuntu-latest",
     "StrictHostKeyChecking=no",
@@ -35,8 +41,12 @@ def main() -> int:
     failed = False
     files = sorted(WORKFLOWS.glob("*.yml"))
     names = {path.name for path in files}
-    if names != {"zynd-pipeline.yml"}:
-        print("Expected only zynd-pipeline.yml, found: " + ", ".join(sorted(names)))
+    unexpected = sorted(names - ALLOWED_WORKFLOW_FILES)
+    if unexpected:
+        print("Unexpected workflow files: " + ", ".join(unexpected))
+        failed = True
+    if "zynd-pipeline.yml" not in names:
+        print("Missing required workflow: zynd-pipeline.yml")
         failed = True
     if "deploy-main.yml" in names:
         print("deploy-main.yml would start a second backend deployment.")
@@ -48,7 +58,12 @@ def main() -> int:
             if token in text:
                 print(f"{path.name} contains forbidden text: {token}")
                 failed = True
-        data = yaml.safe_load(text)
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            print(f"{path.name} is not valid YAML: {exc}")
+            failed = True
+            continue
         if not isinstance(data, dict):
             print(f"{path.name} did not parse as a mapping.")
             failed = True
@@ -62,6 +77,17 @@ def main() -> int:
         if runners != ["ubuntu-24.04"] * len(runners) or not runners:
             print(f"{path.name} runners={','.join(runners)}")
             failed = True
+
+        if path.name == "zynd-sync-help-bot-env.yml":
+            if set(jobs) != {"sync-help-bot-env"}:
+                print(f"{path.name} jobs={list(jobs)}")
+                failed = True
+            if "workflow_dispatch" not in (trigger or {}):
+                print(f"{path.name} must be workflow_dispatch only.")
+                failed = True
+            print(f"ok {path.name} jobs={len(jobs)}")
+            continue
+
         expected = ["detect-changes", "security-scan", "validate-changes", "deploy-backend"]
         if list(jobs) != expected:
             print(f"Job order is {list(jobs)}")

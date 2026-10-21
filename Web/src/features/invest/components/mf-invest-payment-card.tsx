@@ -833,13 +833,6 @@ export function MfInvestPaymentCard({
     setShowAmountValidation(true);
   }
 
-  function handleModeChange(nextMode: MfInvestPaymentMode) {
-    setActionError(null);
-    setShowAmountValidation(false);
-    setMode(nextMode);
-    setAmount(clampPaymentAmountInput(amount, nextMode));
-  }
-
   function handleAmountChange(nextAmount: number) {
     setActionError(null);
     setShowAmountValidation(false);
