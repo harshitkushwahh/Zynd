@@ -56,7 +56,7 @@ export const copy = {
     description:
       "ZYND is updating or restarting. This usually takes a few minutes. Your work is saved check again when the server is back.",
     progressLabel: "Waiting for backend connection",
-    checkStatus: "Fetch latest status",
+    checkStatus: "Fetch",
     checking: "Checking status…",
     stillUpdating: "Still updating. Try again in a moment.",
     backOnline: "We're back. Reloading…",

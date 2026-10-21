@@ -1,6 +1,7 @@
 "use client";
 
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -66,9 +67,7 @@ export function MaintenanceScreen({ className, onBackOnline }: MaintenanceScreen
     if (ok) {
       setMessage(copy.backendConnection.backOnline);
       onBackOnline?.();
-      return;
     }
-    setMessage(copy.backendConnection.stillUpdating);
   };
 
   return (
@@ -89,8 +88,9 @@ export function MaintenanceScreen({ className, onBackOnline }: MaintenanceScreen
         <p className="mt-3 text-body leading-relaxed text-muted-foreground">
           {copy.backendConnection.description}
         </p>
-        <Button className="mt-8" disabled={checking} onClick={() => void handleCheckStatus()}>
-          {checking ? copy.backendConnection.checking : copy.backendConnection.checkStatus}
+        <Button className="mt-8 gap-2" onClick={() => void handleCheckStatus()}>
+          {copy.backendConnection.checkStatus}
+          <RefreshCw className={cn("size-4", checking && "animate-spin")} aria-hidden />
         </Button>
         {message ? <p className="mt-3 text-caption text-muted-foreground">{message}</p> : null}
       </div>

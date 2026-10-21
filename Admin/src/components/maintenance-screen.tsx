@@ -1,6 +1,7 @@
 "use client";
 
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ const COPY = {
   title: "We'll be right back",
   description:
     "ZYND Admin is updating or the API is restarting. This usually takes a few minutes during deploy.",
-  checkStatus: "Fetch latest status",
+  checkStatus: "Fetch",
   checking: "Checking status…",
   stillUpdating: "Still updating. Try again in a moment.",
   backOnline: "We're back. Reloading…",
@@ -75,9 +76,7 @@ export function MaintenanceScreen({ className, onBackOnline }: MaintenanceScreen
     if (ok) {
       setMessage(COPY.backOnline);
       onBackOnline?.();
-      return;
     }
-    setMessage(COPY.stillUpdating);
   };
 
   return (
@@ -96,8 +95,9 @@ export function MaintenanceScreen({ className, onBackOnline }: MaintenanceScreen
           {COPY.title}
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{COPY.description}</p>
-        <Button className="mt-8" disabled={checking} onClick={() => void handleCheckStatus()}>
-          {checking ? COPY.checking : COPY.checkStatus}
+        <Button className="mt-8 gap-2" onClick={() => void handleCheckStatus()}>
+          {COPY.checkStatus}
+          <RefreshCw className={cn("size-4", checking && "animate-spin")} aria-hidden />
         </Button>
         {message ? <p className="mt-3 text-xs text-muted-foreground">{message}</p> : null}
       </div>
