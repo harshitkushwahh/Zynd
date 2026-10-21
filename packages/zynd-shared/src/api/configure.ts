@@ -1,3 +1,5 @@
+import { normalizePublicApiUrl } from "./normalize-api-url";
+
 let apiUrl = "/api/v1";
 let clientKind: "web" | "admin" | "distributor" | "support" = "web";
 
@@ -5,7 +7,7 @@ export function configureApiClient(config: {
   apiUrl: string;
   clientKind?: "web" | "admin" | "distributor" | "support";
 }) {
-  apiUrl = config.apiUrl;
+  apiUrl = normalizePublicApiUrl(config.apiUrl);
   if (config.clientKind) {
     clientKind = config.clientKind;
   }

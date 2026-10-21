@@ -1,8 +1,10 @@
+import { normalizePublicApiUrl } from "@zynd/shared/api";
+
 export const env = {
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? "ZYND",
   appTagline: process.env.NEXT_PUBLIC_APP_TAGLINE ?? "Your Wealth. Your Way.",
   appEnv: process.env.NEXT_PUBLIC_APP_ENV ?? "development",
-  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "/api/v1",
+  apiUrl: normalizePublicApiUrl(process.env.NEXT_PUBLIC_API_URL),
   googleClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "",
   appleClientId: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ?? "",
   appleRedirectUri: process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI ?? "",

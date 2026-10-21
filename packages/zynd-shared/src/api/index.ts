@@ -1,4 +1,5 @@
 export { configureApiClient, getApiUrl } from "./configure";
+export { normalizeBackendOrigin, normalizePublicApiUrl } from "./normalize-api-url";
 export { getSupportWebSocketUrl } from "./support-ws-url";
 export {
   connectSupportRealtime,
