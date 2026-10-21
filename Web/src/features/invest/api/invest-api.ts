@@ -83,6 +83,7 @@ export type InvestFundSummary = {
   min_sip_amount_inr: number | null;
   min_lumpsum_amount_inr: number | null;
   sip_allowed?: boolean;
+  lumpsum_allowed?: boolean;
   is_featured?: boolean;
   display_order?: number;
   health_badges?: string[];

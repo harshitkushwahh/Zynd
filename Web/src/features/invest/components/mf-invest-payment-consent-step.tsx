@@ -36,7 +36,7 @@ export function MfInvestPaymentConsentStep({
   const mfCopy = copy.mutualFunds.transactionConsent;
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    <div className={cn("flex min-h-[26rem] flex-1 flex-col", className)}>
       <div className="mb-4 flex shrink-0 items-center gap-2 border-b border-border/60 pb-3">
         <button
           type="button"

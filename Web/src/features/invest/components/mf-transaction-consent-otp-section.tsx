@@ -219,7 +219,7 @@ export function MfTransactionConsentOtpSection({
   return (
     <div
       className={cn(
-        embedded ? "flex flex-col px-0 pb-0 pt-0" : "px-4 pb-7 pt-2",
+        embedded ? "flex min-h-0 flex-1 flex-col px-0 pb-0 pt-0" : "px-4 pb-7 pt-2",
         className,
       )}
     >

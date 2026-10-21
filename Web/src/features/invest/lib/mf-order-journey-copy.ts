@@ -159,6 +159,11 @@ function consentOrderFailureDescription(
 ) {
   const code = order.failure_code?.trim().toLowerCase();
   const portfolioCopy = copy.dashboard.portfolio;
+  if (code === "scheme_not_available") {
+    const reason = order.failure_reason?.trim();
+    if (reason) return reason;
+    return copy.mutualFunds.lumpsumSchemeNotAvailableMessage;
+  }
   if (code === "amount_invalid" || code === "below_minimum") {
     return isSwitchOrder(order)
       ? portfolioCopy.holdingSwitchFailureAmountInvalid

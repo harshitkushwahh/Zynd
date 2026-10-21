@@ -125,10 +125,12 @@ export function OtpConsentVerifyPanel({
   const canResend = resendCooldown.canResend && !sending;
   const [otpExpired, setOtpExpired] = useState(false);
   const expiryCountdownStartedRef = useRef(false);
+  const prevExpirySecondsRef = useRef(0);
 
   function resetExpiryCountdown() {
     setOtpExpired(false);
     expiryCountdownStartedRef.current = false;
+    prevExpirySecondsRef.current = 0;
   }
 
   function startExpiryCountdown(seconds: number) {
@@ -162,11 +164,14 @@ export function OtpConsentVerifyPanel({
       return;
     }
     if (!expiryCountdownStartedRef.current) return;
-    if (expiryTimer.secondsLeft > 0) return;
-    setOtpExpired((wasExpired) => {
-      if (!wasExpired) onOtpChange("");
-      return true;
-    });
+
+    const previous = prevExpirySecondsRef.current;
+    prevExpirySecondsRef.current = expiryTimer.secondsLeft;
+
+    if (previous > 0 && expiryTimer.secondsLeft === 0) {
+      setOtpExpired(true);
+      onOtpChange("");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expiryTimer.secondsLeft, otpSent]);
 
@@ -192,6 +197,7 @@ export function OtpConsentVerifyPanel({
         : Math.max(expiryTimer.secondsLeft, 0)
       : appConfig.otpExpiresInSeconds;
   const showResendTimer = otpSent && !sending && !canResend && resendCooldown.secondsLeft > 0;
+  const showResendAction = !otpSent || sending || canResend;
   const confirmDisabled =
     submitting || otpExpired || otp.trim().length < appConfig.otpLength || !otpSent;
   const showExpiredMessage = otpExpired && !bannerError;
@@ -208,7 +214,7 @@ export function OtpConsentVerifyPanel({
     <form
       className={cn(
         "flex w-full flex-col",
-        embedded ? "gap-0" : "gap-5",
+        embedded ? "min-h-0 flex-1 gap-0" : "gap-5",
         className,
       )}
       onSubmit={(event) => {
@@ -217,7 +223,12 @@ export function OtpConsentVerifyPanel({
         onConfirm();
       }}
     >
-      <div className={cn("flex flex-col", embedded ? "items-center gap-4 pt-1" : "gap-5")}>
+      <div
+        className={cn(
+          "flex flex-col",
+          embedded ? "min-h-0 flex-1 items-center gap-4 pt-1" : "gap-5",
+        )}
+      >
         {embedded ? (
           <OtpDeliveryConnector state={deliveryVisualState} />
         ) : (
@@ -285,40 +296,48 @@ export function OtpConsentVerifyPanel({
                   {portfolioCopy.otpResendIn(formatOtpTimer(resendCooldown.secondsLeft))}
                 </span>
               ) : null}
-              <button
-                type="button"
-                className="text-caption font-medium text-primary underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline disabled:opacity-60"
-                disabled={!canResend}
-                onClick={() => void handleSendOtp()}
-              >
-                {sending
-                  ? copy.mfa.verifying
-                  : otpSent
-                    ? portfolioCopy.redeemConsentResendOtp
-                    : portfolioCopy.redeemConsentSendOtp}
-              </button>
+              {showResendAction ? (
+                <button
+                  type="button"
+                  className="text-caption font-medium text-primary underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline disabled:opacity-60"
+                  disabled={!canResend && otpSent}
+                  onClick={() => void handleSendOtp()}
+                >
+                  {sending
+                    ? copy.mfa.verifying
+                    : otpSent
+                      ? portfolioCopy.redeemConsentResendOtp
+                      : portfolioCopy.redeemConsentSendOtp}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
 
-        {showExpiredMessage || bannerError || (error && !bannerError && !otpExpired) ? (
-          <div className="flex flex-col gap-1.5">
-            {showExpiredMessage ? (
-              <FieldMessage variant="error" message={portfolioCopy.otpExpiredMessage} className="mt-0" />
-            ) : null}
-            {bannerError ? (
-              <FieldMessage variant="error" message={bannerError} className="mt-0" />
-            ) : null}
-            {error && !bannerError && !otpExpired ? (
-              <FieldMessage variant="error" message={error} className="mt-0" />
-            ) : null}
-          </div>
-        ) : null}
+        <div
+          className={cn(
+            "flex w-full flex-col gap-1.5",
+            embedded && "min-h-[2.75rem] max-w-[19rem]",
+          )}
+          aria-live="polite"
+        >
+          {showExpiredMessage ? (
+            <FieldMessage variant="error" message={portfolioCopy.otpExpiredMessage} className="mt-0" />
+          ) : null}
+          {bannerError ? (
+            <FieldMessage variant="error" message={bannerError} className="mt-0" />
+          ) : null}
+          {error && !bannerError && !otpExpired ? (
+            <FieldMessage variant="error" message={error} className="mt-0" />
+          ) : null}
+        </div>
       </div>
 
       <AuthSubmitFooter
         className={cn(
-          embedded ? "mt-4 w-full shrink-0 border-t border-border/60 pt-4" : "mt-0 pt-0",
+          embedded
+            ? "mt-auto w-full shrink-0 border-t border-border/60 pt-4"
+            : "mt-0 pt-0",
         )}
       >
         <Button

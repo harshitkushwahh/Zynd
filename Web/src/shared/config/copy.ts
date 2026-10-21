@@ -2095,6 +2095,10 @@ export const copy = {
     sipJourneyFailedMessage: "We couldn't set up this SIP. Please try again.",
     sipSchemeNotAvailableMessage:
       "This fund is not available for SIP on the payment network yet. Try a one-time investment or another fund.",
+    lumpsumSchemeNotAvailableMessage:
+      "This fund is not available for one-time investment on the payment network yet. Try SIP or another fund.",
+    paymentCardLumpsumUnavailable:
+      "One-time investment is not available for this fund on the payment network right now.",
     sipMandateApprovedPlanFailedMessage:
       "Your UPI autopay is set up, but this SIP could not be registered for this fund. The ₹1 verification is not your SIP installment.",
     sipMandateApprovedSchemeFailedMessage:

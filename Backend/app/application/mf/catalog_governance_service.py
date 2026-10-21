@@ -85,12 +85,14 @@ def is_product_investable(
         return False
     if amc.admin_kill_switch:
         return False
+    settings = get_settings()
     return (
         product.lifecycle_status == ProductLifecycleStatus.active
         and amc.is_active
         and fund.is_active
         and fund.fp_oms_purchase_allowed is True
         and fund.fp_oms_active is not False
+        and fund_allows_ondc_lumpsum(fund, payment_gateway=settings.zynd_mf_order_payment_gateway)
     )
 
 

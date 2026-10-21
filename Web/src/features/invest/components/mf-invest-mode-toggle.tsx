@@ -18,6 +18,7 @@ export type MfInvestModeToggleProps = {
   onTabSelect: (tab: MfInvestTab) => void;
   monthlySipAllowed: boolean;
   dailySipAllowed: boolean;
+  lumpsumAllowed?: boolean;
   disabled?: boolean;
   showFolioNominationInfo?: boolean;
 };
@@ -42,6 +43,7 @@ export function MfInvestModeToggle({
   onTabSelect,
   monthlySipAllowed,
   dailySipAllowed,
+  lumpsumAllowed = true,
   disabled = false,
   showFolioNominationInfo = false,
 }: MfInvestModeToggleProps) {
@@ -70,6 +72,7 @@ export function MfInvestModeToggle({
     if (disabled || selected === tab) return;
     if (tab === "monthly" && !monthlySipAllowed) return;
     if (tab === "daily" && !dailySipAllowed) return;
+    if (tab === "lumpsum" && !lumpsumAllowed) return;
     setPendingTab(tab);
     onTabSelect(tab);
   }
@@ -133,11 +136,14 @@ export function MfInvestModeToggle({
           type="button"
           role="tab"
           aria-selected={selected === "lumpsum"}
-          disabled={disabled}
+          disabled={disabled || !lumpsumAllowed}
+          title={
+            !lumpsumAllowed ? copy.mutualFunds.paymentCardLumpsumUnavailable : undefined
+          }
           onClick={() => selectTab("lumpsum")}
           className={cn(
             tabButtonClass,
-            disabled && "cursor-not-allowed opacity-60",
+            (disabled || !lumpsumAllowed) && "cursor-not-allowed opacity-50",
             selected === "lumpsum"
               ? "text-background"
               : "text-muted-foreground hover:text-foreground",
