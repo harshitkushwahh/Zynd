@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, RefreshCw, Settings, ShieldCheck, UserRound, Bell } from "lucide-react";
+import { LogOut, Settings, ShieldCheck, UserRound, Bell } from "lucide-react";
 
 import {
   DASHBOARD_HEADER_CLASS,
@@ -196,19 +196,16 @@ function ProfileAvatar({
   const { profileUrl } = useProfileImage();
   const kyc = useKycOptional();
   const {
-    checkingKraStatus,
     openProfile,
     openSettings,
     openNotifications,
     openKyc,
-    checkKycStatus,
     signOutAndRedirect,
   } = useProfileMenuActions();
   const initials = getUserInitials(resolvedDisplayName.split(/\s+/)[0], user?.email);
   const profileLabel = resolvedDisplayName || copy.settings.accountFallbackName;
   const kycRingTone = kyc?.showRing && kyc.ringTone ? kyc.ringTone : null;
   const showWatchBadge = Boolean(kycRingTone && kyc?.status !== "complete");
-  const showCheckKycStatus = Boolean(kyc?.overallStatus === "submitted" && kyc.kycAllowed);
   const kycComplete = kyc?.status === "complete";
   const kycMenuLabel = kycComplete ? copy.kyc.completeTitle : copy.kyc.menuLabel;
 
@@ -300,15 +297,6 @@ function ProfileAvatar({
               {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.profile)}
             </DropdownMenuShortcut>
           </DropdownMenuItem>
-          {showCheckKycStatus ? (
-            <DropdownMenuItem disabled={checkingKraStatus} onClick={() => void checkKycStatus()}>
-              <RefreshCw className={cn(checkingKraStatus && "animate-spin")} />
-              {checkingKraStatus ? copy.kyc.checkStatusChecking : copy.kyc.checkStatusAction}
-              <DropdownMenuShortcut>
-                {formatProfileMenuShortcut(PROFILE_MENU_SHORTCUTS.checkKycStatus)}
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
-          ) : null}
           {kyc?.showKycMenu ? (
             <DropdownMenuItem
               disabled={!kyc.kycAllowed}

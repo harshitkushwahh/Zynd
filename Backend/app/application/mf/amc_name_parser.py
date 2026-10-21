@@ -67,6 +67,11 @@ def parse_amc_from_scheme_name(scheme_name: str) -> str | None:
     name = scheme_name.strip()
     if not name:
         return None
+    # Quant index/NFO rows often omit AMC in Cybrilla; avoid matching Quantum schemes.
+    if re.match(r"^QUANT\b", name, re.IGNORECASE) and not re.match(
+        r"^QUANTUM\b", name, re.IGNORECASE
+    ):
+        return canonical_amc_display_name("Quant Mutual Fund")
     for prefix in _KNOWN_AMC_PREFIXES:
         if name.lower().startswith(prefix.lower()):
             parsed = prefix if prefix.endswith("Mutual Fund") else f"{prefix} Mutual Fund"

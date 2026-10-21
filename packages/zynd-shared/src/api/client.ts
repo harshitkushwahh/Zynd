@@ -115,9 +115,18 @@ export async function refreshSession(): Promise<SessionRefreshResult> {
             startRefreshCooldown("network");
             return { ok: false, reason: "network" };
           }
-          setAccessToken(null);
-          startRefreshCooldown("expired");
-          return { ok: false, reason: "expired" };
+          const apiError = await parseApiError(response);
+          const sessionEnded =
+            response.status === 401 &&
+            SESSION_REFRESH_ERROR_CODES.has(apiError.code);
+          if (sessionEnded) {
+            setAccessToken(null);
+            startRefreshCooldown("expired");
+            return { ok: false, reason: "expired" };
+          }
+          markBackendConnectionWaiting();
+          startRefreshCooldown("network");
+          return { ok: false, reason: "network" };
         }
 
         clearRefreshCooldown();
