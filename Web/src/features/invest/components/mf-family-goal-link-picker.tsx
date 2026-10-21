@@ -4,29 +4,43 @@ import Link from "next/link";
 import { ArrowUpRight, ChevronDown, Loader2, Lock, Plus, Target, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { FieldMessage } from "@/components/ui/ui-message";
-import {
-  fetchLinkableFamilyGoals,
-  type LinkableFamilyGoal,
-} from "@/features/goals/api/goals-api";
-import {
-  fetchFamilyGroups,
-} from "@/features/family-groups/api/family-groups-api";
-import { buildFamilyGroupHref } from "@/features/family-groups/lib/family-group-navigation";
+import { fetchFamilyGroupGoals, fetchFamilyGroups } from "@/features/family-groups/api/family-groups-api";
 import { familyMemberInitials } from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
+export type FamilyLinkChoice = {
+  familyGroupId: string;
+  familyGroupTitle: string;
+  goalId: string | null;
+  goalTitle: string | null;
+} | null;
+
+type FamilyLinkGroup = {
+  id: string;
+  title: string;
+  avatarUrl: string | null;
+  goals: Array<{ id: string; title: string }>;
+};
+
+type MfFamilyLinkDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: FamilyLinkChoice;
+  onConfirm: (value: FamilyLinkChoice) => void;
+  confirmEntireFolio?: boolean;
+  saving?: boolean;
+};
+
 type MfFamilyGoalLinkPickerProps = {
-  selectedGoalId: string | null;
-  onSelect: (goalId: string | null) => void;
+  value: FamilyLinkChoice;
+  onChange: (value: FamilyLinkChoice) => void;
   disabled?: boolean;
+  lockedLink?: { groupTitle: string; goalTitle: string | null } | null;
+  confirmEntireFolio?: boolean;
   className?: string;
 };
 
@@ -34,10 +48,6 @@ const DUMMY_FAMILY_GROUP = {
   title: "Sharma Family",
   initials: "SF",
 } as const;
-
-function goalLabel(goal: LinkableFamilyGoal) {
-  return `${goal.group_title} · ${goal.goal_title}`;
-}
 
 function FamilyGroupCircle({
   label,
@@ -65,18 +75,206 @@ function FamilyGroupCircle({
     >
       {showAvatar ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={avatarUrl!}
-          alt=""
-          className="size-full object-cover"
-          onError={() => setImageFailed(true)}
-        />
+        <img src={avatarUrl!} alt="" className="size-full object-cover" onError={() => setImageFailed(true)} />
       ) : label ? (
         familyMemberInitials(label)
       ) : (
         <Users className="size-3.5" />
       )}
     </div>
+  );
+}
+
+function choiceLabel(value: FamilyLinkChoice) {
+  if (!value) return copy.goals.linkableFamilyGoalsNone;
+  if (value.goalTitle) return `${value.familyGroupTitle} · ${value.goalTitle}`;
+  return `${value.familyGroupTitle} · ${copy.goals.familyLinkPortfolioOnly}`;
+}
+
+export function MfFamilyLinkDialog({
+  open,
+  onOpenChange,
+  value,
+  onConfirm,
+  confirmEntireFolio = false,
+  saving = false,
+}: MfFamilyLinkDialogProps) {
+  const [groups, setGroups] = useState<FamilyLinkGroup[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(value?.familyGroupId ?? null);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(value?.goalId ?? null);
+  const [linkEnabled, setLinkEnabled] = useState(value != null);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedGroupId(value?.familyGroupId ?? null);
+    setSelectedGoalId(value?.goalId ?? null);
+    setLinkEnabled(value != null);
+  }, [open, value]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const response = await fetchFamilyGroups();
+        const active = response.items.filter((group) => group.status === "active");
+        const goalLists = await Promise.all(
+          active.map(async (group) => {
+            try {
+              const goals = await fetchFamilyGroupGoals(group.id);
+              return goals.items
+                .filter((goal) => goal.status !== "archived")
+                .map((goal) => ({ id: goal.id, title: goal.title }));
+            } catch {
+              return [];
+            }
+          }),
+        );
+        if (cancelled) return;
+        setGroups(
+          active.map((group, index) => ({
+            id: group.id,
+            title: group.title,
+            avatarUrl: group.avatar_url ?? null,
+            goals: goalLists[index] ?? [],
+          })),
+        );
+      } catch (loadError) {
+        if (cancelled) return;
+        setError(loadError instanceof Error ? loadError.message : copy.goals.linkableFamilyGoalsError);
+        setGroups([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? null;
+  const moving =
+    value != null && selectedGroupId != null && value.familyGroupId !== selectedGroupId && linkEnabled;
+
+  function confirm() {
+    if (!linkEnabled || !selectedGroup) {
+      onConfirm(null);
+      onOpenChange(false);
+      return;
+    }
+    const goal = selectedGroup.goals.find((item) => item.id === selectedGoalId) ?? null;
+    onConfirm({
+      familyGroupId: selectedGroup.id,
+      familyGroupTitle: selectedGroup.title,
+      goalId: goal?.id ?? null,
+      goalTitle: goal?.title ?? null,
+    });
+    onOpenChange(false);
+  }
+
+  return (
+    <BrandDialog open={open} onOpenChange={onOpenChange} title={copy.goals.familyLinkDialogTitle} maxWidth="md">
+      <div className="space-y-4 px-6 py-5">
+        <p className="text-compact text-muted-foreground">{copy.goals.familyLinkDialogDescription}</p>
+        <p className="text-caption text-muted-foreground">{copy.goals.familyLinkVisibility}</p>
+        {loading ? (
+          <div className="flex items-center gap-2 text-compact text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            {copy.goals.linkableFamilyGoalsLoading}
+          </div>
+        ) : error ? (
+          <FieldMessage variant="error" message={error} />
+        ) : groups.length === 0 ? (
+          <p className="text-compact text-muted-foreground">{copy.goals.linkableFamilyGoalsEmpty}</p>
+        ) : (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                setLinkEnabled(false);
+                setSelectedGroupId(null);
+                setSelectedGoalId(null);
+              }}
+              className={cn(
+                "flex w-full items-center gap-2.5 rounded-[var(--radius-control)] border px-3 py-2 text-left",
+                !linkEnabled ? "border-primary/40 bg-primary/10" : "border-border/70",
+              )}
+            >
+              <span className="text-compact font-medium">{copy.goals.linkableFamilyGoalsNone}</span>
+            </button>
+            {groups.map((group) => {
+              const selected = linkEnabled && selectedGroupId === group.id;
+              return (
+                <div
+                  key={group.id}
+                  className={cn(
+                    "rounded-[var(--radius-card)] border px-3 py-2.5",
+                    selected ? "border-primary/40 bg-primary/5" : "border-border/70",
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2.5 text-left"
+                    onClick={() => {
+                      setLinkEnabled(true);
+                      setSelectedGroupId(group.id);
+                      setSelectedGoalId(null);
+                    }}
+                  >
+                    <FamilyGroupCircle label={group.title} avatarUrl={group.avatarUrl} />
+                    <span className="min-w-0 flex-1 truncate text-compact font-medium">{group.title}</span>
+                  </button>
+                  {selected ? (
+                    <div className="mt-2 space-y-1 pl-10">
+                      {group.goals.length === 0 ? (
+                        <p className="text-caption text-muted-foreground">{copy.goals.familyLinkNoGoals}</p>
+                      ) : (
+                        <>
+                          <label className="flex items-center gap-2 text-caption">
+                            <input
+                              type="radio"
+                              name={`family-link-${group.id}`}
+                              checked={selectedGoalId == null}
+                              onChange={() => setSelectedGoalId(null)}
+                            />
+                            {copy.goals.familyLinkPortfolioOnly}
+                          </label>
+                          {group.goals.map((goal) => (
+                            <label key={goal.id} className="flex items-center gap-2 text-caption">
+                              <input
+                                type="radio"
+                                name={`family-link-${group.id}`}
+                                checked={selectedGoalId === goal.id}
+                                onChange={() => setSelectedGoalId(goal.id)}
+                              />
+                              {goal.title}
+                            </label>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {confirmEntireFolio && linkEnabled ? (
+          <p className="text-caption text-muted-foreground">{copy.goals.familyLinkEntireFolio}</p>
+        ) : null}
+        {moving ? <p className="text-caption text-muted-foreground">{copy.goals.familyLinkMoveWarning}</p> : null}
+        <BrandDialogFooter>
+          <Button type="button" onClick={confirm} disabled={saving || loading}>
+            {saving ? copy.goals.familyLinkSaving : copy.goals.familyLinkConfirm}
+          </Button>
+        </BrandDialogFooter>
+      </div>
+    </BrandDialog>
   );
 }
 
@@ -88,19 +286,12 @@ function FamilyGoalLinkLockedEmpty({ className }: { className?: string }) {
         className,
       )}
     >
-      <div
-        className="pointer-events-none flex select-none items-center gap-2.5 px-3 py-2.5 blur-[5px]"
-        aria-hidden
-      >
+      <div className="pointer-events-none flex select-none items-center gap-2.5 px-3 py-2.5 blur-[5px]" aria-hidden>
         <FamilyGroupCircle label={DUMMY_FAMILY_GROUP.title} />
-        <p className="min-w-0 flex-1 truncate text-compact font-medium text-foreground">
-          {DUMMY_FAMILY_GROUP.title}
-        </p>
+        <p className="min-w-0 flex-1 truncate text-compact font-medium text-foreground">{DUMMY_FAMILY_GROUP.title}</p>
         <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
       </div>
-
       <div className="pointer-events-none absolute inset-0 sip-chart-overlay" aria-hidden />
-
       <div className="absolute inset-0 flex items-center justify-center px-2">
         <div className="flex h-9 w-full max-w-[20rem] items-center gap-2 px-2.5 shadow-zynd-mid backdrop-blur-sm sip-lock-panel">
           <div className="relative shrink-0">
@@ -112,9 +303,7 @@ function FamilyGoalLinkLockedEmpty({ className }: { className?: string }) {
             </div>
           </div>
           <p className="min-w-0 flex-1 truncate text-[11px] leading-none text-muted-foreground">
-            <span className="font-semibold text-foreground">
-              {copy.goals.linkableFamilyGoalsEmptyTitle}
-            </span>
+            <span className="font-semibold text-foreground">{copy.goals.linkableFamilyGoalsEmptyTitle}</span>
             <span className="mx-1 text-border">·</span>
             {copy.goals.linkableFamilyGoalsEmpty}
           </p>
@@ -132,82 +321,40 @@ function FamilyGoalLinkLockedEmpty({ className }: { className?: string }) {
 }
 
 export function MfFamilyGoalLinkPicker({
-  selectedGoalId,
-  onSelect,
+  value,
+  onChange,
   disabled = false,
+  lockedLink = null,
+  confirmEntireFolio = false,
   className,
 }: MfFamilyGoalLinkPickerProps) {
-  const [items, setItems] = useState<LinkableFamilyGoal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
+  const [hasGroups, setHasGroups] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const [linkableResponse, familyGroupsResponse] = await Promise.all([
-          fetchLinkableFamilyGoals(),
-          fetchFamilyGroups(),
-        ]);
-        if (cancelled) return;
-
-        const avatarByGroupId = new Map(
-          familyGroupsResponse.items.map((group) => [group.id, group.avatar_url ?? null]),
-        );
-
-        setItems(
-          linkableResponse.items.map((item) => ({
-            ...item,
-            group_avatar_url:
-              item.group_avatar_url ?? avatarByGroupId.get(item.group_id) ?? null,
-          })),
-        );
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : copy.goals.linkableFamilyGoalsError);
-        setItems([]);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
+    void fetchFamilyGroups()
+      .then((response) => {
+        if (!cancelled) setHasGroups(response.items.some((group) => group.status === "active"));
+      })
+      .catch(() => {
+        if (!cancelled) setHasGroups(true);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (
-      selectedGoalId &&
-      items.length > 0 &&
-      !items.some((item) => item.goal_id === selectedGoalId)
-    ) {
-      onSelect(null);
+  const label = useMemo(() => {
+    if (lockedLink) {
+      return lockedLink.goalTitle
+        ? `${lockedLink.groupTitle} · ${lockedLink.goalTitle}`
+        : lockedLink.groupTitle;
     }
-  }, [items, onSelect, selectedGoalId]);
+    return choiceLabel(value);
+  }, [lockedLink, value]);
 
-  const createGroup = useMemo(
-    () => items.find((item) => item.can_create_goals) ?? null,
-    [items],
-  );
-
-  const selectedGoal = useMemo(
-    () => items.find((item) => item.goal_id === selectedGoalId) ?? null,
-    [items, selectedGoalId],
-  );
-
-  const triggerLabel = selectedGoal
-    ? goalLabel(selectedGoal)
-    : copy.goals.linkableFamilyGoalsNone;
-
-  if (loading) {
+  if (hasGroups === null) {
     return (
       <div
         className={cn(
@@ -221,116 +368,32 @@ export function MfFamilyGoalLinkPicker({
     );
   }
 
-  if (error) {
-    return <FieldMessage variant="error" message={error} className={className} />;
-  }
-
-  if (items.length === 0) {
+  if (!lockedLink && hasGroups === false) {
     return <FamilyGoalLinkLockedEmpty className={className} />;
   }
 
   return (
     <div className={className}>
-    <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          disabled={disabled}
-          render={
-            <Button
-              type="button"
-              variant="outline"
-              disabled={disabled}
-              className="h-auto w-full justify-start gap-2.5 rounded-[var(--radius-card)] px-3 py-2.5 text-left font-normal"
-            />
-          }
-        >
-          {selectedGoal ? (
-            <FamilyGroupCircle
-              label={selectedGoal.group_title}
-              avatarUrl={selectedGoal.group_avatar_url}
-            />
-          ) : (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted/40 text-muted-foreground ring-1 ring-border">
-              <Target className="size-3.5" aria-hidden />
-            </span>
-          )}
-          <span className="min-w-0 flex-1 truncate text-compact font-medium text-foreground">
-            {triggerLabel}
-          </span>
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </PopoverTrigger>
-
-        <PopoverContent
-          align="start"
-          side="top"
-          sideOffset={6}
-          className="w-[var(--anchor-width)] max-w-[min(22rem,calc(100vw-2rem))] gap-1 p-1.5"
-        >
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              onSelect(null);
-              setOpen(false);
-            }}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 py-2 text-left transition-colors",
-              selectedGoalId === null
-                ? "bg-primary/10 text-foreground"
-                : "hover:bg-muted/60",
-            )}
-          >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted/40 text-muted-foreground ring-1 ring-border">
-              <Target className="size-3.5" aria-hidden />
-            </span>
-            <span className="min-w-0 flex-1 truncate text-compact font-medium">
-              {copy.goals.linkableFamilyGoalsNone}
-            </span>
-          </button>
-
-          {items.map((goal) => {
-            const isSelected = selectedGoalId === goal.goal_id;
-            return (
-              <button
-                key={goal.goal_id}
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  onSelect(goal.goal_id);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 py-2 text-left transition-colors",
-                  isSelected ? "bg-primary/10 text-foreground" : "hover:bg-muted/60",
-                )}
-              >
-                <FamilyGroupCircle
-                  label={goal.group_title}
-                  avatarUrl={goal.group_avatar_url}
-                />
-                <span className="min-w-0 flex-1 truncate text-compact font-medium">
-                  {goalLabel(goal)}
-                </span>
-              </button>
-            );
-          })}
-
-          {createGroup ? (
-            <div className="border-t border-border p-2">
-              <Link
-                href={buildFamilyGroupHref({
-                  id: createGroup.group_id,
-                  title: createGroup.group_title,
-                })}
-                className="flex w-full items-center gap-2 rounded-[var(--radius-control)] px-3 py-2.5 text-left text-compact font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/50"
-                onClick={() => setOpen(false)}
-              >
-                <Plus className="size-4 shrink-0" aria-hidden />
-                {copy.goals.linkableFamilyGoalsCreateHint}
-              </Link>
-            </div>
-          ) : null}
-        </PopoverContent>
-      </Popover>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={disabled || Boolean(lockedLink)}
+        onClick={() => setOpen(true)}
+        className="h-auto w-full justify-start gap-2.5 rounded-[var(--radius-card)] px-3 py-2.5 text-left font-normal"
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted/40 text-muted-foreground ring-1 ring-border">
+          <Target className="size-3.5" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-compact font-medium text-foreground">{label}</span>
+        {lockedLink ? null : <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />}
+      </Button>
+      <MfFamilyLinkDialog
+        open={open}
+        onOpenChange={setOpen}
+        value={value}
+        onConfirm={onChange}
+        confirmEntireFolio={confirmEntireFolio}
+      />
     </div>
   );
 }

@@ -5,7 +5,9 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -23,7 +25,7 @@ import {
   type AuthUser,
   type LoginFlowResponse,
 } from "@/lib/auth-api";
-import { clearSessionHint } from "@/features/auth/api/auth-response";
+import { clearSessionHint, hasSessionHint } from "@/features/auth/api/auth-response";
 import { revokeWebPushDevice } from "@/features/notifications/lib/push-device-registration";
 import { isAuthFailure, setAccessToken } from "@/lib/api-client";
 import {
@@ -31,6 +33,11 @@ import {
   readAuthSessionSnapshot,
   writeAuthSessionSnapshot,
 } from "@/lib/auth-session-cache";
+import {
+  clearPersistedAuthSession,
+  readPersistedAuthUser,
+  writePersistedAuthUser,
+} from "@/lib/auth-session-storage";
 import { clearQueryCache, getQueryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { appConfig } from "@/shared/config/app-config";
@@ -55,12 +62,47 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** SSR-safe: do not read sessionStorage/localStorage here (client initializer would diverge from server HTML). */
+function initialUser(): AuthUser | null {
+  return readAuthSessionSnapshot()?.user ?? null;
+}
+
+function initialLoading(): boolean {
+  const cached = readAuthSessionSnapshot();
+  if (cached?.bootstrapped) return false;
+  return true;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const cached = readAuthSessionSnapshot();
-  const [user, setUser] = useState<AuthUser | null>(() => cached?.user ?? null);
-  const [loading, setLoading] = useState(() => !(cached?.bootstrapped ?? false));
+  const [user, setUserState] = useState<AuthUser | null>(initialUser);
+  const [loading, setLoading] = useState(initialLoading);
   const [sessionRestoring, setSessionRestoring] = useState(true);
-  const [sessionRetrying, setSessionRetrying] = useState(() => cached?.sessionRetrying ?? false);
+  const [sessionRetrying, setSessionRetrying] = useState(
+    () => cached?.sessionRetrying ?? false,
+  );
+  const bootstrapInFlightRef = useRef<Promise<void> | null>(null);
+  const retryAttemptRef = useRef(0);
+  const storageHydratedRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (storageHydratedRef.current) return;
+    storageHydratedRef.current = true;
+
+    const persisted = readPersistedAuthUser();
+    if (persisted) {
+      setUserState((current) => current ?? persisted);
+    }
+    if (hasSessionHint()) {
+      setSessionRetrying(true);
+      setLoading(true);
+    }
+  }, []);
+
+  const setUser = useCallback((next: AuthUser | null) => {
+    setUserState(next);
+    writePersistedAuthUser(next);
+  }, []);
 
   useEffect(() => {
     writeAuthSessionSnapshot({
@@ -70,88 +112,149 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [loading, sessionRetrying, user]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const applyBootstrapResult = useCallback(
+    (result: Awaited<ReturnType<typeof bootstrapSession>>) => {
+      if (result.user) {
+        setUser(result.user);
+        setSessionRetrying(false);
+        retryAttemptRef.current = 0;
+        setLoading(false);
+        return;
+      }
 
-    const restoreSession = async () => {
-      try {
-        const result = await bootstrapSession();
-        if (cancelled) return;
-
-        if (result.user) {
-          setUser(result.user);
+      if (result.reason === "network") {
+        if (hasSessionHint()) {
+          setSessionRetrying(true);
+          setLoading(true);
+        } else {
           setSessionRetrying(false);
           setLoading(false);
-          return;
         }
-
-        if (result.reason === "network") {
-          setSessionRetrying(true);
-          setLoading(false);
-          return;
-        }
-
-        setUser(null);
-        setSessionRetrying(false);
-        setLoading(false);
-      } finally {
-        if (!cancelled) {
-          setSessionRestoring(false);
-        }
+        return;
       }
-    };
 
-    void restoreSession();
+      clearPersistedAuthSession();
+      setUser(null);
+      setSessionRetrying(false);
+      retryAttemptRef.current = 0;
+      setLoading(false);
+    },
+    [setUser],
+  );
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const runBootstrap = useCallback(async () => {
+    if (bootstrapInFlightRef.current) {
+      await bootstrapInFlightRef.current;
+      return;
+    }
+    const task = (async () => {
+      const result = await bootstrapSession();
+      applyBootstrapResult(result);
+    })().finally(() => {
+      bootstrapInFlightRef.current = null;
+      setSessionRestoring(false);
+    });
+    bootstrapInFlightRef.current = task;
+    await task;
+  }, [applyBootstrapResult]);
+
+  useEffect(() => {
+    void runBootstrap();
+  }, [runBootstrap]);
 
   useEffect(() => {
     if (!sessionRetrying) return;
 
-    const intervalId = window.setInterval(() => {
-      void bootstrapSession().then((result) => {
-        if (result.user) {
-          setUser(result.user);
-          setSessionRetrying(false);
-          return;
-        }
+    let cancelled = false;
+    let timerId: number | undefined;
 
-        if (result.reason === "expired") {
-          setUser(null);
-          setSessionRetrying(false);
-        }
-      });
-    }, appConfig.sessionRetryIntervalMs);
+    const schedule = () => {
+      const attempt = retryAttemptRef.current;
+      const delay = Math.min(
+        appConfig.sessionRetryIntervalMs * (attempt + 1),
+        appConfig.sessionRetryMaxIntervalMs,
+      );
+      timerId = window.setTimeout(() => {
+        if (cancelled) return;
+        void bootstrapSession().then((result) => {
+          if (cancelled) return;
+          if (result.user) {
+            setUser(result.user);
+            setSessionRetrying(false);
+            retryAttemptRef.current = 0;
+            setLoading(false);
+            return;
+          }
+          if (result.reason === "expired") {
+            clearPersistedAuthSession();
+            setUser(null);
+            setSessionRetrying(false);
+            retryAttemptRef.current = 0;
+            setLoading(false);
+            return;
+          }
+          retryAttemptRef.current += 1;
+          schedule();
+        });
+      }, delay);
+    };
 
-    return () => window.clearInterval(intervalId);
-  }, [sessionRetrying]);
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timerId !== undefined) window.clearTimeout(timerId);
+    };
+  }, [sessionRetrying, setUser]);
 
-  const signIn = useCallback(async (email: string, password: string, turnstileToken?: string | null) => {
-    const result = await login(email, password, turnstileToken);
-    if (isAuthenticatedResponse(result)) {
-      setUser(result.user);
-    }
-    return result;
-  }, []);
+  useEffect(() => {
+    const recover = () => {
+      if (document.visibilityState === "hidden") return;
+      if (!hasSessionHint()) return;
+      if (user) return;
+      if (sessionRetrying) return;
+      void runBootstrap();
+    };
 
-  const signInWithGoogleToken = useCallback(async (idToken: string) => {
-    const result = await loginWithGoogle(idToken);
-    if (isAuthenticatedResponse(result)) {
-      setUser(result.user);
-    }
-    return result;
-  }, []);
+    window.addEventListener("pageshow", recover);
+    document.addEventListener("visibilitychange", recover);
+    return () => {
+      window.removeEventListener("pageshow", recover);
+      document.removeEventListener("visibilitychange", recover);
+    };
+  }, [runBootstrap, sessionRetrying, user]);
 
-  const signInWithAppleToken = useCallback(async (idToken: string, profile?: AppleLoginProfile) => {
-    const result = await loginWithApple(idToken, profile);
-    if (isAuthenticatedResponse(result)) {
-      setUser(result.user);
-    }
-    return result;
-  }, []);
+  const signIn = useCallback(
+    async (email: string, password: string, turnstileToken?: string | null) => {
+      const result = await login(email, password, turnstileToken);
+      if (isAuthenticatedResponse(result)) {
+        setUser(result.user);
+      }
+      return result;
+    },
+    [setUser],
+  );
+
+  const signInWithGoogleToken = useCallback(
+    async (idToken: string) => {
+      const result = await loginWithGoogle(idToken);
+      if (isAuthenticatedResponse(result)) {
+        setUser(result.user);
+      }
+      return result;
+    },
+    [setUser],
+  );
+
+  const signInWithAppleToken = useCallback(
+    async (idToken: string, profile?: AppleLoginProfile) => {
+      const result = await loginWithApple(idToken, profile);
+      if (isAuthenticatedResponse(result)) {
+        setUser(result.user);
+      }
+      return result;
+    },
+    [setUser],
+  );
 
   const signOut = useCallback(async () => {
     try {
@@ -159,8 +262,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await logout();
     } finally {
       clearAuthSessionSnapshot();
+      clearPersistedAuthSession();
       clearOverviewReadyLatch();
-      setUser(null);
+      setUserState(null);
       setAccessToken(null);
       clearQueryCache();
     }
@@ -187,18 +291,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (restored.reason === "expired") {
         clearAuthSessionSnapshot();
+        clearPersistedAuthSession();
         clearOverviewReadyLatch();
         setUser(null);
         setAccessToken(null);
-        clearSessionHint();
       }
       return null;
     }
-  }, []);
+  }, [setUser]);
 
-  const completeAuth = useCallback((nextUser: AuthUser) => {
-    setUser(nextUser);
-  }, []);
+  const completeAuth = useCallback(
+    (nextUser: AuthUser) => {
+      setUser(nextUser);
+    },
+    [setUser],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -222,12 +329,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshUser,
       sessionRestoring,
       sessionRetrying,
+      setUser,
       signIn,
       signInWithAppleToken,
       signInWithGoogleToken,
       signOut,
       user,
-    ]
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

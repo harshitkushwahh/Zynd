@@ -16,8 +16,8 @@ from app.application.mf.mf_ondc_order_service import (
 )
 from app.application.mf.mf_order_service import TERMINAL_STATUSES, _record_order_event, order_payment_completed
 from app.core.config import get_settings
-from app.infrastructure.mf.fp_oms_client import extract_fp_state, get_mf_purchase
-from app.infrastructure.mf.fp_payment_client import (
+from app.infrastructure.core.mf.oms_client import extract_fp_state, get_mf_purchase
+from app.infrastructure.core.mf.payment_client import (
     extract_payment_status,
     get_payment,
     is_payment_failure_status,

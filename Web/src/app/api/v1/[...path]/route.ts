@@ -59,7 +59,10 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
         { status: 504 },
       );
     }
-    throw error;
+    return NextResponse.json(
+      { detail: "Backend is unavailable. Try again in a moment." },
+      { status: 503 },
+    );
   }
   const responseHeaders = new Headers(backendResponse.headers);
   responseHeaders.delete("content-encoding");

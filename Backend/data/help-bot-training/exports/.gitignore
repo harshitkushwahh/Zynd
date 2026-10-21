@@ -1,0 +1,2 @@
+# Regenerate with scripts/export_help_bot_finetune_jsonl.py (Phase 2; ~70MB at 30k rows)
+*.jsonl

@@ -1,131 +1,151 @@
 "use client";
 
+import { useLayoutEffect, useMemo, useState } from "react";
 import { Calendar, CreditCard, Sun } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
-import {
-  isDailySipFrequency,
-  SIP_FREQUENCY_DAILY,
-  SIP_FREQUENCY_MONTHLY,
-  type SipFrequency,
-} from "@/features/invest/lib/mf-sip-frequency";
+import { isDailySipFrequency, type SipFrequency } from "@/features/invest/lib/mf-sip-frequency";
 import { MfFolioNominationInfoButton } from "@/features/invest/components/mf-folio-nomination-info";
 
 type InvestMode = "sip" | "lumpsum";
-type InvestTab = "monthly" | "daily" | "lumpsum";
+export type MfInvestTab = "monthly" | "daily" | "lumpsum";
 
 export type MfInvestModeToggleProps = {
   mode: InvestMode;
   sipFrequency: SipFrequency;
-  onModeChange: (mode: InvestMode) => void;
-  onSipFrequencyChange: (frequency: SipFrequency) => void;
+  onTabSelect: (tab: MfInvestTab) => void;
   monthlySipAllowed: boolean;
   dailySipAllowed: boolean;
   disabled?: boolean;
   showFolioNominationInfo?: boolean;
 };
 
-function activeTab(mode: InvestMode, sipFrequency: SipFrequency): InvestTab {
+function activeTab(mode: InvestMode, sipFrequency: SipFrequency): MfInvestTab {
   if (mode === "lumpsum") return "lumpsum";
   return isDailySipFrequency(sipFrequency) ? "daily" : "monthly";
 }
 
+function tabIndex(tab: MfInvestTab): number {
+  if (tab === "monthly") return 0;
+  if (tab === "daily") return 1;
+  return 2;
+}
+
 const tabButtonClass =
-  "flex min-h-9 items-center justify-center gap-1 rounded-full px-2 py-2 text-[11px] font-medium transition-colors sm:gap-1.5 sm:px-3 sm:text-compact";
+  "relative z-10 flex min-h-9 items-center justify-center gap-1 rounded-full px-2 py-2 text-[11px] font-medium transition-[color,opacity] duration-200 ease-out sm:gap-1.5 sm:px-3 sm:text-compact";
 
 export function MfInvestModeToggle({
   mode,
   sipFrequency,
-  onModeChange,
-  onSipFrequencyChange,
+  onTabSelect,
   monthlySipAllowed,
   dailySipAllowed,
   disabled = false,
   showFolioNominationInfo = false,
 }: MfInvestModeToggleProps) {
-  const selected = activeTab(mode, sipFrequency);
+  const reduceMotion = useReducedMotion();
+  const derivedTab = activeTab(mode, sipFrequency);
+  const [pendingTab, setPendingTab] = useState<MfInvestTab | null>(null);
 
-  function selectMonthly() {
-    if (!monthlySipAllowed || disabled) return;
-    onModeChange("sip");
-    onSipFrequencyChange(SIP_FREQUENCY_MONTHLY);
-  }
+  useLayoutEffect(() => {
+    if (pendingTab !== null && derivedTab === pendingTab) {
+      setPendingTab(null);
+    }
+  }, [derivedTab, pendingTab]);
 
-  function selectDaily() {
-    if (!dailySipAllowed || disabled) return;
-    onModeChange("sip");
-    onSipFrequencyChange(SIP_FREQUENCY_DAILY);
-  }
+  const selected = pendingTab ?? derivedTab;
+  const selectedIndex = tabIndex(selected);
 
-  function selectOneTime() {
-    if (disabled) return;
-    onModeChange("lumpsum");
+  const pillTransition = useMemo(
+    () =>
+      reduceMotion
+        ? { duration: 0 }
+        : { type: "spring" as const, stiffness: 520, damping: 38, mass: 0.75 },
+    [reduceMotion],
+  );
+
+  function selectTab(tab: MfInvestTab) {
+    if (disabled || selected === tab) return;
+    if (tab === "monthly" && !monthlySipAllowed) return;
+    if (tab === "daily" && !dailySipAllowed) return;
+    setPendingTab(tab);
+    onTabSelect(tab);
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
       <div
         role="tablist"
         aria-label={copy.mutualFunds.paymentCardTitle}
-        className="grid min-w-0 flex-1 grid-cols-3 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
+        className="relative grid min-w-0 flex-1 grid-cols-3 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
       >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selected === "monthly"}
-        disabled={disabled || !monthlySipAllowed}
-        onClick={selectMonthly}
-        className={cn(
-          tabButtonClass,
-          (disabled || !monthlySipAllowed) && "cursor-not-allowed opacity-50",
-          selected === "monthly"
-            ? "bg-foreground text-background shadow-zynd-low"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <Calendar className="size-3.5 shrink-0 opacity-90 sm:size-3.5" aria-hidden />
-        {copy.mutualFunds.paymentCardSipFrequencyMonthly}
-      </button>
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute top-0.5 bottom-0.5 left-0.5 rounded-full bg-foreground shadow-zynd-low will-change-transform"
+          style={{ width: "calc((100% - 0.25rem) / 3)" }}
+          initial={false}
+          animate={{ x: `${selectedIndex * 100}%` }}
+          transition={pillTransition}
+        />
 
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selected === "daily"}
-        disabled={disabled || !dailySipAllowed}
-        title={
-          !dailySipAllowed ? copy.mutualFunds.paymentCardSipFrequencyDailyUnavailable : undefined
-        }
-        onClick={selectDaily}
-        className={cn(
-          tabButtonClass,
-          (disabled || !dailySipAllowed) && "cursor-not-allowed opacity-50",
-          selected === "daily"
-            ? "bg-foreground text-background shadow-zynd-low"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <Sun className="size-3.5 shrink-0 opacity-90" aria-hidden />
-        {copy.mutualFunds.paymentCardSipFrequencyDaily}
-      </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={selected === "monthly"}
+          disabled={disabled || !monthlySipAllowed}
+          onClick={() => selectTab("monthly")}
+          className={cn(
+            tabButtonClass,
+            (disabled || !monthlySipAllowed) && "cursor-not-allowed opacity-50",
+            selected === "monthly"
+              ? "text-background"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Calendar className="size-3.5 shrink-0 opacity-90 sm:size-3.5" aria-hidden />
+          {copy.mutualFunds.paymentCardSipFrequencyMonthly}
+        </button>
 
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selected === "lumpsum"}
-        disabled={disabled}
-        onClick={selectOneTime}
-        className={cn(
-          tabButtonClass,
-          disabled && "cursor-not-allowed opacity-60",
-          selected === "lumpsum"
-            ? "bg-foreground text-background shadow-zynd-low"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <CreditCard className="size-3.5 shrink-0 opacity-90" aria-hidden />
-        {copy.mutualFunds.paymentCardOneTime}
-      </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={selected === "daily"}
+          disabled={disabled || !dailySipAllowed}
+          title={
+            !dailySipAllowed ? copy.mutualFunds.paymentCardSipFrequencyDailyUnavailable : undefined
+          }
+          onClick={() => selectTab("daily")}
+          className={cn(
+            tabButtonClass,
+            (disabled || !dailySipAllowed) && "cursor-not-allowed opacity-50",
+            selected === "daily"
+              ? "text-background"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Sun className="size-3.5 shrink-0 opacity-90" aria-hidden />
+          {copy.mutualFunds.paymentCardSipFrequencyDaily}
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={selected === "lumpsum"}
+          disabled={disabled}
+          onClick={() => selectTab("lumpsum")}
+          className={cn(
+            tabButtonClass,
+            disabled && "cursor-not-allowed opacity-60",
+            selected === "lumpsum"
+              ? "text-background"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <CreditCard className="size-3.5 shrink-0 opacity-90" aria-hidden />
+          {copy.mutualFunds.paymentCardOneTime}
+        </button>
       </div>
       {showFolioNominationInfo ? <MfFolioNominationInfoButton /> : null}
     </div>

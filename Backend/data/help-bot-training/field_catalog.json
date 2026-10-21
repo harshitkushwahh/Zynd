@@ -1,0 +1,620 @@
+{
+  "version": 1,
+  "source": "app/application/support/help_bot_field_catalog.py",
+  "field_count": 68,
+  "fields": [
+    {
+      "path": "kyc.overall_status",
+      "topic": "kyc",
+      "label": "KYC status",
+      "value_type": "enum",
+      "question_hints": [
+        "What is my KYC status?",
+        "Is KYC complete?"
+      ]
+    },
+    {
+      "path": "kyc.completed_at",
+      "topic": "kyc",
+      "label": "KYC completion date",
+      "value_type": "datetime",
+      "question_hints": [
+        "When was KYC completed?"
+      ]
+    },
+    {
+      "path": "kyc.status_last_updated_at",
+      "topic": "kyc",
+      "label": "KYC last update",
+      "value_type": "datetime",
+      "question_hints": [
+        "When did KYC status change?"
+      ]
+    },
+    {
+      "path": "kyc.steps.pan",
+      "topic": "kyc",
+      "label": "PAN step",
+      "value_type": "enum",
+      "question_hints": [
+        "Is PAN verification done?"
+      ]
+    },
+    {
+      "path": "kyc.steps.digilocker",
+      "topic": "kyc",
+      "label": "DigiLocker step",
+      "value_type": "enum",
+      "question_hints": [
+        "DigiLocker status?"
+      ]
+    },
+    {
+      "path": "kyc.steps.address",
+      "topic": "kyc",
+      "label": "address step",
+      "value_type": "enum",
+      "question_hints": [
+        "Address proof status?"
+      ]
+    },
+    {
+      "path": "kyc.steps.personal",
+      "topic": "kyc",
+      "label": "personal details step",
+      "value_type": "enum",
+      "question_hints": [
+        "Personal details step status?"
+      ]
+    },
+    {
+      "path": "kyc.steps.nominee",
+      "topic": "kyc",
+      "label": "nominee step",
+      "value_type": "enum",
+      "question_hints": [
+        "Nominee step submitted?"
+      ]
+    },
+    {
+      "path": "kyc.steps.bank",
+      "topic": "kyc",
+      "label": "bank step",
+      "value_type": "enum",
+      "question_hints": [
+        "Bank verification step?"
+      ]
+    },
+    {
+      "path": "kyc.steps.signature",
+      "topic": "kyc",
+      "label": "signature step",
+      "value_type": "enum",
+      "question_hints": [
+        "Signature uploaded?"
+      ]
+    },
+    {
+      "path": "kyc.steps.review",
+      "topic": "kyc",
+      "label": "review step",
+      "value_type": "enum",
+      "question_hints": [
+        "KYC review submitted?"
+      ]
+    },
+    {
+      "path": "kyc.last_completed_step",
+      "topic": "kyc",
+      "label": "last completed step",
+      "value_type": "string",
+      "question_hints": [
+        "Where do I resume KYC?"
+      ]
+    },
+    {
+      "path": "kyc.readiness_code",
+      "topic": "kyc",
+      "label": "readiness code",
+      "value_type": "enum",
+      "question_hints": [
+        "Why can't I invest?"
+      ]
+    },
+    {
+      "path": "kyc.readiness_reason",
+      "topic": "kyc",
+      "label": "readiness reason",
+      "value_type": "string",
+      "question_hints": [
+        "What is blocking invest?"
+      ]
+    },
+    {
+      "path": "kyc.pan_verification_status",
+      "topic": "kyc",
+      "label": "PAN verification",
+      "value_type": "enum",
+      "question_hints": [
+        "PAN verified?"
+      ]
+    },
+    {
+      "path": "kyc.bank_verification_status",
+      "topic": "kyc",
+      "label": "bank verification",
+      "value_type": "enum",
+      "question_hints": [
+        "Bank verified?"
+      ]
+    },
+    {
+      "path": "kyc.external_kyc_status",
+      "topic": "kyc",
+      "label": "external KYC",
+      "value_type": "enum",
+      "question_hints": [
+        "Registrar KYC status?"
+      ]
+    },
+    {
+      "path": "kyc.kyc_already_registered",
+      "topic": "kyc",
+      "label": "existing KYC flag",
+      "value_type": "bool",
+      "question_hints": [
+        "Already registered elsewhere?"
+      ]
+    },
+    {
+      "path": "payments.last_sip_debit.settled_at",
+      "topic": "payment",
+      "label": "last SIP debit date",
+      "value_type": "datetime",
+      "question_hints": [
+        "When was my last SIP debit?"
+      ]
+    },
+    {
+      "path": "payments.last_sip_debit.amount",
+      "topic": "payment",
+      "label": "last SIP debit amount",
+      "value_type": "money",
+      "question_hints": [
+        "How much was last SIP debit?"
+      ]
+    },
+    {
+      "path": "payments.last_sip_debit.status",
+      "topic": "payment",
+      "label": "last SIP debit status",
+      "value_type": "enum",
+      "question_hints": [
+        "Did last SIP succeed?"
+      ]
+    },
+    {
+      "path": "payments.last_sip_failure.failure_reason",
+      "topic": "payment",
+      "label": "last SIP failure reason",
+      "value_type": "string",
+      "question_hints": [
+        "Why did SIP fail?"
+      ]
+    },
+    {
+      "path": "payments.last_sip_failure.failed_at",
+      "topic": "payment",
+      "label": "last SIP failure time",
+      "value_type": "datetime",
+      "question_hints": [
+        "When did SIP last fail?"
+      ]
+    },
+    {
+      "path": "payments.recent_orders",
+      "topic": "payment",
+      "label": "recent orders",
+      "value_type": "list",
+      "question_hints": [
+        "Latest order status?"
+      ]
+    },
+    {
+      "path": "payments.recent_orders.failure_reason",
+      "topic": "payment",
+      "label": "order failure reason",
+      "value_type": "string",
+      "question_hints": [
+        "Why did payment fail?"
+      ]
+    },
+    {
+      "path": "payments.sip_plans",
+      "topic": "payment",
+      "label": "SIP plans",
+      "value_type": "list",
+      "question_hints": [
+        "List my SIPs"
+      ]
+    },
+    {
+      "path": "payments.sip_plans.status",
+      "topic": "payment",
+      "label": "SIP plan status",
+      "value_type": "enum",
+      "question_hints": [
+        "Is my SIP active?"
+      ]
+    },
+    {
+      "path": "payments.sip_plans.next_installment_date",
+      "topic": "payment",
+      "label": "next SIP date",
+      "value_type": "date",
+      "question_hints": [
+        "When is next SIP?"
+      ]
+    },
+    {
+      "path": "payments.sip_plans.frequency",
+      "topic": "payment",
+      "label": "SIP frequency",
+      "value_type": "enum",
+      "question_hints": [
+        "Monthly or weekly SIP?"
+      ]
+    },
+    {
+      "path": "payments.sip_plans.amount",
+      "topic": "payment",
+      "label": "SIP amount",
+      "value_type": "money",
+      "question_hints": [
+        "SIP installment amount?"
+      ]
+    },
+    {
+      "path": "payments.failed_sip_plans",
+      "topic": "payment",
+      "label": "failed SIP plans",
+      "value_type": "list",
+      "question_hints": [
+        "Any failed SIP plans?"
+      ]
+    },
+    {
+      "path": "portfolio.status",
+      "topic": "portfolio",
+      "label": "portfolio status",
+      "value_type": "enum",
+      "question_hints": [
+        "Portfolio loading error?"
+      ]
+    },
+    {
+      "path": "portfolio.has_pending_orders",
+      "topic": "portfolio",
+      "label": "pending orders",
+      "value_type": "bool",
+      "question_hints": [
+        "Why portfolio pending after payment?"
+      ]
+    },
+    {
+      "path": "portfolio.current_value",
+      "topic": "portfolio",
+      "label": "current value",
+      "value_type": "money",
+      "question_hints": [
+        "Portfolio worth today?"
+      ]
+    },
+    {
+      "path": "portfolio.invested",
+      "topic": "portfolio",
+      "label": "invested amount",
+      "value_type": "money",
+      "question_hints": [
+        "Total invested?"
+      ]
+    },
+    {
+      "path": "portfolio.total_return",
+      "topic": "portfolio",
+      "label": "total return",
+      "value_type": "money",
+      "question_hints": [
+        "Gain or loss?"
+      ]
+    },
+    {
+      "path": "portfolio.holdings_count",
+      "topic": "portfolio",
+      "label": "holdings count",
+      "value_type": "int",
+      "question_hints": [
+        "How many funds?"
+      ]
+    },
+    {
+      "path": "portfolio.active_sips_count",
+      "topic": "portfolio",
+      "label": "active SIP count",
+      "value_type": "int",
+      "question_hints": [
+        "How many active SIPs?"
+      ]
+    },
+    {
+      "path": "portfolio.monthly_sip",
+      "topic": "portfolio",
+      "label": "monthly SIP total",
+      "value_type": "money",
+      "question_hints": [
+        "Monthly SIP total?"
+      ]
+    },
+    {
+      "path": "portfolio.as_on",
+      "topic": "portfolio",
+      "label": "as-on date",
+      "value_type": "datetime",
+      "question_hints": [
+        "How fresh is portfolio data?"
+      ]
+    },
+    {
+      "path": "account.account_status",
+      "topic": "account",
+      "label": "account status",
+      "value_type": "enum",
+      "question_hints": [
+        "Is account restricted?"
+      ]
+    },
+    {
+      "path": "account.email_verified",
+      "topic": "account",
+      "label": "email verified",
+      "value_type": "bool",
+      "question_hints": [
+        "Email verified?"
+      ]
+    },
+    {
+      "path": "account.email_verified_at",
+      "topic": "account",
+      "label": "email verified date",
+      "value_type": "datetime",
+      "question_hints": [
+        "When email verified?"
+      ]
+    },
+    {
+      "path": "account.phone_verified",
+      "topic": "account",
+      "label": "phone verified",
+      "value_type": "bool",
+      "question_hints": [
+        "Phone verified for OTP?"
+      ]
+    },
+    {
+      "path": "account.phone_verified_at",
+      "topic": "account",
+      "label": "phone verified date",
+      "value_type": "datetime",
+      "question_hints": [
+        "When phone verified?"
+      ]
+    },
+    {
+      "path": "account.mfa_enrolled",
+      "topic": "account",
+      "label": "MFA enrolled",
+      "value_type": "bool",
+      "question_hints": [
+        "Is MFA on?"
+      ]
+    },
+    {
+      "path": "account.has_password_login",
+      "topic": "account",
+      "label": "password login",
+      "value_type": "bool",
+      "question_hints": [
+        "Password login enabled?"
+      ]
+    },
+    {
+      "path": "account.google_account_linked",
+      "topic": "account",
+      "label": "Google linked",
+      "value_type": "bool",
+      "question_hints": [
+        "Google sign-in linked?"
+      ]
+    },
+    {
+      "path": "account.apple_account_linked",
+      "topic": "account",
+      "label": "Apple linked",
+      "value_type": "bool",
+      "question_hints": [
+        "Apple sign-in linked?"
+      ]
+    },
+    {
+      "path": "account.linked_sign_in_providers",
+      "topic": "account",
+      "label": "sign-in providers",
+      "value_type": "list",
+      "question_hints": [
+        "How do I sign in?"
+      ]
+    },
+    {
+      "path": "account.country_code",
+      "topic": "account",
+      "label": "country code",
+      "value_type": "string",
+      "question_hints": [
+        "Account country?"
+      ]
+    },
+    {
+      "path": "goals.goals",
+      "topic": "goals",
+      "label": "goals list",
+      "value_type": "list",
+      "question_hints": [
+        "What goals do I have?"
+      ]
+    },
+    {
+      "path": "goals.goals.progress_pct",
+      "topic": "goals",
+      "label": "goal progress",
+      "value_type": "float",
+      "question_hints": [
+        "Goal progress percent?"
+      ]
+    },
+    {
+      "path": "goals.goals.target_amount",
+      "topic": "goals",
+      "label": "goal target",
+      "value_type": "money",
+      "question_hints": [
+        "Goal target amount?"
+      ]
+    },
+    {
+      "path": "goals.goals.current_amount",
+      "topic": "goals",
+      "label": "goal current amount",
+      "value_type": "money",
+      "question_hints": [
+        "Goal saved so far?"
+      ]
+    },
+    {
+      "path": "goals.goals.target_date",
+      "topic": "goals",
+      "label": "goal target date",
+      "value_type": "date",
+      "question_hints": [
+        "Goal deadline?"
+      ]
+    },
+    {
+      "path": "goals.goals.status",
+      "topic": "goals",
+      "label": "goal status",
+      "value_type": "enum",
+      "question_hints": [
+        "Is goal active?"
+      ]
+    },
+    {
+      "path": "goals.goals.title",
+      "topic": "goals",
+      "label": "goal title",
+      "value_type": "string",
+      "question_hints": [
+        "Goal name?"
+      ]
+    },
+    {
+      "path": "family_groups.groups",
+      "topic": "family",
+      "label": "family groups",
+      "value_type": "list",
+      "question_hints": [
+        "Am I in a family group?"
+      ]
+    },
+    {
+      "path": "family_groups.groups.my_role",
+      "topic": "family",
+      "label": "family role",
+      "value_type": "enum",
+      "question_hints": [
+        "Am I family head?"
+      ]
+    },
+    {
+      "path": "family_groups.groups.member_count",
+      "topic": "family",
+      "label": "member count",
+      "value_type": "int",
+      "question_hints": [
+        "Family member count?"
+      ]
+    },
+    {
+      "path": "family_groups.groups.status",
+      "topic": "family",
+      "label": "group status",
+      "value_type": "enum",
+      "question_hints": [
+        "Family group status?"
+      ]
+    },
+    {
+      "path": "family_groups.groups.title",
+      "topic": "family",
+      "label": "group title",
+      "value_type": "string",
+      "question_hints": [
+        "Family group name?"
+      ]
+    },
+    {
+      "path": "referrals.has_code",
+      "topic": "referrals",
+      "label": "has referral code",
+      "value_type": "bool",
+      "question_hints": [
+        "Do I have referral code?"
+      ]
+    },
+    {
+      "path": "referrals.click_count",
+      "topic": "referrals",
+      "label": "referral clicks",
+      "value_type": "int",
+      "question_hints": [
+        "Referral link clicks?"
+      ]
+    },
+    {
+      "path": "referrals.signup_count",
+      "topic": "referrals",
+      "label": "referral signups",
+      "value_type": "int",
+      "question_hints": [
+        "Friends signed up?"
+      ]
+    },
+    {
+      "path": "referrals.kyc_verified_count",
+      "topic": "referrals",
+      "label": "referrals KYC done",
+      "value_type": "int",
+      "question_hints": [
+        "Referrals completed KYC?"
+      ]
+    },
+    {
+      "path": "referrals.first_investment_count",
+      "topic": "referrals",
+      "label": "referrals invested",
+      "value_type": "int",
+      "question_hints": [
+        "Referrals who invested?"
+      ]
+    }
+  ]
+}

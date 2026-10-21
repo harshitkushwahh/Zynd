@@ -205,7 +205,9 @@ export type AdminFamilyGroupSipAddon = {
 };
 
 export type AdminFamilyGroupMfHolding = {
-  holding_id: number;
+  holding_id: string;
+  goal_id?: string | null;
+  goal_title?: string | null;
   user_id: string;
   member_label: string;
   member_display_name: string;

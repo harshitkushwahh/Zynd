@@ -162,7 +162,7 @@ from app.application.distributor.partner_verification_service import (
 )
 from app.application.risk_profile.errors import RiskProfileError
 from app.core.database import get_db
-from app.infrastructure.kyc.fp_clients import FpClientError, list_countries, list_states, lookup_pincode
+from app.application.core.facade import FpClientError, list_countries, list_states, lookup_pincode
 from app.infrastructure.persistence.models import User
 
 router = APIRouter(prefix="/distributor", tags=["distributor"])

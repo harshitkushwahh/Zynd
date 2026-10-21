@@ -4,7 +4,7 @@ from app.api.v1 import health
 from app.api.v1.admin.router import router as admin_router
 from app.api.v1.auth.router import router as auth_router
 from app.api.v1.documents.router import router as documents_router
-from app.api.v1.invest.router import router as invest_router
+from app.api.v1.mf.router import router as invest_router
 from app.api.v1.kyc.router import router as kyc_router
 from app.api.v1.notifications.router import router as notifications_router
 from app.api.v1.referral.router import router as referral_router

@@ -21,6 +21,8 @@ type SupportTicketChatPanelProps = {
   className?: string;
   onUpdated?: (detail: SupportTicketDetail) => void;
   notifyTyping?: (typing: boolean) => void;
+  markMessagesRead?: (messageIds: string[]) => void;
+  wsConnected?: boolean;
 };
 
 function messageDayKey(iso: string): string {
@@ -34,6 +36,8 @@ export function SupportTicketChatPanel({
   className,
   onUpdated,
   notifyTyping,
+  markMessagesRead,
+  wsConnected = false,
 }: SupportTicketChatPanelProps) {
   const { displayName } = useSupportAuth();
   const [messages, setMessages] = useState<SupportTicketMessage[]>(ticket.messages);
@@ -62,6 +66,21 @@ export function SupportTicketChatPanel({
     if (!scroller) return;
     scroller.scrollTop = scroller.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    if (!wsConnected || !markMessagesRead) return;
+    const unreadFromCustomer = messages
+      .filter(
+        (row) =>
+          row.role === "user" &&
+          row.visibility !== "internal" &&
+          !row.supportReadAt &&
+          !row.id.startsWith("msg-local-"),
+      )
+      .map((row) => row.id);
+    if (!unreadFromCustomer.length) return;
+    markMessagesRead(unreadFromCustomer);
+  }, [markMessagesRead, messages, wsConnected]);
 
   const handleSend = useCallback((mode: "reply" | "internal") => {
     const body = draft.trim();

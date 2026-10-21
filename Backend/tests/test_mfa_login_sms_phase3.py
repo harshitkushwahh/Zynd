@@ -185,6 +185,57 @@ async def test_verify_mfa_login_still_accepts_totp(
 
 
 @pytest.mark.asyncio
+async def test_wrong_mfa_totp_keeps_session_for_sms_fallback(
+    db_session: AsyncSession,
+    fake_redis: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ = fake_redis
+    monkeypatch.setenv("DEV_OTP", "445566")
+    get_settings.cache_clear()
+    await ensure_security_config_seed(db_session)
+
+    secret = generate_totp_secret()
+    user = User(
+        email=f"mfa-wrong-totp-{uuid4()}@example.com",
+        password_hash=hash_password("password123"),
+        phone="9000112233",
+        role=UserRole.user,
+        status=UserStatus.active,
+        phone_verified_at=datetime.now(timezone.utc),
+    )
+    db_session.add(user)
+    await db_session.flush()
+    await confirm_mfa_enrollment(
+        db_session,
+        user=user,
+        secret=secret,
+        totp_code=pyotp.TOTP(secret).now(),
+    )
+
+    pending = await maybe_mfa_pending_login(
+        user,
+        device_fingerprint="device-fingerprint-test",
+        user_agent="pytest",
+    )
+    token = pending["mfa_token"]
+
+    with pytest.raises(AuthError) as exc:
+        await verify_mfa_login(
+            db_session,
+            mfa_token=token,
+            totp_code="000000",
+            backup_code=None,
+            sms_otp=None,
+            ip="127.0.0.1",
+        )
+    assert exc.value.code == "invalid_mfa_code"
+
+    result = await send_mfa_login_sms(db_session, mfa_token=token, ip="127.0.0.1")
+    assert result["retry_after_seconds"] >= 30
+
+
+@pytest.mark.asyncio
 async def test_send_mfa_login_sms_respects_send_limit(
     db_session: AsyncSession,
     fake_redis: dict[str, str],

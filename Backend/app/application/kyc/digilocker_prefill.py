@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.kyc.pincode_address_service import apply_pincode_lookup_to_address
-from app.infrastructure.kyc.fp_clients import lookup_pincode
+from app.application.master_data.finprim_reference_service import lookup_pincode
 
 
 async def enrich_digilocker_address_prefill(contact_draft: dict[str, Any]) -> dict[str, Any]:

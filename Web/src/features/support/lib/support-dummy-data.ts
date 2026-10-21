@@ -17,24 +17,24 @@ export const ZYND_HELP_BOT_GREETING =
 
 export const SUPPORT_QUICK_REPLIES: SupportQuickReply[] = [
   {
-    id: "qr-kyc",
-    label: "KYC help",
-    message: "I need help with my KYC verification.",
+    id: "qr-kyc-done",
+    label: "KYC completed?",
+    message: "When was my KYC completed?",
   },
   {
-    id: "qr-sip",
-    label: "SIP issue",
-    message: "I have a question about my SIP.",
+    id: "qr-sip-debit",
+    label: "Last SIP debit",
+    message: "When was my last SIP payment deducted?",
   },
   {
-    id: "qr-payment",
-    label: "Payment failed",
-    message: "My payment failed. Can you help me check what went wrong?",
+    id: "qr-sip-fail",
+    label: "SIP failed",
+    message: "When did my SIP fail and why?",
   },
   {
-    id: "qr-account",
-    label: "Account access",
-    message: "I'm having trouble accessing my account.",
+    id: "qr-google",
+    label: "Google linked?",
+    message: "Is my Google account linked to Zynd?",
   },
 ];
 

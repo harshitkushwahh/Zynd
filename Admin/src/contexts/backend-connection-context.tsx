@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 
 import { fetchBackendHealthOk } from "@/components/maintenance-screen";
 import {
+  BACKEND_HEALTH_OK_INTERVAL_MS,
+  backendDownPollDelayMs,
   getBackendConnectionState,
+  markBackendConnectionDown,
   markBackendConnectionReady,
-  markBackendConnectionWaiting,
   subscribeBackendConnectionState,
   type BackendConnectionState,
 } from "@/lib/api-client";
@@ -25,35 +27,48 @@ export function BackendConnectionProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     let cancelled = false;
+    let timer = 0;
+    let failureCount = 0;
+    let inFlight = false;
+
+    const schedule = (delayMs: number) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void pollHealth();
+      }, delayMs);
+    };
 
     async function pollHealth() {
-      const ok = await fetchBackendHealthOk();
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      let ok = false;
+      try {
+        ok = await fetchBackendHealthOk();
+      } finally {
+        inFlight = false;
+      }
       if (cancelled) return;
       if (ok) {
+        failureCount = 0;
         markBackendConnectionReady();
-      } else {
-        markBackendConnectionWaiting();
+        schedule(BACKEND_HEALTH_OK_INTERVAL_MS);
+        return;
       }
-    }
-
-    function onResume() {
-      if (document.visibilityState === "hidden") return;
-      void pollHealth();
+      failureCount += 1;
+      markBackendConnectionDown();
+      schedule(backendDownPollDelayMs(failureCount));
     }
 
     void pollHealth();
-    const timer = window.setInterval(() => {
+    const onOnline = () => {
+      failureCount = 0;
       void pollHealth();
-    }, 12000);
-    window.addEventListener("online", onResume);
-    window.addEventListener("pageshow", onResume);
-    document.addEventListener("visibilitychange", onResume);
+    };
+    window.addEventListener("online", onOnline);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener("online", onResume);
-      window.removeEventListener("pageshow", onResume);
-      document.removeEventListener("visibilitychange", onResume);
+      window.clearTimeout(timer);
+      window.removeEventListener("online", onOnline);
     };
   }, []);
 

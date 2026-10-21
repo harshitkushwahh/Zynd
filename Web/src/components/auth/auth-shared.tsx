@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef } from "react";
 import {
   Check,
@@ -11,12 +12,12 @@ import {
   User,
 } from "lucide-react";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertAction, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PASSWORD_CRITERIA } from "@/lib/password-criteria";
 import { DEFAULT_COUNTRY } from "@/lib/input-rules";
 import { IndiaFlagIcon } from "@/components/auth/india-flag-icon";
-import { DialogBrandPanel } from "@/components/auth/dialog-brand-panel";
+import { APP_NAME } from "@/shared/config/brand";
 import { cn } from "@/lib/utils";
 
 const SIGNUP_STEPS = [
@@ -28,10 +29,6 @@ const SIGNUP_STEPS = [
 ] as const;
 
 export type SignupStepId = (typeof SIGNUP_STEPS)[number]["id"];
-
-export function AuthBrandPanel() {
-  return <DialogBrandPanel />;
-}
 
 export function AuthProgress({
   currentStep,
@@ -76,9 +73,21 @@ export function AuthFormHeader({
   description: string;
 }) {
   return (
-    <div className="mb-5">
-      <h2 className="text-h3 font-semibold tracking-tight text-foreground">{title}</h2>
-      <p className="mt-1.5 text-compact leading-relaxed text-muted-foreground">
+    <div className="mb-4">
+      <span className="relative mb-3 inline-flex size-12 overflow-hidden rounded-full bg-white ring-2 ring-neutral-300">
+        <Image
+          src="/logo.png"
+          alt={APP_NAME}
+          width={64}
+          height={64}
+          className="absolute left-[-6px] top-[-4px] size-[60px] max-w-none object-fill"
+          priority
+        />
+      </span>
+      <h2 className="text-[1.125rem] font-semibold leading-snug tracking-tight text-foreground sm:text-[1.1875rem]">
+        {title}
+      </h2>
+      <p className="mt-2 max-w-full text-caption leading-snug text-muted-foreground sm:text-compact">
         {description}
       </p>
     </div>
@@ -198,9 +207,8 @@ export function OtpInfoBanner({
 }) {
   const canResend = resend?.canResend ?? false;
   const secondsLeft = resend?.secondsLeft ?? 0;
-  const resendLabel = canResend
-    ? (resend?.readyLabel ?? "Resend code")
-    : `Resend in ${secondsLeft}s`;
+  const readyLabel = resend?.readyLabel ?? "Resend code";
+  const resendLabel = canResend ? readyLabel : `${secondsLeft} seconds until resend`;
 
   return (
     <Alert
@@ -208,32 +216,33 @@ export function OtpInfoBanner({
       className="mb-3 mt-0 gap-1.5 rounded-[var(--radius-card)] px-3 py-2 shadow-zynd-low has-[>svg]:gap-x-2"
     >
       <Info className="size-4" />
-      <AlertDescription className="col-start-2 text-caption leading-snug text-current/90 [&_p:not(:last-child)]:mb-0">
+      <AlertDescription className="col-start-2 text-[0.6875rem] leading-snug text-current/90 sm:text-caption [&_p:not(:last-child)]:mb-0">
         <p>{message}</p>
-        {resend ? (
-          <div className="mt-2 flex justify-end border-t border-info/15 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="min-w-[6.25rem] border-info/30 bg-background/80 text-info hover:border-info/40 hover:bg-info/10 hover:text-info disabled:bg-background/60"
-              disabled={!canResend || resend.disabled}
-              onClick={resend.onResend}
-              aria-label={resendLabel}
-              title={resendLabel}
-            >
-              {canResend ? (
-                <>
-                  <RefreshCw className="size-3" aria-hidden />
-                  {resend.readyLabel ?? "Resend code"}
-                </>
-              ) : (
-                <span className="tabular-nums">{resendLabel}</span>
-              )}
-            </Button>
-          </div>
-        ) : null}
       </AlertDescription>
+      {resend ? (
+        <AlertAction className="top-1/2 -translate-y-1/2">
+          <Button
+            type="button"
+            variant="outline"
+            size={canResend ? "icon-xs" : "xs"}
+            className={
+              canResend
+                ? "border-info/30 bg-background/80 text-info hover:border-info/40 hover:bg-info/10 hover:text-info"
+                : "min-w-[2.75rem] border-info/30 bg-background/80 px-2.5 text-info tabular-nums disabled:bg-background/60"
+            }
+            disabled={!canResend || resend.disabled}
+            onClick={resend.onResend}
+            aria-label={resendLabel}
+            title={resendLabel}
+          >
+            {canResend ? (
+              <RefreshCw className="size-3.5" aria-hidden />
+            ) : (
+              <span className="text-caption font-medium">{secondsLeft}s</span>
+            )}
+          </Button>
+        </AlertAction>
+      ) : null}
     </Alert>
   );
 }
@@ -339,7 +348,7 @@ export function AuthSubmitFooter({
   className?: string;
 }) {
   return (
-    <div className={cn("mt-auto space-y-3 pt-4", className)}>
+    <div className={cn("space-y-3 pt-4", className)}>
       {children}
       {hint ? (
         <div className="text-center text-caption leading-relaxed text-muted-foreground">
@@ -385,7 +394,7 @@ export function ProfileNameHeader({
 
 export function stepPanelClass(active: boolean) {
   if (!active) return "hidden";
-  return "flex flex-1 flex-col animate-in fade-in duration-300";
+  return "flex flex-col animate-in fade-in duration-300";
 }
 
 export const profileInputClass =

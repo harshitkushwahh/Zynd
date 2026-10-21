@@ -1,4 +1,4 @@
-"""Local Ollama chat client. The model only writes a reply from context we provide."""
+"""Support Help Bot + routing LLM client (Groq default, optional local Ollama)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.I)
 
-# Avoid hammering Ollama when it is down (console detail + help bot share this probe).
-_ollama_probe: dict[str, Any] = {"checked_at": 0.0, "ok": False, "model": ""}
-_OLLAMA_PROBE_TTL_SECONDS = 45.0
+# Avoid hammering the LLM backend when it is down (console detail + help bot share probes).
+_llm_probe: dict[str, Any] = {"checked_at": 0.0, "ok": False, "model": "", "provider": ""}
+_LLM_PROBE_TTL_SECONDS = 45.0
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,37 @@ class BotDraft:
 
 
 class OllamaError(Exception):
-    pass
+    """LLM backend error (Groq or Ollama). Kept for historical import paths."""
+
+
+SupportLlmError = OllamaError
+
+
+def _assistant_text(message: dict[str, Any] | None) -> str:
+    """Qwen 3.5+ may fill ``thinking`` and leave ``content`` empty unless ``think: false``."""
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        return content.strip()
+    thinking = message.get("thinking")
+    if isinstance(thinking, str) and thinking.strip():
+        return thinking.strip()
+    return ""
+
+
+def _groq_assistant_text(payload: dict[str, Any]) -> str:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return ""
+    first = choices[0]
+    if not isinstance(first, dict):
+        return ""
+    message = first.get("message")
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    return content.strip() if isinstance(content, str) else ""
 
 
 def parse_bot_draft(content: str) -> BotDraft:
@@ -50,6 +80,17 @@ def parse_bot_draft(content: str) -> BotDraft:
     if len(answer) > 2000:
         answer = answer[:2000].rstrip()
     return BotDraft(can_answer=can_answer, answer=answer)
+
+
+def _cache_llm_probe(*, ok: bool, model: str, provider: str) -> None:
+    _llm_probe["checked_at"] = time.monotonic()
+    _llm_probe["ok"] = ok
+    _llm_probe["model"] = model
+    _llm_probe["provider"] = provider
+
+
+def active_llm_provider() -> Literal["groq", "ollama"]:
+    return get_settings().support_llm_provider
 
 
 async def _fetch_ollama_model_names() -> list[str]:
@@ -90,42 +131,78 @@ def _pick_model_name(configured: str, names: list[str]) -> str:
     return fallback
 
 
-def _cache_ollama_probe(*, ok: bool, model: str) -> None:
-    _ollama_probe["checked_at"] = time.monotonic()
-    _ollama_probe["ok"] = ok
-    _ollama_probe["model"] = model
-
-
 async def resolve_ollama_model() -> str:
     """Pick a chat model that exists locally (falls back when OLLAMA_MODEL is missing)."""
     settings = get_settings()
     configured = settings.ollama_model.strip()
     now = time.monotonic()
-    if now - float(_ollama_probe.get("checked_at") or 0.0) < _OLLAMA_PROBE_TTL_SECONDS:
-        if not _ollama_probe.get("ok"):
+    if (
+        now - float(_llm_probe.get("checked_at") or 0.0) < _LLM_PROBE_TTL_SECONDS
+        and _llm_probe.get("provider") == "ollama"
+    ):
+        if not _llm_probe.get("ok"):
             raise OllamaError("Ollama is unavailable.")
-        cached = str(_ollama_probe.get("model") or "").strip()
+        cached = str(_llm_probe.get("model") or "").strip()
         if cached:
             return cached
 
     try:
         names = await _fetch_ollama_model_names()
     except (httpx.HTTPError, ValueError) as exc:
-        _cache_ollama_probe(ok=False, model="")
+        _cache_llm_probe(ok=False, model="", provider="ollama")
         raise OllamaError("Ollama is unavailable.") from exc
 
     if not names:
-        _cache_ollama_probe(ok=False, model="")
+        _cache_llm_probe(ok=False, model="", provider="ollama")
         raise OllamaError("Ollama has no models installed.")
 
     resolved = _pick_model_name(configured, names)
-    _cache_ollama_probe(ok=True, model=resolved)
+    _cache_llm_probe(ok=True, model=resolved, provider="ollama")
     return resolved
 
 
-async def check_ollama_ready() -> tuple[bool, str]:
-    """Lightweight probe for Help Bot (Ollama) availability."""
+async def resolve_llm_model() -> str:
     settings = get_settings()
+    if settings.support_llm_provider == "groq":
+        return settings.groq_model.strip()
+    return await resolve_ollama_model()
+
+
+async def _probe_groq() -> tuple[bool, str]:
+    settings = get_settings()
+    model = settings.groq_model.strip()
+    if not settings.groq_api_key.strip():
+        _cache_llm_probe(ok=False, model=model, provider="groq")
+        return False, model
+
+    now = time.monotonic()
+    if (
+        now - float(_llm_probe.get("checked_at") or 0.0) < _LLM_PROBE_TTL_SECONDS
+        and _llm_probe.get("provider") == "groq"
+    ):
+        return bool(_llm_probe.get("ok")), str(_llm_probe.get("model") or model)
+
+    url = settings.groq_base_url.rstrip("/") + "/models"
+    headers = {"Authorization": f"Bearer {settings.groq_api_key.strip()}"}
+    timeout = httpx.Timeout(5.0, connect=2.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("groq_probe_failed error=%s", exc)
+        _cache_llm_probe(ok=False, model=model, provider="groq")
+        return False, model
+
+    _cache_llm_probe(ok=True, model=model, provider="groq")
+    return True, model
+
+
+async def check_llm_ready() -> tuple[bool, str]:
+    """Lightweight probe for Help Bot LLM availability."""
+    settings = get_settings()
+    if settings.support_llm_provider == "groq":
+        return await _probe_groq()
     try:
         model = await resolve_ollama_model()
         return True, model
@@ -133,23 +210,81 @@ async def check_ollama_ready() -> tuple[bool, str]:
         return False, settings.ollama_model
 
 
-async def complete_help_reply(*, system_prompt: str, user_prompt: str) -> BotDraft:
+async def check_ollama_ready() -> tuple[bool, str]:
+    """Backward-compatible alias for help-bot status."""
+    return await check_llm_ready()
+
+
+async def _groq_chat_completion(
+    *,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_completion_tokens: int,
+    reasoning_effort: Literal["low", "medium", "high"],
+    timeout_seconds: float,
+) -> str:
+    settings = get_settings()
+    api_key = settings.groq_api_key.strip()
+    if not api_key:
+        raise OllamaError("Groq API key is not configured.")
+
+    url = settings.groq_base_url.rstrip("/") + "/chat/completions"
+    body: dict[str, Any] = {
+        "model": settings.groq_model.strip(),
+        "messages": messages,
+        "temperature": temperature,
+        "max_completion_tokens": max_completion_tokens,
+        "top_p": 1,
+        "stream": False,
+        "response_format": {"type": "json_object"},
+        "reasoning_effort": reasoning_effort,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    timeout = httpx.Timeout(timeout_seconds, connect=5.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, json=body, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text[:240] if exc.response is not None else ""
+        raise OllamaError(f"Groq chat failed ({exc.response.status_code}): {detail}") from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise OllamaError("Groq is unavailable.") from exc
+
+    content = _groq_assistant_text(payload if isinstance(payload, dict) else {})
+    if not content:
+        raise OllamaError("Groq returned an empty reply.")
+    return content
+
+
+async def _ollama_chat_completion(
+    *,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+    num_predict: int,
+    timeout_seconds: float,
+) -> str:
     settings = get_settings()
     model = await resolve_ollama_model()
     url = settings.ollama_base_url.rstrip("/") + "/api/chat"
-    trimmed_prompt = user_prompt[:12_000]
     body = {
         "model": model,
         "stream": False,
+        "think": False,
         "format": "json",
         "keep_alive": "30m",
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": trimmed_prompt},
+            {"role": "user", "content": user_prompt},
         ],
-        "options": {"temperature": 0.2, "num_predict": 384, "num_ctx": 4096},
+        "options": {"temperature": temperature, "num_predict": num_predict, "num_ctx": 4096},
     }
-    timeout = httpx.Timeout(settings.ollama_timeout_seconds, connect=5.0)
+    timeout = httpx.Timeout(timeout_seconds, connect=5.0)
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, json=body)
@@ -162,9 +297,35 @@ async def complete_help_reply(*, system_prompt: str, user_prompt: str) -> BotDra
         raise OllamaError("Ollama is unavailable.") from exc
 
     message = payload.get("message") if isinstance(payload, dict) else None
-    content = message.get("content") if isinstance(message, dict) else None
-    if not isinstance(content, str) or not content.strip():
+    content = _assistant_text(message if isinstance(message, dict) else None)
+    if not content:
         raise OllamaError("Ollama returned an empty reply.")
+    return content
+
+
+async def complete_help_reply(*, system_prompt: str, user_prompt: str) -> BotDraft:
+    settings = get_settings()
+    trimmed_prompt = user_prompt[:12_000]
+    if settings.support_llm_provider == "groq":
+        content = await _groq_chat_completion(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": trimmed_prompt},
+            ],
+            temperature=0.2,
+            max_completion_tokens=384,
+            reasoning_effort="low",
+            timeout_seconds=settings.groq_timeout_seconds,
+        )
+        return parse_bot_draft(content)
+
+    content = await _ollama_chat_completion(
+        system_prompt=system_prompt,
+        user_prompt=trimmed_prompt,
+        temperature=0.2,
+        num_predict=384,
+        timeout_seconds=settings.ollama_timeout_seconds,
+    )
     return parse_bot_draft(content)
 
 
@@ -253,33 +414,25 @@ def parse_routing_decision(content: str) -> RoutingDecision:
 
 async def complete_routing_decision(*, user_prompt: str) -> RoutingDecision:
     settings = get_settings()
-    model = await resolve_ollama_model()
-    url = settings.ollama_base_url.rstrip("/") + "/api/chat"
-    body = {
-        "model": model,
-        "stream": False,
-        "format": "json",
-        "keep_alive": "30m",
-        "messages": [
-            {"role": "system", "content": _ROUTING_SYSTEM},
-            {"role": "user", "content": user_prompt[:10_000]},
-        ],
-        "options": {"temperature": 0.15, "num_predict": 512, "num_ctx": 4096},
-    }
-    timeout = httpx.Timeout(settings.support_routing_timeout_seconds, connect=1.5)
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=body)
-            response.raise_for_status()
-            payload = response.json()
-    except httpx.HTTPStatusError as exc:
-        detail = exc.response.text[:240] if exc.response is not None else ""
-        raise OllamaError(f"Ollama routing failed ({exc.response.status_code}): {detail}") from exc
-    except (httpx.HTTPError, ValueError) as exc:
-        raise OllamaError("Ollama is unavailable.") from exc
+    trimmed = user_prompt[:10_000]
+    if settings.support_llm_provider == "groq":
+        content = await _groq_chat_completion(
+            messages=[
+                {"role": "system", "content": _ROUTING_SYSTEM},
+                {"role": "user", "content": trimmed},
+            ],
+            temperature=0.15,
+            max_completion_tokens=512,
+            reasoning_effort="medium",
+            timeout_seconds=settings.support_routing_timeout_seconds,
+        )
+        return parse_routing_decision(content)
 
-    message = payload.get("message") if isinstance(payload, dict) else None
-    content = message.get("content") if isinstance(message, dict) else None
-    if not isinstance(content, str) or not content.strip():
-        raise OllamaError("Ollama returned an empty routing reply.")
+    content = await _ollama_chat_completion(
+        system_prompt=_ROUTING_SYSTEM,
+        user_prompt=trimmed,
+        temperature=0.15,
+        num_predict=512,
+        timeout_seconds=settings.support_routing_timeout_seconds,
+    )
     return parse_routing_decision(content)

@@ -16,8 +16,12 @@ Both apps use the same FastAPI backend (`env.apiUrl` / `@zynd/shared/api`).
   - `{ "type": "subscribe", "conversation_id"?: "...", "ticket_id"?: "..." }`
   - `{ "type": "agent:typing", "ticket_id": "...", "typing": true|false }` (agents)
   - `{ "type": "agent:presence", "status": "online"|"away" }` (agents)
+  - `{ "type": "messages:read", "conversation_id"?: "...", "ticket_id"?: "...", "message_ids": ["..."] }` — mark read (no REST endpoint)
+    - Customer: requires `conversation_id`; marks bot/agent/system messages as read by the investor.
+    - Agent: `ticket_id` is enough (conversation resolved server-side); marks customer messages as read by support (`support_read_by: agent`).
 - Server → client:
-  - `message:new`, `ticket:updated`, `agent:typing`, `agent:presence`, `conversation:locked`
+  - `message:new`, `message:read`, `ticket:updated`, `agent:typing`, `agent:presence`, `conversation:locked`
+  - `message:read`: `{ "message_id", "conversation_id", "ticket_id"?, "side": "customer"|"support", "read_at", "support_read_by"?: "bot"|"agent" }`
 
 Events are fan-out via Redis channel `support:realtime` (DB index `redis_event_stream_db`).
 

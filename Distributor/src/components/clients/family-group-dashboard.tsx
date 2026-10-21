@@ -50,9 +50,9 @@ type FamilyGroupDashboardProps = {
   className?: string;
 };
 
-function deriveFamilyPortfolioTotals(totalValue: number) {
+function deriveFamilyPortfolioTotals(totalValue: number, investedValue = 0) {
   const current = Math.max(0, totalValue);
-  const invested = current > 0 ? Math.round(current * 0.92) : 0;
+  const invested = Math.max(0, investedValue);
   const returns = current - invested;
   return { current, invested, returns };
 }
@@ -72,7 +72,7 @@ export function FamilyGroupDashboard({
 }: FamilyGroupDashboardProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.family;
   const portfolioCopy = DISTRIBUTOR_CLIENT_COPY.portfolio;
-  const portfolio = deriveFamilyPortfolioTotals(group.totalValue);
+  const portfolio = deriveFamilyPortfolioTotals(group.totalValue, group.investedValue);
   const isOwner = group.role === "owner";
   const goals = group.goals ?? [];
   const roleLabel = group.role === "owner" ? "Owner" : "Member";

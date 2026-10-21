@@ -169,6 +169,10 @@ ollama_tags_reachable() {
 }
 
 ensure_ollama() {
+  llm_provider="$(printf '%s' "${SUPPORT_LLM_PROVIDER:-groq}" | tr '[:upper:]' '[:lower:]')"
+  if [ "${llm_provider}" != "ollama" ]; then
+    return 0
+  fi
   if [ "${OLLAMA_AUTOSTART:-true}" != "true" ]; then
     return 0
   fi

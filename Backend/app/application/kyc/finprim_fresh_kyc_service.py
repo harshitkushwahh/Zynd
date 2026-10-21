@@ -16,7 +16,7 @@ from app.application.kyc.kyc_form_mapper import data_url_to_file
 from app.application.kyc.kyc_partner_refs import append_kyc_partner_ref, latest_partner_ref_id
 from app.application.kyc.personal_draft import lock_marital_status_on_journey
 from app.core.config import get_settings
-from app.infrastructure.kyc.finprim_kyc_client import (
+from app.infrastructure.core.kyc.finprim_kyc_client import (
     create_finprim_esign,
     fetch_finprim_esign,
     fetch_kyc_request,
@@ -25,7 +25,7 @@ from app.infrastructure.kyc.finprim_kyc_client import (
     patch_kyc_request,
     upload_finprim_kyc_file,
 )
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.models import KycOverallStatus, KycStepStatus, User
 
 

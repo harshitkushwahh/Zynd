@@ -34,8 +34,8 @@ from app.application.mf.portfolio_holdings_service import (
     parse_investment_account_returns,
 )
 from app.core.config import Settings, get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     get_capital_gains_report,
     get_holdings_report,
     get_investment_account_wise_returns,

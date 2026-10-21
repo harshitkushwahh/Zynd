@@ -22,7 +22,7 @@ from app.application.mf.mf_transaction_consent_service import (
     send_mf_transaction_consent_otp,
     verify_mf_transaction_consent_otp,
 )
-from app.infrastructure.mf.fp_oms_client import list_mf_folios
+from app.infrastructure.core.mf.oms_client import list_mf_folios
 from app.infrastructure.persistence.mf_transaction_models import MfOrder
 from app.infrastructure.persistence.models import User
 

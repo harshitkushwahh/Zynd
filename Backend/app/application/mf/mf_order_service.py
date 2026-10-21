@@ -15,8 +15,12 @@ from app.application.investor.investor_bank_account_resolver import (
 from app.application.mf.catalog_governance_service import is_product_investable
 from app.application.mf.catalog_lifecycle_service import is_catalog_eligible
 from app.application.mf.invest_fund_slug import fund_public_slug
+from app.application.family_groups.family_holding_link_service import (
+    apply_family_link_metadata,
+    materialize_family_link_from_order,
+    resolve_purchase_family_link,
+)
 from app.application.goals.errors import GoalError
-from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
 from app.application.mf.mf_order_errors import MfOrderError
 from app.application.mf.invest_amc_display import load_fund_amc_display_by_fund_id
@@ -111,6 +115,7 @@ async def create_lumpsum_order(
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
+    family_group_id: uuid.UUID | None = None,
     payment_method: str = "upi",
     folio_number: str | None = None,
 ) -> MfOrder:
@@ -149,7 +154,12 @@ async def create_lumpsum_order(
     )
     mfia = await get_or_create_mf_investment_account(session, user_id=user_id)
     try:
-        linked_goal = await validate_family_goal_link(session, user_id=user_id, family_goal_id=family_goal_id)
+        linked_group_id, linked_goal_id = await resolve_purchase_family_link(
+            session,
+            user_id=user_id,
+            family_group_id=family_group_id,
+            family_goal_id=family_goal_id,
+        )
     except GoalError as exc:
         raise MfOrderError(code=exc.code, message=exc.message, status_code=exc.status_code) from exc
 
@@ -185,15 +195,16 @@ async def create_lumpsum_order(
             "mfia_status": mfia.status.value,
             "user_ip": user_ip,
             **({"folio_number": folio_number.strip()} if folio_number and folio_number.strip() else {}),
-            **(
-                apply_family_goal_metadata({}, family_goal_id=linked_goal.id)
-                if linked_goal
-                else {}
+            **apply_family_link_metadata(
+                {},
+                family_group_id=linked_group_id,
+                family_goal_id=linked_goal_id,
             ),
         },
     )
     session.add(order)
     await session.flush()
+    await materialize_family_link_from_order(session, order)
     await _record_order_event(session, order, from_status=None, to_status=order.status.value)
     return order
 

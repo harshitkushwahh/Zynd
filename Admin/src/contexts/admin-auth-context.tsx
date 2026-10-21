@@ -22,7 +22,7 @@ import {
   type AdminLoginFlowResponse,
   type AdminUser,
 } from "@/lib/auth-api";
-import { setAccessToken } from "@/lib/api-client";
+import { backendDownPollDelayMs, setAccessToken } from "@/lib/api-client";
 
 type AdminAuthContextValue = {
   user: AdminUser | null;
@@ -85,27 +85,42 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!sessionRetrying) return;
 
-    const intervalId = window.setInterval(() => {
-      void bootstrapAdminSession().then((result) => {
-        if (result.user) {
-          setUser(result.user);
-          setPermissions(result.permissions);
-          setRoleKeys(result.roleKeys);
-          setSoleSuperAdmin(result.soleSuperAdmin);
-          setSessionRetrying(false);
-          return;
-        }
-        if (result.reason === "expired") {
-          setUser(null);
-          setPermissions([]);
-          setRoleKeys([]);
-          setSoleSuperAdmin(false);
-          setSessionRetrying(false);
-        }
-      });
-    }, 3000);
+    let cancelled = false;
+    let timerId = 0;
+    let failureCount = 0;
 
-    return () => window.clearInterval(intervalId);
+    const schedule = () => {
+      timerId = window.setTimeout(() => {
+        if (cancelled) return;
+        void bootstrapAdminSession().then((result) => {
+          if (cancelled) return;
+          if (result.user) {
+            setUser(result.user);
+            setPermissions(result.permissions);
+            setRoleKeys(result.roleKeys);
+            setSoleSuperAdmin(result.soleSuperAdmin);
+            setSessionRetrying(false);
+            return;
+          }
+          if (result.reason === "expired") {
+            setUser(null);
+            setPermissions([]);
+            setRoleKeys([]);
+            setSoleSuperAdmin(false);
+            setSessionRetrying(false);
+            return;
+          }
+          failureCount += 1;
+          schedule();
+        });
+      }, backendDownPollDelayMs(failureCount + 1));
+    };
+
+    schedule();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+    };
   }, [sessionRetrying]);
 
   const signIn = useCallback(async (email: string, password: string, turnstileToken?: string | null) => {

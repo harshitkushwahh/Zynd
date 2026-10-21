@@ -23,14 +23,14 @@ from app.application.mf.mf_fp_state import (
     FP_SUCCESS_STATES,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     extract_fp_old_id,
     extract_fp_state,
     get_mf_purchase,
     list_mf_purchases_for_plan,
 )
-from app.infrastructure.mf.fp_payment_client import (
+from app.infrastructure.core.mf.payment_client import (
     create_netbanking_payment,
     extract_payment_status,
     extract_payment_token_url,

@@ -19,11 +19,13 @@ export const copy = {
     loginDescription: `Enter your password to sign in to ${APP_NAME}.`,
     joinTitle: `Join ${APP_NAME}`,
     joinEmailOtpMessage: (email: string) =>
-      `A ${otpDigits}-digit code was sent to ${email}. Enter it below to join ${APP_NAME}.`,
+      `${otpDigits}-digit code sent to ${email}.`,
     dialogSrTitle: `Login or Sign up to ${APP_NAME}`,
     joinButton: `Join ${APP_NAME}`,
     continueWithGoogle: "Continue with Google",
     continueWithApple: "Continue with Apple",
+    oauthGoogle: "Google",
+    oauthApple: "Apple",
     googleNotConfigured: "Google Sign-In is not configured yet.",
     appleNotConfigured: "Apple Sign-In is not configured yet.",
     mfaAuthenticatorHint: `Open your authenticator app and enter the ${otpDigits}-digit code.`,
@@ -34,10 +36,17 @@ export const copy = {
     otpAuthenticatorError: `Enter the ${otpDigits}-digit code from your authenticator app.`,
     otpEmailChange: `Enter the ${otpDigits}-digit code sent to`,
     referralCodeToggle: "Have a referral code?",
-    referralCodeToggleHide: "Hide referral code",
-    referralCodePlaceholder: "Referral code",
-    referralCodeHint: "Applied when you create a new account.",
+    referralCodeChange: "Change referral code",
+    referralCodePlaceholder: "e.g. AB12CD34",
+    referralCodeFormatHint: "Enter the code shared by your friend 🎁",
     referralCodeInvalid: "Enter a valid referral code (6–16 letters or numbers).",
+    referralCodeNotFound: "This referral code isn't valid or is no longer active.",
+    referralExistingUserError: "Referral codes can't be applied to an existing account.",
+    referralDialogTitle: "Referral code",
+    referralDialogApply: "Apply",
+    referralDialogApplying: "Checking…",
+    referralAppliedAriaRemove: "Remove referral code",
+    mfaLetsGo: "Let's go",
   },
   backendConnection: {
     title: "We'll be right back",
@@ -83,7 +92,9 @@ export const copy = {
     verifyDescription: "Enter the 6-digit code from your authenticator app.",
     backupDescription: "Enter one unused backup code. You do not need the authenticator code as well.",
     useBackupCode: "Use a backup code instead",
+    useBackupCodeShort: "Backup code",
     useAuthenticator: "Use authenticator app instead",
+    useAuthenticatorShort: "Authenticator",
     editPassword: "Edit password",
     couldNotReset: "Could not reset password.",
     backToHome: "Back to home",
@@ -1157,7 +1168,9 @@ export const copy = {
       stepUpTitle: "Confirm it's you",
       stepUpDescription: "Verify with your authenticator or a code sent to your mobile.",
       stepUpSendSms: "Send code to mobile",
+      stepUpSendSmsShort: "SMS code",
       stepUpUseAuthenticator: "Use authenticator app",
+      stepUpUseAuthenticatorShort: "Authenticator",
       invalidSmsCode: "Invalid or expired SMS code.",
       couldNotSendSms: "Could not send verification code.",
     },
@@ -1432,6 +1445,10 @@ export const copy = {
       allocationTitle: "Asset allocation",
       holdingInvestedFor: "Invested for {months} months",
       holdingFolioLabel: "Folio",
+      holdingLinkFamily: "Link to family",
+      holdingLinkedFamily: "Linked to family",
+      holdingFamilyLinkChange: "Change",
+      holdingFamilyLinkRemove: "Remove",
       holdingCurrentNav: "Current NAV",
       holdingAvgNav: "Avg. NAV",
       holdingRedeemableUnits: "Redeemable units",
@@ -1771,11 +1788,160 @@ export const copy = {
       `${appName} helps individuals and families manage, grow, and understand their`,
     heroSublead:
       "wealth through a secure, premium experience built on trust, growth, and innovation.",
+    homeHero: {
+      headline: "Effortless wealth for a smarter future",
+      description:
+        "Track portfolios, optimize goals, and grow with intelligent guidance secure, seamless finance for individuals and families on one platform.",
+      primaryCta: "Start for free",
+      socialProof: {
+        metric: "10K+",
+        avatars: ["AK", "RS", "PM", "ND"] as const,
+        caption:
+          "Investors and families use ZYND to manage money with clarity, confidence, and long-term impact.",
+      },
+      partnersTitle: "Built with trusted infrastructure partners",
+      partners: [
+        { name: "UPI", logoSrc: "/upi.png", width: 72 },
+        { name: "NACH", logoSrc: "/nach.png", width: 88 },
+        { name: "Cybrilla", logoSrc: "/partners/cybrilla-icon.png", width: 28 },
+      ] as const,
+      stats: [
+        { value: "10K+", label: "Investors on ZYND" },
+        { value: "500+", label: "Mutual fund schemes" },
+        { value: "4.9★", label: "App experience rating" },
+      ] as const,
+      portfolioPreview: {
+        fundName: "HDFC Flexi Cap Fund",
+        growthLabel: "1Y growth",
+        growthValue: "+18.4%",
+        amcName: "HDFC Mutual Fund",
+        amcSlug: "hdfc-mutual-fund",
+      },
+    },
+    homeFeatures: {
+      eyebrow: "Why ZYND",
+      title: "One platform for how India actually invests",
+      description:
+        "From SIPs and mutual funds to family portfolios and goals — everything stays in sync with real holdings and clear performance.",
+      items: [
+        {
+          title: "Unified portfolio",
+          description:
+            "See mutual funds, goals, and cash movement together instead of juggling spreadsheets and statements.",
+        },
+        {
+          title: "Goal-based SIPs",
+          description:
+            "Set targets for education, retirement, or a home down payment and track progress with automated contributions.",
+        },
+        {
+          title: "Fund discovery",
+          description:
+            "Filter by AMC, category, and risk profile with NAV history and comparisons before you invest.",
+        },
+        {
+          title: "Family-ready views",
+          description:
+            "Invite family members, share visibility safely, and coordinate decisions from one dashboard.",
+        },
+      ] as const,
+    },
+    homeProducts: {
+      eyebrow: "Products",
+      title: "Built for long-term wealth, not one-off trades",
+      description:
+        "Start with mutual funds and SIPs, then layer goals, reports, and guidance as your needs grow.",
+    },
     featureCards: [
       { label: "Portfolio", value: "Track all assets in one place" },
       { label: "Goals", value: "Plan and monitor your future" },
       { label: "Insights", value: "AI-powered financial guidance" },
     ] as const,
+    navLinks: [
+      { label: "Home", href: "/" },
+      { label: "Features", href: "/features" },
+      { label: "Products", href: "/products" },
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
+    ] as const,
+    navGetStarted: "Get started",
+    navOpenMenu: "Open menu",
+    navCloseMenu: "Close menu",
+    productsEyebrow: "Products",
+    productsLead:
+      "Mutual funds, SIPs, goals, and portfolio tracking — designed for Indian investors and families.",
+    aboutEyebrow: (appName: string = APP_NAME) => `About ${appName}`,
+    aboutHeadline: "Built for trust, growth, and clarity",
+    featuresPage: {
+      eyebrow: "Features",
+      title: "Everything you need to manage wealth",
+      description:
+        "Portfolio visibility, goal planning, and guidance — built for clarity and long-term growth.",
+      highlightsEyebrow: "At a glance",
+      highlightsTitle: "Three places your money stays clear",
+      productsCta: "See investing products",
+    },
+    productsPage: {
+      title: "Investing products that fit your life",
+      items: [
+        {
+          title: "Mutual funds",
+          description: "Explore curated funds, NFOs, SIPs, and category screens.",
+        },
+        {
+          title: "Goals & SIPs",
+          description: "Plan milestones and automate contributions with confidence.",
+        },
+        {
+          title: "Portfolio",
+          description: "Unified holdings, performance, and family-aware views.",
+        },
+        {
+          title: "Reports & insights",
+          description: "Statements, tax views, and intelligent nudges when you need them.",
+        },
+      ] as const,
+    },
+    contactPage: {
+      eyebrow: "Contact",
+      title: "Talk to us",
+      description: "Partnerships, product questions, or support reach out anytime.",
+      helpHint: "Already a customer?",
+      helpLinkLabel: "Visit help center",
+    },
+    footer: {
+      description:
+        "Secure wealth management for individuals and families portfolio, goals, and intelligent guidance in one place.",
+      workContactPrefix: "For work inquiries",
+      workContactEmail: "hello@zynd.shop",
+      columns: [
+        {
+          title: "Product",
+          links: [
+            { label: "Portfolio", href: "/features" },
+            { label: "Goals", href: "/features" },
+            { label: "Mutual funds", href: "/products" },
+          ],
+        },
+        {
+          title: "Company",
+          links: [
+            { label: "About", href: "/about" },
+            { label: "Contact", href: "/contact" },
+            { label: "Help", href: "/dashboard/help" },
+          ],
+        },
+        {
+          title: "Legal",
+          links: [
+            { label: "Privacy", href: "/contact" },
+            { label: "Terms", href: "/contact" },
+          ],
+        },
+      ] as const,
+      copyright: (year: number, appName: string = APP_NAME) =>
+        `© ${year} ${appName}. All rights reserved.`,
+    },
   },
   mutualFunds: {
     viewAll: "View all",
@@ -2311,8 +2477,8 @@ export const copy = {
         },
         {
           id: "family_goals",
-          title: "Family goal linking",
-          body: "Optionally link this investment to a shared family goal so everyone in the group can track progress. This is separate from legal KYC nominees and does not change folio registration.",
+          title: "Family linking",
+          body: "Optionally link this investment to one family portfolio, and to one shared goal if the family has one. Leaving it unlinked keeps the fund in your personal portfolio only. This is separate from legal KYC nominees and does not change folio registration.",
         },
       ],
     },
@@ -2718,13 +2884,24 @@ export const copy = {
     createError: "Unable to create goal.",
     updateError: "Unable to update goal.",
     limitReached: (limit: number) => `You can have at most ${limit} active personal goals.`,
-    linkableFamilyGoalsLoading: "Loading family goals…",
-    linkableFamilyGoalsError: "Unable to load family goals.",
-    linkableFamilyGoalsNone: "Don't link to a family goal",
-    linkableFamilyGoalsEmptyTitle: "Link a family goal",
-    linkableFamilyGoalsEmpty: "Join a family group and create goals to link investments.",
+    linkableFamilyGoalsLoading: "Loading family groups…",
+    linkableFamilyGoalsError: "Unable to load family groups.",
+    linkableFamilyGoalsNone: "Don't link to a family",
+    linkableFamilyGoalsEmptyTitle: "Link to a family",
+    linkableFamilyGoalsEmpty: "Join or create a family group to share a fund with them.",
     linkableFamilyGoalsCreateHint: "Create a family goal",
     linkableFamilyGoalsBrowseGroups: "Go to family groups",
+    familyLinkDialogTitle: "Link this fund to a family",
+    familyLinkDialogDescription:
+      "The fund’s current value will show in that family’s portfolio. Your personal portfolio stays the same. One fund can belong to one family.",
+    familyLinkPortfolioOnly: "Family portfolio only",
+    familyLinkNoGoals: "This family has no goal. The fund will show in the shared portfolio.",
+    familyLinkEntireFolio: "This links the entire folio, including units you already hold.",
+    familyLinkMoveWarning: "This fund is already linked to another family. Saving will move it.",
+    familyLinkConfirm: "Link fund",
+    familyLinkSaving: "Saving…",
+    familyLinkFailed: "Unable to update the family link.",
+    familyLinkVisibility: "Family members will see this scheme and its value.",
     linkableFamilyGoalsProgress: (pct: number) => `${pct.toFixed(0)}% funded`,
   },
   authSteps: {
@@ -2984,7 +3161,11 @@ export const copy = {
       portfolioLoading: "Loading portfolio…",
       portfolioLoadFailed: "Unable to load portfolio",
       portfolioEmptyTitle: "No portfolio data yet",
-      portfolioEmptyDescription: "Import CAS holdings or invest through Zynd to see your family allocation.",
+      portfolioEmptyDescription: "Link a mutual fund from your portfolio to show it in this family.",
+      portfolioUnassignedTitle: "Not assigned to a goal",
+      portfolioHoldingMember: "Held by",
+      goalContributionSchemesLabel: "Linked funds",
+      goalContributionOtherSavings: "Other savings are separate from mutual fund value.",
       portfolioLockedTitle: "Coming soon",
       portfolioLockedSubtitle: "Family portfolio overview will show shared allocation across your group.",
       goalTitle: "Family goal",
@@ -3270,12 +3451,12 @@ export const copy = {
     seeAllTickets: "See all",
     ticketsPageTitle: "Tickets",
     ticketsPageDescription: "Every support ticket on your account, including ones still in progress.",
-    resolutionYes: "Yes, resolved",
-    resolutionNo: "No, still open",
+    resolutionYes: "Yes",
+    resolutionNo: "No",
     resolutionHint: "Tap a button so we can update your ticket.",
     ticketResolvedNote: "This ticket is resolved.",
     ticketResolvedComposerLocked:
-      "This ticket is resolved. You can't send more messages here start a new chat if you need help again.",
+      "This ticket is resolved. You can't send more messages here.",
     noRecentTickets: "No tickets yet",
     noRecentTicketsHint:
       "Message us and we'll keep your conversations here for easy follow-up.",

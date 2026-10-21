@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.mf.ingestion_run_service import begin_ingestion_run, finish_ingestion_run, has_running_job
 from app.application.mf.mf_tax_templates import STAMP_DUTY_PCT, tax_notes_for_fund
 from app.core.config import get_settings
-from app.infrastructure.mf.fp_oms_client import get_fund_scheme_by_isin
+from app.infrastructure.core.mf.oms_client import get_fund_scheme_by_isin
 from app.infrastructure.persistence.mf_models import IngestionRunStatus, MutualFund, SchemeComplianceFacts
 
 logger = logging.getLogger(__name__)

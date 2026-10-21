@@ -190,6 +190,9 @@ async def _apply_pin_reset(
         )
     if session_id is not None:
         await store_pin_unlock(user.id, session_id)
+    from app.application.auth.auth_cache_invalidation import invalidate_auth_user_caches
+
+    await invalidate_auth_user_caches(user.id)
     return {"ok": True, "pin_enrolled": True}
 
 

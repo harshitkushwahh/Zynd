@@ -18,8 +18,12 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.family_groups.family_holding_link_service import (
+    apply_family_link_metadata,
+    materialize_family_link_from_sip_plan,
+    resolve_purchase_family_link,
+)
 from app.application.goals.errors import GoalError
-from app.application.goals.goal_funding_service import apply_family_goal_metadata, validate_family_goal_link
 from app.application.investor.investor_profile_service import ensure_pending_investor_profile_for_payment
 from app.application.mf.mf_fp_review_poll import (
     PLAN_REVIEW_WAIT_STATES,
@@ -38,8 +42,8 @@ from app.application.mf.mf_order_service import _load_order_context, get_or_crea
 from app.application.mf.mf_transaction_retry import bump_transient_retry, is_transient_error, should_skip_retry
 from app.application.mf.public_asset_service import resolve_amc_logo_url
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     _extract_fp_object,
     cancel_mf_purchase_plan,
     create_mf_investment_account,
@@ -451,6 +455,7 @@ async def create_sip_plan(
     user_ip: str | None = None,
     bank_account_id: uuid.UUID | None = None,
     family_goal_id: uuid.UUID | None = None,
+    family_group_id: uuid.UUID | None = None,
     mandate_type: str = "upi",
     folio_number: str | None = None,
 ) -> MfSipPlan:
@@ -501,7 +506,12 @@ async def create_sip_plan(
         )
 
     try:
-        linked_goal = await validate_family_goal_link(session, user_id=user_id, family_goal_id=family_goal_id)
+        linked_group_id, linked_goal_id = await resolve_purchase_family_link(
+            session,
+            user_id=user_id,
+            family_group_id=family_group_id,
+            family_goal_id=family_goal_id,
+        )
     except GoalError as exc:
         raise MfOrderError(code=exc.code, message=exc.message, status_code=exc.status_code) from exc
 
@@ -519,7 +529,7 @@ async def create_sip_plan(
         number_of_installments=installments,
         status=MfSipPlanStatus.pending,
         idempotency_key=idempotency_key,
-        metadata_=apply_family_goal_metadata(
+        metadata_=apply_family_link_metadata(
             {
                 "investor_profile_status": profile.status.value,
                 "mfia_status": mfia.status.value,
@@ -528,11 +538,13 @@ async def create_sip_plan(
                 "user_ip": resolved_user_ip,
                 **({"folio_number": folio_number.strip()} if folio_number and folio_number.strip() else {}),
             },
-            family_goal_id=linked_goal.id if linked_goal else None,
+            family_group_id=linked_group_id,
+            family_goal_id=linked_goal_id,
         ),
     )
     session.add(plan)
     await session.flush()
+    await materialize_family_link_from_sip_plan(session, plan)
     await _record_plan_event(session, plan, from_status=None, to_status=plan.status.value)
     return plan
 
@@ -720,8 +732,12 @@ async def _apply_plan_state(session: AsyncSession, plan: MfSipPlan, *, fp_state:
     if mapped == MfSipPlanStatus.active and plan.activated_at is None:
         plan.activated_at = datetime.now(timezone.utc)
         from app.application.goals.goal_funding_service import record_contribution_from_sip_plan
+        from app.application.family_groups.family_holding_link_service import (
+            materialize_family_link_from_sip_plan,
+        )
 
         await record_contribution_from_sip_plan(session, plan)
+        await materialize_family_link_from_sip_plan(session, plan)
     elif mapped == MfSipPlanStatus.failed:
         plan.failure_code = plan.failure_code or "fp_plan_failed"
         plan.failure_reason = plan.failure_reason or str(fp_state)
@@ -791,6 +807,7 @@ async def submit_pending_sip_plan(session: AsyncSession, plan: MfSipPlan) -> boo
         if meta.get("folio_number") != folio_number:
             meta["folio_number"] = folio_number
             plan.metadata_ = meta
+            await materialize_family_link_from_sip_plan(session, plan)
     user_ip = await resolve_fp_user_ip(meta.get("user_ip"))
     if user_ip:
         body["user_ip"] = user_ip

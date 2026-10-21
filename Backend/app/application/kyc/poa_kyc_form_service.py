@@ -31,8 +31,8 @@ from app.application.kyc.path_a_proof import (
 )
 from app.application.integrations.integration_runtime import is_poa_kyc_provider_unavailable_error
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.kyc.kyc_forms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.kyc_forms_client import (
     fetch_kyc_form,
     patch_kyc_form,
     retry_kyc_form_proof_fetch,

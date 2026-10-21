@@ -6,7 +6,7 @@ import {
   stepPanelClass,
   underlineInputClass,
 } from "@/components/auth/auth-shared";
-import { TurnstileWidget } from "@/components/auth/turnstile-widget";
+import { isTurnstileRequired, TurnstileWidget } from "@/components/auth/turnstile-widget";
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
 import { ClearableInput } from "@/components/ui/clearable-input";
@@ -16,10 +16,8 @@ import { useAuthDialogFlow } from "@/features/auth/hooks/auth-dialog-flow";
 import { env } from "@/lib/env";
 import { copy } from "@/shared/config/copy";
 import { clampToMaxLength, inputRuleProps } from "@/lib/input-rules";
-
-function normalizeReferralCodeInput(value: string) {
-  return value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 16);
-}
+import { Gift, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function AuthEmailStep() {
   const flow = useAuthDialogFlow();
@@ -37,6 +35,9 @@ export function AuthEmailStep() {
     isLoginMode,
     setIsLoginMode,
     turnstileResetKey,
+    turnstileMountKey,
+    surfaceOpen,
+    referralDialogOpen,
     setTurnstileToken,
     turnstileVerified,
     turnstileError,
@@ -45,41 +46,40 @@ export function AuthEmailStep() {
     handleGoogleSignIn,
     handleAppleSignIn,
     goToForgotPassword,
-    referralCodeInput,
-    setReferralCodeInput,
-    showReferralCodeInput,
-    toggleReferralCodeInput,
-    referralCodeError,
-    setReferralCodeError,
-    commitReferralCodeInput,
+    appliedReferralCode,
+    openReferralDialog,
+    clearAppliedReferralCode,
   } = flow;
 
   return (
     <form onSubmit={handleEmailContinue} className={stepPanelClass(step === "email")}>
-      <Button
-        type="button"
-        variant="auth-oauth"
-        size="auth"
-        disabled={isSubmitting || !env.googleClientId}
-        title={env.googleClientId ? undefined : copy.auth.googleNotConfigured}
-        onClick={() => void handleGoogleSignIn()}
-      >
-        <GoogleIcon />
-        {copy.auth.continueWithGoogle}
-      </Button>
+      <div className="grid grid-cols-2 gap-2.5">
+        <Button
+          type="button"
+          variant="auth-oauth"
+          size="auth"
+          className="rounded-[0.75rem]"
+          disabled={isSubmitting || !env.googleClientId}
+          title={env.googleClientId ? undefined : copy.auth.googleNotConfigured}
+          onClick={() => void handleGoogleSignIn()}
+        >
+          <GoogleIcon />
+          {copy.auth.oauthGoogle}
+        </Button>
 
-      <Button
-        type="button"
-        variant="auth-oauth"
-        size="auth"
-        className="mt-2"
-        disabled={isSubmitting || !env.appleClientId}
-        title={env.appleClientId ? undefined : copy.auth.appleNotConfigured}
-        onClick={() => void handleAppleSignIn()}
-      >
-        <AppleIcon />
-        {copy.auth.continueWithApple}
-      </Button>
+        <Button
+          type="button"
+          variant="auth-oauth"
+          size="auth"
+          className="rounded-[0.75rem]"
+          disabled={isSubmitting || !env.appleClientId}
+          title={env.appleClientId ? undefined : copy.auth.appleNotConfigured}
+          onClick={() => void handleAppleSignIn()}
+        >
+          <AppleIcon />
+          {copy.auth.oauthApple}
+        </Button>
+      </div>
 
       <div className="my-5 flex items-center gap-3">
         <Separator className="flex-1 bg-border" />
@@ -118,6 +118,39 @@ export function AuthEmailStep() {
       />
       <FieldMessage message={emailError} />
 
+      {!isLoginMode ? (
+        <div className="mt-3 flex justify-end">
+          {appliedReferralCode ? (
+            <div
+              className={cn(
+                "flex max-w-full items-center gap-1.5",
+                "rounded-full border border-border/70 bg-background/75 py-1 pl-2 pr-1",
+                "font-mono text-[0.6875rem] font-medium tracking-wide text-foreground shadow-zynd-low",
+                "backdrop-blur-md backdrop-saturate-150",
+              )}
+              title={appliedReferralCode}
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                <Gift className="size-3" strokeWidth={2.25} aria-hidden />
+              </span>
+              <span className="min-w-0 max-w-[10rem] truncate sm:max-w-[12rem]">{appliedReferralCode}</span>
+              <button
+                type="button"
+                className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                aria-label={copy.auth.referralAppliedAriaRemove}
+                onClick={clearAppliedReferralCode}
+              >
+                <X className="size-3" strokeWidth={2.25} aria-hidden />
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={openReferralDialog} className="auth-link shrink-0">
+              {copy.auth.referralCodeToggle}
+            </button>
+          )}
+        </div>
+      ) : null}
+
       {isLoginMode ? (
         <>
           <PasswordInput
@@ -138,74 +171,56 @@ export function AuthEmailStep() {
         </>
       ) : null}
 
-      <div className="mt-3 flex items-center justify-between gap-3">
-        {isLoginMode ? (
+      {isLoginMode ? (
+        <div className="mt-3">
           <button type="button" onClick={goToForgotPassword} className="auth-link">
             Forgot password?
           </button>
-        ) : (
-          <span aria-hidden className="min-w-0" />
-        )}
-        <button type="button" onClick={toggleReferralCodeInput} className="auth-link shrink-0">
-          {showReferralCodeInput
-            ? copy.auth.referralCodeToggleHide
-            : copy.auth.referralCodeToggle}
-        </button>
-      </div>
+        </div>
+      ) : null}
 
-      {showReferralCodeInput ? (
-        <>
-          <ClearableInput
-            type="text"
-            name="referral_code"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={copy.auth.referralCodePlaceholder}
-            value={referralCodeInput}
-            onClear={() => {
-              setReferralCodeInput("");
-              setReferralCodeError("");
-            }}
-            onChange={(event) => {
-              setReferralCodeInput(normalizeReferralCodeInput(event.target.value));
-              if (referralCodeError) setReferralCodeError("");
-            }}
-            onBlur={() => {
-              void commitReferralCodeInput();
-            }}
-            aria-invalid={!!referralCodeError}
-            className={`${underlineInputClass} mt-3`}
-            maxLength={16}
-          />
-          <FieldMessage message={referralCodeError} />
-          {!referralCodeError ? (
-            <p className="mt-1 text-caption text-muted-foreground">{copy.auth.referralCodeHint}</p>
+      {isLoginMode && loginCaptchaRequired && isTurnstileRequired() && surfaceOpen && !referralDialogOpen ? (
+        <div
+          className={
+            turnstileVerified
+              ? "max-h-0 overflow-hidden opacity-0 transition-[max-height,opacity,margin] duration-300 ease-out"
+              : "relative z-[2] mt-4 mb-4 min-h-[4.5rem] overflow-visible opacity-100 transition-[max-height,opacity,margin] duration-300 ease-out"
+          }
+          aria-hidden={turnstileVerified}
+        >
+          {!turnstileVerified ? (
+            <>
+              <TurnstileWidget
+                resetKey={`login-${turnstileResetKey}-${turnstileMountKey}`}
+                onVerify={setTurnstileToken}
+                onExpire={() => setTurnstileToken("")}
+              />
+              <FieldMessage message={turnstileError} />
+            </>
           ) : null}
-        </>
+        </div>
       ) : null}
 
-      {isLoginMode && loginCaptchaRequired && !turnstileVerified ? (
-        <>
-          <TurnstileWidget
-            resetKey={`login-${turnstileResetKey}`}
-            onVerify={setTurnstileToken}
-            onExpire={() => setTurnstileToken("")}
-            className="mt-4 mb-4"
-          />
-          <FieldMessage message={turnstileError} />
-        </>
-      ) : null}
-
-      {!isLoginMode && !turnstileVerified ? (
-        <>
-          <TurnstileWidget
-            resetKey={`email-${turnstileResetKey}`}
-            onVerify={setTurnstileToken}
-            onExpire={() => setTurnstileToken("")}
-            className="mt-4 mb-4"
-          />
-          <FieldMessage message={turnstileError} />
-        </>
+      {!isLoginMode && isTurnstileRequired() && surfaceOpen && !referralDialogOpen ? (
+        <div
+          className={
+            turnstileVerified
+              ? "max-h-0 overflow-hidden opacity-0 transition-[max-height,opacity,margin] duration-300 ease-out"
+              : "relative z-[2] mt-4 mb-4 min-h-[4.5rem] overflow-visible opacity-100 transition-[max-height,opacity,margin] duration-300 ease-out"
+          }
+          aria-hidden={turnstileVerified}
+        >
+          {!turnstileVerified ? (
+            <>
+              <TurnstileWidget
+                resetKey={`email-${turnstileResetKey}-${turnstileMountKey}`}
+                onVerify={setTurnstileToken}
+                onExpire={() => setTurnstileToken("")}
+              />
+              <FieldMessage message={turnstileError} />
+            </>
+          ) : null}
+        </div>
       ) : null}
 
       <AuthSubmitFooter

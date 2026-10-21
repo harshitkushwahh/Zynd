@@ -1,4 +1,5 @@
 import {
+  backendDownPollDelayMs,
   beginBackendRequest,
   endBackendRequest,
   isBackendConnectionError,
@@ -11,6 +12,29 @@ import { ApiError, parseApiError } from "./errors";
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<SessionRefreshResult> | null = null;
+let refreshCooldownUntil = 0;
+let refreshFailureCount = 0;
+let refreshCooldownReason: "network" | "expired" = "network";
+
+function cooledRefreshResult(): SessionRefreshResult | null {
+  if (Date.now() >= refreshCooldownUntil) return null;
+  return { ok: false, reason: refreshCooldownReason };
+}
+
+function startRefreshCooldown(reason: "network" | "expired"): void {
+  refreshCooldownReason = reason;
+  if (reason === "expired") {
+    refreshCooldownUntil = Date.now() + 60_000;
+    return;
+  }
+  refreshFailureCount += 1;
+  refreshCooldownUntil = Date.now() + backendDownPollDelayMs(refreshFailureCount);
+}
+
+function clearRefreshCooldown(): void {
+  refreshFailureCount = 0;
+  refreshCooldownUntil = 0;
+}
 
 const AUTH_PATHS_SKIP_SESSION_REFRESH = [
   "/auth/signup/",
@@ -59,6 +83,7 @@ export type SessionRefreshResult =
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+  if (token) clearRefreshCooldown();
 }
 
 export function getAccessToken() {
@@ -66,6 +91,9 @@ export function getAccessToken() {
 }
 
 export async function refreshSession(): Promise<SessionRefreshResult> {
+  const cooled = cooledRefreshResult();
+  if (cooled) return cooled;
+
   if (!refreshPromise) {
     refreshPromise = (async (): Promise<SessionRefreshResult> => {
       beginBackendRequest();
@@ -84,12 +112,15 @@ export async function refreshSession(): Promise<SessionRefreshResult> {
         if (!response.ok) {
           if (isBackendConnectionStatus(response.status)) {
             markBackendConnectionWaiting();
+            startRefreshCooldown("network");
             return { ok: false, reason: "network" };
           }
           setAccessToken(null);
+          startRefreshCooldown("expired");
           return { ok: false, reason: "expired" };
         }
 
+        clearRefreshCooldown();
         markBackendConnectionReady();
         const data = (await response.json()) as Record<string, unknown> & {
           access_token: string;
@@ -98,6 +129,7 @@ export async function refreshSession(): Promise<SessionRefreshResult> {
         return { ok: true, accessToken: data.access_token, data };
       } catch {
         markBackendConnectionWaiting();
+        startRefreshCooldown("network");
         return { ok: false, reason: "network" };
       } finally {
         endBackendRequest();

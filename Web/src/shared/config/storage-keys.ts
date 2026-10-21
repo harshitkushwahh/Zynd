@@ -10,6 +10,7 @@ export const storageKeys = {
   changeEmailOtpCooldown: "zynd:change-email-otp",
   loginSecurityAlerts: "zynd.login_security_alerts",
   sessionHint: "zynd:session-hint",
+  sessionUser: "zynd:session-user",
   pinUnlockedAt: "zynd:pin-unlocked-at",
   pinResetOtpCooldown: "zynd:pin-reset-otp",
   stepUpSmsCooldown: "zynd:step-up-sms-otp",

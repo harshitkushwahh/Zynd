@@ -9,8 +9,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.mf_folio_reuse_service import parse_mf_folio_list
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import list_mf_folios
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import list_mf_folios
 from app.infrastructure.persistence.mf_models import FundAmc
 from app.infrastructure.persistence.mf_transaction_models import MfInvestmentAccount
 

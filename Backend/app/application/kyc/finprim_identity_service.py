@@ -12,7 +12,7 @@ from app.application.kyc.kyc_form_mapper import _full_name
 from app.application.kyc.master_data import map_identity_document_to_drafts
 from app.core.config import get_settings
 from app.infrastructure.kyc.cybrilla_terminal_log import log_kyc_step
-from app.infrastructure.kyc.fp_clients import (
+from app.infrastructure.core.kyc.fp_clients import (
     FpClientError,
     create_kyc_request_and_identity_document,
     fetch_identity_document,

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status
 from app.application.kyc.kyc_completion_service import on_kyc_completed
-from app.infrastructure.kyc.poa_client import fetch_poa_preverification, poa_check_readiness
+from app.infrastructure.core.kyc.poa_client import fetch_poa_preverification, poa_check_readiness
 from app.infrastructure.persistence.models import KycOverallStatus, User
 
 

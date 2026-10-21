@@ -101,6 +101,9 @@ class SupportMessage(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
+    customer_read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    support_read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    support_read_by: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     conversation: Mapped[SupportConversation] = relationship(back_populates="messages")
 

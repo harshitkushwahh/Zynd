@@ -1,0 +1,143 @@
+{
+  "training_rows": 52000,
+  "catalog_fields": 68,
+  "covered_fields": 68,
+  "coverage_pct": 100.0,
+  "missing_fields": [],
+  "unknown_context_field_refs": {
+    "kyc.steps": 39,
+    "payments.last_sip_failure": 18,
+    "payments.last_sip_debit": 2,
+    "payments.last_sip_failure.created_at": 1
+  },
+  "can_answer_distribution": {
+    "True": 46646,
+    "False": 5354
+  },
+  "rows_by_topic": {
+    "kyc": 13931,
+    "payment": 10018,
+    "account": 8777,
+    "portfolio": 7180,
+    "goals": 5309,
+    "referrals": 4082,
+    "family": 3883
+  },
+  "heatmap_by_topic": {
+    "kyc": {
+      "kyc.overall_status": 1268,
+      "kyc.completed_at": 749,
+      "kyc.status_last_updated_at": 766,
+      "kyc.steps.pan": 762,
+      "kyc.steps.digilocker": 749,
+      "kyc.steps.address": 734,
+      "kyc.steps.personal": 734,
+      "kyc.steps.nominee": 749,
+      "kyc.steps.bank": 783,
+      "kyc.steps.signature": 734,
+      "kyc.steps.review": 752,
+      "kyc.last_completed_step": 733,
+      "kyc.readiness_code": 796,
+      "kyc.readiness_reason": 754,
+      "kyc.pan_verification_status": 766,
+      "kyc.bank_verification_status": 756,
+      "kyc.external_kyc_status": 751,
+      "kyc.kyc_already_registered": 727
+    },
+    "payment": {
+      "payments.last_sip_debit.settled_at": 745,
+      "payments.last_sip_debit.amount": 753,
+      "payments.last_sip_debit.status": 755,
+      "payments.last_sip_failure.failure_reason": 745,
+      "payments.last_sip_failure.failed_at": 740,
+      "payments.recent_orders": 1050,
+      "payments.recent_orders.failure_reason": 363,
+      "payments.sip_plans": 938,
+      "payments.sip_plans.status": 855,
+      "payments.sip_plans.next_installment_date": 767,
+      "payments.sip_plans.frequency": 742,
+      "payments.sip_plans.amount": 747,
+      "payments.failed_sip_plans": 745
+    },
+    "portfolio": {
+      "portfolio.status": 848,
+      "portfolio.has_pending_orders": 839,
+      "portfolio.current_value": 841,
+      "portfolio.invested": 754,
+      "portfolio.total_return": 774,
+      "portfolio.holdings_count": 860,
+      "portfolio.active_sips_count": 743,
+      "portfolio.monthly_sip": 746,
+      "portfolio.as_on": 775
+    },
+    "account": {
+      "account.account_status": 809,
+      "account.email_verified": 989,
+      "account.email_verified_at": 743,
+      "account.phone_verified": 940,
+      "account.phone_verified_at": 742,
+      "account.mfa_enrolled": 768,
+      "account.has_password_login": 747,
+      "account.google_account_linked": 777,
+      "account.apple_account_linked": 768,
+      "account.linked_sign_in_providers": 746,
+      "account.country_code": 746
+    },
+    "goals": {
+      "goals.goals": 820,
+      "goals.goals.progress_pct": 803,
+      "goals.goals.target_amount": 729,
+      "goals.goals.current_amount": 730,
+      "goals.goals.target_date": 730,
+      "goals.goals.status": 758,
+      "goals.goals.title": 734
+    },
+    "family": {
+      "family_groups.groups": 836,
+      "family_groups.groups.my_role": 754,
+      "family_groups.groups.member_count": 741,
+      "family_groups.groups.status": 767,
+      "family_groups.groups.title": 738
+    },
+    "referrals": {
+      "referrals.has_code": 809,
+      "referrals.click_count": 772,
+      "referrals.signup_count": 861,
+      "referrals.kyc_verified_count": 860,
+      "referrals.first_investment_count": 773
+    }
+  },
+  "top_field_hits": {
+    "kyc.overall_status": 1268,
+    "payments.recent_orders": 1050,
+    "account.email_verified": 989,
+    "account.phone_verified": 940,
+    "payments.sip_plans": 938,
+    "referrals.signup_count": 861,
+    "portfolio.holdings_count": 860,
+    "referrals.kyc_verified_count": 860,
+    "payments.sip_plans.status": 855,
+    "portfolio.status": 848,
+    "portfolio.current_value": 841,
+    "portfolio.has_pending_orders": 839,
+    "family_groups.groups": 836,
+    "goals.goals": 820,
+    "account.account_status": 809,
+    "referrals.has_code": 809,
+    "goals.goals.progress_pct": 803,
+    "kyc.readiness_code": 796,
+    "kyc.steps.bank": 783,
+    "account.google_account_linked": 777,
+    "portfolio.as_on": 775,
+    "portfolio.total_return": 774,
+    "referrals.first_investment_count": 773,
+    "referrals.click_count": 772,
+    "account.apple_account_linked": 768,
+    "account.mfa_enrolled": 768,
+    "payments.sip_plans.next_installment_date": 767,
+    "family_groups.groups.status": 767,
+    "kyc.pan_verification_status": 766,
+    "kyc.status_last_updated_at": 766
+  },
+  "normalized_question_count": 51992
+}

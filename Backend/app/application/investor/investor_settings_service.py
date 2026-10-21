@@ -35,8 +35,8 @@ from app.application.mf.mf_folio_defaults_service import (
 )
 from app.domain.consent.keys import KYC_NOMINATION_OPT_OUT
 from app.infrastructure.kyc.cybrilla_terminal_log import log_exception_dump
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_investor_client import patch_investor_profile
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.investor_client import patch_investor_profile
 from app.infrastructure.persistence.investor_models import (
     InvestorObjectSource,
     InvestorObjectSyncStatus,

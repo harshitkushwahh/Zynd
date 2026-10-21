@@ -27,7 +27,7 @@ function useFamilyGroupDocumentTitle(pathname: string, groupRef: string | null) 
   const needsGroup =
     Boolean(groupRef) &&
     (pathname === "/dashboard/family/group" || pathname.startsWith("/dashboard/family/activity"));
-  const { data: groupsData } = useFamilyGroupsQuery();
+  const { data: groupsData } = useFamilyGroupsQuery(needsGroup);
   const resolvedGroup = useMemo(
     () =>
       needsGroup && groupRef

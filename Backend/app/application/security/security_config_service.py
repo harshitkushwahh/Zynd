@@ -277,4 +277,8 @@ async def apply_security_config_update(
     )
     await db.flush()
     await invalidate_security_config_cache(key)
+    if key.startswith("fund."):
+        from app.application.auth.auth_cache_invalidation import invalidate_fund_movement_policy_cache
+
+        await invalidate_fund_movement_policy_cache()
     return {"key": key, "value": parsed, "version": row.version}

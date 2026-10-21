@@ -23,7 +23,8 @@ from app.api.v1.support.schemas import (
     TicketListOut,
     UpdateTicketRequest,
 )
-from app.application.support.ollama_client import check_ollama_ready
+from app.application.support.ollama_client import active_llm_provider, check_llm_ready
+from app.application.support.training_loader import training_corpus_stats
 from app.application.support.help_bot_service import (
     begin_new_customer_conversation,
     get_current_conversation,
@@ -89,10 +90,17 @@ async def new_support_conversation(
 async def get_help_bot_status(
     _current_user: Annotated[User, Depends(get_current_user)],
 ) -> HelpBotStatusOut:
-    ready, model = await check_ollama_ready()
+    ready, model = await check_llm_ready()
+    status = "connected" if ready else "unavailable"
+    provider = active_llm_provider()
+    corpus = training_corpus_stats()
     return HelpBotStatusOut(
-        ollama="connected" if ready else "unavailable",
+        provider=provider,
+        llm=status,
+        ollama=status,
         model=model,
+        training_rows=int(corpus["training_rows"]),
+        retrieval_ready=bool(corpus["retrieval_ready"]),
     )
 
 

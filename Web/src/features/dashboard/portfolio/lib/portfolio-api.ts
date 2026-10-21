@@ -110,6 +110,14 @@ export type PortfolioHoldingDetailResponse = PortfolioHoldingResponse & {
   sip_options?: PortfolioHoldingSipOption[];
   transactions: PortfolioHoldingTransactionResponse[];
   pending_action?: PortfolioHoldingPendingActionResponse | null;
+  family_link?: PortfolioFamilyLinkResponse | null;
+};
+
+export type PortfolioFamilyLinkResponse = {
+  family_group_id: string;
+  family_group_title: string;
+  goal_id?: string | null;
+  goal_title?: string | null;
 };
 
 export type PortfolioHoldingPendingActionResponse = {
@@ -133,6 +141,27 @@ export function fetchPortfolioSummary() {
 
 export function fetchPortfolioHoldings() {
   return apiRequest<PortfolioHoldingsListResponse>("/invest/portfolio/holdings");
+}
+
+export function linkPortfolioHoldingFamily(
+  holdingId: string,
+  body: { family_group_id: string; goal_id?: string | null },
+) {
+  const params = new URLSearchParams({ holding_id: holdingId });
+  return apiRequest<PortfolioFamilyLinkResponse>(`/invest/portfolio/holdings/family-link?${params.toString()}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      family_group_id: body.family_group_id,
+      goal_id: body.goal_id ?? null,
+    }),
+  });
+}
+
+export function unlinkPortfolioHoldingFamily(holdingId: string) {
+  const params = new URLSearchParams({ holding_id: holdingId });
+  return apiRequest<void>(`/invest/portfolio/holdings/family-link?${params.toString()}`, {
+    method: "DELETE",
+  });
 }
 
 export function fetchPortfolioHoldingDetail(holdingId: string) {

@@ -27,8 +27,8 @@ from app.application.investor.investor_provision_mapper import (
     validate_provision_inputs,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_investor_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.investor_client import (
     create_address,
     create_bank_account,
     create_email_address,

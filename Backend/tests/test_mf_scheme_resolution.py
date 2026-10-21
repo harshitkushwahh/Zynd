@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from app.application.mf.mf_scheme_resolution import (
     is_scheme_unavailable_for_transaction,
     matching_fund_isins,
+    mutual_fund_isin_equals,
     resolve_mf_purchase_scheme,
 )
 
@@ -40,6 +41,12 @@ def test_resolve_mf_purchase_scheme_uses_div_reinvestment_fallback() -> None:
 def test_is_scheme_unavailable_for_transaction() -> None:
     assert is_scheme_unavailable_for_transaction(Exception('scheme: is not available for transaction')) is True
     assert is_scheme_unavailable_for_transaction(Exception("network timeout")) is False
+
+
+def test_mutual_fund_isin_equals_accepts_isin_only() -> None:
+    """SQLAlchemy helper must be called as mutual_fund_isin_equals(isin), not (column, isin)."""
+    clause = mutual_fund_isin_equals("INF740KA1VW7")
+    assert clause is not None
 
 
 def test_matching_fund_isins_returns_requested_variants() -> None:

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { LockKeyhole, ShieldCheck, type LucideIcon } from "lucide-react";
 
 import { copy } from "@/shared/config/copy";
@@ -19,7 +18,7 @@ export function KycDialogSecurityFooter({ className }: KycDialogSecurityFooterPr
     <footer className={cn("shrink-0 px-6 pb-4 pt-0.5 sm:px-8", className)}>
       <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1">
         <span className="inline-flex items-center gap-1 text-[9px] leading-none text-muted-foreground">
-          <Image
+          <img
             src="/partners/cybrilla-icon.png"
             alt="Cybrilla"
             width={12}

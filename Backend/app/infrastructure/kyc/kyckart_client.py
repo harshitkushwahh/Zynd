@@ -233,7 +233,7 @@ async def _run_logged_kyckart_request(
 
 async def kyckart_pan_to_name_dob(pan_number: str) -> dict[str, Any]:
     if not is_kyckart_live():
-        from app.infrastructure.kyc.fp_clients import FpClientError
+        from app.infrastructure.core.kyc.fp_clients import FpClientError
 
         raise FpClientError(
             "Kyckart is not configured for PAN lookup.",

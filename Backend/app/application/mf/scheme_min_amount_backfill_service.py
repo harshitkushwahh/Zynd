@@ -10,7 +10,7 @@ from app.application.mf.invest_catalog_invalidation import notify_invest_catalog
 from app.application.mf.investment_constraints import extract_investment_constraints_from_scheme
 from app.application.mf.scheme_row_normalizer import extract_min_amounts_from_scheme
 from app.core.config import get_settings
-from app.infrastructure.mf.fp_oms_client import get_fund_scheme_by_isin
+from app.infrastructure.core.mf.oms_client import get_fund_scheme_by_isin
 from app.infrastructure.persistence.mf_models import IngestionRunStatus, MutualFund
 
 logger = logging.getLogger(__name__)

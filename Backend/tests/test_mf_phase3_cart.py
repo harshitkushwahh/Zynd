@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.application.mf.mf_order_service import _derive_next_action
-from app.infrastructure.mf.fp_oms_client import create_mf_purchases_batch, update_mf_purchases_batch
+from app.infrastructure.core.mf.oms_client import create_mf_purchases_batch, update_mf_purchases_batch
 
 
 def test_derive_next_action_cart_checkout_pay_upi() -> None:

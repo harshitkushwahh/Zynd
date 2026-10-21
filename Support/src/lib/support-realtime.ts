@@ -18,3 +18,21 @@ export function emitAgentTyping(send: (payload: object) => void, ticketId: strin
 export function subscribeSupportTicket(send: (payload: object) => void, ticketId: string) {
   send({ type: "subscribe", ticket_id: ticketId });
 }
+
+export function emitMessagesRead(
+  send: (payload: object) => void,
+  input: {
+    conversationId?: string | null;
+    ticketId?: string | null;
+    messageIds: string[];
+  },
+) {
+  if (!input.messageIds.length) return;
+  if (!input.conversationId && !input.ticketId) return;
+  send({
+    type: "messages:read",
+    conversation_id: input.conversationId ?? undefined,
+    ticket_id: input.ticketId ?? undefined,
+    message_ids: input.messageIds,
+  });
+}

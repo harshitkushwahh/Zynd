@@ -15,6 +15,9 @@ type ApiMessage = {
   attachment_document_id?: string | null;
   attachment_filename?: string | null;
   resolution_active?: boolean;
+  customer_read_at?: string | null;
+  support_read_at?: string | null;
+  support_read_by?: "bot" | "agent" | null;
 };
 
 export type SupportConversationPayload = {
@@ -75,6 +78,9 @@ export function mapConversationMessages(
       resolutionActive: isPrompt ? resolutionActive : false,
       attachmentId: message.attachment_document_id ?? undefined,
       imageName: message.attachment_filename ?? undefined,
+      customerReadAt: message.customer_read_at ?? undefined,
+      supportReadAt: message.support_read_at ?? undefined,
+      supportReadBy: message.support_read_by ?? undefined,
     };
   });
 }
@@ -166,9 +172,17 @@ export async function fetchSupportAttachment(messageId: string): Promise<string>
 }
 
 export type HelpBotStatus = {
-  ollama: "connected" | "unavailable";
+  provider: "groq" | "ollama";
+  llm: "connected" | "unavailable";
+  /** @deprecated Use `llm` — kept for older API responses */
+  ollama?: "connected" | "unavailable";
   model: string;
 };
+
+export function isHelpBotLlmConnected(status: HelpBotStatus): boolean {
+  if (status.llm === "connected") return true;
+  return status.ollama === "connected";
+}
 
 export async function getHelpBotStatus(): Promise<HelpBotStatus> {
   return apiRequest<HelpBotStatus>("/support/help-bot/status");

@@ -21,6 +21,7 @@ import {
   mapRedeemUnitsItemToRow,
   mapRedemptionJourneyToPortfolioView,
 } from "@/features/dashboard/portfolio/lib/portfolio-redeem-mapper";
+import { ApiError } from "@/lib/api-client";
 import { keepPreviousQueryData } from "@/lib/query-utils";
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
@@ -102,6 +103,13 @@ export function usePortfolioHoldingDetailQuery(holdingId: string) {
     queryFn: () => fetchPortfolioHoldingDetail(holdingId),
     enabled: Boolean(holdingId),
     staleTime: PORTFOLIO_QUERY_STALE_MS,
+    retry: (failureCount, error) => {
+      if (failureCount >= 2) return false;
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        if (error.status !== 408 && error.status !== 429) return false;
+      }
+      return true;
+    },
     placeholderData: keepPreviousQueryData,
     refetchInterval: (current) => {
       const pending = current.state.data?.holding?.pending_action;

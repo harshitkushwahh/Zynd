@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestCategory, InvestFundSummary } from "@/features/invest/api/invest-api";
+import { MfCategoryBrowseEmptyState } from "@/features/invest/components/mf-category-browse-empty-state";
 import { MfFundCard, MfFundCardSkeletonGrid } from "@/features/invest/components/mf-fund-card";
 import {
   mfFundCategoryMetaFor,
@@ -200,10 +201,8 @@ export function MfBrowseCategoryTabs({ categories, onSelectFund }: MfBrowseCateg
           <MfFundCardSkeletonGrid count={BROWSE_TAB_SKELETON_COUNT} />
         ) : null}
 
-        {!isLoadingActive && activeFunds && activeFunds.length === 0 && !activeError ? (
-          <div className="flex min-h-[12rem] items-center justify-center text-compact text-muted-foreground">
-            {copy.mutualFunds.categoryEmpty}
-          </div>
+        {!isLoadingActive && activeFunds && activeFunds.length === 0 && !activeError && activeCategory ? (
+          <MfCategoryBrowseEmptyState categorySlug={activeCategory.slug} />
         ) : null}
 
         {activeFunds && activeFunds.length > 0 ? (

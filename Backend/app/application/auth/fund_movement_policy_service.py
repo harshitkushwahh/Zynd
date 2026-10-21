@@ -74,7 +74,9 @@ def evaluate_fund_eligibility_with_policy(
 
 
 async def evaluate_fund_eligibility(db: AsyncSession, user: User) -> dict[str, Any]:
-    fund_policy = await get_fund_movement_policy(db)
+    from app.application.auth.fund_movement_policy_cache import get_cached_fund_movement_policy
+
+    fund_policy = await get_cached_fund_movement_policy(db)
     return evaluate_fund_eligibility_with_policy(
         user,
         require_mfa=fund_policy["require_mfa"],
@@ -83,8 +85,10 @@ async def evaluate_fund_eligibility(db: AsyncSession, user: User) -> dict[str, A
 
 
 async def get_auth_security_policy(db: AsyncSession, user: User) -> dict[str, Any]:
+    from app.application.auth.fund_movement_policy_cache import get_cached_fund_movement_policy
+
     second_factor = await get_second_factor_policy(db)
-    fund_policy = await get_fund_movement_policy(db)
+    fund_policy = await get_cached_fund_movement_policy(db)
 
     fund_require_mfa = fund_policy["require_mfa"] and user.mfa_required_for_funds
     fund_require_pin = fund_policy["require_pin"]

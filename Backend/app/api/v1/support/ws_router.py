@@ -14,6 +14,7 @@ from app.application.support.realtime.connection_manager import support_connecti
 from app.application.support.realtime.events import support_event
 from app.application.support.realtime.presence import set_agent_presence
 from app.application.support.realtime.publisher import publish_support_realtime_event
+from app.application.support.read_receipts import mark_messages_read_ws
 from app.application.support.ticket_service import get_ticket_by_public_id
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
@@ -134,6 +135,63 @@ async def support_realtime_ws(websocket: WebSocket) -> None:
                     },
                 )
                 await publish_support_realtime_event(event)
+                continue
+
+            if frame_type == "messages:read":
+                raw_ids = frame.get("message_ids") or []
+                message_ids: list[UUID] = []
+                for raw_id in raw_ids:
+                    try:
+                        message_ids.append(UUID(str(raw_id)))
+                    except ValueError:
+                        continue
+                if not message_ids:
+                    continue
+                ticket_id = str(frame.get("ticket_id") or "").strip()
+                conversation_id: UUID | None = None
+                raw_conversation_id = frame.get("conversation_id")
+                if raw_conversation_id:
+                    try:
+                        conversation_id = UUID(str(raw_conversation_id))
+                    except ValueError:
+                        continue
+                async with AsyncSessionLocal() as session:
+                    permissions = await get_user_permission_keys(session, user.id)
+                    is_agent = "support.tickets.read" in permissions
+                    if conversation_id is None and is_agent and ticket_id:
+                        allowed = await _user_may_subscribe_ticket(session, user, ticket_id)
+                        if allowed is not None:
+                            conversation_id = allowed.id
+                    if conversation_id is None:
+                        await session.commit()
+                        continue
+                    conversation = await session.get(SupportConversation, conversation_id)
+                    if conversation is None:
+                        await session.commit()
+                        continue
+                    is_owner = conversation.user_id == user.id
+                    if is_owner:
+                        await mark_messages_read_ws(
+                            session,
+                            user,
+                            conversation_id=conversation_id,
+                            message_ids=message_ids,
+                            as_support=False,
+                        )
+                    elif is_agent:
+                        allowed = None
+                        if ticket_id:
+                            allowed = await _user_may_subscribe_ticket(session, user, ticket_id)
+                        if allowed is not None and allowed.id == conversation_id:
+                            await mark_messages_read_ws(
+                                session,
+                                user,
+                                conversation_id=conversation_id,
+                                message_ids=message_ids,
+                                as_support=True,
+                                support_reader="agent",
+                            )
+                    await session.commit()
                 continue
 
             if frame_type == "agent:presence":

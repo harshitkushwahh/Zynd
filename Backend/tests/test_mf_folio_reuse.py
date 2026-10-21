@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 from app.application.mf.mf_folio_reuse_service import pick_folio_number_for_scheme
-from app.infrastructure.mf.fp_oms_client import create_mf_purchase, create_mf_purchases_batch
+from app.infrastructure.core.mf.oms_client import create_mf_purchase, create_mf_purchases_batch
 
 
 def test_pick_folio_prefers_isin_holding() -> None:
@@ -81,7 +81,7 @@ async def test_create_mf_purchase_includes_folio_only_when_set() -> None:
         captured.update(body)
         return {"id": "mfp_1", "state": "pending"}
 
-    with patch("app.infrastructure.mf.fp_oms_client.fp_mf_post", new=_capture):
+    with patch("app.infrastructure.core.mf.oms_client.fp_mf_post", new=_capture):
         await create_mf_purchase(
             fp_mfia_id="mfia",
             scheme="INF109K01RT3",
@@ -111,9 +111,9 @@ async def test_create_mf_purchases_batch_includes_folio_only_when_set() -> None:
         return {"data": []}
 
     with (
-        patch("app.infrastructure.mf.fp_oms_client.is_finprim_enabled", return_value=True),
-        patch("app.infrastructure.mf.fp_oms_client.fp_mf_post", new=_capture),
-        patch("app.infrastructure.mf.fp_oms_client.resolve_fp_user_ip", new=AsyncMock(return_value=None)),
+        patch("app.infrastructure.core.mf.oms_client.is_finprim_enabled", return_value=True),
+        patch("app.infrastructure.core.mf.oms_client.fp_mf_post", new=_capture),
+        patch("app.infrastructure.core.mf.oms_client.resolve_fp_user_ip", new=AsyncMock(return_value=None)),
     ):
         await create_mf_purchases_batch(
             purchases=[

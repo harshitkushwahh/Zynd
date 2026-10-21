@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.infrastructure.kyc.fp_clients import _normalize_country_row, _normalize_state_row
+from app.infrastructure.core.kyc.fp_clients import _normalize_country_row, _normalize_state_row
 
 
 def test_normalize_state_row_skips_blank_name() -> None:

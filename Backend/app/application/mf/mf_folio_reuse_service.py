@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.mf_investment_account_service import ensure_mfia_old_id
 from app.application.mf.portfolio_holdings_service import parse_holdings_report
-from app.infrastructure.mf.fp_oms_client import get_holdings_report, list_mf_folios
+from app.infrastructure.core.mf.oms_client import get_holdings_report, list_mf_folios
 from app.infrastructure.persistence.mf_models import FundAmc, MutualFund
 from app.infrastructure.persistence.mf_transaction_models import MfInvestmentAccount
 

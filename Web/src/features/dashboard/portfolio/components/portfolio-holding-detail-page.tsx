@@ -25,6 +25,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { PaginationPageMinimalCenter, Table, TableCard } from "@/components/core/table";
 import { paginateItems } from "@/features/family-groups/lib/family-group-table-pagination";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
+import {
+  MfFamilyLinkDialog,
+  type FamilyLinkChoice,
+} from "@/features/invest/components/mf-family-goal-link-picker";
 import type { MfRedeemProceedPayload } from "@/features/invest/components/mf-invest-payment-card-redeem";
 import type { MfPaymentCardVariant } from "@/features/invest/components/mf-invest-payment-card";
 import {
@@ -43,6 +47,12 @@ import { PortfolioUpcomingHoldingDetailPage } from "@/features/dashboard/portfol
 import { PortfolioDetailLockedSection } from "@/features/dashboard/portfolio/components/portfolio-detail-locked-section";
 import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
 import { usePortfolioHoldingDetailQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
+import {
+  linkPortfolioHoldingFamily,
+  unlinkPortfolioHoldingFamily,
+} from "@/features/dashboard/portfolio/lib/portfolio-api";
+import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
+import { queryKeys } from "@/lib/query-keys";
 import {
   cancelMfRedemption,
   cancelMfSwitch,
@@ -186,6 +196,97 @@ function HoldingModeBadge({ mode }: { mode: PortfolioHoldingDetail["holdingMode"
   );
 }
 
+function HoldingFamilyLinkControl({ holding }: { holding: PortfolioHoldingDetail }) {
+  const portfolioCopy = copy.dashboard.portfolio;
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const current: FamilyLinkChoice = holding.familyLink
+    ? {
+        familyGroupId: holding.familyLink.familyGroupId,
+        familyGroupTitle: holding.familyLink.familyGroupTitle,
+        goalId: holding.familyLink.goalId,
+        goalTitle: holding.familyLink.goalTitle,
+      }
+    : null;
+  const label = current
+    ? current.goalTitle
+      ? `${current.familyGroupTitle} · ${current.goalTitle}`
+      : current.familyGroupTitle
+    : portfolioCopy.holdingLinkFamily;
+
+  async function save(next: FamilyLinkChoice) {
+    setSaving(true);
+    setError("");
+    try {
+      if (!next) {
+        if (current) await unlinkPortfolioHoldingFamily(holding.id);
+      } else {
+        await linkPortfolioHoldingFamily(holding.id, {
+          family_group_id: next.familyGroupId,
+          goal_id: next.goalId,
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.portfolio.holdingDetail(holding.id) });
+      await invalidateFamilyQueries(queryClient, next?.familyGroupId ?? current?.familyGroupId);
+      setOpen(false);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : copy.goals.familyLinkFailed);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      {current ? (
+        <>
+          <span className="font-medium text-foreground">{label}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-2.5 text-caption"
+            onClick={() => setOpen(true)}
+          >
+            {portfolioCopy.holdingFamilyLinkChange}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2.5 text-caption"
+            disabled={saving}
+            onClick={() => void save(null)}
+          >
+            {portfolioCopy.holdingFamilyLinkRemove}
+          </Button>
+        </>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2.5 text-caption"
+          onClick={() => setOpen(true)}
+        >
+          {portfolioCopy.holdingLinkFamily}
+        </Button>
+      )}
+      {error ? <span className="text-caption text-destructive">{error}</span> : null}
+      <MfFamilyLinkDialog
+        open={open}
+        onOpenChange={setOpen}
+        value={current}
+        onConfirm={(next) => void save(next)}
+        confirmEntireFolio
+        saving={saving}
+      />
+    </>
+  );
+}
+
 function HoldingOverviewCard({
   holding,
   showDayChange,
@@ -230,6 +331,7 @@ function HoldingOverviewCard({
             {portfolioCopy.holdingFolioLabel}: {holding.folioNumber}
           </span>
           <HoldingModeBadge mode={holding.holdingMode} />
+          <HoldingFamilyLinkControl holding={holding} />
         </div>
       </div>
 
@@ -424,6 +526,14 @@ function PortfolioHoldingPaymentCard({
           minSipAmountInr={holding.minSipAmountInr}
           sipOptions={holding.sipOptions}
           folioNumber={holding.folioNumber}
+          existingFamilyLink={
+            holding.familyLink
+              ? {
+                  groupTitle: holding.familyLink.familyGroupTitle,
+                  goalTitle: holding.familyLink.goalTitle,
+                }
+              : null
+          }
           previewBankLabel={previewBankLabel}
           previewBankName={holding.redeemBankName}
           previewBankIfsc={holding.redeemBankIfsc}

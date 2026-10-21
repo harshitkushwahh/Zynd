@@ -91,7 +91,7 @@ export function AuthPasswordStep() {
   return (
     <form onSubmit={handlePasswordContinue} className={stepPanelClass(step === "password")}>
       <EmailChip email={email} onEdit={() => setStep("email")} />
-      <div className="flex min-h-0 flex-1 flex-col justify-end">
+      <div className="flex flex-col">
         <PasswordInput
           name="password"
           autoComplete="new-password"
@@ -139,20 +139,24 @@ export function AuthMobileStep() {
   return (
     <form onSubmit={handleMobileContinue} className={stepPanelClass(step === "mobile")}>
       <EmailChip email={email} onEdit={() => setStep("email")} />
-      <FieldGroup className="gap-3">
-        <Field>
-          <FieldLabel htmlFor="country">Country</FieldLabel>
-          <div className="flex h-11 items-center gap-2.5 rounded-[var(--radius-control)] border border-border bg-muted/30 px-3 text-compact text-foreground">
-            <IndiaFlagIcon />
-            <span>
-              {defaultCountry.label} ({defaultCountry.dialCode})
-            </span>
+      <Field data-invalid={!!mobileError}>
+        <FieldLabel htmlFor="mobile">Mobile number</FieldLabel>
+        <div className="flex items-stretch gap-2">
+          <div
+            className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-muted/30"
+            title={`${defaultCountry.label} (${defaultCountry.dialCode})`}
+            aria-label={`${defaultCountry.label}, ${defaultCountry.dialCode}`}
+          >
+            <IndiaFlagIcon className="size-6 border-0 shadow-none" />
           </div>
-        </Field>
-        <Field data-invalid={!!mobileError}>
-          <FieldLabel htmlFor="mobile">Mobile number</FieldLabel>
-          <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-muted/20 px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/20">
-            <span className="shrink-0 text-compact font-medium text-muted-foreground">
+          <div
+            className={
+              mobileError
+                ? "flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-control)] border border-destructive bg-muted/20 px-3 focus-within:ring-2 focus-within:ring-destructive/20"
+                : "flex min-w-0 flex-1 items-center gap-2 rounded-[var(--radius-control)] border border-border bg-muted/20 px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/20"
+            }
+          >
+            <span className="shrink-0 text-compact font-semibold tabular-nums text-foreground">
               {defaultCountry.dialCode}
             </span>
             <Input
@@ -173,9 +177,9 @@ export function AuthMobileStep() {
               {...inputRuleProps("mobile")}
             />
           </div>
-          <FieldMessage message={mobileError} />
-        </Field>
-      </FieldGroup>
+        </div>
+        <FieldMessage message={mobileError} />
+      </Field>
       <AuthSubmitFooter>
         <Button
           type="submit"

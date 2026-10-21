@@ -122,29 +122,35 @@ async def build_goal_portfolio_snapshot(db: AsyncSession, goal: Goal) -> dict[st
     linked_product_name: str | None = None
     linked_sip_monthly = Decimal("0")
 
-    if goal.linked_product_id:
-        product = await db.get(Product, goal.linked_product_id)
-        linked_product_name = product.name if product else None
-        holdings_value = await linked_holdings_value_inr(
-            db,
-            user_id=goal.user_id,
-            product_id=goal.linked_product_id,
-        )
-        if goal.family_group_id is None:
-            invested_via_orders = await linked_succeeded_orders_inr(
-                db,
-                user_id=goal.user_id,
-                product_id=goal.linked_product_id,
-            )
-
     if goal.family_group_id:
+        from app.application.family_groups.family_holding_link_service import family_goal_funding_parts
+
+        parts = await family_goal_funding_parts(db, goal)
+        holdings_value = parts["linked_holdings_value_inr"]
+        effective_current = parts["effective_current_inr"]
+        if goal.linked_product_id:
+            product = await db.get(Product, goal.linked_product_id)
+            linked_product_name = product.name if product else None
         linked_sip_monthly = await linked_active_sip_monthly_inr(
             db,
             user_id=goal.user_id,
             goal_id=goal.id,
         )
-
-    effective_current = _decimal(goal.current_amount_inr) + holdings_value + invested_via_orders
+    else:
+        if goal.linked_product_id:
+            product = await db.get(Product, goal.linked_product_id)
+            linked_product_name = product.name if product else None
+            holdings_value = await linked_holdings_value_inr(
+                db,
+                user_id=goal.user_id,
+                product_id=goal.linked_product_id,
+            )
+            invested_via_orders = await linked_succeeded_orders_inr(
+                db,
+                user_id=goal.user_id,
+                product_id=goal.linked_product_id,
+            )
+        effective_current = _decimal(goal.current_amount_inr) + holdings_value + invested_via_orders
     progress_pct = _compute_progress_pct(current=effective_current, target=goal.target_amount_inr)
 
     months_remaining = _months_until(goal.target_date)

@@ -6,8 +6,8 @@ from app.application.mf.mf_redemption_journey_service import (
     map_fp_redemption_status,
     serialize_active_redemption,
 )
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import is_missing_payout_details_error
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import is_missing_payout_details_error
 
 
 def test_map_fp_redemption_status() -> None:

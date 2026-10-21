@@ -99,8 +99,29 @@ function getRingTone(record: KycRecord | null): "warning" | "success" | null {
   return record.status === "complete" ? "success" : "warning";
 }
 
+function splitPanName(fullName: string): {
+  first_name: string | null;
+  middle_name: string | null;
+  last_name: string | null;
+} {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return { first_name: null, middle_name: null, last_name: null };
+  }
+  if (parts.length === 1) {
+    return { first_name: parts[0], middle_name: null, last_name: null };
+  }
+  return {
+    first_name: parts[0],
+    middle_name: parts.length > 2 ? parts.slice(1, -1).join(" ") : null,
+    last_name: parts[parts.length - 1],
+  };
+}
+
 export function KycProvider({ children }: { children: ReactNode }) {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, setUser } = useAuth();
+  const refreshUserInFlightRef = useRef<Promise<unknown> | null>(null);
+  const refreshUserTimerRef = useRef<number | null>(null);
   const [record, setRecord] = useState<KycRecord | null>(null);
   const [overallStatus, setOverallStatus] = useState<string | null>(null);
   const [profileProgress, setProfileProgress] = useState<OverviewKycProfileProgress | null>(null);
@@ -111,6 +132,19 @@ export function KycProvider({ children }: { children: ReactNode }) {
   const previousUserIdRef = useRef<string | null>(null);
   const kycBlockReasons = user ? getKycBlockReasons(user) : [];
   const kycAllowed = Boolean(user && kycBlockReasons.length === 0);
+
+  const scheduleRefreshUser = useCallback(() => {
+    if (refreshUserTimerRef.current !== null) {
+      window.clearTimeout(refreshUserTimerRef.current);
+    }
+    refreshUserTimerRef.current = window.setTimeout(() => {
+      refreshUserTimerRef.current = null;
+      if (refreshUserInFlightRef.current) return;
+      refreshUserInFlightRef.current = refreshUser().finally(() => {
+        refreshUserInFlightRef.current = null;
+      });
+    }, 800);
+  }, [refreshUser]);
 
   const applyBootstrap = useCallback((payload: KycBootstrapResponse) => {
     setOverallStatus(payload.step_statuses?.overall ?? null);
@@ -131,9 +165,9 @@ export function KycProvider({ children }: { children: ReactNode }) {
     applyBootstrap(payload);
     const panName = formatKycPanFullName(payload.pan_draft ?? null);
     if (user && !getDisplayName(user).trim() && panName) {
-      void refreshUser();
+      setUser({ ...user, ...splitPanName(panName) });
     }
-  }, [applyBootstrap, kycAllowed, refreshUser, user]);
+  }, [applyBootstrap, kycAllowed, setUser, user]);
 
   const applyReadinessCheck = useCallback(
     (result: KycReadinessCheckResponse) => {
@@ -172,7 +206,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
                 tooltipDetail: copy.dashboard.overview.profileKycTooltipComplete,
               },
         );
-        void refreshUser();
+        scheduleRefreshUser();
         return;
       }
       setRecord((current) => ({
@@ -180,8 +214,16 @@ export function KycProvider({ children }: { children: ReactNode }) {
         status: "pending",
       }));
     },
-    [refreshUser],
+    [scheduleRefreshUser],
   );
+
+  useEffect(() => {
+    return () => {
+      if (refreshUserTimerRef.current !== null) {
+        window.clearTimeout(refreshUserTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const nextUserId = user?.id ?? null;
@@ -324,9 +366,9 @@ export function KycProvider({ children }: { children: ReactNode }) {
             },
       );
       void refreshFromBootstrap();
-      void refreshUser();
+      scheduleRefreshUser();
     },
-    [refreshFromBootstrap, refreshUser],
+    [refreshFromBootstrap, scheduleRefreshUser],
   );
 
   const resumeAfterDigilocker = useCallback(() => {

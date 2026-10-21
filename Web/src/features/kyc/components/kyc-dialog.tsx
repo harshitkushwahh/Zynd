@@ -322,7 +322,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   const [familyReviewDialogOpen, setFamilyReviewDialogOpen] = useState(false);
   const [nomineeOptOutOpen, setNomineeOptOutOpen] = useState(false);
   const [nomineeOptOutDialogKey, setNomineeOptOutDialogKey] = useState(0);
-  const [nomineeStepMountKey, setNomineeStepMountKey] = useState(0);
+  const [journeyStepRemountKey, setJourneyStepRemountKey] = useState(0);
   const pendingDigilockerUrlRef = useRef<string | null>(null);
   const [digilockerRedirectVariant, setDigilockerRedirectVariant] = useState<"address" | "kraProof">(
     "address",
@@ -1788,8 +1788,10 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
     setPanResetConfirmLoading(true);
     try {
       await resetKycJourneyDrafts();
+      setJourneyDraft(createEmptyJourneyDraft());
       const payload = await fetchKycBootstrap();
       applyBootstrap(payload);
+      setJourneyStepRemountKey((current) => current + 1);
       await refreshFromBootstrap();
       setPanReentryActive(true);
       setPanReadiness(null);
@@ -2082,6 +2084,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         {journeyStepIds.has("address") ? (
           <KycJourneyStepPanel stepId="address" activeStepId={activeStepId}>
             <KycAddressStep
+              key={`address-${journeyStepRemountKey}`}
               initialValue={
                 journeyDraft.address ?? mapContactDraft(bootstrap?.contact_draft) ?? createEmptyAddressForm()
               }
@@ -2107,6 +2110,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         {journeyStepIds.has("personal-info") ? (
           <KycJourneyStepPanel stepId="personal-info" activeStepId={activeStepId}>
             <KycPersonalInfoStep
+              key={`personal-${journeyStepRemountKey}`}
               initialValue={journeyDraft.personalInfo ?? mapPersonalDraft(bootstrap?.personal_draft)}
               enumOptions={enumOptions}
               nationalityOptions={nationalityOptions}
@@ -2120,7 +2124,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         {journeyStepIds.has("nominee") ? (
           <KycJourneyStepPanel stepId="nominee" activeStepId={activeStepId}>
             <KycNomineeStep
-              key={nomineeStepMountKey}
+              key={`nominee-${journeyStepRemountKey}`}
               initialNominees={journeyDraft.nominees ?? mapNomineeDraft(bootstrap?.nominee_draft)}
               relationshipOptions={nomineeEnums?.relationships}
               sourceOfWealthOptions={nomineeEnums?.source_of_wealth}
@@ -2141,6 +2145,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         {journeyStepIds.has("bank") ? (
           <KycJourneyStepPanel stepId="bank" activeStepId={activeStepId}>
             <KycBankStep
+              key={`bank-${journeyStepRemountKey}`}
               initialValue={journeyDraft.bank ?? mappedBank?.form ?? createEmptyBankForm()}
               initialAccountDetails={journeyDraft.bank?.accountDetails ?? mappedBank?.accountDetails ?? null}
               initialProofUploaded={Boolean(bootstrap?.poa_bank_proof_file_id)}
@@ -2154,6 +2159,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         {journeyStepIds.has("signature") ? (
           <KycJourneyStepPanel stepId="signature" activeStepId={activeStepId}>
             <KycSignatureStep
+              key={`signature-${journeyStepRemountKey}`}
               initialValue={
                 journeyDraft.signature ??
                 (bootstrap?.signature_draft as KycSignatureDraft | null | undefined)
@@ -2176,7 +2182,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
                 onSubmit={() => void handleReviewSubmit()}
                 nominationOptedOut={Boolean(journeyDraft.nominationOptedOut)}
                 onAddNominee={() => {
-                  setNomineeStepMountKey((current) => current + 1);
+                  setJourneyStepRemountKey((current) => current + 1);
                   updateDraft({ nominationOptedOut: false });
                   void saveKycJourneyState({ revoke_nomination_opt_out: true }).catch(() => {
                     // Non-blocking — nominee step still allows add / re opt-out.

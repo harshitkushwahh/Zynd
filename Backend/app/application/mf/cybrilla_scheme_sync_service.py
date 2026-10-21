@@ -11,7 +11,7 @@ from app.application.mf.invest_catalog_invalidation import notify_invest_catalog
 from app.application.mf.scheme_row_normalizer import normalize_scheme_row
 from app.application.mf.scheme_sql_upsert_service import upsert_fund_from_normalized
 from app.core.config import get_settings
-from app.infrastructure.mf.fp_oms_client import list_fund_schemes
+from app.infrastructure.core.mf.oms_client import list_fund_schemes
 from app.infrastructure.mf.mongo_raw_store import store_raw_ingestion
 from app.infrastructure.persistence.mf_models import IngestionRunStatus
 

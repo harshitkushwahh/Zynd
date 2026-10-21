@@ -36,6 +36,8 @@ type SupportWidgetContextValue = {
   collapseToPopover: () => void;
   setHelpTab: (tab: SupportHelpTab) => void;
   openChat: () => void;
+  /** Opens chat; starts a fresh thread when the current one is resolved. */
+  openMessageSupport: () => void;
   backToHelp: () => void;
   chat: ReturnType<typeof useSupportChat>;
 };
@@ -109,6 +111,16 @@ export function SupportWidgetProvider({ children }: { children: ReactNode }) {
   }, [resetHelp]);
 
   const openChat = useCallback(() => setPanelView("chat"), []);
+
+  const openMessageSupport = useCallback(() => {
+    if (!chat.canReply) {
+      chat.startNewChat();
+    } else {
+      void chat.refreshConversation();
+    }
+    setPanelView("chat");
+  }, [chat]);
+
   const backToHelp = useCallback(() => {
     preferHelpHomeRef.current = true;
     setPanelView("help");
@@ -146,6 +158,7 @@ export function SupportWidgetProvider({ children }: { children: ReactNode }) {
       collapseToPopover,
       setHelpTab,
       openChat,
+      openMessageSupport,
       backToHelp,
       chat,
     }),
@@ -161,6 +174,7 @@ export function SupportWidgetProvider({ children }: { children: ReactNode }) {
       expandToFullscreen,
       collapseToPopover,
       openChat,
+      openMessageSupport,
       backToHelp,
       chat,
     ],

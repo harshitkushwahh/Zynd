@@ -13,7 +13,7 @@ from app.application.mf.mf_systematic_plan_service import (
     create_stp_plan,
     create_swp_plan,
 )
-from app.infrastructure.mf.fp_oms_client import create_mf_redemption_plan, create_mf_switch_plan
+from app.infrastructure.core.mf.oms_client import create_mf_redemption_plan, create_mf_switch_plan
 from app.infrastructure.persistence.mf_models import FundAmc, MutualFund, Product, ProductType
 from app.infrastructure.persistence.mf_transaction_models import (
     MfInvestmentAccount,
@@ -25,7 +25,7 @@ from app.infrastructure.persistence.models import User
 
 @pytest.fixture(autouse=True)
 def _disable_finprim(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.infrastructure.mf.fp_oms_client.is_finprim_enabled", lambda: False)
+    monkeypatch.setattr("app.infrastructure.core.mf.oms_client.is_finprim_enabled", lambda: False)
 
 
 async def test_create_redemption_plan_stub_is_monthly_systematic() -> None:

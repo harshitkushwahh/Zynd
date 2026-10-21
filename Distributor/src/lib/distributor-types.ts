@@ -259,6 +259,7 @@ export type DistributorClientFamilyGroup = {
   memberCount: number;
   activeGoals: number;
   totalValue: number;
+  investedValue?: number;
   headDisplayName?: string | null;
   headUserId?: string | null;
   members: DistributorClientFamilyMember[];

@@ -21,7 +21,7 @@ from app.application.mf.mf_redemption_service import (
     sync_redemption_order_from_fp,
 )
 from app.core.config import get_settings
-from app.infrastructure.mf.fp_payment_client import is_payment_success_status
+from app.infrastructure.core.mf.payment_client import is_payment_success_status
 from app.infrastructure.persistence.mf_transaction_models import (
     MfCheckout,
     MfCheckoutStatus,

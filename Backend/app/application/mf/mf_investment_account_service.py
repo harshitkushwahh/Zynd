@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.mf.mf_folio_defaults_service import ensure_mfia_folio_defaults
 from app.application.mf.mf_order_service import get_or_create_mf_investment_account
 from app.core.config import get_settings
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.mf.oms_client import (
     create_mf_investment_account,
     extract_fp_old_id,
     get_mf_investment_account,

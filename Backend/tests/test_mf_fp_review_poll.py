@@ -7,7 +7,7 @@ from app.application.mf.mf_fp_review_poll import (
     poll_purchase_until_actionable,
     purchase_not_ready_error,
 )
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 
 
 @pytest.mark.asyncio

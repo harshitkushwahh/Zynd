@@ -454,8 +454,13 @@ async def get_family_goal_contributions(
         for member, user_row in member_rows:
             display_names[user_row.id] = resolve_member_display_name(member, user_row)
 
+    counted_contributions = [
+        row
+        for row in contributions
+        if row.source_type == GoalContributionSourceType.manual
+    ]
     member_totals: dict[UUID, dict[str, Any]] = {}
-    for row in contributions:
+    for row in counted_contributions:
         bucket = member_totals.setdefault(
             row.user_id,
             {
@@ -463,12 +468,62 @@ async def get_family_goal_contributions(
                 "display_name": display_names.get(row.user_id, "Member"),
                 "total_inr": Decimal("0"),
                 "contribution_count": 0,
+                "holdings": [],
             },
         )
         bucket["total_inr"] = Decimal(str(bucket["total_inr"])) + row.amount_inr
         bucket["contribution_count"] += 1
 
-    total_contributed = sum((row.amount_inr for row in contributions), Decimal("0"))
+    from app.application.family_groups.family_holding_link_service import collect_group_linked_holdings
+
+    linked_rows = [
+        row
+        for row in await collect_group_linked_holdings(db, group_id=group_id)
+        if row.get("goal_id") == str(goal.id)
+    ]
+    linked_user_ids = {row["user_id"] for row in linked_rows if row["user_id"] not in display_names}
+    if linked_user_ids:
+        extra_members = list(
+            (
+                await db.execute(
+                    select(FamilyGroupMember, User)
+                    .join(User, User.id == FamilyGroupMember.user_id)
+                    .where(
+                        FamilyGroupMember.group_id == group_id,
+                        FamilyGroupMember.user_id.in_(linked_user_ids),
+                        FamilyGroupMember.status == FamilyGroupMemberStatus.active,
+                    )
+                )
+            ).all()
+        )
+        for member, user_row in extra_members:
+            display_names[user_row.id] = resolve_member_display_name(member, user_row)
+
+    for row in linked_rows:
+        owner_id = row["user_id"]
+        bucket = member_totals.setdefault(
+            owner_id,
+            {
+                "user_id": str(owner_id),
+                "display_name": display_names.get(owner_id, row.get("member_display_name") or "Member"),
+                "total_inr": Decimal("0"),
+                "contribution_count": 0,
+                "holdings": [],
+            },
+        )
+        value = Decimal(str(row.get("current_value_inr") or 0))
+        bucket["total_inr"] = Decimal(str(bucket["total_inr"])) + value
+        bucket["contribution_count"] += 1
+        bucket["holdings"].append(
+            {
+                "scheme_name": row.get("scheme_name") or "Mutual fund",
+                "current_value_inr": float(value),
+            }
+        )
+        if bucket["display_name"] == "Member" and display_names.get(owner_id):
+            bucket["display_name"] = display_names[owner_id]
+
+    total_contributed = sum((Decimal(str(item["total_inr"])) for item in member_totals.values()), Decimal("0"))
 
     return {
         "goal_id": str(goal.id),
@@ -479,6 +534,7 @@ async def get_family_goal_contributions(
                 "display_name": item["display_name"],
                 "total_inr": float(item["total_inr"]),
                 "contribution_count": item["contribution_count"],
+                "holdings": item.get("holdings") or [],
             }
             for item in sorted(member_totals.values(), key=lambda entry: entry["total_inr"], reverse=True)
         ],
@@ -492,6 +548,6 @@ async def get_family_goal_contributions(
                 "note": row.note,
                 "contributed_at": row.contributed_at.isoformat() if row.contributed_at else None,
             }
-            for row in contributions
+            for row in counted_contributions
         ],
     }

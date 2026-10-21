@@ -31,7 +31,7 @@ from app.application.documents.client_id_service import assign_client_id, is_pla
 from app.application.kyc.finprim_identity_service import load_identity_document, start_digilocker
 from app.application.kyc.pan_verification_service import confirm_pan_names, verify_pan
 from app.infrastructure.persistence.models import User, UserRole
-from app.infrastructure.kyc.fp_clients import ensure_kyc_tokens
+from app.infrastructure.core.kyc.fp_clients import ensure_kyc_tokens
 
 
 async def _load_investor_client(db: AsyncSession, client_user_id: UUID) -> User:

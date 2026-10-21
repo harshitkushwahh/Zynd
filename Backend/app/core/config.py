@@ -59,6 +59,22 @@ class Settings(BaseSettings):
     redis_health_check_interval_seconds: int = 30
     redis_max_connections: int = 50
 
+    auth_user_public_cache_enabled: bool = True
+    auth_user_public_cache_ttl_seconds: int = 300
+    auth_user_public_cache_jitter_seconds: int = 120
+    auth_user_row_cache_enabled: bool = True
+    auth_user_row_cache_ttl_seconds: int = 60
+    auth_user_row_cache_jitter_seconds: int = 30
+    auth_fund_policy_cache_enabled: bool = True
+    auth_fund_policy_cache_ttl_seconds: int = 600
+    auth_fund_policy_cache_jitter_seconds: int = 180
+    rbac_permissions_cache_enabled: bool = True
+    rbac_permissions_cache_ttl_seconds: int = 300
+    rbac_permissions_cache_jitter_seconds: int = 120
+    auth_profile_image_url_cache_enabled: bool = True
+    auth_profile_image_url_cache_ttl_seconds: int = 300
+    auth_profile_image_url_cache_jitter_seconds: int = 90
+
     secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"
     jwt_private_key_pem: str = ""
@@ -166,6 +182,11 @@ class Settings(BaseSettings):
     admin_frontend_url: str = "http://localhost:8888"
     distributor_frontend_url: str = "http://localhost:9900"
     support_frontend_url: str = "http://localhost:9999"
+    support_llm_provider: Literal["groq", "ollama"] = "groq"
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_timeout_seconds: float = 120.0
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:4b"
     ollama_timeout_seconds: float = 120.0
@@ -822,6 +843,14 @@ class Settings(BaseSettings):
         }
         origins.update(self.cors_origin_list)
         return sorted(origin for origin in origins if origin)
+
+    @model_validator(mode="after")
+    def require_groq_key_in_production(self) -> "Settings":
+        if self.app_env != "production":
+            return self
+        if self.support_llm_provider == "groq" and not self.groq_api_key.strip():
+            raise ValueError("GROQ_API_KEY is required when SUPPORT_LLM_PROVIDER=groq in production.")
+        return self
 
 
 @lru_cache

@@ -257,11 +257,11 @@ export function OtpConsentVerifyPanel({
               embedded ? "px-0" : "px-0.5",
             )}
           >
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
+            <div className="flex min-w-0 items-baseline gap-1.5">
+              <span className="shrink-0 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
                 {portfolioCopy.otpExpiresLabel}
               </span>
-              <p
+              <span
                 className={cn(
                   "text-caption tabular-nums",
                   otpExpired
@@ -274,7 +274,7 @@ export function OtpConsentVerifyPanel({
                 title={copy.mfa.otpExpiresInHint}
               >
                 {formatOtpTimer(expiryDisplaySeconds)}
-              </p>
+              </span>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-0.5">
               {showResendTimer ? (

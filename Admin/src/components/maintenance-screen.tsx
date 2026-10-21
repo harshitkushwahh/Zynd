@@ -1,13 +1,41 @@
 "use client";
 
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { getApiUrl } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 export const MAINTENANCE_LOTTIE_SRC = "/maintenance/under-construction.lottie";
+
+const MAINTENANCE_LOTTIE_CLASS =
+  "mx-auto h-56 w-full max-w-[280px] sm:h-64 sm:max-w-[320px]";
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function MaintenanceLottie() {
+  const [data, setData] = useState<ArrayBuffer | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(MAINTENANCE_LOTTIE_SRC, { signal: controller.signal })
+      .then(async (response) => (response.ok ? response.arrayBuffer() : null))
+      .then((buffer) => {
+        if (buffer && !controller.signal.aborted) setData(buffer);
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error)) return;
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (!data) return <div className={MAINTENANCE_LOTTIE_CLASS} aria-hidden />;
+
+  return <DotLottieReact data={data} loop autoplay className={MAINTENANCE_LOTTIE_CLASS} />;
+}
 
 const COPY = {
   title: "We'll be right back",
@@ -60,12 +88,7 @@ export function MaintenanceScreen({ className, onBackOnline }: MaintenanceScreen
       )}
     >
       <div className="flex w-full max-w-md flex-col items-center text-center">
-        <DotLottieReact
-          src={MAINTENANCE_LOTTIE_SRC}
-          loop
-          autoplay
-          className="mx-auto h-56 w-full max-w-[280px] sm:h-64 sm:max-w-[320px]"
-        />
+        <MaintenanceLottie />
         <h1
           id="zynd-maintenance-title"
           className="mt-6 font-heading text-2xl font-semibold text-foreground"

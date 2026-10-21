@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 SupportRealtimeEventType = Literal[
     "message:new",
+    "message:read",
     "ticket:updated",
     "agent:typing",
     "agent:presence",

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.infrastructure.mf.fp_oms_client import get_mf_payout_details, get_mf_redemption, list_mf_redemptions
+from app.infrastructure.core.mf.oms_client import get_mf_payout_details, get_mf_redemption, list_mf_redemptions
 
 logger = logging.getLogger(__name__)
 

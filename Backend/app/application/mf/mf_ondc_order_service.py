@@ -36,8 +36,8 @@ from app.application.mf.mf_transaction_retry import bump_transient_retry, is_tra
 from app.application.referral.referral_investment_service import record_referral_investment_activity
 from app.core.config import get_settings
 from app.infrastructure.kyc.cybrilla_terminal_log import log_mf_payment_step
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     create_mf_investment_account,
     create_mf_purchase,
     create_mf_purchases_batch,
@@ -48,7 +48,7 @@ from app.infrastructure.mf.fp_oms_client import (
     update_mf_purchase,
     update_mf_purchases_batch,
 )
-from app.infrastructure.mf.fp_payment_client import (
+from app.infrastructure.core.mf.payment_client import (
     create_netbanking_payment,
     extract_payment_status,
     extract_payment_token_url,
@@ -405,8 +405,12 @@ async def _apply_fp_state(
                 investment_mode=ReferralInvestmentMode.lumpsum,
             )
         from app.application.goals.goal_funding_service import record_contribution_from_order
+        from app.application.family_groups.family_holding_link_service import (
+            materialize_family_link_from_order,
+        )
 
         await record_contribution_from_order(session, order)
+        await materialize_family_link_from_order(session, order)
     elif mapped == MfOrderStatus.failed:
         order.failure_code = order.failure_code or "fp_terminal_failed"
         order.failure_reason = order.failure_reason or str(fp_state)
@@ -540,6 +544,11 @@ async def submit_pending_order(
         meta["folio_number"] = folio_number
         order.metadata_ = meta
         await session.flush()
+        from app.application.family_groups.family_holding_link_service import (
+            materialize_family_link_from_order,
+        )
+
+        await materialize_family_link_from_order(session, order)
 
     await ensure_mfia_nomination_visibility_for_purchase(
         session,
@@ -663,6 +672,12 @@ async def submit_pending_cart_checkout(
         if folio_number and order_meta.get("folio_number") != folio_number:
             order_meta["folio_number"] = folio_number
             order.metadata_ = order_meta
+        if folio_number:
+            from app.application.family_groups.family_holding_link_service import (
+                materialize_family_link_from_order,
+            )
+
+            await materialize_family_link_from_order(session, order)
         purchases.append(
             {
                 "fp_mfia_id": fp_mfia_id,

@@ -27,7 +27,7 @@ from app.application.kyc.bank_verification_core import (
 from app.application.kyc.errors import KycError
 from app.application.kyc.journey_gate_service import require_pan_verified, require_phase1_complete
 from app.application.kyc.journey_state_service import get_or_create_journey, get_or_create_status
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.models import KycOverallStatus, KycStepStatus, User
 
 
@@ -155,7 +155,7 @@ async def upload_bank_proof(
     filename: str,
     content_type: str,
 ) -> dict[str, Any]:
-    from app.infrastructure.kyc.poa_client import upload_poa_file
+    from app.infrastructure.core.kyc.poa_client import upload_poa_file
 
     journey = await get_or_create_journey(db, user.id)
     require_phase1_complete(journey)
@@ -220,7 +220,7 @@ async def verify_bank_manual(
     except InvestorIdentityConflictError as exc:
         raise KycError(exc.message, exc.code, exc.status_code) from exc
 
-    from app.infrastructure.kyc.poa_client import poa_verify_bank_account_manual
+    from app.infrastructure.core.kyc.poa_client import poa_verify_bank_account_manual
 
     try:
         poa_result = await poa_verify_bank_account_manual(
@@ -284,7 +284,7 @@ async def get_bank_preverify_status(
     user_id: UUID,
     preverify_id: str,
 ) -> dict[str, Any]:
-    from app.infrastructure.kyc.poa_client import fetch_poa_preverification
+    from app.infrastructure.core.kyc.poa_client import fetch_poa_preverification
 
     journey = await get_or_create_journey(db, user_id)
     if journey.poa_bank_preverify_id != preverify_id:

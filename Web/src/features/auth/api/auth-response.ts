@@ -1,6 +1,7 @@
 import { setAccessToken } from "@/lib/api-client";
 import { storeLoginSecurityAlerts } from "@/features/account/security/login-security-alerts";
 import type { AuthSuccessResponse, AuthUser } from "@/features/auth/api/types";
+import { writePersistedAuthUser } from "@/lib/auth-session-storage";
 import { storageKeys } from "@/shared/config/storage-keys";
 
 function assertInvestorUser(user: AuthUser) {
@@ -29,6 +30,7 @@ export function storeAuthResponse(data: AuthSuccessResponse) {
   assertInvestorUser(data.user);
   setAccessToken(data.access_token);
   markSessionHint();
+  writePersistedAuthUser(data.user);
   storeLoginSecurityAlerts({
     newDevice: Boolean(data.new_device),
     velocityFlagged: Boolean(data.velocity_flagged),

@@ -7,8 +7,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from app.infrastructure.kyc.fp_clients import FpClientError, lookup_ifsc
-from app.infrastructure.kyc.poa_client import poa_verify_bank_account
+from app.infrastructure.core.kyc.fp_clients import FpClientError, lookup_ifsc
+from app.infrastructure.core.kyc.poa_client import poa_verify_bank_account
 
 
 ACCOUNT_TYPE_MAP = {

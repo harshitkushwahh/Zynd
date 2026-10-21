@@ -27,6 +27,9 @@ type ApiMessage = {
   resolution_active?: boolean;
   attachment_document_id?: string | null;
   attachment_filename?: string | null;
+  customer_read_at?: string | null;
+  support_read_at?: string | null;
+  support_read_by?: "bot" | "agent" | null;
 };
 
 type ApiAttachment = {
@@ -142,6 +145,9 @@ function mapMessage(message: ApiMessage): SupportTicketMessage {
     attachmentFileName: message.attachment_filename ?? undefined,
     kind: message.kind ?? "text",
     resolutionActive: Boolean(message.resolution_active),
+    customerReadAt: message.customer_read_at ?? undefined,
+    supportReadAt: message.support_read_at ?? undefined,
+    supportReadBy: message.support_read_by ?? undefined,
   };
 }
 

@@ -23,7 +23,7 @@ from app.infrastructure.persistence.models import User
 
 @pytest.fixture(autouse=True)
 def _disable_finprim(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.infrastructure.mf.fp_oms_client.is_finprim_enabled", lambda: False)
+    monkeypatch.setattr("app.infrastructure.core.mf.oms_client.is_finprim_enabled", lambda: False)
 
 
 async def _seed_redemption(db_session):

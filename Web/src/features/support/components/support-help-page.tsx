@@ -31,6 +31,7 @@ export function SupportHelpPage() {
     helpTab,
     setHelpTab,
     openChat,
+    openMessageSupport,
     backToHelp,
     chat,
   } = useSupportWidget();
@@ -53,7 +54,7 @@ export function SupportHelpPage() {
           className={cn(
             "flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-xl)] border-2 bg-card shadow-zynd-low",
             !chat.canReply
-              ? "border-success/40 ring-1 ring-success/15"
+              ? "border-border/70 bg-muted/20"
               : "border-border",
           )}
         >
@@ -98,7 +99,7 @@ export function SupportHelpPage() {
           </div>
 
           {hasTickets || !ticketsLoaded ? (
-            <Button type="button" className="gap-2" onClick={openChat}>
+            <Button type="button" className="gap-2" onClick={openMessageSupport}>
               <MessageCircle className="size-4" />
               {copy.support.startChat}
             </Button>

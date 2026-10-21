@@ -12,6 +12,7 @@ from app.application.consent.consent_service import (
     ConsentAcceptContext,
     record_acceptance,
     record_revocation,
+    user_revocable_consent_active,
 )
 from app.domain.consent.keys import KYC_NOMINATION_OPT_OUT
 from app.application.kyc.journey_gate_service import requires_digilocker, requires_full_kyc_submission
@@ -242,7 +243,9 @@ async def reset_kyc_journey_drafts(
     journey.pan_verification_failure_json = None
     journey.external_kyc_request_id = None
     journey.external_identity_document_id = None
+    journey.external_identity_document_json = None
     journey.external_kyc_status = None
+    journey.kyc_partner_external_refs_json = None
     journey.digilocker_failure_reason = None
     journey.poa_readiness_preverify_id = None
     journey.poa_pan_preverify_id = None
@@ -271,6 +274,18 @@ async def reset_kyc_journey_drafts(
     status.review_step_status = KycStepStatus.pending
     if status.overall_status not in {KycOverallStatus.completed}:
         status.overall_status = KycOverallStatus.in_progress
+
+    if await user_revocable_consent_active(
+        db,
+        user_id=user.id,
+        definition_key=KYC_NOMINATION_OPT_OUT,
+    ):
+        await record_revocation(
+            db,
+            user=user,
+            definition_key=KYC_NOMINATION_OPT_OUT,
+            context=ConsentAcceptContext(source="kyc_journey_reset"),
+        )
 
     await db.flush()
     return journey, status

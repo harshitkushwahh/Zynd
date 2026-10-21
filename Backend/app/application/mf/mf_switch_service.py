@@ -35,8 +35,8 @@ from app.application.mf.mf_redemption_service import (
 )
 from app.application.mf.mf_scheme_resolution import resolve_mf_purchase_scheme
 from app.application.mf.portfolio_holdings_service import invalidate_user_portfolio_cache, parse_holding_id
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     create_mf_switch,
     extract_fp_redemption_failure,
     extract_fp_state,

@@ -7,10 +7,11 @@ import { resolveFamilyGroupApiError } from "@/features/family-groups/lib/family-
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
 
-export function useFamilyGroupsQuery() {
+export function useFamilyGroupsQuery(enabled = true) {
   const query = useQuery({
     queryKey: queryKeys.family.list(),
     queryFn: fetchFamilyGroups,
+    enabled,
   });
 
   const errorMessage = query.error

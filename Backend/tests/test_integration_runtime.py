@@ -13,7 +13,7 @@ from app.application.integrations.integration_runtime import (
     profile_configured,
     resolve_integration_field,
 )
-from app.infrastructure.kyc.fp_clients import _fp_runtime, _use_kyc_tenant_runtime
+from app.infrastructure.core.kyc.fp_clients import _fp_runtime, _use_kyc_tenant_runtime
 from app.core.config import Settings
 
 

@@ -121,3 +121,9 @@ export async function recordReferralClick(code: string) {
     body: JSON.stringify({ code }),
   });
 }
+
+export async function validateReferralCode(code: string) {
+  return apiRequest<{ ok: boolean; code: string }>(
+    `/referrals/validate?code=${encodeURIComponent(code)}`,
+  );
+}

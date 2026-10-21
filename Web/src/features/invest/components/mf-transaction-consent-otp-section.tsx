@@ -66,7 +66,6 @@ export function MfTransactionConsentOtpSection({
   className,
 }: MfTransactionConsentOtpSectionProps) {
   const portfolioCopy = copy.dashboard.portfolio;
-  const mfCopy = copy.mutualFunds.transactionConsent;
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -224,9 +223,6 @@ export function MfTransactionConsentOtpSection({
         className,
       )}
     >
-      {!embedded ? (
-        <p className="mb-4 text-compact font-semibold text-foreground">{mfCopy.sectionTitle}</p>
-      ) : null}
       <OtpConsentVerifyPanel
         embedded={embedded}
         loading={loading}

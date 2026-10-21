@@ -51,3 +51,25 @@ Delivery via `auth.otp.requested` worker — never put OTP codes in outbox/event
 | `infrastructure/persistence/repositories/` | SQLAlchemy repository adapters |
 
 Event type strings are defined in domain packages; `application/messaging/streams.py` re-exports them for workers.
+
+## Domain folder map (API / application / Finprim core)
+
+Public URL prefixes are unchanged; packages are aligned by domain.
+
+| Domain | HTTP prefix | `app/api/v1/` | `app/application/` | Finprim HTTP (`app/infrastructure/core/`) |
+|--------|-------------|---------------|--------------------|-------------------------------------------|
+| Login / auth | `/auth` | `auth/` | `auth/`, `identity/` | — |
+| KYC | `/kyc` | `kyc/` | `kyc/` | `core/kyc/` (POA, forms, Finprim KYC tenant) |
+| Mutual funds | `/invest` | `mf/` (package name; not `/mf` URL) | `mf/` | `core/mf/` (OMS, investor, payment, mandate) |
+| Portfolio / CAS / reports | `/invest/...` | `mf/portfolio_router.py` | `mf/` (holdings, reports, redemptions) | via OMS |
+| Risk profile | `/invest/risk-profile/...` | `mf/risk_profile_router.py` | `risk_profile/` | — |
+| Investor settings | `/kyc/settings/...` | `kyc/router.py` (today) | `investor/` (`investor_settings_service`) | via `core/mf/investor_client` when synced |
+| Referrals | `/referrals` | `referral/` | `referral/` | — |
+| Family | `/family-groups` | `family_groups/` | `family_groups/` | — |
+| Goals | `/goals` | `goals/` | `goals/` | — |
+
+Platform config, DB, and Redis remain in `app/core/` (not the Finprim orchestrator). See [CYBRILLA_HTTP_ORCHESTRATOR.md](./CYBRILLA_HTTP_ORCHESTRATOR.md) for orchestrator layout (`infrastructure/core/`).
+
+### API layer
+
+Routers import application services or `app.application.core.facade` — not `app.infrastructure.mf.fp_*` or raw `core` clients (CI guard).

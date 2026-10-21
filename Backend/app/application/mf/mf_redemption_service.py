@@ -34,8 +34,8 @@ from app.application.mf.portfolio_holdings_service import (
     parse_holdings_report,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_oms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.oms_client import (
     create_mf_redemption,
     extract_fp_object,
     extract_fp_redemption_failure,

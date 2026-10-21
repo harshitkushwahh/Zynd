@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 REQUIRED = {"postgres", "redis", "minio", "clamav"}
-REQUIRED_PROD = {"ollama", "api"}
+REQUIRED_PROD = {"api"}
 
 
 def _services(*paths: Path) -> set[str]:

@@ -10,6 +10,7 @@ from app.api.v1.auth.deps import get_client_ip, get_current_user
 from app.api.v1.referral.schemas import (
     ReferralClickRequest,
     ReferralClickResponse,
+    ReferralCodeValidateResponse,
     ReferralLeaderboardCurrentUserResponse,
     ReferralLeaderboardEntryResponse,
     ReferralLeaderboardPeriod,
@@ -33,6 +34,7 @@ from app.application.referral.referral_code_service import (
     count_referral_clicks_for_user,
     get_or_create_referral_code,
     normalize_referral_code,
+    resolve_active_referral_code,
 )
 from app.application.referral.referral_errors import ReferralError
 from app.application.referral.referral_leaderboard_service import (
@@ -179,6 +181,24 @@ async def get_referral_leaderboard_route(
             top_percent=current_user_stats.top_percent,
         ),
     )
+
+
+@router.get("/validate", response_model=ReferralCodeValidateResponse)
+async def validate_referral_code(
+    code: Annotated[str, Query(min_length=1, max_length=16)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ReferralCodeValidateResponse | JSONResponse:
+    normalized = normalize_referral_code(code)
+    if not normalized:
+        return _handle_referral_error(
+            ReferralError("Referral link is invalid or inactive.", "invalid_referral_code", 404)
+        )
+    row = await resolve_active_referral_code(db, code=normalized)
+    if row is None:
+        return _handle_referral_error(
+            ReferralError("Referral link is invalid or inactive.", "invalid_referral_code", 404)
+        )
+    return ReferralCodeValidateResponse(ok=True, code=row.code)
 
 
 @router.post("/clicks", response_model=ReferralClickResponse)

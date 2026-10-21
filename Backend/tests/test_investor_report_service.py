@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.mf.investor_report_service import generate_investor_report
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.mf_transaction_models import MfGeneratedReportKind
 from app.infrastructure.persistence.models import User
 

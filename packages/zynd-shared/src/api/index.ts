@@ -6,10 +6,13 @@ export {
   type SupportRealtimeHandlers,
 } from "../support/realtime-client";
 export {
+  BACKEND_HEALTH_OK_INTERVAL_MS,
   BACKEND_WAITING_CONFIRM_MS,
+  backendDownPollDelayMs,
   getBackendConnectionState,
   isBackendConnectionError,
   isBackendConnectionStatus,
+  markBackendConnectionDown,
   markBackendConnectionReady,
   markBackendConnectionWaiting,
   subscribeBackendConnectionState,

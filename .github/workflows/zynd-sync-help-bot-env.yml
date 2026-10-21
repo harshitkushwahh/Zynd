@@ -1,0 +1,103 @@
+# One-off: upsert Groq Help Bot vars on the VPS and recreate the API container.
+# Secrets: DEPLOY_SSH_KEY (required). Optional GROQ_API_KEY to set/rotate the key on server.
+name: ZYND • Sync Help Bot env (VPS)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      recreate_api:
+        description: Recreate api container after .env update
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-help-bot-env:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BLUEHOST_HOST: 50.6.205.51
+      BLUEHOST_USER: root
+      BLUEHOST_HOST_FINGERPRINT: SHA256:hCKPABfkojXf2K9g9rIwugDS53zFSajJCDbGoYONEM8
+    steps:
+      - name: Apply Help Bot Groq env on VPS
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          RECREATE_API: ${{ inputs.recreate_api }}
+        with:
+          host: ${{ env.BLUEHOST_HOST }}
+          username: ${{ env.BLUEHOST_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ env.BLUEHOST_HOST_FINGERPRINT }}
+          timeout: 30s
+          command_timeout: 10m
+          envs: GROQ_API_KEY,RECREATE_API
+          script: |
+            set -euo pipefail
+            cd /opt/zynd
+            git pull --ff-only origin main || true
+            FRAG=""
+            if [ -n "${GROQ_API_KEY:-}" ]; then
+              FRAG="/tmp/zynd-help-bot-env-$$"
+              umask 077
+              {
+                printf 'SUPPORT_LLM_PROVIDER=groq\n'
+                printf 'GROQ_API_KEY=%s\n' "${GROQ_API_KEY}"
+                printf 'GROQ_MODEL=openai/gpt-oss-120b\n'
+                printf 'GROQ_BASE_URL=https://api.groq.com/openai/v1\n'
+                printf 'GROQ_TIMEOUT_SECONDS=120\n'
+              } > "${FRAG}"
+            fi
+            if [ -f Backend/scripts/sync-help-bot-groq-env-on-vps.sh ]; then
+              if [ -n "${FRAG}" ]; then
+                bash Backend/scripts/sync-help-bot-groq-env-on-vps.sh "${FRAG}"
+              else
+                bash Backend/scripts/sync-help-bot-groq-env-on-vps.sh
+              fi
+            elif [ -n "${FRAG}" ]; then
+              ENV_FILE="/opt/zynd/Backend/.env"
+              python3 - "${ENV_FILE}" "${FRAG}" << 'PY'
+import sys
+from pathlib import Path
+
+env_path = Path(sys.argv[1])
+frag = Path(sys.argv[2])
+updates: dict[str, str] = {}
+for line in frag.read_text(encoding="utf-8").splitlines():
+    line = line.strip()
+    if not line or "=" not in line:
+        continue
+    k, _, v = line.partition("=")
+    updates[k.strip()] = v.strip()
+lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
+out: list[str] = []
+seen: set[str] = set()
+for line in lines:
+    if "=" in line:
+        k = line.split("=", 1)[0]
+        if k in updates:
+            if k not in seen:
+                out.append(f"{k}={updates[k]}")
+                seen.add(k)
+            continue
+    out.append(line)
+for k, v in updates.items():
+    if k not in seen:
+        out.append(f"{k}={v}")
+env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+PY
+              rm -f "${FRAG}"
+              chown root:root "${ENV_FILE}"
+              chmod 600 "${ENV_FILE}"
+            else
+              echo "No GROQ_API_KEY secret and no sync script; nothing to apply."
+              exit 1
+            fi
+            if [ "${RECREATE_API}" != "true" ]; then
+              echo "Skipping api recreate (workflow input)."
+              exit 0
+            fi
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --force-recreate api

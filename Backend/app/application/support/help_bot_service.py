@@ -11,10 +11,10 @@ from app.application.support.context_pack import build_context_pack
 from app.application.support.ollama_client import OllamaError, complete_help_reply
 from app.application.support.playbooks_loader import playbooks_for
 from app.application.support.scope_gate import BOT_NAME, OUT_OF_SCOPE_REPLY, classify_message
+from app.application.support.training_loader import similar_training_examples
 from app.application.support.ticket_service import (
     SupportActionError,
     add_message,
-    ask_if_resolved,
     close_stale_resolution_prompts,
     create_conversation,
     dismiss_open_resolution_prompt,
@@ -37,7 +37,9 @@ Answer only from the product playbook and the customer context in the user messa
 Never use outside knowledge. Never invent amounts, statuses, dates, order ids, or account facts.
 If the context does not contain the fact the customer needs, set can_answer to false.
 Respond with JSON only: {"can_answer": true or false, "answer": "short reply"}.
-When can_answer is true, the answer is shown to the customer. Be specific and brief.
+When can_answer is true, the answer is shown to the customer. Write in clear, friendly language.
+Answer the exact question (when, whether, why, status) using dates and flags from context slices
+such as last_sip_debit, last_sip_failure, kyc.completed_at, and google_account_linked.
 When can_answer is false, the answer is an internal reason, one sentence, with no invented facts.
 """
 
@@ -138,7 +140,7 @@ async def post_customer_message(
         attachment_document_id = document.id
         attachment_filename = document.original_filename
 
-    await add_message(
+    user_message = await add_message(
         db,
         conversation,
         role="user",
@@ -148,6 +150,16 @@ async def post_customer_message(
         attachment_document_id=attachment_document_id,
         attachment_filename=attachment_filename,
     )
+    ticket = ticket or await get_ticket_for_conversation(db, conversation.id)
+    if conversation.handler != "human":
+        from app.application.support.read_receipts import mark_support_read
+
+        await mark_support_read(
+            db,
+            user_message,
+            reader="bot",
+            ticket_public_id=ticket.public_id if ticket else None,
+        )
 
     if has_image:
         if conversation.handler != "human":
@@ -203,6 +215,15 @@ async def post_customer_message(
 
     pack = await build_context_pack(db, user, decision.topics)
     examples = await similar_resolutions(db, text, decision.topics)
+    if len(examples) < 3:
+        examples = [
+            *examples,
+            *similar_training_examples(
+                text,
+                decision.topics,
+                limit=3 - len(examples),
+            ),
+        ]
     history = await list_messages(db, conversation.id)
     transcript = [
         {"role": message.role, "body": message.body}
@@ -266,7 +287,6 @@ async def post_customer_message(
     )
     conversation.handler = "bot"
     conversation.status = "open"
-    await ask_if_resolved(db, conversation, ticket, sender_name=BOT_NAME)
     return await serialize_customer_conversation(db, user, conversation)
 
 

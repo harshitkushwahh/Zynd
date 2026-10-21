@@ -5,7 +5,7 @@ import time
 import pytest
 
 from app.infrastructure.kyc.date_utils import normalize_kyc_date_of_birth
-from app.infrastructure.kyc.fp_clients import (
+from app.infrastructure.core.kyc.fp_clients import (
     FpClientError,
     _CachedToken,
     _is_auth_token_error,

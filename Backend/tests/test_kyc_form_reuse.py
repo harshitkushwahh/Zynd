@@ -7,7 +7,7 @@ import pytest
 
 from app.application.kyc.errors import KycError
 from app.application.kyc.kyc_form_service import ensure_kyc_form
-from app.infrastructure.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.fp_clients import FpClientError
 from app.infrastructure.persistence.models import KycJourneyState, User, UserRole, UserStatus
 
 

@@ -266,7 +266,7 @@ async def resolve_investment_details_for_fund(
         return stored
 
     from app.core.config import get_settings
-    from app.infrastructure.mf.fp_oms_client import get_fund_scheme_by_isin
+    from app.infrastructure.core.mf.oms_client import get_fund_scheme_by_isin
 
     settings = get_settings()
     if settings.resolved_fp_enabled and fund.isin_growth:

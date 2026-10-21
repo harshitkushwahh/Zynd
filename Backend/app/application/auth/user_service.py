@@ -5,15 +5,22 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.auth.fund_movement_policy_service import evaluate_fund_eligibility
-from app.application.documents.profile_image_url_service import resolve_profile_image_urls_by_user_id
+from app.application.auth.fund_movement_policy_cache import get_cached_fund_movement_policy
+from app.application.auth.fund_movement_policy_service import evaluate_fund_eligibility_with_policy
+from app.application.auth.profile_image_url_cache import resolve_profile_image_url_cached
+from app.application.auth.user_row_cache import get_user_by_id_cached
 from app.infrastructure.persistence.models import User
 from app.infrastructure.persistence.repositories.user_repository import SqlAlchemyUserRepository
 
 
 async def user_to_public_dict(db: AsyncSession, user: User) -> dict[str, Any]:
-    eligibility = await evaluate_fund_eligibility(db, user)
-    profile_images = await resolve_profile_image_urls_by_user_id(db, [user.id])
+    fund_policy = await get_cached_fund_movement_policy(db)
+    eligibility = evaluate_fund_eligibility_with_policy(
+        user,
+        require_mfa=fund_policy["require_mfa"],
+        require_pin=fund_policy["require_pin"],
+    )
+    profile_image_url = await resolve_profile_image_url_cached(db, user.id)
     return {
         "id": user.id,
         "email": user.email,
@@ -34,7 +41,7 @@ async def user_to_public_dict(db: AsyncSession, user: User) -> dict[str, Any]:
         "deletion_scheduled_at": user.deletion_scheduled_at,
         "client_id": user.client_id,
         "created_at": user.created_at,
-        "profile_image_url": profile_images.get(user.id),
+        "profile_image_url": profile_image_url,
     }
 
 
@@ -43,7 +50,7 @@ def _user_repo(db: AsyncSession) -> SqlAlchemyUserRepository:
 
 
 async def get_user_by_id(db: AsyncSession, user_id: UUID) -> User | None:
-    return await _user_repo(db).get_by_id(user_id)
+    return await get_user_by_id_cached(db, user_id)
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:

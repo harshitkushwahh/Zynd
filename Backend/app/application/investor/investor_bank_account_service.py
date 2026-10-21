@@ -28,8 +28,8 @@ from app.application.mf.mf_mandate_guard import (
     has_in_flight_mandate_for_bank,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.mf.fp_investor_client import create_bank_account
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.mf.investor_client import create_bank_account
 from app.infrastructure.persistence.investor_models import (
     InvestorBankAccount,
     InvestorBankVerificationStatus,
@@ -595,7 +595,7 @@ async def upload_bank_account_proof(
     filename: str,
     content_type: str,
 ) -> dict[str, Any]:
-    from app.infrastructure.kyc.poa_client import upload_poa_file
+    from app.infrastructure.core.kyc.poa_client import upload_poa_file
 
     await _require_kyc_completed(db, user.id)
     await _require_pan_verified_journey(db, user.id)
@@ -650,7 +650,7 @@ async def verify_bank_account_manual(
     user: User,
     bank_account_id: UUID,
 ) -> dict[str, Any]:
-    from app.infrastructure.kyc.poa_client import poa_verify_bank_account_manual
+    from app.infrastructure.core.kyc.poa_client import poa_verify_bank_account_manual
 
     await _require_kyc_completed(db, user.id)
     journey, pan_draft, pan_number = await _require_pan_verified_journey(db, user.id)
@@ -748,7 +748,7 @@ async def get_bank_account_preverify_status(
     bank_account_id: UUID,
     preverify_id: str,
 ) -> dict[str, Any]:
-    from app.infrastructure.kyc.poa_client import fetch_poa_preverification
+    from app.infrastructure.core.kyc.poa_client import fetch_poa_preverification
 
     await _require_kyc_completed(db, user_id)
     row = await _get_owned_bank_account(db, user_id=user_id, bank_account_id=bank_account_id)

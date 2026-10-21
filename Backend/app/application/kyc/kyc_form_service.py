@@ -32,8 +32,8 @@ from app.application.kyc.path_a_proof import (
     user_poa_proof_redirect_required,
 )
 from app.core.config import get_settings
-from app.infrastructure.kyc.fp_clients import FpClientError
-from app.infrastructure.kyc.kyc_forms_client import (
+from app.infrastructure.core.kyc.fp_clients import FpClientError
+from app.infrastructure.core.kyc.kyc_forms_client import (
     create_kyc_form,
     fetch_kyc_form,
     patch_kyc_form,
@@ -1299,7 +1299,7 @@ async def mark_esign_callback(db: AsyncSession, *, form_id: str, callback_status
     from app.application.kyc.journey_state_service import mark_kyc_submitted
     from app.application.kyc.kyc_flow_mode import should_use_poa_partner_form
     from app.application.kyc.kyc_partner_refs import find_journey_esign_lookup_ids
-    from app.infrastructure.kyc.finprim_kyc_client import fetch_finprim_esign, finprim_esign_complete
+    from app.infrastructure.core.kyc.finprim_kyc_client import fetch_finprim_esign, finprim_esign_complete
     from app.infrastructure.persistence.models import KycJourneyState
 
     clean_id = str(form_id or "").strip()

@@ -17,6 +17,8 @@ type SupportTicketDetailMainPanelProps = {
   className?: string;
   onUpdated?: (detail: SupportTicketDetail) => void;
   notifyTyping?: (typing: boolean) => void;
+  markMessagesRead?: (messageIds: string[]) => void;
+  wsConnected?: boolean;
 };
 
 export function SupportTicketDetailMainPanel({
@@ -25,6 +27,8 @@ export function SupportTicketDetailMainPanel({
   className,
   onUpdated,
   notifyTyping,
+  markMessagesRead,
+  wsConnected,
 }: SupportTicketDetailMainPanelProps) {
   const { ticket, customer, related, activityLog, slaTab, slaLabel } = detail;
 
@@ -41,6 +45,8 @@ export function SupportTicketDetailMainPanel({
           className="h-full min-h-0"
           onUpdated={onUpdated}
           notifyTyping={notifyTyping}
+          markMessagesRead={markMessagesRead}
+          wsConnected={wsConnected}
         />
       </Card>
     );
