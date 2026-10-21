@@ -17,6 +17,19 @@ def test_monthly_scheduler_only_backfills():
     assert ter_ingestion_refreshes_existing("CLI") is True
 
 
+def test_dedupe_ter_candidates_keeps_last_row_per_fund_date():
+    rows = [
+        {"fund_id": 4035, "as_of_date": date(2026, 5, 1), "ter_percent": 2.1, "source": "AMFI_API"},
+        {"fund_id": 4035, "as_of_date": date(2026, 5, 1), "ter_percent": 0.35, "source": "AMFI_API"},
+        {"fund_id": 4035, "as_of_date": date(2026, 5, 2), "ter_percent": 2.1, "source": "AMFI_API"},
+    ]
+    deduped, duplicates = dedupe_ter_candidates(rows)
+    assert duplicates == 1
+    assert len(deduped) == 2
+    by_date = {row["as_of_date"]: row["ter_percent"] for row in deduped}
+    assert by_date[date(2026, 5, 1)] == 0.35
+
+
 def test_filter_new_ter_rows_keeps_history_and_skips_existing():
     existing = {(10, date(2000, 1, 3)), (10, date(2026, 9, 1))}
     rows = [

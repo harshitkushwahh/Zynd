@@ -110,6 +110,7 @@ class InvestFundSummaryResponse(BaseModel):
     min_sip_amount_inr: Optional[float] = None
     min_lumpsum_amount_inr: Optional[float] = None
     sip_allowed: bool = True
+    lumpsum_allowed: bool = True
     is_featured: Optional[bool] = None
     display_order: Optional[int] = None
     health_badges: list[str] = Field(default_factory=list)

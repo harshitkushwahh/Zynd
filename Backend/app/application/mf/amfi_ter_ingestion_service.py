@@ -224,6 +224,13 @@ async def run_amfi_ter_ingestion(
                 f"AMFI TER backfill: already_present={already_present} new={len(candidates)}",
             )
 
+        candidates, duplicate_keys = dedupe_ter_candidates(candidates)
+        if duplicate_keys:
+            skipped += duplicate_keys
+            await emit_pipeline_progress(
+                f"AMFI TER dedupe: collapsed {duplicate_keys} duplicate fund/date rows",
+            )
+
         for start in range(0, len(candidates), TER_WRITE_BATCH):
             batch = candidates[start : start + TER_WRITE_BATCH]
             stmt = insert(SchemeTer).values(batch)

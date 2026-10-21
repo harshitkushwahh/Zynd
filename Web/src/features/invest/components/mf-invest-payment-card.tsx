@@ -103,6 +103,7 @@ export type MfInvestPaymentCardProps = {
   canInvest?: boolean;
   canRedeem?: boolean;
   sipEnabled?: boolean;
+  lumpsumEnabled?: boolean;
   /** Extra space between mode toggle and amount input (portfolio sidebar). */
   relaxedAmountSpacing?: boolean;
   defaultMode?: MfInvestPaymentMode;
@@ -594,6 +595,7 @@ export function MfInvestPaymentCard({
   canInvest = false,
   canRedeem = false,
   sipEnabled = true,
+  lumpsumEnabled = true,
   relaxedAmountSpacing = false,
   defaultMode = "lumpsum",
   mode: controlledMode,
@@ -698,6 +700,7 @@ export function MfInvestPaymentCard({
   const [chipRollRequest, setChipRollRequest] = useState<ChipRollRequest | null>(null);
   const interactive = canInvest && !preview;
   const showSip = sipEnabled;
+  const showLumpsum = lumpsumEnabled;
   const hasFund = Boolean(fundName?.trim() && productId);
   const showPaymentSection = interactive || (preview && hasFundForUi);
   const previewBankDisplay =
@@ -758,7 +761,10 @@ export function MfInvestPaymentCard({
     if (!showSip && mode === "sip") {
       setMode("lumpsum");
     }
-  }, [mode, showSip]);
+    if (!showLumpsum && mode === "lumpsum") {
+      setMode(showSip ? "sip" : "lumpsum");
+    }
+  }, [mode, showLumpsum, showSip]);
 
   useEffect(() => {
     setSipFrequency((current) => {
@@ -1012,7 +1018,7 @@ export function MfInvestPaymentCard({
       <div
         className={cn(
           MF_INVEST_PAYMENT_CARD_CLASS,
-          "flex w-full min-w-0 flex-col overflow-x-hidden px-4 pb-4 pt-4",
+          "flex min-h-[26rem] w-full min-w-0 flex-col overflow-x-hidden px-4 pb-4 pt-4",
           !showFundName && sticky && "lg:sticky lg:top-6",
           !showFundName && className,
         )}
@@ -1084,6 +1090,7 @@ export function MfInvestPaymentCard({
               onTabSelect={handleInvestTabSelect}
               monthlySipAllowed={monthlySipAllowed}
               dailySipAllowed={dailySipAllowed}
+              lumpsumAllowed={showLumpsum}
               disabled={!interactive || formLocked}
               showFolioNominationInfo={interactive && canInvest}
             />

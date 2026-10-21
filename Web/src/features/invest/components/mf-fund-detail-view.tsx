@@ -164,6 +164,7 @@ export function MfFundDetailView({ fundSlug, renderBreadcrumb }: MfFundDetailVie
       preview={false}
       canInvest={canInvest}
       sipEnabled={(config?.sip_enabled ?? false) && fund.sip_allowed === true}
+      lumpsumEnabled={fund.lumpsum_allowed !== false}
       mode={investMode}
       onModeChange={setInvestMode}
       amount={investAmount}

@@ -180,6 +180,8 @@ async def _create_purchase_with_scheme_fallback(
                         fallback,
                     )
                     break
+                if is_scheme_unavailable_for_transaction(exc):
+                    await record_ondc_lumpsum_scheme_unavailable(session, fund)
                 raise
     if last_exc and is_scheme_unavailable_for_transaction(last_exc):
         await record_ondc_lumpsum_scheme_unavailable(session, fund)
@@ -577,6 +579,8 @@ async def submit_pending_order(
             await session.flush()
             return not terminal
         failure_code, failure_reason = _purchase_failure_from_exception(exc)
+        if failure_code == "scheme_not_available":
+            await record_ondc_lumpsum_scheme_unavailable(session, fund)
         previous = order.status.value
         order.status = MfOrderStatus.failed
         order.failure_code = failure_code
