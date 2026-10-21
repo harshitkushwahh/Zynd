@@ -185,9 +185,17 @@ export function shouldShowDigilockerFailureAlert(
   if (forceShow) return true;
   if (!payload || !shouldBlockAddressStep(payload)) return false;
   if (payload.pan_verification_status !== "verified") return false;
-  if (isDigilockerComplete(payload)) return false;
+  if (payload.requires_address_step_proof_digilocker) {
+    if (isProofDetailsComplete(payload.proof_details_status)) return false;
+  } else if (isDigilockerComplete(payload)) {
+    return false;
+  }
 
   if (payload.digilocker_failure_reason) return true;
+
+  if (payload.requires_address_step_proof_digilocker) {
+    return false;
+  }
 
   const status = payload.external_kyc_status;
   if (status === "returned_failed" || status === "started") return true;

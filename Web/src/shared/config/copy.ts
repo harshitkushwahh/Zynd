@@ -614,6 +614,8 @@ export const copy = {
       proofOnlyTitle: "Aadhaar address attached",
       proofOnlyDescription:
         "DigiLocker already attached your Aadhaar address to the KYC form. Enter the same address here so we can keep it on your profile.",
+      kraProofManualEntryHint:
+        "After DigiLocker links your KRA form, enter your permanent and correspondence address here. KRA proof may not include every line — fill in what you need.",
       permanentTab: "Permanent address",
       correspondenceTab: "Correspondence address",
       sameAsPermanent: "Correspondence address is same as permanent address",
@@ -897,6 +899,15 @@ export const copy = {
         "One quick DigiLocker step links your KRA registration form so we can open Aadhaar eSign. Uses sandbox Finprim when KYC_DIGILOCKER_SANDBOX is enabled.",
       redirecting: "Redirecting to DigiLocker",
       secondsRemaining: (seconds: number) => `${seconds}s`,
+      requiredTitle: "Fetch your KRA details",
+      requiredDescription:
+        "DigiLocker connects to your existing KRA registration for this update. We pull verified details from the KRA — this step does not fetch a new Aadhaar address.",
+      requiredAction: "Continue with DigiLocker",
+      failedDescription:
+        "We could not link your KRA registration through DigiLocker. Try again, or contact support if an application is already open at the KRA.",
+      prefilledTitle: "KRA address on file",
+      prefilledDescription:
+        "Details from your KRA registration are shown below. Confirm them or update correspondence if needed.",
     },
     digilocker: {
       title: "DigiLocker",

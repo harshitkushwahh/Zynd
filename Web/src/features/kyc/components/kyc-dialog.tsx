@@ -93,7 +93,6 @@ import {
 } from "@/features/kyc/lib/kyc-journey-draft";
 import { kycPanResetRequiresConfirm } from "@/features/kyc/lib/kyc-pan-reset";
 import { resolvePanDisplay } from "@/features/kyc/lib/kyc-sensitive-display";
-import { isProofDetailsComplete } from "@/features/kyc/lib/kyc-flow-mode";
 import {
   getKycJourneySteps,
   requiresFullKycSubmission,
@@ -649,19 +648,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
           mergedPayload.external_kyc_status === "returned_success" &&
           !mergedPayload.requires_address_step_proof_digilocker,
       );
-      const proofContact = mergedPayload.contact_draft;
-      const proofPermanent =
-        proofContact && typeof proofContact === "object"
-          ? (proofContact.permanent as { line1?: string } | undefined)
-          : undefined;
-      const proofPrefill = Boolean(
-        mergedPayload.requires_address_step_proof_digilocker &&
-          isProofDetailsComplete(mergedPayload.proof_details_status) &&
-          proofContact &&
-          String(proofContact.source ?? "") === "proof_details" &&
-          String(proofPermanent?.line1 ?? "").trim(),
-      );
-      setPrefilledFromDigilocker(identityPrefill || proofPrefill);
+      setPrefilledFromDigilocker(identityPrefill);
       setShowDigilockerFailureCard(showFailureAlert);
       if (digilockerReturn.kind === "failed") {
         digilockerAddressAutoStartRef.current = true;
@@ -729,7 +716,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       return;
     }
     if (status.needs_digilocker && !fetchUrl) {
-      throw new Error(copy.kyc.digilocker.failedDescription);
+      throw new Error(copy.kyc.kraProof.failedDescription);
     }
     const payload = await fetchKycBootstrap();
     applyBootstrap(payload);
@@ -753,7 +740,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
           ? error.message
           : error instanceof Error
             ? error.message
-            : copy.kyc.digilocker.failedDescription;
+            : bootstrap?.requires_address_step_proof_digilocker
+              ? copy.kyc.kraProof.failedDescription
+              : copy.kyc.digilocker.failedDescription;
       setJourneySaveError(message);
       setShowDigilockerFailureCard(true);
       setDigilockerFailureDialogOpen(true);
@@ -1497,7 +1486,11 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
 
   const handleAddressSubmit = async (value: KycAddressFormValue) => {
     if (bootstrap && shouldBlockAddressStep(bootstrap)) {
-      setJourneySaveError(copy.kyc.digilocker.failedDescription);
+      setJourneySaveError(
+        bootstrap.requires_address_step_proof_digilocker
+          ? copy.kyc.kraProof.requiredDescription
+          : copy.kyc.digilocker.requiredDescription,
+      );
       return;
     }
     setSaving(true);
@@ -1861,7 +1854,9 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             ? error.message
             : error instanceof Error
               ? error.message
-              : copy.kyc.digilocker.failedDescription;
+              : bootstrap?.requires_address_step_proof_digilocker
+                ? copy.kyc.kraProof.failedDescription
+                : copy.kyc.digilocker.failedDescription;
         setJourneySaveError(message);
         setShowDigilockerFailureCard(true);
         setDigilockerFailureDialogOpen(true);
@@ -2090,13 +2085,21 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               }
               stateOptions={stateOptions}
               prefilledFromDigilocker={prefilledFromDigilocker}
-              digilockerFieldsLocked={prefilledFromDigilocker}
+              digilockerFieldsLocked={
+                prefilledFromDigilocker && !bootstrap?.requires_address_step_proof_digilocker
+              }
               digilockerPrefillIncomplete={
                 Boolean(bootstrap?.requires_address_step_proof_digilocker) ? false : digilockerPrefillIncomplete
               }
               digilockerBlocked={digilockerBlocked}
               proofAddressOnly={Boolean(bootstrap?.requires_address_step_proof_digilocker)}
-              digilockerFailureReason={digilockerAlertVisible ? digilockerAlertDescription : null}
+              digilockerFailureReason={
+                digilockerAlertVisible
+                  ? digilockerAlertDescription
+                  : bootstrap?.requires_address_step_proof_digilocker && journeySaveError
+                    ? journeySaveError
+                    : null
+              }
               onRetryDigilocker={() => {
                 void handleDigilockerRetry();
               }}
@@ -2300,7 +2303,12 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             showSecurityFooter
           >
             {renderJourneyFormHeader()}
-            {journeySaveError ? (
+            {journeySaveError &&
+            !(
+              activeStepId === "address" &&
+              digilockerBlocked &&
+              bootstrap?.requires_address_step_proof_digilocker
+            ) ? (
               <FieldMessage message={journeySaveError} className="mb-3 mt-0 shrink-0" />
             ) : null}
             <div className="flex min-h-0 flex-1 flex-col">{renderJourneyStep()}</div>
@@ -2416,7 +2424,10 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
       <KycDigilockerFailureDialog
         open={digilockerFailureDialogOpen}
         onOpenChange={setDigilockerFailureDialogOpen}
-        description={digilockerAlertDescription}
+        flow={
+          bootstrap?.requires_address_step_proof_digilocker ? "kraProof" : "aadhaarAddress"
+        }
+        description={digilockerAlertDescription ?? journeySaveError}
         onRetry={() => void handleDigilockerRetry()}
         retrying={digilockerRetrying}
       />

@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 type KycDigilockerFailureDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  flow?: "aadhaarAddress" | "kraProof";
   description?: string | null;
   onRetry: () => void;
   retrying?: boolean;
@@ -21,11 +22,16 @@ type KycDigilockerFailureDialogProps = {
 export function KycDigilockerFailureDialog({
   open,
   onOpenChange,
+  flow = "aadhaarAddress",
   description,
   onRetry,
   retrying = false,
 }: KycDigilockerFailureDialogProps) {
-  const body = description?.trim() || copy.kyc.digilocker.failedDescription;
+  const body =
+    description?.trim() ||
+    (flow === "kraProof"
+      ? copy.kyc.kraProof.failedDescription
+      : copy.kyc.digilocker.failedDescription);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
