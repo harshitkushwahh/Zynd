@@ -143,3 +143,12 @@ def test_require_phase2_complete_requires_verified_bank() -> None:
     with pytest.raises(KycError) as exc:
         require_phase2_complete(journey)
     assert exc.value.code == "phase2_incomplete"
+
+
+def test_require_phase2_complete_allows_cybrilla_manual_pending_bank() -> None:
+    journey = KycJourneyState(user_id=None)  # type: ignore[arg-type]
+    journey.personal_draft_json = {"gender": "male"}
+    journey.last_completed_step = "bank"
+    journey.bank_draft_json = {"accountNumber": "1234567890"}
+    journey.bank_verification_status = "manual_pending"
+    require_phase2_complete(journey)

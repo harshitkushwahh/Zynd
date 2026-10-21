@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Download, FileBarChart, FolderOpen, Play, Search } from "lucide-react";
+import { Download, FileBarChart, FolderOpen, Play, Search } from "lucide-react";
 import Image from "next/image";
 
 import { Table, TableCard } from "@/components/core/table";
@@ -196,13 +196,6 @@ export function ReportsPage() {
   const generated = reportsQuery.data?.reports ?? [];
   const eligibility = reportsQuery.data?.eligibility;
   const canGenerateReports = eligibility?.can_generate ?? false;
-  const generateBlockedMessage =
-    eligibility?.message ??
-    (eligibility?.code === "kyc_required"
-      ? copy.reports.generateBlockedKyc
-      : eligibility?.code === "no_holdings"
-        ? copy.reports.generateBlockedNoHoldings
-        : null);
   const query = search.trim().toLowerCase();
   const visibleGenerated = query
     ? generated.filter((row) => {
@@ -226,26 +219,6 @@ export function ReportsPage() {
       <DashboardBreadcrumb items={[{ label: copy.reports.pageTitle }]} />
       <PageHeader icon={REPORTS_ROUTE.icon} title={copy.reports.pageTitle} />
       <div className="flex min-h-0 flex-col gap-6">
-        {!canGenerateReports && generateBlockedMessage ? (
-          <div
-            role="status"
-            className={cn(
-              ZYND_3XL_RADIUS_CLASS,
-              "flex gap-3 border border-border/80 bg-muted/15 px-4 py-3.5 dark:bg-muted/10",
-            )}
-          >
-            <div
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-              aria-hidden
-            >
-              <AlertCircle className="size-4" strokeWidth={2.1} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-compact font-semibold text-foreground">{copy.reports.generateBlockedTitle}</p>
-              <p className="mt-1 text-caption leading-relaxed text-muted-foreground">{generateBlockedMessage}</p>
-            </div>
-          </div>
-        ) : null}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {REPORT_TYPES.map((item) => (
             <ReportTypeCard

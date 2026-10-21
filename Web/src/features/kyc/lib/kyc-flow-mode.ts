@@ -34,7 +34,7 @@ export function requiresAddressStepDigilocker(
   return Boolean(bootstrap?.requires_digilocker);
 }
 
-/** Proof-details DigiLocker on the address step — KYC on-hold and KRA update. */
+/** Proof-details DigiLocker on the address step — KRA update / on-hold. */
 export function requiresAddressStepProofDigilocker(
   bootstrap: Pick<KycBootstrapResponse, "requires_address_step_proof_digilocker" | "kyc_flow_mode"> | null | undefined,
 ): boolean {

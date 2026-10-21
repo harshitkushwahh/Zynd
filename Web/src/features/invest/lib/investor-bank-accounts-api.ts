@@ -44,6 +44,8 @@ export type InvestorBankAccountVerifyResponse = InvestorBankAccount & {
   bank_verified: boolean;
   requires_manual_verification: boolean;
   requires_proof_upload: boolean;
+  requires_cybrilla_manual_review?: boolean;
+  allows_kyc_continue?: boolean;
 };
 
 export type InvestorBankAccountListResponse = {

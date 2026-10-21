@@ -95,6 +95,8 @@ export function AddBankAccountForm({
       branch: result.branch_name ?? "",
       requiresManualVerification: result.requires_manual_verification,
       requiresProofUpload: result.requires_proof_upload,
+      requiresCybrillaManualReview: result.requires_cybrilla_manual_review,
+      allowsKycContinue: result.allows_kyc_continue,
       preverifyId: result.preverify_id ?? undefined,
       failureReason: result.failure?.reason ?? undefined,
     };
@@ -108,7 +110,7 @@ export function AddBankAccountForm({
     setVerification(verificationResult);
     setProofUploaded(result.proof_uploaded);
 
-    if (result.bank_verified) {
+    if (result.bank_verified || result.allows_kyc_continue) {
       setIsComplete(true);
       onSuccess(result);
       return true;
@@ -136,7 +138,8 @@ export function AddBankAccountForm({
       result.preverify_id &&
       result.id &&
       !result.requires_manual_verification &&
-      !result.requires_proof_upload
+      !result.requires_proof_upload &&
+      !result.requires_cybrilla_manual_review
     ) {
       const polled = await pollWithBackoff(
         () => fetchInvestorBankAccountPreverifyStatus(result.id, result.preverify_id!),
@@ -242,7 +245,9 @@ export function AddBankAccountForm({
     }
   };
 
-  const showManualProof = Boolean(verification?.requiresManualVerification && !isComplete);
+  const showManualProof = Boolean(
+    verification?.requiresProofUpload && verification?.requiresManualVerification && !isComplete,
+  );
   const buttonLabel = isProcessing
     ? copy.kyc.bank.verifying
     : showManualProof

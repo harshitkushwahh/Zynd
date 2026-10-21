@@ -47,6 +47,8 @@ export type KycBankVerificationResult = {
   branch: string;
   requiresManualVerification?: boolean;
   requiresProofUpload?: boolean;
+  requiresCybrillaManualReview?: boolean;
+  allowsKycContinue?: boolean;
   preverifyId?: string;
   failureReason?: string;
 };

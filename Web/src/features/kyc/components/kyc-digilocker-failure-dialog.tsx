@@ -54,9 +54,11 @@ export function KycDigilockerFailureDialog({
                 {copy.kyc.digilocker.failedTitle}
               </p>
               <p className="text-caption leading-relaxed text-muted-foreground">{body}</p>
-              <p className="rounded-[1rem] border border-destructive/20 bg-destructive/[0.06] px-3.5 py-3 text-left text-[11px] font-medium leading-snug text-foreground">
-                {copy.kyc.digilocker.aadhaarCheckboxHint}
-              </p>
+              {flow === "aadhaarAddress" ? (
+                <p className="rounded-[1rem] border border-destructive/20 bg-destructive/[0.06] px-3.5 py-3 text-left text-[11px] font-medium leading-snug text-foreground">
+                  {copy.kyc.digilocker.aadhaarCheckboxHint}
+                </p>
+              ) : null}
             </div>
 
             <Button type="button" className="w-full" disabled={retrying} onClick={onRetry}>

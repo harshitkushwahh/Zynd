@@ -303,6 +303,39 @@ async def find_journey_by_identity_document(
     return result.scalar_one_or_none()
 
 
+async def ensure_address_partner_digilocker_complete(
+    db: AsyncSession,
+    journey: KycJourneyState,
+    *,
+    message: str = "Complete DigiLocker verification first.",
+) -> None:
+    from app.application.kyc.kyc_flow_mode import (
+        requires_address_step_proof_digilocker,
+        should_use_poa_partner_form,
+    )
+    from app.application.kyc.kyc_form_service import fetch_journey_kyc_form
+    from app.application.kyc.path_a_proof import (
+        address_step_partner_digilocker_pending,
+        poa_form_proof_complete,
+    )
+    from app.application.kyc.poa_kyc_form_service import _sync_journey_from_form
+
+    if (
+        requires_address_step_proof_digilocker(journey)
+        and should_use_poa_partner_form(journey)
+        and journey.external_kyc_form_id
+    ):
+        form = await fetch_journey_kyc_form(db, journey, clear_if_missing=False)
+        if form:
+            _sync_journey_from_form(journey, form)
+            if poa_form_proof_complete(form):
+                return
+            raise KycError(message, "digilocker_required", 403)
+
+    if address_step_partner_digilocker_pending(journey):
+        raise KycError(message, "digilocker_required", 403)
+
+
 async def save_journey_state(
     db: AsyncSession,
     *,
@@ -317,10 +350,8 @@ async def save_journey_state(
         journey.pan_draft_json = payload["panDraftJson"]
     if "contactDraftJson" in payload:
         from app.application.kyc.kyc_flow_mode import requires_address_step_proof_digilocker
-        from app.application.kyc.path_a_proof import address_step_partner_digilocker_pending
 
-        if address_step_partner_digilocker_pending(journey):
-            raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
+        await ensure_address_partner_digilocker_complete(db, journey)
         from app.application.kyc.pincode_address_service import normalize_contact_draft_pincodes
 
         contact_draft = payload["contactDraftJson"]
@@ -478,10 +509,7 @@ async def save_journey_state(
     last_step = payload.get("lastCompletedStep")
     if last_step:
         if last_step == "address":
-            from app.application.kyc.path_a_proof import address_step_partner_digilocker_pending
-
-            if address_step_partner_digilocker_pending(journey):
-                raise KycError("Complete DigiLocker verification first.", "digilocker_required", 403)
+            await ensure_address_partner_digilocker_complete(db, journey)
         journey.last_completed_step = last_step
         if last_step == "pan":
             status.pan_step_status = KycStepStatus.verified

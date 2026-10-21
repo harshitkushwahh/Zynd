@@ -29,17 +29,17 @@ export function KycDigilockerInfoCard({
   const isProminent = layout === "prominent";
   const flowCopy = flow === "kraProof" ? copy.kyc.kraProof : copy.kyc.digilocker;
   const title = isRequired
-    ? flowCopy.requiredTitle ?? copy.kyc.digilocker.requiredTitle
+    ? (flowCopy.requiredTitle ?? copy.kyc.digilocker.requiredTitle)
     : copy.kyc.digilocker.failedTitle;
   const body =
     description?.trim() ||
     (isRequired
-      ? flowCopy.requiredDescription ?? copy.kyc.digilocker.requiredDescription
+      ? (flowCopy.requiredDescription ?? copy.kyc.digilocker.requiredDescription)
       : flow === "kraProof"
         ? copy.kyc.kraProof.failedDescription
         : copy.kyc.digilocker.failedDescription);
   const actionLabel = isRequired
-    ? flowCopy.requiredAction ?? copy.kyc.digilocker.requiredAction
+    ? (flowCopy.requiredAction ?? copy.kyc.digilocker.requiredAction)
     : copy.kyc.digilocker.retry;
   const showAadhaarCheckboxHint = !isRequired && flow === "aadhaarAddress";
 

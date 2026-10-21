@@ -156,6 +156,9 @@ export type KycBankVerifyResponse = {
   readiness_verified: boolean;
   requires_manual_verification: boolean;
   requires_proof_upload: boolean;
+  requires_cybrilla_manual_review?: boolean;
+  allows_kyc_continue?: boolean;
+  cybrilla_manual_review_requested?: boolean;
   preverify_id?: string;
   failure?: { field: string; code?: string; reason?: string };
 };

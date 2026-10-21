@@ -118,6 +118,8 @@ async def test_partner_onboarding_submits_for_ho_review(
             readiness_verified=False,
             requires_manual=False,
             requires_proof_upload=False,
+            requires_cybrilla_manual_review=False,
+            allows_kyc_continue=False,
             failure=None,
             kyckart_holder_name="New Mitra",
             kyckart_lookup_error=None,

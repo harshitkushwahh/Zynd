@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.application.kyc.kyc_form_service import _build_next_action
 from app.application.kyc.path_a_proof import (
+    address_step_partner_digilocker_pending,
     path_a_digilocker_proof_satisfied,
     poa_partner_proof_satisfied,
     requires_poa_kyc_form_proof_fetch,
@@ -24,6 +26,28 @@ def _fresh_kyc_journey(**overrides: object) -> SimpleNamespace:
     }
     base.update(overrides)
     return SimpleNamespace(**base)
+
+
+def test_kra_update_pending_poa_proof_blocks_address_step() -> None:
+    journey = SimpleNamespace(
+        external_kyc_status="returned_success",
+        external_identity_document_id=None,
+        kyc_already_registered=False,
+        readiness_code="kyc_onhold",
+        poa_readiness_preverify_id="pv_1",
+        proof_details_status="pending",
+    )
+    with patch(
+        "app.application.kyc.path_a_proof.requires_address_step_digilocker",
+        return_value=False,
+    ), patch(
+        "app.application.kyc.path_a_proof.requires_address_step_proof_digilocker",
+        return_value=True,
+    ):
+        assert address_step_partner_digilocker_pending(journey) is True
+
+    journey.proof_details_status = "fetched"
+    assert address_step_partner_digilocker_pending(journey) is False
 
 
 def test_path_a_satisfied_when_finprim_iddoc_success() -> None:

@@ -33,7 +33,7 @@ def requires_address_step_digilocker(journey: KycJourneyState | None) -> bool:
 
 
 def requires_address_step_proof_digilocker(journey: KycJourneyState | None) -> bool:
-    """Cybrilla proof_details DigiLocker at the address step — on-hold and KRA update only."""
+    """Cybrilla proof_details DigiLocker on the address step — KRA update / on-hold."""
     if journey is None:
         return False
     if resolve_kyc_flow_mode(journey) != "kra_update":

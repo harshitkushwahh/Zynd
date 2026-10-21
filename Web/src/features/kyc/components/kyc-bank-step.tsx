@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { KycBankAccountCard } from "@/features/kyc/components/kyc-bank-account-card";
+import { KycCybrillaBankManualDialog } from "@/features/kyc/components/kyc-cybrilla-bank-manual-dialog";
 import { KycSelectField } from "@/features/kyc/components/kyc-select-field";
 import {
   uploadKycBankProof,
@@ -58,8 +59,14 @@ export function KycBankStep({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingIfsc, setIsFetchingIfsc] = useState(false);
   const [isComplete, setIsComplete] = useState(
-    Boolean(initialVerification?.bankVerified && initialAccountDetails),
+    Boolean(
+      initialAccountDetails &&
+        (initialVerification?.bankVerified ||
+          initialVerification?.requiresCybrillaManualReview ||
+          initialVerification?.allowsKycContinue),
+    ),
   );
+  const [cybrillaManualDialogOpen, setCybrillaManualDialogOpen] = useState(false);
   const [accountDetails, setAccountDetails] = useState<KycBankAccountDetails | null>(
     initialAccountDetails ?? null,
   );
@@ -242,6 +249,8 @@ export function KycBankStep({
       branch: result.branch ?? "",
       requiresManualVerification: result.requires_manual_verification,
       requiresProofUpload: result.requires_proof_upload,
+      requiresCybrillaManualReview: result.requires_cybrilla_manual_review,
+      allowsKycContinue: result.allows_kyc_continue,
       preverifyId: result.preverify_id,
       failureReason: result.failure?.reason,
     };
@@ -267,10 +276,20 @@ export function KycBankStep({
       return;
     }
 
+    if (result.allows_kyc_continue) {
+      verificationResult.requiresCybrillaManualReview = true;
+      verificationResult.allowsKycContinue = true;
+      setVerification(verificationResult);
+      setIsComplete(true);
+      setCybrillaManualDialogOpen(true);
+      return;
+    }
+
     if (
       result.preverify_id &&
       !result.requires_manual_verification &&
-      !result.requires_proof_upload
+      !result.requires_proof_upload &&
+      !result.requires_cybrilla_manual_review
     ) {
       const polled = await pollWithBackoff(
         () => fetchKycBankPreverifyStatus(result.preverify_id!),
@@ -377,7 +396,9 @@ export function KycBankStep({
     });
   };
 
-  const showManualProof = Boolean(verification?.requiresManualVerification && !isComplete);
+  const showManualProof = Boolean(
+    verification?.requiresProofUpload && verification?.requiresManualVerification && !isComplete,
+  );
   const buttonLabel = isProcessing
     ? copy.kyc.bank.verifying
     : showManualProof
@@ -502,6 +523,11 @@ export function KycBankStep({
       >
         {buttonLabel}
       </Button>
+
+      <KycCybrillaBankManualDialog
+        open={cybrillaManualDialogOpen}
+        onOpenChange={setCybrillaManualDialogOpen}
+      />
     </form>
   );
 }

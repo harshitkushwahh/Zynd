@@ -136,6 +136,8 @@ def _verification_outcome(**overrides) -> HybridBankVerificationOutcome:
         "readiness_verified": True,
         "requires_manual": False,
         "requires_proof_upload": False,
+        "requires_cybrilla_manual_review": False,
+        "allows_kyc_continue": False,
         "failure": None,
         "kyckart_holder_name": "Test User",
         "kyckart_lookup_error": None,

@@ -87,6 +87,40 @@ async def poa_fetch_pan_validation(
     return await poll_poa_preverification(preverify_id)
 
 
+async def _poa_create_bank_preverification(
+    *,
+    pan_number: str,
+    account_holder_name: str,
+    account_number: str,
+    ifsc_code: str,
+    account_type: str,
+    verify_manually_if_required: bool = False,
+    proof_file_id: str | None = None,
+) -> dict[str, Any]:
+    account_value: dict[str, Any] = {
+        "account_number": account_number,
+        "ifsc_code": ifsc_code.upper(),
+        "account_type": account_type,
+    }
+    if proof_file_id:
+        account_value["bank_account_proof"] = proof_file_id
+
+    bank_account_entry: dict[str, Any] = {"value": account_value}
+    if verify_manually_if_required:
+        bank_account_entry["verify_manually_if_required"] = True
+
+    created = await fp_post(
+        "/poa/pre_verifications",
+        {
+            "pan": {"value": pan_number.upper()},
+            "name": {"value": account_holder_name},
+            "bank_accounts": [bank_account_entry],
+        },
+        use_poa=True,
+    )
+    return await poll_poa_preverification(str(created["id"]))
+
+
 async def poa_verify_bank_account(
     *,
     pan_number: str,
@@ -104,25 +138,48 @@ async def poa_verify_bank_account(
         account_type=account_type,
     )
 
-    created = await fp_post(
-        "/poa/pre_verifications",
-        {
-            "pan": {"value": pan_number.upper()},
-            "name": {"value": account_holder_name},
-            "bank_accounts": [
-                {
-                    "value": {
-                        "account_number": account_number,
-                        "ifsc_code": ifsc_code.upper(),
-                        "account_type": account_type,
-                    },
-                }
-            ],
-        },
-        use_poa=True,
+    result = await _poa_create_bank_preverification(
+        pan_number=pan_number,
+        account_holder_name=account_holder_name,
+        account_number=account_number,
+        ifsc_code=ifsc_code,
+        account_type=account_type,
     )
-    result = await poll_poa_preverification(str(created["id"]))
     log_poa_operation("verify_bank_hybrid_result", live=True, preverify_id=result.get("id"))
+    return result
+
+
+async def poa_verify_bank_account_uncertain_manual(
+    *,
+    pan_number: str,
+    account_holder_name: str,
+    account_number: str,
+    ifsc_code: str,
+    account_type: str,
+) -> dict[str, Any]:
+    """Follow-up POA after bank code ``uncertain`` (savings/current): consent to manual review."""
+    _require_live_poa()
+    log_poa_operation(
+        "verify_bank_uncertain_manual",
+        live=True,
+        pan=pan_number,
+        ifsc=ifsc_code,
+        account_type=account_type,
+    )
+
+    result = await _poa_create_bank_preverification(
+        pan_number=pan_number,
+        account_holder_name=account_holder_name,
+        account_number=account_number,
+        ifsc_code=ifsc_code,
+        account_type=account_type,
+        verify_manually_if_required=True,
+    )
+    log_poa_operation(
+        "verify_bank_uncertain_manual_result",
+        live=True,
+        preverify_id=result.get("id"),
+    )
     return result
 
 
@@ -138,26 +195,15 @@ async def poa_verify_bank_account_manual(
     _require_live_poa()
     log_poa_operation("verify_bank_manual", live=True, pan=pan_number, ifsc=ifsc_code)
 
-    created = await fp_post(
-        "/poa/pre_verifications",
-        {
-            "pan": {"value": pan_number.upper()},
-            "name": {"value": account_holder_name},
-            "bank_accounts": [
-                {
-                    "value": {
-                        "account_number": account_number,
-                        "ifsc_code": ifsc_code.upper(),
-                        "account_type": account_type,
-                        "bank_account_proof": proof_file_id,
-                    },
-                    "verify_manually_if_required": True,
-                }
-            ],
-        },
-        use_poa=True,
+    result = await _poa_create_bank_preverification(
+        pan_number=pan_number,
+        account_holder_name=account_holder_name,
+        account_number=account_number,
+        ifsc_code=ifsc_code,
+        account_type=account_type,
+        verify_manually_if_required=True,
+        proof_file_id=proof_file_id,
     )
-    result = await poll_poa_preverification(str(created["id"]))
     log_poa_operation("verify_bank_manual_result", live=True, preverify_id=result.get("id"))
     return result
 

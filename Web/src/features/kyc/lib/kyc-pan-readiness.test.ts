@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   capReachableStepIndex,
+  digilockerFailureDescription,
   isDigilockerComplete,
   shouldFocusReviewAfterPartnerReturn,
+  shouldShowDigilockerFailureAlert,
 } from "@/features/kyc/lib/kyc-pan-readiness";
 import { KYC_JOURNEY_STEPS } from "@/features/kyc/lib/kyc-journey";
 
@@ -49,6 +51,31 @@ describe("capReachableStepIndex", () => {
       external_identity_document_id: "iddoc_abc",
     });
     expect(index).toBe(1);
+  });
+});
+
+describe("shouldShowDigilockerFailureAlert", () => {
+  it("ignores Path A digilocker_failure_reason on KRA proof address step", () => {
+    expect(
+      shouldShowDigilockerFailureAlert({
+        pan_verification_status: "verified",
+        requires_address_step_proof_digilocker: true,
+        proof_details_status: "pending",
+        digilocker_failure_reason:
+          "Aadhaar was not fetched. Enter your mobile number in DigiLocker, select the Aadhaar checkbox, and complete verification before returning.",
+      } as import("@/features/kyc/lib/kyc-api").KycBootstrapResponse),
+    ).toBe(false);
+  });
+});
+
+describe("digilockerFailureDescription", () => {
+  it("returns null for KRA proof flow", () => {
+    expect(
+      digilockerFailureDescription({
+        requires_address_step_proof_digilocker: true,
+        digilocker_failure_reason: "Aadhaar was not fetched.",
+      } as import("@/features/kyc/lib/kyc-api").KycBootstrapResponse),
+    ).toBeNull();
   });
 });
 

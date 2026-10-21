@@ -433,11 +433,6 @@ export function KycAddressStep({
           onRetry={onRetryDigilocker}
           retrying={retryingDigilocker}
         />
-        {proofAddressOnly ? (
-          <p className="mx-auto max-w-lg text-center text-caption leading-relaxed text-muted-foreground">
-            {copy.kyc.address.kraProofManualEntryHint}
-          </p>
-        ) : null}
       </div>
     );
   }
@@ -466,7 +461,13 @@ export function KycAddressStep({
       {proofAddressOnly ? (
         <KycInfoCallout
           title={copy.kyc.kraProof.prefilledTitle}
-          description={copy.kyc.kraProof.prefilledDescription}
+          description={
+            <>
+              {copy.kyc.kraProof.prefilledDescriptionLines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </>
+          }
         />
       ) : null}
 

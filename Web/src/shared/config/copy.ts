@@ -614,8 +614,6 @@ export const copy = {
       proofOnlyTitle: "Aadhaar address attached",
       proofOnlyDescription:
         "DigiLocker already attached your Aadhaar address to the KYC form. Enter the same address here so we can keep it on your profile.",
-      kraProofManualEntryHint:
-        "After DigiLocker links your KRA form, enter your permanent and correspondence address here. KRA proof may not include every line — fill in what you need.",
       permanentTab: "Permanent address",
       correspondenceTab: "Correspondence address",
       sameAsPermanent: "Correspondence address is same as permanent address",
@@ -859,6 +857,7 @@ export const copy = {
         accountVerified: "Account verified",
         readinessVerified: "Readiness verified",
         readinessPending: "Readiness pending",
+        cybrillaReviewPending: "Cybrilla review in progress",
       },
       manualVerifyTitle: "Manual verification required",
       manualVerifyDescription:
@@ -872,6 +871,12 @@ export const copy = {
       proofRequired: "Upload bank proof before continuing.",
       verifyManual: "Verify with proof",
       editBankDetails: "Edit bank details",
+      cybrillaManualDialog: {
+        title: "Bank verification in progress",
+        description:
+          "Cybrilla will verify your bank manually (about one business day). You can continue KYC now.",
+        continue: "Continue KYC",
+      },
     },
     signature: {
       drawTab: "Draw sign",
@@ -896,16 +901,20 @@ export const copy = {
     kraProof: {
       title: "Link KRA KYC form",
       description:
-        "One quick DigiLocker step links your KRA registration form so we can open Aadhaar eSign. Uses sandbox Finprim when KYC_DIGILOCKER_SANDBOX is enabled.",
+        "DigiLocker links your KRA registration form so you can complete Aadhaar eSign after review.",
       redirecting: "Redirecting to DigiLocker",
       secondsRemaining: (seconds: number) => `${seconds}s`,
       requiredTitle: "Fetch your KRA details",
       requiredDescription:
-        "DigiLocker connects to your existing KRA registration for this update. We pull verified details from the KRA — this step does not fetch a new Aadhaar address.",
+        "DigiLocker connects to your existing KRA registration for this update. We pull verified KRA details this step does not fetch a new Aadhaar address.",
       requiredAction: "Continue with DigiLocker",
       failedDescription:
         "We could not link your KRA registration through DigiLocker. Try again, or contact support if an application is already open at the KRA.",
       prefilledTitle: "KRA address on file",
+      prefilledDescriptionLines: [
+        "Details from your KRA registration are shown below.",
+        "Confirm them or update correspondence if needed.",
+      ],
       prefilledDescription:
         "Details from your KRA registration are shown below. Confirm them or update correspondence if needed.",
     },

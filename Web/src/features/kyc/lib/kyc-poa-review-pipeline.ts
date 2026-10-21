@@ -5,11 +5,11 @@ import { ApiError } from "@/lib/api-client";
 
 export type PoaReviewGateResult =
   | { kind: "ok" }
-  | { kind: "blocked"; message: string };
+  | { kind: "blocked"; message: string }
+  | { kind: "proof_redirect"; fetchUrl: string };
 
 /**
- * Review submit: sync demographic data to the POA kyc_form only (one partner round-trip when possible).
- * Identity proof is Finprim DigiLocker on the address step — never a second redirect here.
+ * Review submit: ensure POA kyc_form exists, sync demographics, and surface pending proof DigiLocker.
  */
 export async function ensurePoaPartnerProofReadyForSubmit(
   bootstrap?: Pick<KycBootstrapResponse, "kyc_flow_mode"> | null,
@@ -18,11 +18,20 @@ export async function ensurePoaPartnerProofReadyForSubmit(
     return { kind: "ok" };
   }
   try {
-    const status = await fetchPoaKycFormStatus();
+    let status = await fetchPoaKycFormStatus();
     if (!status.form_id) {
-      await startPoaKycForm();
+      status = await startPoaKycForm();
+    }
+    const fetchUrl = status.proof_fetch_url?.trim() ?? "";
+    if (status.needs_digilocker && fetchUrl) {
+      return { kind: "proof_redirect", fetchUrl };
     }
     await syncPoaKycForm();
+    status = await fetchPoaKycFormStatus();
+    const afterSyncUrl = status.proof_fetch_url?.trim() ?? "";
+    if (status.needs_digilocker && afterSyncUrl) {
+      return { kind: "proof_redirect", fetchUrl: afterSyncUrl };
+    }
     return { kind: "ok" };
   } catch (error) {
     const message =

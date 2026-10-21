@@ -7,8 +7,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+from app.application.kyc.master_data import TERMINAL_READINESS_CODES
 from app.infrastructure.core.kyc.fp_clients import FpClientError, lookup_ifsc
 from app.infrastructure.core.kyc.poa_client import poa_verify_bank_account
+
+# Readiness outcomes that must block continuing KYC even when bank matching is only "uncertain".
+BLOCKING_READINESS_CODES = frozenset({"kyc_rate_limit_exceeded", *TERMINAL_READINESS_CODES})
 
 
 ACCOUNT_TYPE_MAP = {
@@ -138,6 +142,29 @@ def extract_readiness_verified(poa_result: dict[str, Any], *, kyc_already_regist
     return False
 
 
+def effective_readiness_code(
+    readiness_result: dict[str, Any],
+    *,
+    readiness_code: str | None,
+) -> str:
+    return str(readiness_result.get("code") or readiness_code or "").strip().lower()
+
+
+def readiness_blocks_uncertain_kyc_continue(
+    readiness_result: dict[str, Any],
+    *,
+    readiness_code: str | None,
+) -> bool:
+    """True when investor must stop — e.g. rate limit — not for kyc_incomplete during active KYC."""
+    code = effective_readiness_code(readiness_result, readiness_code=readiness_code)
+    if code in BLOCKING_READINESS_CODES:
+        return True
+    status = str(readiness_result.get("status") or "").strip().lower()
+    if status == "failed" and code in TERMINAL_READINESS_CODES:
+        return True
+    return False
+
+
 def holder_name_from_pan_draft(pan_draft: dict[str, Any]) -> str:
     full_name = str(pan_draft.get("fullName") or "").strip()
     if full_name:
@@ -199,7 +226,7 @@ CYBRILLA_BANK_CODE_MESSAGES: dict[str, str] = {
         "Collect the correct account and retry."
     ),
     "uncertain": (
-        "Bank verification is uncertain. This account may be eligible for manual verification with proof."
+        "Automatic bank matching was inconclusive. Cybrilla will verify this account manually."
     ),
     "bank_account_proof_required": (
         "Bank account proof is required to verify this account."
@@ -273,6 +300,8 @@ class HybridBankVerificationOutcome:
     readiness_verified: bool
     requires_manual: bool
     requires_proof_upload: bool
+    requires_cybrilla_manual_review: bool
+    allows_kyc_continue: bool
     failure: dict[str, Any] | None
     kyckart_holder_name: str
     kyckart_lookup_error: str | None
@@ -351,12 +380,20 @@ async def run_hybrid_bank_verification(
         readiness_reason=readiness_reason,
     )
     bank_code = str(bank_result.get("code") or "").lower()
+    requires_cybrilla_manual_review = bank_code == "uncertain"
+    requires_proof_upload = bank_code == "bank_account_proof_required"
     requires_manual = bank_code in {
         "bank_account_proof_required",
-        "uncertain",
         "manual_verification_required",
     }
-    requires_proof_upload = bank_code == "bank_account_proof_required"
+    allows_kyc_continue = (
+        requires_cybrilla_manual_review
+        and pan_verified
+        and not readiness_blocks_uncertain_kyc_continue(
+            readiness_result,
+            readiness_code=readiness_code,
+        )
+    )
 
     if not ifsc_metadata_resolved:
         poa_bank_name, poa_branch = extract_bank_metadata_from_poa(poa_result)
@@ -376,21 +413,48 @@ async def run_hybrid_bank_verification(
         if not requires_manual:
             logger.warning(
                 "bank_verification_failed account_last4=%s bank_code=%s bank_reason=%r "
-                "pan_verified=%s pan_code=%s readiness_verified=%s",
+                "pan_verified=%s pan_code=%s readiness_verified=%s "
+                "poa_readiness_status=%s poa_readiness_code=%s journey_readiness_code=%s "
+                "kyc_already_registered=%s allows_kyc_continue=%s",
                 account_no[-4:],
                 bank_result.get("code"),
                 bank_result.get("reason"),
                 pan_verified,
                 pan_result.get("code"),
                 readiness_verified,
+                readiness_result.get("status"),
+                readiness_result.get("code"),
+                readiness_code,
+                kyc_already_registered,
+                allows_kyc_continue,
             )
-        elif failure:
+        elif requires_cybrilla_manual_review and allows_kyc_continue:
+            logger.info(
+                "bank_verification_cybrilla_manual_review account_last4=%s readiness_verified=%s",
+                account_no[-4:],
+                readiness_verified,
+            )
+        elif failure and requires_manual:
             logger.info(
                 "bank_verification_manual_required account_last4=%s bank_code=%s reason=%r",
                 account_no[-4:],
                 bank_result.get("code"),
                 failure.get("reason"),
             )
+        if requires_cybrilla_manual_review and not allows_kyc_continue:
+            readiness_fail_reason = (
+                str(readiness_result.get("reason") or readiness_reason or "").strip()
+                or "KYC readiness check did not pass."
+            )
+            readiness_fail_code = (
+                effective_readiness_code(readiness_result, readiness_code=readiness_code)
+                or "readiness_failed"
+            )
+            failure = {
+                "field": "readiness",
+                "code": readiness_fail_code,
+                "reason": readiness_fail_reason,
+            }
 
     return HybridBankVerificationOutcome(
         poa_result=poa_result,
@@ -400,6 +464,8 @@ async def run_hybrid_bank_verification(
         readiness_verified=readiness_verified,
         requires_manual=requires_manual,
         requires_proof_upload=requires_proof_upload,
+        requires_cybrilla_manual_review=requires_cybrilla_manual_review,
+        allows_kyc_continue=allows_kyc_continue,
         failure=failure,
         kyckart_holder_name=kyckart_display_name,
         kyckart_lookup_error=kyckart_lookup_error,

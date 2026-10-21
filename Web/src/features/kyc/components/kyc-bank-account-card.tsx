@@ -108,7 +108,12 @@ export function KycBankAccountCard({
   ifscCode,
   onEdit,
 }: KycBankAccountCardProps) {
-  const requiresManual = Boolean(verification?.requiresManualVerification && !isComplete);
+  const requiresManual = Boolean(
+    verification?.requiresProofUpload && verification?.requiresManualVerification && !isComplete,
+  );
+  const isCybrillaReviewPending = Boolean(
+    isComplete && verification?.requiresCybrillaManualReview && !verification?.bankVerified,
+  );
   const isBankVerified = Boolean(isComplete && verification?.bankVerified);
   const showGenericPending =
     (!isComplete && !accountDetails) || isProcessing || isFetchingIfsc;
@@ -160,15 +165,19 @@ export function KycBankAccountCard({
     return null;
   }
 
-  if (isBankVerified && !requiresManual) {
+  if ((isBankVerified || isCybrillaReviewPending) && !requiresManual) {
     const kraReady = Boolean(verification?.readinessVerified);
-    const badgeVariant = kraReady ? "success" : "info";
-    const badgeLabel = kraReady
-      ? copy.kyc.bank.badges.bankVerified
-      : copy.kyc.bank.badges.accountVerified;
-    const cardTint = kraReady
-      ? "border-border bg-gradient-to-br from-success/[0.06] via-card to-muted/15"
-      : "border-info/20 bg-gradient-to-br from-info/[0.06] via-card to-muted/15";
+    const badgeVariant = isCybrillaReviewPending ? "info" : kraReady ? "success" : "info";
+    const badgeLabel = isCybrillaReviewPending
+      ? copy.kyc.bank.badges.cybrillaReviewPending
+      : kraReady
+        ? copy.kyc.bank.badges.bankVerified
+        : copy.kyc.bank.badges.accountVerified;
+    const cardTint = isCybrillaReviewPending
+      ? "border-info/20 bg-gradient-to-br from-info/[0.06] via-card to-muted/15"
+      : kraReady
+        ? "border-border bg-gradient-to-br from-success/[0.06] via-card to-muted/15"
+        : "border-info/20 bg-gradient-to-br from-info/[0.06] via-card to-muted/15";
 
     return (
       <BankAccountCardShell
@@ -183,7 +192,7 @@ export function KycBankAccountCard({
             accountDetails={accountDetails}
             ifscCode={ifscCode}
             isProcessing={isProcessing}
-            onEdit={onEdit}
+            onEdit={isCybrillaReviewPending ? undefined : onEdit}
           />
         </div>
       </BankAccountCardShell>

@@ -238,6 +238,8 @@ def _map_journey_verification_status(raw: Any) -> InvestorBankVerificationStatus
         return InvestorBankVerificationStatus.verified
     if normalized == "manual_required":
         return InvestorBankVerificationStatus.manual_required
+    if normalized == "manual_pending":
+        return InvestorBankVerificationStatus.pending
     if normalized == "failed":
         return InvestorBankVerificationStatus.failed
     return InvestorBankVerificationStatus.pending
@@ -503,24 +505,47 @@ async def verify_and_add_bank_account(
     except BankVerificationError as exc:
         raise _map_bank_verification_error(exc) from exc
 
-    verification_status = _map_verification_status(
-        bank_verified=outcome.bank_verified,
-        requires_manual=outcome.requires_manual,
-    )
-    if outcome.requires_manual and not outcome.bank_verified:
+    active_preverify_id = outcome.preverify_id
+    if outcome.allows_kyc_continue and outcome.requires_cybrilla_manual_review:
+        from app.application.kyc.cybrilla_bank_manual_service import (
+            request_cybrilla_uncertain_manual_review,
+        )
+
+        manual_poa = await request_cybrilla_uncertain_manual_review(
+            pan_number=pan_number,
+            account_holder_name=outcome.pan_holder_name,
+            account_number=account_no,
+            ifsc_code=ifsc,
+            poa_account_type=outcome.poa_account_type,
+            uncertain_preverify_id=outcome.preverify_id,
+        )
+        if manual_poa:
+            active_preverify_id = str(manual_poa.get("id") or active_preverify_id)
+
+    if outcome.bank_verified:
+        verification_status = InvestorBankVerificationStatus.verified
+    elif outcome.allows_kyc_continue:
+        verification_status = InvestorBankVerificationStatus.pending
+    elif outcome.requires_manual:
         verification_status = InvestorBankVerificationStatus.manual_required
-    elif not outcome.bank_verified and not outcome.requires_manual:
+    else:
         verification_status = InvestorBankVerificationStatus.failed
 
     ciphertext, key_version = encrypt_account_number(account_no)
     mapped_account_type = map_account_type(account_type)
-    metadata = _clear_disabled_metadata(
-        {
-            "readinessVerified": outcome.readiness_verified,
-            "poaAccountType": outcome.poa_account_type,
-            "seededFrom": "user_add",
-        }
-    )
+    metadata_payload: dict[str, Any] = {
+        "readinessVerified": outcome.readiness_verified,
+        "poaAccountType": outcome.poa_account_type,
+        "seededFrom": "user_add",
+    }
+    if (
+        outcome.allows_kyc_continue
+        and outcome.requires_cybrilla_manual_review
+        and active_preverify_id != outcome.preverify_id
+    ):
+        metadata_payload["cybrillaManualReviewRequested"] = True
+        metadata_payload["poaUncertainPreverifyId"] = outcome.preverify_id
+    metadata = _clear_disabled_metadata(metadata_payload)
 
     has_primary = await db.scalar(
         select(InvestorBankAccount.id).where(
@@ -537,7 +562,7 @@ async def verify_and_add_bank_account(
         row.bank_name = outcome.bank_name[:120] or None
         row.branch_name = outcome.branch[:120] or None
         row.account_type = mapped_account_type
-        row.poa_preverify_id = outcome.preverify_id or None
+        row.poa_preverify_id = active_preverify_id or None
         row.verification_status = verification_status
         row.verification_failure_json = outcome.failure
         row.account_number_ciphertext = ciphertext
@@ -557,7 +582,7 @@ async def verify_and_add_bank_account(
             pan_account_holder_name=outcome.pan_holder_name[:120],
             bank_name=outcome.bank_name[:120] or None,
             branch_name=outcome.branch[:120] or None,
-            poa_preverify_id=outcome.preverify_id or None,
+            poa_preverify_id=active_preverify_id or None,
             verification_status=verification_status,
             verification_failure_json=outcome.failure,
             account_number_ciphertext=ciphertext,
@@ -576,11 +601,13 @@ async def verify_and_add_bank_account(
     payload = await _serialize_bank_account_from_session(db, row)
     payload.update(
         {
-            "success": outcome.bank_verified,
+            "success": outcome.bank_verified or outcome.allows_kyc_continue,
             "pan_verified": outcome.pan_verified,
             "bank_verified": outcome.bank_verified,
             "requires_manual_verification": outcome.requires_manual,
             "requires_proof_upload": outcome.requires_proof_upload,
+            "requires_cybrilla_manual_review": outcome.requires_cybrilla_manual_review,
+            "allows_kyc_continue": outcome.allows_kyc_continue,
         }
     )
     return payload

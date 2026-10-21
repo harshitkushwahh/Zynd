@@ -149,6 +149,10 @@ export function capReachableStepIndex(
     external_identity_document_id?: string | null;
     contact_draft?: Record<string, unknown> | null;
     poa_readiness_preverify_id?: string | null;
+    requires_address_step_digilocker?: boolean | null;
+    requires_address_step_proof_digilocker?: boolean | null;
+    proof_details_status?: string | null;
+    requires_digilocker?: boolean | null;
   } | null | undefined,
 ): number {
   if (!shouldBlockAddressStep(input)) return serverIndex;
@@ -187,15 +191,15 @@ export function shouldShowDigilockerFailureAlert(
   if (payload.pan_verification_status !== "verified") return false;
   if (payload.requires_address_step_proof_digilocker) {
     if (isProofDetailsComplete(payload.proof_details_status)) return false;
-  } else if (isDigilockerComplete(payload)) {
+    // KRA proof uses the required DigiLocker card; Path A failure fields must not override copy.
+    return forceShow;
+  }
+
+  if (isDigilockerComplete(payload)) {
     return false;
   }
 
   if (payload.digilocker_failure_reason) return true;
-
-  if (payload.requires_address_step_proof_digilocker) {
-    return false;
-  }
 
   const status = payload.external_kyc_status;
   if (status === "returned_failed" || status === "started") return true;
@@ -207,6 +211,7 @@ export function digilockerFailureDescription(
   payload: KycBootstrapResponse | null | undefined,
 ): string | null {
   if (!payload) return null;
+  if (payload.requires_address_step_proof_digilocker) return null;
   return payload.digilocker_failure_reason ?? null;
 }
 

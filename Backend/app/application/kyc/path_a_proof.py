@@ -23,7 +23,7 @@ def proof_details_status_complete(status: str | None) -> bool:
 
 
 def address_step_partner_digilocker_pending(journey: KycJourneyState | None) -> bool:
-    """Address step is blocked until the journey's single DigiLocker finishes."""
+    """Address step is blocked until the journey's DigiLocker step finishes (Path A or POA proof)."""
     if journey is None:
         return False
     if requires_address_step_digilocker(journey):

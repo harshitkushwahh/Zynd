@@ -164,7 +164,7 @@ def require_phase2_complete(journey: KycJourneyState | None) -> None:
     if journey is None:
         raise KycError("Complete nominee and bank details first.", "phase2_incomplete", 403)
     require_phase1_complete(journey)
-    if journey.bank_verification_status != "verified":
+    if journey.bank_verification_status not in {"verified", "manual_pending"}:
         raise KycError("Verify your bank account before continuing.", "phase2_incomplete", 403)
     if journey.bank_draft_json is None:
         raise KycError("Complete bank details before continuing.", "phase2_incomplete", 403)
