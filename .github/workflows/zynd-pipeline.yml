@@ -650,17 +650,29 @@ jobs:
               echo "ERROR: ${svc} is ${state} after ${seconds}s. API was not recreated."
               return 1
             }
-            for svc in postgres "${MONGO_SERVICE}" redis minio; do
+            ensure_infra_running() {
+              local svc="$1"
+              local wait_seconds="${2:-180}"
+              local state
               state="$(service_state "${svc}")"
               echo "${svc}: ${state}"
               case "${state}" in
-                running|healthy) ;;
+                running|healthy) return 0 ;;
+                missing|exited|dead|created|paused)
+                  echo "${svc} is ${state}; starting so deploy is not blocked."
+                  compose up -d --no-deps "${svc}"
+                  wait_healthy "${svc}" "${wait_seconds}" || return 1
+                  ;;
                 *)
                   echo "ERROR: ${svc} is ${state}. API was not recreated."
-                  exit 1
+                  return 1
                   ;;
               esac
-            done
+            }
+            ensure_infra_running postgres 120 || exit 1
+            ensure_infra_running "${MONGO_SERVICE}" 240 || exit 1
+            ensure_infra_running redis 120 || exit 1
+            ensure_infra_running minio 120 || exit 1
             clamav_state="$(service_state clamav)"
             echo "clamav: ${clamav_state}"
             if [ "${clamav_state}" != "healthy" ] && [ "${clamav_state}" != "running" ]; then
