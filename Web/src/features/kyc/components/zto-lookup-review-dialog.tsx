@@ -26,6 +26,11 @@ const EMPTY_FIELDS: ZtoReviewFields = {
   date_of_birth: "",
   bank_account_number: "",
   ifsc_code: "",
+  address_line_1: "",
+  address_line_2: "",
+  city: "",
+  state: "",
+  pincode: "",
   address_line: "",
 };
 

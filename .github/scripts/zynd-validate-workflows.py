@@ -14,8 +14,13 @@ ALLOWED_WORKFLOW_FILES = frozenset(
     {
         "zynd-pipeline.yml",
         "zynd-sync-help-bot-env.yml",
+        "zynd-sync-kyc-digilocker-env.yml",
     }
 )
+SYNC_DISPATCH_WORKFLOWS: dict[str, str] = {
+    "zynd-sync-help-bot-env.yml": "sync-help-bot-env",
+    "zynd-sync-kyc-digilocker-env.yml": "sync-kyc-digilocker-env",
+}
 FORBIDDEN = (
     "ubuntu-latest",
     "StrictHostKeyChecking=no",
@@ -78,8 +83,9 @@ def main() -> int:
             print(f"{path.name} runners={','.join(runners)}")
             failed = True
 
-        if path.name == "zynd-sync-help-bot-env.yml":
-            if set(jobs) != {"sync-help-bot-env"}:
+        sync_job = SYNC_DISPATCH_WORKFLOWS.get(path.name)
+        if sync_job is not None:
+            if set(jobs) != {sync_job}:
                 print(f"{path.name} jobs={list(jobs)}")
                 failed = True
             if "workflow_dispatch" not in (trigger or {}):
