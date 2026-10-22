@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useId, useMemo } from "react";
 
+import { SlidingPillTabList } from "@/shared/ui/sliding-pill-tab-list";
+
 import {
   coercePortfolioFlowRange,
   filterPortfolioFlowByRange,
@@ -129,38 +131,28 @@ function PortfolioFlowRangeTabs({
 }) {
   const overview = copy.dashboard.overview;
 
+  const tabs = useMemo(
+    () =>
+      OVERVIEW_PORTFOLIO_FLOW_RANGE_OPTIONS.map((option) => ({
+        id: option.id,
+        label: option.label,
+        disabled: !enabledRanges.has(option.id),
+        title: !enabledRanges.has(option.id) ? overview.portfolioChartRangeUnavailable : undefined,
+      })),
+    [enabledRanges, overview.portfolioChartRangeUnavailable],
+  );
+
   return (
-    <div
-      role="tablist"
-      aria-label={overview.portfolioChartRangeLabel}
-      className="flex flex-wrap justify-center gap-0.5 px-2 pb-2 pt-1"
-    >
-      {OVERVIEW_PORTFOLIO_FLOW_RANGE_OPTIONS.map((option) => {
-        const active = value === option.id;
-        const enabled = enabledRanges.has(option.id);
-        return (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            aria-disabled={!enabled}
-            disabled={!enabled}
-            title={!enabled ? overview.portfolioChartRangeUnavailable : undefined}
-            onClick={() => {
-              if (enabled) onChange(option.id);
-            }}
-            className={cn(
-              "min-w-[2.15rem] rounded-full px-2 py-1 text-[10px] font-medium transition-colors duration-200 ease-out sm:min-w-[2.35rem] sm:px-2.5 sm:text-[11px]",
-              active && enabled && "bg-foreground text-background shadow-sm",
-              !active && enabled && "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              !enabled && "cursor-not-allowed text-muted-foreground/35",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
+    <div className="px-2 pb-2 pt-1">
+      <SlidingPillTabList
+        layout="compact"
+        ariaLabel={overview.portfolioChartRangeLabel}
+        tabs={tabs}
+        value={value}
+        onChange={onChange}
+        tabClassName="relative z-10 shrink-0 rounded-full px-2 py-1 text-[10px] font-medium sm:px-2.5 sm:text-[11px]"
+        className="mx-auto w-auto"
+      />
     </div>
   );
 }
@@ -207,6 +199,7 @@ export function OverviewPortfolioFlowChart({
     <div className="w-full min-w-0">
       <div className="h-[6.75rem] w-full transition-opacity duration-300 ease-out outline-none [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible [&_.recharts-surface]:outline-none [&_.recharts-surface:focus]:outline-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper:focus]:outline-none">
         <PortfolioFlowRecharts
+          rangeKey={range}
           points={chartPoints}
           valueGradientId={valueGradientId}
           tone={chartTone}

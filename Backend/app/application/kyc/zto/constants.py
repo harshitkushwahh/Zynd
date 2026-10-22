@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Final
+from typing import Any, Final
 
 PARTNER_PLACEHOLDER: Final = "<partner>"
 
@@ -37,9 +37,24 @@ FETCH_FAILED: Final = "failed"
 FETCH_TIMEOUT: Final = "timeout"
 FETCH_DUPLICATE: Final = "duplicate"
 
-# Cybrilla lookup statuses
-PROVIDER_TERMINAL_SUCCESS: Final = frozenset({"success", "completed"})
-PROVIDER_TERMINAL_FAILURE: Final = frozenset({"failed", "failure", "not_found", "rejected", "expired"})
+# Cybrilla lookup statuses (production often uses "successful"; sandbox may use "success")
+PROVIDER_TERMINAL_SUCCESS: Final = frozenset({"success", "successful", "completed", "returned_success"})
+PROVIDER_TERMINAL_FAILURE: Final = frozenset({"failed", "failure", "not_found", "rejected", "expired", "error"})
+
+
+def provider_lookup_status(response: dict[str, Any] | None) -> str:
+    if not response:
+        return ""
+    raw = response.get("status")
+    return str(raw).strip().lower() if raw is not None else ""
+
+
+def is_provider_lookup_success(status: str) -> bool:
+    return status in PROVIDER_TERMINAL_SUCCESS
+
+
+def is_provider_lookup_failure(status: str) -> bool:
+    return status in PROVIDER_TERMINAL_FAILURE
 
 
 def consent_text(kind: str, partner_name: str) -> str:

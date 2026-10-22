@@ -348,6 +348,12 @@ class Settings(BaseSettings):
     # When true, FinPrim DigiLocker uses TEST credentials (*_TEST) — sandbox DigiLocker OAuth.
     # When false, uses the active FinPrim integration mode (production DigiLocker when live).
     kyc_digilocker_sandbox: bool = False
+    # POA kyc_form proof redirect (Cybrilla fetch_url) has no Finprim sandbox — use live DigiLocker OAuth.
+    kyc_poa_proof_use_live_digilocker: bool = False
+    # When false, kyc_form discovery only reads Cybrilla logs for the current user (recommended in dev).
+    kyc_form_discovery_all_users_logs: bool = False
+    # When false, never rebind kyc_form ids scraped from provider logs (PAN-safe; use partner refs + create).
+    kyc_form_discovery_from_provider_logs: bool = False
     digilocker_fp_base_url: str = ""
     digilocker_fp_token_base_url: str = ""
     digilocker_fp_tenant: str = ""
@@ -746,6 +752,8 @@ class Settings(BaseSettings):
     def default_kyc_digilocker_sandbox_for_development(self) -> "Settings":
         import os
 
+        if self.kyc_poa_proof_use_live_digilocker:
+            return self
         if self.app_env != "development":
             return self
         if "KYC_DIGILOCKER_SANDBOX" in os.environ:
@@ -753,6 +761,13 @@ class Settings(BaseSettings):
         if "kyc_digilocker_sandbox" in self.model_fields_set:
             return self
         object.__setattr__(self, "kyc_digilocker_sandbox", True)
+        return self
+
+    @model_validator(mode="after")
+    def apply_live_poa_proof_digilocker(self) -> "Settings":
+        if not self.kyc_poa_proof_use_live_digilocker:
+            return self
+        object.__setattr__(self, "kyc_digilocker_sandbox", False)
         return self
 
     @model_validator(mode="after")

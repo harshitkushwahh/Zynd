@@ -27,7 +27,7 @@ export function fallbackZtoConfig(): ZtoConfig {
   };
 }
 
-/** True when signup / opt-in should show Cybrilla lookup checkboxes. */
+/** True when signup should show Cybrilla lookup checkboxes. */
 export function isZtoSignupUiEnabled(config: ZtoConfig | null | undefined): boolean {
   if (config?.enabled) return true;
   return env.ztoEnabled;

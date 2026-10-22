@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -16,6 +17,7 @@ import { isTurnstileRequired } from "@/components/auth/turnstile-widget";
 import { useOtpResendCooldown } from "@/hooks/use-otp-resend-cooldown";
 import { useAuth } from "@/contexts/auth-context";
 import { useKycOptional } from "@/contexts/kyc-context";
+import { notifyZtoFlowStarted } from "@/features/kyc/components/zto-review-gate";
 import { ApiError } from "@/lib/api-client";
 import {
   DEFAULT_COUNTRY,
@@ -320,12 +322,16 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     [completeAuth, finishAuth, loginSmsOtpCooldown, oauthLinkCooldown]
   );
 
+  const completeSignupInFlightRef = useRef(false);
+
   const completeSignup = useCallback(async () => {
     const errors = validateProfile({ firstName, middleName, lastName });
     setProfileErrors(errors);
     if (Object.keys(errors).length > 0) return;
     if (ztoBankConsent !== ztoCustomerConsent) return;
+    if (completeSignupInFlightRef.current) return;
 
+    completeSignupInFlightRef.current = true;
     setIsSubmitting(true);
     try {
       const result = await signupComplete(signupToken, {
@@ -337,6 +343,9 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
       });
       setUser(result.user);
       kyc?.markFreshUser();
+      if (ztoBankConsent && ztoCustomerConsent) {
+        notifyZtoFlowStarted();
+      }
       clearReferralCode();
       finishAuth();
     } catch (error) {
@@ -344,6 +353,7 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
         firstName: getAuthErrorMessage(error, "Could not complete signup. Try again."),
       });
     } finally {
+      completeSignupInFlightRef.current = false;
       setIsSubmitting(false);
     }
   }, [

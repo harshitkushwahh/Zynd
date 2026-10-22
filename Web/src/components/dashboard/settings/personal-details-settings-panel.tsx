@@ -416,15 +416,33 @@ export function PersonalDetailsSettingsPanel({
                 ) : null}
               </>
             ) : showIdentitySection ? (
-              <div className="px-0 py-5 text-center">
-                <div className="mx-auto flex size-8 items-center justify-center rounded-full bg-muted/60 text-muted-foreground ring-1 ring-inset ring-border/50">
-                  <ShieldCheck className="size-4" strokeWidth={2.25} aria-hidden />
+              <div className="py-3.5 sm:py-4">
+                <div className="rounded-[var(--radius-card)] border border-border bg-muted/10 px-4 py-4 sm:px-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                      <ShieldCheck
+                        className="size-5 shrink-0 text-foreground"
+                        strokeWidth={2}
+                        fill="currentColor"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 text-left">
+                        <p className="text-compact font-semibold text-foreground">{copy.kyc.menuLabel}</p>
+                        <p className="mt-0.5 text-caption leading-relaxed text-muted-foreground">
+                          {copy.kyc.pageDescription}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="w-full shrink-0 sm:w-auto"
+                      onClick={() => kyc?.openDialog()}
+                    >
+                      {copy.kyc.menuLabel}
+                    </Button>
+                  </div>
                 </div>
-                <p className="mt-3 text-compact font-medium text-foreground">{copy.kyc.menuLabel}</p>
-                <p className="mt-1 text-caption text-muted-foreground">{copy.kyc.pageDescription}</p>
-                <Button type="button" size="sm" className="mt-3" onClick={() => kyc?.openDialog()}>
-                  {copy.kyc.menuLabel}
-                </Button>
               </div>
             ) : null}
 

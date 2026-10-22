@@ -72,4 +72,7 @@ async def sync_user_name_from_verified_kyc(
 
     if changed:
         await db.flush()
+        from app.application.auth.auth_cache_invalidation import invalidate_auth_user_caches
+
+        await invalidate_auth_user_caches(user.id)
     return changed

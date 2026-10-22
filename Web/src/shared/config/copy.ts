@@ -617,9 +617,8 @@ export const copy = {
       permanentTab: "Permanent address",
       correspondenceTab: "Correspondence address",
       sameAsPermanent: "Correspondence address is same as permanent address",
-      pincodeMismatchTitle: "Use the correct pincode details",
-      pincodeMismatchDescription: (city: string, state: string) =>
-        `City, state, or country did not match this pincode. We updated them to ${city}, ${state}, India.`,
+      pincodeMismatchMessage: (city: string, state: string) =>
+        `Use the correct pincode details we updated city, state, and country to ${city}, ${state}, India.`,
       pincodeNotFound: "This pincode could not be verified. Check the number and try again.",
       requiredField: "This field is required.",
       invalidPincode: "Enter a valid 6-digit pincode.",
@@ -2986,6 +2985,8 @@ export const copy = {
       customerConsent:
         "I allow {partner} to fetch my demographic details using my phone number and name from the credit bureau via Cybrilla and its partners.",
       pairRequired: "Select both options to use smart onboarding, or leave both unchecked.",
+      completing: "Opening your dashboard…",
+      completingWithLookup: "Fetching your details…",
     },
     optIn: {
       title: "Speed up KYC with smart onboarding",
@@ -2998,8 +2999,16 @@ export const copy = {
     },
     review: {
       title: "Review your details",
-      description:
-        "We found these details using your mobile number. They may not be accurate, so please check and edit anything before you accept.",
+      introPoints: [
+        {
+          title: "Fetched from your mobile number",
+          description: "Bank and demographic details from Cybrilla lookup partners.",
+        },
+        {
+          title: "You stay in control",
+          description: "Edit anything here before it pre-fills KYC nothing is verified until you complete each step.",
+        },
+      ],
       illustrationAlt: "Review your fetched details",
       nameLabel: "Full name",
       panLabel: "PAN",
@@ -3007,14 +3016,11 @@ export const copy = {
       bankAccountLabel: "Bank account number",
       ifscLabel: "IFSC code",
       addressLabel: "Address",
-      addressHint: "Verified address is still collected through DigiLocker.",
       dobPlaceholder: "YYYY-MM-DD",
       accept: "Accept & continue",
       decline: "Decline",
       accepting: "Saving…",
       declining: "Declining…",
-      footnote:
-        "Accepting only pre-fills the KYC form. Nothing is verified until you complete each verification step.",
       invalidPan: "Enter a valid PAN (e.g. ABCDE1234F).",
       invalidIfsc: "Enter a valid IFSC code.",
       invalidDob: "Enter a valid date of birth (YYYY-MM-DD).",

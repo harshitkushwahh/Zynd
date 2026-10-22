@@ -36,7 +36,13 @@ export type ZtoReviewFields = {
   date_of_birth: string | null;
   bank_account_number: string | null;
   ifsc_code: string | null;
-  address_line: string | null;
+  address_line_1: string | null;
+  address_line_2: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  /** Combined display line when returned from the API; not submitted on accept. */
+  address_line?: string | null;
 };
 
 export type ZtoReviewData = {

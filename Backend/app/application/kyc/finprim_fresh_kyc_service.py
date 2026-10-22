@@ -102,11 +102,11 @@ async def _apply_finprim_esign_payload(
     status = await get_or_create_status(db, user.id)
 
     if finprim_esign_complete(esign):
-        from app.application.kyc.journey_state_service import mark_kyc_submitted
+        from app.application.kyc.journey_state_service import mark_kyc_submitted_with_profile_sync
 
         ensure_journey_kyc_form_type_recorded(journey)
         journey.kyc_form_status = "submitted"
-        mark_kyc_submitted(user=user, status=status, journey=journey)
+        await mark_kyc_submitted_with_profile_sync(db, user=user, status=status, journey=journey)
         await db.flush()
         return _fresh_submit_response(
             next_action="submitted",
@@ -172,9 +172,11 @@ async def resolve_fresh_kyc_partner_status(
             kyc_request = await fetch_kyc_request(kyc_request_id)
             finprim_status = kyc_request_status(kyc_request)
             if finprim_status in _FINPRIM_KYC_REQUEST_SUBMITTED:
-                from app.application.kyc.journey_state_service import mark_kyc_submitted
+                from app.application.kyc.journey_state_service import mark_kyc_submitted_with_profile_sync
 
-                mark_kyc_submitted(user=user, status=status_row, journey=journey)
+                await mark_kyc_submitted_with_profile_sync(
+                    db, user=user, status=status_row, journey=journey
+                )
                 await db.flush()
                 return _fresh_submit_response(
                     next_action="submitted",
@@ -318,11 +320,11 @@ async def submit_fresh_kyc_via_finprim(
         )
 
     if finprim_esign_complete(esign):
-        from app.application.kyc.journey_state_service import mark_kyc_submitted
+        from app.application.kyc.journey_state_service import mark_kyc_submitted_with_profile_sync
 
         ensure_journey_kyc_form_type_recorded(journey)
         journey.kyc_form_status = "submitted"
-        mark_kyc_submitted(user=user, status=status, journey=journey)
+        await mark_kyc_submitted_with_profile_sync(db, user=user, status=status, journey=journey)
         await db.flush()
         return _fresh_submit_response(
             next_action="submitted",
@@ -388,11 +390,11 @@ async def continue_fresh_kyc_finprim_esign(
 
     status = await get_or_create_status(db, user.id)
     if finprim_esign_complete(esign):
-        from app.application.kyc.journey_state_service import mark_kyc_submitted
+        from app.application.kyc.journey_state_service import mark_kyc_submitted_with_profile_sync
 
         ensure_journey_kyc_form_type_recorded(journey)
         journey.kyc_form_status = "submitted"
-        mark_kyc_submitted(user=user, status=status, journey=journey)
+        await mark_kyc_submitted_with_profile_sync(db, user=user, status=status, journey=journey)
         await db.flush()
         return _fresh_submit_response(
             next_action="submitted",

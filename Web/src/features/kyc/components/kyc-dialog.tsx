@@ -65,7 +65,7 @@ import {
   type KycPanVerifyResponse,
 } from "@/features/kyc/lib/kyc-api";
 import { getKycBootstrapErrorMessage } from "@/features/kyc/lib/kyc-bootstrap-error";
-import { useZtoPanPrefill } from "@/features/kyc/hooks/use-zto-pan-prefill";
+import { useZtoKycPrefill } from "@/features/kyc/hooks/use-zto-kyc-prefill";
 import { pollWithBackoff } from "@/features/kyc/lib/kyc-polling";
 import { INDIAN_STATES, mergeIndianStateOptions } from "@/features/kyc/lib/indian-states";
 import {
@@ -277,7 +277,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   } = useKyc();
 
   const [bootstrap, setBootstrap] = useState<KycBootstrapResponse | null>(null);
-  const ztoPanPrefill = useZtoPanPrefill(bootstrap?.zero_touch?.phase === "ACCEPTED");
+  const ztoKycPrefill = useZtoKycPrefill(bootstrap?.zero_touch?.phase === "ACCEPTED");
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [panResetConfirmOpen, setPanResetConfirmOpen] = useState(false);
@@ -2095,7 +2095,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               initialDraft={
                 panReentryActive ? null : journeyDraft.pan ?? bootstrap?.pan_draft ?? null
               }
-              zeroTouchPrefill={ztoPanPrefill}
+              zeroTouchPrefill={ztoKycPrefill.pan}
               initiallyVerified={panVerified && !panReentryActive}
               initialKycAlreadyRegistered={bootstrap?.kyc_already_registered ?? null}
               initialReadinessCode={panReadiness?.code ?? bootstrap?.readiness_code ?? null}
@@ -2180,6 +2180,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
                 void handleDigilockerRetry();
               }}
               retryingDigilocker={digilockerRetrying}
+              zeroTouchPrefill={ztoKycPrefill.address}
               saving={saving}
               onSubmit={handleAddressSubmit}
             />
@@ -2226,6 +2227,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
             <KycBankStep
               key={`bank-${journeyStepRemountKey}`}
               initialValue={journeyDraft.bank ?? mappedBank?.form ?? createEmptyBankForm()}
+              zeroTouchPrefill={ztoKycPrefill.bank}
               initialAccountDetails={journeyDraft.bank?.accountDetails ?? mappedBank?.accountDetails ?? null}
               initialProofUploaded={Boolean(bootstrap?.poa_bank_proof_file_id)}
               initialVerification={bankInitialVerification}

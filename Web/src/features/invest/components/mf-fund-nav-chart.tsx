@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useMemo } from "react";
+import { useReducedMotion } from "motion/react";
 import {
   Area,
   AreaChart,
@@ -105,9 +106,12 @@ const CHART_TONE_STYLES = {
 type MfFundNavChartProps = {
   points: MfNavChartPoint[];
   periodReturn?: number | null;
+  /** Remounts the inner chart only (stable outer shell) so range switches draw in smoothly. */
+  rangeKey?: string;
 };
 
-export function MfFundNavChart({ points, periodReturn }: MfFundNavChartProps) {
+export function MfFundNavChart({ points, periodReturn, rangeKey = "default" }: MfFundNavChartProps) {
+  const reduceMotion = useReducedMotion();
   const gradientId = useId().replace(/:/g, "");
   const domain = useMemo(() => yDomain(points), [points]);
   const startNav = points[0]?.nav ?? null;
@@ -136,7 +140,11 @@ export function MfFundNavChart({ points, periodReturn }: MfFundNavChartProps) {
     >
       <div className="h-[300px] w-full min-w-0 [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible">
         <RechartsMeasuredContainer className="h-full w-full" width="100%" height={CHART_HEIGHT} minWidth={0}>
-          <AreaChart data={points} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+          <AreaChart
+            key={rangeKey}
+            data={points}
+            margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
+          >
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop
@@ -175,8 +183,8 @@ export function MfFundNavChart({ points, periodReturn }: MfFundNavChartProps) {
                 stroke: toneStyles.stroke,
                 fill: "var(--card)",
               }}
-              isAnimationActive
-              animationDuration={450}
+              isAnimationActive={!reduceMotion}
+              animationDuration={reduceMotion ? 0 : 450}
               animationEasing="ease-out"
             />
           </AreaChart>

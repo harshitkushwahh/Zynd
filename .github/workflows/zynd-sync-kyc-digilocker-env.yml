@@ -1,0 +1,46 @@
+# One-off: apply production KYC / DigiLocker env on the VPS and recreate the API container.
+name: ZYND • Sync KYC DigiLocker env (VPS)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      recreate_api:
+        description: Recreate api container after .env update
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-kyc-digilocker-env:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BLUEHOST_HOST: 50.6.205.51
+      BLUEHOST_USER: root
+      BLUEHOST_HOST_FINGERPRINT: SHA256:hCKPABfkojXf2K9g9rIwugDS53zFSajJCDbGoYONEM8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply KYC DigiLocker env on VPS
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          RECREATE_API: ${{ inputs.recreate_api }}
+        with:
+          host: ${{ env.BLUEHOST_HOST }}
+          username: ${{ env.BLUEHOST_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          fingerprint: ${{ env.BLUEHOST_HOST_FINGERPRINT }}
+          timeout: 30s
+          command_timeout: 10m
+          envs: RECREATE_API
+          script: |
+            set -euo pipefail
+            cd /opt/zynd
+            git pull --ff-only origin main || true
+            if [ ! -f Backend/scripts/sync-kyc-digilocker-env-on-vps.sh ]; then
+              echo "Missing sync script on VPS; deploy main first."
+              exit 1
+            fi
+            RECREATE_API="${RECREATE_API}" bash Backend/scripts/sync-kyc-digilocker-env-on-vps.sh

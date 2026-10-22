@@ -785,6 +785,8 @@ class KycJourneyState(Base):
     bank_verification_failure_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     signature_draft_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     external_kyc_form_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    # PAN on Cybrilla when external_kyc_form_id was bound (must match verified pan_draft_json).
+    poa_kyc_form_bound_pan: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     kyc_form_status: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     kyc_form_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     kyc_form_failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

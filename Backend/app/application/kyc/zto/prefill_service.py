@@ -8,6 +8,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.kyc.zto.normalize import (
+    ADDRESS_REVIEW_FIELDS,
+    address_parts_from_storage,
+    format_address_display,
+)
 from app.infrastructure.persistence.zto_models import ZtoApprovedProfile
 
 _APPROVED_FIELDS = {
@@ -16,7 +21,6 @@ _APPROVED_FIELDS = {
     "date_of_birth": "dob_approved",
     "bank_account_number": "bank_account_approved",
     "ifsc_code": "ifsc_approved",
-    "address_line": "address_approved",
 }
 
 
@@ -29,7 +33,12 @@ def approved_profile_to_dict(profile: ZtoApprovedProfile | None) -> dict[str, An
     """Review-field keyed `*_approved` values (raw lookup values are never re-applied)."""
     if profile is None:
         return None
-    return {field: getattr(profile, column) for field, column in _APPROVED_FIELDS.items()}
+    result = {field: getattr(profile, column) for field, column in _APPROVED_FIELDS.items()}
+    address_parts = address_parts_from_storage(profile.address_approved)
+    for key in ADDRESS_REVIEW_FIELDS:
+        result[key] = address_parts.get(key)
+    result["address_line"] = format_address_display(address_parts)
+    return result
 
 
 async def get_approved_prefill(db: AsyncSession, user_id: uuid.UUID) -> dict[str, Any] | None:

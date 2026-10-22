@@ -5,6 +5,7 @@ const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const ACCOUNT_PATTERN = /^[0-9]{6,24}$/;
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const PINCODE_PATTERN = /^[1-9]\d{5}$/;
 
 export type ZtoReviewErrors = Partial<Record<keyof ZtoReviewFields, string>>;
 
@@ -33,6 +34,8 @@ export function validateZtoReviewFields(values: ZtoReviewFields): ZtoReviewError
   if (ifsc && !IFSC_PATTERN.test(ifsc)) errors.ifsc_code = copy.zto.review.invalidIfsc;
   if (account && !ACCOUNT_PATTERN.test(account)) errors.bank_account_number = copy.zto.review.invalidBankAccount;
   if (dob && !isValidIsoDate(dob)) errors.date_of_birth = copy.zto.review.invalidDob;
+  const pincode = (values.pincode ?? "").trim();
+  if (pincode && !PINCODE_PATTERN.test(pincode)) errors.pincode = copy.kyc.address.invalidPincode;
   return errors;
 }
 
@@ -44,6 +47,10 @@ export function normalizeZtoReviewFields(values: ZtoReviewFields): ZtoReviewFiel
     date_of_birth: clean(values.date_of_birth),
     bank_account_number: clean(values.bank_account_number),
     ifsc_code: clean(values.ifsc_code)?.toUpperCase() ?? null,
-    address_line: clean(values.address_line),
+    address_line_1: clean(values.address_line_1),
+    address_line_2: clean(values.address_line_2),
+    city: clean(values.city),
+    state: clean(values.state),
+    pincode: clean(values.pincode),
   };
 }

@@ -50,6 +50,11 @@ class ZtoReviewFields(BaseModel):
     date_of_birth: Optional[str] = None
     bank_account_number: Optional[str] = None
     ifsc_code: Optional[str] = None
+    address_line_1: Optional[str] = None
+    address_line_2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
     address_line: Optional[str] = None
 
 
@@ -69,6 +74,11 @@ class ZtoReviewAcceptRequest(BaseModel):
     date_of_birth: Optional[str] = Field(default=None, max_length=16)
     bank_account_number: Optional[str] = Field(default=None, max_length=32)
     ifsc_code: Optional[str] = Field(default=None, max_length=16)
+    address_line_1: Optional[str] = Field(default=None, max_length=120)
+    address_line_2: Optional[str] = Field(default=None, max_length=120)
+    city: Optional[str] = Field(default=None, max_length=60)
+    state: Optional[str] = Field(default=None, max_length=60)
+    pincode: Optional[str] = Field(default=None, max_length=6)
     address_line: Optional[str] = Field(default=None, max_length=1000)
 
 

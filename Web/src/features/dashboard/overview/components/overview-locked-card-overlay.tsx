@@ -41,9 +41,9 @@ export function OverviewLockedCardOverlay({
       >
         {stacked ? (
           <>
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <span className="flex size-9 shrink-0 items-center justify-center text-foreground">
               <Lock className="size-4" strokeWidth={2.25} aria-hidden />
-            </div>
+            </span>
             <div className="min-w-0">
               <p className="text-compact font-semibold leading-snug text-foreground">{title}</p>
               {subtitle ? (
@@ -53,14 +53,14 @@ export function OverviewLockedCardOverlay({
           </>
         ) : (
           <>
-            <div
+            <span
               className={cn(
-                "flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary",
+                "flex shrink-0 items-center justify-center text-foreground",
                 compact ? "size-7" : "size-9",
               )}
             >
-              <Lock className={compact ? "size-3" : "size-4"} strokeWidth={2.25} />
-            </div>
+              <Lock className={compact ? "size-3" : "size-4"} strokeWidth={2.25} aria-hidden />
+            </span>
             <div className="min-w-0 text-left">
               <p
                 className={cn(

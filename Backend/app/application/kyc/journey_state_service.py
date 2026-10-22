@@ -128,6 +128,22 @@ def mark_kyc_submitted(
     return True
 
 
+async def mark_kyc_submitted_with_profile_sync(
+    db: AsyncSession,
+    *,
+    user: User,
+    status: UserKycStatus,
+    journey: KycJourneyState | None = None,
+) -> bool:
+    """Mark KYC under review and replace signup name with PAN-verified legal name when available."""
+    transitioned = mark_kyc_submitted(user=user, status=status, journey=journey)
+    if transitioned and journey is not None:
+        from app.application.kyc.user_name_sync_service import sync_user_name_from_verified_kyc
+
+        await sync_user_name_from_verified_kyc(db, user=user, journey=journey)
+    return transitioned
+
+
 def journey_to_bootstrap_dict(journey: KycJourneyState | None, status: UserKycStatus | None) -> dict[str, Any]:
     if journey is None:
         return {

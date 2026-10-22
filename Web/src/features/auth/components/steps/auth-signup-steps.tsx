@@ -14,6 +14,8 @@ import {
 } from "@/components/auth/auth-shared";
 import { PasswordInput } from "@/components/auth/password-input";
 import { IndiaFlagIcon } from "@/components/auth/india-flag-icon";
+import { Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -23,6 +25,7 @@ import { isZtoConsentPairValid, ZtoSignupConsents } from "@/features/kyc/compone
 import { isProfileValid, isValidMobile, isValidOtp } from "@/lib/auth-validation";
 import { clampToMaxLength, digitsOnly, inputRuleProps, lettersOnly } from "@/lib/input-rules";
 import { isPasswordValid } from "@/lib/password-criteria";
+import { cn } from "@/lib/utils";
 import { copy } from "@/shared/config/copy";
 
 export function AuthEmailOtpStep() {
@@ -262,13 +265,28 @@ export function AuthProfileStep() {
     setLastName,
     profileErrors,
     setProfileErrors,
+    isSubmitting,
+    ztoBankConsent,
+    ztoCustomerConsent,
     handleProfileContinue,
   } = flow;
 
+  const ztoLookupActive = ztoBankConsent && ztoCustomerConsent;
+  const busy = isSubmitting;
+  const submitLabel = busy
+    ? ztoLookupActive
+      ? copy.zto.signup.completingWithLookup
+      : copy.zto.signup.completing
+    : "Complete & go to dashboard";
+
   return (
-    <form onSubmit={handleProfileContinue} className={stepPanelClass(step === "profile")}>
+    <form
+      onSubmit={handleProfileContinue}
+      className={cn(stepPanelClass(step === "profile"), busy && "pointer-events-none")}
+      aria-busy={busy}
+    >
       <ProfileNameHeader firstName={firstName} middleName={middleName} lastName={lastName} />
-      <FieldGroup className="gap-4">
+      <FieldGroup className={cn("gap-4", busy && "opacity-60")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field data-invalid={!!profileErrors.firstName}>
             <FieldLabel htmlFor="firstName">First name</FieldLabel>
@@ -287,6 +305,7 @@ export function AuthProfileStep() {
               }}
               aria-invalid={!!profileErrors.firstName}
               className={profileInputClass}
+              disabled={busy}
               {...inputRuleProps("firstName")}
             />
             <FieldMessage message={profileErrors.firstName} />
@@ -308,6 +327,7 @@ export function AuthProfileStep() {
               }}
               aria-invalid={!!profileErrors.lastName}
               className={profileInputClass}
+              disabled={busy}
               {...inputRuleProps("lastName")}
             />
             <FieldMessage message={profileErrors.lastName} />
@@ -331,18 +351,21 @@ export function AuthProfileStep() {
             }}
             aria-invalid={!!profileErrors.middleName}
             className={profileInputClass}
+            disabled={busy}
             {...inputRuleProps("middleName")}
           />
           <FieldMessage message={profileErrors.middleName} />
         </Field>
       </FieldGroup>
-      <AuthSubmitFooter>
+      <AuthSubmitFooter className={busy ? "pointer-events-auto" : undefined}>
         <Button
           type="submit"
           size="auth"
-          disabled={!isProfileValid({ firstName, middleName, lastName })}
+          disabled={!isProfileValid({ firstName, middleName, lastName }) || busy}
+          aria-live="polite"
         >
-          Complete &amp; go to dashboard
+          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          {submitLabel}
         </Button>
       </AuthSubmitFooter>
     </form>

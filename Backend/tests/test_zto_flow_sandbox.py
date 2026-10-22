@@ -200,7 +200,11 @@ async def test_review_data_then_accept_unchanged_has_no_edit_flags(db_session, z
     assert fields["date_of_birth"] == SANDBOX_DOB
     assert fields["bank_account_number"] == SANDBOX_BANK_ACCOUNT_NUMBER
     assert fields["ifsc_code"] == SANDBOX_IFSC
-    assert "Bengaluru" in fields["address_line"]
+    assert fields["address_line_1"] == "221B Baker Street"
+    assert fields["address_line_2"] == "Indiranagar"
+    assert fields["city"] == "Bengaluru"
+    assert fields["state"] == "Karnataka"
+    assert fields["pincode"] == "560038"
 
     # Lowercase PAN/IFSC are normalized and must not count as edits.
     profile = await accept_review(

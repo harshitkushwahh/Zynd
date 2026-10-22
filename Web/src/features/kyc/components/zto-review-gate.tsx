@@ -9,6 +9,14 @@ import type { ZtoPhase, ZtoReviewFields } from "@/features/kyc/lib/zto-types";
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_ATTEMPTS = 15;
 const POLLING_PHASES: ReadonlySet<ZtoPhase> = new Set(["LOOKUP_PENDING", "LOOKUPS_RUNNING"]);
+/** No dashboard ZTO UI after signup unless lookups were started during signup. */
+const INACTIVE_PHASES: ReadonlySet<ZtoPhase> = new Set([
+  "NOT_STARTED",
+  "DISABLED",
+  "ACCEPTED",
+  "DECLINED",
+  "LOOKUPS_FAILED",
+]);
 const ZTO_FLOW_STARTED_EVENT = "zto-flow-started";
 
 export function notifyZtoFlowStarted() {
@@ -47,7 +55,8 @@ export function ZtoReviewGate({ enabled = true, onResolved }: ZtoReviewGateProps
       try {
         const status = await fetchZtoFlowStatus();
         if (cancelledRef.current || !status.enabled) return;
-        if (status.review_required) {
+        if (INACTIVE_PHASES.has(status.phase)) return;
+        if (status.review_required || status.phase === "REVIEW_PENDING") {
           await openReview();
           return;
         }

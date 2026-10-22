@@ -8,9 +8,12 @@ from app.application.kyc.zto.constants import FETCH_SUCCESS, LOOKUP_KIND_BANK, L
 from app.application.kyc.zto.errors import ZtoError
 from app.application.kyc.zto.flow_service import load_decrypted_payloads
 from app.application.kyc.zto.normalize import (
+    ADDRESS_REVIEW_FIELDS,
     REVIEW_FIELDS,
     ZtoValidationError,
+    address_parts_to_storage,
     build_lookup_snapshot,
+    format_address_display,
     validate_review_field,
 )
 from app.application.kyc.zto.phase import ZtoPhase, get_flow, is_review_required, resolve_phase_from_flow
@@ -27,7 +30,6 @@ _COLUMN_PREFIX = {
     "date_of_birth": "dob",
     "bank_account_number": "bank_account",
     "ifsc_code": "ifsc",
-    "address_line": "address",
 }
 
 
@@ -63,6 +65,7 @@ async def build_review_data(
     fields = dict(snapshot)
     # Name shown first is what the user typed at signup; lookup name is only a comparison value.
     fields["name"] = (flow.signup_display_name if flow else None) or snapshot["name"]
+    fields["address_line"] = format_address_display(snapshot)
     data.update(
         fields=fields,
         lookup_name=snapshot["name"],
@@ -100,6 +103,13 @@ async def accept_review(
             approved_values[field] = validate_review_field(field, submitted.get(field))
         except ZtoValidationError as exc:
             raise ZtoError(exc.message, f"zto_invalid_{field}", 422) from exc
+    if not any(approved_values.get(key) for key in ADDRESS_REVIEW_FIELDS):
+        legacy_line = submitted.get("address_line")
+        if legacy_line:
+            try:
+                approved_values["address_line_1"] = validate_review_field("address_line_1", legacy_line)
+            except ZtoValidationError as exc:
+                raise ZtoError(exc.message, "zto_invalid_address_line_1", 422) from exc
 
     bank_payload, customer_payload, fetches = await load_decrypted_payloads(db, user.id)
     snapshot = build_lookup_snapshot(bank_payload, customer_payload)
@@ -124,6 +134,12 @@ async def accept_review(
             f"{prefix}_edited",
             _is_edited(_compare_key(field, approved), _compare_key(field, from_lookup)),
         )
+
+    lookup_address = {key: snapshot.get(key) for key in ADDRESS_REVIEW_FIELDS}
+    approved_address = {key: approved_values.get(key) for key in ADDRESS_REVIEW_FIELDS}
+    profile.address_from_lookup = address_parts_to_storage(lookup_address)
+    profile.address_approved = address_parts_to_storage(approved_address)
+    profile.address_edited = address_parts_to_storage(lookup_address) != address_parts_to_storage(approved_address)
 
     flow.phase = ZtoPhase.ACCEPTED.value
     flow.declined_at = None

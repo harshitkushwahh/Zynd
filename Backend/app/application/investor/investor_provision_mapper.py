@@ -8,7 +8,7 @@ from typing import Any
 
 from app.application.investor.investor_bank_account_crypto import read_account_number
 from app.application.kyc.bank_verification_core import holder_name_from_pan_draft
-from app.application.kyc.kyc_form_mapper import _full_name
+from app.application.kyc.kyc_form_mapper import OCCUPATION_MAP, _full_name
 from app.infrastructure.persistence.investor_models import (
     InvestorAddress,
     InvestorBankAccount,
@@ -116,7 +116,7 @@ def build_early_investor_profile_payload(*, user: User, journey: KycJourneyState
         "name": _full_name(pan)[:70],
         "date_of_birth": _str(pan.get("dateOfBirth")),
         "gender": _str(personal.get("gender")) or "male",
-        "occupation": _str(personal.get("occupation")) or "others",
+        "occupation": _map_fp_investor_occupation(_str(personal.get("occupation")) or "others"),
         "pan": _str(pan.get("panNumber")).upper(),
         "country_of_birth": "IN",
         "place_of_birth": place_of_birth[:60],
@@ -187,6 +187,43 @@ FP_INVESTOR_PROFILE_INCOME_SLABS = frozenset(
 )
 FP_INVESTOR_PROFILE_PEP_DETAILS = frozenset({"not_applicable", "pep_exposed", "pep_related"})
 
+# Finprim `/v2/investor_profiles` occupation enum (differs from KYC form `occupation_type` in places).
+FP_INVESTOR_PROFILE_OCCUPATIONS = frozenset(
+    {
+        "agriculture",
+        "business",
+        "doctor",
+        "forex_dealer",
+        "government_service",
+        "house_wife",
+        "others",
+        "private_sector_service",
+        "professional",
+        "public_sector_service",
+        "retired",
+        "service",
+        "student",
+    }
+)
+
+FP_INVESTOR_OCCUPATION_FROM_KYC_DRAFT = {
+    **OCCUPATION_MAP,
+    "housewife": "house_wife",
+    "house_wife": "house_wife",
+}
+
+
+def _map_fp_investor_occupation(raw: str) -> str:
+    normalized = _str(raw).lower()
+    if not normalized:
+        return "others"
+    if normalized in FP_INVESTOR_PROFILE_OCCUPATIONS:
+        return normalized
+    mapped = FP_INVESTOR_OCCUPATION_FROM_KYC_DRAFT.get(normalized, normalized)
+    if mapped in FP_INVESTOR_PROFILE_OCCUPATIONS:
+        return mapped
+    return "others"
+
 
 def build_investor_profile_patch_payload(
     *,
@@ -216,7 +253,7 @@ def build_investor_profile_payload(*, user: User, journey: KycJourneyState) -> d
         "name": _full_name(pan)[:70],
         "date_of_birth": _str(pan.get("dateOfBirth")),
         "gender": _str(personal.get("gender")),
-        "occupation": _str(personal.get("occupation")),
+        "occupation": _map_fp_investor_occupation(_str(personal.get("occupation"))),
         "pan": _str(pan.get("panNumber")).upper(),
         "country_of_birth": "IN",
         "place_of_birth": place_of_birth[:60],

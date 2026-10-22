@@ -19,14 +19,20 @@ from app.application.kyc.zto.constants import (
     FETCH_TIMEOUT,
     LOOKUP_KIND_BANK,
     LOOKUP_KIND_CUSTOMER,
-    PROVIDER_TERMINAL_FAILURE,
-    PROVIDER_TERMINAL_SUCCESS,
+    is_provider_lookup_failure,
+    is_provider_lookup_success,
+    provider_lookup_status,
     PURPOSE_BY_KIND,
     consent_text,
 )
 from app.application.kyc.zto.crypto import decrypt_lookup_payload, encrypt_lookup_payload
 from app.application.kyc.zto.errors import ZtoError
-from app.application.kyc.zto.normalize import build_lookup_snapshot, normalize_name
+from app.application.kyc.zto.normalize import (
+    build_cybrilla_lookup_consent,
+    build_lookup_snapshot,
+    normalize_lookup_phone,
+    normalize_name,
+)
 from app.application.kyc.zto.phase import ZtoPhase, get_flow, is_review_required, resolve_phase_from_flow
 from app.application.shared.datetime_utils import utcnow
 from app.core.config import Settings, get_settings
@@ -124,10 +130,6 @@ async def upsert_flow(
     return flow
 
 
-def _provider_status(response: dict[str, Any]) -> str:
-    return str(response.get("status") or "").strip().lower()
-
-
 async def _find_registry(
     db: AsyncSession, *, kind: str, phone: str, normalized_name: str | None
 ) -> ZtoPhoneRegistry | None:
@@ -163,19 +165,41 @@ async def _poll_lookup(
     settings: Settings,
 ) -> tuple[str, dict[str, Any]]:
     """Return (fetch_status, last_response). Polls until terminal or attempts exhausted."""
-    response = create_response
+    lookup_id = str(create_response.get("id") or "")
+    if not lookup_id:
+        return FETCH_FAILED, create_response
+
     getter = client.get_bank_lookup if kind == LOOKUP_KIND_BANK else client.get_customer_lookup
-    max_attempts = max(settings.zto_max_poll_attempts, 0)
-    for attempt in range(max_attempts + 1):
-        status = _provider_status(response)
-        if status in PROVIDER_TERMINAL_SUCCESS:
+    max_attempts = max(settings.zto_max_poll_attempts, 1)
+    interval_s = max(settings.zto_poll_interval_ms, 0) / 1000
+
+    initial = provider_lookup_status(create_response)
+    if is_provider_lookup_success(initial):
+        return FETCH_SUCCESS, create_response
+    if is_provider_lookup_failure(initial):
+        return FETCH_FAILED, create_response
+
+    response = create_response
+    last_status = initial
+    for attempt in range(1, max_attempts + 1):
+        response = await getter(lookup_id)
+        last_status = provider_lookup_status(response)
+        if is_provider_lookup_success(last_status):
             return FETCH_SUCCESS, response
-        if status in PROVIDER_TERMINAL_FAILURE:
+        if is_provider_lookup_failure(last_status):
             return FETCH_FAILED, response
-        if attempt == max_attempts:
-            break
-        await asyncio.sleep(max(settings.zto_poll_interval_ms, 0) / 1000)
-        response = await getter(str(create_response["id"]))
+        if attempt < max_attempts and interval_s > 0:
+            await asyncio.sleep(interval_s)
+
+    if is_provider_lookup_success(last_status):
+        return FETCH_SUCCESS, response
+    logger.warning(
+        "ZTO %s lookup poll exhausted id=%s last_status=%r attempts=%s",
+        kind,
+        lookup_id,
+        last_status,
+        max_attempts,
+    )
     return FETCH_TIMEOUT, response
 
 
@@ -189,7 +213,19 @@ async def _run_lookup(
     consent: ZtoConsentRecord,
     settings: Settings,
 ) -> ZtoLookupFetch:
-    phone = user.phone or ""
+    phone = normalize_lookup_phone(user.phone)
+    if len(phone) < 10:
+        fetch = ZtoLookupFetch(
+            user_id=user.id,
+            kind=kind,
+            status=FETCH_FAILED,
+            phone=phone or (user.phone or ""),
+            lookup_name=name if kind == LOOKUP_KIND_CUSTOMER else None,
+            error_message="Valid phone number is required.",
+        )
+        db.add(fetch)
+        await db.flush()
+        return fetch
     name_key = normalized_name_key(name) if kind == LOOKUP_KIND_CUSTOMER else None
 
     registry = await _find_registry(db, kind=kind, phone=phone, normalized_name=name_key)
@@ -221,13 +257,12 @@ async def _run_lookup(
     db.add(fetch)
     await db.flush()
 
-    consent_block: dict[str, Any] = {
-        "collected_at": consent.collected_at.isoformat(),
-        "text": consent.text,
-        "mode": consent.mode,
-    }
-    if consent.ip_address:
-        consent_block["ip_address"] = consent.ip_address
+    consent_block = build_cybrilla_lookup_consent(
+        text=consent.text,
+        mode=consent.mode,
+        collected_at=consent.collected_at,
+        ip_address=consent.ip_address,
+    )
 
     try:
         if kind == LOOKUP_KIND_BANK:
@@ -243,6 +278,8 @@ async def _run_lookup(
             )
         fetch.fp_lookup_id = str(created.get("id") or "") or None
         status, last = await _poll_lookup(client, kind=kind, create_response=created, settings=settings)
+        if status == FETCH_TIMEOUT and is_provider_lookup_success(provider_lookup_status(last)):
+            status = FETCH_SUCCESS
     except NotImplementedError as exc:
         fetch.status = FETCH_FAILED
         fetch.error_message = str(exc)[:255]
@@ -340,7 +377,19 @@ async def start_lookups(
         _decrypt_fetch(customer_fetch),
     )
     has_usable_data = any(
-        snapshot.get(key) for key in ("pan", "date_of_birth", "bank_account_number", "ifsc_code", "address_line")
+        snapshot.get(key)
+        for key in (
+            "name",
+            "pan",
+            "date_of_birth",
+            "bank_account_number",
+            "ifsc_code",
+            "address_line_1",
+            "address_line_2",
+            "city",
+            "state",
+            "pincode",
+        )
     )
     flow.phase = (ZtoPhase.REVIEW_PENDING if has_usable_data else ZtoPhase.LOOKUPS_FAILED).value
     await db.flush()
