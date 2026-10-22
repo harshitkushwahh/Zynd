@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.family_groups.display import get_active_membership
+from app.application.family_groups.display import get_active_membership, resolve_family_group_avatar_url
 from app.application.goals.constants import FAMILY_GOAL_METADATA_KEY, FAMILY_GROUP_METADATA_KEY
 from app.application.goals.errors import GoalError
 from app.infrastructure.persistence.family_group_models import (
@@ -201,9 +201,15 @@ async def serialize_family_holding_link(
         return None
     group = await db.get(FamilyGroup, link.family_group_id)
     goal = await db.get(Goal, link.goal_id) if link.goal_id else None
+    avatar_url = (
+        await resolve_family_group_avatar_url(db, avatar_document_id=group.avatar_document_id)
+        if group
+        else None
+    )
     return {
         "family_group_id": str(link.family_group_id),
         "family_group_title": group.title if group else "",
+        "family_group_avatar_url": avatar_url,
         "goal_id": str(link.goal_id) if link.goal_id else None,
         "goal_title": goal.title if goal else None,
     }

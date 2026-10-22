@@ -250,6 +250,22 @@ def test_compute_portfolio_day_change_returns_none_without_nav_coverage() -> Non
     assert day_change_pct is None
 
 
+def test_extract_folio_meta_reads_nominee_share_from_folio() -> None:
+    meta = _extract_folio_meta(
+        {
+            "data": [
+                {
+                    "nominee1": {"name": "Babu", "allocation_percentage": 100},
+                    "nominee1_allocation_percentage": 100,
+                }
+            ]
+        }
+    )
+
+    assert meta["nominee_name"] == "Babu"
+    assert meta["nominee_share_percent"] == 100
+
+
 def test_extract_folio_meta_resolves_bank_name_from_ifsc() -> None:
     meta = _extract_folio_meta(
         {

@@ -16,15 +16,27 @@ import {
   AuthSmsOtpLoginStep,
 } from "@/features/auth/components/steps/auth-security-steps";
 import { useAuthDialogHeader } from "@/features/auth/hooks/auth-dialog-flow";
+import { cn } from "@/lib/utils";
 
 export function AuthDialogSteps() {
-  const { title, description, progressStep } = useAuthDialogHeader();
+  const { step, title, description, progressStep } = useAuthDialogHeader();
+  const compactBody = step === "mobile-otp" || step === "email-otp";
 
   return (
     <div className="flex max-h-[min(90dvh,720px)] min-h-0 flex-col rounded-[inherit] bg-popover">
-      <AuthDialogIntro title={title} description={description} progressStep={progressStep} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-7 pt-5 sm:px-8 sm:pb-9 sm:pt-6">
-        <div className="relative flex flex-1 flex-col">
+      <AuthDialogIntro
+        title={title}
+        description={description}
+        progressStep={progressStep}
+        compact={compactBody}
+      />
+      <div
+        className={cn(
+          "min-h-0 overflow-y-auto px-6 sm:px-8",
+          compactBody ? "pb-6 pt-2 sm:pb-7 sm:pt-3" : "pb-7 pt-5 sm:pb-9 sm:pt-6",
+        )}
+      >
+        <div className="grid w-full auto-rows-min [&>form]:col-start-1 [&>form]:row-start-1">
           <AuthEmailStep />
           <AuthMfaChallengeStep />
           <AuthSmsOtpLoginStep />

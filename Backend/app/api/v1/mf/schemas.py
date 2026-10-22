@@ -669,6 +669,7 @@ class PortfolioHoldingPendingActionResponse(BaseModel):
 class PortfolioFamilyLinkResponse(BaseModel):
     family_group_id: UUID
     family_group_title: str
+    family_group_avatar_url: Optional[str] = None
     goal_id: Optional[UUID] = None
     goal_title: Optional[str] = None
 
@@ -707,6 +708,8 @@ class PortfolioHoldingDetailResponse(BaseModel):
     redeem_bank_name: Optional[str] = None
     redeem_bank_ifsc: Optional[str] = None
     nominee_name: Optional[str] = None
+    nominee_share_percent: Optional[int] = None
+    nominee_is_minor: Optional[bool] = None
     product_id: Optional[str] = None
     min_sip_amount_inr: Optional[float] = None
     min_lumpsum_amount_inr: Optional[float] = None

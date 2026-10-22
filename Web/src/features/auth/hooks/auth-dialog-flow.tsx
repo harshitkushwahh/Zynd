@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -16,6 +17,7 @@ import { isTurnstileRequired } from "@/components/auth/turnstile-widget";
 import { useOtpResendCooldown } from "@/hooks/use-otp-resend-cooldown";
 import { useAuth } from "@/contexts/auth-context";
 import { useKycOptional } from "@/contexts/kyc-context";
+import { notifyZtoFlowStarted } from "@/features/kyc/components/zto-review-gate";
 import { ApiError } from "@/lib/api-client";
 import {
   DEFAULT_COUNTRY,
@@ -82,6 +84,8 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [ztoBankConsent, setZtoBankConsent] = useState(false);
+  const [ztoCustomerConsent, setZtoCustomerConsent] = useState(false);
 
   const [emailError, setEmailError] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -231,6 +235,8 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     setFirstName("");
     setMiddleName("");
     setLastName("");
+    setZtoBankConsent(false);
+    setZtoCustomerConsent(false);
     setEmailError("");
     setLoginError("");
     setPasswordError("");
@@ -316,20 +322,30 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     [completeAuth, finishAuth, loginSmsOtpCooldown, oauthLinkCooldown]
   );
 
+  const completeSignupInFlightRef = useRef(false);
+
   const completeSignup = useCallback(async () => {
     const errors = validateProfile({ firstName, middleName, lastName });
     setProfileErrors(errors);
     if (Object.keys(errors).length > 0) return;
+    if (ztoBankConsent !== ztoCustomerConsent) return;
+    if (completeSignupInFlightRef.current) return;
 
+    completeSignupInFlightRef.current = true;
     setIsSubmitting(true);
     try {
       const result = await signupComplete(signupToken, {
         firstName: firstName.trim(),
         middleName: middleName.trim(),
         lastName: lastName.trim(),
+        ztoBankConsent,
+        ztoCustomerConsent,
       });
       setUser(result.user);
       kyc?.markFreshUser();
+      if (ztoBankConsent && ztoCustomerConsent) {
+        notifyZtoFlowStarted();
+      }
       clearReferralCode();
       finishAuth();
     } catch (error) {
@@ -337,9 +353,20 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
         firstName: getAuthErrorMessage(error, "Could not complete signup. Try again."),
       });
     } finally {
+      completeSignupInFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [finishAuth, firstName, kyc, lastName, middleName, setUser, signupToken]);
+  }, [
+    finishAuth,
+    firstName,
+    kyc,
+    lastName,
+    middleName,
+    setUser,
+    signupToken,
+    ztoBankConsent,
+    ztoCustomerConsent,
+  ]);
 
   const handleEmailContinue = useCallback(
     async (event: React.FormEvent) => {
@@ -685,6 +712,9 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
         setMobileError("Enter a valid 10-digit mobile number.");
         return;
       }
+      if (ztoBankConsent !== ztoCustomerConsent) {
+        return;
+      }
 
       setIsSubmitting(true);
       setMobileError("");
@@ -700,7 +730,7 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
         setIsSubmitting(false);
       }
     },
-    [mobile, mobileOtpCooldown, signupToken]
+    [mobile, mobileOtpCooldown, signupToken, ztoBankConsent, ztoCustomerConsent]
   );
 
   const handleResendMobileOtp = useCallback(async () => {
@@ -855,6 +885,10 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     setMiddleName,
     lastName,
     setLastName,
+    ztoBankConsent,
+    setZtoBankConsent,
+    ztoCustomerConsent,
+    setZtoCustomerConsent,
     emailError,
     setEmailError,
     loginError,

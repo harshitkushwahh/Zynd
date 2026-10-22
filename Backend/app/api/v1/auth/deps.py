@@ -109,7 +109,7 @@ def set_refresh_cookie(response, refresh_token: str, *, client: AuthClientKind) 
 def clear_refresh_cookie(response, *, client: AuthClientKind) -> None:
     response.delete_cookie(
         key=refresh_cookie_name_for_client(client),
-        **_refresh_cookie_kwargs(max_age=0),
+        **_refresh_cookie_kwargs(),
     )
 
 

@@ -19,6 +19,7 @@ function resolveClientIp(request: NextRequest): string | null {
 }
 
 function isLongLivedBackendStream(path: string): boolean {
+  // Clients should use getNotificationStreamUrl() (direct API). Vercel still caps this route at ~300s.
   return path === "notifications/stream" || path.endsWith("/stream");
 }
 

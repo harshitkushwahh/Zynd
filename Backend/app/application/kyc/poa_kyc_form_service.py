@@ -221,6 +221,19 @@ async def get_poa_kyc_form_status(db: AsyncSession, *, user: User) -> dict[str, 
         raise
     if not form:
         return empty
+    from app.application.kyc.kyc_form_service import (
+        _journey_expected_pan,
+        _kyc_form_matches_expected_pan,
+        _normalize_pan,
+    )
+
+    expected_pan = _journey_expected_pan(journey)
+    if expected_pan and not _kyc_form_matches_expected_pan(form, expected_pan):
+        form = await ensure_kyc_form(db, user=user, journey=journey)
+    elif expected_pan:
+        bound_pan = _normalize_pan(getattr(journey, "poa_kyc_form_bound_pan", None))
+        if bound_pan and bound_pan != expected_pan:
+            form = await ensure_kyc_form(db, user=user, journey=journey)
     if _is_unusable_kyc_form(form):
         try:
             form = await ensure_kyc_form(db, user=user, journey=journey)

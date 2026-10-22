@@ -76,6 +76,7 @@ def test_build_investor_profile_payload() -> None:
     assert payload["tax_status"] == "resident_individual"
     assert payload["name"] == "Asha Patel"
     assert payload["pan"] == "ABCDE1234F"
+    assert payload["occupation"] == "private_sector_service"
     assert payload["source_of_wealth"] == "salary"
     assert payload["use_default_tax_residences"] is True
 

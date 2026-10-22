@@ -20,6 +20,7 @@ class CybrillaChannel(str, Enum):
     finprim_kyc_tenant = "finprim_kyc_tenant"
     cybrilla_poa = "cybrilla_poa"
     cybrilla_poa_kyc_forms = "cybrilla_poa_kyc_forms"
+    cybrilla_zto = "cybrilla_zto"
 
 
 def is_finprim_kyc_request_path(path: str) -> bool:
@@ -74,6 +75,12 @@ def resolve_channel(*, use_poa: bool, path: str) -> CybrillaChannel:
 
 
 def channel_base_and_tenant(channel: CybrillaChannel) -> tuple[str, str]:
+    if channel == CybrillaChannel.cybrilla_zto:
+        from app.application.integrations.integration_runtime import get_zto_runtime
+
+        runtime = get_zto_runtime()
+        tenant = runtime.auth_tenant.strip() or "cybrillapoa"
+        return runtime.base_url, tenant
     if channel == CybrillaChannel.finprim_mf:
         runtime = get_finprim_runtime()
         return runtime.base_url, runtime.tenant
@@ -95,13 +102,21 @@ def channel_base_and_tenant(channel: CybrillaChannel) -> tuple[str, str]:
 
 
 def channel_provider_log_source(channel: CybrillaChannel) -> ProviderLogSource:
-    if channel in {CybrillaChannel.cybrilla_poa, CybrillaChannel.cybrilla_poa_kyc_forms}:
+    if channel in {
+        CybrillaChannel.cybrilla_poa,
+        CybrillaChannel.cybrilla_poa_kyc_forms,
+        CybrillaChannel.cybrilla_zto,
+    }:
         return ProviderLogSource.cybrilla
     return ProviderLogSource.fintech_primitive
 
 
 def channel_uses_poa_terminal_log(channel: CybrillaChannel) -> bool:
-    return channel in {CybrillaChannel.cybrilla_poa, CybrillaChannel.cybrilla_poa_kyc_forms}
+    return channel in {
+        CybrillaChannel.cybrilla_poa,
+        CybrillaChannel.cybrilla_poa_kyc_forms,
+        CybrillaChannel.cybrilla_zto,
+    }
 
 
 def fp_runtime(*, use_poa: bool, path: str = "") -> tuple[str, str]:

@@ -785,6 +785,8 @@ class KycJourneyState(Base):
     bank_verification_failure_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     signature_draft_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     external_kyc_form_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    # PAN on Cybrilla when external_kyc_form_id was bound (must match verified pan_draft_json).
+    poa_kyc_form_bound_pan: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     kyc_form_status: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     kyc_form_type: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     kyc_form_failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -892,4 +894,5 @@ from app.infrastructure.persistence import notification_models as _notification_
 from app.infrastructure.persistence import referral_models as _referral_models  # noqa: F401,E402
 from app.infrastructure.persistence import referral_reward_models as _referral_reward_models  # noqa: F401,E402
 from app.infrastructure.persistence import recommendation_models as _recommendation_models  # noqa: F401,E402
+from app.infrastructure.persistence import zto_models as _zto_models  # noqa: F401,E402
 

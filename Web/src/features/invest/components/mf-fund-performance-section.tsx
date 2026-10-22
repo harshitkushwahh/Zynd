@@ -43,10 +43,12 @@ export function MfFundPerformanceSection({
   );
 
   useEffect(() => {
-    if (effectiveRange !== range) {
-      setRange(effectiveRange);
+    if (allPoints.length < 2) return;
+    const resolved = resolveNavRangeForHistory(allPoints, range);
+    if (resolved !== range) {
+      setRange(resolved);
     }
-  }, [effectiveRange, range, setRange]);
+  }, [allPoints, range, setRange]);
 
   const rangedPoints = useMemo(
     () => filterNavPointsByRange(allPoints, effectiveRange),
@@ -62,7 +64,7 @@ export function MfFundPerformanceSection({
   return (
     <section className="space-y-4" aria-label={copy.mutualFunds.performanceTitle}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <MfNavRangeTabs value={effectiveRange} onChange={setRange} allPoints={allPoints} />
+        <MfNavRangeTabs value={range} onChange={setRange} allPoints={allPoints} />
         <div className="flex flex-wrap items-baseline gap-2 sm:justify-end">
           <span
             className={cn(
@@ -89,7 +91,11 @@ export function MfFundPerformanceSection({
         </div>
       </div>
 
-      <MfFundNavChart key={effectiveRange} points={rangedPoints} periodReturn={periodReturn} />
+      <MfFundNavChart
+        rangeKey={effectiveRange}
+        points={rangedPoints}
+        periodReturn={periodReturn}
+      />
     </section>
   );
 }

@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { AdminTabList, AdminTabTrigger } from "@/components/ui/admin-tab-bar";
 import { cn } from "@/lib/utils";
+import { MfSchedulerJobActions } from "@/components/mf/mf-scheduler-job-actions";
 import {
   fetchMfIngestionRuns,
   fetchMfJobs,
@@ -41,6 +42,7 @@ import {
   type MfIngestionRun,
   type MfJob,
 } from "@/lib/mf-admin-api";
+import { describeMfRunJobResult, formatJobDependsOn } from "@/lib/mf-run-job-feedback";
 
 const ALL_PHASES = "all";
 const ALL_STATUSES = "all";
@@ -69,6 +71,7 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [messageVariant, setMessageVariant] = useState<"success" | "warning">("success");
   const [activeView, setActiveView] = useState<OperationsView>("jobs");
   const [listSearch, setListSearch] = useState("");
   const [phaseFilter, setPhaseFilter] = useState(ALL_PHASES);
@@ -207,14 +210,16 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
     return status === "failed" || status === "partial";
   }).length;
 
-  const handleRunJob = async (jobName: string) => {
+  const handleRunJob = async (jobName: string, force: boolean) => {
     if (!canRunJobs) return;
-    setActionLoading(jobName);
+    setActionLoading(`${jobName}:${force ? "force" : "normal"}`);
     setMessage("");
     setError("");
     try {
-      const result = await runMfJob(jobName);
-      setMessage(`Job ${result.job} triggered.`);
+      const result = await runMfJob(jobName, force);
+      const feedback = describeMfRunJobResult(result, { forced: force });
+      setMessageVariant(feedback.variant);
+      setMessage(feedback.message);
       await loadData();
     } catch (err) {
       setError(getErrorMessage(err, "Could not run job."));
@@ -226,7 +231,11 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   return (
     <div className="space-y-5">
       {error ? <AdminFeedbackMessage variant="destructive" onDismiss={() => setError("")}>{error}</AdminFeedbackMessage> : null}
-      {message ? <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>{message}</AdminFeedbackMessage> : null}
+      {message ? (
+        <AdminFeedbackMessage variant={messageVariant} onDismiss={() => setMessage("")}>
+          {message}
+        </AdminFeedbackMessage>
+      ) : null}
 
       <AdminMetricCardsGrid>
         <AdminMetricCard
@@ -342,6 +351,7 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
               {canRunJobs ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
               <AdminTableHeadCell>Job</AdminTableHeadCell>
               <AdminTableHeadCell>Phase</AdminTableHeadCell>
+              <AdminTableHeadCell>Scheduler</AdminTableHeadCell>
               <AdminTableHeadCell>Schedule</AdminTableHeadCell>
               <AdminTableHeadCell>Last run</AdminTableHeadCell>
               <AdminTableHeadCell className="text-right">Processed</AdminTableHeadCell>
@@ -349,9 +359,9 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
           </AdminTableHeader>
           <AdminTableBody>
             {loading ? (
-              <AdminTableSkeletonRows columns={canRunJobs ? 7 : 6} />
+              <AdminTableSkeletonRows columns={canRunJobs ? 8 : 7} />
             ) : jobPagination.items.length === 0 ? (
-              <AdminTableStateRow colSpan={canRunJobs ? 7 : 6}>No jobs match your filters.</AdminTableStateRow>
+              <AdminTableStateRow colSpan={canRunJobs ? 8 : 7}>No jobs match your filters.</AdminTableStateRow>
             ) : (
               jobPagination.items.map((job) => (
                 <AdminTableRow key={job.name}>
@@ -360,14 +370,12 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
                   </AdminTableCell>
                   {canRunJobs ? (
                     <AdminTableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={actionLoading === job.name}
-                        onClick={() => void handleRunJob(job.name)}
-                      >
-                        {actionLoading === job.name ? "Running…" : "Run now"}
-                      </Button>
+                      <MfSchedulerJobActions
+                        jobName={job.name}
+                        enabled={job.enabled}
+                        actionKey={actionLoading}
+                        onRun={(name, force) => void handleRunJob(name, force)}
+                      />
                     </AdminTableCell>
                   ) : null}
                   <AdminTableCell>
@@ -378,6 +386,18 @@ export function MfOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
                     <span className="rounded-[var(--radius-control)] bg-muted/50 px-2 py-0.5 text-caption text-foreground">
                       Phase {job.phase}
                     </span>
+                  </AdminTableCell>
+                  <AdminTableCell>
+                    <div className="space-y-1.5">
+                      <MfStatusChip
+                        label={job.enabled ? "Enabled" : "Disabled"}
+                        tone={job.enabled ? "success" : "neutral"}
+                        showIcon={false}
+                      />
+                      <p className="max-w-[14rem] text-caption text-muted-foreground">
+                        Depends on: {formatJobDependsOn(job.depends_on)}
+                      </p>
+                    </div>
                   </AdminTableCell>
                   <AdminTableCell>
                     <code className="rounded-[var(--radius-control)] bg-muted/40 px-2 py-0.5 font-mono text-caption text-foreground">

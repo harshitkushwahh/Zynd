@@ -119,7 +119,11 @@ export type MfInvestPaymentCardProps = {
   onRedeemProceed?: (payload: MfRedeemProceedPayload) => void | Promise<void>;
   onRedeemBack?: () => void;
   folioNumber?: string | null;
-  existingFamilyLink?: { groupTitle: string; goalTitle: string | null } | null;
+  existingFamilyLink?: {
+    groupTitle: string;
+    goalTitle: string | null;
+    groupAvatarUrl?: string | null;
+  } | null;
 };
 
 const QUICK_AMOUNTS = [1000, 2000, 5000] as const;
@@ -1100,7 +1104,7 @@ export function MfInvestPaymentCard({
             </div>
           ) : null}
 
-          <div className="space-y-3.5">
+          <div className="space-y-3.5 pt-1.5">
             <AmountInput
               amount={amount}
               mode={mode}
@@ -1155,7 +1159,6 @@ export function MfInvestPaymentCard({
               onChange={setFamilyLink}
               disabled={formLocked}
               lockedLink={existingFamilyLink}
-              confirmEntireFolio={Boolean(folioNumber?.trim()) && !existingFamilyLink}
             />
           ) : null}
 

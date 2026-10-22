@@ -1,5 +1,7 @@
 export { configureApiClient, getApiUrl } from "./configure";
 export { normalizeBackendOrigin, normalizePublicApiUrl } from "./normalize-api-url";
+export { getBackendDirectHttpOrigin } from "./backend-direct-origin";
+export { getNotificationStreamUrl } from "./notification-stream-url";
 export { getSupportWebSocketUrl } from "./support-ws-url";
 export {
   connectSupportRealtime,

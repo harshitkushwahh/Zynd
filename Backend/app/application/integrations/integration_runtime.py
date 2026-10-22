@@ -618,6 +618,64 @@ def mask_secret(value: str) -> str:
     return f"••••{cleaned[-4:]}"
 
 
+@dataclass(frozen=True)
+class ZtoRuntime:
+    base_url: str
+    token_base_url: str
+    auth_tenant: str
+    client_id: str
+    client_secret: str
+
+    @property
+    def resolved_token_base_url(self) -> str:
+        return self.token_base_url.strip() or self.base_url.strip()
+
+    @property
+    def configured(self) -> bool:
+        return bool(
+            self.base_url.strip()
+            and self.resolved_token_base_url
+            and self.auth_tenant.strip()
+            and self.client_id.strip()
+            and self.client_secret.strip()
+        )
+
+
+def get_zto_runtime() -> ZtoRuntime:
+    settings = get_settings()
+    base_url = settings.zto_api_base_url.strip() or "https://api.cybrilla.com"
+    token_base_url = settings.zto_token_base_url.strip()
+    auth_tenant = settings.zto_auth_tenant.strip() or "cybrillapoa"
+    client_id = settings.zto_client_id.strip()
+    client_secret = settings.zto_client_secret.strip()
+
+    # Local dev: reuse Cybrilla POA OAuth when ZTO_* is unset (same cybrillapoa tenant family).
+    if settings.app_env == "development" and settings.zto_mode == "production":
+        if not (client_id and client_secret):
+            poa = get_cybrilla_runtime()
+            if poa.configured:
+                client_id = client_id or poa.client_id
+                client_secret = client_secret or poa.client_secret
+                token_base_url = token_base_url or poa.resolved_token_base_url
+                if not settings.zto_api_base_url.strip():
+                    base_url = poa.base_url.strip() or base_url
+                if not settings.zto_auth_tenant.strip():
+                    auth_tenant = poa.auth_tenant.strip() or auth_tenant
+
+    return ZtoRuntime(
+        base_url=base_url,
+        token_base_url=token_base_url,
+        auth_tenant=auth_tenant,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+
+
+def is_zto_production_live() -> bool:
+    settings = get_settings()
+    return settings.zto_enabled and settings.zto_mode == "production" and get_zto_runtime().configured
+
+
 def invalidate_integration_clients() -> None:
     from app.infrastructure.core.kyc.fp_clients import invalidate_fp_tokens
     from app.infrastructure.core.mf.oms_client import invalidate_mf_token

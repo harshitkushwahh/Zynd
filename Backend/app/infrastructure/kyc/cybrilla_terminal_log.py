@@ -118,6 +118,29 @@ def _summarize_response(body: Any) -> str:
     return " | ".join(parts)
 
 
+def log_zto_http(
+    *,
+    sandbox: bool,
+    method: str,
+    path: str,
+    success: bool = True,
+    duration_ms: int = 0,
+    request_body: Any = None,
+    response_body: Any = None,
+) -> None:
+    """Dev terminal trace for zero-touch lookups (sandbox has no real HTTP)."""
+    tag = "ZTO-SANDBOX" if sandbox else "ZTO"
+    outcome = "OK" if success else "ERR"
+    req = json.dumps(_sanitize_body(request_body), default=str, separators=(",", ":")) if request_body else "-"
+    if len(req) > 200:
+        req = req[:197] + "…"
+    summary = _summarize_response(response_body) if response_body is not None else "-"
+    print(
+        f"[{tag}] {method} {path} → {outcome} {duration_ms}ms | req={req} | res={summary}",
+        flush=True,
+    )
+
+
 def log_fp_http(
     *,
     use_poa: bool,

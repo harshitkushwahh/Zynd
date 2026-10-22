@@ -88,7 +88,7 @@ const PIPELINE_MODE_OPTIONS: { value: MfPipelineMode; label: string; description
   {
     value: "nav-analytics-only",
     label: "NAV + analytics",
-    description: "Cold-start, metrics, ranks — skip scheme staging",
+    description: "Cold-start, metrics, ranks skip scheme staging",
   },
   { value: "health-repair", label: "Health repair", description: "Lifecycle, NAV, metrics, min amounts, health" },
   { value: "bootstrap", label: "Bootstrap (legacy)", description: "Same as after-ingest mode name" },

@@ -20,7 +20,7 @@ from app.application.kyc.journey_gate_service import (
 from app.application.kyc.journey_state_service import (
     get_or_create_journey,
     get_or_create_status,
-    mark_kyc_submitted,
+    mark_kyc_submitted_with_profile_sync,
 )
 from app.application.kyc.kyc_completion_service import on_kyc_completed
 from app.infrastructure.kyc.cybrilla_terminal_log import log_kyc_step
@@ -73,6 +73,56 @@ def _proof_is_complete(form: dict[str, Any]) -> bool:
     return str(_proof_status(form) or "").lower() in _PROOF_COMPLETE
 
 
+def _normalize_pan(value: str | None) -> str:
+    return str(value or "").strip().upper()
+
+
+def _journey_expected_pan(journey: Any) -> str:
+    pan_draft = getattr(journey, "pan_draft_json", None) or {}
+    if isinstance(pan_draft, dict):
+        return _normalize_pan(pan_draft.get("panNumber"))
+    return ""
+
+
+def _kyc_form_matches_expected_pan(form: dict[str, Any], expected_pan: str) -> bool:
+    expected = _normalize_pan(expected_pan)
+    if not expected:
+        return True
+    form_pan = _normalize_pan(form.get("pan"))
+    if not form_pan:
+        return True
+    return form_pan == expected
+
+
+def _discovered_form_has_failed_proof_shell(form: dict[str, Any]) -> bool:
+    """Cybrilla leaves status=created with proof_details.status=failed after a bad DigiLocker attempt."""
+    if _kyc_form_status(form) != "created":
+        return False
+    if _proof_is_complete(form):
+        return False
+    return str(_proof_status(form) or "").lower() == "failed"
+
+
+async def _maybe_retry_failed_poa_proof(form_id: str, form: dict[str, Any]) -> dict[str, Any]:
+    """Reuse the same kyc_form (~7d expiry); refresh proof fetch URL after a failed DigiLocker attempt."""
+    if not form_id or not _discovered_form_has_failed_proof_shell(form):
+        return form
+    try:
+        refreshed = await retry_kyc_form_proof_fetch(form_id)
+        print(
+            f"[KYC] Retried proof on existing kyc_form | form_id={form_id} | proof={_proof_status(refreshed)}",
+            flush=True,
+        )
+        return refreshed
+    except FpClientError as exc:
+        logger.warning(
+            "[KYC] retry_proof_details_fetch failed | form_id=%s | error=%s",
+            form_id,
+            exc.message,
+        )
+        return form
+
+
 def _esign_url(form: dict[str, Any]) -> str | None:
     esign = form.get("esign_details") or {}
     if isinstance(esign, dict) and esign.get("esign_url"):
@@ -100,7 +150,8 @@ def _form_provider_submission_complete(form: dict[str, Any]) -> bool:
     return True
 
 
-def _maybe_mark_kyc_submitted(
+async def _maybe_mark_kyc_submitted(
+    db: AsyncSession,
     *,
     user: User,
     status: Any,
@@ -108,16 +159,67 @@ def _maybe_mark_kyc_submitted(
     form: dict[str, Any],
 ) -> None:
     if _form_provider_submission_complete(form):
-        mark_kyc_submitted(user=user, status=status, journey=journey)
+        await mark_kyc_submitted_with_profile_sync(db, user=user, status=status, journey=journey)
 
 
 def _sync_journey_from_form(journey: Any, form: dict[str, Any]) -> None:
     journey.external_kyc_form_id = str(form.get("id") or journey.external_kyc_form_id or "")
+    form_pan = _normalize_pan(form.get("pan"))
+    journey_pan = _journey_expected_pan(journey)
+    journey.poa_kyc_form_bound_pan = form_pan or journey_pan or None
     journey.kyc_form_status = str(form.get("status") or "")
     journey.kyc_form_type = str(form.get("type") or journey.kyc_form_type or "")
     journey.kyc_form_failure_reason = form.get("reason")
     journey.proof_details_status = _proof_status(form)
     journey.esign_details_status = _esign_status(form)
+
+
+async def clear_poa_kyc_form_if_verified_pan_changed(
+    db: AsyncSession,
+    journey: Any,
+    *,
+    new_pan: str,
+) -> None:
+    """Drop Cybrilla kyc_form binding when the user verifies a different PAN."""
+    previous = _normalize_pan((journey.pan_draft_json or {}).get("panNumber"))
+    incoming = _normalize_pan(new_pan)
+    if not incoming or previous == incoming:
+        return
+    if not str(journey.external_kyc_form_id or "").strip():
+        return
+    print(
+        f"[KYC] Clearing kyc_form binding — verified PAN changed | was={previous} | now={incoming}",
+        flush=True,
+    )
+    await _clear_bound_kyc_form(db, journey)
+
+
+async def _reject_or_clear_mismatched_kyc_form(
+    db: AsyncSession,
+    journey: Any,
+    form: dict[str, Any],
+    *,
+    form_id: str,
+) -> bool:
+    """Return True when form PAN does not match this journey (binding cleared)."""
+    expected = _journey_expected_pan(journey)
+    if not expected:
+        return False
+    if _kyc_form_matches_expected_pan(form, expected):
+        bound = _normalize_pan(getattr(journey, "poa_kyc_form_bound_pan", None))
+        if bound and bound != expected:
+            archive_kyc_form_partner_ref(journey, form_id, reason="pan_mismatch")
+            await _clear_bound_kyc_form(db, journey)
+            return True
+        return False
+    archive_kyc_form_partner_ref(journey, form_id, reason="pan_mismatch")
+    await _clear_bound_kyc_form(db, journey)
+    print(
+        "[KYC] Cleared kyc_form — PAN mismatch | "
+        f"form_id={form_id} | form_pan={form.get('pan')} | expected_pan={expected}",
+        flush=True,
+    )
+    return True
 
 
 def _kyc_form_status(form: dict[str, Any]) -> str:
@@ -182,8 +284,14 @@ async def fetch_journey_kyc_form(
     clear_if_missing: bool = False,
 ) -> dict[str, Any] | None:
     """Load the journey's bound Cybrilla kyc_form; optionally clear missing partner forms."""
-    form_id = journey.external_kyc_form_id
+    form_id = str(journey.external_kyc_form_id or "").strip()
     if not form_id:
+        return None
+    expected = _journey_expected_pan(journey)
+    bound_pan = _normalize_pan(getattr(journey, "poa_kyc_form_bound_pan", None))
+    if expected and bound_pan and bound_pan != expected:
+        archive_kyc_form_partner_ref(journey, form_id, reason="pan_mismatch")
+        await _clear_bound_kyc_form(db, journey)
         return None
     try:
         form = await fetch_kyc_form(form_id)
@@ -197,6 +305,8 @@ async def fetch_journey_kyc_form(
             await _clear_bound_kyc_form(db, journey)
             return None
         raise
+    if await _reject_or_clear_mismatched_kyc_form(db, journey, form, form_id=form_id):
+        return None
     return form
 
 
@@ -213,6 +323,7 @@ async def _clear_bound_kyc_form(db: AsyncSession, journey: Any) -> None:
     finprim_kyc_request = bool(str(journey.external_kyc_request_id or "").strip())
 
     journey.external_kyc_form_id = None
+    journey.poa_kyc_form_bound_pan = None
     journey.kyc_form_failure_reason = None
     journey.proof_details_status = None
     if not finprim_kyc_request:
@@ -280,6 +391,16 @@ async def _fetch_bound_kyc_form(
             "This KYC form was created on production Finprim. "
             "Set FP_POA_*_TEST credentials and start a new sandbox form.",
             "poa_form_sandbox_mismatch",
+            409,
+        )
+
+    expected_pan = _journey_expected_pan(journey)
+    if expected_pan and not _kyc_form_matches_expected_pan(form, expected_pan):
+        archive_kyc_form_partner_ref(journey, form_id, reason="pan_mismatch")
+        await _clear_bound_kyc_form(db, journey)
+        raise KycError(
+            "The linked KYC form belongs to a different PAN.",
+            "kyc_form_pan_mismatch",
             409,
         )
 
@@ -480,17 +601,29 @@ def _kyc_form_ids_in_blob(raw: object) -> list[str]:
     return list(dict.fromkeys(re.findall(r"kycf_[a-zA-Z0-9_]+", text)))
 
 
-def _all_known_kyc_form_ids(journey: Any, *, extra_ids: list[str] | None = None) -> list[str]:
+def _all_known_kyc_form_ids(
+    journey: Any,
+    *,
+    extra_ids: list[str] | None = None,
+    pan: str | None = None,
+) -> list[str]:
     """Every Cybrilla kycf_* we have ever recorded on this journey (newest first)."""
+    clean_pan = _normalize_pan(pan)
     from_refs: list[str] = []
     seen: set[str] = set()
     bound = str(journey.external_kyc_form_id or "").strip()
     if bound.startswith("kycf_"):
-        seen.add(bound)
-        from_refs.append(bound)
+        bound_pan = _normalize_pan(getattr(journey, "poa_kyc_form_bound_pan", None))
+        if not clean_pan or not bound_pan or bound_pan == clean_pan:
+            seen.add(bound)
+            from_refs.append(bound)
     for row in reversed(list(journey.kyc_partner_external_refs_json or [])):
         if row.get("kind") != "kyc_form" or row.get("archived"):
             continue
+        if clean_pan:
+            ref_pan = _normalize_pan(row.get("pan"))
+            if ref_pan and ref_pan != clean_pan:
+                continue
         form_id = str(row.get("external_id") or "")
         if form_id.startswith("kycf_") and form_id not in seen:
             seen.add(form_id)
@@ -528,14 +661,16 @@ async def _kyc_form_ids_from_provider_logs(db: AsyncSession, user_id: UUID | Non
     ids = await _collect(_build_query(scoped_user=True))
     if ids or user_id is None:
         return ids
-    if get_settings().app_env != "development":
+    settings = get_settings()
+    if not settings.kyc_form_discovery_all_users_logs:
+        return ids
+    if settings.app_env != "development":
         return ids
     return await _collect(_build_query(scoped_user=False))
 
 
 def _candidate_kyc_form_ids_for_pan(journey: Any, pan: str) -> list[str]:
-    _ = pan
-    return _all_known_kyc_form_ids(journey)
+    return _all_known_kyc_form_ids(journey, pan=pan)
 
 
 async def _discover_live_kyc_form_for_pan(
@@ -549,14 +684,15 @@ async def _discover_live_kyc_form_for_pan(
     skip = {item for item in (skip_ids or set()) if item}
     log_ids: list[str] = []
     user_id = getattr(journey, "user_id", None)
-    if user_id:
+    settings = get_settings()
+    if settings.kyc_form_discovery_from_provider_logs and user_id:
         try:
             log_ids = await _kyc_form_ids_from_provider_logs(db, user_id)
         except Exception:
             logger.exception("[KYC] Could not load kyc_form ids from provider logs")
     candidate_ids = _prioritize_kyc_form_candidates(
         journey,
-        _all_known_kyc_form_ids(journey, extra_ids=log_ids),
+        _all_known_kyc_form_ids(journey, extra_ids=log_ids, pan=pan),
     )
     if not candidate_ids and _has_recent_ongoing_kyc_form_conflict(journey, pan):
         print(
@@ -571,7 +707,7 @@ async def _discover_live_kyc_form_for_pan(
     for form_id in candidate_ids:
         if form_id in skip:
             continue
-        bound = await _try_bind_usable_kyc_form(db, journey, form_id)
+        bound = await _try_bind_usable_kyc_form(db, journey, form_id, expected_pan=pan)
         if bound:
             logger.info(
                 "[KYC] Rebound live kyc_form | form_id=%s | pan=%s",
@@ -601,6 +737,8 @@ async def _try_bind_usable_kyc_form(
     db: AsyncSession,
     journey: Any,
     form_id: str,
+    *,
+    expected_pan: str | None = None,
 ) -> dict[str, Any] | None:
     if not form_id:
         return None
@@ -617,10 +755,30 @@ async def _try_bind_usable_kyc_form(
             await db.flush()
             await db.commit()
         return None
+    pan_expected = _normalize_pan(expected_pan) or _journey_expected_pan(journey)
+    if pan_expected and not _kyc_form_matches_expected_pan(form, pan_expected):
+        archive_kyc_form_partner_ref(journey, form_id, reason="pan_mismatch")
+        await db.flush()
+        await db.commit()
+        print(
+            "[KYC] Skipping kyc_form — PAN mismatch | "
+            f"form_id={form_id} | form_pan={form.get('pan')} | expected_pan={pan_expected}",
+            flush=True,
+        )
+        return None
     if _is_rebindable_resumable_form(journey, form):
         await _persist_kyc_form_reference(db, journey, form)
         print(
             f"[KYC] Rebound resumable form with completed proof | form_id={form.get('id')} | status={form.get('status')}",
+            flush=True,
+        )
+        return form
+    if _discovered_form_has_failed_proof_shell(form):
+        form = await _maybe_retry_failed_poa_proof(form_id, form)
+        await _persist_kyc_form_reference(db, journey, form)
+        _validate_form_for_submission(form)
+        print(
+            f"[KYC] Rebound kyc_form with failed proof (retry DigiLocker on same form) | form_id={form_id}",
             flush=True,
         )
         return form
@@ -642,12 +800,17 @@ async def _try_bind_usable_kyc_form(
 
 def _proof_redirect_action(form: dict[str, Any]) -> dict[str, Any]:
     fetch_url = _proof_fetch_url(form)
+    sandbox = get_settings().kyc_digilocker_sandbox
+    if sandbox:
+        proof_hint = "sandbox Finprim when configured"
+    else:
+        proof_hint = "production DigiLocker (KYC_DIGILOCKER_SANDBOX=false)"
     return {
         "nextAction": "proof_redirect",
         "redirectUrl": fetch_url,
         "message": (
             "Link your KRA KYC form with DigiLocker to enable Aadhaar eSign "
-            "(sandbox Finprim when configured)."
+            f"({proof_hint})."
         ),
     }
 
@@ -754,7 +917,7 @@ async def _recover_or_retry_failed_new_form(
     other_id = _extract_form_id_from_text(reason)
     if other_id:
         skip_ids.add(other_id)
-        bound = await _try_bind_usable_kyc_form(db, journey, other_id)
+        bound = await _try_bind_usable_kyc_form(db, journey, other_id, expected_pan=pan)
         if bound:
             print(
                 f"[KYC] Recovered referenced form | form_id={other_id} | status={bound.get('status')}",
@@ -813,7 +976,9 @@ async def _recover_or_retry_failed_new_form(
         if _is_ongoing_form_exists_error(exc):
             matched_id = _extract_form_id_from_error(exc)
             if matched_id:
-                bound = await _try_bind_usable_kyc_form(db, journey, matched_id)
+                bound = await _try_bind_usable_kyc_form(
+                    db, journey, matched_id, expected_pan=pan
+                )
                 if bound:
                     return bound
             discovered = await _discover_live_kyc_form_for_pan(db, journey, pan)
@@ -918,15 +1083,26 @@ async def ensure_kyc_form(db: AsyncSession, *, user: User, journey: Any) -> dict
         try:
             form = await _fetch_bound_kyc_form(db, journey, journey.external_kyc_form_id)
         except KycError as exc:
-            if exc.code != "poa_form_sandbox_mismatch":
+            if exc.code == "kyc_form_pan_mismatch":
+                print(
+                    "[KYC] Cleared kyc_form bound to another PAN — will discover or create for verified PAN",
+                    flush=True,
+                )
+                form = None
+            elif exc.code != "poa_form_sandbox_mismatch":
                 raise
-            print("[KYC] Recreating POA kyc_form under sandbox credentials", flush=True)
-            form = None
+            else:
+                print("[KYC] Recreating POA kyc_form under sandbox credentials", flush=True)
+                form = None
         if form is not None:
             print(
                 f"[KYC] Bound form loaded | form_id={form.get('id')} | status={form.get('status')}",
                 flush=True,
             )
+        if form is not None and _discovered_form_has_failed_proof_shell(form):
+            bound_id = str(form.get("id") or journey.external_kyc_form_id or "")
+            form = await _maybe_retry_failed_poa_proof(bound_id, form)
+            await _persist_kyc_form_reference(db, journey, form)
         if form is not None and _is_unusable_kyc_form(form):
             if _is_rebindable_resumable_form(journey, form):
                 print(
@@ -1019,7 +1195,9 @@ async def ensure_kyc_form(db: AsyncSession, *, user: User, journey: Any) -> dict
             print(f"[KYC] Recovered form ID from error | matched_id_str={matched_id_str}", flush=True)
 
             if matched_id_str:
-                bound = await _try_bind_usable_kyc_form(db, journey, matched_id_str)
+                bound = await _try_bind_usable_kyc_form(
+                    db, journey, matched_id_str, expected_pan=pan
+                )
                 if bound:
                     print(
                         f"[KYC] Bound recovered form | form_id={matched_id_str} | status={bound.get('status')}",
@@ -1030,7 +1208,9 @@ async def ensure_kyc_form(db: AsyncSession, *, user: User, journey: Any) -> dict
                 for candidate_id in _candidate_kyc_form_ids_for_pan(journey, pan):
                     if candidate_id == matched_id_str:
                         continue
-                    bound = await _try_bind_usable_kyc_form(db, journey, candidate_id)
+                    bound = await _try_bind_usable_kyc_form(
+                        db, journey, candidate_id, expected_pan=pan
+                    )
                     if bound:
                         return bound
 
@@ -1156,7 +1336,9 @@ async def submit_kyc_form(
     if should_use_poa_partner_form(journey) and journey.external_kyc_form_id:
         existing_form = await fetch_journey_kyc_form(db, journey, clear_if_missing=False)
         if existing_form and _kyc_form_status(existing_form) == "submitted":
-            _maybe_mark_kyc_submitted(user=user, status=status, journey=journey, form=existing_form)
+            await _maybe_mark_kyc_submitted(
+                db, user=user, status=status, journey=journey, form=existing_form
+            )
             await db.flush()
             return {
                 "nextAction": "submitted",
@@ -1297,7 +1479,7 @@ async def submit_kyc_form(
     status.review_step_status = KycStepStatus.saved
     status.signature_step_status = KycStepStatus.saved
 
-    _maybe_mark_kyc_submitted(user=user, status=status, journey=journey, form=form)
+    await _maybe_mark_kyc_submitted(db, user=user, status=status, journey=journey, form=form)
 
     await db.flush()
     response = _build_next_action(form, journey=journey)
@@ -1329,7 +1511,7 @@ async def get_kyc_form_status(db: AsyncSession, *, user: User) -> dict[str, Any]
     _sync_journey_from_form(journey, form)
 
     status = await get_or_create_status(db, user.id)
-    _maybe_mark_kyc_submitted(user=user, status=status, journey=journey, form=form)
+    await _maybe_mark_kyc_submitted(db, user=user, status=status, journey=journey, form=form)
     await db.flush()
 
     settings = get_settings()
@@ -1388,7 +1570,7 @@ async def continue_kyc_form(db: AsyncSession, *, user: User) -> dict[str, Any]:
         _sync_journey_from_form(journey, form)
 
     status = await get_or_create_status(db, user.id)
-    _maybe_mark_kyc_submitted(user=user, status=status, journey=journey, form=form)
+    await _maybe_mark_kyc_submitted(db, user=user, status=status, journey=journey, form=form)
 
     await db.flush()
     response = _build_next_action(form, journey=journey)
@@ -1424,7 +1606,6 @@ async def mark_proof_callback(db: AsyncSession, *, form_id: str, callback_status
 async def mark_esign_callback(db: AsyncSession, *, form_id: str, callback_status: str) -> None:
     from sqlalchemy import select
 
-    from app.application.kyc.journey_state_service import mark_kyc_submitted
     from app.application.kyc.kyc_flow_mode import should_use_poa_partner_form
     from app.application.kyc.kyc_partner_refs import find_journey_esign_lookup_ids
     from app.infrastructure.core.kyc.finprim_kyc_client import fetch_finprim_esign, finprim_esign_complete
@@ -1460,7 +1641,9 @@ async def mark_esign_callback(db: AsyncSession, *, form_id: str, callback_status
             _sync_journey_from_form(journey, form)
             record_kyc_form_partner_ref(journey, form)
             if user:
-                _maybe_mark_kyc_submitted(user=user, status=status, journey=journey, form=form)
+                await _maybe_mark_kyc_submitted(
+                    db, user=user, status=status, journey=journey, form=form
+                )
         else:
             try:
                 esign = await fetch_finprim_esign(clean_id)
@@ -1468,7 +1651,9 @@ async def mark_esign_callback(db: AsyncSession, *, form_id: str, callback_status
             except FpClientError:
                 journey.esign_details_status = "successful"
             if user and finprim_esign_complete({"status": journey.esign_details_status}):
-                mark_kyc_submitted(user=user, status=status, journey=journey)
+                await mark_kyc_submitted_with_profile_sync(
+                    db, user=user, status=status, journey=journey
+                )
     else:
         journey.esign_details_status = "failed"
         journey.kyc_form_failure_reason = "eSign was not completed successfully."

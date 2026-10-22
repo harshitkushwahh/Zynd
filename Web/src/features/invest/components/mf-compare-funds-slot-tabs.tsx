@@ -11,6 +11,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FieldMessage } from "@/components/ui/ui-message";
 import type { InvestFundSummary } from "@/features/invest/api/invest-api";
 import { MfFundAmcAvatar, MfFundSearchResultItem } from "@/features/invest/components/mf-fund-search-ui";
@@ -111,54 +112,80 @@ export function CompareFundSlotSearch({
   excludeProductIds,
 }: CompareFundSlotSearchProps) {
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
   const activeFund = slots[activeSlot] ?? null;
   const pickerExclude = excludeProductIds.filter((id) => id !== activeFund?.product_id);
   const trimmedQuery = query.trim();
 
   const { results, searching, error, isActive } = useMfFundSearch({
     query,
-    enabled: true,
+    enabled: open,
     excludeProductIds: pickerExclude,
   });
 
   useEffect(() => {
     setQuery("");
+    setOpen(false);
   }, [activeSlot]);
 
   function handleSelect(fund: InvestFundSummary) {
     onSlotsChange(slots.map((slot, index) => (index === activeSlot ? fund : slot)));
     setQuery("");
+    setOpen(false);
   }
 
-  const showDropdown =
-    trimmedQuery.length >= MF_FUND_SEARCH_MIN_CHARS || searching || Boolean(error);
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery("");
+  }
+
+  const showResultsPanel =
+    open &&
+    (trimmedQuery.length >= MF_FUND_SEARCH_MIN_CHARS || searching || Boolean(error));
 
   return (
-    <div className="relative w-full min-w-0 overflow-visible">
-      <Command shouldFilter={false} className="w-full min-w-0 overflow-visible rounded-none bg-transparent">
-        <div className="relative w-full min-w-0 overflow-visible">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-            strokeWidth={2.25}
-          />
+    <Popover open={showResultsPanel} onOpenChange={handleOpenChange}>
+      <PopoverTrigger
+        nativeButton={false}
+        render={<div className="block w-full min-w-0" />}
+        className={cn(
+          "relative box-border flex h-11 w-full min-w-0 items-center border border-input bg-transparent py-2 pr-3 pl-10 text-left text-compact transition-colors",
+          "focus-within:border-ring focus-within:ring-3 focus-within:ring-inset focus-within:ring-ring/50 dark:bg-input/30",
+          open && "border-ring ring-3 ring-inset ring-ring/50",
+          ZYND_3XL_RADIUS_CLASS,
+        )}
+        onClick={() => setOpen(true)}
+      >
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+          strokeWidth={2.25}
+        />
+        <Command shouldFilter={false} className="min-w-0 flex-1 bg-transparent">
           <CommandPrimitive.Input
             value={query}
-            onValueChange={setQuery}
+            onValueChange={(value) => {
+              setQuery(value);
+              if (value.trim().length >= MF_FUND_SEARCH_MIN_CHARS) {
+                setOpen(true);
+              }
+            }}
+            onFocus={() => setOpen(true)}
             placeholder={copy.mutualFunds.calculatorSelectFund}
-            className={cn(
-              "box-border flex h-11 w-full min-w-0 border border-input bg-transparent py-2 pr-3 pl-10 text-compact outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 dark:bg-input/30",
-              ZYND_3XL_RADIUS_CLASS,
-            )}
+            className="h-full w-full min-w-0 border-0 bg-transparent p-0 outline-none placeholder:text-muted-foreground focus-visible:ring-0"
           />
-        </div>
+        </Command>
+      </PopoverTrigger>
 
-        {showDropdown ? (
-          <CommandList
-            className={cn(
-              "absolute top-full right-0 left-0 z-20 mt-2 max-h-80 w-full min-w-0 overflow-hidden border border-border/70 bg-card shadow-zynd-mid",
-              ZYND_3XL_RADIUS_CLASS,
-            )}
-          >
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className={cn(
+          "z-50 w-[var(--anchor-width)] max-w-[calc(100vw-2rem)] overflow-hidden border border-border/70 bg-card p-0 shadow-zynd-mid",
+          ZYND_3XL_RADIUS_CLASS,
+        )}
+      >
+        <Command shouldFilter={false}>
+          <CommandList className="max-h-80">
             {searching ? (
               <div className="flex items-center gap-2 px-4 py-4 text-compact text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
@@ -191,8 +218,8 @@ export function CompareFundSlotSearch({
               </CommandGroup>
             ) : null}
           </CommandList>
-        ) : null}
-      </Command>
-    </div>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }

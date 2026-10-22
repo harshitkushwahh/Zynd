@@ -697,6 +697,74 @@ def _months_invested(first_investment_date: str | None) -> int | None:
     return max(months, 0)
 
 
+def _coerce_nominee_share(value: Any) -> int | None:
+    try:
+        if value is None:
+            return None
+        share = int(value)
+        return share if 0 <= share <= 100 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_minor_from_dob(dob: date | None, *, today: date | None = None) -> bool | None:
+    if dob is None:
+        return None
+    today = today or date.today()
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    return age < 18
+
+
+def _nominee_share_from_folio(folio: dict[str, Any], nominee: dict[str, Any] | None) -> int | None:
+    if isinstance(nominee, dict):
+        for key in ("allocation_percentage", "share_percent", "percentage", "allocation"):
+            share = _coerce_nominee_share(nominee.get(key))
+            if share is not None:
+                return share
+    return _coerce_nominee_share(folio.get("nominee1_allocation_percentage"))
+
+
+async def _load_nominee_enrichment(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    nominee_name: str | None,
+    folio_share: int | None,
+    folio_is_minor: bool | None,
+) -> dict[str, Any | None]:
+    share = folio_share
+    is_minor = folio_is_minor
+    if not nominee_name or not nominee_name.strip():
+        return {"nominee_share_percent": share, "nominee_is_minor": is_minor}
+
+    normalized = nominee_name.strip().casefold()
+    rows = (
+        await session.scalars(
+            select(InvestorRelatedParty)
+            .where(InvestorRelatedParty.investor_profile_id == user_id)
+            .order_by(InvestorRelatedParty.share_percent.desc(), InvestorRelatedParty.created_at.asc())
+        )
+    ).all()
+
+    matched = next((row for row in rows if row.name.strip().casefold() == normalized), None)
+    if matched is None and len(rows) == 1:
+        matched = rows[0]
+
+    if matched is not None:
+        if share is None and matched.share_percent is not None:
+            share = int(matched.share_percent)
+        if is_minor is None:
+            minor_from_dob = _is_minor_from_dob(matched.date_of_birth)
+            if minor_from_dob is not None:
+                is_minor = minor_from_dob
+            elif matched.guardian_name and str(matched.guardian_name).strip():
+                is_minor = True
+            else:
+                is_minor = False
+
+    return {"nominee_share_percent": share, "nominee_is_minor": is_minor}
+
+
 def _extract_folio_meta(folio_payload: dict[str, Any]) -> dict[str, Any]:
     rows = folio_payload.get("data")
     if not isinstance(rows, list) or not rows:
@@ -706,9 +774,16 @@ def _extract_folio_meta(folio_payload: dict[str, Any]) -> dict[str, Any]:
     holding_mode = "Demat" if folio.get("dp_id") and folio.get("client_id") else "Physical"
 
     nominee_name = None
+    nominee_share_percent = None
+    nominee_is_minor = None
     nominee = folio.get("nominee1")
     if isinstance(nominee, dict):
         nominee_name = nominee.get("name") or nominee.get("nominee_name")
+        nominee_share_percent = _nominee_share_from_folio(folio, nominee)
+        if nominee.get("is_minor") is True:
+            nominee_is_minor = True
+        elif nominee.get("guardian_name"):
+            nominee_is_minor = True
 
     redeem_bank_label = None
     redeem_bank_name = None
@@ -739,6 +814,8 @@ def _extract_folio_meta(folio_payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "holding_mode": holding_mode,
         "nominee_name": str(nominee_name) if nominee_name else None,
+        "nominee_share_percent": nominee_share_percent,
+        "nominee_is_minor": nominee_is_minor,
         "redeem_bank_label": redeem_bank_label,
         "redeem_bank_name": redeem_bank_name,
         "redeem_bank_ifsc": redeem_bank_ifsc,
@@ -1751,7 +1828,7 @@ async def get_user_portfolio_holding_detail(
     holding_id: str,
 ) -> dict[str, Any]:
     settings = get_settings()
-    cache_key = f"portfolio:holding_detail:v10:{user_id}:{holding_id}"
+    cache_key = f"portfolio:holding_detail:v11:{user_id}:{holding_id}"
     cached = await _get_cached_portfolio(cache_key, settings=settings)
     if cached is not None:
         return cached
@@ -1851,6 +1928,13 @@ async def get_user_portfolio_holding_detail(
     bank_name = folio_meta.get("redeem_bank_name") or primary_bank["redeem_bank_name"]
     bank_ifsc = folio_meta.get("redeem_bank_ifsc") or primary_bank["redeem_bank_ifsc"]
     nominee_name = folio_meta.get("nominee_name") or await _load_primary_nominee_name(session, user_id=user_id)
+    nominee_enrichment = await _load_nominee_enrichment(
+        session,
+        user_id=user_id,
+        nominee_name=nominee_name,
+        folio_share=folio_meta.get("nominee_share_percent"),
+        folio_is_minor=folio_meta.get("nominee_is_minor"),
+    )
 
     xirr_pct = scheme_returns.get("xirr_pct")
     if xirr_pct is None and invested > 0:
@@ -1892,6 +1976,8 @@ async def get_user_portfolio_holding_detail(
         "redeem_bank_name": bank_name,
         "redeem_bank_ifsc": bank_ifsc,
         "nominee_name": nominee_name,
+        "nominee_share_percent": nominee_enrichment.get("nominee_share_percent"),
+        "nominee_is_minor": nominee_enrichment.get("nominee_is_minor"),
         "product_id": str(catalog_fund.product_id) if catalog_fund and catalog_fund.product_id else None,
         "min_sip_amount_inr": (
             float(catalog_fund.min_sip_amount) if catalog_fund and catalog_fund.min_sip_amount is not None else None

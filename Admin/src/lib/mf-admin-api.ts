@@ -355,6 +355,12 @@ export async function fetchMfJobs() {
 export type MfRunJobResult = {
   job: string;
   result: Record<string, unknown>;
+  skipped?: number;
+  reason?: string;
+  processed?: number;
+  inserted?: number;
+  duration_seconds?: number;
+  run_uuid?: string;
 };
 
 export async function runMfJob(jobName: string, force = false) {

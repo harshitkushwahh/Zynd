@@ -15,10 +15,12 @@ from app.application.integrations.integration_runtime import (
     get_finprim_digilocker_runtime,
     get_finprim_kyc_tenant_runtime,
     get_finprim_runtime,
+    get_zto_runtime,
     is_cybrilla_poa_live,
     is_finprim_digilocker_live,
     is_finprim_enabled,
     is_kyckart_live,
+    is_zto_production_live,
 )
 from app.core.config import get_settings
 from app.infrastructure.core.channels import CybrillaChannel
@@ -212,6 +214,21 @@ class CybrillaTokenService:
             return await self._fetch_token(
                 token_base_url=runtime.token_base_url,
                 auth_tenant=runtime.tenant,
+                client_id=runtime.client_id,
+                client_secret=runtime.client_secret,
+            )
+
+        if channel == CybrillaChannel.cybrilla_zto:
+            if not is_zto_production_live():
+                raise CybrillaClientError(
+                    "Zero-touch lookup (production) is not configured.",
+                    "zto_not_configured",
+                    503,
+                )
+            runtime = get_zto_runtime()
+            return await self._fetch_token(
+                token_base_url=runtime.resolved_token_base_url,
+                auth_tenant=runtime.auth_tenant,
                 client_id=runtime.client_id,
                 client_secret=runtime.client_secret,
             )

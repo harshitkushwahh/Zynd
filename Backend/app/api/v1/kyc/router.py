@@ -112,9 +112,13 @@ from app.infrastructure.persistence.models import KycOverallStatus, User
 
 from app.api.v1.kyc.kyc_http_helpers import handle_kyc_error as _handle_kyc_error
 from app.api.v1.kyc.settings_router import router as kyc_settings_router
+from app.api.v1.kyc.zto_router import router as kyc_zto_router
+from app.api.v1.kyc.zto_schemas import ZtoBootstrapInfo
+from app.application.kyc.zto.phase import is_review_required, resolve_zto_phase
 
 router = APIRouter(prefix="/kyc", tags=["kyc"])
 router.include_router(kyc_settings_router)
+router.include_router(kyc_zto_router)
 
 
 @router.post("/token/ensure")
@@ -168,6 +172,7 @@ async def get_kyc_journey_bootstrap(
             definition_key=KYC_NOMINATION_OPT_OUT,
         )
     step_statuses = payload.get("stepStatuses")
+    zto_phase = await resolve_zto_phase(db, current_user.id)
     return KycBootstrapResponse(
         eligible=eligibility["eligible"],
         reasons=eligibility["reasons"],
@@ -210,6 +215,7 @@ async def get_kyc_journey_bootstrap(
         poa_kyc_form_id=payload.get("poaKycFormId"),
         proof_fetch_url=payload.get("proofFetchUrl"),
         requires_poa_proof_fetch=bool(payload.get("requiresPoaProofFetch")),
+        zero_touch=ZtoBootstrapInfo(phase=zto_phase.value, review_required=is_review_required(zto_phase)),
     )
 
 

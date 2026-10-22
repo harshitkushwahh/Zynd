@@ -107,9 +107,9 @@ function AmountSectionContent({ block }: { block: AmountBlock }) {
 
 function SectionIcon({ children }: { children: ReactNode }) {
   return (
-    <div className="sip-icon-badge flex size-9 shrink-0 items-center justify-center rounded-full">
+    <span className="flex size-9 shrink-0 items-center justify-center text-foreground [&>svg]:size-4">
       {children}
-    </div>
+    </span>
   );
 }
 
@@ -166,7 +166,7 @@ function buildInvestmentDetailSections(details: InvestInvestmentDetails): Detail
       summary: amountBlockSummary(details.lumpsum!),
       icon: (
         <SectionIcon>
-          <IndianRupee className="size-4" strokeWidth={2.25} />
+          <IndianRupee strokeWidth={2.25} aria-hidden />
         </SectionIcon>
       ),
       content: <AmountSectionContent block={details.lumpsum!} />,
@@ -180,7 +180,7 @@ function buildInvestmentDetailSections(details: InvestInvestmentDetails): Detail
       summary: amountBlockSummary(details.additional!),
       icon: (
         <SectionIcon>
-          <CirclePlus className="size-4" strokeWidth={2.25} />
+          <CirclePlus strokeWidth={2.25} aria-hidden />
         </SectionIcon>
       ),
       content: <AmountSectionContent block={details.additional!} />,
@@ -211,7 +211,7 @@ function buildInvestmentDetailSections(details: InvestInvestmentDetails): Detail
         .join(" · "),
       icon: (
         <SectionIcon>
-          <ArrowDownToLine className="size-4" strokeWidth={2.25} />
+          <ArrowDownToLine strokeWidth={2.25} aria-hidden />
         </SectionIcon>
       ),
       content: (
@@ -250,7 +250,7 @@ function buildInvestmentDetailSections(details: InvestInvestmentDetails): Detail
           : `${details.sip_options.length} frequencies`,
       icon: (
         <SectionIcon>
-          <CalendarClock className="size-4" strokeWidth={2.25} />
+          <CalendarClock strokeWidth={2.25} aria-hidden />
         </SectionIcon>
       ),
       content: (
@@ -293,7 +293,7 @@ function buildInvestmentDetailSections(details: InvestInvestmentDetails): Detail
       summary: details.transaction_types.map(transactionLabel).join(", "),
       icon: (
         <SectionIcon>
-          <Layers className="size-4" strokeWidth={2.25} />
+          <Layers strokeWidth={2.25} aria-hidden />
         </SectionIcon>
       ),
       content: (
@@ -333,9 +333,9 @@ export function MfInvestmentDetailsCard({ details }: MfInvestmentDetailsCardProp
     <Card className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
       <CardHeader className="border-b border-border/60 bg-muted/10">
         <div className="flex items-start gap-3">
-          <div className="sip-icon-badge mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full">
-            <ClipboardList className="size-4" strokeWidth={2.25} />
-          </div>
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center text-foreground">
+            <ClipboardList className="size-4" strokeWidth={2.25} aria-hidden />
+          </span>
           <div className="min-w-0">
             <CardTitle>{copy.mutualFunds.investmentDetailsTitle}</CardTitle>
             <CardDescription>{copy.mutualFunds.investmentDetailsDescription}</CardDescription>

@@ -64,6 +64,8 @@ function panFailureMessage(failure: KycPanFailure) {
 type KycPanStepProps = {
   disabled?: boolean;
   initialDraft?: KycPanDraft | null;
+  /** Zero-touch approved values — one-time input seed only (never verified, never persisted). */
+  zeroTouchPrefill?: KycPanDraft | null;
   initiallyVerified?: boolean;
   initialKycAlreadyRegistered?: boolean | null;
   initialReadinessCode?: string | null;
@@ -82,6 +84,7 @@ type KycPanStepProps = {
 export function KycPanStep({
   disabled,
   initialDraft,
+  zeroTouchPrefill = null,
   initiallyVerified = false,
   initialKycAlreadyRegistered = null,
   initialReadinessCode = null,
@@ -119,6 +122,22 @@ export function KycPanStep({
     initialKycAlreadyRegistered,
   );
   const panReentryAllowedRef = useRef(!panResetRequiresConfirm);
+  const zeroTouchSeededRef = useRef(false);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- async one-time seed from approved ZTO snapshot */
+  useEffect(() => {
+    if (!zeroTouchPrefill || zeroTouchSeededRef.current) return;
+    zeroTouchSeededRef.current = true;
+    // Seed only untouched inputs; never override a saved draft or something the user already typed.
+    if (initialDraft?.panNumber || panNumber || firstName || lastName || dateOfBirth) return;
+    setPanNumber(zeroTouchPrefill.panNumber ?? "");
+    setFirstName(zeroTouchPrefill.firstName ?? "");
+    setMiddleName(zeroTouchPrefill.middleName ?? "");
+    setLastName(zeroTouchPrefill.lastName ?? "");
+    setDateOfBirth(zeroTouchPrefill.dateOfBirth ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zeroTouchPrefill]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     panReentryAllowedRef.current = !panResetRequiresConfirm;

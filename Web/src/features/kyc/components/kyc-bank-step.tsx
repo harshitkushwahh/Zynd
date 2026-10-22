@@ -38,6 +38,8 @@ import { cn } from "@/lib/utils";
 
 type KycBankStepProps = {
   initialValue?: KycBankFormValue;
+  /** Zero-touch approved values — one-time input seed only (never verified, never persisted). */
+  zeroTouchPrefill?: KycBankFormValue | null;
   initialAccountDetails?: KycBankAccountDetails | null;
   initialVerification?: KycBankVerificationResult | null;
   initialProofUploaded?: boolean;
@@ -47,6 +49,7 @@ type KycBankStepProps = {
 
 export function KycBankStep({
   initialValue,
+  zeroTouchPrefill = null,
   initialAccountDetails,
   initialVerification,
   initialProofUploaded = false,
@@ -77,6 +80,7 @@ export function KycBankStep({
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUploaded, setProofUploaded] = useState(initialProofUploaded);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const zeroTouchSeededRef = useRef(false);
   const [accountEntryActive, setAccountEntryActive] = useState(
     () => !bankAccountNumberOnFile(initialValue ?? createEmptyBankForm()),
   );
@@ -196,6 +200,33 @@ export function KycBankStep({
 
   const initialIfscRef = useRef(form.ifscCode);
   const didBootstrapIfscRef = useRef(false);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- one-time seed from approved ZTO snapshot */
+  useEffect(() => {
+    if (!zeroTouchPrefill || zeroTouchSeededRef.current) return;
+    zeroTouchSeededRef.current = true;
+    const baseline = initialValue ?? createEmptyBankForm();
+    if (
+      baseline.accountNumber.trim() ||
+      baseline.ifscCode.trim() ||
+      bankAccountNumberOnFile(baseline)
+    ) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      accountNumber: zeroTouchPrefill.accountNumber || current.accountNumber,
+      ifscCode: zeroTouchPrefill.ifscCode || current.ifscCode,
+    }));
+    if (zeroTouchPrefill.ifscCode.trim()) {
+      setAccountEntryActive(true);
+      const code = normalizeIfscCode(zeroTouchPrefill.ifscCode);
+      if (IFSC_PATTERN.test(code)) {
+        void applyIfscLookup(code);
+      }
+    }
+  }, [zeroTouchPrefill, initialValue]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (didBootstrapIfscRef.current) {

@@ -6,19 +6,29 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type KycInfoCalloutProps = {
-  title: string;
+  title?: string;
   description: ReactNode;
   className?: string;
+  /** Icon + one line of text (no title stack). */
+  layout?: "default" | "inline";
   /** Optional control aligned inside the callout (e.g. DigiLocker retry). */
   action?: ReactNode;
 };
 
-export function KycInfoCallout({ title, description, className, action }: KycInfoCalloutProps) {
+export function KycInfoCallout({
+  title,
+  description,
+  className,
+  layout = "default",
+  action,
+}: KycInfoCalloutProps) {
+  const inline = layout === "inline";
   return (
     <div
       role="status"
       className={cn(
-        "flex items-start gap-3 rounded-[var(--radius-card)] border border-info/25 bg-gradient-to-br from-info/[0.07] via-card to-muted/15 px-4 py-3.5 shadow-zynd-low",
+        "flex gap-3 rounded-[var(--radius-card)] border border-info/25 bg-gradient-to-br from-info/[0.07] via-card to-muted/15 px-4 shadow-zynd-low",
+        inline ? "items-center py-3" : "items-start py-3.5",
         className,
       )}
     >
@@ -26,8 +36,16 @@ export function KycInfoCallout({ title, description, className, action }: KycInf
         <Info className="size-4" strokeWidth={2.25} aria-hidden />
       </div>
       <div className="min-w-0 flex-1 text-left leading-tight">
-        <p className="text-caption font-semibold tracking-tight text-foreground">{title}</p>
-        <div className="mt-1 space-y-1.5 text-[11px] leading-snug text-muted-foreground">
+        {title && !inline ? (
+          <p className="text-caption font-semibold tracking-tight text-foreground">{title}</p>
+        ) : null}
+        <div
+          className={cn(
+            inline
+              ? "text-compact leading-snug text-foreground"
+              : "mt-1 space-y-1.5 text-[11px] leading-snug text-muted-foreground",
+          )}
+        >
           {description}
         </div>
       </div>

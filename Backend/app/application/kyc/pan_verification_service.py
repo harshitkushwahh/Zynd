@@ -19,6 +19,7 @@ from app.application.investor.investor_identity_uniqueness_service import (
     assert_pan_not_used_by_other_user,
 )
 from app.application.kyc.journey_state_service import get_or_create_journey, save_journey_state
+from app.application.kyc.kyc_form_service import clear_poa_kyc_form_if_verified_pan_changed
 from app.application.kyc.kyc_notification_service import notify_kyc_initiated
 from app.application.kyc.master_data import TERMINAL_READINESS_CODES
 from app.infrastructure.kyc.date_utils import normalize_kyc_date_of_birth
@@ -193,6 +194,7 @@ async def verify_pan(
     }
 
     journey = await get_or_create_journey(db, user.id)
+    await clear_poa_kyc_form_if_verified_pan_changed(db, journey, new_pan=pan)
     same_pan, same_inputs = _same_pan_inputs(journey, pan=pan, full_name=name, dob=dob)
 
     try:
@@ -300,6 +302,7 @@ async def verify_pan(
     )
 
     journey = await get_or_create_journey(db, user.id)
+    await sync_user_name_from_verified_kyc(db, user=user, journey=journey)
 
     return {
         "success": True,

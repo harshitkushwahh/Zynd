@@ -27,6 +27,7 @@ import {
   addressMatchesPincode,
   applyPincodeToAddress,
 } from "@/features/kyc/lib/kyc-pincode";
+import { permanentAddressIsEmpty } from "@/features/kyc/lib/zto-prefill";
 import { ApiError } from "@/lib/api-client";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,8 @@ type AddressTab = "permanent" | "correspondence";
 
 type KycAddressStepProps = {
   initialValue?: KycAddressFormValue;
+  /** Approved ZTO snapshot — seeds empty address fields and runs pincode lookup for city/state. */
+  zeroTouchPrefill?: KycAddressFormValue | null;
   stateOptions?: string[];
   prefilledFromDigilocker?: boolean;
   digilockerFieldsLocked?: boolean;
@@ -200,6 +203,7 @@ function AddressFieldsForm({
 
 export function KycAddressStep({
   initialValue,
+  zeroTouchPrefill = null,
   stateOptions = [...INDIAN_STATES],
   prefilledFromDigilocker = false,
   digilockerFieldsLocked = false,
@@ -223,6 +227,7 @@ export function KycAddressStep({
     correspondence: string;
   }>({ permanent: "", correspondence: "" });
   const pincodeEnrichedRef = useRef<{ permanent?: string; correspondence?: string }>({});
+  const zeroTouchSeededRef = useRef(false);
   const lookupRequestRef = useRef(0);
   const formRef = useRef(form);
   formRef.current = form;
@@ -283,7 +288,7 @@ export function KycAddressStep({
       if (hadMismatch && (match.expectedCity || match.expectedState)) {
         setPincodeNotice((notices) => ({
           ...notices,
-          [type]: copy.kyc.address.pincodeMismatchDescription(
+          [type]: copy.kyc.address.pincodeMismatchMessage(
             nextAddress.city || match.expectedCity,
             nextAddress.state || match.expectedState,
           ),
@@ -309,6 +314,38 @@ export function KycAddressStep({
       return "failed" as const;
     }
   };
+
+  /* eslint-disable react-hooks/set-state-in-effect -- one-time seed from approved ZTO snapshot */
+  useEffect(() => {
+    if (!zeroTouchPrefill || zeroTouchSeededRef.current) return;
+    zeroTouchSeededRef.current = true;
+    const baseline = initialValue ?? createEmptyAddressForm();
+    if (!permanentAddressIsEmpty(baseline)) return;
+
+    const seededPermanent = {
+      ...zeroTouchPrefill.permanent,
+      state: resolveStateOption(zeroTouchPrefill.permanent.state, stateOptions),
+    };
+    const nextForm: KycAddressFormValue = {
+      ...baseline,
+      permanent: seededPermanent,
+      correspondence: zeroTouchPrefill.sameAsPermanent
+        ? { ...seededPermanent }
+        : {
+            ...zeroTouchPrefill.correspondence,
+            state: resolveStateOption(zeroTouchPrefill.correspondence.state, stateOptions),
+          },
+      sameAsPermanent: zeroTouchPrefill.sameAsPermanent,
+    };
+    formRef.current = nextForm;
+    setForm(nextForm);
+
+    const pincode = seededPermanent.pincode.trim();
+    if (pincode.length === 6 && pincodeEnrichedRef.current.permanent !== pincode) {
+      void applyPincodeLookup(pincode, "permanent");
+    }
+  }, [zeroTouchPrefill, initialValue, stateOptions]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     const pincode = initialValue?.permanent.pincode ?? "";
@@ -536,17 +573,7 @@ export function KycAddressStep({
       />
 
       {pincodeNotice[activeTab] ? (
-        <div
-          role="status"
-          className="rounded-[var(--radius-card)] border border-warning/25 bg-warning/[0.06] px-4 py-3"
-        >
-          <p className="text-caption font-semibold text-foreground">
-            {copy.kyc.address.pincodeMismatchTitle}
-          </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-            {pincodeNotice[activeTab]}
-          </p>
-        </div>
+        <KycInfoCallout layout="inline" description={pincodeNotice[activeTab]} />
       ) : null}
 
       {activeTab === "permanent" ? (

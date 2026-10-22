@@ -123,6 +123,7 @@ export function mapPortfolioHoldingDetail(
       ? {
           familyGroupId: holding.family_link.family_group_id,
           familyGroupTitle: holding.family_link.family_group_title,
+          familyGroupAvatarUrl: holding.family_link.family_group_avatar_url ?? null,
           goalId: holding.family_link.goal_id ?? null,
           goalTitle: holding.family_link.goal_title ?? null,
         }
@@ -139,6 +140,8 @@ export function mapPortfolioHoldingDetail(
     redeemBankName: holding.redeem_bank_name,
     redeemBankIfsc: holding.redeem_bank_ifsc,
     nomineeName: holding.nominee_name,
+    nomineeSharePercent: holding.nominee_share_percent ?? null,
+    nomineeIsMinor: holding.nominee_is_minor ?? null,
     productId: holding.product_id ?? null,
     minSipAmountInr: holding.min_sip_amount_inr ?? null,
     minLumpsumAmountInr: holding.min_lumpsum_amount_inr ?? null,

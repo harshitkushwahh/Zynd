@@ -11,11 +11,11 @@ import { copy } from "@/shared/config/copy";
 function PortfolioPageTabsSkeleton() {
   return (
     <div
-      className="flex flex-wrap justify-end gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
+      className="inline-flex flex-wrap justify-end gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
       aria-hidden="true"
     >
       {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-9 w-[5.5rem] rounded-full" />
+        <Skeleton key={index} className="h-8 w-[4.75rem] rounded-full sm:h-9 sm:w-[5.25rem]" />
       ))}
     </div>
   );

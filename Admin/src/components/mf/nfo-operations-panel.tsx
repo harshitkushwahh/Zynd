@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock3, Play, RefreshCw, Settings2 } from "lucide-react";
 
+import { MfSchedulerJobActions } from "@/components/mf/mf-scheduler-job-actions";
 import { MfStatusChip, type MfStatusTone } from "@/components/mf/mf-status-chip";
 import { AdminFeedbackMessage } from "@/components/ui/admin-feedback-message";
 import { AdminMetricCard } from "@/components/ui/admin-metric-card";
@@ -33,6 +34,7 @@ import {
   type MfIngestionRun,
   type MfJob,
 } from "@/lib/mf-admin-api";
+import { describeMfRunJobResult, formatJobDependsOn } from "@/lib/mf-run-job-feedback";
 import { cn } from "@/lib/utils";
 
 const ALL_STATUSES = "all";
@@ -69,6 +71,7 @@ export function NfoOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [messageVariant, setMessageVariant] = useState<"success" | "warning">("success");
   const [activeView, setActiveView] = useState<OperationsView>("jobs");
   const [listSearch, setListSearch] = useState("");
   const [runStatusFilter, setRunStatusFilter] = useState(ALL_STATUSES);
@@ -163,14 +166,16 @@ export function NfoOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
     return status === "failed" || status === "partial";
   }).length;
 
-  const handleRunJob = async (jobName: string) => {
+  const handleRunJob = async (jobName: string, force: boolean) => {
     if (!canRunJobs) return;
-    setActionLoading(jobName);
+    setActionLoading(`${jobName}:${force ? "force" : "normal"}`);
     setMessage("");
     setError("");
     try {
-      const result = await runNfoJob(jobName);
-      setMessage(`Job ${result.job} triggered.`);
+      const result = await runNfoJob(jobName, force);
+      const feedback = describeMfRunJobResult(result, { forced: force });
+      setMessageVariant(feedback.variant);
+      setMessage(feedback.message);
       await loadData();
     } catch (err) {
       setError(getErrorMessage(err, "Could not run NFO job."));
@@ -187,7 +192,7 @@ export function NfoOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
         </AdminFeedbackMessage>
       ) : null}
       {message ? (
-        <AdminFeedbackMessage variant="success" onDismiss={() => setMessage("")}>
+        <AdminFeedbackMessage variant={messageVariant} onDismiss={() => setMessage("")}>
           {message}
         </AdminFeedbackMessage>
       ) : null}
@@ -288,6 +293,7 @@ export function NfoOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
                 <AdminTableHeadCell className="w-14 text-right">#</AdminTableHeadCell>
                 {canRunJobs ? <AdminTableHeadCell className="text-right">Actions</AdminTableHeadCell> : null}
                 <AdminTableHeadCell>Job</AdminTableHeadCell>
+                <AdminTableHeadCell>Scheduler</AdminTableHeadCell>
                 <AdminTableHeadCell>Schedule</AdminTableHeadCell>
                 <AdminTableHeadCell>Last run</AdminTableHeadCell>
                 <AdminTableHeadCell className="text-right">Processed</AdminTableHeadCell>
@@ -295,9 +301,9 @@ export function NfoOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
             </AdminTableHeader>
             <AdminTableBody>
               {loading ? (
-                <AdminTableSkeletonRows columns={canRunJobs ? 6 : 5} />
+                <AdminTableSkeletonRows columns={canRunJobs ? 7 : 6} />
               ) : jobPagination.items.length === 0 ? (
-                <AdminTableStateRow colSpan={canRunJobs ? 6 : 5}>No jobs match your search.</AdminTableStateRow>
+                <AdminTableStateRow colSpan={canRunJobs ? 7 : 6}>No jobs match your search.</AdminTableStateRow>
               ) : (
                 jobPagination.items.map((job) => (
                   <AdminTableRow key={job.name}>
@@ -306,19 +312,29 @@ export function NfoOperationsPanel({ canRunJobs }: { canRunJobs: boolean }) {
                     </AdminTableCell>
                     {canRunJobs ? (
                       <AdminTableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={actionLoading === job.name}
-                          onClick={() => void handleRunJob(job.name)}
-                        >
-                          {actionLoading === job.name ? "Running…" : "Run now"}
-                        </Button>
+                        <MfSchedulerJobActions
+                          jobName={job.name}
+                          enabled={job.enabled}
+                          actionKey={actionLoading}
+                          onRun={(name, force) => void handleRunJob(name, force)}
+                        />
                       </AdminTableCell>
                     ) : null}
                     <AdminTableCell>
                       <p className="max-w-md font-medium text-foreground">{job.description}</p>
                       <p className="mt-0.5 font-mono text-caption text-muted-foreground">{job.name}</p>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <div className="space-y-1.5">
+                        <MfStatusChip
+                          label={job.enabled ? "Enabled" : "Disabled"}
+                          tone={job.enabled ? "success" : "neutral"}
+                          showIcon={false}
+                        />
+                        <p className="max-w-[14rem] text-caption text-muted-foreground">
+                          Depends on: {formatJobDependsOn(job.depends_on)}
+                        </p>
+                      </div>
                     </AdminTableCell>
                     <AdminTableCell>
                       <code className="rounded-[var(--radius-control)] bg-muted/40 px-2 py-0.5 font-mono text-caption">

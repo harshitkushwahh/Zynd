@@ -60,7 +60,13 @@ export async function signupVerifyMobile(signupToken: string, otp: string) {
 
 export async function signupComplete(
   signupToken: string,
-  profile: { firstName: string; middleName?: string; lastName: string }
+  profile: {
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    ztoBankConsent?: boolean;
+    ztoCustomerConsent?: boolean;
+  }
 ) {
   const data = await apiRequest<AuthSuccessResponse>("/auth/signup/complete", {
     method: "POST",
@@ -70,6 +76,8 @@ export async function signupComplete(
       middle_name: profile.middleName || null,
       last_name: profile.lastName,
       device_fingerprint: getDeviceFingerprint(),
+      zto_bank_consent: Boolean(profile.ztoBankConsent),
+      zto_customer_consent: Boolean(profile.ztoCustomerConsent),
     }),
   });
   return storeAuthResponse(data);

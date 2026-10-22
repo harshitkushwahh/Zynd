@@ -18,6 +18,7 @@ import {
 } from "@/features/dashboard/overview/lib/overview-portfolio-flow-series";
 
 type OverviewPortfolioFlowRechartsProps = {
+  rangeKey?: string;
   points: OverviewPortfolioFlowPoint[];
   valueGradientId: string;
   tone: PortfolioFlowChartTone;
@@ -32,6 +33,7 @@ type OverviewPortfolioFlowRechartsProps = {
 };
 
 export function OverviewPortfolioFlowRecharts({
+  rangeKey = "default",
   points,
   valueGradientId,
   tone,
@@ -49,6 +51,7 @@ export function OverviewPortfolioFlowRecharts({
   return (
     <RechartsMeasuredContainer className="h-full w-full" width="100%" height={chartHeight} minWidth={0}>
       <AreaChart
+        key={rangeKey}
         data={points}
         margin={{
           top: chartEdgeInset,

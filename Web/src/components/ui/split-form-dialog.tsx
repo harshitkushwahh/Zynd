@@ -34,6 +34,10 @@ type SplitFormDialogProps = {
   contentClassName?: string;
   /** Vertically center children in the space below the right header. */
   centerContent?: boolean;
+  /** When false, hides the panel close control (e.g. required decision flows). */
+  showCloseButton?: boolean;
+  /** When false, backdrop/Escape cannot dismiss the dialog. */
+  dismissible?: boolean;
 };
 
 export function SplitFormDialog({
@@ -52,9 +56,16 @@ export function SplitFormDialog({
   gridClassName,
   contentClassName,
   centerContent = false,
+  showCloseButton = true,
+  dismissible = true,
 }: SplitFormDialogProps) {
+  const handleOpenChange = (next: boolean) => {
+    if (!dismissible && !next) return;
+    onOpenChange(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
         className={cn(
@@ -117,22 +128,25 @@ export function SplitFormDialog({
           </aside>
 
           <div className="relative z-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-popover">
-            <DialogClose
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="absolute top-4 right-4 z-10 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="Close"
-                />
-              }
-            >
-              <XIcon className="size-4" strokeWidth={2} />
-            </DialogClose>
+            {showCloseButton ? (
+              <DialogClose
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="absolute top-4 right-4 z-10 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Close"
+                  />
+                }
+              >
+                <XIcon className="size-4" strokeWidth={2} />
+              </DialogClose>
+            ) : null}
 
             <div
               className={cn(
-                "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-6 pt-14 pb-2 sm:px-7",
+                "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-6 pb-2 sm:px-7",
+                showCloseButton ? "pt-14" : "pt-6",
                 contentClassName,
               )}
             >

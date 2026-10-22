@@ -1,5 +1,6 @@
 import { apiRequest, getAccessToken } from "@/lib/api-client";
 import { env } from "@/lib/env";
+import type { ZtoBootstrapInfo } from "@/features/kyc/lib/zto-types";
 
 export type KycEligibilityReason =
   | "account_inactive"
@@ -78,6 +79,7 @@ export type KycBootstrapResponse = {
   poa_kyc_form_id?: string | null;
   proof_fetch_url?: string | null;
   requires_poa_proof_fetch?: boolean | null;
+  zero_touch?: ZtoBootstrapInfo | null;
 };
 
 export type KycFlowMode = "repeat_kra" | "fresh_kyc" | "kra_update";

@@ -129,10 +129,12 @@ export function MfCompareFundsNavChart({
   );
 
   useEffect(() => {
-    if (effectiveRange !== range) {
-      onRangeChange(effectiveRange);
+    if (series.length === 0) return;
+    const resolved = resolveNavRangeForCompareHistory(series, range);
+    if (resolved !== range) {
+      onRangeChange(resolved);
     }
-  }, [effectiveRange, onRangeChange, range]);
+  }, [series, range, onRangeChange]);
 
   const chartRows = useMemo(
     () => buildCompareNavChartRows(series, effectiveRange),
@@ -145,7 +147,7 @@ export function MfCompareFundsNavChart({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <MfNavRangeTabs
-          value={effectiveRange}
+          value={range}
           onChange={onRangeChange}
           isRangeAvailable={(nextRange) => hasSufficientNavHistoryForCompareRange(series, nextRange)}
           ariaLabel={copy.mutualFunds.compareChartTitle}

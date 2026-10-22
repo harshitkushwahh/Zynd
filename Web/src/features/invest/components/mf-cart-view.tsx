@@ -67,12 +67,15 @@ import {
   MF_INVEST_PAYMENT_CARD_CLASS,
   MF_PAGE_SECTION_CLASS,
 } from "@/features/invest/lib/mf-ui";
-import { TabPanel } from "@/shared/ui/tab-panel";
+import {
+  MfCartTabToggle,
+  type MfCartTab,
+} from "@/features/invest/components/mf-cart-tab-toggle";
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-type CartTab = "lumpsum" | "monthly" | "daily";
+type CartTab = MfCartTab;
 
 function isSipCartTab(tab: CartTab) {
   return tab === "monthly" || tab === "daily";
@@ -87,65 +90,15 @@ function CartTabPanel({
   children: React.ReactNode;
 }) {
   return (
-    <TabPanel active={active} className="col-start-1 row-start-1 min-w-0">
-      {children}
-    </TabPanel>
-  );
-}
-function CartTabToggle({
-  tab,
-  onChange,
-  lumpsumCount,
-  monthlyCount,
-  dailyCount,
-}: {
-  tab: CartTab;
-  onChange: (tab: CartTab) => void;
-  lumpsumCount: number;
-  monthlyCount: number;
-  dailyCount: number;
-}) {
-  const options = [
-    { id: "lumpsum" as const, label: copy.mutualFunds.paymentCardOneTime, count: lumpsumCount },
-    { id: "monthly" as const, label: copy.mutualFunds.paymentCardSipFrequencyMonthly, count: monthlyCount },
-    { id: "daily" as const, label: copy.mutualFunds.paymentCardSipFrequencyDaily, count: dailyCount },
-  ];
-
-  return (
     <div
-      role="tablist"
-      aria-label={copy.mutualFunds.cartTitle}
-      className="grid max-w-xl grid-cols-3 gap-1 rounded-full border border-border/80 bg-muted/20 p-1"
+      role="tabpanel"
+      aria-hidden={!active}
+      className={cn(
+        "col-start-1 row-start-1 min-w-0 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+        active ? "relative z-[1] opacity-100" : "pointer-events-none z-0 opacity-0",
+      )}
     >
-      {options.map((option) => {
-        const isActive = tab === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(option.id)}
-            className={cn(
-              "inline-flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-compact font-medium",
-              "transition-[color,background-color,box-shadow,opacity] duration-200 ease-out motion-reduce:transition-none",
-              isActive
-                ? "bg-foreground text-background shadow-zynd-low"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <span>{option.label}</span>
-            <span
-              className={cn(
-                "flex min-h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-                isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground",
-              )}
-            >
-              {option.count > 9 ? "9+" : option.count}
-            </span>
-          </button>
-        );
-      })}
+      {children}
     </div>
   );
 }
@@ -488,7 +441,7 @@ function CartCheckoutPanel({
           <div
             className={cn(
               "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
-              tab === "lumpsum" ? "opacity-100" : "pointer-events-none invisible opacity-0",
+              tab === "lumpsum" ? "relative z-[1] opacity-100" : "pointer-events-none z-0 opacity-0",
             )}
           >
             <MfPaymentMethodPicker
@@ -500,7 +453,7 @@ function CartCheckoutPanel({
           <div
             className={cn(
               "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none",
-              isSipCartTab(tab) ? "opacity-100" : "pointer-events-none invisible opacity-0",
+              isSipCartTab(tab) ? "relative z-[1] opacity-100" : "pointer-events-none z-0 opacity-0",
             )}
           >
             <MfMandateTypePicker
@@ -733,7 +686,7 @@ export function MfCartView() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CartTabToggle
+        <MfCartTabToggle
           tab={tab}
           onChange={setTab}
           lumpsumCount={lumpsumCount}
@@ -834,7 +787,7 @@ export function MfCartView() {
             onSelectFamilyLink={setFamilyLink}
             className={cn(
               "transition-opacity duration-200 ease-out motion-reduce:transition-none",
-              tab === "lumpsum" ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+              tab === "lumpsum" ? "relative z-10 opacity-100" : "pointer-events-none z-0 opacity-0",
             )}
           />
           <CartCheckoutPanel
@@ -859,7 +812,7 @@ export function MfCartView() {
             onSelectFamilyLink={setFamilyLink}
             className={cn(
               "transition-opacity duration-200 ease-out motion-reduce:transition-none",
-              isSipCartTab(tab) ? "relative z-10 opacity-100" : "pointer-events-none invisible opacity-0",
+              isSipCartTab(tab) ? "relative z-10 opacity-100" : "pointer-events-none z-0 opacity-0",
             )}
           />
         </div>
