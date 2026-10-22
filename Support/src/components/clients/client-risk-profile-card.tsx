@@ -56,7 +56,7 @@ export function ClientRiskProfileCard({
               : copy.riskProfile
           }
         >
-          {assessed ? (
+          {assessed && riskGauge && tierVisual ? (
             <>
               <div className="distributor-client-risk-sidebar-card__header">
                 <p className="distributor-client-risk-sidebar-card__title">{copy.riskProfile.toUpperCase()}</p>
@@ -77,19 +77,15 @@ export function ClientRiskProfileCard({
                 />
               </div>
               <div className="distributor-client-risk-sidebar-card__summary">
-                {riskGauge && tierVisual ? (
-                  <>
-                    <RiskProfileTierBadge tier={riskGauge.tier} uppercase />
-                    <p
-                      className={cn(
-                        "distributor-client-risk-sidebar-card__score tabular-nums",
-                        tierVisual.textClass,
-                      )}
-                    >
-                      {riskGauge.displayScore}/100
-                    </p>
-                  </>
-                ) : null}
+                <RiskProfileTierBadge tier={riskGauge.tier} uppercase />
+                <p
+                  className={cn(
+                    "distributor-client-risk-sidebar-card__score tabular-nums",
+                    tierVisual.textClass,
+                  )}
+                >
+                  {riskGauge.displayScore}/100
+                </p>
               </div>
             </>
           ) : (

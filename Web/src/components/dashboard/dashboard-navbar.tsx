@@ -25,7 +25,6 @@ import {
 import { useDashboardRoute } from "@/features/dashboard/navigation/use-dashboard-route";
 import { useMfCartCount } from "@/features/invest/hooks/use-mf-cart-count";
 import { useTheme } from "@/contexts/theme-context";
-import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 function NavIconButton({

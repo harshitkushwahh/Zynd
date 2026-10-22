@@ -311,10 +311,7 @@ function buildSparklines(tickets: SupportTicket[]): SupportOverviewMetricsBundle
   };
 }
 
-function buildMetricTrends(
-  tickets: SupportTicket[],
-  summary: ReturnType<typeof summarizeAgentTicketQueue>,
-): SupportOverviewMetricsBundle["metricTrends"] {
+function buildMetricTrends(tickets: SupportTicket[]): SupportOverviewMetricsBundle["metricTrends"] {
   const now = new Date();
   const thisWeekStart = startOfLocalDay(new Date(now));
   thisWeekStart.setDate(thisWeekStart.getDate() - 6);
@@ -353,7 +350,7 @@ export function buildSupportOverviewAnalytics(
     trends: buildWeeklyTrends(tickets),
     categories: buildCategorySegments(tickets),
     performance: buildPerformance(tickets),
-    metricTrends: buildMetricTrends(tickets, summary),
+    metricTrends: buildMetricTrends(tickets),
     sparklines: buildSparklines(tickets),
   };
 }
