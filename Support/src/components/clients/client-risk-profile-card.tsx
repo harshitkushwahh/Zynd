@@ -28,9 +28,12 @@ export function ClientRiskProfileCard({
   variant = "default",
 }: ClientRiskProfileCardProps) {
   const copy = DISTRIBUTOR_CLIENT_COPY.overview;
-  const riskGauge = resolveClientRiskGauge(profile);
-  const tierVisual = riskGauge ? resolveRiskTierVisual(riskGauge.tier) : null;
-  const assessed = hasAssessedRiskProfile(profile) && riskGauge != null;
+  const sidebarRisk = (() => {
+    const gauge = resolveClientRiskGauge(profile);
+    if (!gauge || !hasAssessedRiskProfile(profile)) return null;
+    return { gauge, tierVisual: resolveRiskTierVisual(gauge.tier) };
+  })();
+  const assessed = sidebarRisk != null;
   const reference = clientReference ?? profile.investor.clientCode;
   const tabNavigation = useClientDetailTabNavigation();
   const currentAssessment = useMemo(
@@ -51,12 +54,12 @@ export function ClientRiskProfileCard({
           disabled={!assessed}
           onClick={() => assessed && openRiskProfileTab()}
           aria-label={
-            assessed && tierVisual && riskGauge
-              ? `${tierVisual.label} risk profile, ${riskGauge.displayScore} out of 100. Open risk profile tab.`
+            sidebarRisk
+              ? `${sidebarRisk.tierVisual.label} risk profile, ${sidebarRisk.gauge.displayScore} out of 100. Open risk profile tab.`
               : copy.riskProfile
           }
         >
-          {assessed && riskGauge && tierVisual ? (
+          {sidebarRisk ? (
             <>
               <div className="distributor-client-risk-sidebar-card__header">
                 <p className="distributor-client-risk-sidebar-card__title">{copy.riskProfile.toUpperCase()}</p>
@@ -68,23 +71,23 @@ export function ClientRiskProfileCard({
               </div>
               <div className="distributor-client-risk-sidebar-card__gauge">
                 <RiskProfileGauge
-                  score={riskGauge.score}
-                  tier={riskGauge.tier}
-                  displayScore={riskGauge.displayScore}
+                  score={sidebarRisk.gauge.score}
+                  tier={sidebarRisk.gauge.tier}
+                  displayScore={sidebarRisk.gauge.displayScore}
                   size="compact"
                   showCaption={false}
                   showTierScale={false}
                 />
               </div>
               <div className="distributor-client-risk-sidebar-card__summary">
-                <RiskProfileTierBadge tier={riskGauge.tier} uppercase />
+                <RiskProfileTierBadge tier={sidebarRisk.gauge.tier} uppercase />
                 <p
                   className={cn(
                     "distributor-client-risk-sidebar-card__score tabular-nums",
-                    tierVisual.textClass,
+                    sidebarRisk.tierVisual.textClass,
                   )}
                 >
-                  {riskGauge.displayScore}/100
+                  {sidebarRisk.gauge.displayScore}/100
                 </p>
               </div>
             </>

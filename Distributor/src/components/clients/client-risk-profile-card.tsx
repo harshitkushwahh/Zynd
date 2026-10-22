@@ -56,7 +56,7 @@ export function ClientRiskProfileCard({
               : copy.riskProfile
           }
         >
-          {assessed && riskGauge && tierVisual ? (
+          {assessed ? (
             <>
               <div className="distributor-client-risk-sidebar-card__header">
                 <p className="distributor-client-risk-sidebar-card__title">{copy.riskProfile.toUpperCase()}</p>
