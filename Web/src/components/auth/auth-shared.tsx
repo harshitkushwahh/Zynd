@@ -32,15 +32,17 @@ export type SignupStepId = (typeof SIGNUP_STEPS)[number]["id"];
 
 export function AuthProgress({
   currentStep,
+  compact = false,
 }: {
   currentStep: SignupStepId | null;
+  compact?: boolean;
 }) {
   if (!currentStep) return null;
 
   const currentIndex = SIGNUP_STEPS.findIndex((s) => s.id === currentStep);
 
   return (
-    <div className="mb-6">
+    <div className={compact ? "mb-3" : "mb-6"}>
       <span className="inline-flex items-center rounded-[var(--radius-control)] border border-border bg-muted/50 px-2.5 py-1 text-caption font-medium text-muted-foreground">
         Step {currentIndex + 1} of {SIGNUP_STEPS.length}
       </span>
@@ -68,13 +70,20 @@ export function AuthProgress({
 export function AuthFormHeader({
   title,
   description,
+  compact = false,
 }: {
   title: string;
   description: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="mb-4">
-      <span className="relative mb-3 inline-flex size-12 overflow-hidden rounded-full bg-white ring-2 ring-neutral-300">
+    <div className={compact ? "mb-0" : "mb-4"}>
+      <span
+        className={cn(
+          "relative inline-flex overflow-hidden rounded-full bg-white ring-2 ring-neutral-300",
+          compact ? "mb-2 size-10" : "mb-3 size-12",
+        )}
+      >
         <Image
           src="/logo.png"
           alt={APP_NAME}
@@ -87,7 +96,12 @@ export function AuthFormHeader({
       <h2 className="text-[1.125rem] font-semibold leading-snug tracking-tight text-foreground sm:text-[1.1875rem]">
         {title}
       </h2>
-      <p className="mt-2 max-w-full text-caption leading-snug text-muted-foreground sm:text-compact">
+      <p
+        className={cn(
+          "max-w-full text-caption leading-snug text-muted-foreground sm:text-compact",
+          compact ? "mt-1" : "mt-2",
+        )}
+      >
         {description}
       </p>
     </div>
@@ -97,24 +111,31 @@ export function AuthFormHeader({
 export function EmailChip({
   email,
   onEdit,
+  verified = false,
 }: {
   email: string;
-  onEdit: () => void;
+  onEdit?: () => void;
+  /** Hide edit once email OTP is verified (password, mobile, and later steps). */
+  verified?: boolean;
 }) {
+  const showEdit = !verified && onEdit;
+
   return (
     <div className="mb-3 flex items-center gap-2.5 rounded-[var(--radius-card)] border border-border bg-muted/40 px-3 py-2 shadow-zynd-low">
       <div className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-primary/10 text-primary">
         <Mail className="size-3.5" />
       </div>
       <span className="min-w-0 flex-1 truncate text-caption text-foreground">{email}</span>
-      <button
-        type="button"
-        aria-label="Edit email"
-        onClick={onEdit}
-        className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <Pencil className="size-3" />
-      </button>
+      {showEdit ? (
+        <button
+          type="button"
+          aria-label="Edit email"
+          onClick={onEdit}
+          className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Pencil className="size-3" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -122,13 +143,20 @@ export function EmailChip({
 export function MobileChip({
   mobile,
   onEdit,
+  className,
 }: {
   mobile: string;
   onEdit: () => void;
+  className?: string;
 }) {
   const formatted = mobile.replace(/(\d{5})(\d{5})/, "$1 $2");
   return (
-    <div className="mb-3 flex items-center gap-2.5 rounded-[var(--radius-card)] border border-border bg-muted/40 px-3 py-2 shadow-zynd-low">
+    <div
+      className={cn(
+        "mb-3 flex items-center gap-2.5 rounded-[var(--radius-card)] border border-border bg-muted/40 px-3 py-2 shadow-zynd-low",
+        className,
+      )}
+    >
       <div className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-muted/60">
         <IndiaFlagIcon className="size-4 border-0 shadow-none" />
       </div>
@@ -394,7 +422,7 @@ export function ProfileNameHeader({
 
 export function stepPanelClass(active: boolean) {
   if (!active) return "hidden";
-  return "flex flex-col animate-in fade-in duration-300";
+  return "flex w-full flex-col animate-in fade-in duration-300";
 }
 
 export const profileInputClass =

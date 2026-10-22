@@ -43,7 +43,9 @@ Polling remains a fallback when the WebSocket is disconnected.
 
 - `SUPPORT_REALTIME_ENABLED` (default `true`)
 - `SUPPORT_WEBHOOK_SECRET`, `SUPPORT_WEBHOOK_URLS`
-- **Web / Support frontends:** `NEXT_PUBLIC_BACKEND_WS_ORIGIN=ws://127.0.0.1:8000` in `.env.local` when `NEXT_PUBLIC_API_URL` is `/api/v1` (Next HTTP proxy). Browsers open WS on port **8000**, not the Next dev server.
+- **Web / Support frontends:** When `NEXT_PUBLIC_API_URL` is `/api/v1` (same-origin Next proxy), long-lived connections must bypass Vercel/Next:
+  - **WebSocket (support):** `NEXT_PUBLIC_BACKEND_WS_ORIGIN=ws://127.0.0.1:8000` in `.env.local` (dev) or `wss://api.zynd.shop` on Vercel production.
+  - **SSE (notifications):** uses the same direct origin (`NEXT_PUBLIC_BACKEND_WS_ORIGIN` → `https://…`, or set `NEXT_PUBLIC_BACKEND_HTTP_ORIGIN=https://api.zynd.shop`). Do **not** open `/notifications/stream` through `/api/v1` on Vercel — the serverless proxy hits a **300s** runtime timeout.
 
 ## Presence
 

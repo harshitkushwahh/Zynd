@@ -1468,7 +1468,7 @@ export const copy = {
       allocationTitle: "Asset allocation",
       holdingInvestedFor: "Invested for {months} months",
       holdingFolioLabel: "Folio",
-      holdingLinkFamily: "Link to family",
+      holdingLinkFamily: "Link family",
       holdingLinkedFamily: "Linked to family",
       holdingFamilyLinkChange: "Change",
       holdingFamilyLinkRemove: "Remove",
@@ -1478,6 +1478,8 @@ export const copy = {
       holdingRedeemTo: "Redeem to:",
       holdingNominee: "Nominee:",
       holdingNomineeEmpty: "No nominee added",
+      holdingNomineeAdult: "Adult",
+      holdingNomineeMinor: "Minor",
       holdingModePhysical: "Physical",
       holdingModeDemat: "Demat",
       holdingModePhysicalTooltip:
@@ -2505,7 +2507,7 @@ export const copy = {
         {
           id: "family_goals",
           title: "Family linking",
-          body: "Optionally link this investment to one family portfolio, and to one shared goal if the family has one. Leaving it unlinked keeps the fund in your personal portfolio only. This is separate from legal KYC nominees and does not change folio registration.",
+          body: "Optionally link this investment to a family—it always shows in that family’s portfolio. You can also count it toward one shared goal. Leaving it unlinked keeps the fund in your personal portfolio only. This is separate from legal KYC nominees and does not change folio registration.",
         },
       ],
     },
@@ -2920,15 +2922,17 @@ export const copy = {
     linkableFamilyGoalsBrowseGroups: "Go to family groups",
     familyLinkDialogTitle: "Link this fund to a family",
     familyLinkDialogDescription:
-      "The fund’s current value will show in that family’s portfolio. Your personal portfolio stays the same. One fund can belong to one family.",
+      "Shows in the family portfolio only your personal total stays the same. One fund per family; members see the scheme and value.",
     familyLinkPortfolioOnly: "Family portfolio only",
-    familyLinkNoGoals: "This family has no goal. The fund will show in the shared portfolio.",
+    familyLinkPortfolioShort: "Portfolio",
+    familyLinkGoalOptionalHint: "Optional: also count toward a goal",
+    familyLinkPortfolioIncludedHint: "Always included in the family portfolio",
+    familyLinkHasGoalsHint: "This family has goals you can link to",
     familyLinkEntireFolio: "This links the entire folio, including units you already hold.",
     familyLinkMoveWarning: "This fund is already linked to another family. Saving will move it.",
-    familyLinkConfirm: "Link fund",
+    familyLinkConfirm: "Link family",
     familyLinkSaving: "Saving…",
     familyLinkFailed: "Unable to update the family link.",
-    familyLinkVisibility: "Family members will see this scheme and its value.",
     linkableFamilyGoalsProgress: (pct: number) => `${pct.toFixed(0)}% funded`,
   },
   authSteps: {
@@ -2971,6 +2975,51 @@ export const copy = {
     forgotPassword: {
       title: "Reset your password",
       description: "We will send a reset link to your registered email.",
+    },
+  },
+  zto: {
+    signup: {
+      heading: "Smart onboarding (optional)",
+      description:
+        "Allow us to look up your details to save you typing. You can review and edit everything before it is used.",
+      bankConsent: "I allow {partner} to fetch my bank account details using my phone number via Cybrilla and its partners.",
+      customerConsent:
+        "I allow {partner} to fetch my demographic details using my phone number and name from the credit bureau via Cybrilla and its partners.",
+      pairRequired: "Select both options to use smart onboarding, or leave both unchecked.",
+    },
+    optIn: {
+      title: "Speed up KYC with smart onboarding",
+      description:
+        "You can allow us to look up your bank and demographic details using your verified mobile number. You will review and edit everything before it is used.",
+      continue: "Look up my details",
+      skip: "Continue without lookup",
+      submitting: "Starting…",
+      failed: "Could not start lookup. Try again or continue with manual KYC.",
+    },
+    review: {
+      title: "Review your details",
+      description:
+        "We found these details using your mobile number. They may not be accurate, so please check and edit anything before you accept.",
+      illustrationAlt: "Review your fetched details",
+      nameLabel: "Full name",
+      panLabel: "PAN",
+      dobLabel: "Date of birth",
+      bankAccountLabel: "Bank account number",
+      ifscLabel: "IFSC code",
+      addressLabel: "Address",
+      addressHint: "Verified address is still collected through DigiLocker.",
+      dobPlaceholder: "YYYY-MM-DD",
+      accept: "Accept & continue",
+      decline: "Decline",
+      accepting: "Saving…",
+      declining: "Declining…",
+      footnote:
+        "Accepting only pre-fills the KYC form. Nothing is verified until you complete each verification step.",
+      invalidPan: "Enter a valid PAN (e.g. ABCDE1234F).",
+      invalidIfsc: "Enter a valid IFSC code.",
+      invalidDob: "Enter a valid date of birth (YYYY-MM-DD).",
+      invalidBankAccount: "Enter a valid bank account number.",
+      saveFailed: "Could not save your response. Please try again.",
     },
   },
   riskProfile: {

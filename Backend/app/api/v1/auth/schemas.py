@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class CheckEmailRequest(BaseModel):
@@ -66,6 +66,14 @@ class SignupCompleteRequest(BaseModel):
     last_name: str = Field(min_length=2, max_length=50)
     middle_name: Optional[str] = Field(default=None, max_length=50)
     device_fingerprint: str = Field(min_length=8, max_length=256)
+    zto_bank_consent: bool = False
+    zto_customer_consent: bool = False
+
+    @model_validator(mode="after")
+    def _zto_consents_all_or_nothing(self) -> "SignupCompleteRequest":
+        if self.zto_bank_consent != self.zto_customer_consent:
+            raise ValueError("Accept both lookup consents or neither.")
+        return self
 
 
 class LoginRequest(BaseModel):

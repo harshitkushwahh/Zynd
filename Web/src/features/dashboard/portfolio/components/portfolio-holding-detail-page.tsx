@@ -11,21 +11,29 @@ import {
   CircleHelp,
   Info,
   LineChart,
+  Pencil,
+  Plus,
   Repeat2,
   Shuffle,
   TrendingUp,
+  X,
 } from "lucide-react";
 
+import { BankLogo } from "@/components/banking/bank-logo";
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
 import { LoadErrorCard } from "@/components/ui/load-error-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PaginationPageMinimalCenter, Table, TableCard } from "@/components/core/table";
 import { paginateItems } from "@/features/family-groups/lib/family-group-table-pagination";
+import { familyMemberInitials } from "@/features/family-groups/lib/family-group-ui";
 import { MfInvestPaymentCard } from "@/features/invest/components/mf-invest-payment-card";
 import {
+  FamilyGroupCircle,
   MfFamilyLinkDialog,
   type FamilyLinkChoice,
 } from "@/features/invest/components/mf-family-goal-link-picker";
@@ -95,6 +103,11 @@ import { fetchInvestConfig, type InvestConfig } from "@/features/invest/api/inve
 import { invalidateInvestAndPortfolioQueries } from "@/features/invest/lib/invalidate-invest-queries";
 import { useAuth } from "@/contexts/auth-context";
 import { copy } from "@/shared/config/copy";
+import {
+  extractAccountLast4,
+  formatMaskedBankAccountSuffix,
+  resolveBankAccountDisplayName,
+} from "@/shared/lib/bank-account-display";
 import { cn } from "@/lib/utils";
 
 type PortfolioHoldingDetailPageProps = {
@@ -172,6 +185,134 @@ function MetricCell({
   );
 }
 
+function HoldingFamilyLinkFolioTooltipContent({ title }: { title: string }) {
+  return (
+    <div className="space-y-1 text-pretty">
+      <p>{title}</p>
+      <p className="text-[11px] leading-snug text-background/75">{copy.goals.familyLinkEntireFolio}</p>
+    </div>
+  );
+}
+
+function HoldingNomineeBadge({ holding }: { holding: PortfolioHoldingDetail }) {
+  const portfolioCopy = copy.dashboard.portfolio;
+  const name = holding.nomineeName?.trim();
+
+  if (!name) {
+    return (
+      <p className="text-compact text-muted-foreground">
+        {portfolioCopy.holdingNominee}{" "}
+        <span className="font-medium text-muted-foreground">{portfolioCopy.holdingNomineeEmpty}</span>
+      </p>
+    );
+  }
+
+  const kindBadge =
+    holding.nomineeIsMinor === true
+      ? { label: portfolioCopy.holdingNomineeMinor, variant: "warning" as const }
+      : holding.nomineeIsMinor === false
+        ? { label: portfolioCopy.holdingNomineeAdult, variant: "info" as const }
+        : null;
+  const shareLabel =
+    holding.nomineeSharePercent != null
+      ? copy.kyc.nominee.list.shareLabel(String(holding.nomineeSharePercent))
+      : null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="shrink-0 text-compact text-muted-foreground">{portfolioCopy.holdingNominee}</span>
+      <HoverCard>
+        <HoverCardTrigger
+          delay={280}
+          closeDelay={520}
+          render={
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center rounded-full border border-border/70 bg-muted/20 p-0.5 outline-none transition-colors hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2"
+              aria-label={name}
+            />
+          }
+        >
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted/50 text-[10px] font-semibold text-foreground ring-1 ring-inset ring-border/70">
+            {familyMemberInitials(name)}
+          </span>
+        </HoverCardTrigger>
+
+        <HoverCardContent
+          side="top"
+          align="center"
+          sideOffset={6}
+          className="w-52 rounded-[1.25rem] p-3 data-closed:duration-100 data-closed:zoom-out-100 data-open:duration-150 data-open:zoom-in-100"
+        >
+          <div className="flex flex-col items-center text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-muted/40 text-sm font-semibold text-foreground ring-1 ring-border/70">
+              {familyMemberInitials(name)}
+            </div>
+            <p className="mt-2.5 max-w-full text-compact font-semibold leading-snug text-foreground">{name}</p>
+            {kindBadge || shareLabel ? (
+              <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5">
+                {kindBadge ? (
+                  <StatusBadge variant={kindBadge.variant} showIcon={false} className="h-5 px-2 text-[10px]">
+                    {kindBadge.label}
+                  </StatusBadge>
+                ) : null}
+                {shareLabel ? (
+                  <Badge variant="secondary" className="h-5 border-border/60 px-2 text-[10px] font-medium">
+                    {shareLabel}
+                  </Badge>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    </div>
+  );
+}
+
+function HoldingRedeemBankBadge({ holding }: { holding: PortfolioHoldingDetail }) {
+  const portfolioCopy = copy.dashboard.portfolio;
+  const accountLabel = holding.redeemBankLabel?.trim();
+
+  if (!accountLabel) {
+    return (
+      <p className="text-compact text-muted-foreground">
+        {portfolioCopy.holdingRedeemTo} <span className="font-medium text-foreground">—</span>
+      </p>
+    );
+  }
+
+  const bankName =
+    resolveBankAccountDisplayName({
+      bankName: holding.redeemBankName,
+      ifscCode: holding.redeemBankIfsc,
+      accountLabel,
+    }) ?? copy.mutualFunds.bankPickerUnknownBank;
+  const accountSuffix = formatMaskedBankAccountSuffix(extractAccountLast4(accountLabel));
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="shrink-0 text-compact text-muted-foreground">{portfolioCopy.holdingRedeemTo}</span>
+      <span className="inline-flex max-w-full shrink-0 flex-wrap items-center gap-1.5 rounded-full border border-border/70 bg-muted/20 py-0.5 pl-0.5 pr-2.5">
+        <BankLogo
+          bankName={holding.redeemBankName}
+          ifscCode={holding.redeemBankIfsc}
+          accountLabel={accountLabel}
+          size="sm"
+          className="size-7 min-h-7 min-w-7 [&_img]:size-5"
+          fallbackClassName="bg-muted/60 text-muted-foreground ring-border/60"
+        />
+        <span className="inline-flex flex-wrap items-baseline gap-x-1 pr-0.5 text-caption font-medium leading-snug text-foreground">
+          <span className="text-pretty">{bankName}</span>
+          {accountSuffix ? (
+            <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{accountSuffix}</span>
+          ) : null}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function HoldingModeBadge({ mode }: { mode: PortfolioHoldingDetail["holdingMode"] }) {
   const portfolioCopy = copy.dashboard.portfolio;
   const label =
@@ -206,6 +347,7 @@ function HoldingFamilyLinkControl({ holding }: { holding: PortfolioHoldingDetail
     ? {
         familyGroupId: holding.familyLink.familyGroupId,
         familyGroupTitle: holding.familyLink.familyGroupTitle,
+        familyGroupAvatarUrl: holding.familyLink.familyGroupAvatarUrl,
         goalId: holding.familyLink.goalId,
         goalTitle: holding.familyLink.goalTitle,
       }
@@ -241,46 +383,65 @@ function HoldingFamilyLinkControl({ holding }: { holding: PortfolioHoldingDetail
   return (
     <>
       {current ? (
-        <>
-          <span className="font-medium text-foreground">{label}</span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 px-2.5 text-caption"
-            onClick={() => setOpen(true)}
-          >
-            {portfolioCopy.holdingFamilyLinkChange}
-          </Button>
+        <div className="inline-flex max-w-full items-center gap-0.5 rounded-full border border-border/70 bg-muted/20 py-0.5 pl-0.5 pr-0.5">
+          <Tooltip>
+            <TooltipTrigger
+              type="button"
+              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label={`${label}. ${copy.goals.familyLinkEntireFolio}`}
+              onClick={() => setOpen(true)}
+            >
+              <FamilyGroupCircle
+                label={current.familyGroupTitle}
+                avatarUrl={current.familyGroupAvatarUrl}
+                className="size-7 text-[10px]"
+              />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs">
+              <HoldingFamilyLinkFolioTooltipContent title={label} />
+            </TooltipContent>
+          </Tooltip>
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-7 px-2.5 text-caption"
+            size="icon-sm"
+            className="size-7 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+            aria-label={portfolioCopy.holdingFamilyLinkChange}
+            onClick={() => setOpen(true)}
+          >
+            <Pencil className="size-3.5" aria-hidden />
+          </Button>
+          <span className="mx-0.5 h-4 w-px shrink-0 bg-border/80" aria-hidden />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 shrink-0 rounded-full text-muted-foreground hover:text-destructive"
             disabled={saving}
+            aria-label={portfolioCopy.holdingFamilyLinkRemove}
             onClick={() => void save(null)}
           >
-            {portfolioCopy.holdingFamilyLinkRemove}
+            <X className="size-3.5" aria-hidden />
           </Button>
-        </>
+        </div>
       ) : (
-        <Button
+        <button
           type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 px-2.5 text-caption"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 bg-muted/20 px-3 text-caption font-medium text-foreground transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label={portfolioCopy.holdingLinkFamily}
           onClick={() => setOpen(true)}
         >
+          <Plus className="size-3.5" aria-hidden />
           {portfolioCopy.holdingLinkFamily}
-        </Button>
+        </button>
       )}
-      {error ? <span className="text-caption text-destructive">{error}</span> : null}
+      {error ? <span className="w-full text-right text-caption text-destructive">{error}</span> : null}
       <MfFamilyLinkDialog
         open={open}
         onOpenChange={setOpen}
         value={current}
         onConfirm={(next) => void save(next)}
-        confirmEntireFolio
+        defaultSelectAllGoals
         saving={saving}
       />
     </>
@@ -368,23 +529,8 @@ function HoldingOverviewCard({
       </div>
 
       <div className="mt-5 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2">
-        <p className="text-compact text-muted-foreground">
-          {portfolioCopy.holdingRedeemTo}{" "}
-          <span className="border-b border-dotted border-muted-foreground/60 font-medium text-foreground">
-            {holding.redeemBankLabel ?? "—"}
-          </span>
-        </p>
-        <p className="text-compact text-muted-foreground">
-          {portfolioCopy.holdingNominee}{" "}
-          <span
-            className={cn(
-              "font-medium",
-              holding.nomineeName?.trim() ? "text-foreground" : "text-muted-foreground",
-            )}
-          >
-            {holding.nomineeName?.trim() || portfolioCopy.holdingNomineeEmpty}
-          </span>
-        </p>
+        <HoldingRedeemBankBadge holding={holding} />
+        <HoldingNomineeBadge holding={holding} />
       </div>
     </section>
   );
@@ -531,6 +677,7 @@ function PortfolioHoldingPaymentCard({
               ? {
                   groupTitle: holding.familyLink.familyGroupTitle,
                   goalTitle: holding.familyLink.goalTitle,
+                  groupAvatarUrl: holding.familyLink.familyGroupAvatarUrl,
                 }
               : null
           }

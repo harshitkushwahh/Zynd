@@ -323,6 +323,17 @@ class Settings(BaseSettings):
     fp_client_secret_live: str = ""
     fp_webhook_secret_live: str = ""
     fp_webhook_callback_url_live: str = ""
+    # Zero-Touch Lookup (Cybrilla bank + customer lookups) — see Docs/multiplus-zero-touch-lookup-adaptation.md
+    zto_enabled: bool = False
+    zto_mode: Literal["sandbox", "production"] = "production"
+    zto_api_base_url: str = "https://api.cybrilla.com"
+    zto_token_base_url: str = ""
+    zto_client_id: str = ""
+    zto_client_secret: str = ""
+    zto_auth_tenant: str = ""
+    zto_poll_interval_ms: int = 2000
+    zto_max_poll_attempts: int = 5
+    zto_partner_name: str = "Zynd"
     fp_enabled: bool = False
     fp_token_cache_minutes: int = 25
     fp_webhook_secret: str = ""

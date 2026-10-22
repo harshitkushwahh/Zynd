@@ -37,6 +37,8 @@ import { SettingsNavigationProvider } from "@/contexts/settings-navigation-conte
 import { copy } from "@/shared/config/copy";
 import { ZyndErrorBoundary } from "@/shared/components/zynd-error-boundary";
 import { ConsentReacceptDialog } from "@/features/consent/components/consent-reaccept-dialog";
+import { ZtoOptInGate } from "@/features/kyc/components/zto-opt-in-gate";
+import { ZtoReviewGate } from "@/features/kyc/components/zto-review-gate";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -121,6 +123,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         />
       ) : null}
       <ConsentReacceptDialog context="login" enabled={!loading} />
+      <ZtoOptInGate enabled={!loading} />
+      <ZtoReviewGate enabled={!loading} />
         <div
         className={cn(
           "flex h-full min-h-0 flex-col",

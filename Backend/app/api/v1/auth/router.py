@@ -375,6 +375,8 @@ async def post_signup_complete(
             device_fingerprint=body.device_fingerprint,
             user_agent=request.headers.get("user-agent"),
             ip=get_client_ip(request),
+            zto_bank_consent=body.zto_bank_consent,
+            zto_customer_consent=body.zto_customer_consent,
         )
     except AuthError as exc:
         raise handle_auth_error(exc) from exc

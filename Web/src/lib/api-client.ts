@@ -8,6 +8,7 @@ export {
   apiRequest,
   getAccessToken,
   getApiUrl,
+  getNotificationStreamUrl,
   getSupportWebSocketUrl,
   BACKEND_HEALTH_OK_INTERVAL_MS,
   backendDownPollDelayMs,

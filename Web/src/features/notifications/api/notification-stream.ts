@@ -1,4 +1,4 @@
-import { getAccessToken, getApiUrl, refreshSession } from "@zynd/shared/api";
+import { getAccessToken, getNotificationStreamUrl, refreshSession } from "@zynd/shared/api";
 
 import type { NotificationCategory, NotificationItem } from "@/features/notifications/api/notifications-api";
 
@@ -12,8 +12,6 @@ type NotificationStreamHandlers = {
   onUnreadCount?: (unreadCount: number) => void;
   onDisconnect?: () => void;
 };
-
-const STREAM_PATH = "/notifications/stream";
 
 function parseSseBlock(block: string): { event: string; data: string } | null {
   const lines = block.split("\n");
@@ -61,7 +59,8 @@ export async function connectNotificationStream(
     throw new Error("missing_access_token");
   }
 
-  let response = await fetch(`${getApiUrl()}${STREAM_PATH}`, {
+  const streamUrl = getNotificationStreamUrl();
+  let response = await fetch(streamUrl, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -76,7 +75,7 @@ export async function connectNotificationStream(
     if (!refreshed.ok) {
       throw new Error("session_expired");
     }
-    response = await fetch(`${getApiUrl()}${STREAM_PATH}`, {
+    response = await fetch(streamUrl, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${refreshed.accessToken}`,

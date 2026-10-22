@@ -892,4 +892,5 @@ from app.infrastructure.persistence import notification_models as _notification_
 from app.infrastructure.persistence import referral_models as _referral_models  # noqa: F401,E402
 from app.infrastructure.persistence import referral_reward_models as _referral_reward_models  # noqa: F401,E402
 from app.infrastructure.persistence import recommendation_models as _recommendation_models  # noqa: F401,E402
+from app.infrastructure.persistence import zto_models as _zto_models  # noqa: F401,E402
 

@@ -103,6 +103,8 @@ export type PortfolioHoldingDetailResponse = PortfolioHoldingResponse & {
   redeem_bank_name: string | null;
   redeem_bank_ifsc: string | null;
   nominee_name: string | null;
+  nominee_share_percent?: number | null;
+  nominee_is_minor?: boolean | null;
   product_id?: string | null;
   min_sip_amount_inr?: number | null;
   min_lumpsum_amount_inr?: number | null;
@@ -116,6 +118,7 @@ export type PortfolioHoldingDetailResponse = PortfolioHoldingResponse & {
 export type PortfolioFamilyLinkResponse = {
   family_group_id: string;
   family_group_title: string;
+  family_group_avatar_url?: string | null;
   goal_id?: string | null;
   goal_title?: string | null;
 };

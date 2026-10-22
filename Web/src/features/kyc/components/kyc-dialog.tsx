@@ -65,6 +65,7 @@ import {
   type KycPanVerifyResponse,
 } from "@/features/kyc/lib/kyc-api";
 import { getKycBootstrapErrorMessage } from "@/features/kyc/lib/kyc-bootstrap-error";
+import { useZtoPanPrefill } from "@/features/kyc/hooks/use-zto-pan-prefill";
 import { pollWithBackoff } from "@/features/kyc/lib/kyc-polling";
 import { INDIAN_STATES, mergeIndianStateOptions } from "@/features/kyc/lib/indian-states";
 import {
@@ -276,6 +277,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   } = useKyc();
 
   const [bootstrap, setBootstrap] = useState<KycBootstrapResponse | null>(null);
+  const ztoPanPrefill = useZtoPanPrefill(bootstrap?.zero_touch?.phase === "ACCEPTED");
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [panResetConfirmOpen, setPanResetConfirmOpen] = useState(false);
@@ -2093,6 +2095,7 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
               initialDraft={
                 panReentryActive ? null : journeyDraft.pan ?? bootstrap?.pan_draft ?? null
               }
+              zeroTouchPrefill={ztoPanPrefill}
               initiallyVerified={panVerified && !panReentryActive}
               initialKycAlreadyRegistered={bootstrap?.kyc_already_registered ?? null}
               initialReadinessCode={panReadiness?.code ?? bootstrap?.readiness_code ?? null}

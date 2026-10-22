@@ -82,6 +82,8 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [ztoBankConsent, setZtoBankConsent] = useState(false);
+  const [ztoCustomerConsent, setZtoCustomerConsent] = useState(false);
 
   const [emailError, setEmailError] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -231,6 +233,8 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     setFirstName("");
     setMiddleName("");
     setLastName("");
+    setZtoBankConsent(false);
+    setZtoCustomerConsent(false);
     setEmailError("");
     setLoginError("");
     setPasswordError("");
@@ -320,6 +324,7 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     const errors = validateProfile({ firstName, middleName, lastName });
     setProfileErrors(errors);
     if (Object.keys(errors).length > 0) return;
+    if (ztoBankConsent !== ztoCustomerConsent) return;
 
     setIsSubmitting(true);
     try {
@@ -327,6 +332,8 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
         firstName: firstName.trim(),
         middleName: middleName.trim(),
         lastName: lastName.trim(),
+        ztoBankConsent,
+        ztoCustomerConsent,
       });
       setUser(result.user);
       kyc?.markFreshUser();
@@ -339,7 +346,17 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [finishAuth, firstName, kyc, lastName, middleName, setUser, signupToken]);
+  }, [
+    finishAuth,
+    firstName,
+    kyc,
+    lastName,
+    middleName,
+    setUser,
+    signupToken,
+    ztoBankConsent,
+    ztoCustomerConsent,
+  ]);
 
   const handleEmailContinue = useCallback(
     async (event: React.FormEvent) => {
@@ -685,6 +702,9 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
         setMobileError("Enter a valid 10-digit mobile number.");
         return;
       }
+      if (ztoBankConsent !== ztoCustomerConsent) {
+        return;
+      }
 
       setIsSubmitting(true);
       setMobileError("");
@@ -700,7 +720,7 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
         setIsSubmitting(false);
       }
     },
-    [mobile, mobileOtpCooldown, signupToken]
+    [mobile, mobileOtpCooldown, signupToken, ztoBankConsent, ztoCustomerConsent]
   );
 
   const handleResendMobileOtp = useCallback(async () => {
@@ -855,6 +875,10 @@ function useAuthDialogFlowState(onClose: () => void, surfaceOpen: boolean) {
     setMiddleName,
     lastName,
     setLastName,
+    ztoBankConsent,
+    setZtoBankConsent,
+    ztoCustomerConsent,
+    setZtoCustomerConsent,
     emailError,
     setEmailError,
     loginError,

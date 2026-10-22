@@ -5,6 +5,8 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.v1.kyc.zto_schemas import ZtoBootstrapInfo
+
 
 class KycEligibilityResponse(BaseModel):
     eligible: bool
@@ -130,6 +132,7 @@ class KycBootstrapResponse(BaseModel):
     poa_kyc_form_id: Optional[str] = None
     proof_fetch_url: Optional[str] = None
     requires_poa_proof_fetch: Optional[bool] = None
+    zero_touch: Optional[ZtoBootstrapInfo] = None
 
 
 class KycDigilockerStartResponse(BaseModel):

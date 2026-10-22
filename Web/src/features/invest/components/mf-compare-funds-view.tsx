@@ -514,8 +514,8 @@ export function MfCompareFundsView() {
       >
       <div className="space-y-6">
         <div className="space-y-4">
-          <Card className={MF_CALC_CARD_CLASS}>
-            <CardContent className={MF_CALC_CARD_CONTENT_CLASS}>
+          <Card className={cn(MF_CALC_CARD_CLASS, "overflow-visible")}>
+            <CardContent className={cn(MF_CALC_CARD_CONTENT_CLASS, "overflow-visible")}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <GitCompare

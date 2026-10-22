@@ -237,8 +237,12 @@ async def signup_complete(
     user_agent: str | None,
     ip: str | None,
     settings: Settings | None = None,
+    zto_bank_consent: bool = False,
+    zto_customer_consent: bool = False,
 ) -> tuple[User, str, str]:
     settings = settings or get_settings()
+    if zto_bank_consent != zto_customer_consent:
+        raise AuthError("Accept both lookup consents or neither.", "zto_consent_pair_required", 400)
     draft = await get_signup_draft(signup_token)
     if not draft or not draft.get("mobile_verified") or not draft.get("password_hash"):
         raise AuthError("Complete all signup steps first.", "signup_incomplete", 400)
@@ -287,6 +291,21 @@ async def signup_complete(
         definition_key=PLATFORM_SIGNUP_LEGAL,
         context=ConsentAcceptContext(source="signup", ip=ip, user_agent=user_agent),
     )
+
+    if zto_bank_consent and zto_customer_consent:
+        from app.application.kyc.zto.flow_service import handle_signup_zto
+
+        await handle_signup_zto(
+            db,
+            user=user,
+            first_name=user.first_name,
+            middle_name=user.middle_name,
+            last_name=user.last_name,
+            bank_consent=zto_bank_consent,
+            customer_consent=zto_customer_consent,
+            ip=ip,
+            settings=settings,
+        )
 
     await delete_signup_draft(signup_token)
     return user, access_token, refresh_token

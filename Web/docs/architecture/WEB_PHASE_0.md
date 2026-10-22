@@ -46,6 +46,8 @@ User-facing strings that reference app name or OTP length. Components should imp
 | `NEXT_PUBLIC_APP_NAME` | Client | Brand name (default `ZYND`) |
 | `NEXT_PUBLIC_APP_TAGLINE` | Client | Tagline |
 | `NEXT_PUBLIC_API_URL` | Client | API base (default `/api/v1`) |
+| `NEXT_PUBLIC_BACKEND_WS_ORIGIN` | Client | Direct FastAPI WS/SSE origin when API base is relative (prod: `wss://api.zynd.shop`) |
+| `NEXT_PUBLIC_BACKEND_HTTP_ORIGIN` | Client | Optional explicit HTTPS origin for SSE (prod: `https://api.zynd.shop`) |
 | `BACKEND_URL` | Server | FastAPI proxy target |
 
 See `.env.example`.

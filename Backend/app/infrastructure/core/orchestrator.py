@@ -96,6 +96,39 @@ class CybrillaHttpOrchestrator:
             runner=runner,
         )
 
+    async def request_zto(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: dict[str, Any] | None = None,
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """Cybrilla zero-touch lookups (/v2/bank_account_lookups, /v2/customer_data_lookups)."""
+        channel = CybrillaChannel.cybrilla_zto
+        base, tenant = channel_base_and_tenant(channel)
+        use_poa_log = channel_uses_poa_terminal_log(channel)
+        log_source = channel_provider_log_source(channel)
+
+        async def runner(token: str) -> httpx.Response:
+            headers = {"Authorization": f"Bearer {token}", "x-tenant-id": tenant}
+            url = f"{base.rstrip('/')}{path}"
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                if method == "GET":
+                    return await client.get(url, headers=headers)
+                headers["Content-Type"] = "application/json"
+                return await client.post(url, headers=headers, json=json_body or {})
+
+        return await self._request_with_auth_retry(
+            method=method,
+            path=path,
+            channel=channel,
+            use_poa_log=use_poa_log,
+            log_source=log_source,
+            request_body=json_body,
+            runner=runner,
+        )
+
     async def request_mf(
         self,
         method: str,

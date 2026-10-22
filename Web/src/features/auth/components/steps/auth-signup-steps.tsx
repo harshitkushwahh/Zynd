@@ -19,6 +19,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { useAuthDialogFlow } from "@/features/auth/hooks/auth-dialog-flow";
+import { isZtoConsentPairValid, ZtoSignupConsents } from "@/features/kyc/components/zto-signup-consents";
 import { isProfileValid, isValidMobile, isValidOtp } from "@/lib/auth-validation";
 import { clampToMaxLength, digitsOnly, inputRuleProps, lettersOnly } from "@/lib/input-rules";
 import { isPasswordValid } from "@/lib/password-criteria";
@@ -79,8 +80,6 @@ export function AuthPasswordStep() {
   const flow = useAuthDialogFlow();
   const {
     step,
-    email,
-    setStep,
     password,
     setPassword,
     passwordError,
@@ -90,7 +89,6 @@ export function AuthPasswordStep() {
 
   return (
     <form onSubmit={handlePasswordContinue} className={stepPanelClass(step === "password")}>
-      <EmailChip email={email} onEdit={() => setStep("email")} />
       <div className="flex flex-col">
         <PasswordInput
           name="password"
@@ -126,19 +124,20 @@ export function AuthMobileStep() {
   const flow = useAuthDialogFlow();
   const {
     step,
-    email,
-    setStep,
     mobile,
     setMobile,
     mobileError,
     setMobileError,
     defaultCountry,
+    ztoBankConsent,
+    setZtoBankConsent,
+    ztoCustomerConsent,
+    setZtoCustomerConsent,
     handleMobileContinue,
   } = flow;
 
   return (
     <form onSubmit={handleMobileContinue} className={stepPanelClass(step === "mobile")}>
-      <EmailChip email={email} onEdit={() => setStep("email")} />
       <Field data-invalid={!!mobileError}>
         <FieldLabel htmlFor="mobile">Mobile number</FieldLabel>
         <div className="flex items-stretch gap-2">
@@ -180,11 +179,21 @@ export function AuthMobileStep() {
         </div>
         <FieldMessage message={mobileError} />
       </Field>
+      <ZtoSignupConsents
+        className="mt-3 space-y-2"
+        bankConsent={ztoBankConsent}
+        customerConsent={ztoCustomerConsent}
+        onBankConsentChange={setZtoBankConsent}
+        onCustomerConsentChange={setZtoCustomerConsent}
+      />
       <AuthSubmitFooter>
         <Button
           type="submit"
           size="auth"
-          disabled={!isValidMobile(mobile)}
+          disabled={
+            !isValidMobile(mobile) ||
+            !isZtoConsentPairValid(ztoBankConsent, ztoCustomerConsent)
+          }
         >
           Send OTP
         </Button>
@@ -197,7 +206,6 @@ export function AuthMobileOtpStep() {
   const flow = useAuthDialogFlow();
   const {
     step,
-    email,
     mobile,
     setStep,
     mobileOtp,
@@ -212,8 +220,7 @@ export function AuthMobileOtpStep() {
 
   return (
     <form onSubmit={handleMobileOtpContinue} className={stepPanelClass(step === "mobile-otp")}>
-      <EmailChip email={email} onEdit={() => setStep("email")} />
-      <MobileChip mobile={mobile} onEdit={() => setStep("mobile")} />
+      <MobileChip mobile={mobile} onEdit={() => setStep("mobile")} className="mb-2" />
       <OtpInfoBanner
         message={copy.auth.otpMobileBanner}
         resend={{
@@ -233,13 +240,9 @@ export function AuthMobileOtpStep() {
           if (mobileOtpError) setMobileOtpError("");
         }}
       />
-      <FieldMessage message={mobileOtpError} />
-      <AuthSubmitFooter>
-        <Button
-          type="submit"
-          size="auth"
-          disabled={!isValidOtp(mobileOtp)}
-        >
+      <FieldMessage message={mobileOtpError} className="mb-0" />
+      <AuthSubmitFooter className="pt-3">
+        <Button type="submit" size="auth" disabled={!isValidOtp(mobileOtp)}>
           Verify mobile
         </Button>
       </AuthSubmitFooter>

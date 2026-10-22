@@ -87,6 +87,31 @@ async def lifespan(_: FastAPI):
                 runtime_settings.twilio_messaging_service_sid or "—",
             )
 
+    if runtime_settings.zto_enabled:
+        from app.application.integrations.integration_runtime import get_zto_runtime, is_zto_production_live
+
+        zto_runtime = get_zto_runtime()
+        if runtime_settings.zto_mode == "production":
+            logger.info(
+                "ZTO enabled mode=production cybrilla=%s tenant=%s configured=%s",
+                zto_runtime.base_url,
+                zto_runtime.auth_tenant,
+                is_zto_production_live(),
+            )
+        else:
+            logger.info("ZTO enabled mode=sandbox (in-memory lookups; set ZTO_MODE=production for Cybrilla HTTP)")
+    if runtime_settings.debug and runtime_settings.dev_otp.strip():
+        logger.info("DEV OTP active for email/mobile verification (code=%s)", runtime_settings.dev_otp.strip())
+
+    if runtime_settings.zynd_mf_ingestion_enabled:
+        logger.info(
+            "MF ingestion enabled cold_start_backfill=%s on_startup=%s from_date=%s threshold=%s",
+            runtime_settings.zynd_mf_cold_start_backfill_enabled,
+            runtime_settings.zynd_mf_cold_start_on_startup,
+            runtime_settings.zynd_mf_cold_start_backfill_from_date,
+            runtime_settings.zynd_mf_cold_start_backfill_threshold,
+        )
+
     if runtime_settings.app_env == "development":
         run_dev_migrations(runtime_settings)
         await refresh_database_pool()

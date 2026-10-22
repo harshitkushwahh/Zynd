@@ -1,3 +1,4 @@
+import { getBackendDirectHttpOrigin } from "./backend-direct-origin";
 import { getApiUrl } from "./configure";
 
 /**
@@ -20,9 +21,8 @@ export function getSupportWebSocketUrl(accessToken: string): string {
     return `${wsBase}/support/ws?token=${token}`;
   }
 
-  const wsOrigin = (
-    typeof process !== "undefined" ? process.env.NEXT_PUBLIC_BACKEND_WS_ORIGIN : undefined
-  )?.replace(/\/$/, "") ?? "ws://127.0.0.1:8000";
+  const httpOrigin = getBackendDirectHttpOrigin();
+  const wsOrigin = httpOrigin.replace(/^http/i, "ws");
 
   const pathPrefix = apiBase.startsWith("/") ? apiBase : `/${apiBase}`;
   return `${wsOrigin}${pathPrefix}/support/ws?token=${token}`;

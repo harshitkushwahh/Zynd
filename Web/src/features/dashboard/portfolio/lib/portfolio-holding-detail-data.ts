@@ -45,6 +45,7 @@ export type PortfolioHoldingDetail = {
   familyLink: {
     familyGroupId: string;
     familyGroupTitle: string;
+    familyGroupAvatarUrl: string | null;
     goalId: string | null;
     goalTitle: string | null;
   } | null;
@@ -60,6 +61,8 @@ export type PortfolioHoldingDetail = {
   redeemBankName: string | null;
   redeemBankIfsc: string | null;
   nomineeName: string | null;
+  nomineeSharePercent: number | null;
+  nomineeIsMinor: boolean | null;
   productId: string | null;
   minSipAmountInr: number | null;
   minLumpsumAmountInr: number | null;
