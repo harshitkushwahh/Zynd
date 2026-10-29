@@ -45,12 +45,12 @@ function HoldingRow({ holding }: { holding: MfExternalHolding }) {
 
 export function MfHoldingsSection() {
   const { summary } = usePortfolioSummaryQuery();
-  const { holdings } = usePortfolioHoldingsQuery();
+  const { holdings: portfolioHoldings } = usePortfolioHoldingsQuery();
   const casAllowed =
     summary?.has_allotted_investment === true ||
-    holdings.some((row) => row.source !== "external");
+    portfolioHoldings.some((row) => row.source !== "external");
   const [casOpen, setCasOpen] = useState(false);
-  const [holdings, setHoldings] = useState<MfExternalHolding[]>([]);
+  const [externalHoldings, setExternalHoldings] = useState<MfExternalHolding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +59,7 @@ export function MfHoldingsSection() {
     setError(null);
     try {
       const holdingsResponse = await fetchExternalHoldings();
-      setHoldings(holdingsResponse.external_holdings);
+      setExternalHoldings(holdingsResponse.external_holdings);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.holdingsLoadError);
     } finally {
@@ -101,12 +101,12 @@ export function MfHoldingsSection() {
             </div>
           ) : null}
           {error ? <FieldMessage variant="error" message={error} /> : null}
-          {!loading && !error && holdings.length === 0 ? (
+          {!loading && !error && externalHoldings.length === 0 ? (
             <div className="flex min-h-[180px] items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border px-6 text-center">
               <p className="text-compact text-muted-foreground">{copy.mutualFunds.holdingsEmpty}</p>
             </div>
           ) : null}
-          {holdings.map((holding) => (
+          {externalHoldings.map((holding) => (
             <HoldingRow key={`${holding.isin}-${holding.folio_number}`} holding={holding} />
           ))}
         </CardContent>

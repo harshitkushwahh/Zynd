@@ -65,16 +65,16 @@ export function FamilyGroupAvatarUploadDialog({
       onUpload={async (file) => {
         try {
           const updated = await uploadFamilyGroupAvatar(groupId, file);
-          if (!updated.avatar_url) {
+          let avatarUrl = updated.avatar_url ?? null;
+          if (!avatarUrl) {
             const latest = await fetchLatestDocument("family_group_avatar");
             if (latest?.status === "pending_scan") {
               await waitForDocumentReady(latest.id);
             }
             const group = await fetchFamilyGroup(groupId);
-            onUploaded?.(group.avatar_url ?? null);
-            return;
+            avatarUrl = group.avatar_url ?? null;
           }
-          onUploaded?.(updated.avatar_url ?? null);
+          onUploaded?.(avatarUrl);
         } catch (error) {
           throw new Error(formatDocumentUploadError(error, avatarCopy.uploadFailed));
         }

@@ -243,7 +243,9 @@ export function ReportsPage() {
                   return;
                 }
                 if (!canGenerateReports) return;
-                generateMutation.mutate(item.kind);
+                const reportKind = item.kind;
+                if (reportKind === "cas") return;
+                generateMutation.mutate(reportKind);
               }}
             />
             );

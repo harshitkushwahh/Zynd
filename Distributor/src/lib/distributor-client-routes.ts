@@ -9,7 +9,6 @@ export const YOUR_CLIENTS_LIST_HREF = "/dashboard/your-clients";
 export const SYSTEM_RESIDENT_INVESTORS_HREF = "/dashboard/investors/resident";
 
 const ZYND_CLIENT_ID_SUFFIX = "@zynd";
-const MISSING_CLIENT_CODE = "";
 
 type DistributorClientRefSource = Pick<DistributorInvestor, "id" | "clientCode">;
 
@@ -18,7 +17,7 @@ export function distributorClientPathRef(
   source: DistributorClientRefSource | { id: string; clientCode?: string | null },
 ): string {
   const code = source.clientCode?.trim();
-  if (code && code !== MISSING_CLIENT_CODE) {
+  if (code) {
     if (code.endsWith(ZYND_CLIENT_ID_SUFFIX)) {
       return code.slice(0, -ZYND_CLIENT_ID_SUFFIX.length);
     }

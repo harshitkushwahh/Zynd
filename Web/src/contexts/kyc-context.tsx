@@ -165,13 +165,10 @@ export function KycProvider({ children }: { children: ReactNode }) {
     const payload = await fetchKycBootstrap();
     applyBootstrap(payload);
     const panName = formatKycPanFullName(payload.pan_draft ?? null);
-    if (panName) {
-      setUser((current) => {
-        if (!current || getDisplayName(current).trim()) return current;
-        return { ...current, ...splitPanName(panName) };
-      });
+    if (panName && user && !getDisplayName(user).trim()) {
+      setUser({ ...user, ...splitPanName(panName) });
     }
-  }, [applyBootstrap, kycAllowed, setUser]);
+  }, [applyBootstrap, kycAllowed, setUser, user]);
 
   const applyReadinessCheck = useCallback(
     (result: KycReadinessCheckResponse) => {

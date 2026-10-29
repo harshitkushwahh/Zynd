@@ -42,7 +42,6 @@ import {
   GOALS_PERSONAL_PREVIEW_SCROLL_ROW_CLASS,
 } from "@/features/goals/lib/goal-navigation";
 import { queryKeys } from "@/lib/query-keys";
-import { cn } from "@/lib/utils";
 import { copy } from "@/shared/config/copy";
 
 const goalsRoute = DASHBOARD_ROUTES.find((route) => route.id === "goals")!;

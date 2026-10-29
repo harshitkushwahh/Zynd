@@ -125,7 +125,9 @@ export function FamilyGroupCircle({
     setImageFailed(false);
   }, [resolvedAvatarUrl]);
 
-  const initialsVariant = zyndAvatarVariantForSeed(label);
+  const seedLabel = label.trim();
+  const initialsVariant =
+    opaque && !showAvatar && seedLabel ? zyndAvatarVariantForSeed(seedLabel) : null;
 
   return (
     <div
@@ -141,7 +143,7 @@ export function FamilyGroupCircle({
         className,
       )}
       style={
-        opaque && !showAvatar
+        initialsVariant
           ? { backgroundColor: initialsVariant.bg, color: initialsVariant.fg }
           : undefined
       }
@@ -154,8 +156,8 @@ export function FamilyGroupCircle({
           className="size-full object-cover"
           onError={() => setImageFailed(true)}
         />
-      ) : label ? (
-        familyMemberInitials(label)
+      ) : seedLabel ? (
+        familyMemberInitials(seedLabel)
       ) : (
         <Users className="size-3.5" />
       )}

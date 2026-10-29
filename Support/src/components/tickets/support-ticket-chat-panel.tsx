@@ -9,7 +9,7 @@ import { useSupportAuth } from "@/contexts/support-auth-context";
 import { formatDistributorDate } from "@/lib/format";
 import { getDisplayInitials } from "@/lib/get-display-initials";
 import { replyToSupportTicket } from "@/lib/support-tickets-api";
-import type { SupportTicket, SupportTicketDetail, SupportTicketMessage } from "@/lib/support-types";
+import type { SupportTicket, SupportTicketDetail } from "@/lib/support-types";
 import { cn } from "@/lib/utils";
 
 type SupportTicketChatPanelProps = {

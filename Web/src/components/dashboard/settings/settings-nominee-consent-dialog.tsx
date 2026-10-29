@@ -45,7 +45,9 @@ export function SettingsNomineeConsentDialog({
           className="min-h-0 flex-1 px-5 pb-5 sm:px-6 sm:pb-6"
           loadConsent={async () => ({ masked_mobile: "" })}
           sendOtp={sendSettingsNomineeConsentOtp}
-          confirmOtp={(otp) => addInvestorNominee(nomineesToSave, otp)}
+          confirmOtp={async (otp): Promise<void> => {
+            await addInvestorNominee(nomineesToSave, otp);
+          }}
           onConfirmed={() => void onConfirmed()}
           onCancel={() => onOpenChange(false)}
           cancelLabel={settingsCopy.nomineesConsentCancel}
