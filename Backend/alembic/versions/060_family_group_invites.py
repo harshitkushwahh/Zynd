@@ -1,4 +1,4 @@
-"""Family group invites — Phase 1.
+"""Family group invites  Phase 1.
 
 Revision ID: 060_family_group_invites
 Revises: 059_family_groups_foundation

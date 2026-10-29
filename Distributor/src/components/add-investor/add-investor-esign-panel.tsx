@@ -42,7 +42,7 @@ export function AddInvestorEsignPanel({ done, onSign }: AddInvestorEsignPanelPro
         {done ? (
           <p className="add-investor-esign-panel__success">
             <CheckCircle2 className="size-3.5" strokeWidth={2.25} aria-hidden />
-            E-sign captured — continue to review your details.
+            E-sign captured  continue to review your details.
           </p>
         ) : null}
       </div>

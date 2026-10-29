@@ -1,4 +1,4 @@
-"""MF product content & compliance layer — Phase 12.
+"""MF product content & compliance layer  Phase 12.
 
 Revision ID: 041_mf_product_content
 Revises: 040_mf_display_order

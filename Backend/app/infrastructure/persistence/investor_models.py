@@ -1,4 +1,4 @@
-"""Cybrilla investor profile objects — provisioned at first MF/payment flow (future).
+"""Cybrilla investor profile objects  provisioned at first MF/payment flow (future).
 
 Maps to Finprim v2 resources: investor_profile, bank_accounts, addresses,
 email_addresses, phone_numbers, related_parties.

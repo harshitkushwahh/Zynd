@@ -133,7 +133,7 @@ export function clearMfSipMandateRedirect(planId: string) {
   clearMfPaymentRedirect(planId);
 }
 
-/** After gateway return, Cybrilla auth URLs are one-time — do not auto-redirect again. */
+/** After gateway return, Cybrilla auth URLs are one-time  do not auto-redirect again. */
 export function markMfSipMandateAutoRedirectBlocked(planId: string) {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(`${SIP_MANDATE_AUTO_REDIRECT_BLOCKED_PREFIX}${planId}`, "1");

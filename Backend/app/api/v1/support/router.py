@@ -13,6 +13,7 @@ from app.api.v1.support.schemas import (
     ConversationOut,
     HelpBotStatusOut,
     PostMessageRequest,
+    BotHelpFeedbackRequest,
     ResolutionChoiceRequest,
     CustomerTicketListOut,
     SupportConsoleUserListOut,
@@ -25,6 +26,8 @@ from app.api.v1.support.schemas import (
 )
 from app.application.support.ollama_client import active_llm_provider, check_llm_ready
 from app.application.support.training_loader import training_corpus_stats
+from app.application.support.customer_message_limits import validate_customer_image_bytes
+from app.application.support.bot_help_feedback_service import submit_bot_help_feedback
 from app.application.support.help_bot_service import (
     begin_new_customer_conversation,
     get_current_conversation,
@@ -130,6 +133,10 @@ async def post_support_message(
                 payload = await file.read()
                 filename = getattr(file, "filename", None) or "image"
                 if payload:
+                    validate_customer_image_bytes(
+                        filename=str(filename),
+                        content=payload,
+                    )
                     upload = (str(filename), payload)
         else:
             raw = await request.body()
@@ -145,6 +152,20 @@ async def post_support_message(
         ) from exc
     try:
         payload = await post_customer_message(db, current_user, body=text, upload=upload)
+    except SupportActionError as exc:
+        _raise_support_error(exc)
+    return ConversationOut.model_validate(payload)
+
+
+@router.post("/conversations/messages/{message_id}/help-feedback", response_model=ConversationOut)
+async def post_bot_help_feedback(
+    message_id: UUID,
+    body: BotHelpFeedbackRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ConversationOut:
+    try:
+        payload = await submit_bot_help_feedback(db, current_user, message_id, body.choice)
     except SupportActionError as exc:
         _raise_support_error(exc)
     return ConversationOut.model_validate(payload)

@@ -13,6 +13,7 @@ from app.api.v1.kyc.schemas import (
     InvestorSettingsStateResponse,
     MfFolioNominationItemResponse,
     MfFolioNominationListResponse,
+    SettingsNomineeOtpSendResponse,
 )
 from app.application.kyc.errors import KycError
 from app.core.database import get_db
@@ -56,6 +57,24 @@ async def patch_kyc_settings_investor_profile(
     return InvestorSettingsStateResponse(**state)
 
 
+@router.post("/settings/nominees/consent/send-otp", response_model=SettingsNomineeOtpSendResponse)
+async def post_kyc_settings_nominee_consent_send_otp(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> SettingsNomineeOtpSendResponse:
+    from app.application.investor.nominee_settings_consent_service import send_settings_nominee_consent_otp
+
+    try:
+        payload = await send_settings_nominee_consent_otp(user=current_user, ip=get_client_ip(request))
+    except KycError as exc:
+        raise handle_kyc_error(exc) from exc
+    return SettingsNomineeOtpSendResponse(
+        masked_mobile=str(payload["masked_mobile"]),
+        retry_after_seconds=payload.get("retry_after_seconds"),
+        expires_in=payload.get("expires_in"),
+    )
+
+
 @router.post("/settings/nominees", response_model=InvestorSettingsStateResponse)
 async def post_kyc_settings_nominee(
     body: InvestorNomineeCreateRequest,
@@ -65,17 +84,26 @@ async def post_kyc_settings_nominee(
 ) -> InvestorSettingsStateResponse:
     from app.application.consent.consent_service import ConsentAcceptContext
     from app.application.investor.investor_settings_service import add_investor_nominee
+    from app.application.investor.nominee_settings_consent_service import verify_settings_nominee_consent_otp
+
+    consent_context = ConsentAcceptContext(
+        source="settings_nominee",
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
 
     try:
+        await verify_settings_nominee_consent_otp(
+            db,
+            user=current_user,
+            otp=body.otp,
+            consent_context=consent_context,
+        )
         state = await add_investor_nominee(
             db,
             user=current_user,
             nominees=body.resolved_nominees(),
-            consent_context=ConsentAcceptContext(
-                source="settings_nominee",
-                ip=get_client_ip(request),
-                user_agent=request.headers.get("user-agent"),
-            ),
+            consent_context=consent_context,
         )
     except KycError as exc:
         raise handle_kyc_error(exc) from exc

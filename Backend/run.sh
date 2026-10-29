@@ -51,7 +51,7 @@ print_postgres_help() {
   if command -v lsof >/dev/null 2>&1; then
     lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null | awk '/:(543[0-9]|5432)/ {print "  " $0}' || true
     if ! lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null | grep -qE ':(543[0-9]|5432)'; then
-      echo "  (none found — Postgres is probably not running)"
+      echo "  (none found  Postgres is probably not running)"
     fi
   else
     echo "  (install lsof to auto-detect ports)"

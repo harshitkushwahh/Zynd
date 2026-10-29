@@ -19,6 +19,8 @@ class SupportMessageOut(BaseModel):
     attachment_document_id: str | None = None
     attachment_filename: str | None = None
     resolution_active: bool = False
+    help_feedback: Literal["pending", "yes", "no"] | None = None
+    help_feedback_active: bool = False
     customer_read_at: datetime | None = None
     support_read_at: datetime | None = None
     support_read_by: Literal["bot", "agent"] | None = None
@@ -38,7 +40,7 @@ class ConversationOut(BaseModel):
 
 
 class PostMessageRequest(BaseModel):
-    body: str = ""
+    body: str = Field(default="", max_length=4000)
     has_attachment: bool = False
 
 
@@ -207,6 +209,10 @@ class UpdateTicketRequest(BaseModel):
 
 
 class ResolutionChoiceRequest(BaseModel):
+    choice: Literal["yes", "no"]
+
+
+class BotHelpFeedbackRequest(BaseModel):
     choice: Literal["yes", "no"]
 
 

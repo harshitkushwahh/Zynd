@@ -15,7 +15,10 @@ from app.application.documents.document_image_validation import (
     max_bytes_for_doc_type,
     validate_profile_image_content,
 )
-from app.application.documents.document_scan_service import dispatch_document_scan
+from app.application.documents.document_scan_service import (
+    dispatch_document_scan,
+    process_document_scan,
+)
 from app.application.documents.document_storage_service import build_storage_key, extension_for_mime
 from app.application.documents.errors import DocumentError
 from app.core.config import Settings, get_settings
@@ -95,6 +98,27 @@ async def _next_version(db: AsyncSession, *, user_id, doc_type: DocumentType) ->
     )
     current = result.scalar_one_or_none()
     return (current or 0) + 1
+
+
+async def recover_pending_avatar_uploads(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    settings: Settings | None = None,
+) -> None:
+    """Complete or fail avatar uploads stuck in pending_scan (missed finalize / async worker)."""
+    settings = settings or get_settings()
+    result = await db.execute(
+        select(UserDocument.id).where(
+            UserDocument.user_id == user_id,
+            UserDocument.doc_type.in_(
+                [DocumentType.profile_image, DocumentType.family_group_avatar]
+            ),
+            UserDocument.status == DocumentStatus.pending_scan,
+        )
+    )
+    for document_id in result.scalars().all():
+        await process_document_scan(db, document_id=document_id, settings=settings)
 
 
 async def finalize_document_scans(
@@ -179,6 +203,8 @@ async def upload_user_document(
                 "rate_limited",
                 429,
             )
+
+        await recover_pending_avatar_uploads(db, user_id=user.id, settings=settings)
 
         pending = await db.execute(
             select(UserDocument.id)

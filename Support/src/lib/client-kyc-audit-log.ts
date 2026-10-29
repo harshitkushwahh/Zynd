@@ -31,7 +31,7 @@ function mapAuditActor(actor: string): DistributorClientKycAuditActor {
 
 export function mapKycAuditSourceLabel(source: string | null | undefined): string {
   const trimmed = source?.trim();
-  if (!trimmed) return "—";
+  if (!trimmed) return "";
   return SOURCE_LABELS[trimmed] ?? trimmed;
 }
 

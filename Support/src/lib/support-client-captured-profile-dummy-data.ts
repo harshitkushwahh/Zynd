@@ -95,7 +95,7 @@ function buildBankSlide(
     verified,
     fields: [
       { label: copy.bankAccount, value: account.accountNumberMasked, mono: true },
-      { label: DISTRIBUTOR_CLIENT_COPY.identity.ifsc, value: account.ifscCode ?? "—", mono: true },
+      { label: DISTRIBUTOR_CLIENT_COPY.identity.ifsc, value: account.ifscCode ?? "", mono: true },
       { label: copy.bankName, value: account.bankName },
       ...(account.accountType
         ? [{ label: copy.accountType, value: account.accountType }]
@@ -292,7 +292,7 @@ export function buildSupportClientCapturedProfile(
           correspondenceSlides.length > 1
             ? `${cardCopy.correspondence} (${index + 1})`
             : cardCopy.correspondence,
-        value: field?.value ?? "—",
+        value: field?.value ?? "",
         multiline: field?.multiline,
       };
     }),
@@ -305,19 +305,19 @@ export function buildSupportClientCapturedProfile(
         {
           id: `bank-account-${slide.id}`,
           label: `${cardCopy.bankAccount}${suffix}`,
-          value: accountField?.value ?? "—",
+          value: accountField?.value ?? "",
           mono: true,
         },
         {
           id: `bank-ifsc-${slide.id}`,
           label: `IFSC${suffix}`,
-          value: ifscField?.value ?? "—",
+          value: ifscField?.value ?? "",
           mono: true,
         },
         {
           id: `bank-name-${slide.id}`,
           label: `${cardCopy.bankName}${suffix}`,
-          value: nameField?.value ?? "—",
+          value: nameField?.value ?? "",
         },
       ];
     }),

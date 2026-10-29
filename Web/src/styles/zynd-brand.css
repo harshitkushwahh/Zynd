@@ -22,7 +22,7 @@
   --zynd-neutral-50: #f8fafc;
   --zynd-white: #ffffff;
 
-  /* Dark neutral scale — true black, no blue tint */
+  /* Dark neutral scale  true black, no blue tint */
   --zynd-dark-bg: #0a0a0a;
   --zynd-dark-surface: #151515;
   --zynd-dark-elevated: #1c1c1c;
@@ -108,7 +108,7 @@
   --india-flag-green: #138808;
   --india-flag-chakra: #000080;
 
-  /* ShadCN semantic tokens — light mode */
+  /* ShadCN semantic tokens  light mode */
   --background: var(--zynd-white);
   --foreground: var(--zynd-neutral-900);
   --card: var(--zynd-white);
@@ -568,7 +568,7 @@
   }
 }
 
-/* Support FAB — solid brand background; icon motion on hover only */
+/* Support FAB  solid brand background; icon motion on hover only */
 .zynd-support-fab {
   cursor: pointer;
 }

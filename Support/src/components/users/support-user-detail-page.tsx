@@ -98,7 +98,7 @@ export function SupportUserDetailPage({ clientId }: SupportUserDetailPageProps) 
   useEffect(() => {
     const fromUrl = parseClientDetailTabId(searchParams.get("tab"));
     setDefaultTab(fromUrl ?? "tickets");
-    // Intentionally keyed on client switch only — do not react when `tab` is stripped from the URL.
+    // Intentionally keyed on client switch only  do not react when `tab` is stripped from the URL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 

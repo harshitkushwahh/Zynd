@@ -40,7 +40,6 @@ export function OverviewPortfolioFlowRecharts({
   yDomain,
   baseValue,
   renderTooltip,
-  chartHeight,
   chartEdgeInset,
   chartDotRadius,
   chartDotStroke,
@@ -49,30 +48,26 @@ export function OverviewPortfolioFlowRecharts({
   const colors = PORTFOLIO_FLOW_CHART_COLORS[tone];
 
   return (
-    <RechartsMeasuredContainer className="h-full w-full" width="100%" height={chartHeight} minWidth={0}>
+    <RechartsMeasuredContainer className="h-full w-full" width="100%" height="100%" minWidth={0}>
       <AreaChart
         key={rangeKey}
         data={points}
         margin={{
           top: chartEdgeInset,
-          right: chartEdgeInset,
-          left: chartEdgeInset,
+          right: 0,
+          left: 0,
           bottom: 0,
         }}
       >
         <defs>
           <linearGradient id={valueGradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={colors.stroke} stopOpacity={0.28} />
-            <stop offset="100%" stopColor={colors.stroke} stopOpacity={0.02} />
+            <stop offset="100%" stopColor={colors.stroke} stopOpacity={0.14} />
           </linearGradient>
         </defs>
 
-        <XAxis
-          dataKey="label"
-          hide
-          padding={{ left: chartEdgeInset, right: chartEdgeInset }}
-        />
-        <YAxis hide domain={yDomain} width={0} allowDataOverflow={false} />
+        <XAxis dataKey="label" hide height={0} padding={{ left: 0, right: 0 }} />
+        <YAxis hide domain={yDomain} width={0} axisLine={false} tickLine={false} />
 
         <Tooltip
           animationDuration={200}

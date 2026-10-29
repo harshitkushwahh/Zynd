@@ -45,12 +45,12 @@ type DetailSection = {
 };
 
 function formatAmount(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "";
   return formatInr(value);
 }
 
 function formatUnits(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "";
   return value.toLocaleString("en-IN", { maximumFractionDigits: 4 });
 }
 
@@ -69,11 +69,11 @@ function amountBlockSummary(block: AmountBlock) {
     block.min_inr != null ? `${copy.mutualFunds.investmentMin} ${formatAmount(block.min_inr)}` : null,
     block.max_inr != null ? `${copy.mutualFunds.investmentMax} ${formatAmount(block.max_inr)}` : null,
   ].filter(Boolean);
-  return parts.join(" · ") || "—";
+  return parts.join(" · ") || "";
 }
 
 function ConstraintStatGrid({ rows }: { rows: Array<{ label: string; value: string }> }) {
-  const visibleRows = rows.filter((row) => row.value !== "—");
+  const visibleRows = rows.filter((row) => row.value !== "");
   if (visibleRows.length === 0) return null;
 
   return (
@@ -107,7 +107,7 @@ function AmountSectionContent({ block }: { block: AmountBlock }) {
 
 function SectionIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center text-foreground [&>svg]:size-4">
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground [&>svg]:size-4">
       {children}
     </span>
   );
@@ -333,7 +333,7 @@ export function MfInvestmentDetailsCard({ details }: MfInvestmentDetailsCardProp
     <Card className={cn("overflow-hidden border border-border", MF_FUND_DETAIL_RADIUS_CLASS)}>
       <CardHeader className="border-b border-border/60 bg-muted/10">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center text-foreground">
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
             <ClipboardList className="size-4" strokeWidth={2.25} aria-hidden />
           </span>
           <div className="min-w-0">

@@ -54,7 +54,7 @@ function ReturnsCell({
   hasCostBasis: boolean;
 }) {
   if (!hasCostBasis) {
-    return <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground"></span>;
   }
 
   const positive = amount >= 0;
@@ -220,7 +220,7 @@ export function ClientPortfolioHoldingsList({
           const navDisplay =
             holding.navPerUnit != null && holding.navPerUnit > 0
               ? formatDistributorNav(holding.navPerUnit)
-              : "—";
+              : "";
 
           return (
             <Table.Row id={holding.id}>

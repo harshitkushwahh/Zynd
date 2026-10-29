@@ -264,7 +264,7 @@ export function SupportKycVerificationsPanel() {
             <Table.Cell className={cn("text-muted-foreground", DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS)}>
               {row.submittedAt && row.submittedAt !== new Date(0).toISOString()
                 ? formatDistributorDate(row.submittedAt)
-                : "—"}
+                : ""}
             </Table.Cell>
           </Table.Row>
         )}

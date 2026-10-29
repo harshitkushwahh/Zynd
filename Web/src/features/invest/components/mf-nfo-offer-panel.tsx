@@ -31,9 +31,9 @@ function parseDateOnly(value: string) {
 }
 
 function closingInLabel(closeDate: string | null | undefined) {
-  if (!closeDate) return "—";
+  if (!closeDate) return "";
   const close = parseDateOnly(closeDate);
-  if (!close) return "—";
+  if (!close) return "";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   close.setHours(0, 0, 0, 0);
@@ -70,7 +70,7 @@ export function MfNfoOfferPanel({ fund, onInvest }: MfNfoOfferPanelProps) {
   const nfo = fund.nfo;
   if (!nfo) return null;
 
-  const closes = nfo.subscription_close_date ? formatDate(nfo.subscription_close_date) : "—";
+  const closes = nfo.subscription_close_date ? formatDate(nfo.subscription_close_date) : "";
   const category = fund.content?.risk_label ?? fund.sebi_category;
   const steps = [
     { title: copy.mutualFunds.nfoHowApply, body: copy.mutualFunds.nfoHowApplyBody, icon: FileText },

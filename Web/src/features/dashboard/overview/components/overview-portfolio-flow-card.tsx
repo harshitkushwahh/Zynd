@@ -58,7 +58,7 @@ function PortfolioFlowProcessingBody({
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 top-6 select-none blur-[5px] opacity-70"
       >
-        <div className="mt-auto px-1 pt-3 sm:px-2">
+        <div className="mt-auto px-0 pt-3">
           <OverviewPortfolioFlowChart
             series={[...chartSeries]}
             range="1y"
@@ -112,7 +112,7 @@ function PortfolioFlowCardBody({
   const [range, setRange] = useState<OverviewPortfolioFlowRange>("1y");
 
   const chartSection = (
-    <div className={cn("mt-auto px-1 pt-3 sm:px-2", locked && "pointer-events-none select-none")}>
+    <div className={cn("mt-auto flex min-h-[8.25rem] flex-1 flex-col pt-3", locked && "pointer-events-none select-none")}>
       <OverviewPortfolioFlowChart
         series={[...series]}
         range={range}
@@ -122,7 +122,7 @@ function PortfolioFlowCardBody({
   );
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-4 sm:px-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -154,7 +154,7 @@ function PortfolioFlowCardBody({
 
       {chartInteractive ? (
         <div
-          className="relative z-10"
+          className="relative z-10 mt-auto flex min-h-0 flex-1 flex-col"
           onClick={(event) => event.preventDefault()}
           onKeyDown={(event) => event.stopPropagation()}
           role="presentation"
@@ -164,7 +164,7 @@ function PortfolioFlowCardBody({
       ) : (
         chartSection
       )}
-    </>
+    </div>
   );
 }
 

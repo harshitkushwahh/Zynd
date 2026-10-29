@@ -4,7 +4,10 @@ import { TabPanel } from "@/shared/ui/tab-panel";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { LineChart } from "lucide-react";
+import { Download, LineChart } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { MfCasImportDialog } from "@/features/invest/components/mf-cas-import-dialog";
 
 import { DashboardBreadcrumb } from "@/components/dashboard/dashboard-breadcrumb";
 import { DashboardContentFade } from "@/components/dashboard/dashboard-content-fade";
@@ -18,6 +21,7 @@ import { PortfolioProcessingBanner } from "@/features/dashboard/portfolio/compon
 import { PortfolioRedeemUnitsPanel } from "@/features/dashboard/portfolio/components/portfolio-redeem-units-panel";
 import { PortfolioSipsPanel } from "@/features/dashboard/portfolio/components/portfolio-sips-panel";
 import { PortfolioSummaryCard } from "@/features/dashboard/portfolio/components/portfolio-summary-card";
+import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
 import { PortfolioUninvestedEmptyState } from "@/features/dashboard/portfolio/components/portfolio-uninvested-empty-state";
 import { PortfolioTransactionsPanel } from "@/features/dashboard/portfolio/components/portfolio-transactions-panel";
 import { useMfOrdersQuery } from "@/features/invest/hooks/use-mf-orders-query";
@@ -87,6 +91,22 @@ function PortfolioStatCard({
   );
 }
 
+function PortfolioImportExternalFunds() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <div className="mt-4 flex justify-center">
+        <Button type="button" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Download className="size-4" aria-hidden />
+          {copy.dashboard.portfolio.importExternalFunds}
+        </Button>
+      </div>
+      <MfCasImportDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 function PortfolioOverviewPanel() {
   const overview = copy.dashboard.overview;
   const portfolioCopy = copy.dashboard.portfolio;
@@ -122,6 +142,10 @@ function PortfolioOverviewPanel() {
   const hasResolved = summaryHasResolved && holdingsHasResolved;
   const showInitialSkeleton = !hasResolved && (summaryLoading || holdingsLoading);
   const errorMessage = summaryError || holdingsError;
+  const hasPlatformHoldings = holdings.some((row) => row.source !== "external");
+  const hasAllottedInvestment =
+    summary?.has_allotted_investment === true || hasPlatformHoldings;
+  const externalHoldings = holdings.filter((row) => row.source === "external");
   const hasHoldings = holdings.length > 0;
   const hasUpcoming = upcomingOrders.length > 0;
   const awaitingAllotmentInr = pendingInr;
@@ -171,10 +195,32 @@ function PortfolioOverviewPanel() {
     );
   }
 
-  if (showUninvestedEmpty && !hasUpcoming) {
+  if (showUninvestedEmpty && !hasUpcoming && !hasAllottedInvestment) {
     return (
       <DashboardContentFade>
         <PortfolioUninvestedEmptyState />
+      </DashboardContentFade>
+    );
+  }
+
+  if (hasAllottedInvestment && !hasPlatformHoldings && !hasUpcoming) {
+    const overviewTabMeta = getPortfolioTabMeta("overview");
+    return (
+      <DashboardContentFade>
+        <PortfolioTabEmptyState
+          icon={overviewTabMeta.icon}
+          title={portfolioCopy.overviewAlumniTitle}
+          description={portfolioCopy.overviewAlumniDescription}
+        />
+        {externalHoldings.length > 0 ? (
+          <PortfolioHoldingsTable
+            holdings={externalHoldings}
+            upcomingOrders={[]}
+            sipPlans={sipPlans}
+            className="mt-4"
+          />
+        ) : null}
+        <PortfolioImportExternalFunds />
       </DashboardContentFade>
     );
   }
@@ -243,6 +289,7 @@ function PortfolioOverviewPanel() {
           className="mt-4"
         />
       ) : null}
+      {hasAllottedInvestment ? <PortfolioImportExternalFunds /> : null}
     </DashboardContentFade>
   );
 }

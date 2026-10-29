@@ -1,4 +1,4 @@
-"""Family groups persistence — Phase 0 foundation."""
+"""Family groups persistence  Phase 0 foundation."""
 
 from __future__ import annotations
 

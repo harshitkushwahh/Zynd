@@ -39,7 +39,7 @@ const CHANNEL_META: Record<
   },
   mobile: {
     title: "Mobile verification",
-    description: "Indian mobile number and SMS OTP — same as the web signup flow.",
+    description: "Indian mobile number and SMS OTP  same as the web signup flow.",
     icon: Phone,
     inputLabel: "Mobile number",
     placeholder: "10-digit number",
@@ -73,7 +73,7 @@ export function AddInvestorVerifyChannel({
   const verified = otpSent && isValidSixDigitOtp(otp);
 
   const destination =
-    channel === "email" ? value : value.length === 10 ? `+91 ${value}` : "+91 —";
+    channel === "email" ? value : value.length === 10 ? `+91 ${value}` : "+91 ";
 
   const handleSendOtp = async () => {
     if (!inputValid) return;

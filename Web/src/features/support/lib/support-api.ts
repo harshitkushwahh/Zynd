@@ -15,6 +15,8 @@ type ApiMessage = {
   attachment_document_id?: string | null;
   attachment_filename?: string | null;
   resolution_active?: boolean;
+  help_feedback?: "pending" | "yes" | "no" | null;
+  help_feedback_active?: boolean;
   customer_read_at?: string | null;
   support_read_at?: string | null;
   support_read_by?: "bot" | "agent" | null;
@@ -65,17 +67,19 @@ export function mapConversationMessages(
   return messages.map((message) => {
     const isPrompt = isResolutionPromptMessage(message);
     const isLatestPrompt = isPrompt && message.id === latestPromptId;
-    const resolutionActive =
-      Boolean(message.resolution_active) || (resolutionOpen && isLatestPrompt);
+    const resolutionActive = isPrompt && resolutionOpen && isLatestPrompt;
 
     return {
       id: message.id,
       role: message.role === "user" ? "user" : message.role === "system" ? "system" : "agent",
+      authorRole: message.role,
       body: isPrompt && !message.body.trim() ? RESOLUTION_PROMPT_BODY : message.body,
       createdAt: message.created_at,
       senderName: message.sender_name ?? undefined,
       kind: isPrompt ? "resolution_prompt" : (message.kind ?? "text"),
       resolutionActive: isPrompt ? resolutionActive : false,
+      helpFeedback: message.help_feedback ?? undefined,
+      helpFeedbackActive: Boolean(message.help_feedback_active),
       attachmentId: message.attachment_document_id ?? undefined,
       imageName: message.attachment_filename ?? undefined,
       customerReadAt: message.customer_read_at ?? undefined,
@@ -143,6 +147,16 @@ export function postSupportMessage(body: string, file?: File | null) {
 
 export function getSupportTicketThread(ticketId: string) {
   return apiRequest<SupportConversationPayload>(`/support/tickets/${encodeURIComponent(ticketId)}`);
+}
+
+export function postBotHelpFeedback(messageId: string, choice: "yes" | "no") {
+  return apiRequest<SupportConversationPayload>(
+    `/support/conversations/messages/${messageId}/help-feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify({ choice }),
+    },
+  );
 }
 
 export function respondSupportResolution(ticketId: string, choice: "yes" | "no") {

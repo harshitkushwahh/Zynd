@@ -21,7 +21,7 @@
   padding-inline: clamp(0.35rem, 1vw, 0.75rem);
 }
 
-/* Success dashboard is one full-width block — not the KYC hero | illustration grid. */
+/* Success dashboard is one full-width block  not the KYC hero | illustration grid. */
 @media (min-width: 56rem) {
   .rf-kyc-overlay-content.rf-funds-page-content-dashboard {
     grid-template-columns: minmax(0, 1fr);
@@ -164,7 +164,7 @@
   justify-content: center;
 }
 
-/* Risk assessment illustration — glass hero art (riskpro-funds.png) */
+/* Risk assessment illustration  glass hero art (riskpro-funds.png) */
 .rf-risk-illustration.rf-risk-illustration-glass {
   position: relative;
   width: min(100%, 22rem);

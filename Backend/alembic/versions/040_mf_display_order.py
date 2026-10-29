@@ -1,4 +1,4 @@
-"""MF category display order — Phase 9.
+"""MF category display order  Phase 9.
 
 Revision ID: 040_mf_display_order
 Revises: 039_mf_catalog_overrides

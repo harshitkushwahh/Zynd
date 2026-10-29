@@ -1,4 +1,4 @@
-/** Browser storage keys — single source of truth (Phase 0). */
+/** Browser storage keys  single source of truth (Phase 0). */
 
 export const storageKeys = {
   signupSession: "zynd_signup_session",

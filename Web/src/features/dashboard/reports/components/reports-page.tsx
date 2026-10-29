@@ -16,6 +16,8 @@ import { REPORTS_ROUTE } from "@/features/dashboard/navigation/dashboard-routes"
 import { downloadInvestorReport } from "@/features/dashboard/reports/lib/investor-report-download";
 import { PortfolioDetailLockedSection } from "@/features/dashboard/portfolio/components/portfolio-detail-locked-section";
 import { PortfolioTabEmptyState } from "@/features/dashboard/portfolio/components/portfolio-tab-empty-state";
+import { usePortfolioHoldingsQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
+import { MfCasImportDialog } from "@/features/invest/components/mf-cas-import-dialog";
 import {
   createInvestorReport,
   fetchInvestorReports,
@@ -69,7 +71,6 @@ const REPORT_TYPES: Array<{
     title: copy.reports.casTitle,
     body: copy.reports.casBody,
     imageSrc: "/cas.png",
-    locked: true,
   },
 ];
 
@@ -157,6 +158,7 @@ export function ReportsPage() {
   const [runningKind, setRunningKind] = useState<InvestorReportKind | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [casOpen, setCasOpen] = useState(false);
 
   const reportsQuery = useQuery({
     queryKey: queryKeys.invest.reports(),
@@ -193,9 +195,13 @@ export function ReportsPage() {
     },
   });
 
+  const { holdings } = usePortfolioHoldingsQuery();
   const generated = reportsQuery.data?.reports ?? [];
   const eligibility = reportsQuery.data?.eligibility;
   const canGenerateReports = eligibility?.can_generate ?? false;
+  const casImportEligible =
+    eligibility?.cas_import_eligible === true ||
+    holdings.some((row) => row.source !== "external");
   const query = search.trim().toLowerCase();
   const visibleGenerated = query
     ? generated.filter((row) => {
@@ -220,21 +226,28 @@ export function ReportsPage() {
       <PageHeader icon={REPORTS_ROUTE.icon} title={copy.reports.pageTitle} />
       <div className="flex min-h-0 flex-col gap-6">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {REPORT_TYPES.map((item) => (
+          {REPORT_TYPES.map((item) => {
+            const isCas = item.kind === "cas";
+            return (
             <ReportTypeCard
               key={item.kind}
               title={item.title}
               body={item.body}
               imageSrc={item.imageSrc}
-              locked={item.locked}
-              runDisabled={!canGenerateReports}
-              generating={item.kind !== "cas" && runningKind === item.kind}
+              locked={isCas ? !casImportEligible : item.locked}
+              runDisabled={isCas ? !casImportEligible : !canGenerateReports}
+              generating={!isCas && runningKind === item.kind}
               onRun={() => {
-                if (item.kind === "cas" || !canGenerateReports) return;
+                if (isCas) {
+                  if (casImportEligible) setCasOpen(true);
+                  return;
+                }
+                if (!canGenerateReports) return;
                 generateMutation.mutate(item.kind);
               }}
             />
-          ))}
+            );
+          })}
         </div>
 
         {generated.length === 0 ? (
@@ -329,6 +342,7 @@ export function ReportsPage() {
           </div>
         )}
       </div>
+      <MfCasImportDialog open={casOpen} onOpenChange={setCasOpen} />
     </DashboardContentFade>
   );
 }

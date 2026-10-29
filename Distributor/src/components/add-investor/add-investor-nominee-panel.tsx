@@ -101,7 +101,7 @@ function NomineeListCard({
               ? `DOB ${formatNomineeDobDisplay(nominee.core.dateOfBirth)}`
               : nominee.core.age
                 ? `Age ${nominee.core.age}`
-                : "DOB —"}{" "}
+                : "DOB "}{" "}
             · {nominee.core.sharePercent}% share
           </p>
         </div>

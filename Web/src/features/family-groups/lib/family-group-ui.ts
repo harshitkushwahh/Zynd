@@ -32,6 +32,29 @@ export function familyMemberInitials(name: string) {
   return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
 }
 
+/** Five Zynd logo palette fills for initials avatars (blue, green, amber, purple, cyan). */
+export const ZYND_AVATAR_VARIANTS = [
+  { bg: "var(--zynd-blue)", fg: "var(--zynd-white)" },
+  { bg: "var(--zynd-emerald)", fg: "var(--zynd-white)" },
+  { bg: "var(--zynd-accent-amber)", fg: "var(--zynd-white)" },
+  { bg: "var(--zynd-purple)", fg: "var(--zynd-white)" },
+  { bg: "var(--zynd-accent-cyan)", fg: "var(--zynd-white)" },
+] as const;
+
+export function zyndAvatarVariantIndex(seed: string) {
+  const normalized = seed.trim();
+  if (!normalized) return 0;
+  let hash = 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = (hash + normalized.charCodeAt(index) * (index + 1)) % 10_007;
+  }
+  return hash % ZYND_AVATAR_VARIANTS.length;
+}
+
+export function zyndAvatarVariantForSeed(seed: string) {
+  return ZYND_AVATAR_VARIANTS[zyndAvatarVariantIndex(seed)];
+}
+
 export function familyMemberRoleName(role: FamilyGroupRole | string) {
   const normalized = role.trim().toLowerCase();
   const roles = copy.familyGroups.roles;

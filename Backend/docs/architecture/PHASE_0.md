@@ -1,4 +1,4 @@
-# Phase 0 — Inventory & guardrails
+# Phase 0  Inventory & guardrails
 
 Completed checklist for the backend refactor program.
 
@@ -17,10 +17,10 @@ Completed checklist for the backend refactor program.
 
 On API boot (`APP_ENV=development` for admin user only):
 
-1. `ensure_dev_admin_seed` — `admin@zynd.com` (development only)
-2. `ensure_rbac_seed` — permissions, roles, super_admin assignments
-3. `ensure_security_config_seed` — lockout/risk defaults
-4. `ensure_retention_seed` — data retention schedule rows
+1. `ensure_dev_admin_seed`  `admin@zynd.com` (development only)
+2. `ensure_rbac_seed`  permissions, roles, super_admin assignments
+3. `ensure_security_config_seed`  lockout/risk defaults
+4. `ensure_retention_seed`  data retention schedule rows
 
 ## Next: Phase 2
 

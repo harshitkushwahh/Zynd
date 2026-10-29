@@ -208,7 +208,7 @@ function BookQualityCharts() {
       <ChartCard
         eyebrow="Book quality"
         title="AUM movement"
-        info="Breakdown of what drove book change this month — opening balance, flows, market impact, and closing AUM."
+        info="Breakdown of what drove book change this month  opening balance, flows, market impact, and closing AUM."
       >
         <ResponsiveContainer width="100%" height={CHART_HEIGHT} minWidth={0}>
           <BarChart

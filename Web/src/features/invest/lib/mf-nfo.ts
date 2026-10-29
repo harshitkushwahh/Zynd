@@ -40,7 +40,7 @@ export function formatNfoSubscriptionPeriod(
   openDate?: string | null,
   closeDate?: string | null,
 ) {
-  if (!openDate && !closeDate) return "—";
+  if (!openDate && !closeDate) return "";
   if (!openDate) return formatDate(closeDate);
   if (!closeDate) return formatDate(openDate);
 

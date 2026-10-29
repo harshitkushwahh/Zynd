@@ -39,8 +39,8 @@ FINPRIM_INCOME_SLAB_OPTIONS = [
 
 FINPRIM_PEP_OPTIONS = [
     {"label": "No", "value": "not_applicable"},
-    {"label": "Yes — I am PEP exposed", "value": "pep_exposed"},
-    {"label": "Yes — related to a PEP", "value": "pep_related"},
+    {"label": "Yes I am PEP exposed", "value": "pep_exposed"},
+    {"label": "Yes related to a PEP", "value": "pep_related"},
 ]
 
 TERMINAL_READINESS_CODES = frozenset({"kyc_deactivated", "kyc_underprocess"})

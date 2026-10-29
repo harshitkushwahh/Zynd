@@ -57,7 +57,7 @@ export function SupportContactCard({
   if (panelView === "chat") {
     return (
       <SupportChatPanel
-        className={className}
+        className={cn("min-w-0 overflow-hidden", className)}
         messagesClassName={
           variant === "fullscreen"
             ? "px-4 sm:px-6 md:mx-auto md:w-full md:max-w-3xl"

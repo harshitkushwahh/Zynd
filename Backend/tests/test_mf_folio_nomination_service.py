@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from app.application.mf.mf_folio_nomination_service import (
+    _amc_code_from_folio,
     count_folio_nominees,
     nominee_count_label,
     primary_nominee_name,
     _serialize_folio_row,
 )
+from app.infrastructure.persistence.mf_models import FundAmc
 
 
 def test_count_folio_nominees_ignores_empty_slots() -> None:
@@ -41,3 +43,20 @@ def test_serialize_folio_row_without_amc_lookup() -> None:
     assert row["amc_name"] == "AMC 103"
     assert row["nominee_count"] == 0
     assert row["nominee_status"] == "No nominee"
+
+
+def test_amc_code_from_folio_reads_nested_object() -> None:
+    assert _amc_code_from_folio({"amc": {"id": "H", "name": "DSP"}}) == "H"
+
+
+def test_serialize_folio_row_resolves_amc_from_holdings_isin() -> None:
+    amc = FundAmc(name="DSP Mutual Fund", slug="dsp", amc_code="DSP")
+    row = _serialize_folio_row(
+        {"number": "44851151/97", "amc": "H", "nominee1": None},
+        amc_by_code={},
+        amc_by_isin={"INF179KC1HC7": amc},
+        holding_rows=[{"folio_number": "44851151/97", "isin": "INF179KC1HC7", "units": 1.0}],
+    )
+    assert row is not None
+    assert row["amc_name"] == "DSP Mutual Fund"
+    assert row["amc_slug"] == "dsp"

@@ -67,8 +67,8 @@ def _format_pep(value: str | None) -> str | None:
         return None
     mapping = {
         "not_applicable": "No",
-        "pep_exposed": "Yes — PEP exposed",
-        "pep_related": "Yes — related to a PEP",
+        "pep_exposed": "Yes PEP exposed",
+        "pep_related": "Yes related to a PEP",
     }
     return mapping.get(value, value.replace("_", " ").title())
 

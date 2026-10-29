@@ -1,4 +1,4 @@
-# MF payments master — Lumpsum & SIP (MultiPlus end-to-end)
+# MF payments master  Lumpsum & SIP (MultiPlus end-to-end)
 
 Single reference for **Mutual Fund checkout**: OAuth tenants, **MultiPlus** HTTP APIs (webapp → backend), and **Finprim / Cybrilla** partner APIs (backend → FP). Covers **lumpsum (one-time)** and **SIP** (mandate + plan + first installment).
 
@@ -6,15 +6,15 @@ Single reference for **Mutual Fund checkout**: OAuth tenants, **MultiPlus** HTTP
 
 **Related (Zynd repo):**
 
-- [MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md](./MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md) — Zynd ONDC deferral vs MultiPlus explicit steps  
-- [MF_ONDC_LUMPSUM_PAYMENT_FLOW.md](./MF_ONDC_LUMPSUM_PAYMENT_FLOW.md) — Cybrilla A–H + Zynd invest API list  
-- [INVESTOR_PROFILE.md](./INVESTOR_PROFILE.md) — investor provisioning before MF orders  
-- [MF_SCHEDULER_PHASES.md](./MF_SCHEDULER_PHASES.md) § Phase 6 — orders, workers, config  
+- [MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md](./MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md)  Zynd ONDC deferral vs MultiPlus explicit steps  
+- [MF_ONDC_LUMPSUM_PAYMENT_FLOW.md](./MF_ONDC_LUMPSUM_PAYMENT_FLOW.md)  Cybrilla A–H + Zynd invest API list  
+- [INVESTOR_PROFILE.md](./INVESTOR_PROFILE.md)  investor provisioning before MF orders  
+- [MF_SCHEDULER_PHASES.md](./MF_SCHEDULER_PHASES.md) § Phase 6  orders, workers, config  
 
-**Related (MultiPlus monorepo only — not in Zynd):**
+**Related (MultiPlus monorepo only  not in Zynd):**
 
-- `BASKET_INVEST_E2E_CHECKLIST.md` — multi-fund basket batch  
-- `KYC_ARCHITECTURE_MODEL.md` §13 — full partner API inventory  
+- `BASKET_INVEST_E2E_CHECKLIST.md`  multi-fund basket batch  
+- `KYC_ARCHITECTURE_MODEL.md` §13  full partner API inventory  
 
 ---
 
@@ -25,9 +25,9 @@ MultiPlus uses **separate OAuth stacks** for MF investing vs KYC vs Cybrilla POA
 | Stack | Java service | Token HTTP | API base | Env (primary) | Tenant / OAuth | Used for |
 |-------|--------------|------------|----------|---------------|----------------|----------|
 | **MF / payments / OMS** | `FpTokenService` | `POST {FP_BASE_URL}/v2/auth/{FP_TENANT}/token` | `{FP_BASE_URL}` | `FP_*` | MF tenant (e.g. multiplus) | Lumpsum + SIP + mandates + PG in this doc |
-| **KYC legacy Finprim** | `KycTokenService` | Same pattern | `KYC_TENANT_BASE_URL` / sandbox | `KYC_TENANT_*`, `DIGILOCKER_FP_*` | KYC tenant | kyc_requests, esigns — not MF checkout |
-| **Cybrilla POA (KRA)** | `FpPoaTokenService` | `POST {FP_POA_TOKEN_BASE_URL}/v2/auth/{FP_POA_AUTH_TENANT}/token` | `FP_POA_BASE_URL` | `FP_POA_*` | cybrillapoa | pre_verifications, kyc_forms — not MF checkout |
-| **Zero-touch lookups** | `ZtoTokenService` | POA pattern | `ZTO_API_BASE_URL` | `ZTO_*` | cybrillapoa | Lookups — not MF checkout |
+| **KYC legacy Finprim** | `KycTokenService` | Same pattern | `KYC_TENANT_BASE_URL` / sandbox | `KYC_TENANT_*`, `DIGILOCKER_FP_*` | KYC tenant | kyc_requests, esigns  not MF checkout |
+| **Cybrilla POA (KRA)** | `FpPoaTokenService` | `POST {FP_POA_TOKEN_BASE_URL}/v2/auth/{FP_POA_AUTH_TENANT}/token` | `FP_POA_BASE_URL` | `FP_POA_*` | cybrillapoa | pre_verifications, kyc_forms  not MF checkout |
+| **Zero-touch lookups** | `ZtoTokenService` | POA pattern | `ZTO_API_BASE_URL` | `ZTO_*` | cybrillapoa | Lookups  not MF checkout |
 
 ### 1.1 MF token request (MultiPlus)
 
@@ -52,7 +52,7 @@ Response: `access_token` (Bearer), `expires_in`. Cached in-memory ~`FP_TOKEN_CAC
 
 URL: `{FP_BASE_URL}{path}`. **No `x-tenant-id`** on standard MF client (KYC orchestrator may differ).
 
-**Zynd equivalent:** `fp_oms_client._fp_mf_request` — `Authorization`, `x-tenant-id: {runtime.tenant}`, optional `user_ip` on purchase body (not X-Forwarded-For on all calls).
+**Zynd equivalent:** `fp_oms_client._fp_mf_request`  `Authorization`, `x-tenant-id: {runtime.tenant}`, optional `user_ip` on purchase body (not X-Forwarded-For on all calls).
 
 ### 1.3 Feature flags (MF)
 
@@ -95,7 +95,7 @@ Gateway default: **`ondc`** on `POST /v2/mf_purchases` / plans (`create_mf_purch
 
 ---
 
-## 3. Lumpsum (one-time) — full flow
+## 3. Lumpsum (one-time)  full flow
 
 ### 3.1 Sequence (Cybrilla ONDC + MultiPlus)
 
@@ -138,8 +138,8 @@ Base: `/api/v1/payments/me`. Client: `webapp/src/api/payments.js`.
 | 2 | POST | `/mf/purchase/{id}/consent` | PATCH consent |
 | 3–4 | POST | `.../otp/send`, `.../otp/verify` | Consent OTP |
 | 5 | POST | `/mf/purchase/{id}/pay` | PG + redirect URL |
-| — | GET | `.../payment-status` | Poll |
-| — | POST | `.../sync-from-fp`, `/retry`, `/cancel` | Ops |
+|  | GET | `.../payment-status` | Poll |
+|  | POST | `.../sync-from-fp`, `/retry`, `/cancel` | Ops |
 
 ### 3.3 Finprim calls (lumpsum)
 
@@ -173,16 +173,16 @@ Base: `/api/v1/payments/me`. Client: `webapp/src/api/payments.js`.
 
 ---
 
-## 4. SIP — full flow
+## 4. SIP  full flow
 
 Same **MF token** and `FP_BASE_URL`. Mandates + first installment use `/api/pg/*`; plans use `/v2/mf_purchase_plans`.
 
 ### 4.1 Phases
 
-1. **Mandate** — `POST /api/pg/mandates` → authorize  
-2. **Plan** — `POST /v2/mf_purchase_plans` → OTP → `PATCH` confirm + consent  
-3. **First installment** — child `mf_purchases` + `POST /api/pg/payments/netbanking` (like lumpsum)  
-4. **Ongoing** — mandate debits; plan cancel/pause APIs  
+1. **Mandate**  `POST /api/pg/mandates` → authorize  
+2. **Plan**  `POST /v2/mf_purchase_plans` → OTP → `PATCH` confirm + consent  
+3. **First installment**  child `mf_purchases` + `POST /api/pg/payments/netbanking` (like lumpsum)  
+4. **Ongoing**  mandate debits; plan cancel/pause APIs  
 
 ### 4.2 MultiPlus REST (SIP)
 
@@ -197,7 +197,7 @@ Same **MF token** and `FP_BASE_URL`. Mandates + first installment use `/api/pg/*
 | Plan | `POST /v2/mf_purchase_plans` | `POST /mf/sip/plan` | `POST /invest/sip/plans` |
 | Plan confirm | `PATCH` confirmed + consent | `POST .../confirm` | `submit_pending_sip_plan` / worker |
 | First installment | `GET mf_purchases?plan`, netbanking | on confirm attach | `POST .../first-installment/pay`, `mf_sip_installment_order_service` |
-| Recurring | mandate | — | `mf_mandate_service` |
+| Recurring | mandate |  | `mf_mandate_service` |
 
 Mandate `provider_name`: **CYBRILLAPOA** (default in Zynd) vs **ONDC** on lumpsum netbanking.
 
@@ -210,7 +210,7 @@ Mandate `provider_name`: **CYBRILLAPOA** (default in Zynd) vs **ONDC** on lumpsu
 
 **Zynd files:** `mf_sip_plan_service.py`, `mf_mandate_service.py`, `mf_sip_installment_order_service.py`, `fp_mandate_client.py`.
 
-**Daily vs monthly SIP (Zynd):** [MF_SIP_DAILY_FREQUENCY.md](./MF_SIP_DAILY_FREQUENCY.md) — frequency field, OMS validation, invest card, and cart.
+**Daily vs monthly SIP (Zynd):** [MF_SIP_DAILY_FREQUENCY.md](./MF_SIP_DAILY_FREQUENCY.md)  frequency field, OMS validation, invest card, and cart.
 
 ---
 
@@ -232,7 +232,7 @@ Mandate `provider_name`: **CYBRILLAPOA** (default in Zynd) vs **ONDC** on lumpsu
 
 ## 6. Basket checkout (brief)
 
-**MultiPlus:** `/api/v1/payments/me/mf/basket/lumpsum` — batch purchases, one netbanking with multiple `amc_order_ids`.
+**MultiPlus:** `/api/v1/payments/me/mf/basket/lumpsum`  batch purchases, one netbanking with multiple `amc_order_ids`.
 
 **Zynd:** `POST /invest/cart/checkout` (lumpsum cart), `advance_ondc_cart_checkout`, `_create_cart_checkout_payment` with multiple `amc_order_ids`. SIP cart: `POST /invest/cart/sip/checkout`.
 
@@ -301,8 +301,8 @@ ZYND_MF_FP_USER_IP_FALLBACK=<public-ipv4>
 | 401 on MF | Wrong host/tenant; invalidate token cache |
 | No `token_url` (lumpsum) | Not `pending`; consent; confirm before PG; bad `old_id` |
 | PG 422 ONDC | Wrong step order; duplicate netbanking on paid SIP installment |
-| Postback never hits API | URL points at SPA only — MultiPlus needs API `/fp/postback`; Zynd needs whitelisted postback on PG create |
-| Instant “link no longer valid” (Zynd) | Stale sessionStorage, reused cancelled order, reconcile `payment_abandoned` — see [fix guide](./MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md) |
+| Postback never hits API | URL points at SPA only  MultiPlus needs API `/fp/postback`; Zynd needs whitelisted postback on PG create |
+| Instant “link no longer valid” (Zynd) | Stale sessionStorage, reused cancelled order, reconcile `payment_abandoned`  see [fix guide](./MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md) |
 | Mandate stuck | `GET /api/pg/mandates/{id}`; complete auth |
 
 ---
@@ -318,9 +318,9 @@ Base: **`/api/v1/invest`**. Auth: investor session + fund eligibility where note
 | `POST /mf/purchase` | `POST /invest/orders` |
 | `POST /consent` + OTP + `POST /pay` | (partner steps inside) `GET /invest/orders/{id}/payment-status` |
 | `GET /payment-status` | Same path |
-| — | `GET /invest/orders/{id}` |
-| — | `POST /invest/orders/{id}/confirm-payment-return` |
-| — | `POST /invest/orders/{id}/abandon-payment` (explicit cancel only) |
+|  | `GET /invest/orders/{id}` |
+|  | `POST /invest/orders/{id}/confirm-payment-return` |
+|  | `POST /invest/orders/{id}/abandon-payment` (explicit cancel only) |
 
 ### 11.2 Cart lumpsum
 

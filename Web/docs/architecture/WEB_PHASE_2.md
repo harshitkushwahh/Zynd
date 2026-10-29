@@ -1,4 +1,4 @@
-# Web Phase 2 — Navigation & routing
+# Web Phase 2  Navigation & routing
 
 Completed checklist. Dashboard tabs now use real URLs; navigation config is a single source of truth.
 
@@ -34,9 +34,9 @@ Completed checklist. Dashboard tabs now use real URLs; navigation config is a si
 ## Behavior notes
 
 - Top tab bar is hidden on settings pages (breadcrumb owns that context).
-- `/dashboard` matches only the portfolio overview — not nested dashboard paths.
+- `/dashboard` matches only the portfolio overview  not nested dashboard paths.
 - Search (⌘K) navigates to route `href`s.
 
 ## Next: Web Phase 4
 
-Dashboard feature modules — overview, security alerts, MFA banner under `features/`.
+Dashboard feature modules  overview, security alerts, MFA banner under `features/`.

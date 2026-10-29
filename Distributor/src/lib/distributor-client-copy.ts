@@ -37,7 +37,7 @@ export const DISTRIBUTOR_CLIENT_COPY = {
   kyc: {
     title: "KYC verification",
     description:
-      "Same journey investors complete on Zynd — PAN, address, bank, and review steps.",
+      "Same journey investors complete on Zynd  PAN, address, bank, and review steps.",
     overallLabel: "Overall status",
     stepCompleted: "Completed",
     stepPending: "Pending",
@@ -69,7 +69,7 @@ export const DISTRIBUTOR_CLIENT_COPY = {
     auditLogColumnSource: "Source",
     auditLogActorInvestor: "Investor",
     auditLogActorSystem: "System",
-    auditLogStepNone: "—",
+    auditLogStepNone: "",
   },
 
   portfolio: {
@@ -258,7 +258,7 @@ export const DISTRIBUTOR_CLIENT_COPY = {
 
   referrals: {
     title: "Referrals",
-    description: "Invite → Invest → Qualify — same program investors see on Zynd.",
+    description: "Invite → Invest → Qualify  same program investors see on Zynd.",
     referralCode: "Referral code",
     totalReferrals: "Total referrals",
     kycVerified: "KYC verified",
@@ -331,12 +331,12 @@ export const DISTRIBUTOR_CLIENT_COPY = {
     columnUploaded: "Uploaded",
     columnStatus: "Status",
     columnSource: "Source",
-    identifierNone: "—",
+    identifierNone: "",
     identifierNotSubmitted: "Not submitted",
-    fileNone: "—",
+    fileNone: "",
     fileNotSubmitted: "Not submitted",
     fileNotUploaded: "Not uploaded yet",
-    dateNone: "—",
+    dateNone: "",
     dateNotSubmitted: "Not submitted",
     dateNotUploaded: "Not uploaded yet",
     viewDescription: "Files uploaded by this investor during KYC.",

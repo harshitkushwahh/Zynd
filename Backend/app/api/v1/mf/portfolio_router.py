@@ -63,6 +63,7 @@ from app.api.v1.mf.schemas import (
     MfCartResponse,
     MfCasImportListResponse,
     MfCasImportResponse,
+    MfCasQrRequest,
     CreateInvestorReportRequest,
     InvestorReportListResponse,
     InvestorReportResponse,
@@ -137,6 +138,7 @@ from app.application.mf.cas_import_service import (
     list_user_cas_imports,
     list_user_external_holdings,
     request_user_cas_import,
+    validate_user_cas_qr,
 )
 from app.application.mf.investor_report_service import (
     InvestorReportError,
@@ -1013,6 +1015,21 @@ async def cancel_mf_stp_plan_route(
     return await mf_h._systematic_plan_response(db, plan)
 
 
+def _cas_import_response(import_row) -> MfCasImportResponse:
+    metadata = import_row.metadata_ or {}
+    launch_url = metadata.get("launch_url")
+    return MfCasImportResponse(
+        import_id=str(import_row.id),
+        status=import_row.status.value,
+        external_request_id=import_row.external_request_id,
+        launch_url=str(launch_url) if launch_url else None,
+        holdings_count=import_row.holdings_count,
+        failure_reason=import_row.failure_reason,
+        requested_at=import_row.requested_at,
+        completed_at=import_row.completed_at,
+    )
+
+
 @router.post("/cas/imports", response_model=MfCasImportResponse)
 async def request_cas_import(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -1024,20 +1041,40 @@ async def request_cas_import(
 
     try:
         import_row = await request_user_cas_import(db, user=current_user)
+        response = _cas_import_response(import_row)
         await db.commit()
     except MfCasError:
         await db.rollback()
         raise
 
-    return MfCasImportResponse(
-        import_id=str(import_row.id),
-        status=import_row.status.value,
-        external_request_id=import_row.external_request_id,
-        holdings_count=import_row.holdings_count,
-        failure_reason=import_row.failure_reason,
-        requested_at=import_row.requested_at,
-        completed_at=import_row.completed_at,
-    )
+    return response
+
+
+@router.post("/cas/imports/{import_id}/qr", response_model=MfCasImportResponse)
+async def submit_cas_qr(
+    import_id: UUID,
+    body: MfCasQrRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_invest_eligible_user)],
+) -> MfCasImportResponse:
+    settings = get_settings()
+    if not settings.zynd_mf_cas_enabled:
+        raise HTTPException(status_code=503, detail="External holdings import is not enabled")
+
+    try:
+        import_row = await validate_user_cas_qr(
+            db,
+            user_id=current_user.id,
+            import_id=import_id,
+            qr_code=body.qr_code,
+        )
+        response = _cas_import_response(import_row)
+        await db.commit()
+    except MfCasError:
+        await db.rollback()
+        raise
+
+    return response
 
 
 @router.get("/cas/imports", response_model=MfCasImportListResponse)
@@ -1046,20 +1083,7 @@ async def list_cas_imports(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> MfCasImportListResponse:
     imports = await list_user_cas_imports(db, user_id=current_user.id)
-    return MfCasImportListResponse(
-        imports=[
-            MfCasImportResponse(
-                import_id=str(row.id),
-                status=row.status.value,
-                external_request_id=row.external_request_id,
-                holdings_count=row.holdings_count,
-                failure_reason=row.failure_reason,
-                requested_at=row.requested_at,
-                completed_at=row.completed_at,
-            )
-            for row in imports
-        ]
-    )
+    return MfCasImportListResponse(imports=[_cas_import_response(row) for row in imports])
 
 
 

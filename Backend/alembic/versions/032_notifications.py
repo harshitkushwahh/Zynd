@@ -1,4 +1,4 @@
-"""Phase 1 notifications — in-app inbox and user preferences.
+"""Phase 1 notifications  in-app inbox and user preferences.
 
 Revision ID: 032_notifications
 Revises: 031_referral_stage5

@@ -88,6 +88,55 @@ function StoredAttachmentImage({
   );
 }
 
+function BotHelpFeedbackRow({ message }: { message: SupportMessage }) {
+  const { chat } = useSupportWidget();
+  const [pending, setPending] = useState<"yes" | "no" | null>(null);
+
+  if (message.authorRole !== "bot" || message.id === "zynd-help-bot-greeting") {
+    return null;
+  }
+  if (message.helpFeedback === "yes") {
+    return (
+      <p className="px-1 text-[10px] text-muted-foreground">{copy.support.helpFeedbackThanks}</p>
+    );
+  }
+  if (message.helpFeedback === "no" || !message.helpFeedbackActive) {
+    return null;
+  }
+
+  const choose = (choice: "yes" | "no") => {
+    if (pending) return;
+    setPending(choice);
+    void chat.submitHelpFeedback(message.id, choice).finally(() => setPending(null));
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-1 pt-0.5">
+      <span className="text-[10px] text-muted-foreground">{copy.support.helpFeedbackPrompt}</span>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-7 rounded-lg px-2.5 text-[11px]"
+        disabled={pending !== null}
+        onClick={() => choose("yes")}
+      >
+        {copy.support.helpFeedbackYes}
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-7 rounded-lg px-2.5 text-[11px] text-muted-foreground"
+        disabled={pending !== null}
+        onClick={() => choose("no")}
+      >
+        {copy.support.helpFeedbackNo}
+      </Button>
+    </div>
+  );
+}
+
 function ResolutionPromptCard({ message }: { message: SupportMessage }) {
   const { chat } = useSupportWidget();
   const [pending, setPending] = useState<"yes" | "no" | null>(null);
@@ -100,22 +149,23 @@ function ResolutionPromptCard({ message }: { message: SupportMessage }) {
   };
 
   return (
-    <div className="flex w-full items-end gap-2 justify-start px-0.5 py-1">
-      <Avatar size="sm" className="mb-5 shrink-0 border border-border/70">
+    <div className="flex w-full min-w-0 max-w-full items-end gap-2 justify-start px-0.5 py-1 isolate">
+      <Avatar size="sm" className="mb-5 shrink-0 border border-border/70 bg-card shadow-zynd-low after:mix-blend-normal">
         <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
           {chat.agent.initials}
         </AvatarFallback>
       </Avatar>
 
-      <div className="flex w-full max-w-[min(100%,42rem)] flex-col items-start gap-1 sm:max-w-[min(100%,52rem)] xl:max-w-[72%]">
+      <div className="flex min-w-0 max-w-[calc(100%-2.75rem)] flex-col items-start gap-1 sm:max-w-[min(85%,24rem)]">
         <span className="px-1 text-[11px] font-medium text-muted-foreground">
           {message.senderName ?? chat.agent.name}
         </span>
-        <div className="w-full max-w-sm rounded-2xl rounded-bl-md border border-border/70 bg-card px-3.5 py-3 shadow-zynd-low">
-          <p className="text-compact font-semibold text-foreground">{message.body}</p>
+        <div className="w-full min-w-0 max-w-full rounded-2xl rounded-bl-md border border-border/70 bg-card px-3.5 py-3 shadow-zynd-low">
+          <p className="text-compact font-semibold break-words [overflow-wrap:anywhere] text-foreground">
+            {message.body}
+          </p>
           {showButtons ? (
             <>
-              <p className="mt-1 text-caption text-muted-foreground">{copy.support.resolutionHint}</p>
               <div className="mt-3 flex gap-2">
                 <Button
                   type="button"
@@ -189,12 +239,12 @@ export function SupportMessageBubble({ message }: SupportMessageBubbleProps) {
   return (
     <div
       className={cn(
-        "flex w-full items-end gap-2",
+        "flex w-full min-w-0 max-w-full items-end gap-2 isolate",
         isUser ? "justify-end" : "justify-start",
       )}
     >
       {!isUser ? (
-        <Avatar size="sm" className="mb-5 shrink-0 border border-border/70">
+        <Avatar size="sm" className="mb-5 shrink-0 border border-border/70 bg-card shadow-zynd-low after:mix-blend-normal">
           <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
             {chat.agent.initials}
           </AvatarFallback>
@@ -203,7 +253,7 @@ export function SupportMessageBubble({ message }: SupportMessageBubbleProps) {
 
       <div
         className={cn(
-          "flex w-full max-w-[min(100%,42rem)] flex-col gap-1 sm:max-w-[min(100%,52rem)] xl:max-w-[72%]",
+          "flex min-w-0 max-w-[calc(100%-2.75rem)] flex-col gap-1 sm:max-w-[min(85%,42rem)] xl:max-w-[72%]",
           isUser ? "items-end" : "items-start",
         )}
       >
@@ -214,7 +264,7 @@ export function SupportMessageBubble({ message }: SupportMessageBubbleProps) {
         ) : null}
         <div
           className={cn(
-            "overflow-hidden rounded-2xl text-compact leading-relaxed",
+            "w-full min-w-0 max-w-full overflow-hidden rounded-2xl text-compact leading-relaxed",
             isUser
               ? "rounded-br-md bg-primary text-primary-foreground shadow-zynd-low"
               : "rounded-bl-md border border-border/70 bg-card text-foreground shadow-zynd-low",
@@ -233,7 +283,14 @@ export function SupportMessageBubble({ message }: SupportMessageBubbleProps) {
             </div>
           ) : null}
           {showText ? (
-            <p className={cn(hasImage && "px-2 pb-1.5 pt-0.5")}>{message.body}</p>
+            <p
+              className={cn(
+                "whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+                hasImage && "px-2 pb-1.5 pt-0.5",
+              )}
+            >
+              {message.body}
+            </p>
           ) : null}
         </div>
         <span className="flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
@@ -253,10 +310,11 @@ export function SupportMessageBubble({ message }: SupportMessageBubbleProps) {
             />
           )}
         </span>
+        {!isUser ? <BotHelpFeedbackRow message={message} /> : null}
       </div>
 
       {isUser ? (
-        <Avatar size="sm" className="mb-5 shrink-0 border border-border/70">
+        <Avatar size="sm" className="mb-5 shrink-0 border border-border/70 bg-card shadow-zynd-low after:mix-blend-normal">
           {profileImage?.profileUrl ? (
             <AvatarImage src={profileImage.profileUrl} alt={profileLabel} />
           ) : null}

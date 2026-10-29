@@ -1,4 +1,4 @@
-"""Phase 5 notification hardening — audit events for delivery compliance.
+"""Phase 5 notification hardening  audit events for delivery compliance.
 
 Revision ID: 034_notification_phase5
 Revises: 033_push_devices

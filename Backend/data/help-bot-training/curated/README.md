@@ -1,6 +1,6 @@
 # Curated training batches (customer voice)
 
-These files are **authored** support questions—not parametric template spam.
+These files are **authored** support questionsnot parametric template spam.
 
 | File | Role |
 |------|------|

@@ -13,7 +13,7 @@ export type DistributorNotification = {
   kind: DistributorNotificationKind;
 };
 
-/** Alerts for the logged-in distributor employee — not client order/txn feed. */
+/** Alerts for the logged-in distributor employee  not client order/txn feed. */
 export const DISTRIBUTOR_DUMMY_NOTIFICATIONS: DistributorNotification[] = [
   {
     id: "n1",
@@ -35,7 +35,7 @@ export const DISTRIBUTOR_DUMMY_NOTIFICATIONS: DistributorNotification[] = [
     id: "n3",
     kind: "lead",
     title: "New lead in pipeline",
-    body: "Branch walk-in referral — invite link sent to the prospect.",
+    body: "Branch walk-in referral  invite link sent to the prospect.",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
     read: true,
   },

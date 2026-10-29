@@ -191,7 +191,7 @@ export function SupportTicketsTable({
               </StatusBadge>
             </Table.Cell>
             <Table.Cell className="tabular-nums text-muted-foreground">
-              {ticket.urgencyScore ?? ticket.routing?.urgencyScore ?? "—"}
+              {ticket.urgencyScore ?? ticket.routing?.urgencyScore ?? ""}
             </Table.Cell>
             <Table.Cell
               className={cn(

@@ -174,7 +174,7 @@ async def verify_otp(purpose: str, identifier: str, code: str) -> bool:
     return True
 
 
-# Backward-compatible re-exports — prefer persistence stores directly.
+# Backward-compatible re-exports  prefer persistence stores directly.
 from app.infrastructure.persistence.password_reset_token_store import (  # noqa: E402
     consume_reset_token,
     create_reset_token,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,8 +7,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from app.application.support.context_pack import build_context_pack
+from app.application.support.help_bot_answer_policy import (
+    HELP_BOT_SYSTEM_PROMPT,
+    build_help_bot_user_prompt,
+    pick_customer_reply,
+    should_escalate_to_human,
+)
+from app.application.support.help_bot_conversation_context import resolve_help_topics
+from app.application.support.help_bot_grounded_reply import (
+    should_answer_without_llm,
+    try_grounded_account_reply,
+)
+from app.application.support.help_bot_order_context import (
+    enrich_payment_context_for_message,
+    message_mentions_order_id,
+    reply_for_pasted_order_ids,
+)
+from app.application.support.help_bot_types import BotDraft
 from app.application.support.ollama_client import OllamaError, complete_help_reply
-from app.application.support.playbooks_loader import playbooks_for
 from app.application.support.scope_gate import BOT_NAME, OUT_OF_SCOPE_REPLY, classify_message
 from app.application.support.training_loader import similar_training_examples
 from app.application.support.ticket_service import (
@@ -29,20 +44,9 @@ from app.application.support.ticket_service import (
     similar_resolutions,
     utcnow,
 )
+from app.application.support.customer_message_limits import validate_customer_message_text
 from app.application.support.ticket_attachments import store_ticket_image
 from app.infrastructure.persistence.models import User
-
-_SYSTEM_PROMPT = """You are Zynd Help Bot, the first-line assistant inside the Zynd app.
-Answer only from the product playbook and the customer context in the user message.
-Never use outside knowledge. Never invent amounts, statuses, dates, order ids, or account facts.
-If the context does not contain the fact the customer needs, set can_answer to false.
-Respond with JSON only: {"can_answer": true or false, "answer": "short reply"}.
-When can_answer is true, the answer is shown to the customer. Write in clear, friendly language.
-Answer the exact question (when, whether, why, status) using dates and flags from context slices
-such as last_sip_debit, last_sip_failure, kyc.completed_at, and google_account_linked.
-When can_answer is false, the answer is an internal reason, one sentence, with no invented facts.
-"""
-
 
 def _escalation_text(public_id: str) -> str:
     return (
@@ -75,14 +79,8 @@ async def post_customer_message(
     body: str,
     upload: tuple[str, bytes] | None = None,
 ) -> dict:
-    text = body.strip()
     has_image = upload is not None and len(upload[1]) > 0
-    if has_image and not text:
-        text = "I attached an image."
-    if not text:
-        raise SupportActionError("empty_message", "Write a message before sending.")
-    if len(text) > 4000:
-        raise SupportActionError("message_too_long", "Message is too long.")
+    text = validate_customer_message_text(text=body, has_attachment=has_image)
 
     await close_stale_resolution_prompts(db, user_id=user.id)
     conversation = await find_active_conversation(db, user.id)
@@ -101,6 +99,12 @@ async def post_customer_message(
             "conversation_closed",
             "This ticket is resolved. Start a new chat to message support.",
             403,
+        )
+    if has_image and conversation.handler != "human":
+        raise SupportActionError(
+            "attachment_not_available",
+            "You can share images after a support agent joins this chat.",
+            400,
         )
     if (
         ticket is not None
@@ -213,59 +217,125 @@ async def post_customer_message(
         )
         return await serialize_customer_conversation(db, user, conversation)
 
-    pack = await build_context_pack(db, user, decision.topics)
-    examples = await similar_resolutions(db, text, decision.topics)
-    if len(examples) < 3:
-        examples = [
-            *examples,
-            *similar_training_examples(
-                text,
-                decision.topics,
-                limit=3 - len(examples),
-            ),
-        ]
     history = await list_messages(db, conversation.id)
     transcript = [
         {"role": message.role, "body": message.body}
         for message in history
         if message.visibility == "customer" and message.kind != "resolution_prompt"
     ][-6:]
-    user_prompt = (
-        f"Playbook:\n{playbooks_for(decision.topics)}\n\n"
-        f"Customer context:\n{json.dumps(pack, default=str)[:3500]}\n\n"
-        f"Approved past answers:\n{json.dumps(examples, default=str)[:1500]}\n\n"
-        f"Conversation:\n{json.dumps(transcript, default=str)[:2000]}\n\n"
-        f"Latest question:\n{text}"
-    )
-    try:
-        draft = await complete_help_reply(system_prompt=_SYSTEM_PROMPT, user_prompt=user_prompt)
-    except OllamaError as exc:
-        logger.warning("help_bot_ollama_failed user=%s error=%s", user.id, exc)
-        await _escalate(
-            db,
-            user,
-            conversation,
-            text,
-            decision.topics,
-            "Zynd Help Bot could not reach the model.",
-            routing_fallback_only=True,
-        )
-        return await serialize_customer_conversation(db, user, conversation)
 
-    if not draft.can_answer:
+    topics = resolve_help_topics(
+        message_topics=tuple(decision.topics),
+        transcript=transcript,
+        latest_text=text,
+    )
+    if message_mentions_order_id(text) and "payment" not in topics:
+        topics = (*topics, "payment")
+    pack = await build_context_pack(db, user, topics)
+    await enrich_payment_context_for_message(db, user.id, text, pack)
+
+    if message_mentions_order_id(text):
+        order_reply = await reply_for_pasted_order_ids(db, user.id, text)
+        if order_reply:
+            await add_message(
+                db,
+                conversation,
+                role="bot",
+                body=order_reply,
+                sender_name=BOT_NAME,
+            )
+            await ensure_ticket(
+                db,
+                conversation,
+                user,
+                body=text,
+                topics=topics,
+                handled_by="bot",
+                status="pending",
+            )
+            conversation.handler = "bot"
+            conversation.status = "open"
+            return await serialize_customer_conversation(db, user, conversation)
+
+    if should_answer_without_llm(text):
+        grounded_only = try_grounded_account_reply(text, pack, topics)
+        if grounded_only:
+            await add_message(
+                db,
+                conversation,
+                role="bot",
+                body=grounded_only,
+                sender_name=BOT_NAME,
+            )
+            await ensure_ticket(
+                db,
+                conversation,
+                user,
+                body=text,
+                topics=topics,
+                handled_by="bot",
+                status="pending",
+            )
+            conversation.handler = "bot"
+            conversation.status = "open"
+            return await serialize_customer_conversation(db, user, conversation)
+
+    examples = await similar_resolutions(db, text, topics)
+    if len(examples) < 3:
+        examples = [
+            *examples,
+            *similar_training_examples(
+                text,
+                topics,
+                limit=3 - len(examples),
+            ),
+        ]
+    user_prompt = build_help_bot_user_prompt(
+        topics=topics,
+        pack=pack,
+        examples=examples,
+        transcript=transcript,
+        latest_question=text,
+    )
+
+    llm_unavailable = False
+    draft = BotDraft(can_answer=False, answer="", needs_agent=False)
+    try:
+        draft = await complete_help_reply(
+            system_prompt=HELP_BOT_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+        )
+    except OllamaError as exc:
+        llm_unavailable = True
+        logger.warning("help_bot_ollama_failed user=%s error=%s", user.id, exc)
+
+    customer_reply = pick_customer_reply(
+        question=text,
+        pack=pack,
+        topics=topics,
+        draft=draft,
+    )
+    escalate, escalate_reason = should_escalate_to_human(
+        needs_human=False,
+        draft=draft,
+        customer_reply=customer_reply,
+        llm_unavailable=llm_unavailable,
+    )
+    if escalate:
         logger.info(
-            "help_bot_cannot_answer user=%s topics=%s reason=%s",
+            "help_bot_escalate user=%s topics=%s reason=%s",
             user.id,
-            decision.topics,
-            (draft.answer or "")[:240],
+            topics,
+            escalate_reason[:240],
         )
         await _escalate(
             db,
             user,
             conversation,
             text,
-            decision.topics,
-            draft.answer or "The account records do not answer this question.",
+            topics,
+            escalate_reason,
+            routing_fallback_only=True,
         )
         return await serialize_customer_conversation(db, user, conversation)
 
@@ -273,21 +343,42 @@ async def post_customer_message(
         db,
         conversation,
         role="bot",
-        body=draft.answer,
+        body=customer_reply or "",
         sender_name=BOT_NAME,
     )
-    ticket = await ensure_ticket(
+    await ensure_ticket(
         db,
         conversation,
         user,
         body=text,
-        topics=decision.topics,
+        topics=topics,
         handled_by="bot",
         status="pending",
     )
     conversation.handler = "bot"
     conversation.status = "open"
     return await serialize_customer_conversation(db, user, conversation)
+
+
+async def escalate_conversation_to_human(
+    db,
+    user,
+    conversation,
+    body: str,
+    topics,
+    reason: str,
+    *,
+    routing_fallback_only: bool = True,
+) -> None:
+    await _escalate(
+        db,
+        user,
+        conversation,
+        body,
+        topics,
+        reason,
+        routing_fallback_only=routing_fallback_only,
+    )
 
 
 async def _escalate(

@@ -49,7 +49,7 @@ type BankLookupPreview = {
 
 function maskedAccountNumber(accountNumber: string): string {
   const digits = accountNumber.replace(/\D/g, "");
-  return digits ? `****${digits.slice(-4)}` : "—";
+  return digits ? `****${digits.slice(-4)}` : "";
 }
 
 function bankAccountTypeLabel(accountType: string): string {
@@ -58,9 +58,9 @@ function bankAccountTypeLabel(accountType: string): string {
 
 function applyVerifyResult(result: ClientKycBankVerifyResponse): BankLookupPreview {
   return {
-    accountHolderName: result.kyckart_account_holder_name?.trim() || result.account_holder_name?.trim() || "—",
-    bankName: result.bank_name?.trim() || "—",
-    branchName: result.branch?.trim() || "—",
+    accountHolderName: result.kyckart_account_holder_name?.trim() || result.account_holder_name?.trim() || "",
+    bankName: result.bank_name?.trim() || "",
+    branchName: result.branch?.trim() || "",
     kyckartError: result.kyckart_lookup_error?.trim() || undefined,
     poaPan: result.poa_pan_status ?? null,
     poaBank: result.poa_bank_status ?? null,
@@ -70,7 +70,7 @@ function applyVerifyResult(result: ClientKycBankVerifyResponse): BankLookupPrevi
 
 export function formatAddInvestorBankSummary(bank: AddInvestorBankDraft): string {
   if (!bank.bankName.trim()) {
-    return "—";
+    return "";
   }
 
   const accountTypeLabel = bank.accountType ? bankAccountTypeLabel(bank.accountType) : null;
@@ -94,11 +94,11 @@ export function formatAddInvestorBankReviewItems(
     { label: "Bank", value: `${bank.bankName.trim()}${branchSuffix}` },
     {
       label: "Account type",
-      value: bank.accountType ? bankAccountTypeLabel(bank.accountType) : "—",
+      value: bank.accountType ? bankAccountTypeLabel(bank.accountType) : "",
     },
     { label: "Account number", value: maskedAccountNumber(bank.accountNumber) },
     { label: "IFSC", value: bank.ifsc.trim().toUpperCase() },
-  ].filter((item) => item.value && item.value !== "—");
+  ].filter((item) => item.value && item.value !== "");
 }
 
 function canVerifyBankDetails(bank: AddInvestorBankDraft): boolean {
@@ -125,8 +125,8 @@ export function AddInvestorBankPanel({
   );
 
   const hasKyckartPreview =
-    Boolean(lookupPreview?.accountHolderName && lookupPreview.accountHolderName !== "—") ||
-    Boolean(lookupPreview?.bankName && lookupPreview.bankName !== "—");
+    Boolean(lookupPreview?.accountHolderName && lookupPreview.accountHolderName !== "") ||
+    Boolean(lookupPreview?.bankName && lookupPreview.bankName !== "");
 
   const hasDetails =
     bank.accountVerified &&
@@ -211,9 +211,9 @@ export function AddInvestorBankPanel({
 
       if (bankVerified) {
         onBankChange({
-          accountHolderName: preview.accountHolderName !== "—" ? preview.accountHolderName : panNameForVerification,
-          bankName: preview.bankName !== "—" ? preview.bankName : bank.bankName,
-          branchName: preview.branchName !== "—" ? preview.branchName : bank.branchName || "—",
+          accountHolderName: preview.accountHolderName !== "" ? preview.accountHolderName : panNameForVerification,
+          bankName: preview.bankName !== "" ? preview.bankName : bank.bankName,
+          branchName: preview.branchName !== "" ? preview.branchName : bank.branchName || "",
           accountVerified: true,
         });
         return;

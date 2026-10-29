@@ -27,11 +27,12 @@ type SplitFormDialogProps = {
   points: SplitFormDialogPoint[];
   pointsLead?: ReactNode;
   children: ReactNode;
-  footer: ReactNode;
+  footer?: ReactNode;
   className?: string;
   /** Overrides default grid height (e.g. tighter max height for compact flows). */
   gridClassName?: string;
   contentClassName?: string;
+  footerClassName?: string;
   /** Vertically center children in the space below the right header. */
   centerContent?: boolean;
   /** When false, hides the panel close control (e.g. required decision flows). */
@@ -55,6 +56,7 @@ export function SplitFormDialog({
   className,
   gridClassName,
   contentClassName,
+  footerClassName,
   centerContent = false,
   showCloseButton = true,
   dismissible = true,
@@ -81,7 +83,12 @@ export function SplitFormDialog({
             gridClassName,
           )}
         >
-          <aside className="relative z-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-b border-border/70 bg-muted/20 px-6 py-6 sm:px-8 sm:py-7 md:border-r md:border-b-0">
+          <aside
+            className={cn(
+              "relative z-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-b border-border/70 bg-muted/20 px-6 py-6 sm:px-8 sm:py-7 md:border-r md:border-b-0",
+              points.length === 0 && !heading && !stepProgress && "justify-center",
+            )}
+          >
             <div
               aria-hidden
               className="pointer-events-none absolute -top-10 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
@@ -91,40 +98,42 @@ export function SplitFormDialog({
             {heading ? (
               <h2 className="relative mt-4 text-h3 font-semibold tracking-tight text-foreground">{heading}</h2>
             ) : null}
-            <div
-              className={cn(
-                "relative",
-                stepProgress ? "mt-5" : heading ? "mt-5" : "mt-8 md:mt-auto md:pt-8",
-              )}
-            >
-              {pointsLead ? <div className="mb-4">{pointsLead}</div> : null}
-              <ul className="space-y-5">
-                {points.map((point) => {
-                  const Icon = point.icon;
-                  return (
-                    <li key={point.title} className="flex items-start gap-3">
-                      <span
-                        className={cn(
-                          "flex size-9 shrink-0 items-center justify-center rounded-full",
-                          point.iconClassName,
-                        )}
-                      >
-                        <Icon className="size-4" strokeWidth={2.25} aria-hidden />
-                      </span>
-                      <span className="min-w-0 pt-0.5">
-                        <span className="block text-compact font-semibold text-foreground">{point.title}</span>
-                        {point.description ? (
-                          <span className="mt-0.5 block text-caption leading-relaxed text-muted-foreground">
-                            {point.description}
-                          </span>
-                        ) : null}
-                        {point.extra ? <div className="mt-2.5">{point.extra}</div> : null}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            {points.length > 0 ? (
+              <div
+                className={cn(
+                  "relative",
+                  stepProgress ? "mt-5" : heading ? "mt-5" : "mt-8 md:mt-auto md:pt-8",
+                )}
+              >
+                {pointsLead ? <div className="mb-4">{pointsLead}</div> : null}
+                <ul className="space-y-5">
+                  {points.map((point) => {
+                    const Icon = point.icon;
+                    return (
+                      <li key={point.title} className="flex items-start gap-3">
+                        <span
+                          className={cn(
+                            "flex size-9 shrink-0 items-center justify-center rounded-full",
+                            point.iconClassName,
+                          )}
+                        >
+                          <Icon className="size-4" strokeWidth={2.25} aria-hidden />
+                        </span>
+                        <span className="min-w-0 pt-0.5">
+                          <span className="block text-compact font-semibold text-foreground">{point.title}</span>
+                          {point.description ? (
+                            <span className="mt-0.5 block text-caption leading-relaxed text-muted-foreground">
+                              {point.description}
+                            </span>
+                          ) : null}
+                          {point.extra ? <div className="mt-2.5">{point.extra}</div> : null}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
           </aside>
 
           <div className="relative z-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-popover">
@@ -159,9 +168,11 @@ export function SplitFormDialog({
                 {children}
               </div>
             </div>
-            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border/70 px-6 py-4 sm:flex-row sm:justify-end sm:px-7">
-              {footer}
-            </div>
+            {footer != null ? (
+              <div className={cn("flex shrink-0 flex-col-reverse gap-2 border-t border-border/70 px-6 py-4 sm:flex-row sm:justify-end sm:px-7", footerClassName)}>
+                {footer}
+              </div>
+            ) : null}
           </div>
         </div>
       </DialogContent>

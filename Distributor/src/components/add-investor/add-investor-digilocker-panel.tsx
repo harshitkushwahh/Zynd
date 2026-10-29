@@ -56,7 +56,7 @@ export function AddInvestorDigilockerPanel({
         {done ? (
           <p className="add-investor-digilocker-panel__success">
             <CheckCircle2 className="size-3.5" strokeWidth={2.25} aria-hidden />
-            Aadhaar fetched — continue to address review.
+            Aadhaar fetched  continue to address review.
           </p>
         ) : null}
       </div>

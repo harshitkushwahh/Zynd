@@ -93,5 +93,5 @@ Legacy role keys `distributor_console` and `distributor_manager` are migrated to
 
 ## Guardrail tests
 
-- `tests/test_phase0_inventory.py` — matrix covers all seeded permissions; no open gaps
-- `tests/test_phase5_rbac.py` — permission scope and maker-checker behavior
+- `tests/test_phase0_inventory.py`  matrix covers all seeded permissions; no open gaps
+- `tests/test_phase5_rbac.py`  permission scope and maker-checker behavior

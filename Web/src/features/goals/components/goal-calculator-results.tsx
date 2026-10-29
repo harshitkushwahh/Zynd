@@ -10,9 +10,7 @@ import { FieldMessage } from "@/components/ui/ui-message";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { GoalCalculatorResult } from "@/features/goals/api/goals-api";
 import { formatGoalPanelInr } from "@/features/goals/lib/goal-display-format";
-import {
-  GoalTemplateIllustrationImage,
-} from "@/features/goals/components/goal-template-illustration-image";
+import { GoalTemplateIllustrationImage } from "@/features/goals/components/goal-template-illustration-image";
 import {
   goalTemplateIconThemeFor,
   goalTemplateTaglineFor,
@@ -118,7 +116,7 @@ function PlanIllustrationHeader({
       <div className="w-full shrink-0 border-b border-border/70 px-4 pb-4 pt-4 sm:px-5">
         <div className="relative overflow-hidden rounded-[var(--radius-card)] border border-border/70 bg-popover shadow-sm">
           <div className="relative aspect-[4/3] w-full">
-            <GoalTemplateIllustrationImage src={illustrationUrl} />
+            <GoalTemplateIllustrationImage src={illustrationUrl} priority />
             <div
               className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-popover via-popover/75 to-transparent"
               aria-hidden

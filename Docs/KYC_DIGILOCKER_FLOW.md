@@ -1,34 +1,34 @@
 # KYC DigiLocker, POA proof, and eSign (Zynd)
 
-Zynd DIY KYC mirrors the Multiplus three-journey model: **Path A** (Finprim identity document at the **address** step for new-to-KYC only), **Path B** (Cybrilla POA `kyc_forms` — for on-hold and KRA update, **one** proof-details DigiLocker at the **address** step), and **Aadhaar eSign** after that proof completes.
+Zynd DIY KYC mirrors the Multiplus three-journey model: **Path A** (Finprim identity document at the **address** step for new-to-KYC only), **Path B** (Cybrilla POA `kyc_forms`  for on-hold and KRA update, **one** proof-details DigiLocker at the **address** step), and **Aadhaar eSign** after that proof completes.
 
-**J2 (`fresh_kyc`)** uses **one** DigiLocker at address + Finprim eSign at Review — [KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md](./KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md). **J3** may use POA proof at Review; hybrid debugging: [KYC_DUAL_DIGILOCKER_HYBRID.md](./KYC_DUAL_DIGILOCKER_HYBRID.md).
+**J2 (`fresh_kyc`)** uses **one** DigiLocker at address + Finprim eSign at Review  [KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md](./KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md). **J3** may use POA proof at Review; hybrid debugging: [KYC_DUAL_DIGILOCKER_HYBRID.md](./KYC_DUAL_DIGILOCKER_HYBRID.md).
 
 ## Journey modes (`kyc_flow_mode`)
 
 | Mode | When | Path A (address-step DigiLocker) | Path B (Review POA proof) | eSign |
 |------|------|----------------------------------|---------------------------|-------|
 | `repeat_kra` | KRA short submit | No | No | No |
-| `fresh_kyc` | New / unavailable KYC (J2) | Yes — identity document at **address** | **No** POA proof at Review | **Finprim** eSign |
+| `fresh_kyc` | New / unavailable KYC (J2) | Yes  identity document at **address** | **No** POA proof at Review | **Finprim** eSign |
 | `kra_update` | On-hold / re-KYC / modify (J3) | **No** identity document | POA `proof_details.fetch_url` once, at the **address** step. The partner keeps the Aadhaar address. The user then types the same address for Zynd's record. | POA eSign |
 
 Bootstrap exposes `kycFlowMode`, `requiresAddressStepDigilocker` (alias `requiresPanStepDigilocker`), `requiresDigilocker` (Path A gate until `external_kyc_status === returned_success`), `poaKycFormId`, and `proofFetchUrl`.
 
-## Path A — Finprim identity document
+## Path A  Finprim identity document
 
 1. After PAN, the user reaches the **address** step (J2 and J3). The app calls `POST /api/v1/kyc/kyc-request/start` (investor) or `POST /api/v1/distributor/clients/{id}/kyc/kyc-request/start` (Mitra).
 2. User completes DigiLocker at Finprim; partner **postback** hits `GET|POST /api/v1/kyc/public/digilocker-callback` (server-resolved URL from env, never from the browser).
 3. API persists status and **302** redirects to `{KYC_DIGILOCKER_WEB_REDIRECT_ORIGIN}{KYC_DIGILOCKER_WEB_REDIRECT_PATH}` with `identity_document` and `status` query params (default Web path: `/dashboard/kyc`; Distributor local dev may point to `/dashboard/add-investor`).
-4. **Hydrate** — `GET /api/v1/kyc/identity-document/{id}` maps Aadhaar into contact/personal drafts (pincode enrichment via pincode lookup). Address fields are prefilled; manual entry is not required when fetch succeeds.
+4. **Hydrate**  `GET /api/v1/kyc/identity-document/{id}` maps Aadhaar into contact/personal drafts (pincode enrichment via pincode lookup). Address fields are prefilled; manual entry is not required when fetch succeeds.
 
 ### Env (see `Backend/.env.example`)
 
-- `KYC_DIGILOCKER_CALLBACK_URL` / `DIGILOCKER_FP` — public API callback Finprim calls
+- `KYC_DIGILOCKER_CALLBACK_URL` / `DIGILOCKER_FP`  public API callback Finprim calls
 - `KYC_DIGILOCKER_WEB_REDIRECT_ORIGIN`, `KYC_DIGILOCKER_WEB_REDIRECT_PATH`
-- **`KYC_DIGILOCKER_SANDBOX`** — `true` uses **`https://s.finprim.com`** and **`DIGILOCKER_FP_*`** sandbox credentials (Multiplus parity). Does **not** reuse live `FP_CLIENT_*` on `api.fintechprimitives.com`. `false` uses production FinPrim + production DigiLocker.
+- **`KYC_DIGILOCKER_SANDBOX`**  `true` uses **`https://s.finprim.com`** and **`DIGILOCKER_FP_*`** sandbox credentials (Multiplus parity). Does **not** reuse live `FP_CLIENT_*` on `api.fintechprimitives.com`. `false` uses production FinPrim + production DigiLocker.
 - **`DIGILOCKER_FP_BASE_URL`**, **`DIGILOCKER_FP_TOKEN_BASE_URL`**, **`DIGILOCKER_FP_TENANT`**, **`DIGILOCKER_FP_CLIENT_ID`**, **`DIGILOCKER_FP_CLIENT_SECRET`**
 
-## Path B — POA kyc_forms at Review
+## Path B  POA kyc_forms at Review
 
 For **`kra_update` (J3)** with Path A complete, the Web runs the POA Review gate (`ensurePoaPartnerProofReadyForSubmit`), binds `kycf_*`, and may return **`proof_redirect`** when proof is incomplete. **`fresh_kyc` (J2)** skips POA forms at Review and submits via Finprim `kyc_request` + eSign (`submit_fresh_kyc_via_finprim`).
 

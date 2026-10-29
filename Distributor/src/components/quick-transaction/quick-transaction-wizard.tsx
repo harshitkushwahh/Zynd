@@ -1153,7 +1153,7 @@ export function QuickTransactionWizard() {
                       {txnType === "sip" ? "Total SIP per month" : "Total investment"}
                     </p>
                     <p className="quick-txn-review-hero__amount">
-                      {totalAmount > 0 ? formatAum(totalAmount) : "—"}
+                      {totalAmount > 0 ? formatAum(totalAmount) : ""}
                     </p>
                     <p className="quick-txn-review-hero__words">
                       {totalAmount > 0 ? (
@@ -1167,7 +1167,7 @@ export function QuickTransactionWizard() {
                           </span>
                         </>
                       ) : (
-                        "—"
+                        ""
                       )}
                     </p>
                     {txnType === "sip" && sipInstallmentCount > 0 ? (
@@ -1190,7 +1190,7 @@ export function QuickTransactionWizard() {
                     ) : paymentMethod === "netbanking" ? (
                       <Landmark className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
                     ) : null}
-                    <span>{PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.label ?? "—"}</span>
+                    <span>{PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.label ?? ""}</span>
                   </div>
                 </div>
 
@@ -1229,7 +1229,7 @@ export function QuickTransactionWizard() {
                     <div className="min-w-0">
                       <p className="quick-txn-review-card__label">Investor</p>
                       <p className="quick-txn-review-card__value font-mono">
-                        {selectedInvestors[0]?.clientCode ?? "—"}
+                        {selectedInvestors[0]?.clientCode ?? ""}
                       </p>
                       <p className="quick-txn-review-card__hint">{selectedInvestors[0]?.emailMasked ?? ""}</p>
                     </div>

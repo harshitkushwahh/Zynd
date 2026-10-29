@@ -222,7 +222,7 @@ export function BranchDistributorReportsPanel({
               {row.kind === "kyc" ? row.stage : row.exceptionType}
             </Table.Cell>
             <Table.Cell className="text-right tabular-nums">
-              {row.kind === "kyc" ? row.daysOpen : "—"}
+              {row.kind === "kyc" ? row.daysOpen : ""}
             </Table.Cell>
             <Table.Cell>
               {row.kind === "kyc" ? (

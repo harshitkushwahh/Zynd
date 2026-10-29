@@ -43,7 +43,7 @@ export function resolveAmcLogoUrl(
 }
 
 export function formatReturn(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "";
   return `${value.toFixed(2)}%`;
 }
 
@@ -59,7 +59,7 @@ export function formatSignedReturn(value: number | null | undefined) {
 }
 
 export function formatInr(value: number | null | undefined, options?: { compact?: boolean }) {
-  if (value == null) return "—";
+  if (value == null) return "";
   if (options?.compact && value >= 1_00_00_000) {
     return `₹${(value / 1_00_00_000).toFixed(2)} Cr`;
   }
@@ -85,7 +85,7 @@ function formatOverviewCompactUnit(value: number) {
 
 /** Overview card INR: full format below ₹10L, then ₹XL / ₹X Cr. */
 export function formatInrOverview(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "";
 
   const abs = Math.abs(value);
   const sign = value < 0 ? "-" : "";
@@ -107,12 +107,12 @@ export function formatInrOverview(value: number | null | undefined) {
 }
 
 export function formatNav(value: number | null | undefined) {
-  if (value == null) return "—";
+  if (value == null) return "";
   return value.toFixed(4);
 }
 
 export function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
+  if (!value) return "";
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (dateOnly) {
     return new Intl.DateTimeFormat("en-IN", {
@@ -147,7 +147,7 @@ export function formatSipNextInstallmentDate(plan: {
 }
 
 export function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
+  if (!value) return "";
   return new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
@@ -191,12 +191,12 @@ export function formatSipFrequencyLabel(frequency: string | null | undefined) {
 }
 
 export function formatSipInstallmentDay(day: number | null | undefined) {
-  if (!day) return "—";
+  if (!day) return "";
   return copy.mySips.installmentDay.replace("{day}", String(day));
 }
 
 export function formatSipInstallmentCount(count: number | null | undefined) {
-  if (!count) return "—";
+  if (!count) return "";
   return copy.mySips.installmentCount.replace("{count}", String(count));
 }
 

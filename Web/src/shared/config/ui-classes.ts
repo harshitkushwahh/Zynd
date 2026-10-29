@@ -1,15 +1,15 @@
-/** Repeated layout/surface class strings — prefer Button size/variant for actions. */
+/** Repeated layout/surface class strings  prefer Button size/variant for actions. */
 
-/** Standard dashboard card radius — maps to `--radius-card` via zynd-brand.css `.rounded-card`. */
+/** Standard dashboard card radius  maps to `--radius-card` via zynd-brand.css `.rounded-card`. */
 export const ZYND_CARD_RADIUS_CLASS = "rounded-card";
 
-/** High-promo card radius — maps to `--radius-3xl` (referral, risk profile, MF sidebar). */
+/** High-promo card radius  maps to `--radius-3xl` (referral, risk profile, MF sidebar). */
 export const ZYND_3XL_RADIUS_CLASS = "rounded-3xl";
 
-/** Inputs, chips, and compact controls — maps to `--radius-control`. */
+/** Inputs, chips, and compact controls  maps to `--radius-control`. */
 export const ZYND_CONTROL_RADIUS_CLASS = "rounded-control";
 
-/** Larger promo / MF surfaces — maps to `--radius-medium` (intentionally rounder than card). */
+/** Larger promo / MF surfaces  maps to `--radius-medium` (intentionally rounder than card). */
 export const ZYND_MEDIUM_RADIUS_CLASS = "rounded-medium";
 
 export const uiClasses = {

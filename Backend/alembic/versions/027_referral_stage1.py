@@ -1,4 +1,4 @@
-"""Referral Stage 1 — signup attributions.
+"""Referral Stage 1  signup attributions.
 
 Revision ID: 027_referral_stage1
 Revises: 026_referral_stage0

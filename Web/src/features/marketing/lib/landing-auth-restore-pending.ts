@@ -1,4 +1,3 @@
-import { hasSessionHint } from "@/features/auth/api/auth-response";
 import type { AuthUser } from "@/features/auth/api/types";
 
 type LandingAuthRestoreInput = {
@@ -8,13 +7,11 @@ type LandingAuthRestoreInput = {
   sessionRetrying: boolean;
 };
 
-/** Marketing nav should not flash Get Started while session restore may still succeed. */
+/** Marketing nav: hold skeleton until bootstrap finishes (avoids cached-user / Get Started flicker). */
 export function isLandingAuthRestorePending({
-  user,
   loading,
   sessionRestoring,
   sessionRetrying,
 }: LandingAuthRestoreInput): boolean {
-  if (user) return false;
-  return loading || sessionRestoring || sessionRetrying || hasSessionHint();
+  return loading || sessionRestoring || sessionRetrying;
 }

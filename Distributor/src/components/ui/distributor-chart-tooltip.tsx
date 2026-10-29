@@ -7,7 +7,7 @@ type DistributorChartTooltipProps = {
   className?: string;
 };
 
-/** Shared Recharts / chart hover surface — uses global surface tokens. */
+/** Shared Recharts / chart hover surface  uses global surface tokens. */
 export function DistributorChartTooltip({ children, className }: DistributorChartTooltipProps) {
   return (
     <div

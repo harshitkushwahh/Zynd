@@ -16,7 +16,7 @@
 
 ## Missing catalog fields
 
-_None — full field coverage._
+_None  full field coverage._
 
 ## Top field hits
 

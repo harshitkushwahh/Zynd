@@ -20,9 +20,12 @@ if str(ROOT) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from app.application.support.help_bot_policy_eval import run_policy_regression  # noqa: E402
 from app.application.support.training_loader import similar_training_examples  # noqa: E402
 import eval_help_bot_retrieval as retrieval_eval  # noqa: E402
 import help_bot_coverage_report as coverage_report  # noqa: E402
+
+POLICY_REGRESSION_PATH = TRAINING_DIR / "eval" / "policy-regression.jsonl"
 
 _compute_coverage = coverage_report._compute_coverage
 _load_training_rows = coverage_report._load_training_rows
@@ -42,6 +45,8 @@ def _load_manifest_thresholds() -> dict:
         "min_retrieval_hit_at_3_pct": 75.0,
         "eval_row_count": 250,
         "retrieval_k": 3,
+        "policy_regression_count": 12,
+        "min_policy_regression_pass_pct": 100.0,
     }
     if not MANIFEST_PATH.is_file():
         return defaults
@@ -54,6 +59,15 @@ def _load_manifest_thresholds() -> dict:
         ),
         "eval_row_count": int(eval_meta.get("count", defaults["eval_row_count"])),
         "retrieval_k": int(eval_meta.get("retrieval_k", defaults["retrieval_k"])),
+        "policy_regression_count": int(
+            eval_meta.get("policy_regression_count", defaults["policy_regression_count"])
+        ),
+        "min_policy_regression_pass_pct": float(
+            eval_meta.get(
+                "min_policy_regression_pass_pct",
+                defaults["min_policy_regression_pass_pct"],
+            )
+        ),
     }
 
 
@@ -124,9 +138,28 @@ def main() -> None:
             f"Retrieval hit@{k} {hit_pct:.1f}% below minimum {min_hit}% ({hits}/{len(eval_rows)})"
         )
 
+    if not POLICY_REGRESSION_PATH.is_file():
+        raise SystemExit(f"Missing policy regression set: {POLICY_REGRESSION_PATH}")
+
+    policy_passed, policy_total, policy_results = run_policy_regression(POLICY_REGRESSION_PATH)
+    expected_policy = thresholds["policy_regression_count"]
+    if policy_total != expected_policy:
+        raise SystemExit(
+            f"Policy regression has {policy_total} rows, expected {expected_policy}"
+        )
+    policy_pct = 100.0 * policy_passed / max(policy_total, 1)
+    min_policy = thresholds["min_policy_regression_pass_pct"]
+    if policy_pct < min_policy:
+        failed = [row.case_id for row in policy_results if not row.ok]
+        raise SystemExit(
+            f"Policy regression {policy_pct:.1f}% below minimum {min_policy}% "
+            f"({policy_passed}/{policy_total}) failed={failed[:6]}"
+        )
+
     print(
         f"help_bot_gates ok: coverage={coverage_pct}% "
         f"hit@{k}={hit_pct:.1f}% ({hits}/{len(eval_rows)}) "
+        f"policy={policy_pct:.1f}% ({policy_passed}/{policy_total}) "
         f"train_rows={len(train_rows)}"
     )
     _github_summary(
@@ -137,8 +170,10 @@ def main() -> None:
             f"- Field coverage: **{coverage_pct}%** (min {min_cov}%)",
             f"- Eval rows: **{len(eval_rows)}**",
             f"- Retrieval hit@{k}: **{hit_pct:.1f}%** ({hits}/{len(eval_rows)}, min {min_hit}%)",
+            f"- Policy regression: **{policy_pct:.1f}%** ({policy_passed}/{policy_total}, min {min_policy}%)",
             "",
             "Eval set is held out from `batch-*.jsonl` (overlap check passed).",
+            "`policy-regression.jsonl` exercises answer/escalation policy without LLM calls.",
         ]
     )
 

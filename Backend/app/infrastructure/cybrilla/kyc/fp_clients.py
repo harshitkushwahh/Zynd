@@ -1,4 +1,4 @@
-"""Backward-compatible shim — use ``app.infrastructure.core.kyc.fp_clients`` instead."""
+"""Backward-compatible shim  use ``app.infrastructure.core.kyc.fp_clients`` instead."""
 
 from app.infrastructure.core.kyc import fp_clients as _impl
 

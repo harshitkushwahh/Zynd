@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Distributor option menus — animated surfaces and muted row hover.
+ * Distributor option menus  animated surfaces and muted row hover.
  * Built on shared Select / DropdownMenu primitives (Motion + Base UI).
  */
 

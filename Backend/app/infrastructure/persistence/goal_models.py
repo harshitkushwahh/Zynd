@@ -1,4 +1,4 @@
-"""Financial goals — personal and family (Phase 1: personal goals)."""
+"""Financial goals  personal and family (Phase 1: personal goals)."""
 
 from __future__ import annotations
 

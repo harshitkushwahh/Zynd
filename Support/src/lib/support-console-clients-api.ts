@@ -212,8 +212,8 @@ export function mapApiClientListItem(row: ApiClientListItem): DistributorInvesto
     displayName: row.display_name?.trim() || row.client_id || "Investor",
     emailMasked: row.email_masked,
     panMasked: row.pan_masked,
-    clientCode: row.client_id ?? "—",
-    mobileMasked: row.phone_masked ?? "—",
+    clientCode: row.client_id ?? "",
+    mobileMasked: row.phone_masked ?? "",
     profileImageUrl: resolveDistributorAssetUrl(row.profile_image_url ?? null),
     onboardingStatus: mapOnboarding(row.onboarding_status),
     complianceStatus: mapCompliance(row.compliance_status),
@@ -247,7 +247,7 @@ function mapBankAccounts(rows: Array<Record<string, unknown>> | undefined) {
     id: String(row.id ?? index),
     bankName: String(row.bank_name ?? "Bank"),
     accountNumberMasked: String(row.account_number_masked ?? "••••"),
-    ifscCode: String(row.ifsc_code ?? "—"),
+    ifscCode: String(row.ifsc_code ?? ""),
     accountType: row.account_type
       ? lookupAddInvestorEnumLabel(String(row.account_type), ADD_INVESTOR_BANK_ACCOUNT_TYPE_OPTIONS)
       : undefined,

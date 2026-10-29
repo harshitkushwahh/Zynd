@@ -6,10 +6,8 @@ import logging
 import os
 from pathlib import Path
 
-from sqlalchemy import select
-
 from app.application.investor.investor_provision_worker_service import process_pending_investor_provisions
-from app.application.mf.cas_import_service import process_cas_import
+from app.application.mf.cas_import_service import expire_stale_cas_imports
 from app.application.mf.mf_ondc_order_service import advance_ondc_orders, process_pending_orders, sync_open_orders
 from app.application.mf.mf_redemption_service import sync_open_redemption_orders
 from app.application.mf.mf_sip_worker_service import (
@@ -23,7 +21,6 @@ from app.application.mf.mf_transaction_ops_service import expire_stale_checkouts
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.logging_config import configure_logging
-from app.infrastructure.persistence.mf_transaction_models import MfCasImport, MfCasImportStatus
 
 logger = logging.getLogger(__name__)
 
@@ -106,27 +103,10 @@ async def run_mf_cas_worker_once() -> dict:
     if not settings.zynd_mf_cas_enabled:
         return {"skipped": 1, "reason": "cas_disabled"}
 
-    processed = succeeded = failed = 0
     async with AsyncSessionLocal() as session:
-        imports = list(
-            (
-                await session.execute(
-                    select(MfCasImport)
-                    .where(MfCasImport.status == MfCasImportStatus.pending)
-                    .order_by(MfCasImport.requested_at)
-                    .limit(settings.zynd_mf_cas_worker_batch_size)
-                )
-            ).scalars()
-        )
-        for import_row in imports:
-            processed += 1
-            try:
-                await process_cas_import(session, import_row)
-                succeeded += 1
-            except Exception:
-                failed += 1
+        result = await expire_stale_cas_imports(session)
         await session.commit()
-    return {"processed": processed, "succeeded": succeeded, "failed": failed}
+    return result
 
 
 def _worker_tick_had_activity(result: dict) -> bool:
@@ -176,7 +156,7 @@ async def run_mf_cas_worker_loop() -> None:
     while True:
         try:
             result = await run_mf_cas_worker_once()
-            if result.get("processed"):
+            if result.get("expired"):
                 logger.info("MF CAS worker tick: %s", result)
         except Exception:
             logger.exception("MF CAS worker tick failed")

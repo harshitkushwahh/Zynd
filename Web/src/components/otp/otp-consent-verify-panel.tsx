@@ -87,10 +87,12 @@ type OtpConsentVerifyPanelProps = {
   bannerError?: string;
   inputError?: boolean;
   confirmLabel: string;
+  cancelLabel?: string;
+  onCancel?: () => void;
   infoMessage: string;
   /** Resend cooldown from send-otp (retry_after_seconds). */
   sentResendCooldownSeconds?: number | null;
-  /** OTP validity countdown from send-otp (expires_in) — shown on the left. */
+  /** OTP validity countdown from send-otp (expires_in)  shown on the left. */
   otpExpiresInSeconds?: number | null;
   /** Invest payment card: full-height layout, footer pinned, Zynd→phone connector. */
   embedded?: boolean;
@@ -112,6 +114,8 @@ export function OtpConsentVerifyPanel({
   bannerError,
   inputError = false,
   confirmLabel,
+  cancelLabel,
+  onCancel,
   infoMessage,
   sentResendCooldownSeconds,
   otpExpiresInSeconds,
@@ -154,7 +158,7 @@ export function OtpConsentVerifyPanel({
   useEffect(() => {
     if (!otpSent || expiryTimer.secondsLeft > 0 || otpExpiresInSeconds != null) return;
     startExpiryCountdown(appConfig.otpExpiresInSeconds);
-    // OTP already sent (e.g. reopen) — assume full validity window if API did not pass expires_in.
+    // OTP already sent (e.g. reopen)  assume full validity window if API did not pass expires_in.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otpSent, otpExpiresInSeconds]);
 
@@ -336,14 +340,27 @@ export function OtpConsentVerifyPanel({
       <AuthSubmitFooter
         className={cn(
           embedded
-            ? "mt-auto w-full shrink-0 border-t border-border/60 pt-4"
+            ? "mt-auto w-full shrink-0 border-t border-border/60 px-5 pt-4 sm:px-6"
             : "mt-0 pt-0",
+          onCancel && "!flex-row gap-2.5",
         )}
       >
+        {onCancel ? (
+          <Button
+            type="button"
+            variant="outline"
+            className={cn("w-full sm:flex-1", embedded && "h-9.5 rounded-[var(--radius-control)]")}
+            disabled={submitting}
+            onClick={onCancel}
+          >
+            {cancelLabel ?? copy.confirmDialog.cancel}
+          </Button>
+        ) : null}
         <Button
           type="submit"
           className={cn(
             "w-full",
+            onCancel && "sm:flex-1",
             embedded && "h-9.5 rounded-[var(--radius-control)] shadow-zynd-low",
           )}
           disabled={confirmDisabled}

@@ -10,7 +10,7 @@ import {
 const POPUP_CLOSED_POLL_MS = 250;
 /** Ignore instant popup.close noise (blockers / about:blank) so we do not treat it as payment abandon. */
 const POPUP_MIN_OPEN_MS = 400;
-/** Require consecutive closed reads — cross-origin navigations can briefly report closed. */
+/** Require consecutive closed reads  cross-origin navigations can briefly report closed. */
 const POPUP_CLOSED_CONFIRM_POLLS = 2;
 
 type UseMfPaymentGatewayPopupArgs = {

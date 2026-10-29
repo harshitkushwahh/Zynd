@@ -1,8 +1,8 @@
-# Dual DigiLocker — new-to-KYC, Zynd hybrid setup & `.env`
+# Dual DigiLocker  new-to-KYC, Zynd hybrid setup & `.env`
 
 Plain-language guide for when **address DigiLocker succeeds** (Finprim `iddoc_*`) but **Cybrilla POA proof stays pending** (`kycf_*`). Use for **J3 `kra_update`** or **misconfigured J2** (POA gate still running).
 
-**J2 `fresh_kyc` spec:** one DigiLocker only — [KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md](./KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md).
+**J2 `fresh_kyc` spec:** one DigiLocker only  [KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md](./KYC_ZYND_TEACHING_J2_SINGLE_DIGILOCKER.md).
 
 Related: [KYC_DIGILOCKER_FLOW.md](./KYC_DIGILOCKER_FLOW.md).
 
@@ -10,7 +10,7 @@ Related: [KYC_DIGILOCKER_FLOW.md](./KYC_DIGILOCKER_FLOW.md).
 
 ## 1. The confusion in one sentence
 
-You can succeed at **Finprim DigiLocker** and still need a **second, one-time DigiLocker** on the **Cybrilla POA form** — redoing address DigiLocker only refreshes `iddoc_*`; it does **not** set `proof_details` on `kycf_*`.
+You can succeed at **Finprim DigiLocker** and still need a **second, one-time DigiLocker** on the **Cybrilla POA form**  redoing address DigiLocker only refreshes `iddoc_*`; it does **not** set `proof_details` on `kycf_*`.
 
 ---
 
@@ -29,7 +29,7 @@ Review (POA):     Cybrilla kycf_4dadde04… → proof_details.status (want fetch
 
 ---
 
-## 3. “New to KYC” — how many DigiLocker trips?
+## 3. “New to KYC”  how many DigiLocker trips?
 
 Journey mode: **`fresh_kyc`** (from KRA readiness / `kyc_unavailable`).
 
@@ -50,7 +50,7 @@ Product copy on the **address** step describes Path A only. In **hybrid** enviro
 | Path A gate | `Backend/app/application/kyc/kyc_flow_mode.py`, `requires_address_step_digilocker` |
 | Path B sync / proof resolve | `Backend/app/application/kyc/poa_kyc_form_service.py`, `path_a_proof.py` |
 | Review submit → proof redirect | `Backend/app/application/kyc/kyc_form_service.py` (`submit_kyc_form`, `_proof_redirect_action`) |
-| Web — address vs KRA dialog | `Web/src/features/kyc/components/kyc-dialog.tsx` (`digilockerRedirectVariant`: `address` \| `kraProof`) |
+| Web  address vs KRA dialog | `Web/src/features/kyc/components/kyc-dialog.tsx` (`digilockerRedirectVariant`: `address` \| `kraProof`) |
 | Review POA gate before submit | `Web/src/features/kyc/lib/kyc-poa-review-pipeline.ts` |
 
 ---
@@ -71,7 +71,7 @@ Product copy on the **address** step describes Path A only. In **hybrid** enviro
 
 ### 4.3 Intended product behavior (current)
 
-- On **Review submit**, if POA proof is incomplete and Cybrilla returns a **`fetch_url`**, API returns **`proof_redirect`** and Web opens **“Link KRA KYC form”** (`kraProof` dialog) — **even when address DigiLocker already succeeded**.
+- On **Review submit**, if POA proof is incomplete and Cybrilla returns a **`fetch_url`**, API returns **`proof_redirect`** and Web opens **“Link KRA KYC form”** (`kraProof` dialog)  **even when address DigiLocker already succeeded**.
 - User completes Path B once → callback `poa_proof_return=1&kyc_form=kycf_…` → proof status moves toward **fetched**.
 - **Submit Review again** → signature (if needed) → **eSign**.
 
@@ -81,7 +81,7 @@ Status polling / bootstrap **does not** auto-open Path B (avoids surprise popups
 
 ## 5. Operator checklist
 
-1. Finish **address DigiLocker (Path A)** — `iddoc_*` on journey is OK.
+1. Finish **address DigiLocker (Path A)**  `iddoc_*` on journey is OK.
 2. Complete wizard through **Review** (location + `POST /kyc/poa-form/sync` as usual).
 3. On submit, if **“Link KRA KYC form”** appears → complete that DigiLocker (updates **`kycf_…`**, not `iddoc`).
 4. Return via `/api/v1/kyc/public/poa-proof-callback` → land on `/dashboard/kyc?poa_proof_return=1&kyc_form=…`.
@@ -101,11 +101,11 @@ Status polling / bootstrap **does not** auto-open Path B (avoids surprise popups
 | `kyc_form_type` | `fresh` or `modify` | New vs KRA update |
 | `proof_details_status` (journey) | `pending` → `fetched` | Path B completion |
 
-JSON like `{"form_id":"kycf_4dadde04…"}` from Cybrilla is the **POA form id** — normal and separate from `iddoc_*`.
+JSON like `{"form_id":"kycf_4dadde04…"}` from Cybrilla is the **POA form id**  normal and separate from `iddoc_*`.
 
 ---
 
-## 7. Environment variables — full KYC / DigiLocker / POA
+## 7. Environment variables  full KYC / DigiLocker / POA
 
 Put these in **`Backend/.env`** (git-ignored). Restart API after changes: `Backend/./run.sh`. Web only needs the API base URL (no partner secrets).
 
@@ -122,7 +122,7 @@ See **`Backend/.env.example`** for the full list and comments.
 | **`KYC_PROOF_CALLBACK_URL`** | Optional | Defaults from `API_PUBLIC_URL` | POA proof partner callback |
 | **`KYC_ESIGN_CALLBACK_URL`** | Optional | Defaults from `API_PUBLIC_URL` | POA eSign callback |
 
-**Local dev trap:** `localhost` in callback URLs is **not** reachable from Finprim/Cybrilla servers — use ngrok, Cloudflare tunnel, or a shared dev API host and set **`API_PUBLIC_URL`** + **`DIGILOCKER_FP`** to that HTTPS origin.
+**Local dev trap:** `localhost` in callback URLs is **not** reachable from Finprim/Cybrilla servers  use ngrok, Cloudflare tunnel, or a shared dev API host and set **`API_PUBLIC_URL`** + **`DIGILOCKER_FP`** to that HTTPS origin.
 
 Typical POA proof callback path:
 
@@ -130,7 +130,7 @@ Typical POA proof callback path:
 
 (Config resolves this via `Settings.resolved_kyc_proof_callback_url` in `Backend/app/core/config.py`.)
 
-### 7.2 Finprim / DigiLocker tenant (Path A — address step)
+### 7.2 Finprim / DigiLocker tenant (Path A  address step)
 
 Often sandbox: `https://s.finprim.com`. Enable with **`KYC_DIGILOCKER_SANDBOX=true`**.
 
@@ -144,20 +144,20 @@ Often sandbox: `https://s.finprim.com`. Enable with **`KYC_DIGILOCKER_SANDBOX=tr
 
 **Rule:** `GET /kyc/identity-document/{iddoc}` must use the **same tenant** that created the iddoc.
 
-### 7.3 Cybrilla POA (Path B — `kycf_*`, KRA readiness, proof, eSign)
+### 7.3 Cybrilla POA (Path B  `kycf_*`, KRA readiness, proof, eSign)
 
 REST: `https://api.cybrilla.com`. OAuth: `{FP_POA_TOKEN_BASE_URL}/v2/auth/{FP_POA_AUTH_TENANT}/token` (default tenant `cybrillapoa`).
 
 | Variable | Purpose |
 |----------|---------|
-| `FP_POA_BASE_URL` | Cybrilla API — `/poa/pre_verifications`, `/poa/kyc_forms` |
+| `FP_POA_BASE_URL` | Cybrilla API  `/poa/pre_verifications`, `/poa/kyc_forms` |
 | `FP_POA_TOKEN_BASE_URL` | Usually `https://api.fintechprimitives.com` |
 | `FP_POA_AUTH_TENANT` | Default `cybrillapoa` |
 | `FP_POA_CLIENT_ID` / `FP_POA_CLIENT_SECRET` | POA OAuth |
 | `FP_POA_*_TEST` | Sandbox partner client (`mfdptnr_*_test_*`) when `KYC_DIGILOCKER_SANDBOX` / `KYC_ESIGN_SANDBOX` |
-| `FP_POA_KYC_FORMS_FRESH_ENABLED` | `true` — allow `type=fresh` for new-to-KYC |
+| `FP_POA_KYC_FORMS_FRESH_ENABLED` | `true`  allow `type=fresh` for new-to-KYC |
 
-In **`APP_ENV=development`**, if `FP_POA_*_TEST` is empty, the API may reuse live **`FP_POA_*`** for POA forms while DigiLocker stays on sandbox — this **hybrid** pattern is exactly when **dual DigiLocker** shows up.
+In **`APP_ENV=development`**, if `FP_POA_*_TEST` is empty, the API may reuse live **`FP_POA_*`** for POA forms while DigiLocker stays on sandbox  this **hybrid** pattern is exactly when **dual DigiLocker** shows up.
 
 ### 7.4 Finprim MF / shared profile
 
@@ -198,7 +198,7 @@ FP_POA_KYC_FORMS_FRESH_ENABLED=true
 # FP_POA_API_TENANT_TEST=cybrillarta
 ```
 
-After credential or host changes, restart `./run.sh`. If OAuth fails with `invalid_client`, ensure **client id and secret are a matching pair** (both test or both live) — see `integration_runtime._resolve_cybrilla_poa_client_pair`.
+After credential or host changes, restart `./run.sh`. If OAuth fails with `invalid_client`, ensure **client id and secret are a matching pair** (both test or both live)  see `integration_runtime._resolve_cybrilla_poa_client_pair`.
 
 ### 7.6 Web
 
@@ -220,7 +220,7 @@ sequenceDiagram
   participant FP as Finprim
   participant POA as Cybrilla POA
 
-  Note over U,FP: Path A — Address
+  Note over U,FP: Path A  Address
   U->>W: Address step DigiLocker
   W->>API: POST /kyc/kyc-request/start
   API->>FP: kyc_requests + identity_documents
@@ -228,7 +228,7 @@ sequenceDiagram
   FP->>API: /public/digilocker-callback (iddoc)
   API-->>W: address prefilled
 
-  Note over U,POA: Path B — Review (kycf exists, proof pending)
+  Note over U,POA: Path B  Review (kycf exists, proof pending)
   U->>W: Review submit
   W->>API: poa-form/sync + POST /kyc/form/submit
   API->>POA: GET/PATCH kyc_forms (fresh)
@@ -248,7 +248,7 @@ sequenceDiagram
 |-------------|--------------|--------|
 | `proof=pending` forever, `fetch_url` present | Path B not completed | Review submit → **Link KRA KYC form** → complete DigiLocker |
 | `proof=pending`, no `fetch_url` | Partner stuck / wrong env | Inspect raw `GET /poa/kyc_forms/{kycf}` JSON; contact partner or recreate form |
-| Address OK, proof still pending | Expected in hybrid | Not a bug — complete Path B |
+| Address OK, proof still pending | Expected in hybrid | Not a bug  complete Path B |
 | Finprim auth errors | Token/env mismatch | Align `DIGILOCKER_FP_*` with sandbox; check client id/secret pair |
 | Callback never hits API | localhost in callback URL | Tunnel; set `API_PUBLIC_URL` + `DIGILOCKER_FP` to public HTTPS |
 | Submit “processing”, no dialog | No `fetch_url` on form | Capture Cybrilla form JSON; may need partner support |
@@ -258,7 +258,7 @@ sequenceDiagram
 
 ## 10. Related docs
 
-- [KYC_DIGILOCKER_FLOW.md](./KYC_DIGILOCKER_FLOW.md) — routes, env summary, Distributor parity
-- [ZYND_MITRA_INVESTOR_ONBOARDING.md](./ZYND_MITRA_INVESTOR_ONBOARDING.md) — distributor onboarding
+- [KYC_DIGILOCKER_FLOW.md](./KYC_DIGILOCKER_FLOW.md)  routes, env summary, Distributor parity
+- [ZYND_MITRA_INVESTOR_ONBOARDING.md](./ZYND_MITRA_INVESTOR_ONBOARDING.md)  distributor onboarding
 
 Written for Zynd **FastAPI** backend + **Web** KYC dialog hybrid debugging (Finprim sandbox + Cybrilla POA).

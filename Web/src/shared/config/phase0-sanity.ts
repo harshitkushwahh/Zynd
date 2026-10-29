@@ -1,5 +1,5 @@
 /**
- * Phase 0 guardrails — covered by `src/shared/config/phase0-sanity.test.ts`.
+ * Phase 0 guardrails  covered by `src/shared/config/phase0-sanity.test.ts`.
  */
 
 import { appConfig } from "@/shared/config/app-config";

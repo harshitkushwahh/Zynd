@@ -133,7 +133,7 @@ async def process_push_dispatch_job(
         notification = result.scalar_one_or_none()
         if not notification:
             logger.warning(
-                "Push retry skipped — notification missing notification_id=%s user_id=%s",
+                "Push retry skipped  notification missing notification_id=%s user_id=%s",
                 notification_id,
                 user_id,
             )

@@ -29,7 +29,7 @@ export function applyResolutionFlags(
       ...message,
       kind: "resolution_prompt" as const,
       body: message.body.trim() ? message.body : RESOLUTION_PROMPT_BODY,
-      resolutionActive: Boolean(message.resolutionActive) || (resolutionOpen && isLatest),
+      resolutionActive: resolutionOpen && isLatest,
     };
   });
 }

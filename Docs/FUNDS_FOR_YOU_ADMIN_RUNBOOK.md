@@ -1,4 +1,4 @@
-# Funds For You — Admin Runbook
+# Funds For You  Admin Runbook
 
 Operational guide for configuring, publishing, and supporting the **Funds For You** recommendation engine in Zynd Admin.
 
@@ -28,7 +28,7 @@ Required permissions:
 6. Optionally set portfolio display name and objective in **Basket details**.
 7. Repeat for additional baskets (e.g. **Growth Tilt**, **Income Focus**) to give the engine rotation options within the tier.
 8. Paste a test user UUID in **Preview user** and confirm 5 funds + allocation chart render.
-9. Review **Publish readiness** — all active baskets must show as **ready**.
+9. Review **Publish readiness**  all active baskets must show as **ready**.
 10. Click **Publish** and confirm in the dialog. Note the new version number.
 
 ---
@@ -81,7 +81,7 @@ Required permissions:
 
 ### “Publish button is disabled”
 
-Open **Publish readiness** — resolve any **short pool** issues or create at least one active basket.
+Open **Publish readiness**  resolve any **short pool** issues or create at least one active basket.
 
 ---
 

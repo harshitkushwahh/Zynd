@@ -43,7 +43,7 @@ function AttendanceChartTooltip({ active, payload }: AttendanceChartTooltipProps
   return (
     <div className="distributor-work-attendance-card__tooltip">
       <p className="distributor-work-attendance-card__tooltip-value tabular-nums">
-        {point.hours > 0 ? `${point.hours.toFixed(1)}h` : "—"}
+        {point.hours > 0 ? `${point.hours.toFixed(1)}h` : ""}
       </p>
     </div>
   );
@@ -211,7 +211,7 @@ export function DistributorWorkAttendanceCard({
           <p className="distributor-work-attendance-card__eyebrow">{periodLabel} · Payroll input</p>
           <h2 className="distributor-work-attendance-card__title">Work attendance</h2>
           <p className="distributor-work-attendance-card__description">
-            Daily clock-in by work type — drives variable pay and field allowances.
+            Daily clock-in by work type  drives variable pay and field allowances.
           </p>
         </div>
       </div>

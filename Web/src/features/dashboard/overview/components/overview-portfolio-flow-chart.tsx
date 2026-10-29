@@ -143,7 +143,7 @@ function PortfolioFlowRangeTabs({
   );
 
   return (
-    <div className="px-2 pb-2 pt-1">
+    <div className="flex justify-center px-2 pb-3 pt-1">
       <SlidingPillTabList
         layout="compact"
         ariaLabel={overview.portfolioChartRangeLabel}
@@ -151,7 +151,7 @@ function PortfolioFlowRangeTabs({
         value={value}
         onChange={onChange}
         tabClassName="relative z-10 shrink-0 rounded-full px-2 py-1 text-[10px] font-medium sm:px-2.5 sm:text-[11px]"
-        className="mx-auto w-auto"
+        className="w-auto justify-center"
       />
     </div>
   );
@@ -196,8 +196,8 @@ export function OverviewPortfolioFlowChart({
   }, [onRangeChange, range, series]);
 
   return (
-    <div className="w-full min-w-0">
-      <div className="h-[6.75rem] w-full transition-opacity duration-300 ease-out outline-none [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible [&_.recharts-surface]:outline-none [&_.recharts-surface:focus]:outline-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper:focus]:outline-none">
+    <div className="relative h-full min-h-[8.25rem] w-full min-w-0 flex-1">
+      <div className="absolute inset-0 outline-none [&_.recharts-cartesian-grid]:overflow-visible [&_.recharts-surface]:overflow-visible [&_.recharts-surface]:outline-none [&_.recharts-surface:focus]:outline-none [&_.recharts-wrapper]:outline-none [&_.recharts-wrapper:focus]:outline-none">
         <PortfolioFlowRecharts
           rangeKey={range}
           points={chartPoints}
@@ -214,11 +214,13 @@ export function OverviewPortfolioFlowChart({
         />
       </div>
 
-      <PortfolioFlowRangeTabs
-        value={range}
-        enabledRanges={enabledRanges}
-        onChange={onRangeChange}
-      />
+      <div className="absolute inset-x-0 bottom-0">
+        <PortfolioFlowRangeTabs
+          value={range}
+          enabledRanges={enabledRanges}
+          onChange={onRangeChange}
+        />
+      </div>
     </div>
   );
 }

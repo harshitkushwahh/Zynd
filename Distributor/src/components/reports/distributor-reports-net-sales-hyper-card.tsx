@@ -162,7 +162,7 @@ export function DistributorReportsNetSalesHyperCard({
           tabIndex={needsScrollX ? 0 : undefined}
           role={needsScrollX ? "region" : undefined}
           aria-label={
-            needsScrollX ? "Net sales trend — scroll horizontally for earlier periods" : undefined
+            needsScrollX ? "Net sales trend  scroll horizontally for earlier periods" : undefined
           }
         >
           {chartReady ? (

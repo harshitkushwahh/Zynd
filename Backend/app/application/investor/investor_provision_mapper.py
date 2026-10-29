@@ -286,7 +286,7 @@ def resolve_fp_bank_holder_name(
     bank_row: InvestorBankAccount,
     journey: KycJourneyState | None = None,
 ) -> str:
-    """Finprim bank payloads must use PAN-step name only — never Kyckart/display names."""
+    """Finprim bank payloads must use PAN-step name only  never Kyckart/display names."""
     pan_draft = journey.pan_draft_json if journey and isinstance(journey.pan_draft_json, dict) else {}
     bank_draft = journey.bank_draft_json if journey and isinstance(journey.bank_draft_json, dict) else {}
 

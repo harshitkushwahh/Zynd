@@ -105,7 +105,7 @@ export function AddDistributorContactVerifyPanel({
   const PhaseIcon = meta.icon;
 
   const destination =
-    channel === "email" ? value : value.length === 10 ? `+91 ${value}` : "+91 —";
+    channel === "email" ? value : value.length === 10 ? `+91 ${value}` : "+91 ";
 
   const handleSendOtp = async () => {
     if (!inputValid || sendingOtp) return;

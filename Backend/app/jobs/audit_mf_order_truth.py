@@ -21,12 +21,12 @@ from app.infrastructure.persistence.mf_transaction_models import MfCheckout, MfO
 logger = logging.getLogger(__name__)
 
 DEFAULT_ORDER_IDS = [
-    "f3d2a4c7-6968-47fd-ab40-b1f40333a89a",  # UTI Silver — paid Aug 24
-    "a41e5328-c2d1-4923-9866-6ac34331c09e",  # Kotak Silver — paid Aug 24
-    "738ebaa6-2870-4189-a9e5-148c41550a08",  # ABSL Gold — unpaid Aug 22
+    "f3d2a4c7-6968-47fd-ab40-b1f40333a89a",  # UTI Silver  paid Aug 24
+    "a41e5328-c2d1-4923-9866-6ac34331c09e",  # Kotak Silver  paid Aug 24
+    "738ebaa6-2870-4189-a9e5-148c41550a08",  # ABSL Gold  unpaid Aug 22
     "cab564ae-836d-4383-89da-aa1e66733ed4",
     "fc37c18b-a809-4c8e-ab24-6ed1b8565cf3",
-    "d0be3e27-b60a-4d60-a2f9-fa0d53a4e41a",  # HDFC Gold — unpaid Aug 22
+    "d0be3e27-b60a-4d60-a2f9-fa0d53a4e41a",  # HDFC Gold  unpaid Aug 22
     "799b447a-a536-42bc-9ef0-45f5f89d881c",
 ]
 

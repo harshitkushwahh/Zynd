@@ -1,5 +1,6 @@
 import {
   Bell,
+  Bot,
   FileBarChart,
   Gauge,
   Gift,
@@ -166,6 +167,12 @@ export const HELP_PAGE_META: DashboardPageMeta = {
   icon: Headset,
 };
 
+export const AI_ASSISTANT_PAGE_META: DashboardPageMeta = {
+  title: copy.aiAssistant.pageTitle,
+  description: copy.aiAssistant.pageDescription,
+  icon: Bot,
+};
+
 export const REPORTS_PAGE_META: DashboardPageMeta = {
   title: copy.reports.pageTitle,
   description: copy.reports.pageDescription,
@@ -199,6 +206,8 @@ export function resolveDashboardRoute(pathname: string): DashboardRoute | undefi
     pathname.startsWith("/dashboard/kyc") ||
     pathname.startsWith("/dashboard/notifications") ||
     pathname.startsWith("/dashboard/help") ||
+    pathname.startsWith("/dashboard/zyndai") ||
+    pathname.startsWith("/dashboard/ai-chat") ||
     pathname.startsWith("/dashboard/reports")
   ) {
     return undefined;
@@ -225,6 +234,10 @@ export function getDashboardPageMeta(pathname: string): DashboardPageMeta {
 
   if (pathname.startsWith("/dashboard/help")) {
     return HELP_PAGE_META;
+  }
+
+  if (pathname.startsWith("/dashboard/zyndai") || pathname.startsWith("/dashboard/ai-chat")) {
+    return AI_ASSISTANT_PAGE_META;
   }
 
   if (pathname.startsWith("/dashboard/reports")) {

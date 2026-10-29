@@ -1,4 +1,4 @@
-# Phase 6 — Domain deepening
+# Phase 6  Domain deepening
 
 Completed checklist.
 
@@ -41,8 +41,8 @@ SQLAlchemy implementations live in `app/infrastructure/persistence/repositories/
 
 Initial adapters:
 
-- `SqlAlchemyUserRepository` — used by `user_service`
-- `SqlAlchemyAuditRepository` — used by `audit_service` and `audit_admin_service`
+- `SqlAlchemyUserRepository`  used by `user_service`
+- `SqlAlchemyAuditRepository`  used by `audit_service` and `audit_admin_service`
 
 Further services can adopt repositories incrementally without changing HTTP contracts.
 
@@ -55,10 +55,10 @@ The durable envelope remains `DomainEvent`; payload schemas version independentl
 
 ## Deferred (per ADR-001)
 
-- **Kafka adapter** — only when Redis Streams limits are hit
+- **Kafka adapter**  only when Redis Streams limits are hit
 - Full CQRS / separate read models
 - Migrating every SQLAlchemy query to repositories in one pass
 
 ## Guardrails
 
-- `tests/test_phase6_domain.py` — payload round-trip, repository lookups, stream constant alignment
+- `tests/test_phase6_domain.py`  payload round-trip, repository lookups, stream constant alignment

@@ -1,4 +1,4 @@
-"""MF payment foundation — checkouts, cart, webhook events, order linkage.
+"""MF payment foundation  checkouts, cart, webhook events, order linkage.
 
 Revision ID: 047_mf_payment_foundation
 Revises: 046_mf_collections

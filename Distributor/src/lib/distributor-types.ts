@@ -22,7 +22,7 @@ export type DistributorInvestor = {
   createdAt: string;
   /** True when this investor was added to the logged-in distributor's book. */
   inDistributorBook: boolean;
-  /** PM vs DIY — shown on system-wide resident lists. */
+  /** PM vs DIY  shown on system-wide resident lists. */
   serviceModel?: InvestorServiceModel;
 };
 
@@ -96,7 +96,7 @@ export type DistributorTransactionGroup = {
   totalAmount: number;
   status: "Draft" | "Submitted" | "Completed";
   createdAt: string;
-  /** One-time vs SIP — used for operations sidebar variants. */
+  /** One-time vs SIP  used for operations sidebar variants. */
   channel?: "one-time" | "sip";
   /** False for platform-wide rows in “All orders”. Defaults to true. */
   inDistributorBook?: boolean;

@@ -57,7 +57,7 @@ async def lifespan(_: FastAPI):
     if runtime_settings.debug and runtime_settings.app_env == "development":
         if not smtp_configured():
             dev_email_msg = (
-                "DEV: SMTP disabled — password reset links print as [DEV PASSWORD RESET] "
+                "DEV: SMTP disabled  password reset links print as [DEV PASSWORD RESET] "
                 "in this terminal."
             )
             logger.warning(dev_email_msg)
@@ -69,7 +69,7 @@ async def lifespan(_: FastAPI):
 
     if runtime_settings.app_env == "development" and runtime_settings.event_dispatch_mode == "outbox":
         logger.warning(
-            "EVENT_DISPATCH_MODE=outbox in development — run "
+            "EVENT_DISPATCH_MODE=outbox in development  run "
             "`python -m app.jobs.run_event_worker` (and outbox relay) or set "
             "EVENT_USE_WORKER_IN_DEV=false for inline email delivery."
         )
@@ -83,8 +83,8 @@ async def lifespan(_: FastAPI):
         elif runtime_settings.debug:
             logger.info(
                 "Twilio SMS enabled (from=%s, messaging_service=%s)",
-                runtime_settings.twilio_from_number or "—",
-                runtime_settings.twilio_messaging_service_sid or "—",
+                runtime_settings.twilio_from_number or "",
+                runtime_settings.twilio_messaging_service_sid or "",
             )
 
     if runtime_settings.zto_enabled:
@@ -135,7 +135,7 @@ async def lifespan(_: FastAPI):
     corpus = training_corpus_stats()
     if row_count <= 0:
         logger.warning(
-            "Help bot training corpus is empty — retrieval few-shot disabled. "
+            "Help bot training corpus is empty  retrieval few-shot disabled. "
             "Ship data/help-bot-training/batch-*.jsonl with the API image."
         )
     else:
@@ -162,7 +162,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    description="ZYND Wealth Operating System — Event-first API",
+    description="ZYND Wealth Operating System  Event-first API",
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/docs" if settings.debug else None,

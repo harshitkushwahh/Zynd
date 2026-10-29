@@ -128,7 +128,7 @@ export function NfoClosingInChip({ closeDate, className }: NfoClosingInChipProps
 
 /** Plain closing line for detail panel when outside the urgency window (e.g. 10+ days). */
 export function nfoClosingInPlainValue(closeDate: string | null | undefined, now: Date = new Date()): string {
-  if (!closeDate) return "—";
+  if (!closeDate) return "";
   const countdown = nfoCloseCountdown(closeDate, countdownLabels(), now);
   if (!countdown || countdown.phase === "closed") return copy.mutualFunds.nfoClosingClosed;
   if (nfoClosingUrgencyTier(countdown)) {

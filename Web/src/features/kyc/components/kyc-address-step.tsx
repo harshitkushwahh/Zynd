@@ -26,6 +26,7 @@ import {
   addressHadValues,
   addressMatchesPincode,
   applyPincodeToAddress,
+  stateMatchesDropdownOptions,
 } from "@/features/kyc/lib/kyc-pincode";
 import { permanentAddressIsEmpty } from "@/features/kyc/lib/zto-prefill";
 import { ApiError } from "@/lib/api-client";
@@ -33,6 +34,28 @@ import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
 type AddressTab = "permanent" | "correspondence";
+
+function seedAddressFormWithZto(
+  baseline: KycAddressFormValue,
+  zeroTouchPrefill: KycAddressFormValue,
+  stateOptions: string[],
+): KycAddressFormValue {
+  const seededPermanent = {
+    ...zeroTouchPrefill.permanent,
+    state: resolveStateOption(zeroTouchPrefill.permanent.state, stateOptions),
+  };
+  return {
+    ...baseline,
+    permanent: seededPermanent,
+    correspondence: zeroTouchPrefill.sameAsPermanent
+      ? { ...seededPermanent }
+      : {
+          ...zeroTouchPrefill.correspondence,
+          state: resolveStateOption(zeroTouchPrefill.correspondence.state, stateOptions),
+        },
+    sameAsPermanent: zeroTouchPrefill.sameAsPermanent,
+  };
+}
 
 type KycAddressStepProps = {
   initialValue?: KycAddressFormValue;
@@ -217,7 +240,11 @@ export function KycAddressStep({
   onSubmit,
 }: KycAddressStepProps) {
   const [activeTab, setActiveTab] = useState<AddressTab>("permanent");
-  const [form, setForm] = useState<KycAddressFormValue>(() => initialValue ?? createEmptyAddressForm());
+  const [form, setForm] = useState<KycAddressFormValue>(() => {
+    const baseline = initialValue ?? createEmptyAddressForm();
+    if (!zeroTouchPrefill || !permanentAddressIsEmpty(baseline)) return baseline;
+    return seedAddressFormWithZto(baseline, zeroTouchPrefill, stateOptions);
+  });
   const [errors, setErrors] = useState<{
     permanent: Partial<Record<AddressFieldKey, string>>;
     correspondence: Partial<Record<AddressFieldKey, string>>;
@@ -227,7 +254,7 @@ export function KycAddressStep({
     correspondence: string;
   }>({ permanent: "", correspondence: "" });
   const pincodeEnrichedRef = useRef<{ permanent?: string; correspondence?: string }>({});
-  const zeroTouchSeededRef = useRef(false);
+  const pincodeLookupAttemptRef = useRef("");
   const lookupRequestRef = useRef(0);
   const formRef = useRef(form);
   formRef.current = form;
@@ -244,6 +271,8 @@ export function KycAddressStep({
 
   useEffect(() => {
     if (!initialValue) return;
+    // Parent often passes a fresh empty placeholder each render — do not wipe ZTO or in-progress input.
+    if (permanentAddressIsEmpty(initialValue)) return;
 
     const normalizedPermanent = {
       ...initialValue.permanent,
@@ -317,43 +346,39 @@ export function KycAddressStep({
 
   /* eslint-disable react-hooks/set-state-in-effect -- one-time seed from approved ZTO snapshot */
   useEffect(() => {
-    if (!zeroTouchPrefill || zeroTouchSeededRef.current) return;
-    zeroTouchSeededRef.current = true;
+    if (!zeroTouchPrefill) return;
     const baseline = initialValue ?? createEmptyAddressForm();
     if (!permanentAddressIsEmpty(baseline)) return;
+    if (!permanentAddressIsEmpty(formRef.current)) return;
 
-    const seededPermanent = {
-      ...zeroTouchPrefill.permanent,
-      state: resolveStateOption(zeroTouchPrefill.permanent.state, stateOptions),
-    };
-    const nextForm: KycAddressFormValue = {
-      ...baseline,
-      permanent: seededPermanent,
-      correspondence: zeroTouchPrefill.sameAsPermanent
-        ? { ...seededPermanent }
-        : {
-            ...zeroTouchPrefill.correspondence,
-            state: resolveStateOption(zeroTouchPrefill.correspondence.state, stateOptions),
-          },
-      sameAsPermanent: zeroTouchPrefill.sameAsPermanent,
-    };
+    const nextForm = seedAddressFormWithZto(baseline, zeroTouchPrefill, stateOptions);
     formRef.current = nextForm;
     setForm(nextForm);
-
-    const pincode = seededPermanent.pincode.trim();
-    if (pincode.length === 6 && pincodeEnrichedRef.current.permanent !== pincode) {
-      void applyPincodeLookup(pincode, "permanent");
-    }
   }, [zeroTouchPrefill, initialValue, stateOptions]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    const pincode = initialValue?.permanent.pincode ?? "";
+    const pincode = form.permanent.pincode.trim();
     if (pincode.length !== 6) return;
-    if (pincodeEnrichedRef.current.permanent === pincode) return;
+
+    const attemptKey = `${pincode}|${stateOptions.length}`;
+    const alreadyEnriched = pincodeEnrichedRef.current.permanent === pincode;
+    const missingLocality =
+      !form.permanent.city.trim() ||
+      !stateMatchesDropdownOptions(form.permanent.state, stateOptions);
+
+    if (alreadyEnriched && !missingLocality) return;
+    if (alreadyEnriched && missingLocality && pincodeLookupAttemptRef.current === attemptKey) {
+      return;
+    }
+
+    pincodeLookupAttemptRef.current = attemptKey;
+    if (alreadyEnriched && missingLocality) {
+      pincodeEnrichedRef.current.permanent = undefined;
+    }
 
     void applyPincodeLookup(pincode, "permanent");
-  }, [initialValue?.permanent.pincode, prefilledFromDigilocker, stateOptions]);
+  }, [form.permanent.pincode, form.permanent.city, form.permanent.state, stateOptions]);
 
   const updateAddress = (
     type: "permanent" | "correspondence",
@@ -385,6 +410,9 @@ export function KycAddressStep({
     if (field === "pincode") {
       setPincodeNotice((notices) => ({ ...notices, [type]: "" }));
       pincodeEnrichedRef.current[type] = undefined;
+      if (type === "permanent") {
+        pincodeLookupAttemptRef.current = "";
+      }
       if (value.length === 6) {
         void applyPincodeLookup(value, type);
       }

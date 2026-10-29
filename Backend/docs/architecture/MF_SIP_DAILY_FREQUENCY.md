@@ -1,4 +1,4 @@
-# Daily SIP — Zynd (extension of monthly SIP)
+# Daily SIP  Zynd (extension of monthly SIP)
 
 Daily SIP builds on the existing monthly SIP flow. Mandate creation, plan submit to Finprim, first-installment payment gateway, postback, and ongoing mandate debits follow the same paths as monthly SIP. What differs is frequency selection, fund eligibility (OMS `sip_options`), validation rules, Finprim create-plan payload, cart persistence, portfolio aggregates, and UI copy.
 
@@ -29,7 +29,7 @@ sequenceDiagram
 
   Note over U,FP: Same as monthly SIP through mandate
   U->>API: POST /invest/mandates
-  U->>U: Invest card — Monthly or Daily
+  U->>U: Invest card  Monthly or Daily
   U->>API: POST /invest/sip/plans/validate
   API->>API: OMS validate daily or monthly bucket
   U->>API: POST /invest/sip/plans
@@ -59,7 +59,7 @@ SIP cart checkout creates one plan per cart line via `create_sip_plan`, each wit
 
 ---
 
-## 4. Zynd REST — frequency fields
+## 4. Zynd REST  frequency fields
 
 Base path: `/api/v1/invest` (auth required).
 
@@ -78,8 +78,8 @@ Plan responses include `frequency`, `installment_day`, `number_of_installments`.
 
 Helpers in [`investment_constraints.py`](../../app/application/mf/investment_constraints.py):
 
-- `sip_option_for_frequency(fund, frequency)` — reads `fund.investment_constraints.sip_options`.
-- `assert_sip_frequency_allowed(fund, frequency)` — daily without daily node when options exist → `"Daily SIP is not available for this fund."`
+- `sip_option_for_frequency(fund, frequency)`  reads `fund.investment_constraints.sip_options`.
+- `assert_sip_frequency_allowed(fund, frequency)`  daily without daily node when options exist → `"Daily SIP is not available for this fund."`
 - Amount min/max and min installments from the frequency-specific option when present; else monthly falls back to `fund.min_sip_amount`.
 
 Used by `validate_sip_plan_inputs` and `create_sip_plan` in [`mf_sip_plan_service.py`](../../app/application/mf/mf_sip_plan_service.py).
@@ -90,9 +90,9 @@ Installment day checks run only for monthly (`_validate_installment_day`).
 
 ## 6. Database and catalog
 
-- `mf_sip_plans.frequency` — set on create (monthly or daily).
-- `mf_cart_items.frequency` — SIP cart line frequency.
-- `mutual_funds.investment_constraints` — JSON snapshot including `sip_options` from Cybrilla scheme `sip_frequency_specific_data` (ingestion pipeline).
+- `mf_sip_plans.frequency`  set on create (monthly or daily).
+- `mf_cart_items.frequency`  SIP cart line frequency.
+- `mutual_funds.investment_constraints`  JSON snapshot including `sip_options` from Cybrilla scheme `sip_frequency_specific_data` (ingestion pipeline).
 
 Fund detail API exposes `investment_details.sip_options` for the Web invest card.
 
@@ -105,9 +105,9 @@ Fund detail API exposes `investment_details.sip_options` for the Web invest card
 | Frequency helpers | `Web/src/features/invest/lib/mf-sip-frequency.ts` |
 | Invest card toggle | `mf-invest-payment-card.tsx`, `mf-sip-frequency-chips.tsx` |
 | Fund detail | `mf-fund-detail-view.tsx` passes `sip_options` |
-| SIP cart | `mf-cart-view.tsx` — cart-level frequency, hide day picker when daily |
-| Portfolio holding | `portfolio-holding-sip.ts` — monthly vs daily split display |
-| My SIPs | `mf-format.ts` — `formatSipFrequencyLabel` |
+| SIP cart | `mf-cart-view.tsx`  cart-level frequency, hide day picker when daily |
+| Portfolio holding | `portfolio-holding-sip.ts`  monthly vs daily split display |
+| My SIPs | `mf-format.ts`  `formatSipFrequencyLabel` |
 
 ---
 
@@ -118,7 +118,7 @@ Fund detail API exposes `investment_details.sip_options` for the Web invest card
 - `upsert_cart_item(..., frequency)` persists line frequency.
 - Validates each SIP line with the same OMS rules as single-fund plan create.
 - Rejects mixed frequencies across SIP items (`sip_frequency_mismatch`).
-- `checkout_sip_cart` — shared mandate; max line amount for mandate limit (correct for daily per-installment).
+- `checkout_sip_cart`  shared mandate; max line amount for mandate limit (correct for daily per-installment).
 
 ---
 
@@ -165,4 +165,4 @@ Holding detail Web UI shows separate monthly and daily commitment where applicab
 
 ## Related
 
-- [MF_PAYMENTS_MASTER_LUMPSUM_SIP.md](./MF_PAYMENTS_MASTER_LUMPSUM_SIP.md) — full SIP + lumpsum API map
+- [MF_PAYMENTS_MASTER_LUMPSUM_SIP.md](./MF_PAYMENTS_MASTER_LUMPSUM_SIP.md)  full SIP + lumpsum API map

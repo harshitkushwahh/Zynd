@@ -10,7 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FieldMessage } from "@/components/ui/ui-message";
 import { fetchFamilyGroupGoals, fetchFamilyGroups } from "@/features/family-groups/api/family-groups-api";
-import { familyMemberInitials } from "@/features/family-groups/lib/family-group-ui";
+import {
+  familyMemberInitials,
+  zyndAvatarVariantForSeed,
+} from "@/features/family-groups/lib/family-group-ui";
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
@@ -106,29 +109,51 @@ export function FamilyGroupCircle({
   label,
   avatarUrl,
   className,
+  opaque = false,
 }: {
   label: string;
   avatarUrl?: string | null;
   className?: string;
+  /** Solid backing (no translucent tint) — use on photo cards and rich goal surfaces. */
+  opaque?: boolean;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const showAvatar = Boolean(avatarUrl) && !imageFailed;
+  const resolvedAvatarUrl = avatarUrl?.trim() ? avatarUrl.trim() : null;
+  const showAvatar = Boolean(resolvedAvatarUrl) && !imageFailed;
 
   useEffect(() => {
     setImageFailed(false);
-  }, [avatarUrl]);
+  }, [resolvedAvatarUrl]);
+
+  const initialsVariant = zyndAvatarVariantForSeed(label);
 
   return (
     <div
       className={cn(
         "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-inset ring-border/80",
-        showAvatar ? "bg-muted/50" : "bg-primary/10 text-xs font-semibold text-primary ring-primary/15",
+        opaque
+          ? showAvatar
+            ? "bg-muted/40 ring-2 ring-white/85 shadow-md dark:ring-white/20"
+            : "text-xs font-semibold ring-2 ring-white/70 shadow-md dark:ring-white/25"
+          : showAvatar
+            ? "bg-muted/50"
+            : "bg-primary/10 text-xs font-semibold text-primary ring-primary/15",
         className,
       )}
+      style={
+        opaque && !showAvatar
+          ? { backgroundColor: initialsVariant.bg, color: initialsVariant.fg }
+          : undefined
+      }
     >
       {showAvatar ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatarUrl!} alt="" className="size-full object-cover" onError={() => setImageFailed(true)} />
+        <img
+          src={resolvedAvatarUrl!}
+          alt=""
+          className="size-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
       ) : label ? (
         familyMemberInitials(label)
       ) : (

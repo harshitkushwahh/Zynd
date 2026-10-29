@@ -1,6 +1,6 @@
 export type PortfolioChartPeriod = "1D" | "1M" | "6M" | "1Y" | "3Y" | "5Y" | "10Y";
 
-/** Client detail portfolio chart — shorter period menu. */
+/** Client detail portfolio chart  shorter period menu. */
 export type ClientPortfolioChartPeriod = "1D" | "1M" | "all";
 
 export type PortfolioChartPoint = {

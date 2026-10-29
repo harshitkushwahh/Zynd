@@ -35,7 +35,7 @@ export function mapPartnerListItemToBranchRecord(item: DistributorPartnerListIte
     id: item.client_id,
     name: item.name,
     email: item.email,
-    arn: item.arn || "—",
+    arn: item.arn || "",
     clientCount: item.client_count,
     aum: item.aum,
     status,

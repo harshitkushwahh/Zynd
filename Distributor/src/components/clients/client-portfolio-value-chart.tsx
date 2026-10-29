@@ -327,7 +327,7 @@ export function ClientPortfolioValueChart({
             role={canScrollX ? "region" : undefined}
             aria-label={
               canScrollX
-                ? `${copy.chartTitle} — scroll horizontally for earlier periods`
+                ? `${copy.chartTitle}  scroll horizontally for earlier periods`
                 : undefined
             }
             onScroll={syncAxisScroll}

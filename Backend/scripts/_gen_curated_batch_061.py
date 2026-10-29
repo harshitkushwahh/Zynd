@@ -53,7 +53,7 @@ _MODULE_TAGS = (
 
 
 def finalize_q(q: str) -> str:
-    """Light module tag for uniqueness — no invented amounts."""
+    """Light module tag for uniqueness  no invented amounts."""
     global _gidx
     i = _gidx
     _gidx += 1
@@ -85,16 +85,16 @@ def add(entry: dict) -> None:
 KYC_SPECS: list[tuple[list[str], bool, str, str]] = [
     (["kyc.overall_status"], True, "Complete KYC module khola to overall status kya dikhega?", "Summarise overall_status; if not completed point to Complete KYC."),
     (["kyc.completed_at", "kyc.overall_status"], True, "Kal raat tak KYC complete ho gaya tha kya mere account pe?", "If completed, state completed_at; else quote overall_status."),
-    (["kyc.status_last_updated_at", "kyc.overall_status"], True, "Status last update kab hua — abhi bhi submitted dikha raha hai", "Quote status_last_updated_at with overall_status; no approval promise unless completed."),
+    (["kyc.status_last_updated_at", "kyc.overall_status"], True, "Status last update kab hua  abhi bhi submitted dikha raha hai", "Quote status_last_updated_at with overall_status; no approval promise unless completed."),
     (["kyc.steps.pan", "kyc.pan_verification_status"], True, "PAN wala step green hai ya dubara upload karna padega?", "Answer from pan step and pan_verification_status only."),
     (["kyc.steps.digilocker"], True, "DigiLocker se Aadhaar link hua ya error aa raha tha?", "Use digilocker step status; if failed reopen Complete KYC."),
     (["kyc.steps.address"], True, "Address proof step approve hua ya reject?", "Quote address step status from context."),
-    (["kyc.steps.personal"], True, "Personal details me father name mismatch tha — ab step ka status?", "Explain personal step status; retry from Complete KYC if failed."),
-    (["kyc.steps.nominee"], True, "Nominee add kar diya tha — submit ho gaya na?", "State nominee step status."),
+    (["kyc.steps.personal"], True, "Personal details me father name mismatch tha  ab step ka status?", "Explain personal step status; retry from Complete KYC if failed."),
+    (["kyc.steps.nominee"], True, "Nominee add kar diya tha  submit ho gaya na?", "State nominee step status."),
     (["kyc.steps.bank", "kyc.bank_verification_status"], True, "Bank penny drop fail tha, ab verify ho gaya kya?", "Use bank step and bank_verification_status."),
     (["kyc.steps.signature", "kyc.steps.review"], True, "E-sign aur final review dono tick ho gaye?", "Summarise signature and review step statuses."),
-    (["kyc.last_completed_step"], True, "App band kar di thi — KYC wahi se resume hoga jahan chhoda?", "Resume from last_completed_step via Dashboard → Complete KYC."),
-    (["kyc.readiness_code", "kyc.readiness_reason"], True, "Invest button grey hai — KYC readiness reason kya hai?", "Explain invest block from readiness_code and readiness_reason."),
+    (["kyc.last_completed_step"], True, "App band kar di thi  KYC wahi se resume hoga jahan chhoda?", "Resume from last_completed_step via Dashboard → Complete KYC."),
+    (["kyc.readiness_code", "kyc.readiness_reason"], True, "Invest button grey hai  KYC readiness reason kya hai?", "Explain invest block from readiness_code and readiness_reason."),
     (["kyc.kyc_already_registered", "kyc.external_kyc_status"], True, "Already registered elsewhere wala flag on hai kya?", "Quote kyc_already_registered and external_kyc_status only."),
     (["kyc.steps"], True, "Kaunsa KYC step abhi pending ya failed hai list me?", "List pending or failed steps from kyc.steps."),
     (["kyc.overall_status"], True, "KYC ke bina Explore se lumpsum chalega?", "If overall_status not completed, investing requires completed KYC per playbook."),
@@ -107,7 +107,7 @@ KYC_SPECS: list[tuple[list[str], bool, str, str]] = [
 
 KYC_FALSE: list[tuple[list[str], str, str]] = [
     (["kyc.overall_status"], "Mera poora PAN number chat me bhej do verify ke liye", "Decline sharing full PAN; use masked context or Complete KYC screen only."),
-    (["kyc.overall_status"], "Zerodha pe KYC hai — yahan dubara poora flow mandatory hai kya?", "Stay in Zynd scope; do not claim other-broker policy; point to Complete KYC status."),
+    (["kyc.overall_status"], "Zerodha pe KYC hai  yahan dubara poora flow mandatory hai kya?", "Stay in Zynd scope; do not claim other-broker policy; point to Complete KYC status."),
     (["kyc.steps.digilocker"], "Binance jaisa video KYC yahan available hai?", "Decline out-of-scope; MF onboarding uses Complete KYC steps in app."),
     (["kyc.overall_status"], "KYC agent ko WhatsApp pe selfie bhejun kya?", "Politely decline or escalate; stay within Zynd support scope."),
     (["kyc.overall_status"], "Paytm pe KYC hai Zynd me skip ho sakta hai?", "Politely decline or escalate; stay within Zynd support scope."),
@@ -156,13 +156,13 @@ for i in range(280):
     variants = [
         q_tpl,
         f"{mod} screen pe {step} step ka kya scene hai? {dev} try kiya tha.",
-        f"KYC {step} wala part stuck lag raha — context me status kya hai, {tm}?",
+        f"KYC {step} wala part stuck lag raha  context me status kya hai, {tm}?",
         f"Bhai {mod} me overall KYC ka update chahiye tha, {dev}.",
-        f"Invest block ho raha hai — {step} step complete hai ya nahi?",
-        f"Nominee ya bank — jo bhi pending ho bata do, {tm} check kiya.",
+        f"Invest block ho raha hai  {step} step complete hai ya nahi?",
+        f"Nominee ya bank  jo bhi pending ho bata do, {tm} check kiya.",
         f"Readiness code samajh nahi aaya, Invest grey kyu hai?",
         f"DigiLocker redirect ke baad app me {step} status refresh nahi hua {dev}.",
-        f"Phase1 complete likha tha — ab full KYC complete hua?",
+        f"Phase1 complete likha tha  ab full KYC complete hua?",
         f"External KYC registrar status kya dikha raha hai app me?",
     ]
     q = variants[(i // len(KYC_SPECS)) % len(variants)]
@@ -192,9 +192,9 @@ ACCT_FALSE: list[tuple[list[str], str, str]] = [
     (["account.has_password_login"], "Bank PIN Settings me update kaise karun chat me batao", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.linked_sign_in_providers"], "Facebook login kab aa raha hai?", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.mfa_enrolled"], "Rooted phone pe MFA bypass trick?", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
-    (["account.email_verified"], "Two emails merge — dono ka password bhej raha hun", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
+    (["account.email_verified"], "Two emails merge  dono ka password bhej raha hun", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.apple_account_linked"], "Apple ID password yahan safe hai paste karun?", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
-    (["account.phone_verified"], "SIM swap ho gaya — purana OTP forward karo", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
+    (["account.phone_verified"], "SIM swap ho gaya  purana OTP forward karo", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.account_status"], "Chat me poora Aadhaar save kar lo account ke liye", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.linked_sign_in_providers"], "Borrow someone else's verified phone for OTP?", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.mfa_enrolled"], "Auto-login token chat pe copy paste kar do", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
@@ -203,7 +203,7 @@ ACCT_FALSE: list[tuple[list[str], str, str]] = [
     (["account.account_status"], "Sell my login credentials best price?", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.google_account_linked"], "Dusre ka Google account link karke unka portfolio dekho", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.mfa_enrolled"], "MFA band karne ka secret code chat me chahiye", "Do not expose secrets; use in-app MFA recovery or agent."),
-    (["account.has_password_login"], "Purana password yaad nahi — yahan bata deta hun sahi hai?", "Never collect passwords in chat; direct to Settings password reset flow."),
+    (["account.has_password_login"], "Purana password yaad nahi  yahan bata deta hun sahi hai?", "Never collect passwords in chat; direct to Settings password reset flow."),
     (["account.phone_verified"], "Telegram bot se phone verify ho jayega?", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
     (["account.account_status"], "Settings se kisi aur ka PAN edit kar sakta hun?", "Decline unsafe or out-of-scope requests; direct to official Settings flows or agent."),
 ]
@@ -233,12 +233,12 @@ for i in range(280):
     act = ACCT_ACTIONS[i % len(ACCT_ACTIONS)]
     variants = [
         q_tpl,
-        f"{scr} tab me {act} ka option nahi dikh raha — status kya hai?",
+        f"{scr} tab me {act} ka option nahi dikh raha  status kya hai?",
         f"Settings se MFA band karna hai pehle enrolled hai ya nahi?",
-        f"Naya phone liya — verified number context me update hua?",
+        f"Naya phone liya  verified number context me update hua?",
         f"Google se login karta hun password set kar sakta hun kya?",
-        f"Apple hide-my-email use kiya — email verified flag true hai?",
-        f"Session expire ho raha bar bar — account status check karo",
+        f"Apple hide-my-email use kiya  email verified flag true hai?",
+        f"Session expire ho raha bar bar  account status check karo",
         f"Referral signup ke baad email verify pending dikha raha hai",
         f"Invest consent OTP ke liye phone verified hona zaroori hai?",
         f"Profile me naam KYC se match nahi kar raha account side pe kya dikhega?",
@@ -256,7 +256,7 @@ MF_SPECS: list[tuple[list[str], str, bool, str, str]] = [
     (["payment"], ["payments.recent_orders"], True, "Transactions me latest order payment pending kyu hai?", "Find PAYMENT_PENDING in recent_orders; explain awaiting confirmation."),
     (["payment"], ["payments.recent_orders"], True, "Lumpsum order settle ho gaya ya processing me hai?", "Use recent lumpsum order status and settled_at if any."),
     (["payment"], ["payments.failed_sip_plans"], True, "Failed SIP plans list me kuch hai abhi?", "Summarise failed_sip_plans from context."),
-    (["portfolio"], ["portfolio.has_pending_orders", "payments.recent_orders"], True, "Paisa kata par Portfolio me units nahi — pending order hai?", "Explain settlement; cite has_pending_orders and matching recent_orders."),
+    (["portfolio"], ["portfolio.has_pending_orders", "payments.recent_orders"], True, "Paisa kata par Portfolio me units nahi  pending order hai?", "Explain settlement; cite has_pending_orders and matching recent_orders."),
     (["portfolio"], ["portfolio.current_value", "portfolio.as_on"], True, "Portfolio value aaj kitni dikha rahi hai as-on date kya hai?", "Quote current_value and as_on."),
     (["portfolio"], ["portfolio.invested", "portfolio.total_return"], True, "Total invested aur gain loss context se bata do", "Use invested and total_return only."),
     (["portfolio"], ["portfolio.holdings_count", "portfolio.active_sips_count"], True, "Kitne funds hold kar raha hun aur kitni active SIPs?", "Quote holdings_count and active_sips_count."),
@@ -274,11 +274,11 @@ MF_FALSE: list[tuple[list[str], str, str]] = [
     (["portfolio.current_value"], "Agle mahine mera portfolio kitna badhega predict karo", "Decline predictions; quote current_value only."),
     (["payments.recent_orders"], "Best large-cap fund 2026 me kaun sa lu SIP?", "Decline investment advice; suggest Explore research, no scheme pick."),
     (["portfolio.current_value"], "NAV kal kitna hoga HDFC fund ka guess karo", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
-    (["payments.recent_orders"], "Small cap ya mid cap — mere liye kaun better hai batao", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
+    (["payments.recent_orders"], "Small cap ya mid cap  mere liye kaun better hai batao", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["portfolio.invested"], "Insider tip se kaun sa MF double hoga?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["payments.recent_orders"], "SBI fund vs Axis fund guaranteed winner?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["portfolio.total_return"], "Market crash me sab bech dun kya advice do", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
-    (["payments.recent_orders"], "WhatsApp group ne fund bola — wahi lu na?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
+    (["payments.recent_orders"], "WhatsApp group ne fund bola  wahi lu na?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["payments.recent_orders"], "Loan leke lumpsum dalun returns pakka 20%?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["payments.recent_orders"], "NFO me hamesha profit hota hai na?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["portfolio.current_value"], "Guaranteed 50% return wala plan hai kya?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
@@ -290,7 +290,7 @@ MF_FALSE: list[tuple[list[str], str, str]] = [
     (["payments.recent_orders"], "Crypto index fund Zynd pe launch hua kya invest karun?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["payments.recent_orders"], "Tax chori ke liye ELSS hide kaise karun", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["portfolio.invested"], "SIP band karke FD better hai hamesha?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
-    (["payments.recent_orders"], "Agent ne commission wala fund bola — sahi hai?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
+    (["payments.recent_orders"], "Agent ne commission wala fund bola  sahi hai?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["payments.recent_orders"], "Fund manager ka personal WhatsApp do", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["portfolio.has_pending_orders"], "Portfolio copy paste karke dusre ko trade kar do", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
     (["payments.recent_orders"], "Insider NAV leak mila invest ab?", "Decline advice, predictions, or third-party payment paths; stay on Zynd order/context facts or Explore."),
@@ -332,14 +332,14 @@ for i in range(350):
     act = MF_ACTIONS[i % len(MF_ACTIONS)]
     variants = [
         q_tpl,
-        f"{scr} se {act} try kiya — context me order status kya hai?",
+        f"{scr} se {act} try kiya  context me order status kya hai?",
         f"My SIPs page pe mandate issue dikha raha tha, failure reason?",
-        f"Invest cart me fund add kiya payment fail — recent orders dekho",
-        f"Explore pe NFO dikha par invest blocked — payment ya KYC?",
+        f"Invest cart me fund add kiya payment fail  recent orders dekho",
+        f"Explore pe NFO dikha par invest blocked  payment ya KYC?",
         f"Transactions history me duplicate debit lag raha hai verify karo",
         f"Portfolio holding detail me units kam kyu after switch?",
         f"Lumpsum ke baad Explore me same fund buy aur kar sakta hun?",
-        f"Redeem amount bank me aaya nahi — payment settled_at check",
+        f"Redeem amount bank me aaya nahi  payment settled_at check",
         f"Goals link SIP portfolio me count sahi hai?",
     ]
     q = variants[(i // len(MF_SPECS)) % len(variants)]
@@ -354,13 +354,13 @@ MULTI = [
      "Phone verify nahi hai to KYC submit ho payega?",
      "Both phone_verified and overall_status; phone OTP needed for flows."),
     (["payment", "portfolio"], ["payments.recent_orders", "portfolio.has_pending_orders"], True,
-     "Debit ho gaya Portfolio blank — payment aur pending flag dono check karo",
+     "Debit ho gaya Portfolio blank  payment aur pending flag dono check karo",
      "Cross-check recent_orders with has_pending_orders for settlement."),
     (["kyc", "payment"], ["kyc.steps.bank", "payments.sip_plans.status"], True,
      "Bank KYC fail hai to SIP mandate active kaise dikha raha hai?",
      "Explain bank step vs sip_plans status; retry bank in Complete KYC."),
     (["account", "payment"], ["account.mfa_enrolled", "payments.recent_orders"], True,
-     "MFA on hai phir bhi invest consent OTP fail — order status?",
+     "MFA on hai phir bhi invest consent OTP fail  order status?",
      "MFA does not replace transaction OTP; use recent_orders failure_reason."),
     (["kyc", "portfolio"], ["kyc.overall_status", "portfolio.holdings_count"], True,
      "KYC complete hai par holdings zero kyu?",
@@ -400,14 +400,14 @@ for i in range(90):
     topics, fields, ca, q_tpl, sol = base
     extras = [
         f"Settings me phone change ke baad Complete KYC bank step dubara?",
-        f"Google login + KYC pending — Invest pe error code kya context me?",
-        f"Failed payment Explore cart se — KYC readiness bhi dekho",
-        f"Portfolio pending + payment success — dono modules reconcile karo",
+        f"Google login + KYC pending  Invest pe error code kya context me?",
+        f"Failed payment Explore cart se  KYC readiness bhi dekho",
+        f"Portfolio pending + payment success  dono modules reconcile karo",
         f"Nominee KYC aur Goals beneficiary alag hai kya?",
-        f"MFA enrolled par email verify false — MF redeem chalega?",
-        f"Transactions fail + account_status active — phir bhi block?",
+        f"MFA enrolled par email verify false  MF redeem chalega?",
+        f"Transactions fail + account_status active  phir bhi block?",
         f"SIP mandate + bank verification mismatch KYC side pe?",
-        f"Family group member KYC pending — main account SIP affect?",
+        f"Family group member KYC pending  main account SIP affect?",
         f"Referral bonus aur payment settled order link hai?",
     ]
     q = extras[(i // len(MULTI)) % len(extras)] if i >= len(MULTI) else q_tpl

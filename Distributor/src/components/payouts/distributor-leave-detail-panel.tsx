@@ -219,7 +219,7 @@ export function DistributorLeaveDetailPanel({ title }: DistributorLeaveDetailPan
                 {formatDistributorDate(row.appliedAt)}
               </Table.Cell>
               <Table.Cell className={DISTRIBUTOR_TABLE_CREATED_AT_COLUMN_CLASS}>
-                {row.reviewedAt ? formatDistributorDate(row.reviewedAt) : "—"}
+                {row.reviewedAt ? formatDistributorDate(row.reviewedAt) : ""}
               </Table.Cell>
             </Table.Row>
           );

@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { extendTailwindMerge } from "tailwind-merge";
 
-/** ZYND typography utilities use `text-*` for font size only — keep them out of the color group. */
+/** ZYND typography utilities use `text-*` for font size only  keep them out of the color group. */
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {

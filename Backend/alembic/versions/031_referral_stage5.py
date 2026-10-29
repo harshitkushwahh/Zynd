@@ -1,4 +1,4 @@
-"""Referral Stage 5 — engaged stage and engagement milestone events.
+"""Referral Stage 5  engaged stage and engagement milestone events.
 
 Revision ID: 031_referral_stage5
 Revises: 030_referral_stage4

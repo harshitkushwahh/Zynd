@@ -249,7 +249,7 @@ export function AddInvestorWizard() {
         title: "Contact & access",
         icon: ShieldCheck,
         items: [
-          ...(displayClientId !== "—"
+          ...(displayClientId !== ""
             ? [{ label: "Investor code", value: displayClientId }]
             : []),
           { label: "Email", value: email },
@@ -365,7 +365,7 @@ export function AddInvestorWizard() {
     }
     const draft: AddInvestorComplianceDraft = {
       clientUserId,
-      clientId: displayClientId !== "—" ? displayClientId : clientId,
+      clientId: displayClientId !== "" ? displayClientId : clientId,
       email,
       mobile,
       investorName: accountHolderName || email,
@@ -986,7 +986,7 @@ export function AddInvestorWizard() {
       setSubmitError("Complete every compliance step before submitting.");
       return;
     }
-    if (!clientId && displayClientId === "—") {
+    if (!clientId && displayClientId === "") {
       setSubmitError("Investor account details are missing. Restart from onboarding.");
       return;
     }

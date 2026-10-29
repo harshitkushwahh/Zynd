@@ -144,5 +144,5 @@ export async function fetchTopFundsForCategory(categorySlug: string, limit = MF_
 }
 
 export function displayCategoryLabel(fund: InvestFundSummary) {
-  return fund.sebi_category ?? "—";
+  return fund.sebi_category ?? "";
 }

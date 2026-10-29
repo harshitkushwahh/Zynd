@@ -118,7 +118,7 @@ export function portfolioFlowYDomain(points: OverviewPortfolioFlowPoint[]): [num
   const relativeFloor = Math.max(Math.abs(max), Math.abs(min)) * 0.02;
   const range = Math.max(spread, relativeFloor, 1);
 
-  return [min - range * 0.12, max + range * 0.12];
+  return [min, max + range * 0.18];
 }
 
 export type PortfolioFlowChartTone = "profit" | "loss";

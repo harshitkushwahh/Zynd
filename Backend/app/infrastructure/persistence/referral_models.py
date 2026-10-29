@@ -1,4 +1,4 @@
-"""Referral program persistence — Stage 0+ (codes, clicks, attributions)."""
+"""Referral program persistence  Stage 0+ (codes, clicks, attributions)."""
 
 from __future__ import annotations
 

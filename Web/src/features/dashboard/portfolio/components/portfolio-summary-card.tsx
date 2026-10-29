@@ -77,7 +77,7 @@ export function PortfolioSummaryCard({
         </div>
       </div>
 
-      <div className="mt-auto px-1 pt-3 sm:px-2">
+      <div className="mt-auto px-0 pt-3">
         <OverviewPortfolioFlowChart
           series={[...series]}
           range={range}

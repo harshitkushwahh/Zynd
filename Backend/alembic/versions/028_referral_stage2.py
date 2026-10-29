@@ -1,4 +1,4 @@
-"""Referral Stage 2 — KYC verified stage.
+"""Referral Stage 2  KYC verified stage.
 
 Revision ID: 028_referral_stage2
 Revises: 027_referral_stage1

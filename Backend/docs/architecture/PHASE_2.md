@@ -1,4 +1,4 @@
-# Phase 2 — Event bus becomes real
+# Phase 2  Event bus becomes real
 
 Completed checklist per ADR-001 Step A (direct publish after commit).
 
@@ -42,4 +42,4 @@ See `docs/architecture/PHASE_3.md`. Direct publish (`redis` mode) is replaced by
 
 ## Next: Phase 4
 
-OTP platformization — see refactor plan.
+OTP platformization  see refactor plan.

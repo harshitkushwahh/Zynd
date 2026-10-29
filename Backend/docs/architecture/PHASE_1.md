@@ -1,6 +1,6 @@
-# Phase 1 — Structural cleanup
+# Phase 1  Structural cleanup
 
-Completed checklist. No API behavior changes — internal module boundaries only.
+Completed checklist. No API behavior changes  internal module boundaries only.
 
 ## Done
 
@@ -11,7 +11,7 @@ Completed checklist. No API behavior changes — internal module boundaries only
 | Centralized audit writes | `app/application/auth/audit_service.py`; used by `session_service`, `account_service`, `deletion_executor_service`, `oauth_service` |
 | Extract signup draft store | `app/infrastructure/persistence/signup_draft_store.py` |
 | Extract reset token store | `app/infrastructure/persistence/password_reset_token_store.py` |
-| OTP module trimmed | `app/infrastructure/otp/service.py` — OTP only; re-exports draft/reset for compat |
+| OTP module trimmed | `app/infrastructure/otp/service.py`  OTP only; re-exports draft/reset for compat |
 | Unified OAuth | `app/application/auth/oauth_service.py` (state + connect/disconnect); thin re-exports in `oauth_state_service`, `oauth_settings_service` |
 | Application ports | `app/application/ports/otp_gateway.py`, `email_gateway.py`, `messaging/event_publisher.py` |
 | Shared datetime helper | `app/application/shared/datetime_utils.py` |

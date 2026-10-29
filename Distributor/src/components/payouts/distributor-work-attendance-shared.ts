@@ -8,7 +8,7 @@ export const WORK_TYPE_OPTIONS: Array<{ value: DistributorWorkLocationType; labe
 ];
 
 export function formatClockTime(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "";
   return new Intl.DateTimeFormat("en-IN", {
     hour: "numeric",
     minute: "2-digit",

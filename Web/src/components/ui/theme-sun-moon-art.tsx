@@ -76,7 +76,7 @@ type ThemeTransitionOrbProps = {
   className?: string;
 };
 
-/** Sun/moon orb artwork only — for full-screen theme transition overlay. */
+/** Sun/moon orb artwork only  for full-screen theme transition overlay. */
 export function ThemeTransitionOrb({ isDark, className }: ThemeTransitionOrbProps) {
   return (
     <div

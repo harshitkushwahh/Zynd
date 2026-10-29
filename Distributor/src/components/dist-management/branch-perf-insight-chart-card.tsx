@@ -15,7 +15,7 @@ type BranchPerfInsightChartCardProps = {
   className?: string;
 };
 
-/** Dist-management graph card — matches reports insight tab chart chrome. */
+/** Dist-management graph card  matches reports insight tab chart chrome. */
 export function BranchPerfInsightChartCard({
   eyebrow,
   title,

@@ -1,4 +1,4 @@
-/* Animated sun/moon theme switch — adapted from Uiverse.io by RiccardoRapelli */
+/* Animated sun/moon theme switch  adapted from Uiverse.io by RiccardoRapelli */
 
 .zynd-theme-switch {
   --zynd-theme-switch-width: 46px;
@@ -286,7 +286,7 @@
   }
 }
 
-/* Full-screen overlay — sun/moon orb only (no switch track) */
+/* Full-screen overlay  sun/moon orb only (no switch track) */
 .zynd-theme-orb-scene {
   position: relative;
   width: 11rem;

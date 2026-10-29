@@ -1,4 +1,4 @@
-/** Layout class names — shell styles live in `Distributor/src/styles/distributor.css`. */
+/** Layout class names  shell styles live in `Distributor/src/styles/distributor.css`. */
 
 export const SUPPORT_SIDEBAR_EXPANDED_WIDTH = "var(--distributor-sidebar-width-expanded)";
 export const SUPPORT_SIDEBAR_ICON_WIDTH = "var(--distributor-sidebar-width-icon)";

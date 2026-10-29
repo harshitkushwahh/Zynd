@@ -77,7 +77,7 @@ async def _wipe_mongo_mf() -> None:
     settings = get_settings()
     mongo_url = settings.resolved_mongo_url
     if not mongo_url:
-        print("MongoDB not configured — skipping MF raw/staging wipe.")
+        print("MongoDB not configured  skipping MF raw/staging wipe.")
         return
 
     try:

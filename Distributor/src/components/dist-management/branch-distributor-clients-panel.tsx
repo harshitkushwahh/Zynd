@@ -146,7 +146,7 @@ export function BranchDistributorClientsPanel({
               <Table.Cell className="font-mono text-caption">{investor.clientCode}</Table.Cell>
               <Table.Cell className="text-muted-foreground">{investor.investorType}</Table.Cell>
               <Table.Cell className="text-right tabular-nums">
-                {investor.aum != null && investor.aum > 0 ? formatAum(investor.aum) : "—"}
+                {investor.aum != null && investor.aum > 0 ? formatAum(investor.aum) : ""}
               </Table.Cell>
               <Table.Cell>
                 <StatusBadge variant={onboardingStatusVariant(investor.onboardingStatus)}>

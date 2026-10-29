@@ -22,5 +22,6 @@ export const GOALS_LIST_HREF = "/dashboard/goals";
 export const GOALS_PERSONAL_LIST_HREF = "/dashboard/goals/personal";
 export const GOALS_FAMILY_LIST_HREF = "/dashboard/goals/family";
 
-export const GOALS_PERSONAL_PREVIEW_LIMIT = 3;
+export const GOALS_PERSONAL_PREVIEW_LIMIT = 6;
+export const GOALS_PERSONAL_PREVIEW_SCROLL_ROW_CLASS = "pt-2 pb-10";
 export const GOALS_FAMILY_PREVIEW_LIMIT = 2;

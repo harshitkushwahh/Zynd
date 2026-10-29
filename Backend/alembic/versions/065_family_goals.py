@@ -1,4 +1,4 @@
-"""Family goals — contributions and activity.
+"""Family goals  contributions and activity.
 
 Revision ID: 065_family_goals
 Revises: 064_goals_foundation

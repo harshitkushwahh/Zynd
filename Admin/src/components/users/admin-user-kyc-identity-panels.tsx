@@ -29,8 +29,8 @@ import { documentReviewStatusVariant, kycStepStatusVariant } from "@/components/
 
 const PEP_EXPOSED_LABELS: Record<string, string> = {
   not_applicable: "No",
-  pep_exposed: "Yes — PEP exposed",
-  pep_related: "Yes — related to a PEP",
+  pep_exposed: "Yes PEP exposed",
+  pep_related: "Yes elated to a PEP",
 };
 
 const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -112,7 +112,7 @@ function PanIdentityPanel({ kyc }: { kyc: AdminUserKycDetail }) {
     <KycPanelShell title="PAN details" icon={Fingerprint}>
       <div className="admin-user-kyc-identity-pan-hero">
         <div className="admin-user-kyc-identity-pan-hero__main">
-          <p className="admin-user-kyc-identity-pan-hero__name">{kyc.pan?.full_name ?? "—"}</p>
+          <p className="admin-user-kyc-identity-pan-hero__name">{kyc.pan?.full_name ?? ""}</p>
           {panMasked ? (
             <span className="admin-user-kyc-identity-pan-hero__pan font-mono">{panMasked}</span>
           ) : null}

@@ -51,8 +51,8 @@ export function mapApiDistributorOrder(row: ApiDistributorOrderListItem): Distri
   return {
     id: row.order_id,
     orderRef: row.fp_purchase_id ?? row.order_id.slice(0, 8).toUpperCase(),
-    investorEmailMasked: row.client_email_masked ?? "—",
-    clientCode: row.client_code ?? "—",
+    investorEmailMasked: row.client_email_masked ?? "",
+    clientCode: row.client_code ?? "",
     schemeName: row.product_name ?? "Mutual fund",
     amcName: row.amc_name ?? null,
     amcSlug: row.amc_slug ?? null,

@@ -418,9 +418,16 @@ class InvestorProfileSettingsUpdateRequest(BaseModel):
     spouse_name: Optional[str] = None
 
 
+class SettingsNomineeOtpSendResponse(BaseModel):
+    masked_mobile: str
+    retry_after_seconds: Optional[int] = None
+    expires_in: Optional[int] = None
+
+
 class InvestorNomineeCreateRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    otp: str = Field(min_length=4, max_length=12)
     nominees: list[dict[str, Any]] = Field(default_factory=list)
     nominee: Optional[dict[str, Any]] = None
 

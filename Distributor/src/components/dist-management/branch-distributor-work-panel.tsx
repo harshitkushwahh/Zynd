@@ -435,7 +435,7 @@ export function BranchDistributorWorkPanel({
           <Table.Row id={row.day}>
             <Table.Cell className="font-medium">{row.day}</Table.Cell>
             <Table.Cell className="text-right tabular-nums">
-              {row.hours > 0 ? `${row.hours.toFixed(1)}h` : "—"}
+              {row.hours > 0 ? `${row.hours.toFixed(1)}h` : ""}
             </Table.Cell>
             <Table.Cell>
               <StatusBadge variant={workDayStatusVariant(row.status)}>
@@ -533,7 +533,7 @@ export function BranchDistributorWorkPanel({
                 {formatClockTime(row.clockOut)}
               </Table.Cell>
               <Table.Cell className="text-right tabular-nums">
-                {row.hours > 0 ? `${row.hours.toFixed(1)}h` : "—"}
+                {row.hours > 0 ? `${row.hours.toFixed(1)}h` : ""}
               </Table.Cell>
               <Table.Cell>
                 {row.workType ? (
@@ -541,11 +541,11 @@ export function BranchDistributorWorkPanel({
                     {row.workType}
                   </StatusBadge>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground"></span>
                 )}
               </Table.Cell>
               <Table.Cell className="text-right tabular-nums">
-                {row.payFactor > 0 ? `${row.payFactor.toFixed(2)}×` : "—"}
+                {row.payFactor > 0 ? `${row.payFactor.toFixed(2)}×` : ""}
               </Table.Cell>
               <Table.Cell>
                 {row.status === "complete" ? (

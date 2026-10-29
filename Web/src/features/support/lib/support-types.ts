@@ -1,4 +1,5 @@
 export type SupportMessageRole = "user" | "agent" | "system";
+export type SupportAuthorRole = "user" | "bot" | "agent" | "system";
 
 export type SupportMessage = {
   id: string;
@@ -11,6 +12,9 @@ export type SupportMessage = {
   attachmentId?: string;
   kind?: "text" | "resolution_prompt";
   resolutionActive?: boolean;
+  authorRole?: SupportAuthorRole;
+  helpFeedback?: "pending" | "yes" | "no" | null;
+  helpFeedbackActive?: boolean;
   customerReadAt?: string | null;
   supportReadAt?: string | null;
   supportReadBy?: "bot" | "agent" | null;
@@ -25,6 +29,7 @@ export type SupportImageAttachment = {
 
 export type SupportQuickReply = {
   id: string;
+  /** Short chip text (statement, not a question). */
   label: string;
   message: string;
 };

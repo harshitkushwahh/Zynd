@@ -19,7 +19,7 @@ function normalizeMobileDigits(mobile: string): string {
   return digits;
 }
 
-/** Mirrors Backend `build_client_id_candidate` — email local part + mobile digits + @zynd. */
+/** Mirrors Backend `build_client_id_candidate`  email local part + mobile digits + @zynd. */
 export function buildInvestorClientCodeCandidate(email: string, mobile: string): string {
   const normalizedEmail = email.trim().toLowerCase();
   const localPart = normalizedEmail.split("@")[0] ?? "";
@@ -38,7 +38,7 @@ export function isPlaceholderInvestorClientCode(clientCode: string | null | unde
 
 export function formatInvestorClientCodeDisplay(clientCode: string | null | undefined): string {
   if (!clientCode || isPlaceholderInvestorClientCode(clientCode)) {
-    return "—";
+    return "";
   }
   return clientCode;
 }

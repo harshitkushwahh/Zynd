@@ -1,4 +1,4 @@
-"""Backward-compatible shim — use ``app.infrastructure.core.mf.oms_client`` instead."""
+"""Backward-compatible shim  use ``app.infrastructure.core.mf.oms_client`` instead."""
 
 from app.infrastructure.core.mf import oms_client as _impl
 

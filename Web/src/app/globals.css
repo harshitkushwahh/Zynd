@@ -55,7 +55,7 @@
 
 /* ─── ZYND Global Web Loader ──────────────────────────────────────────────── */
 /* NOTE: ZyndGlobalLoader is the app-wide full-screen loading state.          */
-/* Styles live here (globals.css); use <ZyndGlobalLoader /> — not ad-hoc text. */
+/* Styles live here (globals.css); use <ZyndGlobalLoader />  not ad-hoc text. */
 
 .zynd-global-loader-screen {
   display: flex;
@@ -235,7 +235,7 @@
   }
 }
 
-/* Indeterminate zebra stripe progress — backend connection dialog. */
+/* Indeterminate zebra stripe progress  backend connection dialog. */
 .stripe-progress-bar {
   height: 0.375rem;
   overflow: hidden;
@@ -275,7 +275,7 @@
   }
 }
 
-/* Document upload dialog — spinning ring while uploading (no overlay spinner). */
+/* Document upload dialog  spinning ring while uploading (no overlay spinner). */
 .upload-preview-spin-ring {
   position: relative;
 }
@@ -308,7 +308,7 @@
   }
 }
 
-/* Sonner toasts — ZYND theme tokens */
+/* Sonner toasts  ZYND theme tokens */
 .zynd-toaster [data-sonner-toast][data-styled="true"] {
   box-shadow: var(--shadow-mid);
   padding: 0.875rem 1rem;
@@ -407,7 +407,7 @@
   color: var(--destructive-foreground);
 }
 
-/* Accordion — smooth height transition (Base UI panel) */
+/* Accordion  smooth height transition (Base UI panel) */
 [data-slot="accordion-content"] {
   height: var(--accordion-panel-height);
   overflow: hidden;

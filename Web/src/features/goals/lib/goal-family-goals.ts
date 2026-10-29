@@ -1,13 +1,19 @@
 import {
+  fetchFamilyGroup,
   fetchFamilyGroupGoals,
   fetchFamilyGroups,
   type FamilyGoal,
+  type FamilyGroupMemberPreview,
   type FamilyGroupSummary,
 } from "@/features/family-groups/api/family-groups-api";
+
+export const FAMILY_GOAL_CARD_MEMBER_AVATAR_LIMIT = 5;
 
 export type DashboardFamilyGoal = FamilyGoal & {
   groupTitle: string;
   groupAvatarUrl?: string | null;
+  groupMemberCount: number;
+  groupMembers: FamilyGroupMemberPreview[];
 };
 
 export async function buildDashboardFamilyGoals(
@@ -18,13 +24,21 @@ export async function buildDashboardFamilyGoals(
   const results = await Promise.all(
     activeGroups.map(async (group) => {
       try {
-        const response = await fetchFamilyGroupGoals(group.id);
-        return response.items
+        const [goalsResponse, groupDetail] = await Promise.all([
+          fetchFamilyGroupGoals(group.id),
+          fetchFamilyGroup(group.id),
+        ]);
+        const groupMembers = groupDetail.members.slice(0, FAMILY_GOAL_CARD_MEMBER_AVATAR_LIMIT);
+        const groupMemberCount = groupDetail.member_count ?? groupDetail.members.length;
+
+        return goalsResponse.items
           .filter((goal) => goal.status !== "archived")
           .map((goal) => ({
             ...goal,
             groupTitle: group.title,
             groupAvatarUrl: group.avatar_url ?? null,
+            groupMemberCount,
+            groupMembers,
           }));
       } catch {
         return [];

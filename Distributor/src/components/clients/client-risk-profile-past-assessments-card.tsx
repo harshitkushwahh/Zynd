@@ -73,7 +73,7 @@ export function ClientRiskProfilePastAssessmentsCard({
                     </div>
                   </div>
                   <p className="distributor-client-risk-past-card__row-date tabular-nums">
-                    {row.completedAt ? formatDistributorDate(row.completedAt) : "—"}
+                    {row.completedAt ? formatDistributorDate(row.completedAt) : ""}
                   </p>
                 </button>
               </li>

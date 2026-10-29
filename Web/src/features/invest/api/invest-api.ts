@@ -889,6 +889,7 @@ export type MfCasImport = {
   import_id: string;
   status: string;
   external_request_id: string | null;
+  launch_url: string | null;
   holdings_count: number;
   failure_reason: string | null;
   requested_at: string | null;
@@ -897,6 +898,13 @@ export type MfCasImport = {
 
 export function requestCasImport() {
   return apiRequest<MfCasImport>("/invest/cas/imports", { method: "POST" });
+}
+
+export function submitCasQr(importId: string, qrCode: string) {
+  return apiRequest<MfCasImport>(`/invest/cas/imports/${importId}/qr`, {
+    method: "POST",
+    body: JSON.stringify({ qr_code: qrCode }),
+  });
 }
 
 export type InvestorReportKind = "account_statement" | "capital_gains" | "tax";
@@ -917,6 +925,7 @@ export type InvestorReportEligibility = {
   can_generate: boolean;
   code: string | null;
   message: string | null;
+  cas_import_eligible?: boolean;
 };
 
 export type InvestorReportListResponse = {

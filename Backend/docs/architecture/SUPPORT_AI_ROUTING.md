@@ -28,10 +28,10 @@ Debounce: `SUPPORT_ROUTING_DEBOUNCE_SECONDS` (default 300).
 
 ## Config
 
-- `SUPPORT_AI_ROUTING_ENABLED` — use LLM routing (default true in dev)
-- `SUPPORT_ROUTING_TIMEOUT_SECONDS` — routing LLM timeout (default 20)
-- `SUPPORT_ROUTING_DEBOUNCE_SECONDS` — min interval between re-routes (default 300)
-- `SUPPORT_ROUTING_REASSIGN_WHEN_AWAY` — reassign on high urgency if assignee not online (default true)
+- `SUPPORT_AI_ROUTING_ENABLED`  use LLM routing (default true in dev)
+- `SUPPORT_ROUTING_TIMEOUT_SECONDS`  routing LLM timeout (default 20)
+- `SUPPORT_ROUTING_DEBOUNCE_SECONDS`  min interval between re-routes (default 300)
+- `SUPPORT_ROUTING_REASSIGN_WHEN_AWAY`  reassign on high urgency if assignee not online (default true)
 - **Groq (default):** `SUPPORT_LLM_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_MODEL` (default `openai/gpt-oss-120b`), `GROQ_BASE_URL`, `GROQ_TIMEOUT_SECONDS`
 - **Optional local Ollama:** `SUPPORT_LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`
 
@@ -39,9 +39,9 @@ Debounce: `SUPPORT_ROUTING_DEBOUNCE_SECONDS` (default 300).
 
 Ticket payloads include:
 
-- `routing` — latest insight (urgency, rationales, PM co-handling, source `ai` | `fallback`)
-- `urgency_score` — queue sort key (backend list sorted urgency desc, then updated_at)
-- `sla` — computed deadline snapshot (unchanged)
+- `routing`  latest insight (urgency, rationales, PM co-handling, source `ai` | `fallback`)
+- `urgency_score`  queue sort key (backend list sorted urgency desc, then updated_at)
+- `sla`  computed deadline snapshot (unchanged)
 
 ## Operations
 

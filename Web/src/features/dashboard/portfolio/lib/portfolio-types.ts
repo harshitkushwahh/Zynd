@@ -8,6 +8,7 @@ export type PortfolioHoldingItem = {
   investedInr: number;
   returnPct: number;
   allocationPct: number;
+  source?: string | null;
 };
 
 export function portfolioHoldingAmcInitials(amcName: string) {

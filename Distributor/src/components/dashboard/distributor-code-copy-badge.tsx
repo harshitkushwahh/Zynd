@@ -10,7 +10,7 @@ import { ZYND_MITRA_COPY } from "@/lib/zynd-mitra-copy";
 type DistributorCodeCopyBadgeProps = {
   distributorCode: string;
   className?: string;
-  /** `hero` — pill on the dashboard photo card; `inline` — copy row on accent identity cards; `menu` — account dropdown row. */
+  /** `hero`  pill on the dashboard photo card; `inline`  copy row on accent identity cards; `menu`  account dropdown row. */
   placement?: "hero" | "inline" | "menu";
 };
 

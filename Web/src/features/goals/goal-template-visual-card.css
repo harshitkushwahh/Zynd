@@ -1,0 +1,144 @@
+.goal-template-visual-card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.35rem;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: var(--card);
+  text-align: left;
+  box-shadow: 0 8px 22px -18px color-mix(in srgb, var(--foreground) 14%, transparent);
+  transition: border-color 280ms ease;
+}
+
+.dark .goal-template-visual-card {
+  box-shadow: 0 8px 24px -18px rgba(0, 0, 0, 0.38);
+}
+
+button.goal-template-visual-card {
+  cursor: pointer;
+}
+
+button.goal-template-visual-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+}
+
+button.goal-template-visual-card:hover .goal-template-visual-card__chevron {
+  background: #2563eb;
+  border-color: #1e40af;
+  color: #fff;
+}
+
+.goal-template-visual-card--dialog {
+  border-radius: 1.5rem;
+}
+
+.goal-template-visual-card__media {
+  position: relative;
+  aspect-ratio: 1 / 0.88;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.goal-template-visual-card__image {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.goal-template-visual-card__image-fade {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 52%,
+    color-mix(in srgb, var(--card) 35%, transparent) 72%,
+    color-mix(in srgb, var(--card) 88%, transparent) 88%,
+    var(--card) 100%
+  );
+}
+
+.goal-template-visual-card__fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+.goal-template-visual-card__body {
+  position: relative;
+  padding: 0.875rem 0.875rem 1rem;
+}
+
+.goal-template-visual-card--dialog .goal-template-visual-card__body {
+  padding: 1rem 1.125rem 1.125rem;
+}
+
+.goal-template-visual-card__title {
+  padding-right: 2.75rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: color-mix(in srgb, var(--zynd-navy, #0f172a) 92%, var(--foreground));
+}
+
+.dark .goal-template-visual-card__title {
+  color: var(--foreground);
+}
+
+.goal-template-visual-card__desc {
+  margin-top: 0.375rem;
+  padding-right: 2.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--muted-foreground) 92%, var(--foreground));
+}
+
+.goal-template-visual-card--dialog .goal-template-visual-card__title {
+  font-size: 1.375rem;
+}
+
+.goal-template-visual-card--dialog .goal-template-visual-card__desc {
+  font-size: 0.8125rem;
+}
+
+.goal-template-visual-card__chevron {
+  position: absolute;
+  right: 0.875rem;
+  bottom: 0.875rem;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, #2563eb 32%, transparent);
+  background: color-mix(in srgb, #2563eb 12%, transparent);
+  color: #2563eb;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    transform 200ms ease;
+}
+
+.dark .goal-template-visual-card__chevron {
+  border-color: color-mix(in srgb, #1e40af 65%, transparent);
+  background: color-mix(in srgb, #1e3a8a 52%, transparent);
+  color: #fff;
+}
+
+.goal-template-visual-card__chevron svg {
+  translate: 1px 0;
+}
+

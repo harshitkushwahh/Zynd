@@ -15,6 +15,11 @@ from app.application.documents.client_id_service import assign_client_id
 from app.application.documents.document_audit_service import audit_document_uploaded
 from app.application.documents.document_mime_validation import mime_matches_content
 from app.application.documents.document_storage_service import extension_for_mime
+from app.application.support.customer_message_limits import (
+    MAX_TICKET_IMAGE_BYTES,
+    sniff_image_mime,
+    validate_customer_image_bytes,
+)
 from app.application.support.ticket_service import SupportActionError
 from app.core.config import Settings, get_settings
 from app.infrastructure.persistence.models import (
@@ -31,18 +36,7 @@ from app.infrastructure.storage.documents.factory import get_document_storage
 
 logger = logging.getLogger(__name__)
 
-MAX_TICKET_IMAGE_BYTES = 5 * 1024 * 1024
 _SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
-
-
-def sniff_image_mime(content: bytes) -> str | None:
-    if content.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if content.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
-        return "image/webp"
-    return None
 
 
 def _sanitize_filename(filename: str, extension: str) -> str:
@@ -67,13 +61,11 @@ async def store_ticket_image(
 ) -> UserDocument:
     """Save the image in `{zynd client id}/{ticket id}/` and attach it to the customer."""
     settings = settings or get_settings()
-    if not content:
-        raise SupportActionError("empty_file", "Uploaded file is empty.")
-    if len(content) > MAX_TICKET_IMAGE_BYTES:
-        raise SupportActionError("file_too_large", "Image must be 5 MB or smaller.", 413)
-
+    validate_customer_image_bytes(filename=filename, content=content)
     mime_type = sniff_image_mime(content)
-    if mime_type is None or not mime_matches_content(mime_type, content):
+    assert mime_type is not None  # validated above
+
+    if not mime_matches_content(mime_type, content):
         raise SupportActionError("invalid_image", "Upload a PNG, JPG, or WebP image.")
 
     scan = await scan_bytes_for_malware(content, settings)

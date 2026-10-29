@@ -366,9 +366,44 @@
       "count": 1000,
       "status": "complete",
       "notes": "Curated Hinglish: MF modules, KYC, Account Settings"
+    },
+    {
+      "batch": 62,
+      "file": "batch-062.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Hinglish referral counts, signups, KYC, clicks, invite code"
+    },
+    {
+      "batch": 63,
+      "file": "batch-063.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Hinglish explain / kya hai / smajao (referrals, portfolio typos, modules)"
+    },
+    {
+      "batch": 64,
+      "file": "batch-064.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Mixed Hinglish/English status & troubleshooting: KYC, payments, portfolio, referrals, goals, family, account, risk, reports, multi-topic"
+    },
+    {
+      "batch": 65,
+      "file": "batch-065.jsonl",
+      "count": 100,
+      "status": "complete",
+      "notes": "Follow-up chat edges: SIP/cart failures, nominee/CAS, family governance, report downloads, cross-module reconciliation"
+    },
+    {
+      "batch": 66,
+      "file": "batch-066.jsonl",
+      "count": 122,
+      "status": "complete",
+      "notes": "Live routing fixes: address vs portfolio, backup-code typos, device/session counts, referral explain, portfolio typos (Hinglish)"
     }
   ],
-  "cumulative_count": 52000,
+  "cumulative_count": 52522,
   "topic_quota_batch_001": {
     "kyc": 16,
     "payment": 20,
@@ -386,6 +421,9 @@
     "held_out": true,
     "min_coverage_pct": 100,
     "min_retrieval_hit_at_3_pct": 75,
-    "retrieval_k": 3
+    "retrieval_k": 3,
+    "policy_regression_file": "eval/policy-regression.jsonl",
+    "policy_regression_count": 20,
+    "min_policy_regression_pass_pct": 100
   }
 }

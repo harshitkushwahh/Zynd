@@ -1,4 +1,4 @@
-"""MF SIP foundation — mandates and purchase plans.
+"""MF SIP foundation  mandates and purchase plans.
 
 Revision ID: 048_mf_sip_foundation
 Revises: 047_mf_payment_foundation

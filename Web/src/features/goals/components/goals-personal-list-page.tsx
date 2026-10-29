@@ -11,6 +11,7 @@ import { GoalsContentFade } from "@/features/goals/components/goals-page-loading
 import { GoalsListPageSkeleton } from "@/features/goals/components/goals-list-page-skeleton";
 import { useCachedPersonalGoalsList } from "@/features/goals/hooks/use-cached-personal-goals-list";
 import { GOALS_LIST_HREF } from "@/features/goals/lib/goal-navigation";
+import { sortGoalsLatestFirst } from "@/features/goals/lib/goal-summary";
 import { DASHBOARD_ROUTES } from "@/features/dashboard/navigation/dashboard-routes";
 import { copy } from "@/shared/config/copy";
 
@@ -20,7 +21,7 @@ export function GoalsPersonalListPage() {
   const { goals, error, showSkeleton, hasResolved, reload } = useCachedPersonalGoalsList();
 
   const activeGoals = useMemo(
-    () => goals.filter((goal) => goal.status !== "archived"),
+    () => sortGoalsLatestFirst(goals.filter((goal) => goal.status !== "archived")),
     [goals],
   );
 

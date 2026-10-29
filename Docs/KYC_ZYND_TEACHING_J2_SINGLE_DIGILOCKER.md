@@ -1,4 +1,4 @@
-# J2 (new-to-KYC) — one DigiLocker (MultiPlus parity)
+# J2 (new-to-KYC)  one DigiLocker (MultiPlus parity)
 
 Audience: Zynd engineers.
 
@@ -6,7 +6,7 @@ Audience: Zynd engineers.
 
 **J3** (`kra_update`, including on-hold) uses Cybrilla proof-details DigiLocker once, on the address step, then POA eSign. It does not start an identity-document DigiLocker. See [KYC_DIGILOCKER_FLOW.md](./KYC_DIGILOCKER_FLOW.md).
 
-Hybrid debugging (wrong journey mode, stale `kycf_*`): [KYC_DUAL_DIGILOCKER_HYBRID.md](./KYC_DUAL_DIGILOCKER_HYBRID.md) — **not** the J2 product spec.
+Hybrid debugging (wrong journey mode, stale `kycf_*`): [KYC_DUAL_DIGILOCKER_HYBRID.md](./KYC_DUAL_DIGILOCKER_HYBRID.md)  **not** the J2 product spec.
 
 ## Implementation map (Zynd)
 

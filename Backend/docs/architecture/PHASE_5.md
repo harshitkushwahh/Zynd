@@ -1,4 +1,4 @@
-# Phase 5 — RBAC completion
+# Phase 5  RBAC completion
 
 Completed checklist.
 
@@ -31,10 +31,10 @@ Completed checklist.
 
 ## User vs admin transfers
 
-- **User self-service:** `POST /transactions/transfer` — still gated by `require_fund_eligible_user` (MFA + account status).
-- **Ops/admin:** `POST /admin/transactions/transfer` — requires `transactions.execute` (super_admin only in seed roles).
+- **User self-service:** `POST /transactions/transfer`  still gated by `require_fund_eligible_user` (MFA + account status).
+- **Ops/admin:** `POST /admin/transactions/transfer`  requires `transactions.execute` (super_admin only in seed roles).
 
 ## Guardrails
 
-- `tests/test_phase0_inventory.py` — matrix must have no `planned` / `mismatch` / `partial` entries.
-- `tests/test_phase5_rbac.py` — list/audit, RBAC assign/revoke, support_agent scope, security config approval.
+- `tests/test_phase0_inventory.py`  matrix must have no `planned` / `mismatch` / `partial` entries.
+- `tests/test_phase5_rbac.py`  list/audit, RBAC assign/revoke, support_agent scope, security config approval.

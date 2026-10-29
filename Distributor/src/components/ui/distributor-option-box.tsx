@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
-/** Pill filter / option trigger — full radius, slightly taller than default `sm`. */
+/** Pill filter / option trigger  full radius, slightly taller than default `sm`. */
 export const DISTRIBUTOR_OPTION_BOX_TRIGGER_CLASS = cn(
   "min-w-[9rem] rounded-full border-border bg-muted/45 px-4 shadow-none",
   "hover:bg-muted/65 dark:bg-input/30 dark:hover:bg-input/45",

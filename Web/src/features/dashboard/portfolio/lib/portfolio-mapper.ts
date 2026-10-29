@@ -96,6 +96,7 @@ export function mapPortfolioHoldingToItem(holding: PortfolioHoldingResponse): Po
     investedInr: holding.invested_inr,
     returnPct: holding.return_pct,
     allocationPct: holding.allocation_pct,
+    source: holding.source ?? null,
   };
 }
 

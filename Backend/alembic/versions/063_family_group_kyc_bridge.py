@@ -1,4 +1,4 @@
-"""KYC nominee → family group bridge — Phase 4.
+"""KYC nominee → family group bridge  Phase 4.
 
 Revision ID: 063_family_group_kyc_bridge
 Revises: 062_family_group_engagement

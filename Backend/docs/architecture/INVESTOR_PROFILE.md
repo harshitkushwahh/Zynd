@@ -1,4 +1,4 @@
-# Investor profile (Cybrilla v2) — foundation
+# Investor profile (Cybrilla v2)  foundation
 
 ## Purpose
 
@@ -67,7 +67,7 @@ if profile.status != InvestorProfileStatus.active:
 
 ## What is NOT in scope yet
 
-- Cybrilla `POST /v2/investor_profiles` client (profile creation API — confirm exact endpoint with Cybrilla docs)
+- Cybrilla `POST /v2/investor_profiles` client (profile creation API  confirm exact endpoint with Cybrilla docs)
 
 ## Multi-bank accounts
 

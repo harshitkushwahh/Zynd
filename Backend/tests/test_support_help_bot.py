@@ -77,6 +77,19 @@ def test_follow_up_keeps_previous_topic() -> None:
     assert decision.topics == ("goals",)
 
 
+def test_referral_hinglish_education_in_scope() -> None:
+    for q in ("referal smajao", "referals kya hai", "referal"):
+        decision = classify_message(q)
+        assert decision.in_scope is True, q
+        assert "referrals" in decision.topics, q
+
+
+def test_portfolio_typo_explain_in_scope() -> None:
+    decision = classify_message("porotlfio explain")
+    assert decision.in_scope is True
+    assert "portfolio" in decision.topics
+
+
 def test_resolution_window_waits_24_hours() -> None:
     from datetime import datetime, timedelta, timezone
 

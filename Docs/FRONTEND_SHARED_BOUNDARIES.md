@@ -17,7 +17,7 @@ Location: `packages/zynd-shared/`
 
 Each app keeps its own `lib/env.ts` and calls `configureApiClient({ apiUrl: env.apiUrl })` once from `lib/api-client.ts`.
 
-Turnstile site keys are **not** in the shared package — each app wraps `TurnstileWidget` and passes `env.turnstileSiteKey`.
+Turnstile site keys are **not** in the shared package  each app wraps `TurnstileWidget` and passes `env.turnstileSiteKey`.
 
 ## What stays app-local
 

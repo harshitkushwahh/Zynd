@@ -175,7 +175,7 @@ export function AddInvestorOnboardingPanel({
 
   const destination = useMemo(() => {
     if (phase === "email") return email;
-    if (phase === "mobile") return mobile.length === 10 ? `+91 ${mobile}` : "+91 —";
+    if (phase === "mobile") return mobile.length === 10 ? `+91 ${mobile}` : "+91 ";
     return "";
   }, [email, mobile, phase]);
 
@@ -694,7 +694,7 @@ export function AddInvestorOnboardingPanel({
                 ? "Email and mobile are verified. We emailed the investor a password setup link for their first Zynd sign-in."
                 : "Both email and mobile must be verified before the investor is created and added to your book."}
             </p>
-            {submitResult || (onboardingComplete && displayedClientId !== "—") ? (
+            {submitResult || (onboardingComplete && displayedClientId !== "") ? (
               <div className="add-investor-onboarding-wizard__destination">
                 <div className="min-w-0 flex-1 text-left">
                   <p className="add-investor-onboarding-wizard__destination-label">Investor code</p>

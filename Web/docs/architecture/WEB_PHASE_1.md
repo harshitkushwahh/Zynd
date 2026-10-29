@@ -1,4 +1,4 @@
-# Web Phase 1 — Structural cleanup
+# Web Phase 1  Structural cleanup
 
 Completed checklist. Same auth UX and API contracts; code split into feature modules.
 

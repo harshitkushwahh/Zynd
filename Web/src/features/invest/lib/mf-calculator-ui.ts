@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { ZYND_3XL_RADIUS_CLASS } from "@/shared/config/ui-classes";
 
-/** MF calculator surfaces — backed by CSS variables in zynd-brand.css */
+/** MF calculator surfaces  backed by CSS variables in zynd-brand.css */
 export const MF_CALC_CARD_CLASS = cn(
   ZYND_3XL_RADIUS_CLASS,
   "border border-border bg-card py-0 shadow-none ring-0 [--card-spacing:0]",

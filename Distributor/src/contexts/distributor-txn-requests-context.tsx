@@ -152,7 +152,7 @@ export function DistributorTxnRequestsProvider({ children }: { children: ReactNo
           fundLines.length === 1
             ? primaryFund.fundName
             : `${fundLines.length} funds`,
-        irn: primaryFund?.irn ?? "—",
+        irn: primaryFund?.irn ?? "",
         paymentMethodLabel: input.paymentMethodLabel,
         requestRef,
         recommendationLink: created.link ?? undefined,

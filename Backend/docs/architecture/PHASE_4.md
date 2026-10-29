@@ -1,4 +1,4 @@
-# Phase 4 — OTP platformization
+# Phase 4  OTP platformization
 
 Completed checklist.
 

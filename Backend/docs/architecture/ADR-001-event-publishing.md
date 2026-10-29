@@ -8,7 +8,7 @@
 
 Use a **two-step migration**:
 
-### Step A — Direct publish after commit (Phase 2)
+### Step A  Direct publish after commit (Phase 2)
 
 - Application services mutate Postgres, then **after successful commit** publish domain events to Redis Streams.
 - Workers (email, security review, projections) consume via consumer groups.
@@ -17,7 +17,7 @@ Use a **two-step migration**:
 **Pros:** Small change, unblocks workers quickly.  
 **Cons:** Crash between commit and publish can drop events (at-most-once).
 
-### Step B — Transactional outbox (Phase 3) ✅
+### Step B  Transactional outbox (Phase 3) ✅
 
 Implemented: `outbox_events` + relay job + idempotent consumers on `event_id`.
 

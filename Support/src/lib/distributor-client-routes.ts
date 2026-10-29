@@ -1,19 +1,19 @@
 import { buildYourClientsListHref } from "@/lib/distributor-clients-list-scope";
 import type { DistributorInvestor } from "@/lib/distributor-types";
 
-/** Where the user opened client detail from — drives back links and breadcrumbs. */
+/** Where the user opened client detail from  drives back links and breadcrumbs. */
 export type DistributorClientListOrigin = "your-book" | "system-resident";
 
 export const YOUR_CLIENTS_LIST_HREF = "/dashboard/your-clients";
-/** @deprecated List lives on Your clients — use buildYourClientsListHref("all"). */
+/** @deprecated List lives on Your clients  use buildYourClientsListHref("all"). */
 export const SYSTEM_RESIDENT_INVESTORS_HREF = "/dashboard/investors/resident";
 
 const ZYND_CLIENT_ID_SUFFIX = "@zynd";
-const MISSING_CLIENT_CODE = "—";
+const MISSING_CLIENT_CODE = "";
 
 type DistributorClientRefSource = Pick<DistributorInvestor, "id" | "clientCode">;
 
-/** URL path segment for a client — Zynd client id, not the internal user uuid. */
+/** URL path segment for a client  Zynd client id, not the internal user uuid. */
 export function distributorClientPathRef(
   source: DistributorClientRefSource | { id: string; clientCode?: string | null },
 ): string {

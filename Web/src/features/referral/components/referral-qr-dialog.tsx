@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Download, Loader2, RotateCcw } from "lucide-react";
 
-import { BrandDialog, BrandDialogFooter } from "@/components/ui/brand-dialog";
+import { BrandDialog } from "@/components/ui/brand-dialog";
 import { Button } from "@/components/ui/button";
 import {
   downloadReferralQr,
@@ -188,8 +188,13 @@ export function ReferralQrDialog({ open, onOpenChange, shareUrl, code }: Referra
       maxWidth="md"
     >
       <div className="space-y-5 px-6 py-5">
-        <div className="flex justify-center">
-          <div className={cn("bg-gradient-to-br from-primary/25 via-primary/10 to-emerald-500/20 p-[3px]", REFERRAL_CARD_RADIUS_CLASS)}>
+        <div className="mx-auto w-full max-w-[17.5rem] space-y-3 sm:max-w-[18.75rem]">
+          <div
+            className={cn(
+              "bg-gradient-to-br from-primary/25 via-primary/10 to-emerald-500/20 p-[3px]",
+              REFERRAL_CARD_RADIUS_CLASS,
+            )}
+          >
             <div className="rounded-[calc(var(--radius-3xl)-2px)] bg-white p-4 sm:p-5">
               {loading ? (
                 <div className="flex size-[220px] items-center justify-center sm:size-[240px]">
@@ -221,6 +226,16 @@ export function ReferralQrDialog({ open, onOpenChange, shareUrl, code }: Referra
               )}
             </div>
           </div>
+
+          <Button
+            type="button"
+            className="h-11 w-full gap-2"
+            disabled={downloading || loading || !qrImageUrl}
+            onClick={() => void handleDownload()}
+          >
+            <Download className="size-4" />
+            {downloading ? copy.referral.downloadQrLoading : copy.referral.downloadQr}
+          </Button>
         </div>
 
         <div className="space-y-3">
@@ -239,18 +254,6 @@ export function ReferralQrDialog({ open, onOpenChange, shareUrl, code }: Referra
           />
         </div>
       </div>
-
-      <BrandDialogFooter>
-        <Button
-          type="button"
-          className="gap-2"
-          disabled={downloading || loading || !qrImageUrl}
-          onClick={() => void handleDownload()}
-        >
-          <Download className="size-4" />
-          {downloading ? copy.referral.downloadQrLoading : copy.referral.downloadQr}
-        </Button>
-      </BrandDialogFooter>
     </BrandDialog>
   );
 }

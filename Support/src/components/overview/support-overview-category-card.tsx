@@ -56,7 +56,7 @@ export function SupportOverviewCategoryCard({
 
       {isEmpty ? (
         <p className="px-1 py-8 text-center text-caption text-muted-foreground">
-          No tickets in your queue yet — category mix will appear here.
+          No tickets in your queue yet  category mix will appear here.
         </p>
       ) : (
         <div className="distributor-operations-team-card__gauge" role="img" aria-label="Ticket category distribution">

@@ -27,7 +27,7 @@ type SupportTicketDetailHeaderProps = {
   onSetStatus?: (status: SupportTicketDetail["ticket"]["status"]) => void;
 };
 
-/** Match distributor toolbar controls — modest radius, not pill-shaped. */
+/** Match distributor toolbar controls  modest radius, not pill-shaped. */
 const HEADER_ACTION_BUTTON_CLASS = "rounded-md";
 
 export function SupportTicketDetailHeader({

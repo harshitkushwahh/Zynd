@@ -16,7 +16,7 @@ Both apps use the same FastAPI backend (`env.apiUrl` / `@zynd/shared/api`).
   - `{ "type": "subscribe", "conversation_id"?: "...", "ticket_id"?: "..." }`
   - `{ "type": "agent:typing", "ticket_id": "...", "typing": true|false }` (agents)
   - `{ "type": "agent:presence", "status": "online"|"away" }` (agents)
-  - `{ "type": "messages:read", "conversation_id"?: "...", "ticket_id"?: "...", "message_ids": ["..."] }` — mark read (no REST endpoint)
+  - `{ "type": "messages:read", "conversation_id"?: "...", "ticket_id"?: "...", "message_ids": ["..."] }`  mark read (no REST endpoint)
     - Customer: requires `conversation_id`; marks bot/agent/system messages as read by the investor.
     - Agent: `ticket_id` is enough (conversation resolved server-side); marks customer messages as read by support (`support_read_by: agent`).
 - Server → client:
@@ -45,7 +45,7 @@ Polling remains a fallback when the WebSocket is disconnected.
 - `SUPPORT_WEBHOOK_SECRET`, `SUPPORT_WEBHOOK_URLS`
 - **Web / Support frontends:** When `NEXT_PUBLIC_API_URL` is `/api/v1` (same-origin Next proxy), long-lived connections must bypass Vercel/Next:
   - **WebSocket (support):** `NEXT_PUBLIC_BACKEND_WS_ORIGIN=ws://127.0.0.1:8000` in `.env.local` (dev) or `wss://api.zynd.shop` on Vercel production.
-  - **SSE (notifications):** uses the same direct origin (`NEXT_PUBLIC_BACKEND_WS_ORIGIN` → `https://…`, or set `NEXT_PUBLIC_BACKEND_HTTP_ORIGIN=https://api.zynd.shop`). Do **not** open `/notifications/stream` through `/api/v1` on Vercel — the serverless proxy hits a **300s** runtime timeout.
+  - **SSE (notifications):** uses the same direct origin (`NEXT_PUBLIC_BACKEND_WS_ORIGIN` → `https://…`, or set `NEXT_PUBLIC_BACKEND_HTTP_ORIGIN=https://api.zynd.shop`). Do **not** open `/notifications/stream` through `/api/v1` on Vercel  the serverless proxy hits a **300s** runtime timeout.
 
 ## Presence
 

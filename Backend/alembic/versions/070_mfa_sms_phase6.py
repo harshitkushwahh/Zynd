@@ -1,4 +1,4 @@
-"""MFA SMS phase 6 — fund gate contact audit event.
+"""MFA SMS phase 6  fund gate contact audit event.
 
 Revision ID: 070_mfa_sms_phase6
 Revises: 069_mfa_sms_phase1

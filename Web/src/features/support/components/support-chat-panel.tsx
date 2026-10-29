@@ -8,17 +8,44 @@ import {
   type ReactNode,
   type UIEvent,
 } from "react";
-import { ChevronDown, Lock } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SupportChatComposer } from "@/features/support/components/support-chat-composer";
 import { SupportMessageBubble } from "@/features/support/components/support-message-bubble";
 import { useSupportWidget } from "@/features/support/contexts/support-widget-context";
+import type { SupportQuickReply } from "@/features/support/lib/support-types";
 import { cn } from "@/lib/utils";
 import { copy } from "@/shared/config/copy";
 
 const NEAR_BOTTOM_PX = 72;
+
+function SupportQuickReplyChip({
+  reply,
+  onSelect,
+  compact,
+}: {
+  reply: SupportQuickReply;
+  onSelect: (message: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(reply.message)}
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-card whitespace-nowrap text-foreground shadow-zynd-low",
+        "transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary active:scale-[0.98]",
+        compact
+          ? "px-2.5 py-1 text-[11px] font-medium"
+          : "px-3 py-1.5 text-caption font-medium",
+      )}
+    >
+      {reply.label}
+    </button>
+  );
+}
 
 function SupportPresenceDot({
   online,
@@ -108,6 +135,7 @@ export function SupportChatPanel({
     clearAttachment,
     agentTyping,
     canReply,
+    handler,
     resolutionOpen,
     sendMessage,
     sendQuickReply,
@@ -125,6 +153,7 @@ export function SupportChatPanel({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
+  const lastScrollHeightRef = useRef(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
 
   const updateScrollState = useCallback(() => {
@@ -162,11 +191,18 @@ export function SupportChatPanel({
   );
 
   useEffect(() => {
+    const scroller = scrollerRef.current;
     if (!stickToBottomRef.current) {
       updateScrollState();
       return;
     }
-    scrollToBottom("smooth");
+    if (!scroller) {
+      scrollToBottom("auto");
+      return;
+    }
+    const heightChanged = scroller.scrollHeight !== lastScrollHeightRef.current;
+    lastScrollHeightRef.current = scroller.scrollHeight;
+    scrollToBottom(heightChanged ? "auto" : "smooth");
   }, [messages, agentTyping, scrollToBottom, updateScrollState]);
 
   const handleSendDraft = useCallback(() => {
@@ -192,11 +228,15 @@ export function SupportChatPanel({
 
   const isPageHeader = headerVariant === "page";
   const threadLocked = !canReply;
+  const composerLockedForResolution = canReply && resolutionOpen;
+  const composerLockedResolved = !canReply;
+  const showActiveComposer = canReply && !resolutionOpen;
+  const imagesEnabled = handler === "human";
 
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col bg-background",
+        "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background",
         isPageHeader && "overflow-hidden rounded-[inherit]",
         threadLocked && "bg-muted/25",
         className,
@@ -213,7 +253,7 @@ export function SupportChatPanel({
             <div className="flex w-full items-center justify-between gap-3 px-4 py-3.5 md:px-5">
               <div className="flex min-w-0 shrink-0 items-center gap-3">
                 <div className="relative shrink-0">
-                  <Avatar size="lg" className="border border-border/80 shadow-zynd-low">
+                  <Avatar size="lg" className="border border-border/80 bg-card shadow-zynd-low after:mix-blend-normal">
                     <AvatarFallback className="bg-primary/10 text-caption font-semibold text-primary">
                       {header.initials}
                     </AvatarFallback>
@@ -268,18 +308,12 @@ export function SupportChatPanel({
                     aria-label={copy.support.quickRepliesHint}
                   >
                     {quickReplies.map((reply) => (
-                      <button
+                      <SupportQuickReplyChip
                         key={reply.id}
-                        type="button"
-                        onClick={() => handleQuickReply(reply.message)}
-                        className={cn(
-                          "inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-foreground shadow-zynd-low",
-                          "transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
-                          "active:scale-[0.98]",
-                        )}
-                      >
-                        {reply.label}
-                      </button>
+                        reply={reply}
+                        onSelect={handleQuickReply}
+                        compact
+                      />
                     ))}
                   </div>
                 ) : null}
@@ -292,20 +326,37 @@ export function SupportChatPanel({
         ) : (
           <div
             className={cn(
-              "flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3.5",
+              "flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-3.5 sm:gap-3 sm:px-4",
               threadLocked ? "bg-muted/50" : "bg-gradient-brand",
             )}
           >
             <div className="flex min-w-0 items-center gap-3">
               <div className="relative shrink-0">
-                <Avatar size="lg" className="border border-primary-foreground/25">
-                  <AvatarFallback className="bg-primary-foreground/15 text-caption font-semibold text-primary-foreground">
+                <Avatar
+                  size="lg"
+                  className={cn(
+                    "border shadow-zynd-low",
+                    threadLocked
+                      ? "border-border/80 bg-card"
+                      : "border-primary-foreground/25",
+                  )}
+                >
+                  <AvatarFallback
+                    className={cn(
+                      "text-caption font-semibold",
+                      threadLocked
+                        ? "bg-primary/10 text-primary"
+                        : "bg-primary-foreground/15 text-primary-foreground",
+                    )}
+                  >
                     {header.initials}
                   </AvatarFallback>
                   {showPresence ? (
                     <SupportAvatarPresenceBadge
                       online={header.status === "online"}
-                      ringClassName="ring-[color-mix(in_oklch,var(--primary),black_12%)]"
+                      ringClassName={
+                        threadLocked ? "ring-card" : "ring-[color-mix(in_oklch,var(--primary),black_12%)]"
+                      }
                     />
                   ) : null}
                 </Avatar>
@@ -341,9 +392,9 @@ export function SupportChatPanel({
           ref={scrollerRef}
           onScroll={handleMessagesScroll}
           className={cn(
-            "h-full space-y-3.5 overflow-y-auto px-3 py-4 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
+            "h-full min-w-0 space-y-3.5 overflow-x-hidden overflow-y-auto px-3 py-4 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
             isPageHeader && !threadLocked && "bg-muted/20",
-            threadLocked && "bg-muted/15 opacity-[0.92] [filter:saturate(0.88)]",
+            threadLocked && "bg-muted/15",
             messagesClassName,
           )}
         >
@@ -354,7 +405,7 @@ export function SupportChatPanel({
           {agentTyping ? (
             <div className="flex justify-start">
               <div className="flex items-center gap-2.5">
-                <Avatar size="sm" className="border border-border/70">
+                <Avatar size="sm" className="border border-border/70 bg-card shadow-zynd-low after:mix-blend-normal">
                   <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
                     {agent.initials}
                   </AvatarFallback>
@@ -391,30 +442,17 @@ export function SupportChatPanel({
         <div className="shrink-0 border-t border-border/60 bg-background/95 px-3 py-2.5 backdrop-blur-[var(--blur-sm)]">
           <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {quickReplies.map((reply) => (
-              <button
+              <SupportQuickReplyChip
                 key={reply.id}
-                type="button"
-                onClick={() => handleQuickReply(reply.message)}
-                className={cn(
-                  "inline-flex shrink-0 items-center rounded-full border border-primary/20 bg-card px-3 py-1.5 text-caption font-medium whitespace-nowrap text-foreground shadow-zynd-low",
-                  "transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
-                  "active:scale-[0.98]",
-                )}
-              >
-                {reply.label}
-              </button>
+                reply={reply}
+                onSelect={handleQuickReply}
+              />
             ))}
           </div>
         </div>
       ) : null}
 
-      {canReply && resolutionOpen ? (
-        <p className="shrink-0 border-t border-border/70 bg-muted/20 px-4 py-3 text-center text-caption text-muted-foreground md:px-5">
-          {copy.support.resolutionHint}
-        </p>
-      ) : null}
-
-      {canReply && !resolutionOpen ? (
+      {showActiveComposer ? (
         <SupportChatComposer
           value={draft}
           onChange={setDraft}
@@ -423,29 +461,33 @@ export function SupportChatPanel({
           onAttachImage={attachImage}
           onClearAttachment={clearAttachment}
           disabled={agentTyping}
+          imagesEnabled={imagesEnabled}
           className={cn(
             isPageHeader &&
               "rounded-b-[var(--radius-xl)] border-t border-border/70 bg-background px-3 py-3 md:px-5",
           )}
         />
       ) : (
-        <div
+        <SupportChatComposer
+          value=""
+          onChange={() => undefined}
+          onSend={() => undefined}
+          attachment={null}
+          onAttachImage={() => undefined}
+          onClearAttachment={() => undefined}
+          disabled
+          imagesEnabled={false}
+          disabledPlaceholder={
+            composerLockedForResolution
+              ? copy.support.resolutionHint
+              : copy.support.ticketResolvedComposerLocked
+          }
           className={cn(
-            "shrink-0 border-t border-border/60 bg-muted/45 px-3 py-3",
-            isPageHeader && "px-4 md:px-5",
+            isPageHeader &&
+              "rounded-b-[var(--radius-xl)] border-t border-border/70 bg-background px-3 py-3 md:px-5",
+            (composerLockedForResolution || composerLockedResolved) && "opacity-95",
           )}
-        >
-          <div
-            className="flex min-h-11 items-center gap-2.5 rounded-[var(--radius-control)] border border-border/50 bg-muted/55 px-3 py-2.5"
-            aria-disabled="true"
-            role="status"
-          >
-            <Lock className="size-4 shrink-0 text-muted-foreground/80" aria-hidden />
-            <p className="text-caption leading-snug text-muted-foreground">
-              {copy.support.ticketResolvedComposerLocked}
-            </p>
-          </div>
-        </div>
+        />
       )}
     </div>
   );

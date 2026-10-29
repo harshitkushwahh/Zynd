@@ -10,7 +10,7 @@ type BranchPerfChartTooltipProps = {
   rows: BranchPerfChartTooltipRow[];
 };
 
-/** Compact plot tooltip — matches reports insight chart default sizing. */
+/** Compact plot tooltip  matches reports insight chart default sizing. */
 export function BranchPerfChartTooltip({ label, rows }: BranchPerfChartTooltipProps) {
   if (rows.length === 0) return null;
 

@@ -16,6 +16,7 @@ from app.infrastructure.persistence import goal_models  # noqa: F401
 from app.infrastructure.persistence import recommendation_models  # noqa: F401
 from app.infrastructure.persistence import mitra_txn_recommendation_models  # noqa: F401
 from app.infrastructure.persistence import mf_transaction_models  # noqa: F401
+from app.infrastructure.persistence import support_models  # noqa: F401
 
 # Enum values added after initial schema creation — sync for isolated test DBs.
 _AUDIT_EVENT_ENUM_EXTENSIONS = [
@@ -494,6 +495,26 @@ async def db_session() -> AsyncSession:
         await conn.execute(
             text(
                 "ALTER TABLE distributor_state_heads ADD COLUMN IF NOT EXISTS status VARCHAR(16) DEFAULT 'active' NOT NULL"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE support_tickets "
+                "ADD COLUMN IF NOT EXISTS bot_unhelpful_count INTEGER NOT NULL DEFAULT 0"
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS support_bot_message_feedback (
+                    message_id UUID PRIMARY KEY
+                        REFERENCES support_messages(id) ON DELETE CASCADE,
+                    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    choice VARCHAR(8) NOT NULL
+                        CHECK (choice IN ('yes', 'no')),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
             )
         )
 

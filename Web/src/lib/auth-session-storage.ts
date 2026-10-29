@@ -26,7 +26,7 @@ export function writePersistedAuthUser(user: AuthUser | null) {
   try {
     window.sessionStorage.setItem(storageKeys.sessionUser, JSON.stringify(user));
   } catch {
-    // Quota or private mode — ignore.
+    // Quota or private mode  ignore.
   }
 }
 
