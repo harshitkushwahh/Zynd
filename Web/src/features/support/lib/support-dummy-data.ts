@@ -18,7 +18,7 @@ export const ZYND_HELP_BOT_GREETING =
 export const SUPPORT_QUICK_REPLIES: SupportQuickReply[] = [
   {
     id: "qr-kyc-done",
-    label: "KYC completed?",
+    label: "KYC completion",
     message: "When was my KYC completed?",
   },
   {
@@ -28,12 +28,12 @@ export const SUPPORT_QUICK_REPLIES: SupportQuickReply[] = [
   },
   {
     id: "qr-sip-fail",
-    label: "SIP failed",
+    label: "SIP failure",
     message: "When did my SIP fail and why?",
   },
   {
     id: "qr-google",
-    label: "Google linked?",
+    label: "Google sign-in",
     message: "Is my Google account linked to Zynd?",
   },
 ];

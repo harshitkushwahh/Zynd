@@ -23,8 +23,8 @@ const OVERVIEW_READY_TIMEOUT_MS = 4_000;
  * Once ready, stays ready through HMR refetches to avoid remounting heavy widgets.
  */
 export function useOverviewDashboardData() {
-  const { user, loading: authLoading } = useAuth();
-  const enabled = Boolean(user);
+  const { user, loading: authLoading, sessionRestoring, sessionRetrying } = useAuth();
+  const enabled = Boolean(user) && !sessionRestoring && !sessionRetrying;
   const riskProfile = useRiskProfileOptional();
   const riskLoading = Boolean(enabled && riskProfile?.loading);
 

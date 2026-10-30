@@ -277,7 +277,13 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
   } = useKyc();
 
   const [bootstrap, setBootstrap] = useState<KycBootstrapResponse | null>(null);
-  const ztoKycPrefill = useZtoKycPrefill(bootstrap?.zero_touch?.phase === "ACCEPTED");
+  const defaultEmptyAddress = useMemo(() => createEmptyAddressForm(), []);
+  const ztoKycPrefill = useZtoKycPrefill(open, bootstrap?.zero_touch?.phase === "ACCEPTED");
+  const bootstrapContactAddress = useMemo(
+    () => mapContactDraft(bootstrap?.contact_draft),
+    [bootstrap?.contact_draft],
+  );
+  const ztoAddressPrefillGeneration = ztoKycPrefill.address ? 1 : 0;
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [panResetConfirmOpen, setPanResetConfirmOpen] = useState(false);
@@ -2155,10 +2161,8 @@ export function KycDialog({ open, onOpenChange }: KycDialogProps) {
         {journeyStepIds.has("address") ? (
           <KycJourneyStepPanel stepId="address" activeStepId={activeStepId}>
             <KycAddressStep
-              key={`address-${journeyStepRemountKey}`}
-              initialValue={
-                journeyDraft.address ?? mapContactDraft(bootstrap?.contact_draft) ?? createEmptyAddressForm()
-              }
+              key={`address-${journeyStepRemountKey}-${ztoAddressPrefillGeneration}`}
+              initialValue={journeyDraft.address ?? bootstrapContactAddress ?? defaultEmptyAddress}
               stateOptions={stateOptions}
               prefilledFromDigilocker={prefilledFromDigilocker}
               digilockerFieldsLocked={

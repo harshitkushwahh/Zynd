@@ -42,7 +42,7 @@ export function KycInfoCallout({
         <div
           className={cn(
             inline
-              ? "text-compact leading-snug text-foreground"
+              ? "text-[11px] leading-snug text-muted-foreground"
               : "mt-1 space-y-1.5 text-[11px] leading-snug text-muted-foreground",
           )}
         >

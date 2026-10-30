@@ -151,7 +151,7 @@ function isRedemptionOrderFailed(order: Pick<MfOrder, "status" | "fp_state">) {
   return (status === "FAILED" || status === "CANCELLED") && !isLiveRedemptionFpState(order);
 }
 
-/** Long-form copy for journey timeline steps only — not for status badges. */
+/** Long-form copy for journey timeline steps only  not for status badges. */
 function consentOrderFailureDescription(
   order: Pick<MfOrder, "fp_state" | "order_type" | "failure_code"> & {
     failure_reason?: string | null;

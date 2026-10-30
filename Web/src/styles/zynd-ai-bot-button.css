@@ -1,4 +1,4 @@
-/* AI bot navbar control — brand aurora hover (Gemini-like soft glow) */
+/* AI bot navbar control  brand aurora hover (Gemini-like soft glow) */
 
 .zynd-ai-bot-button {
   --zynd-ai-h: 2.5rem;
@@ -287,7 +287,7 @@
   fill: none;
 }
 
-/* Online indicator — sits on the card corner (surface uses overflow: hidden). */
+/* Online indicator  sits on the card corner (surface uses overflow: hidden). */
 .zynd-ai-bot-status {
   position: absolute;
   right: -2px;
@@ -332,4 +332,58 @@
     animation: none;
     opacity: 0.55;
   }
+}
+
+/* Standalone mark (sidebar, hero) — matches .zynd-ai-bot-button visuals */
+.zynd-ai-bot-icon-mark {
+  --zynd-ai-h: 2.5rem;
+  --zynd-ai-w: 2.5rem;
+  --zynd-ai-round: 0.75rem;
+  --zynd-ai-base: var(--zynd-blue, #2563eb);
+  --zynd-ai-base-end: var(--zynd-emerald, #10b981);
+  --zynd-ai-glow: color-mix(in srgb, var(--zynd-emerald, #10b981) 80%, transparent);
+  --zynd-ai-glow-soft: color-mix(in srgb, var(--zynd-emerald, #10b981) 0%, transparent);
+  --zynd-ai-cyan: var(--zynd-accent-cyan, #06b6d4);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--zynd-ai-w);
+  height: var(--zynd-ai-h);
+  flex-shrink: 0;
+  isolation: isolate;
+}
+
+.zynd-ai-bot-icon-mark--xs {
+  --zynd-ai-h: 1.125rem;
+  --zynd-ai-w: 1.125rem;
+  --zynd-ai-round: 0.35rem;
+}
+
+.zynd-ai-bot-icon-mark--sm {
+  --zynd-ai-h: 2.25rem;
+  --zynd-ai-w: 2.25rem;
+  --zynd-ai-round: 0.65rem;
+}
+
+.zynd-ai-bot-icon-mark--lg {
+  --zynd-ai-h: 4.75rem;
+  --zynd-ai-w: 4.75rem;
+  --zynd-ai-round: 1.125rem;
+}
+
+.zynd-ai-bot-icon-mark--glow .zynd-ai-bot-aurora {
+  opacity: 0.75;
+  filter: blur(18px);
+  transform: scale(1.05);
+}
+
+.zynd-ai-bot-icon-mark .zynd-ai-bot-icon {
+  width: 55%;
+  height: 55%;
+}
+
+.zynd-ai-bot-icon-mark--lg .zynd-ai-bot-icon {
+  width: 50%;
+  height: 50%;
 }

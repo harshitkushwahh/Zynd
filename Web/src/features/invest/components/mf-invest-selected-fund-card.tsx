@@ -50,7 +50,7 @@ export function MfInvestSelectedFundCard({
           className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-dashed border-border/70 bg-muted/20 text-[10px] font-semibold text-muted-foreground/70"
           aria-hidden
         >
-          —
+          
         </div>
       )}
       <p

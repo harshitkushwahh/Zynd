@@ -15,7 +15,7 @@ export function decodeSupportClientReference(raw: string): string {
   }
 }
 
-/** Path segment for URLs — omits `@zynd` suffix so links stay readable. */
+/** Path segment for URLs  omits `@zynd` suffix so links stay readable. */
 export function supportUserPathRef(clientCode: string): string {
   const decoded = decodeSupportClientReference(clientCode);
   if (decoded.endsWith(ZYND_ID_SUFFIX)) {

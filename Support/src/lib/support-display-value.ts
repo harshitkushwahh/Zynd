@@ -1,6 +1,6 @@
 export const SUPPORT_EMPTY_VALUE = "NA";
 
-const EMPTY_MARKERS = new Set(["", "—", "-", "–", "none", "null", "undefined"]);
+const EMPTY_MARKERS = new Set(["", "", "-", "–", "none", "null", "undefined"]);
 
 export function isSupportEmptyDisplayValue(value: string | null | undefined): boolean {
   if (value == null) return true;

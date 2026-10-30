@@ -1,4 +1,4 @@
-"""MF enrichment — scheme master, return calculator, AUM ranks, compliance, AMC registry.
+"""MF enrichment  scheme master, return calculator, AUM ranks, compliance, AMC registry.
 
 Revision ID: 044_mf_enrichment
 Revises: 043_mf_invest_search_cache

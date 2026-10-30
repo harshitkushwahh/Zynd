@@ -120,7 +120,7 @@ function InvestorSummaryCard({ investor }: { investor: DistributorInvestor }) {
           <p className="font-mono text-compact font-semibold text-foreground">{investor.clientCode}</p>
           <p className="mt-0.5 truncate text-caption text-muted-foreground">{investor.emailMasked}</p>
           <p className="mt-1 text-[0.65rem] text-muted-foreground">
-            {investor.investorType} · {investor.serviceModel?.toUpperCase() ?? "—"}
+            {investor.investorType} · {investor.serviceModel?.toUpperCase() ?? ""}
           </p>
         </div>
       </div>

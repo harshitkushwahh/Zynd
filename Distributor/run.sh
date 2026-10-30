@@ -14,7 +14,7 @@ if [ -f .env ]; then
     fi
   done < .env
 elif [ -f .env.example ]; then
-  echo "No Distributor/.env found — copy .env.example to .env and set NEXT_PUBLIC_TURNSTILE_SITE_KEY."
+  echo "No Distributor/.env found  copy .env.example to .env and set NEXT_PUBLIC_TURNSTILE_SITE_KEY."
 fi
 
 # Turbopack caches compiled CSS under .next; a bad distributor.css parse can stick until this is removed.

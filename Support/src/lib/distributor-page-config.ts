@@ -46,7 +46,7 @@ export const DISTRIBUTOR_PAGE_CONFIG = {
   residentInvestors: {
     iconName: "users",
     title: "All investors",
-    description: "All resident individuals on Zynd — PM and DIY users across the platform (demo).",
+    description: "All resident individuals on Zynd  PM and DIY users across the platform (demo).",
   },
   nriInvestors: {
     iconName: "users",

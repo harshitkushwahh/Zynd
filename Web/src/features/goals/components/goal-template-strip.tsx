@@ -3,7 +3,6 @@
 import type { GoalTemplate } from "@/features/goals/api/goals-api";
 import { GoalTemplateScrollRow } from "@/features/goals/components/goal-template-scroll-row";
 import { GoalTemplateCard } from "@/features/goals/components/goal-template-card";
-
 type GoalTemplateStripProps = {
   templates: GoalTemplate[];
   onSelect: (template: GoalTemplate) => void;

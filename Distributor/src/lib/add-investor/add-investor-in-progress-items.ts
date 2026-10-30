@@ -56,7 +56,7 @@ export function buildAddInvestorInProgressItems(
             ? investor.emailMasked
             : existing.label,
         clientCode:
-          existing.clientCode === "—"
+          existing.clientCode === ""
             ? formatInvestorClientCodeDisplay(investor.clientCode)
             : existing.clientCode,
         investor,

@@ -235,3 +235,69 @@ async def test_process_document_scan_rejects_invalid_mime(
     assert status == DocumentStatus.rejected
 
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_profile_upload_recovers_stuck_pending_avatar_scan(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOCUMENTS_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    settings = get_settings()
+
+    user = User(
+        email=f"avatar-recover-{uuid4()}@example.com",
+        phone="9876543210",
+        role=UserRole.user,
+        status=UserStatus.active,
+    )
+    await assign_client_id(db_session, user)
+    db_session.add(user)
+    await db_session.flush()
+
+    storage = get_document_storage(settings)
+    storage_key = f"{user.client_id}/profile_image/v1.png"
+    storage.write_bytes(
+        bucket=settings.pii_documents_bucket,
+        storage_key=storage_key,
+        content=_png_bytes(),
+        encrypt_at_rest=True,
+    )
+
+    stuck = UserDocument(
+        user_id=user.id,
+        client_id=user.client_id,
+        doc_type=DocumentType.family_group_avatar,
+        version=1,
+        original_filename="avatar.png",
+        mime_type="image/png",
+        size_bytes=len(_png_bytes()),
+        sha256="deadbeef",
+        storage_provider=DocumentStorageProvider.local,
+        storage_bucket=settings.pii_documents_bucket,
+        storage_key=storage_key,
+        status=DocumentStatus.pending_scan,
+    )
+    db_session.add(stuck)
+    await db_session.flush()
+
+    uploaded = await upload_user_document(
+        db_session,
+        user=user,
+        doc_type=DocumentType.profile_image,
+        filename="profile.png",
+        mime_type="image/png",
+        content=_png_bytes(),
+        defer_scan=True,
+    )
+    assert uploaded["status"] == "pending_scan"
+
+    result = await db_session.execute(
+        select(UserDocument).where(UserDocument.id == stuck.id)
+    )
+    recovered = result.scalar_one()
+    assert recovered.status != DocumentStatus.pending_scan
+
+    get_settings.cache_clear()

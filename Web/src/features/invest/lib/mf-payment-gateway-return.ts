@@ -71,7 +71,7 @@ export function clearMfGatewayReturnMarkers() {
 /**
  * Full-page gateway handoff is still in session.
  * Resume the payment dialog on Back, bfcache, reload, or an explicit postback resume.
- * Do not treat a normal in-app navigation as a return — that used to cancel in-review orders
+ * Do not treat a normal in-app navigation as a return  that used to cancel in-review orders
  * before the investor ever reached Cybrilla.
  */
 export function resolveGatewayNavigationAction(args: {

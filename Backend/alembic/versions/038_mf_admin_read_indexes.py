@@ -1,4 +1,4 @@
-"""MF admin catalog read indexes — Phase 7.
+"""MF admin catalog read indexes  Phase 7.
 
 Revision ID: 038_mf_admin_read_indexes
 Revises: 037_mf_transactions

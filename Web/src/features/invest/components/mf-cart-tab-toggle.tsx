@@ -16,7 +16,7 @@ function tabIndex(tab: MfCartTab): number {
 }
 
 const tabButtonClass =
-  "relative z-10 inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-2 text-[11px] font-medium transition-[color,opacity] duration-200 ease-out sm:px-3 sm:text-compact";
+  "relative z-10 inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full px-2.5 py-2 text-[11px] font-medium transition-[color,opacity] duration-200 ease-out sm:px-3 sm:text-compact";
 
 type MfCartTabToggleProps = {
   tab: MfCartTab;
@@ -73,7 +73,7 @@ export function MfCartTabToggle({
     <div
       role="tablist"
       aria-label={copy.mutualFunds.cartTitle}
-      className="relative grid max-w-xl min-w-0 flex-1 grid-cols-3 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
+      className="relative grid w-fit max-w-md shrink-0 grid-cols-3 gap-0 rounded-full border border-border/80 bg-muted/20 p-0.5"
     >
       <motion.div
         aria-hidden

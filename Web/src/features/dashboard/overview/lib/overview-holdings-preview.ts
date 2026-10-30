@@ -7,6 +7,7 @@ export type OverviewHoldingCardItem = {
   amcLogoUrl: string | null;
   investedInr: number;
   returnPct: number | null;
+  source?: string | null;
 };
 
 export function truncateHoldingFundName(name: string, maxLength = 24) {

@@ -24,7 +24,7 @@ Pipeline stage **[7b/15]** already fails deploy if `GROQ_API_KEY` is missing whe
 Deploy does **not** copy `Backend/.env`. Sync Help Bot vars from your laptop when SSH to the VPS works:
 
 ```bash
-# From repo root — reads local Backend/.env (GROQ_* only), never prints secrets
+# From repo root  reads local Backend/.env (GROQ_* only), never prints secrets
 Backend/scripts/ssh-push-help-bot-env.sh
 ```
 

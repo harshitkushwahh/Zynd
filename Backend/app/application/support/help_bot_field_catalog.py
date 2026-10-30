@@ -41,6 +41,20 @@ CATALOG: tuple[FieldSpec, ...] = (
     FieldSpec("kyc.bank_verification_status", "kyc", "bank verification", "enum", _hints("Bank verified?")),
     FieldSpec("kyc.external_kyc_status", "kyc", "external KYC", "enum", _hints("Registrar KYC status?")),
     FieldSpec("kyc.kyc_already_registered", "kyc", "existing KYC flag", "bool", _hints("Already registered elsewhere?")),
+    FieldSpec(
+        "kyc.residential_address.city",
+        "kyc",
+        "registered city",
+        "string",
+        _hints("What city is on my address?", "Mera address kya hai?"),
+    ),
+    FieldSpec(
+        "kyc.residential_address.postal_code",
+        "kyc",
+        "registered PIN code",
+        "string",
+        _hints("What is my address PIN code?", "Pincode kya hai?"),
+    ),
     # Payments
     FieldSpec(
         "payments.last_sip_debit.settled_at",
@@ -143,6 +157,34 @@ CATALOG: tuple[FieldSpec, ...] = (
         _hints("How do I sign in?"),
     ),
     FieldSpec("account.country_code", "account", "country code", "string", _hints("Account country?")),
+    FieldSpec(
+        "account.active_session_count",
+        "account",
+        "active sessions",
+        "int",
+        _hints("How many devices am I logged in on?", "Kitne device pe login hu?"),
+    ),
+    FieldSpec(
+        "account.active_device_count",
+        "account",
+        "active device profiles",
+        "int",
+        _hints("How many browsers or devices for my login sessions?"),
+    ),
+    FieldSpec(
+        "settings.backup_codes_remaining",
+        "account",
+        "backup codes remaining",
+        "int",
+        _hints("How many backup codes left?", "Backup code batao"),
+    ),
+    FieldSpec(
+        "settings.backup_codes_total",
+        "account",
+        "backup codes issued",
+        "int",
+        _hints("Total backup codes issued?", "Baakup code kitne the?"),
+    ),
     # Goals
     FieldSpec("goals.goals", "goals", "goals list", "list", _hints("What goals do I have?")),
     FieldSpec("goals.goals.progress_pct", "goals", "goal progress", "float", _hints("Goal progress percent?")),

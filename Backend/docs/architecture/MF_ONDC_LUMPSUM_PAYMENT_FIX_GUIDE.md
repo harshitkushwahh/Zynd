@@ -1,4 +1,4 @@
-# ONDC lumpsum payment — MultiPlus vs Zynd (fix guide)
+# ONDC lumpsum payment  MultiPlus vs Zynd (fix guide)
 
 **Symptom (Zynd):** User taps **Invest now** (or finishes OTP) → payment overlay shows *“Payment couldn’t be completed / link no longer valid”* (or order `CANCELLED` with `failure_code: payment_abandoned`) with no redirect to `token_url`.
 
@@ -6,7 +6,7 @@
 
 **Gateway:** `ZYND_MF_ORDER_PAYMENT_GATEWAY=ondc` → PG `provider_name: "ONDC"`.
 
-**MultiPlus reference (external):** `PaymentService.java`, `CustomerPaymentResource.java`, `FintechPrimitivesClient.java`, `FpPaymentPostbackResource.java` — not in the Zynd repo; use your MultiPlus monorepo for side-by-side code review.
+**MultiPlus reference (external):** `PaymentService.java`, `CustomerPaymentResource.java`, `FintechPrimitivesClient.java`, `FpPaymentPostbackResource.java`  not in the Zynd repo; use your MultiPlus monorepo for side-by-side code review.
 
 **Shorter API map:** [MF_ONDC_LUMPSUM_PAYMENT_FLOW.md](./MF_ONDC_LUMPSUM_PAYMENT_FLOW.md)
 
@@ -62,7 +62,7 @@
 
 ---
 
-## 4. Zynd Web — Invest now
+## 4. Zynd Web  Invest now
 
 | # | API | Purpose |
 |---|-----|---------|
@@ -73,24 +73,24 @@
 
 ---
 
-## 5. False “link no longer valid” — causes & fixes
+## 5. False “link no longer valid”  causes & fixes
 
 | Priority | Cause | Zynd fix (status) |
 |----------|--------|-------------------|
-| P0 | Stale `sessionStorage` redirect flags | `clearMfPaymentSessionBeforeNewInvest()` before `POST /orders`; `clearAllMfPaymentRedirectFlags()` in `beginMfOrderPaymentSession` — **implemented** |
-| P0 | Reused dead `order_id` / overlay resume | Resume only when `wasMfPaymentRedirected(orderId)`; pay route uses `resumeAfterGatewayReturn: true` — **implemented** |
-| P0 | `abandon-payment` too eager | Abandon only when dismiss after `returnedFromPayment && gatewayReturnHandled` — **unchanged (already)** |
-| P1 | Reconcile sets `payment_abandoned` | Reconcile → `payment_not_completed`; `payment_abandoned` only from abandon API — **implemented** |
-| P1 | Cybrilla pipeline never runs | Worker autostart + payment-status advance; watch `[FINPRIM]` — **ops** |
-| P2 | Idempotency returns `CANCELLED` row | `409 idempotency_reused_terminal` — **implemented** |
-| P2 | UI mislabel on fresh order | `isFreshInvestOrder` → show `failure_reason`, not abandoned copy — **implemented** |
-| P3 | Invalid postback | HTTPS ngrok URL in sandbox — **env** |
+| P0 | Stale `sessionStorage` redirect flags | `clearMfPaymentSessionBeforeNewInvest()` before `POST /orders`; `clearAllMfPaymentRedirectFlags()` in `beginMfOrderPaymentSession`  **implemented** |
+| P0 | Reused dead `order_id` / overlay resume | Resume only when `wasMfPaymentRedirected(orderId)`; pay route uses `resumeAfterGatewayReturn: true`  **implemented** |
+| P0 | `abandon-payment` too eager | Abandon only when dismiss after `returnedFromPayment && gatewayReturnHandled`  **unchanged (already)** |
+| P1 | Reconcile sets `payment_abandoned` | Reconcile → `payment_not_completed`; `payment_abandoned` only from abandon API  **implemented** |
+| P1 | Cybrilla pipeline never runs | Worker autostart + payment-status advance; watch `[FINPRIM]`  **ops** |
+| P2 | Idempotency returns `CANCELLED` row | `409 idempotency_reused_terminal`  **implemented** |
+| P2 | UI mislabel on fresh order | `isFreshInvestOrder` → show `failure_reason`, not abandoned copy  **implemented** |
+| P3 | Invalid postback | HTTPS ngrok URL in sandbox  **env** |
 
 ---
 
 ## 6. Checklist (one purchase)
 
-See section 6 in [MF_ONDC_LUMPSUM_PAYMENT_FLOW.md](./MF_ONDC_LUMPSUM_PAYMENT_FLOW.md) — tick MFIA, purchase, consent, netbanking, confirm, submitted, `token_url`, postback, bank `old_id`.
+See section 6 in [MF_ONDC_LUMPSUM_PAYMENT_FLOW.md](./MF_ONDC_LUMPSUM_PAYMENT_FLOW.md)  tick MFIA, purchase, consent, netbanking, confirm, submitted, `token_url`, postback, bank `old_id`.
 
 ---
 

@@ -209,7 +209,7 @@ export function isDistributorLegacyOperationsPath(pathname: string): boolean {
   );
 }
 
-/** Primary dashboard sidebar — flat icon rail (no section headers). */
+/** Primary dashboard sidebar  flat icon rail (no section headers). */
 export function getDistributorSidebarNavItems(isManager: boolean): DistributorNavItem[] {
   const groups = getDistributorNavGroups(isManager).filter((group) => group.id !== "operations");
   return [...DISTRIBUTOR_WORKSPACE_ROUTES, ...groups.flatMap((group) => group.items)];

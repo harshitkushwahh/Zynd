@@ -1,4 +1,4 @@
-# Web Phase 4 — Dashboard & account feature modules
+# Web Phase 4  Dashboard & account feature modules
 
 Completed checklist. Dashboard overview and account security/MFA live under `features/`.
 
@@ -21,7 +21,7 @@ Completed checklist. Dashboard overview and account security/MFA live under `fea
 ```
 src/features/
   dashboard/
-    config/           # dashboard-content.ts — stat cards, placeholders
+    config/           # dashboard-content.ts  stat cards, placeholders
     overview/
       components/     # stat cards, portfolio, profile, activity
       portfolio-overview-page.tsx
@@ -44,4 +44,4 @@ src/features/
 
 ## Next: Web Phase 6
 
-Quality — tests (Vitest), E2E (Playwright), error boundaries.
+Quality  tests (Vitest), E2E (Playwright), error boundaries.

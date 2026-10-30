@@ -1,4 +1,4 @@
-# Web Phase 6 — Quality & observability
+# Web Phase 6  Quality & observability
 
 Completed checklist. Unit tests, smoke E2E, and error boundaries lock in the Web refactor program.
 
@@ -7,7 +7,7 @@ Completed checklist. Unit tests, smoke E2E, and error boundaries lock in the Web
 | Item | Artifact |
 |------|----------|
 | Vitest | `vitest.config.ts`, `vitest.setup.ts` |
-| Unit tests | `src/**/*.test.{ts,tsx}` — validation, routes, API errors, security alerts |
+| Unit tests | `src/**/*.test.{ts,tsx}`  validation, routes, API errors, security alerts |
 | Phase 0 guardrails test | `phase0-sanity.test.ts` |
 | Playwright smoke E2E | `playwright.config.ts`, `e2e/smoke.spec.ts` |
 | Client error boundary | `src/shared/components/zynd-error-boundary.tsx` |
@@ -38,8 +38,8 @@ E2E smoke covers marketing home, invalid reset-password link, and unauthenticate
 
 ## Error handling
 
-- `ZyndErrorBoundary` — inline fallback for client subtrees (auth dialog, dashboard pages)
-- `app/dashboard/error.tsx` — Next.js route-level recovery with reset button
+- `ZyndErrorBoundary`  inline fallback for client subtrees (auth dialog, dashboard pages)
+- `app/dashboard/error.tsx`  Next.js route-level recovery with reset button
 - Copy lives in `copy.dashboard.error.*`
 
 ## Future (out of scope)
@@ -48,6 +48,6 @@ E2E smoke covers marketing home, invalid reset-password link, and unauthenticate
 - Zod schemas aligned with OpenAPI
 - CI workflow wiring (add when repo CI is ready)
 
-## Web refactor program — complete
+## Web refactor program  complete
 
 Phases 0–6 delivered: config guardrails → auth split → routing → copy/variants → feature modules → shared package → tests & error boundaries.

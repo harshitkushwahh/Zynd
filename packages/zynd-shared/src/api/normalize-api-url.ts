@@ -14,7 +14,7 @@ export function normalizePublicApiUrl(raw: string | undefined, fallback = "/api/
   return `${trimmed}/api/v1`;
 }
 
-/** FastAPI origin for server-side BFF proxy (no `/api/v1` — the proxy adds it). */
+/** FastAPI origin for server-side BFF proxy (no `/api/v1`  the proxy adds it). */
 export function normalizeBackendOrigin(raw: string): string {
   return raw.trim().replace(/\/$/, "").replace(API_V1_SUFFIX, "");
 }

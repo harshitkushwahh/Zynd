@@ -6,7 +6,7 @@ export function formatDistributorBranchName(branchName: string): string {
   if (!trimmed) return trimmed;
 
   return trimmed
-    .replace(/\s*—\s*/g, DISTRIBUTOR_BRANCH_NAME_SEPARATOR)
+    .replace(/\s*\s*/g, DISTRIBUTOR_BRANCH_NAME_SEPARATOR)
     .replace(/\s*–\s*/g, DISTRIBUTOR_BRANCH_NAME_SEPARATOR)
     .replace(/\s+-\s+/g, DISTRIBUTOR_BRANCH_NAME_SEPARATOR);
 }

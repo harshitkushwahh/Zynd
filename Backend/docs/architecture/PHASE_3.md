@@ -1,4 +1,4 @@
-# Phase 3 — Transactional outbox
+# Phase 3  Transactional outbox
 
 Completed checklist per ADR-001 Step B.
 
@@ -37,4 +37,4 @@ Production: run relay and worker as separate processes alongside the API.
 
 ## Next: Phase 5
 
-See `docs/architecture/PHASE_4.md`. RBAC completion — admin APIs + enforcement tests.
+See `docs/architecture/PHASE_4.md`. RBAC completion  admin APIs + enforcement tests.

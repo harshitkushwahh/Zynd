@@ -37,6 +37,15 @@ export function isFamilyGoalCovered(goal: DashboardFamilyGoal) {
   return goal.status === "achieved" || resolveFamilyGoalProgress(goal) > 0;
 }
 
+export function sortGoalsLatestFirst(goals: Goal[]) {
+  return [...goals].sort((left, right) => {
+    const leftMs = Date.parse(left.updated_at ?? left.created_at ?? "") || 0;
+    const rightMs = Date.parse(right.updated_at ?? right.created_at ?? "") || 0;
+    if (rightMs !== leftMs) return rightMs - leftMs;
+    return right.id.localeCompare(left.id);
+  });
+}
+
 export function pickTopPriorityGoal(goals: Goal[]) {
   if (goals.length === 0) return null;
 

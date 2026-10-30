@@ -1,6 +1,6 @@
 import type { MfCart } from "@/features/invest/api/invest-api";
 
-/** Matches backend `zynd_mf_cart_max_items` default — applied separately per cart tab. */
+/** Matches backend `zynd_mf_cart_max_items` default  applied separately per cart tab. */
 export const MF_CART_MAX_ITEMS = 10;
 
 export type MfCartInvestmentType = "lumpsum" | "sip";

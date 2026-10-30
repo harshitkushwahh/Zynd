@@ -26,7 +26,7 @@ type MfFundDetailHeaderProps = {
 };
 
 function metricNa(value: string) {
-  return value === "—" ? "NA" : value;
+  return value === "" ? "NA" : value;
 }
 
 function MetricCard({

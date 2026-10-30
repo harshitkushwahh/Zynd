@@ -5,6 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Goal } from "@/features/goals/api/goals-api";
+import { GoalRichCard, GOAL_RICH_CARD_SCROLL_WIDTH_CLASS } from "@/features/goals/components/goal-rich-card";
 import { formatGoalTargetCompact } from "@/features/goals/lib/goal-format";
 import { goalDetailHref } from "@/features/goals/lib/goal-navigation";
 import {
@@ -17,7 +18,8 @@ import { goalTemplateIconThemeFor } from "@/features/goals/lib/goal-template-met
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-export const GOAL_PROGRESS_CARD_WIDTH_CLASS = "w-[11rem]";
+/** @deprecated Prefer GOAL_RICH_CARD_SCROLL_WIDTH_CLASS — kept for locked empty-state placeholders. */
+export const GOAL_PROGRESS_CARD_WIDTH_CLASS = GOAL_RICH_CARD_SCROLL_WIDTH_CLASS;
 export const OVERVIEW_GOAL_TILE_HEIGHT_CLASS = "h-[5.25rem]";
 
 type GoalProgressCardProps = {
@@ -100,8 +102,7 @@ function GoalProgressRing({
   );
 }
 
-export function GoalProgressCard({ goal, variant = "default" }: GoalProgressCardProps) {
-  const isOverview = variant === "overview";
+function GoalProgressOverviewCard({ goal }: { goal: Goal }) {
   const Icon = getGoalTemplateIcon(goal.template?.icon_key);
   const iconTheme = goalTemplateIconThemeFor(goal.template?.slug ?? "custom");
   const iconColorClass = goalIconColorClass(iconTheme.headerIconClass ?? iconTheme.iconBadgeClass);
@@ -114,27 +115,19 @@ export function GoalProgressCard({ goal, variant = "default" }: GoalProgressCard
       href={goalDetailHref(goal.id)}
       className={cn(
         GOAL_PROGRESS_CARD_WIDTH_CLASS,
-        "group block shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-        isOverview ? "rounded-[1.75rem]" : "rounded-[var(--radius-card)]",
+        "group block shrink-0 rounded-[1.75rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
       )}
       aria-label={`${goal.title}, ${statusLabel}, ${targetLabel} target`}
     >
       <div
         className={cn(
           "relative flex flex-row items-center gap-2 border transition-[border-color,background-color,box-shadow] duration-200",
-          isOverview
-            ? cn(
-                OVERVIEW_GOAL_TILE_HEIGHT_CLASS,
-                "rounded-[1.75rem] border-border/60 bg-muted/30 p-2.5 hover:border-primary/25 hover:bg-muted/40",
-              )
-            : "h-[5.5rem] rounded-[var(--radius-card)] border-border bg-card p-2.5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-zynd-low motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+          OVERVIEW_GOAL_TILE_HEIGHT_CLASS,
+          "rounded-[1.75rem] border-border/60 bg-muted/30 p-2.5 hover:border-primary/25 hover:bg-muted/40",
         )}
       >
         <ArrowUpRight
-          className={cn(
-            "absolute text-muted-foreground transition-colors group-hover:text-primary",
-            isOverview ? "right-2 top-2 size-3" : "right-2 top-2 size-3.5",
-          )}
+          className="absolute right-2 top-2 size-3 text-muted-foreground transition-colors group-hover:text-primary"
           strokeWidth={2}
           aria-hidden
         />
@@ -144,7 +137,7 @@ export function GoalProgressCard({ goal, variant = "default" }: GoalProgressCard
           icon={Icon}
           iconColorClass={iconColorClass}
           targetLabel={targetLabel}
-          overview={isOverview}
+          overview
         />
 
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 pr-2.5">
@@ -152,10 +145,7 @@ export function GoalProgressCard({ goal, variant = "default" }: GoalProgressCard
           <StatusBadge
             variant={goalStatusBadgeVariant(goal.status)}
             icon={goalStatusBadgeIcon(goal.status)}
-            className={cn(
-              "w-fit px-1.5 text-[10px]",
-              isOverview && "h-5 rounded-[1.75rem]",
-            )}
+            className="h-5 w-fit rounded-[1.75rem] px-1.5 text-[10px]"
           >
             {statusLabel}
           </StatusBadge>
@@ -163,4 +153,12 @@ export function GoalProgressCard({ goal, variant = "default" }: GoalProgressCard
       </div>
     </Link>
   );
+}
+
+export function GoalProgressCard({ goal, variant = "default" }: GoalProgressCardProps) {
+  if (variant === "overview") {
+    return <GoalProgressOverviewCard goal={goal} />;
+  }
+
+  return <GoalRichCard goal={goal} layout="scroll" />;
 }

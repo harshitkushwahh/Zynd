@@ -20,7 +20,7 @@ export function AddDistributorPlaceholderPage() {
       />
       <Card className="p-6">
         <p className="text-compact text-muted-foreground">
-          Demo placeholder — wire this to branch-scoped invite API when backend is ready.
+          Demo placeholder  wire this to branch-scoped invite API when backend is ready.
         </p>
         <Button type="button" className="mt-4" nativeButton={false} render={<Link href="/dashboard/dist-management/distributors" />}>
           {ZYND_MITRA_COPY.viewBranchMitras}

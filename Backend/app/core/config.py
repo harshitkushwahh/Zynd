@@ -539,9 +539,23 @@ class Settings(BaseSettings):
     zynd_investor_provision_batch_size: int = 10
     zynd_mf_cas_enabled: bool = False
     zynd_mf_central_base_url: str = ""
+    zynd_mf_central_redirect_base_url: str = ""
+    zynd_mf_central_origin: str = ""
+    zynd_mf_central_post_message_origins: str = ""
+    zynd_mf_cas_callback_path: str = "/dashboard/mutual-funds/cas/callback"
+    zynd_mf_central_client_id: str = ""
+    zynd_mf_central_client_secret: str = ""
+    zynd_mf_central_username: str = ""
+    zynd_mf_central_password: str = ""
+    zynd_mf_central_encryption_key: str = ""
+    zynd_mf_central_aes_iv: str = ""
+    zynd_mf_central_url_encryption_key: str = ""
+    zynd_mf_central_private_key: str = ""
+    zynd_mf_central_public_key: str = ""
     zynd_mf_central_api_key: str = ""
     zynd_mf_cas_worker_tick_seconds: int = 60
     zynd_mf_cas_worker_batch_size: int = 10
+    zynd_mf_cas_consent_timeout_hours: int = 6
 
     @property
     def resolved_mongo_url(self) -> str:
@@ -558,6 +572,10 @@ class Settings(BaseSettings):
         from app.application.integrations.integration_runtime import is_kyckart_live
 
         return is_kyckart_live()
+
+    @property
+    def resolved_mf_cas_callback_url(self) -> str:
+        return f"{self.frontend_url.rstrip('/')}{self.zynd_mf_cas_callback_path}"
 
     @property
     def resolved_mf_payment_postback_url(self) -> str:

@@ -1,4 +1,4 @@
-/** Layout class names — styles live in `src/styles/distributor.css`. */
+/** Layout class names  styles live in `src/styles/distributor.css`. */
 
 export const DISTRIBUTOR_SURFACE_RADIUS_CLASS = "rounded-[var(--radius-5xl)]";
 export const DISTRIBUTOR_SIDEBAR_EXPANDED_WIDTH = "var(--distributor-sidebar-width-expanded)";
@@ -8,7 +8,7 @@ export const DISTRIBUTOR_SIDEBAR_COLLAPSED_UI_CLASS = "border-r-0";
 export const DISTRIBUTOR_SIDEBAR_HEADER_CLASS = "distributor-sidebar-header";
 export const DISTRIBUTOR_SIDEBAR_HEADER_COLLAPSED_CLASS =
   "distributor-sidebar-header distributor-sidebar-header--collapsed";
-/** Legacy export — prefer CSS tokens; kept for table min-width naming. */
+/** Legacy export  prefer CSS tokens; kept for table min-width naming. */
 export const DISTRIBUTOR_SIDEBAR_WIDTH = "w-56";
 
 export const DISTRIBUTOR_SHELL_CLASS = "distributor-shell";
@@ -124,7 +124,7 @@ export const DISTRIBUTOR_WORKSPACE_NAV_ITEM_DISABLED_CLASS =
 export const DISTRIBUTOR_WORKSPACE_NAV_ITEM_COUNT_CLASS =
   "distributor-workspace-nav-item__count";
 
-/** @deprecated Use DISTRIBUTOR_NAVBAR_SPACER_CLASS — height from `--distributor-navbar-height`. */
+/** @deprecated Use DISTRIBUTOR_NAVBAR_SPACER_CLASS  height from `--distributor-navbar-height`. */
 export const DISTRIBUTOR_NAVBAR_HEIGHT = DISTRIBUTOR_NAVBAR_SPACER_CLASS;
 
 export function distributorSidebarContentTopClass(collapsed: boolean) {

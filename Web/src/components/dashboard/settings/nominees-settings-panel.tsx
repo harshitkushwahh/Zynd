@@ -6,6 +6,7 @@ import { Plus, Trash2, UserPlus, UserRound, UsersRound } from "lucide-react";
 
 import { AddSettingsNomineeDialog } from "@/components/dashboard/settings/add-settings-nominee-dialog";
 import { MfFolioNominationTable } from "@/components/dashboard/settings/mf-folio-nomination-table";
+import { SettingsNomineeConsentDialog } from "@/components/dashboard/settings/settings-nominee-consent-dialog";
 import { SettingsContentCard } from "@/components/dashboard/settings/settings-content-card";
 import { SettingsPanelHeader } from "@/components/dashboard/settings/settings-panel-header";
 import { SETTINGS_NAV } from "@/components/dashboard/settings/settings-sidebar";
@@ -16,7 +17,6 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { FieldMessage, UiMessage } from "@/components/ui/ui-message";
 import { useKycOptional } from "@/contexts/kyc-context";
-import { addInvestorNominee } from "@/features/kyc/lib/kyc-api";
 import {
   KYC_NOMINEE_RELATIONSHIP_OPTIONS,
   lookupKycEnumLabel,
@@ -106,6 +106,8 @@ export function NomineesSettingsPanel({
   const kyc = useKycOptional();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [pendingNominees, setPendingNominees] = useState<KycNomineeRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -114,15 +116,22 @@ export function NomineesSettingsPanel({
   const maxNominees = kycProfile?.maxNominees ?? MAX_KYC_NOMINEES;
   const canAdd = Boolean(kycProfile?.canAddNominee) && nominees.length < maxNominees;
 
-  const handleSaveNominee = async (nomineesToSave: KycNomineeRecord[]) => {
-    setSaving(true);
+  const queueNomineeSave = (nomineesToSave: KycNomineeRecord[]) => {
     setError("");
     setSuccess("");
+    setPendingNominees(nomineesToSave);
+    setConsentOpen(true);
+  };
+
+  const handleNomineeConsentConfirmed = async () => {
+    setSaving(true);
+    setError("");
     try {
-      await addInvestorNominee(nomineesToSave);
       await onKycProfileReload?.();
       void queryClient.invalidateQueries({ queryKey: ["kyc", "mf-folio-nominations"] });
       setAddOpen(false);
+      setConsentOpen(false);
+      setPendingNominees([]);
       setSuccess(copy.settings.nomineeAdded);
     } catch (err) {
       setError(getErrorMessage(err, copy.settings.couldNotAddNominee));
@@ -131,8 +140,12 @@ export function NomineesSettingsPanel({
     }
   };
 
-  const handleRemoveNominee = async (nomineeId: string) => {
-    await handleSaveNominee(assignLeftoverShareAfterRemove(nominees, nomineeId));
+  const handleSaveNominee = (nomineesToSave: KycNomineeRecord[]) => {
+    queueNomineeSave(nomineesToSave);
+  };
+
+  const handleRemoveNominee = (nomineeId: string) => {
+    queueNomineeSave(assignLeftoverShareAfterRemove(nominees, nomineeId));
   };
 
   const headerActions =
@@ -236,9 +249,6 @@ export function NomineesSettingsPanel({
             />
           ))}
         </div>
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          {copy.settings.nomineesFolioDisclaimer}
-        </p>
         <MfFolioNominationTable enabled={Boolean(kycProfile?.hasMfInvestmentAccount)} />
       </div>
     );
@@ -267,7 +277,17 @@ export function NomineesSettingsPanel({
         investorPanLast4={kycProfile?.panLast4}
         saving={saving}
         error={error}
-        onSave={(nomineesToSave) => void handleSaveNominee(nomineesToSave)}
+        onSave={handleSaveNominee}
+      />
+
+      <SettingsNomineeConsentDialog
+        open={consentOpen}
+        onOpenChange={(open) => {
+          setConsentOpen(open);
+          if (!open) setPendingNominees([]);
+        }}
+        nomineesToSave={pendingNominees}
+        onConfirmed={() => void handleNomineeConsentConfirmed()}
       />
     </SettingsContentCard>
   );

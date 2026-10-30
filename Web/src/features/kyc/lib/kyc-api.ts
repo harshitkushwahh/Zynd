@@ -459,11 +459,20 @@ export async function updateInvestorProfileSettings(body: {
   });
 }
 
-export async function addInvestorNominee(nominee: object | object[]) {
+export async function sendSettingsNomineeConsentOtp() {
+  return apiRequest<{
+    masked_mobile: string;
+    retry_after_seconds?: number;
+    expires_in?: number;
+  }>("/kyc/settings/nominees/consent/send-otp", { method: "POST" });
+}
+
+export async function addInvestorNominee(nominee: object | object[], otp: string) {
   const nominees = Array.isArray(nominee) ? nominee : [nominee];
   return apiRequest<InvestorSettingsStateResponse>("/kyc/settings/nominees", {
     method: "POST",
     body: JSON.stringify({
+      otp,
       nominees,
       nominee: nominees[0] ?? null,
     }),

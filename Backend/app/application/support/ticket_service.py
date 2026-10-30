@@ -9,6 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.bootstrap_redaction import mask_pan_display
 from app.infrastructure.persistence.models import KycJourneyState, User, UserKycStatus
+from app.application.support.bot_help_feedback_helpers import (
+    help_feedback_fields,
+    latest_bot_text_message_id,
+    load_feedback_choices,
+)
 from app.infrastructure.persistence.support_models import (
     SupportConversation,
     SupportMessage,
@@ -34,6 +39,54 @@ class SupportActionError(Exception):
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def effective_ticket_status(
+    ticket: SupportTicket,
+    conversation: SupportConversation | None,
+) -> str:
+    if ticket.status == "resolved" or ticket.resolved_at is not None:
+        return "resolved"
+    if ticket.resolution_choice in {"yes", "auto"}:
+        return "resolved"
+    if conversation is not None and conversation.status == "closed":
+        return "resolved"
+    return ticket.status
+
+
+async def reconcile_ticket_resolution_state(
+    db: AsyncSession,
+    ticket: SupportTicket,
+    conversation: SupportConversation | None,
+) -> str:
+    """Align ticket row when the conversation is closed but status drifted."""
+    status = effective_ticket_status(ticket, conversation)
+    if status != "resolved" or ticket.status == "resolved":
+        return status
+    now = utcnow()
+    ticket.status = "resolved"
+    ticket.resolved_at = ticket.resolved_at or now
+    if ticket.resolution_choice is None:
+        ticket.resolution_choice = "yes"
+    ticket.resolution_prompted_at = None
+    ticket.updated_at = now
+    await db.flush()
+    from app.application.support.ticket_list_cache import bump_customer_ticket_list_cache_version
+
+    await bump_customer_ticket_list_cache_version(ticket.user_id)
+    return "resolved"
+
+
+async def _conversation_map(
+    db: AsyncSession,
+    conversation_ids: list[UUID],
+) -> dict[UUID, SupportConversation]:
+    if not conversation_ids:
+        return {}
+    result = await db.execute(
+        select(SupportConversation).where(SupportConversation.id.in_(conversation_ids))
+    )
+    return {row.id: row for row in result.scalars()}
 
 
 def _aware(value: datetime) -> datetime:
@@ -306,6 +359,8 @@ def serialize_message(
     message: SupportMessage,
     *,
     resolution_active: bool = False,
+    help_feedback: str | None = None,
+    help_feedback_active: bool = False,
 ) -> dict[str, Any]:
     kind = "resolution_prompt" if _is_resolution_prompt_message(message) else (message.kind or "text")
     return {
@@ -319,15 +374,23 @@ def serialize_message(
         "attachment_document_id": str(message.attachment_document_id) if message.attachment_document_id else None,
         "attachment_filename": message.attachment_filename,
         "resolution_active": resolution_active,
+        "help_feedback": help_feedback,
+        "help_feedback_active": help_feedback_active,
         "customer_read_at": _iso(message.customer_read_at),
         "support_read_at": _iso(message.support_read_at),
         "support_read_by": message.support_read_by,
     }
 
 
-def _prompt_is_active(ticket: SupportTicket | None, message: SupportMessage, latest_prompt_id: UUID | None) -> bool:
+def _prompt_is_active(
+    ticket: SupportTicket | None,
+    message: SupportMessage,
+    latest_prompt_id: UUID | None,
+    conversation: SupportConversation,
+) -> bool:
     return bool(
         ticket is not None
+        and conversation.status != "closed"
         and _is_resolution_prompt_message(message)
         and message.id == latest_prompt_id
         and ticket.status != "resolved"
@@ -358,10 +421,25 @@ async def serialize_customer_conversation(
     stored = [message for message in await list_messages(db, conversation.id) if message.visibility == "customer"]
     prompt_ids = [message.id for message in stored if _is_resolution_prompt_message(message)]
     latest_prompt_id = prompt_ids[-1] if prompt_ids else None
-    messages = [
-        serialize_message(message, resolution_active=_prompt_is_active(ticket, message, latest_prompt_id))
-        for message in stored
-    ]
+    latest_bot_id = latest_bot_text_message_id(stored)
+    feedback_map = await load_feedback_choices(db, [message.id for message in stored])
+    messages = []
+    for message in stored:
+        help_fb, help_active = help_feedback_fields(
+            message=message,
+            conversation=conversation,
+            ticket=ticket,
+            latest_bot_id=latest_bot_id,
+            recorded_choice=feedback_map.get(message.id),
+        )
+        messages.append(
+            serialize_message(
+                message,
+                resolution_active=_prompt_is_active(ticket, message, latest_prompt_id, conversation),
+                help_feedback=help_fb,
+                help_feedback_active=help_active,
+            )
+        )
     resolution_open = any(message["resolution_active"] for message in messages)
     participant = conversation.handler if conversation.handler in {"bot", "human"} else "bot"
     assignee_name: str | None = None
@@ -478,15 +556,17 @@ def serialize_ticket(
     assignee_name: str | None,
     messages: list[dict[str, Any]] | None = None,
     include_sla: bool = False,
+    conversation: SupportConversation | None = None,
 ) -> dict[str, Any]:
     from app.application.support.ticket_routing_service import sla_snapshot
 
+    status = effective_ticket_status(ticket, conversation)
     payload: dict[str, Any] = {
         "id": ticket.public_id,
         "subject": ticket.subject,
         "description": ticket.description,
         "topic": ticket.topic,
-        "status": ticket.status,
+        "status": status,
         "priority": ticket.priority,
         "user_id": client_code,
         "assignee_id": str(ticket.assignee_id) if ticket.assignee_id else None,
@@ -558,15 +638,20 @@ async def list_customer_tickets_page(
     rows = list(result.scalars())
     has_more = len(rows) > safe_limit
     tickets = rows[:safe_limit]
+    conv_map = await _conversation_map(db, [ticket.conversation_id for ticket in tickets])
     names = await _assignee_names(db, tickets)
-    items = [
-        serialize_ticket(
-            ticket,
-            client_code=user.client_id,
-            assignee_name=names.get(ticket.assignee_id) if ticket.assignee_id else None,
+    items = []
+    for ticket in tickets:
+        conversation = conv_map.get(ticket.conversation_id)
+        await reconcile_ticket_resolution_state(db, ticket, conversation)
+        items.append(
+            serialize_ticket(
+                ticket,
+                client_code=user.client_id,
+                assignee_name=names.get(ticket.assignee_id) if ticket.assignee_id else None,
+                conversation=conversation,
+            )
         )
-        for ticket in tickets
-    ]
     payload = {
         "items": items,
         "has_more": has_more,
@@ -597,6 +682,15 @@ async def list_console_tickets(
         query = query.join(User, User.id == SupportTicket.user_id).where(User.client_id == client_id.strip())
     result = await db.execute(query.order_by(SupportTicket.updated_at.desc()).limit(200))
     tickets = list(result.scalars())
+    conv_map = await _conversation_map(db, [ticket.conversation_id for ticket in tickets])
+    for ticket in tickets:
+        await reconcile_ticket_resolution_state(db, ticket, conv_map.get(ticket.conversation_id))
+    if queue == "escalated":
+        tickets = [
+            ticket
+            for ticket in tickets
+            if effective_ticket_status(ticket, conv_map.get(ticket.conversation_id)) != "resolved"
+        ]
     from app.application.support.support_intelligence_router import ticket_urgency_score
     from app.application.support.ticket_routing_service import PRIORITY_RANK
 
@@ -618,6 +712,7 @@ async def list_console_tickets(
             client_code=codes.get(ticket.user_id, ""),
             assignee_name=names.get(ticket.assignee_id) if ticket.assignee_id else None,
             include_sla=True,
+            conversation=conv_map.get(ticket.conversation_id),
         )
         for ticket in tickets
     ]
@@ -767,6 +862,12 @@ async def ask_if_resolved(
     *,
     sender_name: str,
 ) -> None:
+    if ticket.status == "resolved" or conversation.status == "closed":
+        raise SupportActionError(
+            "ticket_resolved",
+            "This ticket is already resolved. Reopen it before asking the customer again.",
+            409,
+        )
     now = utcnow()
     ticket.status = "pending"
     ticket.resolved_at = None
@@ -818,6 +919,9 @@ async def close_stale_resolution_prompts(db: AsyncSession, *, user_id: UUID | No
             )
             conversation.status = "closed"
         await store_resolution_examples(db, ticket)
+        from app.application.support.ticket_list_cache import bump_customer_ticket_list_cache_version
+
+        await bump_customer_ticket_list_cache_version(ticket.user_id)
     await db.flush()
 
 
@@ -852,6 +956,7 @@ async def respond_to_resolution(
         if choice == "yes":
             ticket.status = "resolved"
             ticket.resolution_choice = "yes"
+            ticket.resolution_prompted_at = None
             ticket.resolved_at = now
             conversation.status = "closed"
             await add_message(
@@ -930,6 +1035,8 @@ async def console_ticket_detail(db: AsyncSession, public_id: str) -> dict[str, A
     user = await db.get(User, ticket.user_id)
     if user is None:
         raise SupportActionError("ticket_not_found", "Ticket not found.", 404)
+    conversation = await db.get(SupportConversation, ticket.conversation_id)
+    await reconcile_ticket_resolution_state(db, ticket, conversation)
     if ticket.assignee_id is None and ticket.status in {"open", "pending"}:
         from app.application.support.support_intelligence_router import apply_support_intelligence
 
@@ -961,6 +1068,7 @@ async def console_ticket_detail(db: AsyncSession, public_id: str) -> dict[str, A
             assignee_name=names.get(ticket.assignee_id) if ticket.assignee_id else None,
             messages=messages,
             include_sla=True,
+            conversation=conversation,
         ),
         "customer": await customer_snapshot(db, user),
         "domain": domain_context(ticket.topic, pack, user.client_id),
@@ -991,6 +1099,12 @@ async def add_agent_reply(
     conversation = await db.get(SupportConversation, ticket.conversation_id)
     if conversation is None:
         raise SupportActionError("ticket_not_found", "Ticket not found.", 404)
+    if ticket.status == "resolved" or conversation.status == "closed":
+        raise SupportActionError(
+            "ticket_resolved",
+            "This ticket is resolved. Reopen it from ticket status before messaging the customer.",
+            409,
+        )
     cleaned = body.strip()
     if not cleaned and not resolution_prompt:
         raise SupportActionError("empty_message", "Write a message before sending.")
@@ -1024,10 +1138,7 @@ async def add_agent_reply(
             ticket.first_responded_at = now
         ticket.updated_at = now
         ticket.handled_by = "human"
-        if ticket.status == "resolved":
-            ticket.status = "pending"
-            ticket.resolved_at = None
-        elif ticket.status == "open":
+        if ticket.status == "open":
             ticket.status = "pending"
         await reopen_for_agent(db, conversation)
     if resolution_prompt:
@@ -1064,6 +1175,7 @@ async def update_console_ticket(
         ticket.handled_by = "human"
         if status == "resolved":
             ticket.resolved_at = now
+            ticket.resolution_prompted_at = None
             if ticket.resolution_choice is None:
                 ticket.resolution_choice = "yes"
             conversation.status = "closed"

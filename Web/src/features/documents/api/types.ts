@@ -2,6 +2,7 @@ export type DocumentType =
   | "aadhaar"
   | "pan"
   | "profile_image"
+  | "family_group_avatar"
   | "bank_statement"
   | "signature"
   | "address_proof"

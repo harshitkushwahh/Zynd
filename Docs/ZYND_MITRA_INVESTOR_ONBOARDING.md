@@ -1,4 +1,4 @@
-# Zynd Mitra — Investor onboarding, book, and compliance
+# Zynd Mitra  Investor onboarding, book, and compliance
 
 This document describes how a **Zynd Mitra** (field distributor) or **Mitra Manager** adds investors, how clients are linked to the Mitra’s **Zynd Mitra code**, and how **Your clients** and **Compliance** stay in sync with the global KYC service.
 
@@ -18,14 +18,14 @@ Every distributor-console persona receives a **persona client ID** stored on `us
 
 **When assigned**
 
-- **Field Mitra** — on `POST /distributor/partners/onboarding/submit` (Add Zynd Mitra wizard).
-- **Manager / State Head** — on admin invite accept (`assign_zynd_persona_client_id` by role).
+- **Field Mitra**  on `POST /distributor/partners/onboarding/submit` (Add Zynd Mitra wizard).
+- **Manager / State Head**  on admin invite accept (`assign_zynd_persona_client_id` by role).
 
 The Mitra code is shown in the distributor console via `GET /distributor/console/context` → `client_id`, and in the session as `zyndClientId`.
 
 ### Zynd client code (investor)
 
-Investors (Web/Mobile users) get a separate ID: `{emailLocal}{phoneDigits}@zynd` (e.g. `rahulsharma9876543210@zynd`). This is **not** the Mitra code — it identifies the investor account.
+Investors (Web/Mobile users) get a separate ID: `{emailLocal}{phoneDigits}@zynd` (e.g. `rahulsharma9876543210@zynd`). This is **not** the Mitra code  it identifies the investor account.
 
 ### Book link (Mitra ↔ investor)
 
@@ -33,7 +33,7 @@ Table: `distributor_client_links`
 
 | Column | Purpose |
 |--------|---------|
-| `client_user_id` | Investor `users.id` (unique — one book per investor) |
+| `client_user_id` | Investor `users.id` (unique  one book per investor) |
 | `mitra_user_id` | Field Mitra (or manager acting as book owner) |
 | `mitra_client_id` | Denormalized `ZYND-M-…` for reporting and filters |
 | `branch_id` | Branch at link time |
@@ -47,7 +47,7 @@ Table: `distributor_client_links`
 
 ```mermaid
 flowchart TB
-  subgraph stage1 [Stage 1 — Account]
+  subgraph stage1 [Stage 1  Account]
     A[Mitra: Add investor] --> B[Email OTP]
     B --> C[Mobile OTP]
     C --> D[Submit → create User]
@@ -55,7 +55,7 @@ flowchart TB
     E --> F[Email Web set-password link]
   end
 
-  subgraph stage2 [Stage 2 — Compliance / KYC]
+  subgraph stage2 [Stage 2  Compliance / KYC]
     G[Mitra: compliance wizard] --> H[Global KYC service]
     H --> I[Cybrilla POA readiness on PAN]
     I --> J{Readiness code}
@@ -77,7 +77,7 @@ flowchart TB
   H --> Q
 ```
 
-### Stage 1 — Account onboarding (Mitra console)
+### Stage 1  Account onboarding (Mitra console)
 
 **Duplicate prevention (Stage 1):** email and mobile are rejected if already registered on any active Zynd investor account (`email_already_registered`, `phone_already_registered`).
 
@@ -87,32 +87,32 @@ flowchart TB
 
 **API** (`/api/v1/distributor/clients/onboarding/…`):
 
-1. `POST …/start` — email → OTP
+1. `POST …/start`  email → OTP
 2. `POST …/verify-email`
 3. `POST …/send-mobile-otp` / `verify-mobile`
-4. `POST …/submit` — creates investor user, assigns investor `client_id`, creates book link, sends **Web** password-reset email
+4. `POST …/submit`  creates investor user, assigns investor `client_id`, creates book link, sends **Web** password-reset email
 
 **Password:** Server generates a random hash; investor sets password via Web reset link (not chosen by Mitra).
 
 **Permissions:** `distributor.clients.onboard`
 
-### Stage 2 — Compliance (global KYC)
+### Stage 2  Compliance (global KYC)
 
 **Subject:** investor `client_user_id`  
-**Actor:** Mitra (delegated — routes to be extended under `/distributor/clients/{ref}/kyc/…`)
+**Actor:** Mitra (delegated  routes to be extended under `/distributor/clients/{ref}/kyc/…`)
 
-**Single backend engine:** `Backend/app/application/kyc/` — same services used by Web and Mobile self-service, with `user=` set to the **investor**, not the Mitra.
+**Single backend engine:** `Backend/app/application/kyc/`  same services used by Web and Mobile self-service, with `user=` set to the **investor**, not the Mitra.
 
 **Cybrilla POA readiness** (on PAN verify):
 
 | Readiness | Action |
 |-----------|--------|
-| `verified` | Continue investment flow — short KRA path (skip DigiLocker / signature where applicable) |
+| `verified` | Continue investment flow  short KRA path (skip DigiLocker / signature where applicable) |
 | `kyc_unavailable` | Start **Fresh** KYC |
 | `kyc_rejected` | Start **Fresh** KYC (product rule; align code with `journey_gate_service`) |
 | `kyc_incomplete`, `kyc_legacy`, `kyc_onhold` | Start **Modify** KYC |
-| `kyc_underprocess` | Block — show “KYC is currently under process.” |
-| `kyc_deactivated` | Block — no investment, fresh, or modify |
+| `kyc_underprocess` | Block  show “KYC is currently under process.” |
+| `kyc_deactivated` | Block  no investment, fresh, or modify |
 
 DigiLocker / eSign (full KYC path):
 
@@ -129,15 +129,15 @@ DigiLocker / eSign (full KYC path):
 
 **Scoping:**
 
-- **Field Mitra** — clients where `distributor_client_links.mitra_user_id = current user`
-- **Mitra Manager** — clients linked to any **active** partner in the manager’s branch, plus the manager’s own book if they onboard directly
+- **Field Mitra**  clients where `distributor_client_links.mitra_user_id = current user`
+- **Mitra Manager**  clients linked to any **active** partner in the manager’s branch, plus the manager’s own book if they onboard directly
 
 **Response fields (per client):**
 
-- `client_id` — investor Zynd client code
-- `mitra_client_id` — owning Mitra code (`ZYND-M-…`)
-- `in_distributor_book` — always `true` for listed rows
-- `compliance_status`, `onboarding_status`, `investment_status` — derived from KYC / investment state
+- `client_id`  investor Zynd client code
+- `mitra_client_id`  owning Mitra code (`ZYND-M-…`)
+- `in_distributor_book`  always `true` for listed rows
+- `compliance_status`, `onboarding_status`, `investment_status`  derived from KYC / investment state
 
 **Detail:** `GET /distributor/clients/{reference}` includes `book_link` with `mitra_client_id`, `linked_at`, etc. Access denied if client is not in the actor’s book.
 
@@ -158,7 +158,7 @@ Builds a queue from **book clients** whose KYC is incomplete or blocked, using `
 | Nominee incomplete | Personal done, nominee missing |
 | Compliance exception | `kyc_underprocess` / `kyc_deactivated` |
 
-Same book filter as Your clients — Mitra only sees their queue.
+Same book filter as Your clients  Mitra only sees their queue.
 
 ---
 
@@ -168,7 +168,7 @@ Same book filter as Your clients — Mitra only sees their queue.
 
 Returns:
 
-- `client_id` — **Zynd Mitra code** for the logged-in user
+- `client_id`  **Zynd Mitra code** for the logged-in user
 - `phone_masked`
 - `branch`, `branch_assigned`
 
@@ -184,7 +184,7 @@ The distributor UI reads `zyndClientId` and `phoneMasked` from the auth session 
 | `distributor.clients.read` | ✓ | ✓ |
 | `distributor.clients.onboard` | ✓ | ✓ |
 | `distributor.compliance.list` | ✓ | ✓ |
-| `distributor.partners.manage` | — | ✓ |
+| `distributor.partners.manage` |  | ✓ |
 
 ---
 
@@ -199,18 +199,18 @@ The distributor UI reads `zyndClientId` and `phoneMasked` from the auth session 
 | Compliance queue | `distributor_compliance_service.py` |
 | Persona IDs | `client_id_service.py` |
 | Global KYC | `Backend/app/application/kyc/*`, `/kyc/*` |
-| Distributor UI — clients | `Distributor/src/lib/distributor-clients-api.ts` |
-| Distributor UI — compliance | `distributor-compliance-panel.tsx` |
+| Distributor UI  clients | `Distributor/src/lib/distributor-clients-api.ts` |
+| Distributor UI  compliance | `distributor-compliance-panel.tsx` |
 
 ---
 
 ## 8. Next steps (not yet implemented)
 
-1. **Delegated KYC API** — `/distributor/clients/{ref}/kyc/*` wrapping existing KYC handlers with book access checks.
-2. **Wire Add investor wizard** — replace demo (`add-investor-demo.ts`) with Stage 1 + Stage 2 APIs.
-3. **Shared KYC rules package** — move readiness/journey logic to `@zynd/shared/kyc` for Web, Mobile, Distributor.
-4. **Align `kyc_rejected`** — product Fresh vs current Modify mapping in `journey_gate_service.py`.
-5. **Investment block** — enforce `kyc_deactivated` / `kyc_underprocess` in fund eligibility, not only at PAN verify.
+1. **Delegated KYC API**  `/distributor/clients/{ref}/kyc/*` wrapping existing KYC handlers with book access checks.
+2. **Wire Add investor wizard**  replace demo (`add-investor-demo.ts`) with Stage 1 + Stage 2 APIs.
+3. **Shared KYC rules package**  move readiness/journey logic to `@zynd/shared/kyc` for Web, Mobile, Distributor.
+4. **Align `kyc_rejected`**  product Fresh vs current Modify mapping in `journey_gate_service.py`.
+5. **Investment block**  enforce `kyc_deactivated` / `kyc_underprocess` in fund eligibility, not only at PAN verify.
 
 ---
 

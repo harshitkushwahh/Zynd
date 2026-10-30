@@ -41,7 +41,7 @@ export default function KycPartnerEmbedReturnPage() {
       channel.postMessage(payload);
       channel.close();
     } catch {
-      // BroadcastChannel unavailable — opener or full navigation must handle the return.
+      // BroadcastChannel unavailable  opener or full navigation must handle the return.
     }
 
     if (!openerAlive) {

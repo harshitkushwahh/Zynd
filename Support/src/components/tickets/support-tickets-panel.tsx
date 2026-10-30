@@ -16,22 +16,32 @@ export function SupportTicketsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    void listSupportTickets({ queue })
-      .then((rows) => {
-        if (!cancelled) {
-          setTickets(rows);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTickets([]);
-          setLoading(false);
-        }
-      });
+
+    const load = () => {
+      setLoading(true);
+      void listSupportTickets({ queue })
+        .then((rows) => {
+          if (!cancelled) {
+            setTickets(rows);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTickets([]);
+            setLoading(false);
+          }
+        });
+    };
+
+    load();
+    const poll = window.setInterval(load, 20_000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
+      window.removeEventListener("focus", onFocus);
     };
   }, [queue]);
 

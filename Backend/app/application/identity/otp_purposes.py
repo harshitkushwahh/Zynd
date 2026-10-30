@@ -18,6 +18,7 @@ class OtpPurpose(str, Enum):
     partner_onboarding_mobile = "partner_onboarding_mobile"
     client_onboarding_email = "client_onboarding_email"
     client_onboarding_mobile = "client_onboarding_mobile"
+    settings_nominee_update = "settings_nominee_update"
 
 
 OtpChannel = Literal["email", "sms"]
@@ -104,6 +105,12 @@ OTP_PURPOSE_REGISTRY: dict[OtpPurpose, OtpPurposeDefinition] = {
         channel="sms",
         email_subject="Verify investor mobile for Zynd",
     ),
+    OtpPurpose.settings_nominee_update: OtpPurposeDefinition(
+        purpose=OtpPurpose.settings_nominee_update,
+        storage_key="settings_nominee_update",
+        channel="sms",
+        email_subject="Confirm nominee update on Zynd",
+    ),
 }
 
 # Backward-compatible storage-key aliases used before Phase 4.
@@ -152,4 +159,6 @@ def build_otp_message(*, purpose: OtpPurpose, code: str) -> str:
         return f"Your Zynd investor email verification code is {code}. It expires in 10 minutes."
     if purpose == OtpPurpose.client_onboarding_mobile:
         return f"Your Zynd investor mobile verification code is {code}. It expires in 10 minutes."
+    if purpose == OtpPurpose.settings_nominee_update:
+        return f"Your Zynd nominee update confirmation code is {code}. It expires in 10 minutes."
     return f"Your ZYND verification code is {code}. It expires in 10 minutes."

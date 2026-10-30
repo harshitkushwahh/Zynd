@@ -502,7 +502,7 @@ export function BranchCommissionsPanel({
                         <Table.Cell className="text-right tabular-nums">{formatAum(row.accrued)}</Table.Cell>
                         <Table.Cell className="text-right tabular-nums">{formatAum(row.released)}</Table.Cell>
                         <Table.Cell className="text-right tabular-nums">
-                          {row.onHold > 0 ? formatAum(row.onHold) : "—"}
+                          {row.onHold > 0 ? formatAum(row.onHold) : ""}
                         </Table.Cell>
                         <Table.Cell className="text-right tabular-nums">{formatAum(row.netPayable)}</Table.Cell>
                         <Table.Cell>

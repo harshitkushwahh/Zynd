@@ -50,9 +50,13 @@ export function GoalsFamilyListPage() {
 
       {hasResolved && !error && familyGoals.length > 0 ? (
         <GoalsContentFade>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid justify-items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {familyGoals.map((goal) => (
-              <FamilyGoalProgressCard key={`${goal.family_group_id}-${goal.id}`} goal={goal} />
+              <FamilyGoalProgressCard
+                key={`${goal.family_group_id}-${goal.id}`}
+                goal={goal}
+                layout="grid"
+              />
             ))}
           </div>
         </GoalsContentFade>

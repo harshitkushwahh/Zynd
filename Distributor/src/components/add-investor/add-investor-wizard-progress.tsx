@@ -16,7 +16,7 @@ export type AddInvestorWizardProgressStep = {
 type AddInvestorWizardProgressProps = {
   steps: AddInvestorWizardProgressStep[];
   activeIndex: number;
-  /** Distribute steps evenly — used when there are many compliance steps. */
+  /** Distribute steps evenly  used when there are many compliance steps. */
   equalWidth?: boolean;
   className?: string;
 };

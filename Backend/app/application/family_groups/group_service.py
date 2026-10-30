@@ -315,7 +315,11 @@ async def upload_family_group_avatar(
         },
     )
 
-    return await serialize_family_group(db, group, viewer_user_id=user.id)
+    payload = await serialize_family_group(db, group, viewer_user_id=user.id)
+    # Router uses this to run scan after commit (not exposed on FamilyGroupResponse).
+    payload = dict(payload)
+    payload["avatar_document_id"] = str(uploaded["id"])
+    return payload
 
 
 async def list_group_members_preview(

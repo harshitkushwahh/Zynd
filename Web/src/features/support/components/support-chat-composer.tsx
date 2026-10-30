@@ -11,6 +11,12 @@ import { ImagePlus, SendHorizontal, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { SupportImageAttachment } from "@/features/support/lib/support-types";
+import {
+  clampSupportMessageText,
+  SUPPORT_IMAGE_ACCEPT,
+  SUPPORT_MESSAGE_MAX_CHARS,
+  supportMessageCharCount,
+} from "@/features/support/lib/support-message-limits";
 import { cn } from "@/lib/utils";
 import { copy } from "@/shared/config/copy";
 
@@ -24,6 +30,10 @@ type SupportChatComposerProps = {
   onAttachImage: (file: File | null) => void;
   onClearAttachment: () => void;
   disabled?: boolean;
+  /** When false, hide image upload (Help Bot cannot review images). */
+  imagesEnabled?: boolean;
+  /** Shown as placeholder when the thread is locked (resolution prompt or resolved ticket). */
+  disabledPlaceholder?: string;
   className?: string;
 };
 
@@ -35,11 +45,19 @@ export function SupportChatComposer({
   onAttachImage,
   onClearAttachment,
   disabled = false,
+  imagesEnabled = true,
+  disabledPlaceholder,
   className,
 }: SupportChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const canSend = (value.trim().length > 0 || Boolean(attachment)) && !disabled;
+  const charCount = supportMessageCharCount(value);
+  const charsRemaining = SUPPORT_MESSAGE_MAX_CHARS - charCount;
+  const showCharHint = charCount > 0 && charsRemaining <= 400;
+  const inputLocked = disabled || Boolean(disabledPlaceholder);
+  const canSend =
+    (value.trim().length > 0 || (imagesEnabled && Boolean(attachment))) && !inputLocked;
+  const placeholder = disabledPlaceholder?.trim() || copy.support.composerPlaceholder;
 
   const resizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -72,7 +90,7 @@ export function SupportChatComposer({
   };
 
   const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    onChange(event.target.value);
+    onChange(clampSupportMessageText(event.target.value));
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -116,43 +134,49 @@ export function SupportChatComposer({
         </div>
       ) : null}
 
-      <div className="flex items-end gap-2">
+      <div className="flex min-w-0 items-end gap-2">
         <textarea
           ref={textareaRef}
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          disabled={disabled}
+          disabled={inputLocked}
           rows={1}
-          placeholder={copy.support.composerPlaceholder}
+          maxLength={SUPPORT_MESSAGE_MAX_CHARS}
+          placeholder={placeholder}
+          readOnly={Boolean(disabledPlaceholder)}
           aria-label={copy.support.composerAriaLabel}
           className={cn(
-            "max-h-28 min-h-10 flex-1 resize-none overflow-y-auto rounded-[var(--radius-control)] border border-input bg-transparent px-3 py-2.5 text-compact outline-none",
+            "max-h-28 min-h-10 min-w-0 flex-1 resize-none overflow-y-auto rounded-[var(--radius-control)] border border-input bg-transparent px-3 py-2.5 text-compact outline-none",
             "placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
             "disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30",
           )}
         />
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          tabIndex={-1}
-          onChange={handleFileChange}
-        />
+        {imagesEnabled ? (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={SUPPORT_IMAGE_ACCEPT}
+              className="sr-only"
+              tabIndex={-1}
+              onChange={handleFileChange}
+            />
 
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled}
-          aria-label={copy.support.uploadImageAriaLabel}
-          className="size-10 shrink-0 rounded-full"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <ImagePlus className="size-4" />
-        </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={inputLocked}
+              aria-label={copy.support.uploadImageAriaLabel}
+              className="size-10 shrink-0 rounded-full"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <ImagePlus className="size-4" />
+            </Button>
+          </>
+        ) : null}
 
         <Button
           type="submit"
@@ -164,6 +188,18 @@ export function SupportChatComposer({
           <SendHorizontal className="size-4" />
         </Button>
       </div>
+
+      {showCharHint ? (
+        <p
+          className={cn(
+            "mt-2 text-end text-caption tabular-nums text-muted-foreground",
+            charsRemaining <= 50 && "text-destructive",
+          )}
+          aria-live="polite"
+        >
+          {copy.support.composerCharLimitHint(charsRemaining)}
+        </p>
+      ) : null}
     </form>
   );
 }

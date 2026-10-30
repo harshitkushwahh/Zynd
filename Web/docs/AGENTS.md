@@ -1,4 +1,4 @@
-# Zynd Web — agent notes
+# Zynd Web  agent notes
 
 ## Architecture docs
 
@@ -13,13 +13,13 @@
 
 ## Hard rules (Phase 0+)
 
-1. New auth/signup/login API calls go in `src/features/auth/api/` or `src/features/account/api/` — not directly in components.
+1. New auth/signup/login API calls go in `src/features/auth/api/` or `src/features/account/api/`  not directly in components.
 2. New auth dialog steps go under `src/features/auth/components/steps/` and register in `auth-dialog-steps.tsx`.
 3. `@/lib/auth-api` is a compatibility barrel; prefer feature imports for new code.
-4. Dashboard nav items live in `src/features/dashboard/navigation/dashboard-routes.ts` — add routes there and under `app/dashboard/`.
+4. Dashboard nav items live in `src/features/dashboard/navigation/dashboard-routes.ts`  add routes there and under `app/dashboard/`.
 5. Browser storage keys live in `src/shared/config/storage-keys.ts`.
 6. Timings and limits live in `src/shared/config/app-config.ts`.
-7. User-facing brand and OTP copy live in `src/shared/config/copy.ts` / `brand.ts` — use `env.appName`, not literal `"ZYND"`.
+7. User-facing brand and OTP copy live in `src/shared/config/copy.ts` / `brand.ts`  use `env.appName`, not literal `"ZYND"`.
 8. Server-only env (`BACKEND_URL`) → `src/shared/config/server-env.ts`.
 9. User initials / display name → `src/shared/utils/user-display.ts`.
 10. Auth submit buttons → `size="auth"`; OAuth buttons → `variant="auth-oauth" size="auth"`.
@@ -50,5 +50,5 @@ Copy `.env.example` to `.env.local` for local overrides.
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes  APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->

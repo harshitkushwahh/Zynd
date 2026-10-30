@@ -13,6 +13,8 @@ export function SupportFloatingWidget() {
   const isFundScreener = pathname.startsWith("/dashboard/mutual-funds/all");
   const isHelpChatPage =
     pathname.startsWith("/dashboard/help") && support?.panelView === "chat";
+  const isAiAssistantPage =
+    pathname.startsWith("/dashboard/zyndai") || pathname.startsWith("/dashboard/ai-chat");
 
   if (isFundScreener) {
     return <SupportChatPopover />;
@@ -21,7 +23,7 @@ export function SupportFloatingWidget() {
   return (
     <>
       <SupportChatPopover />
-      {isHelpChatPage ? null : (
+      {isHelpChatPage || isAiAssistantPage ? null : (
         <SupportFabButton
           className={cn(
             "fixed z-50",

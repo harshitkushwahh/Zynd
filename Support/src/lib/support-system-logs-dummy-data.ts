@@ -62,7 +62,7 @@ export const SUPPORT_DUMMY_SYSTEM_LOGS: SupportSystemLogEntry[] = [
     level: "Error",
     service: "Payment gateway",
     event: "mandate.debit.failed",
-    detail: "SIP debit failed for client ZYND-U-003 — insufficient balance",
+    detail: "SIP debit failed for client ZYND-U-003  insufficient balance",
     correlationId: "pg_mnd_331",
   },
   {
@@ -89,7 +89,7 @@ export const SUPPORT_DUMMY_SYSTEM_LOGS: SupportSystemLogEntry[] = [
     level: "Warning",
     service: "Payout webhook",
     event: "signature.mismatch",
-    detail: "Webhook signature validation failed — request ignored",
+    detail: "Webhook signature validation failed  request ignored",
     correlationId: "wh_19c4e",
   },
 ];

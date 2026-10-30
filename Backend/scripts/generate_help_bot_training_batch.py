@@ -89,7 +89,7 @@ def batch_one_entries() -> list[dict]:
         ),
         (
             "kyc-08",
-            "I finished KYC yesterday — is it approved?",
+            "I finished KYC yesterday  is it approved?",
             ["kyc.overall_status", "kyc.status_last_updated_at"],
             "Use overall_status and status_last_updated_at; do not promise approval unless completed.",
         ),
@@ -101,7 +101,7 @@ def batch_one_entries() -> list[dict]:
         ),
         (
             "kyc-10",
-            "My KYC failed — what do I do?",
+            "My KYC failed  what do I do?",
             ["kyc.steps", "kyc.readiness_reason"],
             "Identify failed step from steps; mention readiness_reason if present; retry that step.",
         ),
@@ -166,7 +166,7 @@ def batch_one_entries() -> list[dict]:
         ),
         (
             "pay-04",
-            "My payment failed — what happened?",
+            "My payment failed  what happened?",
             ["payments.recent_orders"],
             "Newest failed order: status, failure_code, failure_reason from recent_orders.",
         ),
@@ -258,7 +258,7 @@ def batch_one_entries() -> list[dict]:
         ),
         (
             "pay-19",
-            "SIP failed due to mandate — what now?",
+            "SIP failed due to mandate  what now?",
             ["payments.failed_sip_plans", "payments.sip_plans"],
             "Mention failed plan/mandate reason; re-authorize mandate in app.",
         ),
@@ -290,7 +290,7 @@ def batch_one_entries() -> list[dict]:
         ("port-08", "What is my monthly SIP total?", ["portfolio.monthly_sip"], "Quote monthly_sip_inr field as monthly_sip."),
         ("port-09", "Portfolio not updating since yesterday", ["portfolio.as_on", "portfolio.status"], "Give as_on; if stale suggest refresh Transactions."),
         ("port-10", "Are my units allotted yet?", ["portfolio.has_pending_orders", "payments.recent_orders"], "Cross-check pending orders vs holdings."),
-        ("port-11", "Current value vs invested — difference?", ["portfolio.current_value", "portfolio.invested", "portfolio.total_return"], "Explain using those three fields."),
+        ("port-11", "Current value vs invested  difference?", ["portfolio.current_value", "portfolio.invested", "portfolio.total_return"], "Explain using those three fields."),
         ("port-12", "Do I have any pending orders?", ["portfolio.has_pending_orders"], "Boolean from context."),
     ]
     for slug, q, fields, sol in portfolio:
@@ -299,7 +299,7 @@ def batch_one_entries() -> list[dict]:
     account = [
         ("acc-01", "Is my Google account linked to Zynd?", ["account.google_account_linked"], "Yes/no from google_account_linked."),
         ("acc-02", "Is Apple sign-in connected?", ["account.apple_account_linked"], "Yes/no from apple_account_linked."),
-        ("acc-03", "How do I sign in — password or Google?", ["account.google_account_linked", "account.has_password_login"], "List linked methods from flags."),
+        ("acc-03", "How do I sign in  password or Google?", ["account.google_account_linked", "account.has_password_login"], "List linked methods from flags."),
         ("acc-04", "Is my email verified?", ["account.email_verified", "account.email_verified_at"], "Use email_verified and date if true."),
         ("acc-05", "Is my phone number verified?", ["account.phone_verified"], "Quote phone_verified."),
         ("acc-06", "Do I have MFA enabled?", ["account.mfa_enrolled"], "Quote mfa_enrolled."),
@@ -385,7 +385,7 @@ def batch_one_entries() -> list[dict]:
         (
             "multi-04",
             ["referrals", "kyc"],
-            "Friend did KYC — why no referral credit?",
+            "Friend did KYC  why no referral credit?",
             ["referrals.kyc_verified_count"],
             "Quote count; program rules on referrals page.",
         ),
@@ -434,14 +434,14 @@ def batch_one_entries() -> list[dict]:
         (
             "multi-11",
             ["referrals", "payment"],
-            "Referral friend invested — what counts?",
+            "Referral friend invested  what counts?",
             ["referrals.first_investment_count"],
             "Quote first_investment_count; rules on referrals page.",
         ),
         (
             "multi-12",
             ["kyc", "payment", "account"],
-            "I am new — what do I do first?",
+            "I am new  what do I do first?",
             ["kyc.overall_status", "account.email_verified"],
             "Order: verify email/phone, complete KYC, then invest.",
         ),
@@ -459,17 +459,17 @@ def batch_two_entries() -> list[dict]:
 
     kyc = [
         ("kyc-01", "Mera KYC complete ho gaya kya?", ["kyc.overall_status", "kyc.completed_at"], "Answer in clear English: use overall_status; if completed give completed_at."),
-        ("kyc-02", "How long does KYC approval take?", ["kyc.overall_status"], "If submitted say under review; no SLA in context — do not invent days."),
-        ("kyc-03", "My KYC got rejected — what now?", ["kyc.steps", "kyc.readiness_reason"], "Find failed/rejected step; readiness_reason; retry Complete KYC."),
+        ("kyc-02", "How long does KYC approval take?", ["kyc.overall_status"], "If submitted say under review; no SLA in context  do not invent days."),
+        ("kyc-03", "My KYC got rejected  what now?", ["kyc.steps", "kyc.readiness_reason"], "Find failed/rejected step; readiness_reason; retry Complete KYC."),
         ("kyc-04", "Can I change nominee after KYC?", ["kyc.steps.nominee", "kyc.overall_status"], "Direct to Complete KYC / nominee step if not completed; else Settings/KYC update flow."),
         ("kyc-05", "Address proof was rejected", ["kyc.steps.address"], "Quote address step; reopen Complete KYC to re-upload."),
         ("kyc-06", "Signature step is still pending", ["kyc.steps.signature"], "Quote signature status; continue from Complete KYC."),
         ("kyc-07", "Wrong name showing in KYC", ["kyc.steps.personal", "kyc.pan_verification_status"], "Personal/PAN step; fix in Complete KYC before submit."),
-        ("kyc-08", "I submitted KYC — how many days for approval?", ["kyc.overall_status", "kyc.status_last_updated_at"], "If submitted, under review; no fixed timeline in context."),
+        ("kyc-08", "I submitted KYC  how many days for approval?", ["kyc.overall_status", "kyc.status_last_updated_at"], "If submitted, under review; no fixed timeline in context."),
         ("kyc-09", "Need to redo DigiLocker", ["kyc.steps.digilocker", "kyc.readiness_code"], "DigiLocker step status; restart from Complete KYC."),
         ("kyc-10", "PAN name does not match bank", ["kyc.pan_verification_status", "kyc.bank_verification_status"], "Explain mismatch flags; fix PAN/bank steps."),
         ("kyc-11", "Is CKYC updated for me?", ["kyc.external_kyc_status"], "Only external_kyc_status from context."),
-        ("kyc-12", "Does KYC expire?", ["kyc.overall_status"], "If completed, KYC remains until re-KYC required — no expiry date in context unless present."),
+        ("kyc-12", "Does KYC expire?", ["kyc.overall_status"], "If completed, KYC remains until re-KYC required  no expiry date in context unless present."),
         ("kyc-13", "Difference between investor profile and KYC?", ["kyc.overall_status"], "KYC verifies identity; investing may need completed KYC + investor profile readiness."),
         ("kyc-14", "Why is bank step still pending?", ["kyc.steps.bank", "kyc.bank_verification_status"], "Bank verification status and retry path."),
         ("kyc-15", "Is nominee mandatory?", ["kyc.steps.nominee"], "Nominee step status; complete if pending per journey."),
@@ -487,14 +487,14 @@ def batch_two_entries() -> list[dict]:
         ("pay-06", "Increase my monthly SIP amount", ["payments.sip_plans"], "Current amount from sip_plans; change via My SIPs or agent."),
         ("pay-07", "Mandate limit exceeded for SIP", ["payments.sip_plans.failure_reason", "payments.failed_sip_plans"], "Quote failure_reason mentioning mandate/tier limits."),
         ("pay-08", "Why was autopay skipped this month?", ["payments.last_sip_failure", "payments.sip_plans"], "Last failure or inactive plan from context."),
-        ("pay-09", "Transaction failed — insufficient balance", ["payments.last_sip_failure.failure_reason"], "Quote failure_reason if mentions balance."),
+        ("pay-09", "Transaction failed  insufficient balance", ["payments.last_sip_failure.failure_reason"], "Quote failure_reason if mentions balance."),
         ("pay-10", "Payment gateway timed out", ["payments.recent_orders"], "Latest order PAYMENT_PENDING or failed; retry payment."),
         ("pay-11", "Check status of my order", ["payments.recent_orders"], "Newest order type, status, dates."),
         ("pay-12", "Money debited but order cancelled", ["payments.recent_orders"], "Find cancelled order with debit; escalate for refund trace.", False),
         ("pay-13", "When does my first SIP installment run?", ["payments.sip_plans.next_installment_date"], "next_installment_date from active plan."),
         ("pay-14", "Will SIP run on a public holiday?", [], "Playbook: debits follow mandate/plan schedule; exact holiday rules not in context."),
-        ("pay-15", "Two SIP debits on same day — normal?", ["payments.recent_orders"], "List SIP orders that day; escalate if duplicate succeeded.", False),
-        ("pay-16", "UPI mandate expired — how to renew?", ["payments.sip_plans.status", "payments.failed_sip_plans"], "Failed/expired mandate from plan; re-authorize in app."),
+        ("pay-15", "Two SIP debits on same day  normal?", ["payments.recent_orders"], "List SIP orders that day; escalate if duplicate succeeded.", False),
+        ("pay-16", "UPI mandate expired  how to renew?", ["payments.sip_plans.status", "payments.failed_sip_plans"], "Failed/expired mandate from plan; re-authorize in app."),
         ("pay-17", "Pay lumpsum using net banking", ["payments.recent_orders"], "Recent lumpsum PAYMENT_PENDING/SUCCEEDED path; checkout in invest flow."),
         ("pay-18", "Cart checkout failed at payment", ["payments.recent_orders.failure_reason"], "Latest failed order failure_reason."),
         ("pay-19", "Wrong installment amount debited", ["payments.last_sip_debit.amount", "payments.sip_plans"], "Compare last debit amount to plan amount; escalate if mismatch.", False),
@@ -512,14 +512,14 @@ def batch_two_entries() -> list[dict]:
         ("port-02", "How much can I withdraw today?", ["portfolio.current_value"], "Current value is indicative; redemption limits from fund rules not in context."),
         ("port-03", "Today's gain or loss on portfolio", ["portfolio.total_return", "portfolio.as_on"], "Quote total_return and as_on; not intraday unless in context."),
         ("port-04", "Show scheme-wise breakup", ["portfolio.holdings_count"], "Direct to Portfolio holdings list; do not invent scheme names."),
-        ("port-05", "Import CAS statement", [], "CAS feature if enabled in product; else support article — no CAS row without context."),
+        ("port-05", "Import CAS statement", [], "CAS feature if enabled in product; else support article  no CAS row without context."),
         ("port-06", "External holdings not showing", ["portfolio.status"], "Portfolio summary status; CAS import path if available."),
         ("port-07", "Partial redemption possible?", ["portfolio.holdings_count"], "Yes via redeem flow if holdings exist; quote holdings_count."),
-        ("port-08", "I redeemed everything — balance zero?", ["portfolio.holdings_count", "portfolio.current_value"], "If holdings_count 0 and value 0, confirm empty portfolio."),
+        ("port-08", "I redeemed everything  balance zero?", ["portfolio.holdings_count", "portfolio.current_value"], "If holdings_count 0 and value 0, confirm empty portfolio."),
         ("port-09", "Fund missing after 3 days of payment", ["portfolio.has_pending_orders", "payments.recent_orders"], "Pending allotment explanation."),
         ("port-10", "Why current value less than invested?", ["portfolio.invested", "portfolio.current_value", "portfolio.total_return"], "Market movement via total_return; quote numbers."),
         ("port-11", "Portfolio summary failed to load", ["portfolio.status"], "status field error; retry later; no invented values."),
-        ("port-12", "Where is my folio number?", [], "Holdings detail in Portfolio; folio not in summary context — open holding."),
+        ("port-12", "Where is my folio number?", [], "Holdings detail in Portfolio; folio not in summary context  open holding."),
     ]
     for slug, q, fields, sol in portfolio:
         can = slug != "port-04" and slug != "port-12"
@@ -529,7 +529,7 @@ def batch_two_entries() -> list[dict]:
         ("acc-01", "Google sign-in not working", ["account.google_account_linked"], "If linked, troubleshooting; if not, link in Settings."),
         ("acc-02", "Add a phone number to my account", ["account.phone_verified"], "Settings → phone; quote phone_verified."),
         ("acc-03", "Email verification link expired", ["account.email_verified"], "Resend verification from Settings if not verified."),
-        ("acc-04", "Reset MFA authenticator app", ["account.mfa_enrolled"], "Security settings; bot cannot reset — agent if locked out.", False),
+        ("acc-04", "Reset MFA authenticator app", ["account.mfa_enrolled"], "Security settings; bot cannot reset  agent if locked out.", False),
         ("acc-05", "Where are backup codes?", ["account.mfa_enrolled"], "Security → MFA backup codes when enrolled."),
         ("acc-06", "Login OTP on SMS not coming", ["account.phone_verified", "account.mfa_enrolled"], "Check phone_verified; retry; escalate.", False),
         ("acc-07", "Why is my account suspended?", ["account.account_status"], "Quote account_status; support review."),
@@ -538,9 +538,9 @@ def batch_two_entries() -> list[dict]:
         ("acc-10", "App PIN lock setup", [], "Security / app PIN in settings if product supports."),
         ("acc-11", "I logged into the wrong Zynd account", [], "Sign out and sign in with correct email/Google.", True),
         ("acc-12", "Can you merge two accounts?", [], "Not self-serve; escalate to support.", False),
-        ("acc-13", "Apple Hide My Email — will referrals work?", ["account.apple_account_linked", "account.email_verified"], "Email must be reachable; apple linked flag."),
+        ("acc-13", "Apple Hide My Email  will referrals work?", ["account.apple_account_linked", "account.email_verified"], "Email must be reachable; apple linked flag."),
         ("acc-14", "Turn off marketing notifications", [], "Settings → notifications preferences."),
-        ("acc-15", "Session keeps expiring", [], "Re-login; check MFA; clear cookies — playbook troubleshooting."),
+        ("acc-15", "Session keeps expiring", [], "Re-login; check MFA; clear cookies  playbook troubleshooting."),
         ("acc-16", "Is my data secure on Zynd?", [], "High-level security: MFA, encryption; no invented certifications."),
     ]
     for item in account:
@@ -554,7 +554,7 @@ def batch_two_entries() -> list[dict]:
         ("goal-03", "What return % does the calculator use?", [], "Calculator assumption from UI; not stored in context."),
         ("goal-04", "Fund a goal with one-time lumpsum", ["goals.goals", "payments.recent_orders"], "Link invest flow to goal; quote goal title."),
         ("goal-05", "Split SIP across two goals", ["goals.goals", "payments.sip_plans"], "Explain funding rules; list goals and SIPs present."),
-        ("goal-06", "My goal deadline passed — what now?", ["goals.goals.target_date", "goals.goals.status"], "Quote target_date and status; extend/edit in Goals."),
+        ("goal-06", "My goal deadline passed  what now?", ["goals.goals.target_date", "goals.goals.status"], "Quote target_date and status; extend/edit in Goals."),
         ("goal-07", "Family member contributing to shared goal", ["goals.goals", "family_groups.groups"], "Family goal funding per playbook."),
         ("goal-08", "Track goal progress daily", ["goals.goals.progress_pct"], "progress_pct and current vs target amounts."),
     ]
@@ -569,7 +569,7 @@ def batch_two_entries() -> list[dict]:
     family = [
         ("fam-01", "Remove someone from family group", ["family_groups.groups.my_role"], "Only head can remove; quote role."),
         ("fam-02", "Family invite link expired", [], "Resend invite from Family section."),
-        ("fam-03", "I am in two family groups — is that ok?", ["family_groups.groups"], "Count groups; explain multiple membership if allowed."),
+        ("fam-03", "I am in two family groups  is that ok?", ["family_groups.groups"], "Count groups; explain multiple membership if allowed."),
         ("fam-04", "What can a family member do vs head?", ["family_groups.groups.my_role"], "Quote my_role; playbook permissions summary."),
         ("fam-05", "Transfer family head role", [], "Family settings → transfer head; bot cannot transfer."),
         ("fam-06", "Add child to family group", [], "Invite flow from Family; age/KYC rules per product."),
@@ -601,14 +601,14 @@ def batch_two_entries() -> list[dict]:
         ("multi-02", ["portfolio", "payment"], "Redeem and money not in bank", ["payments.recent_orders", "portfolio.holdings_count"], "Redemption order status and settlement timeline."),
         ("multi-03", ["account", "referrals"], "Wrong email used for referral", ["account.email_verified", "referrals.signup_count"], "Referral attributes to signup email; fix before friend signs up."),
         ("multi-04", ["goals", "portfolio"], "Goal progress not moving after invest", ["goals.goals", "portfolio.has_pending_orders"], "Pending orders delay goal progress update."),
-        ("multi-05", ["family", "kyc"], "Family member cannot invest — KYC?", ["family_groups.groups", "kyc.overall_status"], "Each member needs own KYC; quote customer's KYC only."),
-        ("multi-06", ["payment", "referrals"], "Friend invested — referral count still zero", ["referrals.first_investment_count"], "Quote count; qualification hold days if in product copy elsewhere not invented."),
-        ("multi-07", ["account", "portfolio"], "New phone login — portfolio missing", ["account.phone_verified", "portfolio.status"], "Same account; refresh; status loading issue."),
+        ("multi-05", ["family", "kyc"], "Family member cannot invest  KYC?", ["family_groups.groups", "kyc.overall_status"], "Each member needs own KYC; quote customer's KYC only."),
+        ("multi-06", ["payment", "referrals"], "Friend invested  referral count still zero", ["referrals.first_investment_count"], "Quote count; qualification hold days if in product copy elsewhere not invented."),
+        ("multi-07", ["account", "portfolio"], "New phone login  portfolio missing", ["account.phone_verified", "portfolio.status"], "Same account; refresh; status loading issue."),
         ("multi-08", ["kyc", "referrals"], "Referral needs friend KYC first?", ["referrals.kyc_verified_count"], "Use kyc_verified_count semantics; referrals page rules."),
         ("multi-09", ["payment", "goals"], "SIP linked to wrong goal", ["payments.sip_plans", "goals.goals"], "List SIPs and goals; change link in Goals/SIP settings."),
-        ("multi-10", ["portfolio", "kyc"], "Holdings show but KYC pending — bug?", ["kyc.overall_status", "portfolio.holdings_count"], "Reconcile status vs holdings; may be legacy or pending re-KYC."),
+        ("multi-10", ["portfolio", "kyc"], "Holdings show but KYC pending  bug?", ["kyc.overall_status", "portfolio.holdings_count"], "Reconcile status vs holdings; may be legacy or pending re-KYC."),
         ("multi-11", ["account", "payment"], "MFA on but payment OTP separate?", ["account.mfa_enrolled", "payments.recent_orders"], "Login MFA vs payment/OTP consent are different flows."),
-        ("multi-12", ["kyc", "payment", "portfolio"], "New investor — debit, KYC, units timeline", ["kyc.overall_status", "payments.recent_orders", "portfolio.has_pending_orders"], "Step order: KYC → pay → pending allotment."),
+        ("multi-12", ["kyc", "payment", "portfolio"], "New investor  debit, KYC, units timeline", ["kyc.overall_status", "payments.recent_orders", "portfolio.has_pending_orders"], "Step order: KYC → pay → pending allotment."),
     ]
     for slug, topics, q, fields, sol in multi:
         rows.append(_row(b, slug, topics, q, context_fields=fields, solution=sol))
@@ -626,24 +626,24 @@ def batch_three_entries() -> list[dict]:
         ("kyc-02", "Change address after submitting KYC", ["kyc.steps.address", "kyc.overall_status"], "Reopen address step if allowed; overall_status from context."),
         ("kyc-03", "My review step is stuck on submitted", ["kyc.steps.review", "kyc.overall_status"], "Review/submitted status; wait or support if prolonged."),
         ("kyc-04", "Can I invest with partial KYC?", ["kyc.overall_status"], "Investing requires completed KYC unless context shows otherwise."),
-        ("kyc-05", "DigiLocker failed — error message?", ["kyc.steps.digilocker", "kyc.readiness_reason"], "DigiLocker status; readiness_reason if in kyc slice."),
+        ("kyc-05", "DigiLocker failed  error message?", ["kyc.steps.digilocker", "kyc.readiness_reason"], "DigiLocker status; readiness_reason if in kyc slice."),
         ("kyc-06", "Need help uploading signature", ["kyc.steps.signature"], "Signature step pending → Complete KYC."),
         ("kyc-07", "Is my PAN verified with ITD?", ["kyc.pan_verification_status"], "Quote pan_verification_status only."),
-        ("kyc-08", "KYC shows phase2 complete — can I invest?", ["kyc.overall_status"], "Explain phase2 vs full completed; invest when overall completed."),
+        ("kyc-08", "KYC shows phase2 complete  can I invest?", ["kyc.overall_status"], "Explain phase2 vs full completed; invest when overall completed."),
         ("kyc-09", "Why do I need bank penny drop?", ["kyc.steps.bank", "kyc.bank_verification_status"], "Bank verification purpose; status from context."),
         ("kyc-10", "Nominee details wrong after submit", ["kyc.steps.nominee"], "Fix via nominee step if still editable."),
-        ("kyc-11", "Aadhaar masked in KYC — is that ok?", ["kyc.steps.digilocker"], "DigiLocker provides masked Aadhaar per regulations."),
+        ("kyc-11", "Aadhaar masked in KYC  is that ok?", ["kyc.steps.digilocker"], "DigiLocker provides masked Aadhaar per regulations."),
         ("kyc-12", "KYC pending since last week", ["kyc.status_last_updated_at", "kyc.overall_status"], "Give last update time and status; no SLA invented."),
         ("kyc-13", "Re-KYC required on my account?", ["kyc.overall_status", "kyc.readiness_code"], "Use readiness_code/reason if present."),
         ("kyc-14", "Help with personal details step", ["kyc.steps.personal"], "Personal step status; continue Complete KYC."),
         ("kyc-15", "External KYC status pending", ["kyc.external_kyc_status"], "Quote external_kyc_status; no external ids."),
-        ("kyc-16", "I closed KYC midway — is progress saved?", ["kyc.last_completed_step"], "Progress saved at last_completed_step; resume Complete KYC."),
+        ("kyc-16", "I closed KYC midway  is progress saved?", ["kyc.last_completed_step"], "Progress saved at last_completed_step; resume Complete KYC."),
     ]
     for slug, q, fields, sol in kyc:
         rows.append(_row(b, slug, ["kyc"], q, context_fields=fields, solution=sol))
 
     payment = [
-        ("pay-01", "STP setup — how does it work?", [], "STP is transfer between schemes; setup in invest flows; no STP rows without context."),
+        ("pay-01", "STP setup  how does it work?", [], "STP is transfer between schemes; setup in invest flows; no STP rows without context."),
         ("pay-02", "SWP to my bank monthly", [], "SWP withdrawal plans if product supports; direct to relevant MF section."),
         ("pay-03", "SIP date change to 5th of month", ["payments.sip_plans"], "Quote current plan; change via My SIPs."),
         ("pay-04", "Stop next SIP only not cancel plan", ["payments.sip_plans.next_installment_date"], "Skip installment rules in My SIPs; next date from context."),
@@ -651,15 +651,15 @@ def batch_three_entries() -> list[dict]:
         ("pay-06", "Order processing after payment success", ["payments.recent_orders", "portfolio.has_pending_orders"], "Processing until allotment; has_pending_orders."),
         ("pay-07", "Failed because mandate not approved", ["payments.failed_sip_plans", "payments.sip_plans"], "Mandate approval failure_reason."),
         ("pay-08", "Invest lumpsum minimum amount?", [], "Min amount on scheme page; not in support context unless order min in pack."),
-        ("pay-09", "SIP minimum ₹500 — my plan?", ["payments.sip_plans"], "Quote sip_plans amount."),
+        ("pay-09", "SIP minimum ₹500  my plan?", ["payments.sip_plans"], "Quote sip_plans amount."),
         ("pay-10", "Consent OTP for mutual fund purchase", [], "MF consent OTP is separate from login OTP; complete in invest dialog."),
         ("pay-11", "Did not receive transaction consent OTP", [], "Resend from consent screen; check phone_verified.", False),
-        ("pay-12", "Multiple orders in cart — one payment failed", ["payments.recent_orders"], "List recent orders statuses separately."),
+        ("pay-12", "Multiple orders in cart  one payment failed", ["payments.recent_orders"], "List recent orders statuses separately."),
         ("pay-13", "NFO lumpsum payment status", ["payments.recent_orders"], "Latest order type/status for NFO if in orders."),
-        ("pay-14", "Refund timeline for failed lumpsum", ["payments.recent_orders.failure_reason"], "Failed order reason; refund via bank if debited — escalate.", False),
+        ("pay-14", "Refund timeline for failed lumpsum", ["payments.recent_orders.failure_reason"], "Failed order reason; refund via bank if debited  escalate.", False),
         ("pay-15", "Change SIP debit bank account", ["payments.sip_plans"], "Requires mandate update in My SIPs."),
         ("pay-16", "Why SIP amount differs slightly each month?", ["payments.last_sip_debit.amount"], "Quote amounts; market/nav rounding only if visible."),
-        ("pay-17", "Payment done app crashed — order placed?", ["payments.recent_orders"], "Check newest order status in Transactions."),
+        ("pay-17", "Payment done app crashed  order placed?", ["payments.recent_orders"], "Check newest order status in Transactions."),
         ("pay-18", "Autopay declined by bank", ["payments.last_sip_failure.failure_reason"], "failure_reason from bank decline."),
         ("pay-19", "Restart SIP after cancellation", ["payments.sip_plans"], "Cancelled plan status; create new SIP in invest flow."),
         ("pay-20", "Track payment reference number", ["payments.recent_orders"], "Order id/reference from recent order if in context; else Transactions UI."),
@@ -708,7 +708,7 @@ def batch_three_entries() -> list[dict]:
         ("acc-12", "Use same email for two family members", [], "One account per email; family invites use separate accounts."),
         ("acc-13", "Client ID for my account", [], "Client id visible in profile/support; not in default slice.", False),
         ("acc-14", "Turn on email alerts for SIP", [], "Notification preferences."),
-        ("acc-15", "Account created with Apple — add password?", ["account.apple_account_linked", "account.has_password_login"], "Add password in Security if has_password_login false."),
+        ("acc-15", "Account created with Apple  add password?", ["account.apple_account_linked", "account.has_password_login"], "Add password in Security if has_password_login false."),
         ("acc-16", "Sign out all devices", [], "Security → sign out everywhere if available."),
     ]
     for item in account:
@@ -738,7 +738,7 @@ def batch_three_entries() -> list[dict]:
         ("fam-04", "Family group name change", ["family_groups.groups"], "Edit group title if head; from groups list."),
         ("fam-05", "Invite rejected by member", [], "Invite shows declined; head can re-invite."),
         ("fam-06", "Max members in family group", [], "Product limit in Family UI; not invented."),
-        ("fam-07", "Child turns 18 — family access?", [], "Member becomes adult account; own KYC/investing."),
+        ("fam-07", "Child turns 18  family access?", [], "Member becomes adult account; own KYC/investing."),
         ("fam-08", "Notifications for family invites", [], "Enable push/email in notification settings."),
     ]
     for slug, q, fields, sol in family:
@@ -763,7 +763,7 @@ def batch_three_entries() -> list[dict]:
         rows.append(_row(b, slug, ["referrals"], q, context_fields=fields, solution=sol, can_answer=can))
 
     multi = [
-        ("multi-01", ["kyc", "account"], "Risk profile pending — cannot invest?", ["kyc.overall_status"], "KYC plus risk profile may both be required; KYC from context."),
+        ("multi-01", ["kyc", "account"], "Risk profile pending  cannot invest?", ["kyc.overall_status"], "KYC plus risk profile may both be required; KYC from context."),
         ("multi-02", ["payment", "account"], "Consent OTP fails but login OTP works", ["account.phone_verified"], "Separate flows; phone_verified; retry consent."),
         ("multi-03", ["portfolio", "payment"], "Statement shows debit portfolio empty", ["payments.recent_orders", "portfolio.has_pending_orders"], "Pending allotment timeline."),
         ("multi-04", ["goals", "kyc"], "Create goal before KYC complete?", ["kyc.overall_status", "goals.goals"], "Goals may exist; funding invest needs KYC completed."),
@@ -773,7 +773,7 @@ def batch_three_entries() -> list[dict]:
         ("multi-08", ["portfolio", "goals"], "Goal funded but portfolio flat", ["goals.goals", "portfolio.current_value"], "Market movement vs goal progress timing."),
         ("multi-09", ["account", "kyc"], "Google account email differs from KYC email", ["account.google_account_linked", "kyc.overall_status"], "Sign-in email vs KYC registered email alignment."),
         ("multi-10", ["payment", "portfolio"], "Tax harvest redemption help", ["portfolio.holdings_count"], "Tax advice not provided; redemption flow only."),
-        ("multi-11", ["referrals", "kyc"], "Friend stuck on KYC — referral counts?", ["referrals.kyc_verified_count"], "Counts update when friend completes KYC."),
+        ("multi-11", ["referrals", "kyc"], "Friend stuck on KYC  referral counts?", ["referrals.kyc_verified_count"], "Counts update when friend completes KYC."),
         ("multi-12", ["kyc", "payment", "account"], "Full checklist before first SIP", ["kyc.overall_status", "account.email_verified", "account.phone_verified"], "Verify channels, complete KYC, then SIP+m mandate."),
     ]
     for slug, topics, q, fields, sol in multi:
@@ -902,7 +902,7 @@ def batch_four_entries() -> list[dict]:
 
     family = [
         ("fam-01", "Family group invite not received", [], "Resend; check email/SMS of invitee."),
-        ("fam-02", "Member left group — goals?", ["family_groups.groups", "goals.goals"], "Shared goals may unlink; quote groups."),
+        ("fam-02", "Member left group  goals?", ["family_groups.groups", "goals.goals"], "Shared goals may unlink; quote groups."),
         ("fam-03", "Can family see my portfolio value?", [], "No portfolio sharing; shared goals only.", False),
         ("fam-04", "Two heads in same family group", ["family_groups.groups.my_role"], "Only one head; quote roles."),
         ("fam-05", "Invite parent to family", [], "Send invite from Family section."),
@@ -971,7 +971,7 @@ def batch_five_entries() -> list[dict]:
         ("kyc-10", "Duplicate KYC application", ["kyc.overall_status"], "One KYC journey per user; quote status."),
         ("kyc-11", "KYC approved email not received", ["kyc.overall_status", "account.email_verified"], "Check spam; status in app over email."),
         ("kyc-12", "Switch from manual KYC to DigiLocker", ["kyc.steps.digilocker"], "DigiLocker step in Complete KYC."),
-        ("kyc-13", "Help — KYC page blank", ["kyc.overall_status"], "Refresh; try browser; escalate if persists.", False),
+        ("kyc-13", "Help  KYC page blank", ["kyc.overall_status"], "Refresh; try browser; escalate if persists.", False),
         ("kyc-14", "Father name mismatch in KYC", ["kyc.steps.personal"], "Fix personal details step before submit."),
         ("kyc-15", "KYC and risk profile order", ["kyc.overall_status"], "Complete KYC first; risk profile in dashboard."),
         ("kyc-16", "Withdraw KYC application", ["kyc.overall_status"], "Cannot withdraw submitted; support for edge cases.", False),
@@ -1021,7 +1021,7 @@ def batch_five_entries() -> list[dict]:
         ("port-02", "Incorrect units in one scheme", ["portfolio.holdings_count"], "Escalate with folio from holding.", False),
         ("port-03", "Portfolio vs contract note", [], "Contract notes in Transactions/Reports."),
         ("port-04", "Show only equity holdings", [], "Filter asset class on Portfolio UI."),
-        ("port-05", "Debt fund value dropped — why?", ["portfolio.total_return"], "Market/rate move; quote total_return not advice."),
+        ("port-05", "Debt fund value dropped  why?", ["portfolio.total_return"], "Market/rate move; quote total_return not advice."),
         ("port-06", "Merge folios same PAN", [], "Contact AMC/consolidation; not self-serve in app.", False),
         ("port-07", "Historical portfolio chart missing", ["portfolio.as_on"], "Chart range in UI; as_on for data freshness."),
         ("port-08", "Zero units after partial redeem", ["portfolio.holdings_count", "payments.recent_orders"], "Remaining units after REDEMPTION order."),
@@ -1114,7 +1114,7 @@ def batch_five_entries() -> list[dict]:
     multi = [
         ("multi-01", ["account", "kyc"], "Agent review my KYC status", ["kyc.overall_status", "kyc.steps"], "Bot summary then human if needed.", False),
         ("multi-02", ["payment", "account"], "Human for payment dispute", ["payments.recent_orders"], "Escalate with order facts.", False),
-        ("multi-03", ["portfolio", "account"], "Wrong portfolio — need agent", ["portfolio.status"], "Refresh; escalate if status error.", False),
+        ("multi-03", ["portfolio", "account"], "Wrong portfolio  need agent", ["portfolio.status"], "Refresh; escalate if status error.", False),
         ("multi-04", ["kyc", "payment", "portfolio"], "New user zero holdings after week", ["kyc.overall_status", "payments.recent_orders", "portfolio.holdings_count"], "Timeline KYC→pay→allotment."),
         ("multi-05", ["referrals", "kyc", "payment"], "Refer friend who cannot complete KYC", ["referrals.kyc_verified_count"], "Friend must complete own KYC."),
         ("multi-06", ["family", "kyc", "payment"], "Pay SIP for child in family group", ["family_groups.groups"], "Each investor own mandate.", False),
@@ -1144,7 +1144,7 @@ def batch_six_entries() -> list[dict]:
         ("kyc-03", "Why PAN photo required", ["kyc.steps.pan"], "PAN verification step requirement."),
         ("kyc-04", "KYC for senior citizen", ["kyc.overall_status"], "Same journey; no age shortcut in context."),
         ("kyc-05", "Update mobile in KYC contact", ["kyc.steps.personal", "account.phone_verified"], "Personal/contact step vs phone_verified flag."),
-        ("kyc-06", "KYC status shows none — never started?", ["kyc.overall_status"], "If none, open Complete KYC from dashboard."),
+        ("kyc-06", "KYC status shows none  never started?", ["kyc.overall_status"], "If none, open Complete KYC from dashboard."),
         ("kyc-07", "Can I skip nominee?", ["kyc.steps.nominee"], "Nominee step status; regulatory requirement tone."),
         ("kyc-08", "KYC failed CKYC match", ["kyc.external_kyc_status"], "Quote external_kyc_status; retry/support."),
         ("kyc-09", "How to download KYC acknowledgement", [], "Acknowledgement in app after submit if available.", False),
@@ -1229,7 +1229,7 @@ def batch_six_entries() -> list[dict]:
         ("acc-13", "Account flagged for review", ["account.account_status"], "Quote account_status; support follow-up."),
         ("acc-14", "Change timezone display", [], "Dates shown in user locale/IST for India product."),
         ("acc-15", "Link email after Apple signup", ["account.apple_account_linked", "account.email_verified"], "Add/verify email in Settings."),
-        ("acc-16", "Help bot vs human — who answers?", [], "Bot first; agent after escalation or complex cases."),
+        ("acc-16", "Help bot vs human  who answers?", [], "Bot first; agent after escalation or complex cases."),
     ]
     for item in account:
         slug, q, fields, sol = item[0], item[1], item[2], item[3]
@@ -1244,7 +1244,7 @@ def batch_six_entries() -> list[dict]:
         ("goal-05", "SIP calculator linked to goal", ["goals.goals"], "Run calculator then create/link goal."),
         ("goal-06", "Goal nudge if behind schedule", ["goals.goals.progress_pct"], "progress_pct vs time to target_date."),
         ("goal-07", "Education goal for child", ["goals.goals"], "Personal goal title; family optional."),
-        ("goal-08", "Zero goals — should I create one?", ["goals.goals"], "Optional; list if empty in context."),
+        ("goal-08", "Zero goals  should I create one?", ["goals.goals"], "Optional; list if empty in context."),
     ]
     for slug, q, fields, sol in goals:
         rows.append(_row(b, slug, ["goals"], q, context_fields=fields, solution=sol))
@@ -1322,14 +1322,14 @@ def batch_seven_entries() -> list[dict]:
         ("kyc-05", "KYC selfie video step", ["kyc.steps"], "Only steps in context; no video if not in steps."),
         ("kyc-06", "Why KYC needs bank proof", ["kyc.steps.bank"], "Regulatory payout account verification."),
         ("kyc-07", "KYC pending over 30 days", ["kyc.status_last_updated_at", "kyc.overall_status"], "Quote status; escalate if submitted too long.", False),
-        ("kyc-08", "Help — OTP on KYC bank verify", ["kyc.bank_verification_status"], "Bank penny drop/OTP on bank step."),
+        ("kyc-08", "Help  OTP on KYC bank verify", ["kyc.bank_verification_status"], "Bank penny drop/OTP on bank step."),
         ("kyc-09", "Scanned PDF for address ok?", ["kyc.steps.address"], "Use accepted formats in Complete KYC UI."),
         ("kyc-10", "KYC for minor child account", [], "Separate minor/guardian flow if product supports.", False),
         ("kyc-11", "Print KYC form offline", [], "Digital journey in app only."),
         ("kyc-12", "KYC agent callback request", ["kyc.overall_status"], "Summarise; human callback via escalation.", False),
         ("kyc-13", "PEP declaration in KYC", ["kyc.steps.personal"], "Personal/review disclosures in journey."),
         ("kyc-14", "KYC locked cannot edit", ["kyc.overall_status"], "Submitted/under review may lock edits."),
-        ("kyc-15", "Verify KYC on call — is it legit?", [], "Zynd never asks for full PAN/password on phone; use in-app only."),
+        ("kyc-15", "Verify KYC on call  is it legit?", [], "Zynd never asks for full PAN/password on phone; use in-app only."),
         ("kyc-16", "KYC status API for my app", [], "Consumer app only; no developer API in help scope.", False),
     ])
     add(["payment"], [
@@ -1347,7 +1347,7 @@ def batch_seven_entries() -> list[dict]:
         ("pay-12", "Bulk redeem all funds", ["portfolio.holdings_count"], "Redeem each holding or full redeem flow.", False),
         ("pay-13", "Payment receipt download", ["payments.recent_orders"], "Receipt in Transactions for succeeded orders."),
         ("pay-14", "Third party paying my SIP", [], "Payer must be account holder bank/mandate.", False),
-        ("pay-15", "Failed — risk profile expired", [], "Renew risk profile in dashboard then retry."),
+        ("pay-15", "Failed  risk profile expired", [], "Renew risk profile in dashboard then retry."),
         ("pay-16", "Weekend payment processing", ["payments.recent_orders"], "Orders may queue until next business processing."),
         ("pay-17", "SIP in direct plan only", [], "Plan type on scheme page at invest time."),
         ("pay-18", "Payment link expired", ["payments.recent_orders"], "Start new payment from order in Transactions."),
@@ -1431,7 +1431,7 @@ def batch_seven_entries() -> list[dict]:
         ("multi-08", ["family", "referrals"], "Refer entire family group", ["referrals.has_code", "family_groups.groups"], "Each signup uses code individually."),
         ("multi-09", ["kyc", "payment", "portfolio"], "Safe to invest all savings today", [], "Not personalized advice; diversification user decision.", False),
         ("multi-10", ["account", "kyc"], "Email phishing with KYC link", [], "Use only app/official domain links.", False),
-        ("multi-11", ["payment", "account"], "Ransomware locked phone — SIP?", ["payments.sip_plans"], "Secure device; SIP continues on mandate if active."),
+        ("multi-11", ["payment", "account"], "Ransomware locked phone  SIP?", ["payments.sip_plans"], "Secure device; SIP continues on mandate if active."),
         ("multi-12", ["kyc", "payment", "account"], "What will you never ask in chat", [], "Never password, full PAN, OTP, card CVV."),
     ]
     for item in multi_items:
@@ -1594,7 +1594,7 @@ def batch_eight_entries() -> list[dict]:
         rows.append(_row(b, slug, topics, q, context_fields=fields, solution=sol, can_answer=can))
 
     multi = [
-        ("multi-01", ["payment", "portfolio"], "Refresh all — orders and holdings", ["payments.recent_orders", "portfolio.as_on"], "Refresh Transactions and Portfolio."),
+        ("multi-01", ["payment", "portfolio"], "Refresh all  orders and holdings", ["payments.recent_orders", "portfolio.as_on"], "Refresh Transactions and Portfolio."),
         ("multi-02", ["kyc", "payment"], "Ready to invest checklist", ["kyc.overall_status", "account.email_verified", "account.phone_verified"], "Verify channels + completed KYC."),
         ("multi-03", ["goals", "payment"], "Goal funded but SIP cancelled", ["goals.goals", "payments.sip_plans.status"], "Progress stays; SIP status separate."),
         ("multi-04", ["referrals", "kyc"], "Friend KYC done referral still pending", ["referrals.kyc_verified_count"], "Wait qualification steps beyond KYC."),
@@ -1632,8 +1632,8 @@ def batch_nine_entries() -> list[dict]:
         ("kyc-07", "kyc submitted but still cant invest", ["kyc.overall_status", "kyc.readiness_code"], "overall vs readiness_code; wait or fix blocking step."),
         ("kyc-08", "re-kyc required message meaning", ["kyc.readiness_code", "kyc.readiness_reason"], "Quote readiness fields; Complete KYC if prompted."),
         ("kyc-09", "aadhar address not matching", ["kyc.steps.address"], "Address step; re-upload or DigiLocker refresh."),
-        ("kyc-10", "minor account kyc", [], "Zynd individual adult accounts; minors need guardian flow — escalate.", False),
-        ("kyc-11", "nri kyc supported?", [], "Indian resident KYC in context; NRI rules not in pack — escalate.", False),
+        ("kyc-10", "minor account kyc", [], "Zynd individual adult accounts; minors need guardian flow  escalate.", False),
+        ("kyc-11", "nri kyc supported?", [], "Indian resident KYC in context; NRI rules not in pack  escalate.", False),
         ("kyc-12", "kyc status last updated kab", ["kyc.status_last_updated_at"], "status_last_updated_at only."),
         ("kyc-13", "personal details step stuck loading", ["kyc.steps.personal", "kyc.last_completed_step"], "Resume from last_completed_step; refresh page."),
         ("kyc-14", "review step submit button greyed", ["kyc.steps.review", "kyc.steps"], "Incomplete prior steps in steps object."),
@@ -1653,13 +1653,13 @@ def batch_nine_entries() -> list[dict]:
         rows.append(_row(b, slug, topics, q, context_fields=fields, solution=sol, can_answer=can, paraphrases=para or []))
 
     payment = [
-        ("pay-01", "redeem karne me kitna time", ["payments.recent_orders", "portfolio.has_pending_orders"], "Redemption order status; settlement not instant — recent_orders."),
+        ("pay-01", "redeem karne me kitna time", ["payments.recent_orders", "portfolio.has_pending_orders"], "Redemption order status; settlement not instant  recent_orders."),
         ("pay-02", "SWP start kaise karu", ["payments.sip_plans"], "SWP via product flow; sip_plans for existing recurring context only."),
         ("pay-03", "STP from equity to debt", ["payments.recent_orders"], "STP order in recent_orders or Switch/STP UI; no invented status."),
         ("pay-04", "sip consent otp nahi aa raha", [], "Resend consent OTP; cooldown; check phone_verified.", False),
         ("pay-05", "lumpsum payment pending since 2 hrs", ["payments.recent_orders"], "Order PAYMENT_PENDING; refresh Transactions."),
         ("pay-06", "switch order rejected why", ["payments.recent_orders.failure_reason"], "failure_reason on switch order."),
-        ("pay-07", "cancel pending redemption", ["payments.recent_orders"], "Cancel only if order still cancellable — status in recent_orders.", False),
+        ("pay-07", "cancel pending redemption", ["payments.recent_orders"], "Cancel only if order still cancellable  status in recent_orders.", False),
         ("pay-08", "sip amount galat debit hua", ["payments.last_sip_debit.amount", "payments.sip_plans"], "Compare amounts; escalate mismatch.", False),
         ("pay-09", "mandate revoke bank app se", ["payments.sip_plans.status"], "Plan may show inactive; re-register mandate in app."),
         ("pay-10", "nfo apply kiya status", ["payments.recent_orders"], "NFO purchase row in recent_orders type/status."),
@@ -1681,13 +1681,13 @@ def batch_nine_entries() -> list[dict]:
         rows.append(_row(b, slug, topics, q, context_fields=fields, solution=sol, can_answer=can))
 
     portfolio = [
-        ("port-01", "XIRR kya hai mere portfolio ka", [], "XIRR if shown in UI; not in summary pack — open analytics.", False),
+        ("port-01", "XIRR kya hai mere portfolio ka", [], "XIRR if shown in UI; not in summary pack  open analytics.", False),
         ("port-02", "holding since date", [], "Per-scheme detail in Portfolio holding page."),
         ("port-03", "units balance wrong lag raha", ["portfolio.holdings_count"], "Refresh; escalate if persists.", False),
         ("port-04", "redeemable amount vs current value", ["portfolio.current_value"], "Current value indicative; exit load/lock-in in scheme rules not in context."),
         ("port-05", "ELSS lock in period kitna bacha", [], "ELSS lock from scheme detail; not in summary context.", False),
         ("port-06", "dividend payout history", [], "Transactions / scheme detail; not full history in pack."),
-        ("port-07", "portfolio as on date meaning", ["portfolio.as_on"], "Quote as_on — data freshness timestamp."),
+        ("port-07", "portfolio as on date meaning", ["portfolio.as_on"], "Quote as_on  data freshness timestamp."),
         ("port-08", "total return negative kyu", ["portfolio.total_return", "portfolio.invested"], "Market move; quote total_return vs invested."),
         ("port-09", "pending orders badge portfolio", ["portfolio.has_pending_orders"], "has_pending_orders true during allotment."),
         ("port-10", "compare two funds in portfolio", [], "Holdings list only; no performance compare in bot context.", False),
@@ -1714,7 +1714,7 @@ def batch_nine_entries() -> list[dict]:
         ("acc-11", "notification sip debit alert off", [], "Settings notifications toggles."),
         ("acc-12", "help bot history saved?", [], "Ticket thread in Help; resolved tickets read-only."),
         ("acc-13", "turnstile captcha failing signup", [], "Retry network; disable VPN; refresh page."),
-        ("acc-14", "referral code paste at signup", ["referrals.has_code"], "Friend enters code during signup — not retroactive on your account."),
+        ("acc-14", "referral code paste at signup", ["referrals.has_code"], "Friend enters code during signup  not retroactive on your account."),
         ("acc-15", "profile photo change", [], "Profile settings if supported."),
         ("acc-16", "zynd app vs web same portfolio", ["portfolio.holdings_count"], "Same account same holdings after sync."),
     ]
@@ -1764,7 +1764,7 @@ def batch_nine_entries() -> list[dict]:
         ("ref-05", "referral fraud duplicate accounts", [], "One reward per unique qualified user; escalate suspicion.", False),
         ("ref-06", "referral earnings where shown", [], "Referrals dashboard terms and rewards section."),
         ("ref-07", "code at login vs signup", ["referrals.has_code"], "Code at signup for friend; you share from Referrals."),
-        ("ref-08", "referral after account delete", [], "Deletion voids pending rewards — policy in terms.", False),
+        ("ref-08", "referral after account delete", [], "Deletion voids pending rewards  policy in terms.", False),
     ]
     for item in referrals:
         slug, q, fields, sol = item[0], item[1], item[2], item[3]
@@ -1775,7 +1775,7 @@ def batch_nine_entries() -> list[dict]:
         ("multi-01", ["kyc", "payment"], "KYC done par SIP start nahi ho rahi", ["kyc.readiness_code", "payments.sip_plans.status"], "readiness_code plus mandate/plan status."),
         ("multi-02", ["portfolio", "payment"], "Redeem kiya paise kab aayenge", ["payments.recent_orders", "portfolio.has_pending_orders"], "Redemption order status and settlement expectation from order row."),
         ("multi-03", ["account", "kyc"], "Google se login KYC alag?", ["account.google_account_linked", "kyc.overall_status"], "Same user; KYC per account not per OAuth provider."),
-        ("multi-04", ["goals", "portfolio"], "Goal 50% but portfolio down", ["goals.goals.progress_pct", "portfolio.total_return"], "Goal progress vs market total_return — explain separately."),
+        ("multi-04", ["goals", "portfolio"], "Goal 50% but portfolio down", ["goals.goals.progress_pct", "portfolio.total_return"], "Goal progress vs market total_return  explain separately."),
         ("multi-05", ["payment", "account"], "OTP fail invest flow", ["account.phone_verified", "payments.recent_orders"], "phone_verified and pending order payment retry."),
         ("multi-06", ["referrals", "account"], "Refer friend not verified email", ["referrals.has_code", "account.email_verified"], "You can share; friend must verify to qualify."),
         ("multi-07", ["family", "kyc"], "Family member KYC pending", ["family_groups.groups", "kyc.overall_status"], "Each member own kyc.overall_status on their login.", False),
@@ -1794,19 +1794,19 @@ def batch_nine_entries() -> list[dict]:
 
 
 def batch_ten_entries() -> list[dict]:
-    """Batch 10: capstone mix — tone, closures, dense combos, fine-tune-ready phrasing."""
+    """Batch 10: capstone mix  tone, closures, dense combos, fine-tune-ready phrasing."""
     b = 10
     rows: list[dict] = []
 
     kyc = [
-        ("kyc-01", "Thanks — when exactly did I finish KYC?", ["kyc.completed_at", "kyc.overall_status"], "If completed, give completed_at warmly; else state status and next step.", ["KYC completion date please", "Finished KYC — what date?"]),
+        ("kyc-01", "Thanks  when exactly did I finish KYC?", ["kyc.completed_at", "kyc.overall_status"], "If completed, give completed_at warmly; else state status and next step.", ["KYC completion date please", "Finished KYC  what date?"]),
         ("kyc-02", "Which KYC step is still open?", ["kyc.steps"], "List pending/failed steps by name from steps."),
         ("kyc-03", "Am I investment-ready per KYC?", ["kyc.overall_status", "kyc.readiness_code"], "completed + readiness_code clear to invest or block reason."),
         ("kyc-04", "Bank verified but overall not complete", ["kyc.steps.bank", "kyc.overall_status"], "Remaining steps in steps beyond bank."),
         ("kyc-05", "Can you resubmit KYC for me?", [], "Customer must complete Complete KYC; bot cannot submit.", False),
         ("kyc-06", "KYC document password protected PDF", ["kyc.steps.address"], "Upload unlocked PDF in address step."),
-        ("kyc-07", "Holding US passport — KYC?", [], "Product supports resident Indian KYC in context; escalate atypical docs.", False),
-        ("kyc-08", "Status says submitted — what next?", ["kyc.overall_status", "kyc.status_last_updated_at"], "Under review; notify when status changes; no SLA invent."),
+        ("kyc-07", "Holding US passport  KYC?", [], "Product supports resident Indian KYC in context; escalate atypical docs.", False),
+        ("kyc-08", "Status says submitted  what next?", ["kyc.overall_status", "kyc.status_last_updated_at"], "Under review; notify when status changes; no SLA invent."),
         ("kyc-09", "Fix typo in PAN before submit", ["kyc.steps.pan"], "Correct in pan step before review submit."),
         ("kyc-10", "Nominee same as bank account holder", ["kyc.steps.nominee"], "Nominee rules in form; need not match bank holder."),
         ("kyc-11", "Complete KYC on desktop vs mobile", ["kyc.last_completed_step"], "Same journey; resume via last_completed_step."),
@@ -1835,7 +1835,7 @@ def batch_ten_entries() -> list[dict]:
         ("pay-04", "Latest order status in one sentence", ["payments.recent_orders"], "Newest order type + status + date."),
         ("pay-05", "Pause all SIPs at once", [], "Pause each in My SIPs; no bulk bot action.", False),
         ("pay-06", "Change default bank for debits", ["kyc.steps.bank"], "Bank from KYC; update via Complete KYC/settings bank change flow.", False),
-        ("pay-07", "Invest ₹5000 today — will it work?", [], "No investment advice or guarantees; check KYC/readiness and use invest flow.", False),
+        ("pay-07", "Invest ₹5000 today  will it work?", [], "No investment advice or guarantees; check KYC/readiness and use invest flow.", False),
         ("pay-08", "Order stuck in payment pending", ["payments.recent_orders"], "Retry payment or wait webhook; quote order age from row."),
         ("pay-09", "SIP cancelled but mandate active at bank", ["payments.sip_plans.status"], "Cancel plan in app; revoke mandate in bank if needed."),
         ("pay-10", "Duplicate webhook double order fear", ["payments.recent_orders"], "List same-day orders; escalate duplicate success.", False),
@@ -1861,14 +1861,14 @@ def batch_ten_entries() -> list[dict]:
         ("port-02", "How much have I invested in total?", ["portfolio.invested"], "Quote invested field."),
         ("port-03", "Overall gain or loss amount", ["portfolio.total_return"], "Quote total_return with brief explanation."),
         ("port-04", "Do I hold any funds currently?", ["portfolio.holdings_count"], "holdings_count zero vs positive."),
-        ("port-05", "Portfolio still loading — normal?", ["portfolio.status"], "status loading; retry refresh."),
+        ("port-05", "Portfolio still loading  normal?", ["portfolio.status"], "status loading; retry refresh."),
         ("port-06", "Pending orders affecting value?", ["portfolio.has_pending_orders", "portfolio.current_value"], "has_pending_orders may delay full reflection."),
         ("port-07", "Best performing fund in my portfolio", [], "No ranking in summary pack; open holdings.", False),
         ("port-08", "Should I sell losing fund?", [], "No investment advice; explain total_return only or escalate.", False),
         ("port-09", "Portfolio empty after successful buy", ["portfolio.has_pending_orders", "payments.recent_orders"], "Pending allotment until settlement."),
         ("port-10", "SIP count on portfolio card", ["portfolio.active_sips_count"], "Quote active_sips_count."),
         ("port-11", "Reconcile portfolio with bank statement", [], "Bank debits vs orders in Transactions; escalate mismatch.", False),
-        ("port-12", "Thank you — that explains my portfolio summary", ["portfolio.current_value", "portfolio.invested", "portfolio.total_return"], "Brief recap of three fields; invite further questions."),
+        ("port-12", "Thank you  that explains my portfolio summary", ["portfolio.current_value", "portfolio.invested", "portfolio.total_return"], "Brief recap of three fields; invite further questions."),
     ]
     for item in portfolio:
         slug, q, fields, sol = item[0], item[1], item[2], item[3]
@@ -1884,8 +1884,8 @@ def batch_ten_entries() -> list[dict]:
         ("acc-05", "MFA enabled on my account?", ["account.mfa_enrolled"], "mfa_enrolled and Security settings."),
         ("acc-06", "Account status active or restricted?", ["account.account_status"], "Quote account_status."),
         ("acc-07", "How do I talk to a human agent?", [], "Use Help chat Message support / escalate; bot hands off.", False),
-        ("acc-08", "This chat resolved my issue — thanks", [], "Acknowledge; if resolution prompt open, Yes closes ticket; new issue new chat."),
-        ("acc-09", "Wrong answer earlier — need agent", [], "Apologize; escalate to agent with ticket context.", False),
+        ("acc-08", "This chat resolved my issue  thanks", [], "Acknowledge; if resolution prompt open, Yes closes ticket; new issue new chat."),
+        ("acc-09", "Wrong answer earlier  need agent", [], "Apologize; escalate to agent with ticket context.", False),
         ("acc-10", "Can you see my password?", [], "Never; Zynd staff cannot see passwords.", False),
         ("acc-11", "Export all my support tickets", [], "Help → Tickets history; bot cannot bulk export.", False),
         ("acc-12", "Timezone for dates in chat", [], "Use customer-friendly IST wording for ISO timestamps from context."),
@@ -1906,7 +1906,7 @@ def batch_ten_entries() -> list[dict]:
         ("goal-04", "Goal deleted by mistake recover", [], "Escalate if no undo in UI.", False),
         ("goal-05", "Goal currency INR confirm", ["goals.goals"], "Goals in INR per product."),
         ("goal-06", "Link new SIP to existing goal", ["goals.goals", "payments.sip_plans"], "Funding link in goal settings."),
-        ("goal-07", "No goals yet — is that ok?", ["goals.goals"], "Optional feature; investing works without goals."),
+        ("goal-07", "No goals yet  is that ok?", ["goals.goals"], "Optional feature; investing works without goals."),
         ("goal-08", "Goal progress after redemption", ["goals.goals.progress_pct", "portfolio.total_return"], "Progress may drop if linked to holdings value.", False),
     ]
     for item in goals:
@@ -1939,7 +1939,7 @@ def batch_ten_entries() -> list[dict]:
         ("ref-05", "Referral program rules summary", ["referrals.has_code"], "High-level from Referrals page; no invent reward amounts.", False),
         ("ref-06", "Friend forgot code at signup", [], "Cannot add post signup; friend new account only path.", False),
         ("ref-07", "Self referral with second email", [], "Prohibited; escalate fraud concern.", False),
-        ("ref-08", "Thank you — shared my referral link", ["referrals.has_code"], "Encourage sharing; remind friend uses at signup."),
+        ("ref-08", "Thank you  shared my referral link", ["referrals.has_code"], "Encourage sharing; remind friend uses at signup."),
     ]
     for item in referrals:
         slug, q, fields, sol = item[0], item[1], item[2], item[3]
@@ -1947,18 +1947,18 @@ def batch_ten_entries() -> list[dict]:
         rows.append(_row(b, slug, ["referrals"], q, context_fields=fields, solution=sol, can_answer=can))
 
     multi = [
-        ("multi-01", ["account", "kyc", "payment"], "Can I invest today — full checklist", ["kyc.overall_status", "kyc.readiness_code", "account.email_verified", "account.phone_verified"], "Checklist from four fields; direct to Invest if clear."),
+        ("multi-01", ["account", "kyc", "payment"], "Can I invest today  full checklist", ["kyc.overall_status", "kyc.readiness_code", "account.email_verified", "account.phone_verified"], "Checklist from four fields; direct to Invest if clear."),
         ("multi-02", ["portfolio", "payment", "kyc"], "Why portfolio zero but SIP active", ["portfolio.holdings_count", "payments.sip_plans.status", "kyc.overall_status"], "No holdings yet vs pending first debit."),
         ("multi-03", ["goals", "payment", "portfolio"], "Goal progress vs portfolio value mismatch", ["goals.goals.progress_pct", "portfolio.current_value"], "Explain measurement difference; no advice."),
         ("multi-04", ["referrals", "kyc", "account"], "Referral pending friend KYC", ["referrals.kyc_verified_count", "referrals.signup_count"], "Counts explain pipeline; friend must complete own KYC."),
         ("multi-05", ["family", "goals", "kyc"], "Family shared goal member not KYC", ["family_groups.groups", "kyc.overall_status"], "Each member invests after own KYC.", False),
         ("multi-06", ["payment", "portfolio", "account"], "Help me understand last 7 days activity", ["payments.recent_orders", "portfolio.as_on"], "Summarize recent_orders only; no invented trades."),
         ("multi-07", ["kyc", "payment", "portfolio", "goals", "referrals"], "Everything important in one message", ["kyc.overall_status", "portfolio.current_value", "payments.sip_plans", "goals.goals", "referrals.signup_count"], "Dense factual summary; bullet style; no advice."),
-        ("multi-08", ["account", "payment"], "Agent please — payment dispute", ["payments.recent_orders"], "Acknowledge; escalate with order ids from context.", False),
-        ("multi-09", ["portfolio", "payment", "kyc"], "Data looks wrong — human review", ["portfolio.status", "payments.recent_orders", "kyc.overall_status"], "Escalate; attach what fields look inconsistent.", False),
+        ("multi-08", ["account", "payment"], "Agent please  payment dispute", ["payments.recent_orders"], "Acknowledge; escalate with order ids from context.", False),
+        ("multi-09", ["portfolio", "payment", "kyc"], "Data looks wrong  human review", ["portfolio.status", "payments.recent_orders", "kyc.overall_status"], "Escalate; attach what fields look inconsistent.", False),
         ("multi-10", ["account"], "Goodbye and close chat", [], "If resolved prompt, suggest Yes; else ask if anything else."),
         ("multi-11", ["kyc", "account"], "Verify identity before sharing portfolio stats", ["kyc.overall_status", "account.email_verified"], "Bot only serves signed-in user; quote status reassurance."),
-        ("multi-12", ["kyc", "payment", "portfolio", "account", "goals", "family", "referrals"], "Final training recap — my Zynd snapshot", ["kyc.overall_status", "portfolio.current_value", "portfolio.invested", "payments.sip_plans", "goals.goals", "referrals.signup_count", "account.email_verified"], "Capstone answer: one short paragraph from all fields present; warm close."),
+        ("multi-12", ["kyc", "payment", "portfolio", "account", "goals", "family", "referrals"], "Final training recap  my Zynd snapshot", ["kyc.overall_status", "portfolio.current_value", "portfolio.invested", "payments.sip_plans", "goals.goals", "referrals.signup_count", "account.email_verified"], "Capstone answer: one short paragraph from all fields present; warm close."),
     ]
     for item in multi:
         slug, topics, q, fields, sol = item[0], item[1], item[2], item[3], item[4]

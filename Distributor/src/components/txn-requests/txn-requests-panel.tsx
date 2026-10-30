@@ -205,7 +205,7 @@ export function TxnRequestsPanel({
                     amcName={request.amcName}
                   />
                 ) : (
-                  "—"
+                  ""
                 )}
               </Table.Cell>
               <Table.Cell>

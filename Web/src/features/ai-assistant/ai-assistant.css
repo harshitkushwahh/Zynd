@@ -1,0 +1,139 @@
+.ai-assistant-page-shell {
+  view-transition-name: zynd-ai-page;
+}
+
+.ai-assistant-page-enter {
+  animation: ai-assistant-page-in 340ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes ai-assistant-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-assistant-page-enter {
+    animation: none;
+  }
+}
+
+::view-transition-old(zynd-ai-page),
+::view-transition-new(zynd-ai-page) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ai-assistant-sidebar {
+  --ai-sidebar-expanded: 13.5rem;
+  --ai-sidebar-collapsed: 4.5rem;
+  transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
+}
+
+.ai-assistant-sidebar-rail {
+  transition: opacity 220ms ease;
+}
+
+.ai-assistant-sidebar-panel {
+  width: var(--ai-sidebar-expanded);
+  transition: opacity 220ms ease 40ms;
+}
+
+.ai-assistant-sidebar-rail--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ai-assistant-sidebar-panel--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ai-assistant-composer {
+  max-height: 16rem;
+  border-radius: 1.25rem;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.ai-assistant-composer:focus-within {
+  border-color: color-mix(in srgb, var(--border) 85%, var(--foreground) 15%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.ai-assistant-composer--hero {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--background), var(--background)) padding-box,
+    linear-gradient(
+      120deg,
+      color-mix(in srgb, #22d3ee 55%, transparent),
+      color-mix(in srgb, var(--primary) 45%, transparent),
+      color-mix(in srgb, #c084fc 40%, transparent)
+    )
+    border-box;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #22d3ee 18%, transparent),
+    0 20px 56px -28px color-mix(in srgb, var(--primary) 42%, transparent);
+}
+
+.ai-assistant-composer--hero:focus-within {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent),
+    0 22px 60px -26px color-mix(in srgb, var(--primary) 48%, transparent);
+}
+
+.dark .ai-assistant-composer--hero {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #22d3ee 22%, transparent),
+    0 24px 64px -24px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+.ai-assistant-composer-send {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.ai-assistant-composer-send:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--foreground) 25%);
+  color: var(--foreground);
+}
+
+.ai-assistant-thread-chip {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.ai-assistant-thread-chip:hover {
+  transform: scale(1.04);
+}
+
+.ai-assistant-thread-chip--active {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+.ai-assistant-message-enter {
+  animation: ai-assistant-message-in 280ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes ai-assistant-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

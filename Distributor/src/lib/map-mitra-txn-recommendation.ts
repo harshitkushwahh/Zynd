@@ -86,8 +86,8 @@ export function mapMitraTxnRecommendationsToOperations(items: ApiMitraTxnRecomme
   const transactionGroups: DistributorTransactionGroup[] = [];
 
   for (const row of items) {
-    const clientCode = row.client_code ?? "—";
-    const investorEmailMasked = row.client_email_masked ?? "—";
+    const clientCode = row.client_code ?? "";
+    const investorEmailMasked = row.client_email_masked ?? "";
     const mappedRequest = mapMitraTxnRecommendationToTxnRequest(row, clientCode, investorEmailMasked);
     requests.push(mappedRequest);
     if (recommendationFundCount(row) > 1) {

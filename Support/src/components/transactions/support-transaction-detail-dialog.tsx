@@ -302,11 +302,11 @@ export function SupportTransactionDetailDialog({
                 <OrderFact label="Created" value={formatDistributorDateTime(order.createdAt)} />
                 <OrderFact
                   label="Submitted"
-                  value={detail.submittedAt ? formatDistributorDateTime(detail.submittedAt) : "—"}
+                  value={detail.submittedAt ? formatDistributorDateTime(detail.submittedAt) : ""}
                 />
                 <OrderFact
                   label="Settled"
-                  value={detail.settledAt ? formatDistributorDateTime(detail.settledAt) : "—"}
+                  value={detail.settledAt ? formatDistributorDateTime(detail.settledAt) : ""}
                 />
                 <OrderFact
                   label="Payment link"
@@ -314,7 +314,7 @@ export function SupportTransactionDetailDialog({
                     detail.paymentUrl ? (
                       <span className="text-primary">Payment link on file</span>
                     ) : (
-                      "—"
+                      ""
                     )
                   }
                 />

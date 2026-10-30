@@ -13,7 +13,7 @@ const TEAM_SEGMENTS: ReadonlyArray<{ id: string; label: string; count: number; f
 const GAUGE_CHART_HEIGHT = 124;
 const GAUGE_OUTER_RADIUS = 88;
 const GAUGE_INNER_RADIUS = 58;
-/** Recharts pie center Y — arc sits on the bottom edge of the chart. */
+/** Recharts pie center Y  arc sits on the bottom edge of the chart. */
 const GAUGE_CENTER_Y = GAUGE_CHART_HEIGHT - 2;
 
 const CHART_DATA = TEAM_SEGMENTS.map((segment) => ({

@@ -38,5 +38,5 @@ export function ClientDetailEmptyState({
 export function isClientDetailValueEmpty(value: string | null | undefined): boolean {
   if (value == null) return true;
   const trimmed = value.trim();
-  return trimmed.length === 0 || trimmed === "—" || trimmed === "-";
+  return trimmed.length === 0 || trimmed === "" || trimmed === "-";
 }

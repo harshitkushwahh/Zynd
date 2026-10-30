@@ -19,7 +19,7 @@ const EMPTY_COPY: Record<
 > = {
   unread: {
     title: "No unread notifications",
-    description: "You're all caught up — nothing needs your attention right now.",
+    description: "You're all caught up  nothing needs your attention right now.",
     icon: BellOff,
   },
   all: {

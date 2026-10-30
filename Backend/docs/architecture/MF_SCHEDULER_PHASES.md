@@ -1,4 +1,4 @@
-# MF Scheduler — phased build plan
+# MF Scheduler  phased build plan
 
 NFO classification runs in a **separate** worker (`nfo-scheduler`). After the MF daily boundary succeeds, that worker starts immediately; fallback is `0 22 * * *` IST. See [NFO_ZYND_PLAN.md](./NFO_ZYND_PLAN.md).
 
@@ -9,35 +9,35 @@ Each phase adds jobs, tables, and config gates. Earlier phases must succeed befo
 ## Daily timeline (IST)
 
 ```text
-20:00  cybrilla-scheme-ingest      Phase 15 — Cybrilla → Mongo staging
-20:02  cybrilla-scheme-validate    Phase 15 — validate staged rows
-20:05  cybrilla-scheme-promote     Phase 15 — Mongo → SQL (draft products)
-20:15  catalog-lifecycle-sync      Phase 5 — DRAFT→ACTIVE promotion
-21:00  amfi-nav-daily              Phase 1 — NAV overlay (ISIN match only)
-22:00  nav-metrics-compute         Phase 2 — returns from NAV history
-22:15  fund-classification-compute Phase 2 — cap/theme tags from scheme metadata
-22:25  collection-assign-sync      Phase 2 — curated collection membership
-23:30  composite-rank-compute      Phase 2 — category rankings
+20:00  cybrilla-scheme-ingest      Phase 15  Cybrilla → Mongo staging
+20:02  cybrilla-scheme-validate    Phase 15  validate staged rows
+20:05  cybrilla-scheme-promote     Phase 15  Mongo → SQL (draft products)
+20:15  catalog-lifecycle-sync      Phase 5  DRAFT→ACTIVE promotion
+21:00  amfi-nav-daily              Phase 1  NAV overlay (ISIN match only)
+22:00  nav-metrics-compute         Phase 2  returns from NAV history
+22:15  fund-classification-compute Phase 2  cap/theme tags from scheme metadata
+22:25  collection-assign-sync      Phase 2  curated collection membership
+23:30  composite-rank-compute      Phase 2  category rankings
 
 Monthly (1st):
-  09:00  amfi-aum-monthly       Phase 3 — fund size
-  10:00  amfi-ter-monthly       Phase 3 — expense ratio
+  09:00  amfi-aum-monthly       Phase 3  fund size
+  10:00  amfi-ter-monthly       Phase 3  expense ratio
 
 Quarterly (15th Jan/Apr/Jul/Oct):
-  11:30  amfi-aaum-quarterly    Phase 3 — average AUM (optional)
+  11:30  amfi-aaum-quarterly    Phase 3  average AUM (optional)
 
 Every 2h:
-       stale-run-cleanup        Phase 1 — ops
+       stale-run-cleanup        Phase 1  ops
 
 Daily (before scheme sync):
-  18:30  nav-cold-start-backfill Phase 4 — historical NAV if below threshold
+  18:30  nav-cold-start-backfill Phase 4  historical NAV if below threshold
 ```
 
 Cron expressions are evaluated in `ZYND_MF_SCHEDULER_TIMEZONE` (default `Asia/Kolkata`), so `0 21 * * *` fires at 21:00 IST. A slot is not lost if the loop is busy with a long job or the worker restarts: any slot within the last `ZYND_MF_SCHEDULER_CATCH_UP_MINUTES` (default 180) that has no `ingestion_run_log` row is run on the next tick.
 
 The dependency guard blocks a job only when its upstream job is `running`, its latest run `failed`, or it has **never** succeeded. An upstream that simply has no run in the last `ZYND_MF_DEPENDENCY_LOOKBACK_HOURS` (for example `cybrilla-scheme-promote` with `ZYND_MF_SCHEME_PROMOTE_AUTO=false`, which only runs when an admin approves a batch) does not stall the daily NAV chain.
 
-## Phase 0 — Foundation ✅
+## Phase 0  Foundation ✅
 
 **Status:** Done
 
@@ -49,7 +49,7 @@ The dependency guard blocks a job only when its upstream job is `running`, its l
 | Raw archive | Mongo `zynd_mf_raw.raw_ingestions` metadata + gzip object in `ZYND_MF_RAW_BUCKET` (local or S3/MinIO) |
 | Docker worker | `docker-compose.yml` → `mf-scheduler` |
 
-## Phase 1 — Core ingest ✅
+## Phase 1  Core ingest ✅
 
 **Status:** Done
 
@@ -67,7 +67,7 @@ python -m app.jobs.run_mf_scheduler --job cybrilla-scheme-sync
 python -m app.jobs.run_mf_scheduler --job amfi-nav-daily
 ```
 
-## Phase 2 — Analytics pipeline
+## Phase 2  Analytics pipeline
 
 **Status:** Implemented in `036_mf_analytics`
 
@@ -84,7 +84,7 @@ python -m app.jobs.run_mf_scheduler --job amfi-nav-daily
 
 **Depends on:** Phase 1 NAV rows existing for touched funds.
 
-## Phase 3 — Enrichment (monthly / quarterly)
+## Phase 3  Enrichment (monthly / quarterly)
 
 **Status:** Implemented
 
@@ -98,16 +98,16 @@ python -m app.jobs.run_mf_scheduler --job amfi-nav-daily
 - `ZYND_MF_AUM_INGESTION_ENABLED=true`
 - `ZYND_MF_TER_INGESTION_ENABLED=true`
 - `ZYND_MF_AAUM_ENABLED=true`
-- `ZYND_MF_AMFI_AUM_SCHEME_WISE_DATA_URL` — optional fallback when monthly repo XLS is category-only
-- `ZYND_MF_TER_PAGE_SIZE=500` — AMFI TER pagination (125 pages vs 6224 at size 10)
+- `ZYND_MF_AMFI_AUM_SCHEME_WISE_DATA_URL`  optional fallback when monthly repo XLS is category-only
+- `ZYND_MF_TER_PAGE_SIZE=500`  AMFI TER pagination (125 pages vs 6224 at size 10)
 
-## Phase 4 — Ops & cold start
+## Phase 4  Ops & cold start
 
 **Status:** Implemented
 
 | Feature | Location |
 |---------|----------|
-| `nav-cold-start-backfill` | `nav_cold_start_backfill_service.py` — AMFI history windows when NAV depth is shallow |
+| `nav-cold-start-backfill` | `nav_cold_start_backfill_service.py`  AMFI history windows when NAV depth is shallow |
 | Admin job trigger | `POST /admin/mf/jobs/{name}/run` (`mf.jobs.run`) |
 | Job dependency guard | `mf_job_runner_service.py` + `check_job_dependencies()` |
 | Prometheus metrics | `GET /admin/mf/metrics` (`mf.jobs.read`) |
@@ -116,7 +116,7 @@ python -m app.jobs.run_mf_scheduler --job amfi-nav-daily
 - `ZYND_MF_COLD_START_BACKFILL_ENABLED=true`
 - `ZYND_MF_COLD_START_BACKFILL_THRESHOLD=1000`
 - `ZYND_MF_COLD_START_BACKFILL_FROM_DATE=2006-04-01`
-- `ZYND_MF_COLD_START_ON_STARTUP=true` — auto backfill when scheduler starts
+- `ZYND_MF_COLD_START_ON_STARTUP=true`  auto backfill when scheduler starts
 - `ZYND_MF_DEPENDENCY_GUARD_ENABLED=true`
 - `ZYND_MF_DEPENDENCY_LOOKBACK_HOURS=24`
 
@@ -129,7 +129,7 @@ POST /admin/mf/jobs/nav-cold-start-backfill/run?force=true
 POST /admin/mf/jobs/amfi-nav-daily/run
 ```
 
-## Phase 5 — Catalog lifecycle
+## Phase 5  Catalog lifecycle
 
 **Status:** Implemented
 
@@ -168,7 +168,7 @@ GET /invest/funds?category=equity&sort=return_3y
 GET /invest/funds/{product_id}
 ```
 
-## Phase 6 — Transactions (not scheduler)
+## Phase 6  Transactions (not scheduler)
 
 **Status:** Implemented
 
@@ -176,8 +176,8 @@ Cybrilla orders and MF Central CAS run as **separate workers** (`mf-order-worker
 
 | Component | Location |
 |-----------|----------|
-| Order schema | `037_mf_transactions` — `mf_orders`, `mf_investment_accounts`, `mf_external_holdings` |
-| Cybrilla OMS client | `fp_oms_client.py` — `POST /v2/mf_purchases`, MFIA create |
+| Order schema | `037_mf_transactions`  `mf_orders`, `mf_investment_accounts`, `mf_external_holdings` |
+| Cybrilla OMS client | `fp_oms_client.py`  `POST /v2/mf_purchases`, MFIA create |
 | Order API | `POST/GET /invest/orders` (KYC + fund-eligibility gated) |
 | Order worker | `run_mf_transaction_workers.py --orders` |
 | MF Central CAS | `mf_central_client.py` + `cas_import_service.py` |
@@ -188,16 +188,12 @@ Cybrilla orders and MF Central CAS run as **separate workers** (`mf-order-worker
 2. Worker submits to Cybrilla when investor profile + MFIA are ready
 3. Worker polls FP purchase state → `SUCCEEDED` triggers referral hook
 
-**CAS flow:**
-1. User `POST /invest/cas/imports` (KYC complete, PAN on file)
-2. CAS worker fetches holdings → `mf_external_holdings` (ISIN match)
-3. User `GET /invest/holdings/external`
+**CAS flow:** stub today (`POST /cas/request`, worker `GET /cas/{id}`). The live MF Central contract (OAuth, encrypted `newCasRequest`, investor QR consent, `validateQRCode`, dashboard merge) is in [MF_CENTRAL_CAS.md](./MF_CENTRAL_CAS.md).
 
 **Config:**
 - `ZYND_MF_ORDERS_ENABLED=true`
 - `ZYND_MF_ORDER_WORKER_TICK_SECONDS=30`
-- `ZYND_MF_CAS_ENABLED=false` (enable when MF Central credentials configured)
-- `ZYND_MF_CENTRAL_BASE_URL=` / `ZYND_MF_CENTRAL_API_KEY=`
+- `ZYND_MF_CAS_ENABLED=false` until the MF Central env block in [MF_CENTRAL_CAS.md](./MF_CENTRAL_CAS.md) is set
 
 **API:**
 ```bash
@@ -208,7 +204,7 @@ POST /invest/cas/imports
 GET  /invest/holdings/external
 ```
 
-## Phase 7 — Admin catalog read console
+## Phase 7  Admin catalog read console
 
 **Status:** Implemented
 
@@ -222,7 +218,7 @@ Read-only admin APIs and Admin app UI for catalog inspection before Phase 8 writ
 | Categories API | `GET /admin/mf/categories` |
 | Funds list/detail | `GET /admin/mf/funds`, `GET /admin/mf/funds/{id}` |
 | NAV history | `GET /admin/mf/funds/{id}/navs` |
-| Admin UI | `Admin/src/app/dashboard/mutual-funds` — tabs: Overview, Categories, Funds, AMCs, Operations |
+| Admin UI | `Admin/src/app/dashboard/mutual-funds`  tabs: Overview, Categories, Funds, AMCs, Operations |
 
 **RBAC:** `mf.catalog.read` added to `operations` role and `super_admin`.
 
@@ -240,7 +236,7 @@ cd Backend && alembic upgrade head
 cd Admin && npm run dev   # http://localhost:8888/dashboard/mutual-funds
 ```
 
-## Phase 8 — Admin toggles, overrides & audit
+## Phase 8  Admin toggles, overrides & audit
 
 **Status:** Implemented
 
@@ -248,12 +244,12 @@ Admin write controls with governance precedence enforced in invest API, order fl
 
 | Component | Location |
 |-----------|----------|
-| Override schema | `039_mf_catalog_overrides` — `products.admin_*`, `fund_amcs.admin_kill_switch` |
+| Override schema | `039_mf_catalog_overrides`  `products.admin_*`, `fund_amcs.admin_kill_switch` |
 | Governance rules | `catalog_governance_service.py` |
 | Lifecycle respect | `catalog_lifecycle_service.py` skips FORCE_HIDE / kill-switch funds |
 | Write service + audit | `catalog_admin_write_service.py` → `audit_logs` |
 | Fund PATCH | `PATCH /admin/mf/funds/{id}` (`mf.catalog.manage`) |
-| AMC PATCH (extended) | `PATCH /admin/mf/amcs/{id}` — `admin_kill_switch` + audit |
+| AMC PATCH (extended) | `PATCH /admin/mf/amcs/{id}`  `admin_kill_switch` + audit |
 
 **Governance precedence:**
 1. Admin `FORCE_HIDE` / AMC kill switch
@@ -275,7 +271,7 @@ PATCH /admin/mf/funds/{id}   {"is_active":false,"admin_visibility":"FORCE_HIDE",
 PATCH /admin/mf/amcs/{id}    {"admin_kill_switch":true,"reason":"..."}
 ```
 
-## Phase 9 — Category curation & per-category sort order
+## Phase 9  Category curation & per-category sort order
 
 **Status:** Implemented
 
@@ -283,13 +279,13 @@ Admin controls fund order within categories and featured placement on invest hom
 
 | Component | Location |
 |-----------|----------|
-| Display schema | `040_mf_display_order` — category + `product_categories` curation columns |
+| Display schema | `040_mf_display_order`  category + `product_categories` curation columns |
 | Curation service | `category_curation_service.py` |
 | Sort helpers | `catalog_display_service.py` |
-| Invest API sort | `invest_home_service.py` — curated order when category filter set; featured carousel |
+| Invest API sort | `invest_home_service.py`  curated order when category filter set; featured carousel |
 | Admin curation API | `GET/PATCH /admin/mf/categories/{id}`, `GET .../{slug}/funds`, `PUT .../{slug}/order` |
 | Bulk AMC add | `POST /admin/mf/categories/{slug}/funds/bulk-amc` |
-| Admin UI | `CategoryCurationPanel` — reorder, featured star/rank, bulk AMC add |
+| Admin UI | `CategoryCurationPanel`  reorder, featured star/rank, bulk AMC add |
 
 **Public sort (per category):** `is_featured DESC → featured_rank → display_order → composite_rank → name`
 
@@ -303,7 +299,7 @@ PUT  /admin/mf/categories/equity/order  {"items":[{"product_id":"...","display_o
 POST /admin/mf/categories/equity/funds/bulk-amc  {"amc_id":3}
 ```
 
-## Phase 10 — Catalog health & data quality gates
+## Phase 10  Catalog health & data quality gates
 
 **Status:** Implemented
 
@@ -314,7 +310,7 @@ Production display gates and ops health dashboard for catalog trustworthiness.
 | Health service | `catalog_health_service.py` |
 | Public stale NAV gate | `invest_health_sql_clause()` in `catalog_governance_service.py` |
 | Admin health API | `GET /admin/mf/catalog/health`, `GET /admin/mf/catalog/health/issues` |
-| Admin UI | `CatalogHealthPanel` — counters + drill-down |
+| Admin UI | `CatalogHealthPanel`  counters + drill-down |
 | Fund badges | `health_flags` on admin fund list/detail |
 
 **Config:**
@@ -332,7 +328,7 @@ Production display gates and ops health dashboard for catalog trustworthiness.
 | Orphan product | critical | Ops alert |
 | Empanelled AMC, 0 active funds | warning | Ops alert |
 
-## Phase 11 — Public invest UX
+## Phase 11  Public invest UX
 
 **Status:** Implemented
 
@@ -341,22 +337,22 @@ End-user mutual fund browse, detail, order placement, and external holdings on t
 | Component | Location |
 |-----------|----------|
 | Invest NAV API | `GET /invest/funds/{product_id}/navs` |
-| Invest config API | `GET /invest/config` — ARN, EUIN, disclaimer |
-| Extended fund schemas | `InvestFundSummaryResponse` — min SIP, SEBI category, health badges |
-| Invest service | `invest_home_service.py` — `list_invest_fund_navs`, `get_invest_config_payload` |
+| Invest config API | `GET /invest/config`  ARN, EUIN, disclaimer |
+| Extended fund schemas | `InvestFundSummaryResponse`  min SIP, SEBI category, health badges |
+| Invest service | `invest_home_service.py`  `list_invest_fund_navs`, `get_invest_config_payload` |
 | Web API client | `Web/src/features/invest/api/invest-api.ts` |
-| Web UI | `MutualFundsCatalogPanel` — home, category, detail, orders, holdings |
+| Web UI | `MutualFundsCatalogPanel`  home, category, detail, orders, holdings |
 
 **Web screens:**
-- **Browse home** — category chips, featured carousel, total fund count
-- **Category list** — admin-curated sort (Phase 9), paginated fund cards
-- **Fund card** — AMC logo, 3Y return, min SIP, SEBI category, health badges
-- **Fund detail** — NAV chart, TER, AUM, returns grid, disclaimer, lumpsum CTA
-- **Orders** — list from Phase 6 API
-- **External holdings** — CAS import CTA + holdings list
+- **Browse home**  category chips, featured carousel, total fund count
+- **Category list**  admin-curated sort (Phase 9), paginated fund cards
+- **Fund card**  AMC logo, 3Y return, min SIP, SEBI category, health badges
+- **Fund detail**  NAV chart, TER, AUM, returns grid, disclaimer, lumpsum CTA
+- **Orders**  list from Phase 6 API
+- **External holdings**  CAS import CTA + holdings list
 
 **Config:**
-- `ZYND_MF_INVEST_DISCLAIMER` — scheme disclaimer text
+- `ZYND_MF_INVEST_DISCLAIMER`  scheme disclaimer text
 - Reuses `ZYND_DISTRIBUTOR_ARN`, `ZYND_DISTRIBUTOR_EUIN`, `ZYND_MF_ORDERS_ENABLED`, `ZYND_MF_CAS_ENABLED`
 
 **Exit criteria:**
@@ -366,7 +362,7 @@ End-user mutual fund browse, detail, order placement, and external holdings on t
 
 ---
 
-## Phase 12 — Product content & compliance layer
+## Phase 12  Product content & compliance layer
 
 **Status:** Implemented
 
@@ -374,7 +370,7 @@ Marketing and compliance content editable in admin, merged into the public inves
 
 | Component | Location |
 |-----------|----------|
-| Content schema | `041_mf_product_content` — `product_display_content`, `amc_display_content`, `mf_compliance_settings` |
+| Content schema | `041_mf_product_content`  `product_display_content`, `amc_display_content`, `mf_compliance_settings` |
 | Content service | `product_content_service.py` |
 | Admin content API | `GET/PATCH /admin/mf/funds/{id}/content`, `GET/PATCH /admin/mf/amcs/{id}/content` |
 | Compliance API | `GET/PATCH /admin/mf/compliance` |
@@ -397,7 +393,7 @@ Marketing and compliance content editable in admin, merged into the public inves
 
 ---
 
-## Phase 13 — Rules engine, bulk ops & maker-checker
+## Phase 13  Rules engine, bulk ops & maker-checker
 
 **Status:** Implemented
 
@@ -405,9 +401,9 @@ Scale catalog operations to 1000+ schemes with rules, CSV bulk import, and maker
 
 | Component | Location |
 |-----------|----------|
-| Rules schema | `042_mf_catalog_rules` — `mf_catalog_rules`, `mf_catalog_rule_runs`, `mf_bulk_catalog_jobs` |
-| Rules service | `catalog_rules_service.py` — evaluate, preview, apply |
-| Bulk service | `catalog_bulk_service.py` — CSV parse, preview, job execution |
+| Rules schema | `042_mf_catalog_rules`  `mf_catalog_rules`, `mf_catalog_rule_runs`, `mf_bulk_catalog_jobs` |
+| Rules service | `catalog_rules_service.py`  evaluate, preview, apply |
+| Bulk service | `catalog_bulk_service.py`  CSV parse, preview, job execution |
 | Maker-checker | `AdminActionType.mf_catalog_bulk_apply`, `mf_catalog_rules_apply` |
 | Admin API | `GET/POST/PATCH /admin/mf/rules`, `POST .../preview`, `POST .../apply` |
 | Bulk API | `POST /admin/mf/funds/bulk`, `.../bulk/preview`, `GET .../bulk/jobs` |
@@ -417,16 +413,16 @@ Scale catalog operations to 1000+ schemes with rules, CSV bulk import, and maker
 
 **Rule actions:** `set_lifecycle_status`, `set_fund_active`, `set_admin_visibility`, `set_admin_investability`, `add_to_category`
 
-**Bulk CSV:** `isin, action, category, position, reason` — actions: disable, enable, force_hide, force_show, auto_visibility, add_category, set_order
+**Bulk CSV:** `isin, action, category, position, reason`  actions: disable, enable, force_hide, force_show, auto_visibility, add_category, set_order
 
 **Config:**
 - `ZYND_MF_RULES_ENABLED=true`
 - `ZYND_MF_BULK_MAKER_CHECKER_THRESHOLD=25`
 
 **RBAC:**
-- `mf.rules.manage` — rule CRUD + preview
-- `mf.catalog.publish` — apply rules + bulk mutations
-- `catalog_publisher` role — publish + approve maker-checker
+- `mf.rules.manage`  rule CRUD + preview
+- `mf.catalog.publish`  apply rules + bulk mutations
+- `catalog_publisher` role  publish + approve maker-checker
 
 **Exit criteria:**
 - Dry-run preview before apply
@@ -435,7 +431,7 @@ Scale catalog operations to 1000+ schemes with rules, CSV bulk import, and maker
 
 ---
 
-## Phase 14 — Production scale (cache, search, observability)
+## Phase 14  Production scale (cache, search, observability)
 
 **Status:** Implemented
 
@@ -443,11 +439,11 @@ Redis-backed invest catalog cache, Postgres full-text search, and extended Prome
 
 | Component | Location |
 |-----------|----------|
-| Cache layer | `invest_catalog_cache.py` — generation-based Redis keys (`invest:catalog:gen`), hit/miss counters |
-| Cached reads | `invest_cached_read_service.py` — wraps home, categories, funds, detail, config, search |
-| Search vectors | `043_mf_invest_search_cache` — `products.invest_search_vector` (TSVECTOR + GIN) |
-| Search service | `invest_search_service.py` — `search_invest_funds()`, `refresh_product_search_vectors()` |
-| Invalidation | `invest_catalog_invalidation.py` — bumps cache gen; optional search vector rebuild |
+| Cache layer | `invest_catalog_cache.py`  generation-based Redis keys (`invest:catalog:gen`), hit/miss counters |
+| Cached reads | `invest_cached_read_service.py`  wraps home, categories, funds, detail, config, search |
+| Search vectors | `043_mf_invest_search_cache`  `products.invest_search_vector` (TSVECTOR + GIN) |
+| Search service | `invest_search_service.py`  `search_invest_funds()`, `refresh_product_search_vectors()` |
+| Invalidation | `invest_catalog_invalidation.py`  bumps cache gen; optional search vector rebuild |
 | Metrics | `catalog_metrics_service.py` + extended `mf_scheduler_metrics.py` |
 | Invest API | `GET /invest/search?q=` + cached `/home`, `/categories`, `/funds`, `/funds/{id}`, `/config` |
 | Web UI | Search bar on mutual funds browse home (`mutual-funds-catalog-panel.tsx`) |
@@ -474,7 +470,7 @@ Redis-backed invest catalog cache, Postgres full-text search, and extended Prome
 
 ---
 
-## Phase 15 — Mongo scheme staging & promote pipeline
+## Phase 15  Mongo scheme staging & promote pipeline
 
 **Status:** Implemented
 
@@ -483,7 +479,7 @@ Cybrilla scheme ingest is staged in Mongo before any SQL catalog writes. Bad bat
 | Component | Location |
 |-----------|----------|
 | Normalizer | `scheme_row_normalizer.py` |
-| Mongo store | `scheme_staging_store.py` — `scheme_ingest_batches`, `scheme_staging_rows` |
+| Mongo store | `scheme_staging_store.py`  `scheme_ingest_batches`, `scheme_staging_rows` |
 | Ingest job | `scheme_staging_ingest_service.py` → `cybrilla-scheme-ingest` |
 | Validate job | `scheme_staging_validate_service.py` → `cybrilla-scheme-validate` |
 | Promote job | `scheme_staging_promote_service.py` → `cybrilla-scheme-promote` |
@@ -508,7 +504,7 @@ Cybrilla API → Mongo staging → validate → (approve) → promote → Postgr
 
 ---
 
-## Phase 16 — Enrichment (scheme master, calculator, compliance)
+## Phase 16  Enrichment (scheme master, calculator, compliance)
 
 **Status:** Implemented
 

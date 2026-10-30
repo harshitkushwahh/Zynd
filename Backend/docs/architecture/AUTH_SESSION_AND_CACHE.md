@@ -13,9 +13,9 @@ Marketing nav uses **restore pending** when hint or retry state exists so logged
 
 ## Auth API hot paths
 
-- `POST /auth/refresh` — DB session row + `get_user_public_profile` (Redis-backed)
-- `GET /auth/me` — same public profile cache
-- Most routes — `get_current_user` → `get_user_by_id_cached` (Redis-backed row, merged into SQLAlchemy session)
+- `POST /auth/refresh`  DB session row + `get_user_public_profile` (Redis-backed)
+- `GET /auth/me`  same public profile cache
+- Most routes  `get_current_user` → `get_user_by_id_cached` (Redis-backed row, merged into SQLAlchemy session)
 
 ## Redis DB usage (cache DB index `redis_cache_db`)
 

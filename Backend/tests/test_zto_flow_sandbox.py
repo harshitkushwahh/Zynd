@@ -303,7 +303,7 @@ async def test_sandbox_failure_phone_ends_in_lookups_failed(db_session, zto_sett
 
 @pytest.mark.asyncio
 async def test_registry_blocks_second_user_with_same_phone(db_session, zto_settings) -> None:
-    # Phone previously used by another (since purged) account — registry persists the Cybrilla limit.
+    # Phone previously used by another (since purged) account  registry persists the Cybrilla limit.
     first = await _user(db_session)
     db_session.add_all(
         [

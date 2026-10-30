@@ -106,9 +106,9 @@ function getAssessmentDraftProgress(
 }
 
 export function RiskProfileProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, sessionRestoring, sessionRetrying } = useAuth();
   const queryClient = useQueryClient();
-  const enabled = Boolean(user);
+  const enabled = Boolean(user) && !sessionRestoring && !sessionRetrying;
 
   const resultQuery = useRiskProfileResultQuery(enabled);
   const historyQuery = useRiskProfileHistoryQuery(enabled);

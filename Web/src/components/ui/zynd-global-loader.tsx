@@ -13,7 +13,7 @@ type ZyndGlobalLoaderProps = {
 
 /**
  * Global full-screen ZYND web loader.
- * Use this anywhere the app needs a centered loading state — not inline spinners.
+ * Use this anywhere the app needs a centered loading state  not inline spinners.
  */
 export function ZyndGlobalLoader({ className, status }: ZyndGlobalLoaderProps) {
   const maskId = useId().replace(/:/g, "");

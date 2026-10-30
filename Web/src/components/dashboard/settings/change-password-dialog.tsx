@@ -89,5 +89,5 @@ export function ChangePasswordVerifyDialog({
   );
 }
 
-/** @deprecated Use ChangePasswordVerifyDialog — kept for existing imports during transition */
+/** @deprecated Use ChangePasswordVerifyDialog  kept for existing imports during transition */
 export const ChangePasswordDialog = ChangePasswordVerifyDialog;

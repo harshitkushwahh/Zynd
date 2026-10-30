@@ -26,7 +26,7 @@ type MfFundAmcAvatarProps = {
   amcLogoUrl?: string | null;
   amcName: string;
   amcSlug?: string | null;
-  /** Scheme / product name — used to infer AMC when catalog rows are Unknown AMC. */
+  /** Scheme / product name  used to infer AMC when catalog rows are Unknown AMC. */
   schemeName?: string | null;
   size?: "sm" | "md";
   className?: string;
@@ -82,7 +82,7 @@ type MfOrderAmcAvatarProps = Omit<MfFundAmcAvatarProps, "amcLogoUrl" | "amcName"
   order: InvestAmcOrderLike;
 };
 
-/** AMC avatar for orders / transactions — enriches from product name when catalog AMC is missing. */
+/** AMC avatar for orders / transactions  enriches from product name when catalog AMC is missing. */
 export function MfOrderAmcAvatar({ order, ...props }: MfOrderAmcAvatarProps) {
   const amc = enrichInvestAmcFromOrder(order);
   return (

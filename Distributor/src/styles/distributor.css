@@ -1,8 +1,8 @@
-/* Distributor console — layout tokens & reusable component styles */
+/* Distributor console  layout tokens & reusable component styles */
 
 :root {
   --distributor-dashboard-profile-width: 16.75rem;
-  /* Global surface roundness — cards, panels, tiles, tables */
+  /* Global surface roundness  cards, panels, tiles, tables */
   --radius-5xl: 2rem;
   --radius-4xl: var(--radius-5xl);
   --radius-3xl: var(--radius-5xl);
@@ -331,7 +331,7 @@
   --distributor-app-background: var(--distributor-shell-canvas-color);
   --background: var(--distributor-app-background);
 
-  /* Skeleton — light grey in light mode; muted grey in dark mode */
+  /* Skeleton  light grey in light mode; muted grey in dark mode */
   --distributor-skeleton-base: color-mix(in srgb, var(--zynd-neutral-200) 58%, var(--zynd-neutral-50) 42%);
   --distributor-skeleton-shimmer: color-mix(in srgb, var(--zynd-white) 55%, var(--zynd-neutral-200) 45%);
 
@@ -1007,7 +1007,7 @@
       inset 0 1px 0 var(--distributor-metric-tile-success-highlight);
   }
 
-  /* Accent gradient cards — no outer stroke (light/dark border was inconsistent) */
+  /* Accent gradient cards  no outer stroke (light/dark border was inconsistent) */
   .distributor-branch-distributor-square-card--accent,
   .distributor-client-portfolio-overview__metric--accent,
   .quick-txn-type-card--selected,
@@ -2767,7 +2767,7 @@
     aspect-ratio: 3 / 4;
     border-radius: var(--distributor-dashboard-hero-radius);
     background-color: var(--muted);
-    /* Photo overlay chrome — fixed contrast regardless of app theme */
+    /* Photo overlay chrome  fixed contrast regardless of app theme */
     --distributor-profile-hero-overlay-fg: #fff;
     --distributor-profile-hero-overlay-fg-muted: color-mix(in srgb, #fff 75%, transparent);
     --distributor-profile-hero-badge-bg: #0a0a0a;

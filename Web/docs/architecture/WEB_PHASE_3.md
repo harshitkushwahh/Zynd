@@ -1,4 +1,4 @@
-# Web Phase 3 — Copy, UI variants & metadata
+# Web Phase 3  Copy, UI variants & metadata
 
 Completed checklist. User-facing strings centralized; auth buttons use design-system variants.
 
@@ -6,9 +6,9 @@ Completed checklist. User-facing strings centralized; auth buttons use design-sy
 
 | Item | Artifact |
 |------|----------|
-| Expanded copy | `src/shared/config/copy.ts` — meta, settings, MFA, reset password, marketing |
+| Expanded copy | `src/shared/config/copy.ts`  meta, settings, MFA, reset password, marketing |
 | Button variants | `size="auth"`, `variant="auth-oauth"` on `components/ui/button.tsx` |
-| UI surface classes | `src/shared/config/ui-classes.ts` — dashboard nav chrome |
+| UI surface classes | `src/shared/config/ui-classes.ts`  dashboard nav chrome |
 | Metadata from copy | `app/layout.tsx` → `copy.meta.siteDescription` |
 | Auth flow buttons | Replaced `AUTH_PRIMARY_BUTTON_CLASS` with `size="auth"` |
 | OAuth buttons | `variant="auth-oauth" size="auth"` |

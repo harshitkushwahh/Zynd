@@ -17,14 +17,14 @@ Runtime credentials come from [`integration_runtime.py`](../../app/application/i
 
 ## Layout
 
-- [`app/infrastructure/core/`](../../app/infrastructure/core/) — orchestrator, tokens, errors, channels
-- [`app/infrastructure/core/kyc/`](../../app/infrastructure/core/kyc/) — KYC/POA JSON helpers and domain clients
-- [`app/infrastructure/core/mf/`](../../app/infrastructure/core/mf/) — MF OMS, investor, payment, mandate clients
-- [`app/application/core/facade.py`](../../app/application/core/facade.py) — router-safe exports
+- [`app/infrastructure/core/`](../../app/infrastructure/core/)  orchestrator, tokens, errors, channels
+- [`app/infrastructure/core/kyc/`](../../app/infrastructure/core/kyc/)  KYC/POA JSON helpers and domain clients
+- [`app/infrastructure/core/mf/`](../../app/infrastructure/core/mf/)  MF OMS, investor, payment, mandate clients
+- [`app/application/core/facade.py`](../../app/application/core/facade.py)  router-safe exports
 
 Legacy import paths (`app.infrastructure.cybrilla.*`, `app.infrastructure.kyc.fp_clients`, `app.infrastructure.mf.fp_oms_client`) remain as shims.
 
-Platform config/DB/redis live in [`app/core/`](../../app/core/) — not the HTTP orchestrator.
+Platform config/DB/redis live in [`app/core/`](../../app/core/)  not the HTTP orchestrator.
 
 ## API layer rule
 

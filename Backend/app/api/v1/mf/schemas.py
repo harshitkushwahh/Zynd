@@ -598,6 +598,7 @@ class PortfolioUpcomingSipResponse(BaseModel):
 class PortfolioSummaryResponse(BaseModel):
     status: str
     has_pending_orders: bool = False
+    has_allotted_investment: bool = False
     current_value_inr: float = 0
     invested_inr: float = 0
     total_return_inr: float = 0
@@ -718,6 +719,7 @@ class PortfolioHoldingDetailResponse(BaseModel):
     transactions: list[PortfolioHoldingTransactionResponse] = Field(default_factory=list)
     pending_action: Optional[PortfolioHoldingPendingActionResponse] = None
     family_link: Optional[PortfolioFamilyLinkResponse] = None
+    source: Optional[str] = None
 
 
 class PortfolioHoldingDetailEnvelopeResponse(BaseModel):
@@ -990,10 +992,15 @@ class MfSystematicPlanOtpSendResponse(BaseModel):
     expires_in: int
 
 
+class MfCasQrRequest(BaseModel):
+    qr_code: str
+
+
 class MfCasImportResponse(BaseModel):
     import_id: str
     status: str
     external_request_id: Optional[str] = None
+    launch_url: Optional[str] = None
     holdings_count: int
     failure_reason: Optional[str] = None
     requested_at: Optional[datetime] = None
@@ -1024,6 +1031,7 @@ class InvestorReportEligibilityResponse(BaseModel):
     can_generate: bool
     code: Optional[str] = None
     message: Optional[str] = None
+    cas_import_eligible: bool = False
 
 
 class InvestorReportListResponse(BaseModel):

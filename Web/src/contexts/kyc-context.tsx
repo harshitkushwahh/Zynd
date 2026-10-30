@@ -119,7 +119,8 @@ function splitPanName(fullName: string): {
 }
 
 export function KycProvider({ children }: { children: ReactNode }) {
-  const { user, refreshUser, setUser } = useAuth();
+  const { user, refreshUser, setUser, sessionRestoring, sessionRetrying } = useAuth();
+  const sessionReady = Boolean(user?.id) && !sessionRestoring && !sessionRetrying;
   const refreshUserInFlightRef = useRef<Promise<unknown> | null>(null);
   const refreshUserTimerRef = useRef<number | null>(null);
   const [record, setRecord] = useState<KycRecord | null>(null);
@@ -164,7 +165,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
     const payload = await fetchKycBootstrap();
     applyBootstrap(payload);
     const panName = formatKycPanFullName(payload.pan_draft ?? null);
-    if (user && !getDisplayName(user).trim() && panName) {
+    if (panName && user && !getDisplayName(user).trim()) {
       setUser({ ...user, ...splitPanName(panName) });
     }
   }, [applyBootstrap, kycAllowed, setUser, user]);
@@ -249,11 +250,11 @@ export function KycProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user || !kycAllowed) return;
+    if (!sessionReady || !kycAllowed) return;
     void refreshFromBootstrap().catch(() => {
       setRecord((current) => current ?? { status: "none" });
     });
-  }, [kycAllowed, refreshFromBootstrap, user]);
+  }, [kycAllowed, refreshFromBootstrap, sessionReady]);
 
   useEffect(() => {
     if (!kycAllowed || overallStatus !== "submitted") return;
@@ -274,7 +275,7 @@ export function KycProvider({ children }: { children: ReactNode }) {
           await refreshFromBootstrap();
         }
       } catch {
-        // Background poll — ignore transient errors.
+        // Background poll  ignore transient errors.
       }
     };
 

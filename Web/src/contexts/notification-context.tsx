@@ -54,10 +54,10 @@ const STREAM_RECONNECT_BASE_MS = 3_000;
 const STREAM_RECONNECT_MAX_MS = 30_000;
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, sessionRestoring, sessionRetrying } = useAuth();
   const queryClient = useQueryClient();
   const userId = user?.id ?? null;
-  const enabled = Boolean(userId);
+  const enabled = Boolean(userId) && !sessionRestoring && !sessionRetrying;
 
   const previewQuery = useNotificationsPreviewQuery(enabled);
   const unreadQuery = useUnreadNotificationCountQuery(enabled);

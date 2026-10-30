@@ -4,7 +4,7 @@ import { Inter } from "next/font/google";
 export const sansFontVariable = "--font-inter" as const;
 
 /**
- * Global sans weights. Must match the literal `weight` array in `interSans` —
+ * Global sans weights. Must match the literal `weight` array in `interSans` 
  * Next.js font loader only accepts compile-time literals, not variables.
  */
 export const sansFontWeights = ["300", "400", "500", "600", "700"] as const;

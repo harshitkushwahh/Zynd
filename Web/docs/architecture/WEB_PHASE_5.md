@@ -1,4 +1,4 @@
-# Web Phase 5 — Shared package with Admin
+# Web Phase 5  Shared package with Admin
 
 Completed checklist. Web and Admin consume `@zynd/shared` instead of duplicating core client utilities.
 
@@ -28,7 +28,7 @@ configureApiClient({ apiUrl: env.apiUrl });
 export * from "@zynd/shared/api";
 ```
 
-Turnstile wrappers inject `env.turnstileSiteKey` — keys stay app-local.
+Turnstile wrappers inject `env.turnstileSiteKey`  keys stay app-local.
 
 ## Import guidance
 
@@ -36,6 +36,6 @@ Turnstile wrappers inject `env.turnstileSiteKey` — keys stay app-local.
 - **Web-only** → stay in `Web/src/features/` or `Web/src/shared/`
 - **Admin-only** → stay in `Admin/src/`
 
-## Next: Web Phase 6 — complete
+## Next: Web Phase 6  complete
 
 See `WEB_PHASE_6.md`. Refactor program phases 0–6 are done.

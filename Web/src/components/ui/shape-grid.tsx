@@ -1,4 +1,4 @@
-// @ts-nocheck — React Bits ShapeGrid (JavaScript source)
+// @ts-nocheck  React Bits ShapeGrid (JavaScript source)
 "use client";
 
 import { useEffect, useRef } from 'react';

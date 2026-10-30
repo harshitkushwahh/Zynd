@@ -254,7 +254,7 @@ function FundRow({ fund }: { fund: EnrichedFundsForYouFund }) {
   const pageCopy = copy.navbar.recommendFunds.pageSuccess;
   const fundReturn = fund.fundReturn;
   const href = resolveFundsForYouFundHref(fund, fund.detail);
-  const amcLabel = fund.amc_name?.trim() || fund.detail?.amc_name?.trim() || "—";
+  const amcLabel = fund.amc_name?.trim() || fund.detail?.amc_name?.trim() || "";
 
   return (
     <div className="rf-success-fund-row">

@@ -112,7 +112,7 @@ export function goalTemplateIconThemeFor(slug: string): GoalTemplateIconTheme {
   };
 }
 
-/** Static illustrations served from `/public/goals` (resized JPEGs for fast dialog load). */
+/** Template strip / dialog heroes — compact JPEGs under `/public/goals`. */
 const GOAL_TEMPLATE_ILLUSTRATIONS: Record<string, string> = {
   car: "/goals/car.jpg",
   travel: "/goals/travel.jpg",
@@ -122,12 +122,163 @@ const GOAL_TEMPLATE_ILLUSTRATIONS: Record<string, string> = {
   retirement: "/goals/retire.jpg",
 };
 
+/** Your-goals rich cards — full PNG heroes at `/public` root (`goal-*.png`, `goals-wedding.png`). */
+const GOAL_RICH_CARD_ILLUSTRATIONS: Record<string, string> = {
+  car: "/goal-car.png",
+  travel: "/goal-travel.png",
+  education: "/goal-edu.png",
+  wedding: "/goals-wedding.png",
+  home: "/goal-home.png",
+  retirement: "/goal-retire.png",
+};
+
 export function goalTemplateIllustrationUrlFor(slug: string) {
   return GOAL_TEMPLATE_ILLUSTRATIONS[slug] ?? null;
 }
 
+export function goalRichCardIllustrationUrlFor(slug: string) {
+  return GOAL_RICH_CARD_ILLUSTRATIONS[slug] ?? null;
+}
+
 export function resolveGoalTemplateIllustrationUrl(slug: string, imageUrl?: string | null) {
   return goalTemplateIllustrationUrlFor(slug) ?? imageUrl ?? null;
+}
+
+export function resolveGoalRichCardIllustrationUrl(slug: string, imageUrl?: string | null) {
+  return goalRichCardIllustrationUrlFor(slug) ?? imageUrl ?? null;
+}
+
+/** Family rich cards — full PNG heroes at `/public` root (`family-goal-*.png`, fallback `family-card.png`). */
+const FAMILY_GOAL_RICH_CARD_ILLUSTRATIONS: Record<string, string> = {
+  car: "/family-goal-car.png",
+  travel: "/family-goal-travel.png",
+  education: "/family-goal-education.png",
+  wedding: "/family-goal-wedding.png",
+  home: "/family-goal-home.png",
+  retirement: "/family-goal-retire.png",
+};
+
+const FAMILY_GOAL_RICH_CARD_FALLBACK = "/family-card.png";
+
+export function familyGoalRichCardIllustrationUrlFor(slug: string) {
+  return FAMILY_GOAL_RICH_CARD_ILLUSTRATIONS[slug] ?? FAMILY_GOAL_RICH_CARD_FALLBACK;
+}
+
+export function resolveFamilyGoalRichCardIllustrationUrl(slug: string) {
+  return familyGoalRichCardIllustrationUrlFor(slug);
+}
+
+export function goalTemplateSlugForId(
+  templateId: string | null | undefined,
+  templates: ReadonlyArray<{ id: string; slug: string }>,
+) {
+  if (!templateId) return "custom";
+  return templates.find((template) => template.id === templateId)?.slug ?? "custom";
+}
+
+export const FAMILY_GOAL_RICH_CARD_ILLUSTRATION_URLS = [
+  ...Object.values(FAMILY_GOAL_RICH_CARD_ILLUSTRATIONS),
+  FAMILY_GOAL_RICH_CARD_FALLBACK,
+  "/family-info.png",
+] as const;
+
+/** CSS custom properties for `GoalRichCard` surface + hero soft layer (tinted per template). */
+export type GoalRichCardSurfaceVars = {
+  "--grc-accent": string;
+  "--grc-light-from": string;
+  "--grc-light-to": string;
+  "--grc-light-glow": string;
+  "--grc-dark-from": string;
+  "--grc-dark-mid": string;
+  "--grc-dark-to": string;
+  "--grc-dark-glow": string;
+  "--grc-hero-soft": string;
+};
+
+const DEFAULT_GOAL_RICH_CARD_SURFACE_VARS: GoalRichCardSurfaceVars = {
+  "--grc-accent": "#6366f1",
+  "--grc-light-from": "#f8fafc",
+  "--grc-light-to": "#eef2ff",
+  "--grc-light-glow": "#c7d2fe",
+  "--grc-dark-from": "#312e81",
+  "--grc-dark-mid": "#0f172a",
+  "--grc-dark-to": "#020617",
+  "--grc-dark-glow": "#6366f1",
+  "--grc-hero-soft": "#a5b4fc",
+};
+
+const GOAL_RICH_CARD_SURFACE_VARS: Record<string, GoalRichCardSurfaceVars> = {
+  car: {
+    "--grc-accent": "#2563eb",
+    "--grc-light-from": "#eef4ff",
+    "--grc-light-to": "#dbeafe",
+    "--grc-light-glow": "#93c5fd",
+    "--grc-dark-from": "#1d4ed8",
+    "--grc-dark-mid": "#0c1929",
+    "--grc-dark-to": "#030712",
+    "--grc-dark-glow": "#3b82f6",
+    "--grc-hero-soft": "#60a5fa",
+  },
+  home: {
+    "--grc-accent": "#059669",
+    "--grc-light-from": "#f8fafc",
+    "--grc-light-to": "#d1fae5",
+    "--grc-light-glow": "#6ee7b7",
+    "--grc-dark-from": "#064e3b",
+    "--grc-dark-mid": "#0f172a",
+    "--grc-dark-to": "#020617",
+    "--grc-dark-glow": "#10b981",
+    "--grc-hero-soft": "#34d399",
+  },
+  retirement: {
+    "--grc-accent": "#d97706",
+    "--grc-light-from": "#fffbeb",
+    "--grc-light-to": "#fef3c7",
+    "--grc-light-glow": "#fcd34d",
+    "--grc-dark-from": "#78350f",
+    "--grc-dark-mid": "#1c1917",
+    "--grc-dark-to": "#0c0a09",
+    "--grc-dark-glow": "#f59e0b",
+    "--grc-hero-soft": "#fbbf24",
+  },
+  wedding: {
+    "--grc-accent": "#e11d48",
+    "--grc-light-from": "#fff1f2",
+    "--grc-light-to": "#ffe4e6",
+    "--grc-light-glow": "#fda4af",
+    "--grc-dark-from": "#881337",
+    "--grc-dark-mid": "#1c1917",
+    "--grc-dark-to": "#0c0a09",
+    "--grc-dark-glow": "#fb7185",
+    "--grc-hero-soft": "#f43f5e",
+  },
+  education: {
+    "--grc-accent": "#7c3aed",
+    "--grc-light-from": "#faf5ff",
+    "--grc-light-to": "#ede9fe",
+    "--grc-light-glow": "#c4b5fd",
+    "--grc-dark-from": "#4c1d95",
+    "--grc-dark-mid": "#0f172a",
+    "--grc-dark-to": "#020617",
+    "--grc-dark-glow": "#8b5cf6",
+    "--grc-hero-soft": "#a78bfa",
+  },
+  travel: {
+    "--grc-accent": "#0d9488",
+    "--grc-light-from": "#f0fdfa",
+    "--grc-light-to": "#ccfbf1",
+    "--grc-light-glow": "#5eead4",
+    "--grc-dark-from": "#134e4a",
+    "--grc-dark-mid": "#0f172a",
+    "--grc-dark-to": "#020617",
+    "--grc-dark-glow": "#14b8a6",
+    "--grc-hero-soft": "#2dd4bf",
+  },
+  custom: DEFAULT_GOAL_RICH_CARD_SURFACE_VARS,
+};
+
+export function goalRichCardSurfaceVarsFor(slug: string): GoalRichCardSurfaceVars {
+  return GOAL_RICH_CARD_SURFACE_VARS[slug] ?? DEFAULT_GOAL_RICH_CARD_SURFACE_VARS;
 }
 
 export type GoalTemplateFormConfig = {
@@ -186,10 +337,9 @@ export function goalTemplateFormConfigFor(slug: string): GoalTemplateFormConfig 
   return GOAL_TEMPLATE_FORM_CONFIG[slug] ?? DEFAULT_GOAL_TEMPLATE_FORM_CONFIG;
 }
 
-export const GOAL_TEMPLATE_CARD_WIDTH_CLASS = "w-[10.75rem] shrink-0 sm:w-[11.25rem]";
+export const GOAL_TEMPLATE_CARD_WIDTH_CLASS = "w-[13.25rem] shrink-0 sm:w-[14rem]";
 
-export const GOAL_TEMPLATE_SCROLL_ROW_CLASS =
-  "flex min-w-0 gap-3 overflow-x-auto overflow-y-visible px-0.5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+export const GOAL_TEMPLATE_SCROLL_ROW_CLASS = "pt-4 pb-10";
 
 const GOAL_TEMPLATE_TAGLINES: Record<string, string> = {
   car: "Stay on track and drive your dreams.",

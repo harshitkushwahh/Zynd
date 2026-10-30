@@ -1,4 +1,4 @@
-"""Mutual fund foundation — scheme master, NAV, products, ingestion logs.
+"""Mutual fund foundation  scheme master, NAV, products, ingestion logs.
 
 Revision ID: 035_mf_foundation
 Revises: 034_notification_phase5

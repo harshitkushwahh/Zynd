@@ -70,16 +70,47 @@ async def build_context_pack(
         pack["family_groups"] = await _safe("family", lambda: _family_slice(db, user.id))
     if "goals" in selected:
         pack["goals"] = await _safe("goals", lambda: _goals_slice(db, user.id))
+    if "account" in selected or "settings" in selected or "kyc" in selected:
+        pack["settings"] = await _safe("settings", lambda: _settings_slice(db, user.id))
     if "account" in selected:
         pack["account"] = await _safe("account", lambda: _account_slice(db, user.id))
+    if "risk_profile" in selected:
+        pack["risk_profile"] = await _safe("risk_profile", lambda: _risk_profile_slice(db, user.id))
+    if "reports" in selected:
+        pack["reports"] = await _safe("reports", lambda: _reports_slice(db, user.id))
+    if "payment" in selected or "cart" in selected:
+        pack["cart"] = await _safe("cart", lambda: _cart_slice(db, user.id))
     if "referrals" in selected:
         pack["referrals"] = await _safe("referrals", lambda: _referral_slice(db, user.id))
     return pack
 
 
+async def _primary_residential_address(db: AsyncSession, user_id: UUID) -> dict[str, Any] | None:
+    from app.infrastructure.persistence.investor_models import InvestorAddress
+
+    row = await db.scalar(
+        select(InvestorAddress)
+        .where(
+            InvestorAddress.investor_profile_id == user_id,
+            InvestorAddress.is_primary.is_(True),
+        )
+        .limit(1)
+    )
+    if row is None:
+        return None
+    return {
+        "on_file": True,
+        "city": row.city,
+        "state": row.state,
+        "postal_code": row.postal_code,
+        "country": row.country,
+    }
+
+
 async def _kyc_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     status = await db.get(UserKycStatus, user_id)
     journey = await db.get(KycJourneyState, user_id)
+    residential_address = await _primary_residential_address(db, user_id)
     overall = _enum_value(status.overall_status) if status else "none"
     steps = None
     if status is not None:
@@ -108,34 +139,60 @@ async def _kyc_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
         "bank_verification_status": journey.bank_verification_status if journey else None,
         "external_kyc_status": journey.external_kyc_status if journey else None,
         "kyc_already_registered": journey.kyc_already_registered if journey else None,
+        "residential_address": residential_address,
     }
+
+
+def order_row_from_mf_order(order) -> dict[str, Any]:
+    from app.application.mf.mf_order_service import order_payment_completed
+
+    status = _enum_value(order.status)
+    payment_completed = order_payment_completed(order)
+    return {
+        "order_id": str(order.id),
+        "amount": _money(order.amount_inr),
+        "status": status,
+        "type": _enum_value(order.order_type),
+        "payment_completed": payment_completed,
+        "failure_code": order.failure_code,
+        "failure_reason": (order.failure_reason or "")[:240] or None,
+        "created_at": _iso(order.created_at),
+        "submitted_at": _iso(order.submitted_at),
+        "settled_at": _iso(order.settled_at),
+        "found": True,
+    }
+
+
+def _order_is_payment_complete(row: dict[str, Any]) -> bool:
+    return bool(row.get("payment_completed")) or row.get("status") == "SUCCEEDED"
+
+
+def _order_activity_time(row: dict[str, Any]) -> str:
+    return str(row.get("settled_at") or row.get("submitted_at") or row.get("created_at") or "")
 
 
 async def _payment_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
     from app.application.mf.mf_order_service import list_user_orders
     from app.application.mf.mf_sip_plan_service import list_user_sip_plans
 
-    orders = await list_user_orders(db, user_id=user_id, limit=12)
+    orders = await list_user_orders(db, user_id=user_id, limit=50)
     plans = await list_user_sip_plans(db, user_id=user_id, limit=8)
+
+    order_rows = [order_row_from_mf_order(order) for order in orders]
 
     last_sip_debit = None
     last_sip_failure = None
-    for order in orders:
-        if _enum_value(order.order_type) != "SIP":
+    sip_debit_candidates: list[dict[str, Any]] = []
+    for row in order_rows:
+        if row.get("type") != "SIP":
             continue
-        status = _enum_value(order.status)
-        row = {
-            "amount": _money(order.amount_inr),
-            "status": status,
-            "created_at": _iso(order.created_at),
-            "settled_at": _iso(order.settled_at),
-            "failure_code": order.failure_code,
-            "failure_reason": (order.failure_reason or "")[:240] or None,
-        }
-        if status == "SUCCEEDED" and order.settled_at is not None and last_sip_debit is None:
-            last_sip_debit = row
-        if status == "FAILED" and last_sip_failure is None:
+        if _order_is_payment_complete(row):
+            sip_debit_candidates.append(row)
+        if row.get("status") == "FAILED" and last_sip_failure is None:
             last_sip_failure = row
+    if sip_debit_candidates:
+        sip_debit_candidates.sort(key=_order_activity_time, reverse=True)
+        last_sip_debit = sip_debit_candidates[0]
 
     failed_plans = [
         {
@@ -149,22 +206,20 @@ async def _payment_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
         if _enum_value(plan.status) == "FAILED"
     ]
 
+    completed_orders = [row for row in order_rows if _order_is_payment_complete(row)]
+    completed_orders.sort(key=_order_activity_time, reverse=True)
+    failed_orders = [row for row in order_rows if row.get("status") == "FAILED"][:8]
+    last_completed_payment = completed_orders[0] if completed_orders else None
+
     return {
+        "last_completed_payment": last_completed_payment,
         "last_sip_debit": last_sip_debit,
         "last_sip_failure": last_sip_failure,
         "failed_sip_plans": failed_plans[:3],
-        "recent_orders": [
-            {
-                "amount": _money(order.amount_inr),
-                "status": _enum_value(order.status),
-                "type": _enum_value(order.order_type),
-                "failure_code": order.failure_code,
-                "failure_reason": (order.failure_reason or "")[:240] or None,
-                "created_at": _iso(order.created_at),
-                "settled_at": _iso(order.settled_at),
-            }
-            for order in orders[:8]
-        ],
+        "recent_payment_completed_orders": completed_orders[:8],
+        "recent_successful_orders": completed_orders[:8],
+        "recent_failed_orders": failed_orders,
+        "recent_orders": order_rows[:12],
         "sip_plans": [
             {
                 "amount": _money(plan.amount_inr),
@@ -232,26 +287,133 @@ async def _goals_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
 
 
 async def _account_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    from app.application.auth.session_service import list_user_sessions
+
     user = await db.get(User, user_id)
     if user is None:
         return {"available": False}
 
     oauth_rows = await db.scalars(select(OAuthAccount).where(OAuthAccount.user_id == user_id))
     providers = {row.provider for row in oauth_rows}
+    sessions = await list_user_sessions(db, user_id=user_id)
+    device_keys = {
+        (row.get("os") or "unknown", row.get("browser") or "unknown") for row in sessions
+    }
 
     return {
         "account_status": _enum_value(user.status),
         "email_verified": user.email_verified_at is not None,
         "email_verified_at": _iso(user.email_verified_at),
+        "email_changed_at": _iso(user.email_changed_at),
         "phone_verified": user.phone_verified_at is not None,
         "phone_verified_at": _iso(user.phone_verified_at),
         "mfa_enrolled": user.mfa_enrolled_at is not None,
+        "mfa_enrolled_at": _iso(user.mfa_enrolled_at),
+        "pin_enrolled": bool(user.pin_hash and str(user.pin_hash).strip()),
+        "pin_set_at": _iso(user.pin_set_at),
+        "password_changed_at": _iso(user.password_changed_at),
         "has_password_login": bool(user.password_hash),
         "google_account_linked": OAuthProvider.google in providers,
         "apple_account_linked": OAuthProvider.apple in providers,
         "linked_sign_in_providers": sorted(_enum_value(provider) or "" for provider in providers),
         "country_code": user.country_code,
+        "active_session_count": len(sessions),
+        "active_device_count": len(device_keys),
     }
+
+
+async def _settings_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    from app.application.auth.mfa_service import get_backup_codes_status
+    from app.infrastructure.persistence.investor_models import InvestorProfile, InvestorRelatedParty
+
+    user = await db.get(User, user_id)
+    backup = await get_backup_codes_status(db, user_id)
+    nominee_count = 0
+    nominee_last_updated_at = None
+    nominee_last_update_source = None
+    profile = await db.get(InvestorProfile, user_id)
+    if profile is not None:
+        rows = await db.scalars(
+            select(InvestorRelatedParty).where(InvestorRelatedParty.investor_profile_id == user_id)
+        )
+        parties = list(rows)
+        nominee_count = len(parties)
+        if parties:
+            latest = max(parties, key=lambda row: row.updated_at)
+            nominee_last_updated_at = _iso(latest.updated_at)
+            nominee_last_update_source = _enum_value(latest.source)
+
+    return {
+        "nominee_count": nominee_count,
+        "nominee_last_updated_at": nominee_last_updated_at,
+        "nominee_last_update_source": nominee_last_update_source,
+        "backup_codes_total": backup.get("total", 0),
+        "backup_codes_remaining": backup.get("remaining", 0),
+        "pin_enrolled": bool(user and user.pin_hash and str(user.pin_hash).strip()),
+        "pin_set_at": _iso(user.pin_set_at) if user else None,
+    }
+
+
+async def _risk_profile_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    from app.application.risk_profile.scoring_service import get_user_risk_profile
+
+    profile = await get_user_risk_profile(db, user_id)
+    if not profile:
+        return {"has_profile": False}
+    tier_cfg = profile.get("tier_config") if isinstance(profile.get("tier_config"), dict) else {}
+    return {
+        "has_profile": True,
+        "tier": profile.get("tier"),
+        "tier_label": tier_cfg.get("label") or profile.get("tier"),
+        "score": profile.get("score"),
+        "display_score": profile.get("display_score"),
+        "computed_at": profile.get("computed_at"),
+        "updated_at": profile.get("updated_at"),
+        "questions_answered": profile.get("questions_answered"),
+    }
+
+
+async def _reports_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    from app.application.mf.investor_report_service import REPORT_TITLES, list_investor_reports
+
+    rows = await list_investor_reports(db, user_id=user_id)
+    last = rows[0] if rows else None
+    last_payload = None
+    if last:
+        from app.infrastructure.persistence.mf_transaction_models import MfGeneratedReportKind
+
+        kind = last.get("kind")
+        kind_label = str(kind or "report")
+        try:
+            kind_label = REPORT_TITLES.get(MfGeneratedReportKind(kind), kind_label)
+        except ValueError:
+            kind_label = str(kind).replace("_", " ").title()
+        last_payload = {
+            "kind": kind,
+            "kind_label": kind_label,
+            "status": last.get("status"),
+            "generated_at": last.get("generated_at"),
+            "period_to": last.get("period_to"),
+        }
+    return {
+        "report_count": len(rows),
+        "last_generated": last_payload,
+        "recent": [
+            {
+                "kind": row.get("kind"),
+                "status": row.get("status"),
+                "generated_at": row.get("generated_at"),
+            }
+            for row in rows[:3]
+        ],
+    }
+
+
+async def _cart_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    from app.application.mf.mf_cart_service import list_cart_items
+
+    items = await list_cart_items(db, user_id=user_id)
+    return {"item_count": len(items)}
 
 
 async def _referral_slice(db: AsyncSession, user_id: UUID) -> dict[str, Any]:

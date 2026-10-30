@@ -77,7 +77,7 @@ function DetailRow({
           empty && "text-muted-foreground",
         )}
       >
-        {empty ? "—" : value}
+        {empty ? "" : value}
       </dd>
     </div>
   );

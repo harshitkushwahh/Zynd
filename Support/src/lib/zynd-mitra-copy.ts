@@ -1,4 +1,4 @@
-/** User-facing product term — use instead of "distributor" in UI copy. */
+/** User-facing product term  use instead of "distributor" in UI copy. */
 export const ZYND_MITRA_COPY = {
   singular: "Zynd Mitra",
   plural: "Zynd Mitras",
@@ -54,7 +54,7 @@ export const ZYND_MITRA_COPY = {
   yourBookArn: "Only clients linked to your Zynd Mitra ARN (demo).",
   txnAwaitingMitra: "Single-fund recommendations you sent from quick transaction.",
   fullBookDesc:
-    "Full investor book for this Zynd Mitra — onboarding, compliance, and investment status at a glance.",
+    "Full investor book for this Zynd Mitra  onboarding, compliance, and investment status at a glance.",
   targetsPerMitra: "Targets vs actuals for each Zynd Mitra.",
   complianceQueueDesc: "KYC queue and clients needing Zynd Mitra action",
   adminContact: "To update Zynd Mitra details or replace documents, contact your Zynd administrator.",
@@ -63,7 +63,7 @@ export const ZYND_MITRA_COPY = {
   mitraAccount: "Zynd Mitra account",
   mitraCode: "Zynd Mitra code",
   mitraVerification: "Aadhaar and PAN submitted for Zynd Mitra verification",
-  onboardingIncomplete: "Zynd Mitra onboarding incomplete — EUIN validation",
+  onboardingIncomplete: "Zynd Mitra onboarding incomplete  EUIN validation",
   mitraDetails: "Zynd Mitra details",
   leaveApplicationDesc: "Approve or decline a Zynd Mitra leave application",
   welcomeConsole: "Welcome to Zynd Mitra Console",

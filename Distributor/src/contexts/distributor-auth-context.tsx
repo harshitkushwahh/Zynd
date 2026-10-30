@@ -84,7 +84,7 @@ export function DistributorAuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setPermissions([]);
       } else if (!tokenRefreshed && cachedUser) {
-        // Offline — keep the last known profile only when the session could not be refreshed.
+        // Offline  keep the last known profile only when the session could not be refreshed.
         setUser(cachedUser);
       } else {
         clearPersistedDistributorSession();

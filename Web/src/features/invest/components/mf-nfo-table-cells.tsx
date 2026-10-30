@@ -142,12 +142,12 @@ export const NfoOfferStatusCell = memo(function NfoOfferStatusCell({
 
   if (status === "UPCOMING") {
     const text = opensInBadgeText(daysUntilDate(fund.nfo?.subscription_open_date, now));
-    if (!text) return <span className="text-caption text-muted-foreground">—</span>;
+    if (!text) return <span className="text-caption text-muted-foreground"></span>;
     return <NfoTimeBadge text={text} tone="grey" />;
   }
 
   if (!countdown || countdown.phase === "closed") {
-    return <span className="text-caption text-muted-foreground">—</span>;
+    return <span className="text-caption text-muted-foreground"></span>;
   }
 
   const timePart = nfoClosesInTimePart(countdown, now, {
@@ -166,7 +166,7 @@ export function NfoCategoryCell({ fund }: { fund: InvestFundSummary }) {
   const categoryKind = resolveMfFundCategoryKind(categoryLabel);
 
   if (!categoryLabel) {
-    return <span className="text-caption text-muted-foreground">—</span>;
+    return <span className="text-caption text-muted-foreground"></span>;
   }
   if (categoryKind) {
     return (

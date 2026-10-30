@@ -84,7 +84,7 @@ export function historicReturnBarPercents(
   };
 }
 
-/** Illustrative lumpsum growth by horizon — shown before a fund is selected. */
+/** Illustrative lumpsum growth by horizon  shown before a fund is selected. */
 export const LUMPSUM_PLACEHOLDER_CHART_SERIES: CalculatorChartSeriesPoint[] = [
   { label: "1Y", invested: 1_00_000, value: 1_12_000, gain: 12_000 },
   { label: "3Y", invested: 1_00_000, value: 1_38_000, gain: 38_000 },

@@ -8,6 +8,7 @@ import {
   getSupportTicketThread,
   isSupportThreadLocked,
   mapConversationMessages,
+  postBotHelpFeedback,
   postSupportMessage,
   respondSupportResolution,
   type SupportConversationPayload,
@@ -27,16 +28,25 @@ import {
 } from "@/features/support/lib/support-dummy-data";
 import { createSupportMessageId } from "@/features/support/lib/support-format";
 import {
+  isOptimisticSupportMessageId,
+  reconcileSupportMessages,
+  withoutMatchingOptimisticUserMessage,
+} from "@/features/support/lib/support-message-merge";
+import {
   applyResolutionFlags,
   isResolutionPromptMessage,
   RESOLUTION_PROMPT_BODY,
 } from "@/features/support/lib/support-resolution";
+import {
+  SUPPORT_MESSAGE_MAX_CHARS,
+  validateSupportImageFile,
+} from "@/features/support/lib/support-message-limits";
 import type {
   SupportImageAttachment,
   SupportMessage,
 } from "@/features/support/lib/support-types";
-
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+import { copy } from "@/shared/config/copy";
+import { toast } from "sonner";
 const POLL_MS = 4000;
 const REALTIME_REFRESH_MS = 350;
 
@@ -96,13 +106,26 @@ function mapRealtimeMessage(message: Record<string, unknown>): SupportMessage | 
   const body = isPrompt && !rawBody.trim() ? RESOLUTION_PROMPT_BODY : rawBody;
   const resolutionActive = isPrompt ? Boolean(message.resolution_active ?? true) : false;
 
+  const authorRole =
+    roleRaw === "user" || roleRaw === "bot" || roleRaw === "agent" || roleRaw === "system"
+      ? roleRaw
+      : "agent";
+
   return {
     id,
     role,
+    authorRole,
     body,
     createdAt,
     kind,
     resolutionActive,
+    helpFeedback:
+      message.help_feedback === "yes" ||
+      message.help_feedback === "no" ||
+      message.help_feedback === "pending"
+        ? message.help_feedback
+        : undefined,
+    helpFeedbackActive: Boolean(message.help_feedback_active),
     senderName: typeof message.sender_name === "string" ? message.sender_name : undefined,
     attachmentId:
       typeof message.attachment_document_id === "string"
@@ -125,7 +148,7 @@ function mapRealtimeMessage(message: Record<string, unknown>): SupportMessage | 
 
 function isPersistedMessageId(id: string): boolean {
   if (id === "zynd-help-bot-greeting") return false;
-  return !id.startsWith("msg-");
+  return !isOptimisticSupportMessageId(id);
 }
 
 export function useSupportChat() {
@@ -154,10 +177,21 @@ export function useSupportChat() {
     conversationIdRef.current = conversation.id;
     setConversationMeta(conversation);
     setHandler(conversation.handler);
+    if (conversation.handler !== "human") {
+      setAttachment((current) => {
+        if (current) {
+          URL.revokeObjectURL(current.url);
+          objectUrlsRef.current.delete(current.url);
+        }
+        return null;
+      });
+    }
     const locked = isSupportThreadLocked(conversation);
     setCanReply(!locked);
     setResolutionOpen(Boolean(conversation.resolution_open) && !locked);
-    setMessages(messagesFromConversation(conversation));
+    setMessages((current) =>
+      reconcileSupportMessages(current, messagesFromConversation(conversation)),
+    );
   }, []);
 
   const refreshConversation = useCallback(() => {
@@ -183,6 +217,8 @@ export function useSupportChat() {
 
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
+  const canReplyRef = useRef(canReply);
+  canReplyRef.current = canReply;
 
   const handleRealtimeEvent = useCallback(
     (event: SupportRealtimeEvent) => {
@@ -200,16 +236,22 @@ export function useSupportChat() {
       if (event.type === "message:new" && event.message) {
         const mapped = mapRealtimeMessage(event.message);
         if (!mapped) return;
-        if (mapped.kind === "resolution_prompt" && mapped.resolutionActive) {
+        const allowResolution = canReplyRef.current;
+        if (
+          allowResolution &&
+          mapped.kind === "resolution_prompt" &&
+          mapped.resolutionActive
+        ) {
           setResolutionOpen(true);
+        } else if (mapped.kind === "resolution_prompt") {
+          mapped.resolutionActive = false;
         }
         setMessages((current) => {
           if (current.some((row) => row.id === mapped.id)) return current;
-          const next = [
-            ...current.filter((row) => row.id !== "zynd-help-bot-greeting"),
-            mapped,
-          ] as SupportMessage[];
-          if (mapped.kind === "resolution_prompt" && mapped.resolutionActive) {
+          let next = current.filter((row) => row.id !== "zynd-help-bot-greeting");
+          next = withoutMatchingOptimisticUserMessage(next, mapped);
+          next = [...next, mapped];
+          if (allowResolution && mapped.kind === "resolution_prompt" && mapped.resolutionActive) {
             return applyResolutionFlags(next, true) as SupportMessage[];
           }
           return next;
@@ -397,7 +439,22 @@ export function useSupportChat() {
   }, []);
 
   const attachImage = useCallback((file: File | null) => {
-    if (!file || !file.type.startsWith("image/") || file.size > MAX_IMAGE_BYTES) {
+    if (!file) {
+      return;
+    }
+    if (handlerRef.current !== "human") {
+      toast.error(copy.support.uploadImageBotDisabledHint);
+      return;
+    }
+    const check = validateSupportImageFile(file);
+    if (!check.ok) {
+      const message =
+        check.reason === "empty"
+          ? copy.support.imageEmptyError
+          : check.reason === "too_large"
+            ? copy.support.imageTooLargeError
+            : copy.support.imageInvalidTypeError;
+      toast.error(message);
       return;
     }
 
@@ -421,8 +478,12 @@ export function useSupportChat() {
   const sendMessage = useCallback(
     (rawText: string, image?: SupportImageAttachment | null) => {
       const body = rawText.trim();
-      const activeImage = image ?? attachment;
+      const activeImage = handler === "human" ? image ?? attachment : null;
       if ((!body && !activeImage) || botTyping || sendingRef.current || !canReply || resolutionOpen) {
+        return;
+      }
+      if (body.length > SUPPORT_MESSAGE_MAX_CHARS) {
+        toast.error(copy.support.messageTooLongError);
         return;
       }
 
@@ -491,6 +552,35 @@ export function useSupportChat() {
       applyConversation(conversation);
     },
     [applyConversation],
+  );
+
+  const submitHelpFeedback = useCallback(
+    (messageId: string, choice: "yes" | "no") => {
+      if (!isPersistedMessageId(messageId) || sendingRef.current) {
+        return Promise.resolve();
+      }
+      sendingRef.current = true;
+      if (choice === "yes") {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === messageId
+              ? { ...message, helpFeedback: "yes", helpFeedbackActive: false }
+              : message,
+          ),
+        );
+      }
+      return postBotHelpFeedback(messageId, choice)
+        .then((conversation) => {
+          applyConversation(conversation);
+        })
+        .catch(() => {
+          void refreshConversation();
+        })
+        .finally(() => {
+          sendingRef.current = false;
+        });
+    },
+    [applyConversation, refreshConversation],
   );
 
   const respondToResolution = useCallback(
@@ -576,6 +666,7 @@ export function useSupportChat() {
       agentTyping,
       wsConnected,
       canReply,
+      handler,
       resolutionOpen,
       conversationReady,
       hasEstablishedThread,
@@ -584,6 +675,7 @@ export function useSupportChat() {
       sendQuickReply,
       openTicket,
       respondToResolution,
+      submitHelpFeedback,
       startNewChat,
       refreshConversation,
     }),
@@ -592,6 +684,7 @@ export function useSupportChat() {
       attachImage,
       attachment,
       canReply,
+      handler,
       resolutionOpen,
       chatHeader,
       clearAttachment,
@@ -601,6 +694,7 @@ export function useSupportChat() {
       messages,
       openTicket,
       respondToResolution,
+      submitHelpFeedback,
       sendMessage,
       sendQuickReply,
       startNewChat,

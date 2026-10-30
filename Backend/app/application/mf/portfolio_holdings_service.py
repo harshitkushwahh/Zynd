@@ -11,7 +11,10 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.investor.indian_bank_display import format_bank_account_label, resolve_bank_display_name
-from app.application.mf.cas_import_service import list_user_external_holdings
+from app.application.mf.cas_import_service import (
+    list_user_external_holdings,
+    user_has_allotted_platform_investment,
+)
 from app.application.mf.mf_redemption_journey_service import (
     get_fp_redemption_journey,
     index_active_redemptions,
@@ -1207,6 +1210,30 @@ async def _build_portfolio_growth_series(
     return _downsample_growth_points(points)
 
 
+def portfolio_has_platform_units(holdings: list[dict[str, Any]]) -> bool:
+    return any(
+        row.get("source") != "external" and float(row.get("units") or 0) > 0 for row in holdings
+    )
+
+
+def hide_external_until_allotted(holdings: list[dict[str, Any]], *, allotted: bool) -> list[dict[str, Any]]:
+    if allotted:
+        return holdings
+    return [row for row in holdings if row.get("source") != "external"]
+
+
+def combined_invested_inr(*, fp_invested: float, holdings: list[dict[str, Any]]) -> float:
+    external = sum(
+        float(row.get("invested_inr") or 0) for row in holdings if row.get("source") == "external"
+    )
+    zynd = float(fp_invested or 0)
+    if zynd <= 0:
+        zynd = sum(
+            float(row.get("invested_inr") or 0) for row in holdings if row.get("source") != "external"
+        )
+    return round(zynd + external, 2)
+
+
 async def _merge_external_holdings(
     session: AsyncSession,
     *,
@@ -1237,6 +1264,11 @@ async def _merge_external_holdings(
         nav = float(ext.get("nav_value") or 0)
         total_current += market_value
 
+        cost = float(ext.get("cost_value_inr") or 0)
+        invested = cost if cost > 0 else market_value
+        return_inr = market_value - invested
+        return_pct = (return_inr / invested * 100) if invested > 0 else 0.0
+
         merged.append(
             {
                 "id": build_portfolio_holding_id(folio_number=folio, isin=isin),
@@ -1247,12 +1279,12 @@ async def _merge_external_holdings(
                 "amc_slug": meta.get("amc_slug"),
                 "amc_logo_url": meta.get("amc_logo_url") or ext.get("amc_logo_url"),
                 "units": units,
-                "redeemable_units": units,
+                "redeemable_units": 0.0,
                 "current_value_inr": market_value,
-                "redeemable_amount_inr": market_value,
-                "invested_inr": market_value,
-                "return_inr": 0.0,
-                "return_pct": 0.0,
+                "redeemable_amount_inr": 0.0,
+                "invested_inr": invested,
+                "return_inr": round(return_inr, 2),
+                "return_pct": round(return_pct, 2),
                 "allocation_pct": 0.0,
                 "nav": nav or None,
                 "nav_as_on": ext.get("as_of_date"),
@@ -1270,7 +1302,7 @@ async def _merge_external_holdings(
 
 
 async def _portfolio_cache_key(user_id: uuid.UUID, kind: str, settings: Settings) -> str:
-    return f"portfolio:{kind}:v3:{user_id}"
+    return f"portfolio:{kind}:v5:{user_id}"
 
 
 async def _get_cached_portfolio(key: str, *, settings: Settings) -> Any | None:
@@ -1568,12 +1600,14 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
     processing = await _has_processing_orders(session, user_id=user_id)
 
     if readiness != "ready" or old_id is None or fp_mfia_id is None:
+        has_allotted = await user_has_allotted_platform_investment(session, user_id)
         external_holdings = await _merge_external_holdings(
             session,
             user_id=user_id,
             fp_holdings=[],
             fund_meta={},
         )
+        external_holdings = hide_external_until_allotted(external_holdings, allotted=has_allotted)
         if external_holdings:
             isins = {str(row.get("isin") or "").upper() for row in external_holdings}
             return_1d_by_isin = await _load_return_1d_by_isin(session, isins=isins)
@@ -1584,7 +1618,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
                 return_1d_by_isin=return_1d_by_isin,
             )
             current_value = sum(float(row.get("current_value_inr") or 0) for row in external_holdings)
-            invested = current_value
+            invested = combined_invested_inr(fp_invested=0, holdings=external_holdings)
             fund_meta = await _load_fund_metadata(session, isins=isins, settings=settings)
             isin_category = {isin: meta.get("sebi_category") for isin, meta in fund_meta.items()}
             allocation = _compute_allocation_slices(
@@ -1613,6 +1647,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
                     invested_inr=invested,
                 ),
                 "as_on": external_holdings[0].get("nav_as_on") if external_holdings else None,
+                "has_allotted_investment": has_allotted,
             }
         else:
             payload = {
@@ -1632,6 +1667,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
                 "allocation": [],
                 "growth": [],
                 "as_on": None,
+                "has_allotted_investment": has_allotted,
             }
         await _set_cached_portfolio(cache_key, payload, settings=settings)
         return payload
@@ -1653,6 +1689,10 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
         fp_holdings=holdings,
         fund_meta=fund_meta,
     )
+    has_allotted = portfolio_has_platform_units(holdings) or await user_has_allotted_platform_investment(
+        session, user_id
+    )
+    holdings = hide_external_until_allotted(holdings, allotted=has_allotted)
     external_isins = {str(row.get("isin") or "").upper() for row in holdings if row.get("source") == "external"}
     if external_isins:
         fund_meta = {**fund_meta, **(await _load_fund_metadata(session, isins=external_isins, settings=settings))}
@@ -1673,9 +1713,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
     current_value = sum(float(row.get("current_value_inr") or 0) for row in holdings) or float(
         returns.get("current_value_inr") or 0
     )
-    invested = float(returns.get("invested_inr") or 0)
-    if not invested and holdings:
-        invested = sum(float(row.get("invested_inr") or 0) for row in holdings if row.get("source") != "external")
+    invested = combined_invested_inr(fp_invested=float(returns.get("invested_inr") or 0), holdings=holdings)
 
     status = "empty"
     if holdings:
@@ -1708,6 +1746,7 @@ async def get_user_portfolio_summary(session: AsyncSession, *, user_id: uuid.UUI
             invested_inr=invested,
         ),
         "as_on": as_on,
+        "has_allotted_investment": has_allotted,
     }
     await _set_cached_portfolio(cache_key, payload, settings=settings)
     return payload
@@ -1725,12 +1764,14 @@ async def list_user_portfolio_holdings(session: AsyncSession, *, user_id: uuid.U
 
     if readiness != "ready" or old_id is None or fp_mfia_id is None:
         settings = get_settings()
+        has_allotted = await user_has_allotted_platform_investment(session, user_id)
         external_holdings = await _merge_external_holdings(
             session,
             user_id=user_id,
             fp_holdings=[],
             fund_meta={},
         )
+        external_holdings = hide_external_until_allotted(external_holdings, allotted=has_allotted)
         if external_holdings:
             isins = {str(row.get("isin") or "").upper() for row in external_holdings}
             return_1d_by_isin = await _load_return_1d_by_isin(session, isins=isins)
@@ -1768,6 +1809,10 @@ async def list_user_portfolio_holdings(session: AsyncSession, *, user_id: uuid.U
         fp_holdings=holdings,
         fund_meta=fund_meta,
     )
+    has_allotted = portfolio_has_platform_units(holdings) or await user_has_allotted_platform_investment(
+        session, user_id
+    )
+    holdings = hide_external_until_allotted(holdings, allotted=has_allotted)
     external_isins = {str(row.get("isin") or "").upper() for row in holdings if row.get("source") == "external"}
     if external_isins:
         fund_meta = {
@@ -1821,6 +1866,76 @@ async def _load_primary_nominee_name(session: AsyncSession, *, user_id: uuid.UUI
     return str(row) if row else None
 
 
+async def _external_holding_detail(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    holding_id: str,
+    folio_number: str,
+    isin: str,
+) -> dict[str, Any] | None:
+    rows = await list_user_external_holdings(session, user_id=user_id)
+    match = next(
+        (
+            row
+            for row in rows
+            if str(row.get("isin") or "").upper() == isin and str(row.get("folio_number") or "") == folio_number
+        ),
+        None,
+    )
+    if match is None:
+        return None
+    current_value = float(match.get("market_value_inr") or 0)
+    invested = float(match.get("cost_value_inr") or 0) or current_value
+    units = float(match.get("units") or 0)
+    nav = float(match.get("nav_value") or 0)
+    return_inr = current_value - invested
+    return_pct = (return_inr / invested * 100) if invested > 0 else 0.0
+    return_1d_by_isin = await _load_return_1d_by_isin(session, isins={isin})
+    day_change_row = {"isin": isin, "current_value_inr": current_value}
+    _apply_holding_day_change([day_change_row], return_1d_by_isin=return_1d_by_isin)
+    return {
+        "id": holding_id,
+        "folio_number": folio_number,
+        "isin": isin,
+        "fund_name": match.get("matched_scheme_name") or match.get("scheme_name") or isin,
+        "amc_name": match.get("amc_name"),
+        "amc_slug": None,
+        "amc_logo_url": match.get("amc_logo_url"),
+        "units": units,
+        "redeemable_units": 0.0,
+        "current_value_inr": current_value,
+        "redeemable_amount_inr": 0.0,
+        "invested_inr": invested,
+        "return_inr": round(return_inr, 2),
+        "return_pct": round(return_pct, 2),
+        "allocation_pct": 0.0,
+        "nav": nav or None,
+        "nav_as_on": match.get("as_of_date"),
+        "holding_mode": "Physical",
+        "invested_months": None,
+        "avg_nav": round(invested / units, 4) if units > 0 and invested > 0 else None,
+        "current_nav": nav or None,
+        "day_change_inr": day_change_row.get("day_change_inr"),
+        "day_change_pct": day_change_row.get("day_change_pct"),
+        "xirr_pct": round(return_pct, 2) if invested > 0 else None,
+        "redeem_bank_label": None,
+        "redeem_bank_name": None,
+        "redeem_bank_ifsc": None,
+        "nominee_name": None,
+        "nominee_share_percent": None,
+        "nominee_is_minor": None,
+        "product_id": None,
+        "min_sip_amount_inr": None,
+        "min_lumpsum_amount_inr": None,
+        "sip_allowed": False,
+        "sip_options": [],
+        "transactions": [],
+        "pending_action": None,
+        "source": "external",
+    }
+
+
 async def get_user_portfolio_holding_detail(
     session: AsyncSession,
     *,
@@ -1828,7 +1943,7 @@ async def get_user_portfolio_holding_detail(
     holding_id: str,
 ) -> dict[str, Any]:
     settings = get_settings()
-    cache_key = f"portfolio:holding_detail:v11:{user_id}:{holding_id}"
+    cache_key = f"portfolio:holding_detail:v12:{user_id}:{holding_id}"
     cached = await _get_cached_portfolio(cache_key, settings=settings)
     if cached is not None:
         return cached
@@ -1845,7 +1960,14 @@ async def get_user_portfolio_holding_detail(
     _mfia, old_id, fp_mfia_id, readiness = await _resolve_mfia_context(session, user_id=user_id)
 
     if readiness != "ready" or old_id is None or fp_mfia_id is None:
-        payload = {"status": readiness, "holding": None}
+        external = await _external_holding_detail(
+            session,
+            user_id=user_id,
+            holding_id=resolved_holding_id,
+            folio_number=folio_number,
+            isin=isin,
+        )
+        payload = {"status": "ready", "holding": external} if external else {"status": readiness, "holding": None}
         await _set_cached_portfolio(cache_key, payload, settings=settings)
         return payload
 
@@ -1855,6 +1977,17 @@ async def get_user_portfolio_holding_detail(
     )
     raw_rows = [row for row in parse_holdings_report(holdings_payload) if str(row.get("isin")).upper() == isin]
     if not raw_rows and pending_action is None:
+        external = await _external_holding_detail(
+            session,
+            user_id=user_id,
+            holding_id=resolved_holding_id,
+            folio_number=folio_number,
+            isin=isin,
+        )
+        if external:
+            payload = {"status": "ready", "holding": external}
+            await _set_cached_portfolio(cache_key, payload, settings=settings)
+            return payload
         payload = {"status": "not_found", "holding": None}
         await _set_cached_portfolio(cache_key, payload, settings=settings)
         return payload

@@ -3,7 +3,11 @@
 import { Camera } from "lucide-react";
 
 import { DocumentUploadDialog } from "@/components/ui/document-upload-dialog";
-import { uploadFamilyGroupAvatar } from "@/features/family-groups/api/family-groups-api";
+import {
+  fetchFamilyGroup,
+  uploadFamilyGroupAvatar,
+} from "@/features/family-groups/api/family-groups-api";
+import { fetchLatestDocument, waitForDocumentReady } from "@/features/documents/api/documents-api";
 import { formatDocumentUploadError } from "@/features/documents/lib/format-document-upload-error";
 import {
   prepareProfileImageFile,
@@ -61,7 +65,16 @@ export function FamilyGroupAvatarUploadDialog({
       onUpload={async (file) => {
         try {
           const updated = await uploadFamilyGroupAvatar(groupId, file);
-          onUploaded?.(updated.avatar_url ?? null);
+          let avatarUrl = updated.avatar_url ?? null;
+          if (!avatarUrl) {
+            const latest = await fetchLatestDocument("family_group_avatar");
+            if (latest?.status === "pending_scan") {
+              await waitForDocumentReady(latest.id);
+            }
+            const group = await fetchFamilyGroup(groupId);
+            avatarUrl = group.avatar_url ?? null;
+          }
+          onUploaded?.(avatarUrl);
         } catch (error) {
           throw new Error(formatDocumentUploadError(error, avatarCopy.uploadFailed));
         }

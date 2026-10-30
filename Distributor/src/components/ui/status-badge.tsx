@@ -52,7 +52,7 @@ type StatusBadgeProps = {
   className?: string;
 };
 
-/** Compact status chip with icon — single badge UI for the Distributor app. */
+/** Compact status chip with icon  single badge UI for the Distributor app. */
 export function StatusBadge({
   variant,
   children,

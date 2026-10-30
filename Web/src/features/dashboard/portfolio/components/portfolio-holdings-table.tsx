@@ -86,7 +86,10 @@ function HoldingFundCell({ holding }: { holding: PortfolioHoldingTableRow }) {
         <p className="font-medium leading-snug break-words whitespace-normal text-foreground">
           {holding.fundName}
         </p>
-        <p className="mt-0.5 text-caption text-muted-foreground">{holding.amcName}</p>
+        <p className="mt-0.5 text-caption text-muted-foreground">
+          {holding.source === "external" ? `${copy.mutualFunds.outsideZynd} · ` : ""}
+          {holding.amcName}
+        </p>
       </div>
     </div>
   );

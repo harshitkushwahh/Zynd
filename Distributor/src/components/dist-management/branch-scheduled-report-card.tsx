@@ -89,7 +89,7 @@ export function BranchScheduledReportCard({
         <dl className="distributor-branch-scheduled-report-card__schedule">
           <div className="distributor-branch-scheduled-report-card__schedule-item">
             <dt>Last sent</dt>
-            <dd>{report.lastSentAt ? formatDistributorDate(report.lastSentAt) : "—"}</dd>
+            <dd>{report.lastSentAt ? formatDistributorDate(report.lastSentAt) : ""}</dd>
           </div>
           <div className="distributor-branch-scheduled-report-card__schedule-item">
             <dt>Next run</dt>

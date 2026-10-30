@@ -18,16 +18,27 @@ export type ZtoKycPrefill = {
   address: KycAddressFormValue | null;
 };
 
+const KYC_DIALOG_CLOSE_RESET_MS = 220;
+
 /**
- * One-time read of the user-approved ZTO snapshot for KYC wizard input seeding.
- * Read-only: never writes journey state and never marks any step verified.
+ * Read-only ZTO snapshot for KYC wizard seeding (never writes journey state).
+ * Fetches while the dialog is open and ZTO was accepted; clears after close.
  */
-export function useZtoKycPrefill(enabled: boolean): ZtoKycPrefill {
+export function useZtoKycPrefill(open: boolean, ztoAccepted: boolean): ZtoKycPrefill {
   const [prefill, setPrefill] = useState<ZtoKycPrefill>({ pan: null, bank: null, address: null });
   const requestedRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled || requestedRef.current) return;
+    if (open) return;
+    const timeoutId = window.setTimeout(() => {
+      requestedRef.current = false;
+      setPrefill({ pan: null, bank: null, address: null });
+    }, KYC_DIALOG_CLOSE_RESET_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !ztoAccepted || requestedRef.current) return;
     requestedRef.current = true;
     void fetchZtoReviewData()
       .then((data) => ({
@@ -37,7 +48,7 @@ export function useZtoKycPrefill(enabled: boolean): ZtoKycPrefill {
       }))
       .then(setPrefill)
       .catch(() => setPrefill({ pan: null, bank: null, address: null }));
-  }, [enabled]);
+  }, [open, ztoAccepted]);
 
   return prefill;
 }

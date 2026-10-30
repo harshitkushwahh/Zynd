@@ -1,7 +1,7 @@
 "use client";
 
 import { notFound } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SupportTicketDetailAside } from "@/components/tickets/support-ticket-detail-aside";
 import { SupportTicketDetailHeader } from "@/components/tickets/support-ticket-detail-header";
@@ -60,16 +60,44 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
     };
   }, [ticketId]);
 
-  const refreshDetail = () => {
+  const refreshGenRef = useRef(0);
+  const refreshTimerRef = useRef<number | null>(null);
+
+  const refreshDetail = useCallback(() => {
+    const gen = ++refreshGenRef.current;
     void fetchSupportTicketDetail(ticketId)
       .then((payload) => {
+        if (gen !== refreshGenRef.current) return;
         setDetail(payload);
         setLoadState("ready");
       })
       .catch(() => {
         // Keep the open ticket in place if a refresh fails.
       });
-  };
+  }, [ticketId]);
+
+  const scheduleRefreshDetail = useCallback(() => {
+    if (refreshTimerRef.current !== null) return;
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      refreshDetail();
+    }, 350);
+  }, [refreshDetail]);
+
+  const applyDetailFromMutation = useCallback((payload: SupportTicketDetail) => {
+    refreshGenRef.current += 1;
+    setDetail(payload);
+    setLoadState("ready");
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const { wsConnected, notifyTyping, markMessagesRead } = useSupportTicketRealtime({
     ticketId,
@@ -103,7 +131,7 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
         return;
       }
       if (event.type === "message:new" || event.type === "ticket:updated") {
-        refreshDetail();
+        scheduleRefreshDetail();
       }
     },
   });
@@ -125,8 +153,7 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
   const applyUpdate = (patch: { status?: SupportTicketDetail["ticket"]["status"]; assignToSelf?: boolean }) => {
     void updateSupportTicket(ticketId, patch)
       .then((payload) => {
-        setDetail(payload);
-        setLoadState("ready");
+        applyDetailFromMutation(payload);
       })
       .catch(() => {
         // Leave the open ticket in place when the update fails.
@@ -190,7 +217,7 @@ export function SupportTicketDetailPage({ ticketId }: SupportTicketDetailPagePro
               detail={detail}
               activeTab={activeTab}
               className="h-full min-h-0"
-              onUpdated={setDetail}
+              onUpdated={applyDetailFromMutation}
               notifyTyping={notifyTyping}
               markMessagesRead={markMessagesRead}
               wsConnected={wsConnected}

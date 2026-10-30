@@ -100,7 +100,7 @@ def _markdown_report(report: dict) -> str:
     lines.extend(["", "## Missing catalog fields", ""])
     missing = report.get("missing_fields") or []
     if not missing:
-        lines.append("_None — full field coverage._")
+        lines.append("_None  full field coverage._")
     else:
         for path in missing:
             spec = PATH_TO_SPEC.get(path)

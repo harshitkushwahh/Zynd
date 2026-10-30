@@ -164,7 +164,7 @@ export function DistributorOverviewPanel() {
                       href={item.href}
                       icon={Layers3}
                       label={item.label}
-                      value="—"
+                      value=""
                     />
                   );
                 })}

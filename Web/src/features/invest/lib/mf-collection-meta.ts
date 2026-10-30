@@ -18,7 +18,7 @@ export type MfCollectionTheme = {
   footerClass: string;
   iconBadgeClass: string;
   glowClass: string;
-  /** Optional illustration asset — when unset, a placeholder is shown. */
+  /** Optional illustration asset  when unset, a placeholder is shown. */
   illustrationSrc?: string | null;
   /** Optional scale utility for the illustration image. */
   illustrationScaleClass?: string;

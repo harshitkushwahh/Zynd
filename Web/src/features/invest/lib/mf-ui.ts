@@ -15,11 +15,11 @@ export const MF_FUND_DETAIL_SURFACE_RADIUS_CLASS = MF_FUND_DETAIL_RADIUS_CLASS;
 
 export const MF_PAGE_SECTION_CLASS = "w-full min-w-0 max-w-full overflow-x-hidden";
 
-/** Transactions table frame — shrinks to content, scrolls internally when rows exceed viewport budget. */
+/** Transactions table frame  shrinks to content, scrolls internally when rows exceed viewport budget. */
 export const MF_TRANSACTIONS_TABLE_FRAME_CLASS =
   "flex max-h-[calc(100dvh-23rem)] flex-col overflow-hidden max-md:max-h-[calc(100dvh-27rem)] md:max-h-[calc(100dvh-18.5rem)]";
 
-/** Grid used for fund card rows — prevents flex/grid children from stretching the page width. */
+/** Grid used for fund card rows  prevents flex/grid children from stretching the page width. */
 export const MF_FUNDS_GRID_CLASS =
   "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 [&>*]:min-w-0";
 
@@ -39,7 +39,7 @@ export const MF_FUND_CARD_HORIZONTAL_WIDTH_CLASS = "w-[17.5rem] shrink-0";
 /** Slightly wider so NFO date ranges stay on one line. */
 export const MF_NFO_CARD_HORIZONTAL_WIDTH_CLASS = "w-[20rem] shrink-0";
 
-/** Invest payment card surface — 2xl radius token, border only (no shadow). */
+/** Invest payment card surface  2xl radius token, border only (no shadow). */
 export const MF_INVEST_PAYMENT_CARD_CLASS =
   "rounded-invest-card border border-zinc-200 bg-card dark:border-zinc-700/80";
 

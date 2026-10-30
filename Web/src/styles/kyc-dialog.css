@@ -1,4 +1,4 @@
-/* KYC dialog — theme variables only, distinct overlay */
+/* KYC dialog  theme variables only, distinct overlay */
 
 .kyc-dialog-overlay {
   background-color: var(--dialog-overlay) !important;
@@ -46,7 +46,7 @@
   border-bottom: none;
 }
 
-/* KYC dialog — fade only; keep viewport-centered transform at all times. */
+/* KYC dialog  fade only; keep viewport-centered transform at all times. */
 
 .kyc-dialog-overlay[data-open],
 .kyc-dialog-overlay[data-closed] {
@@ -73,7 +73,7 @@
   width: 100%;
 }
 
-/* Outcome shell mounts at final width — fade only, no zoom/width easing. */
+/* Outcome shell mounts at final width  fade only, no zoom/width easing. */
 .kyc-dialog-root--outcome[data-open],
 .kyc-dialog-root--outcome[data-closed] {
   transform: none !important;
@@ -131,7 +131,7 @@
   }
 }
 
-/* Incomplete external step (DigiLocker / eSign abandoned) — destructive glow */
+/* Incomplete external step (DigiLocker / eSign abandoned)  destructive glow */
 .kyc-redirect-dialog-root.kyc-incomplete-dialog-surface {
   border: 1px solid color-mix(in srgb, var(--destructive) 48%, var(--border));
   box-shadow:
@@ -161,7 +161,7 @@
     0 0 56px color-mix(in srgb, var(--destructive) 22%, transparent);
 }
 
-/* Cybrilla manual bank review — info glow (mirrors incomplete destructive treatment) */
+/* Cybrilla manual bank review  info glow (mirrors incomplete destructive treatment) */
 .kyc-redirect-dialog-root.kyc-info-dialog-surface {
   border: 1px solid color-mix(in srgb, var(--info) 48%, var(--border));
   box-shadow:

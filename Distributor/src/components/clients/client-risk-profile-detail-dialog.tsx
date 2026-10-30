@@ -36,7 +36,7 @@ type ClientRiskProfileDetailDialogProps = {
 };
 
 function formatAssessmentDateTime(value: string | null) {
-  if (!value) return "—";
+  if (!value) return "";
   return new Date(value).toLocaleString("en-IN", {
     day: "numeric",
     month: "short",

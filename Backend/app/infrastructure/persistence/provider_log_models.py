@@ -1,4 +1,4 @@
-"""Provider integration API logs — Cybrilla, FinPrim, Kyckart."""
+"""Provider integration API logs  Cybrilla, FinPrim, Kyckart."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """Schedule security emails for post-commit dispatch (Phase 2).
 
-SMTP delivery runs in the email worker / sync dispatcher — not on the request path.
+SMTP delivery runs in the email worker / sync dispatcher  not on the request path.
 """
 
 from __future__ import annotations

@@ -54,6 +54,7 @@ function mapPortfolioHoldingsToCardItems(
     amcLogoUrl: holding.amc_logo_url,
     investedInr: holding.current_value_inr,
     returnPct: holding.return_pct,
+    source: holding.source ?? null,
   }));
 }
 
@@ -92,7 +93,10 @@ function HoldingRow({
           <p className={cn("truncate text-compact font-semibold", styles.title)}>
             {truncateHoldingFundName(holding.fundName)}
           </p>
-          <p className={cn("mt-0.5 truncate text-[11px]", styles.muted)}>{holding.amcName}</p>
+          <p className={cn("mt-0.5 truncate text-[11px]", styles.muted)}>
+            {holding.source === "external" ? `${copy.mutualFunds.outsideZynd} · ` : ""}
+            {holding.amcName}
+          </p>
         </div>
       </div>
 

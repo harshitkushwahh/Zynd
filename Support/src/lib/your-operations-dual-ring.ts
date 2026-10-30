@@ -7,7 +7,7 @@ export type YourOrdersOperationMix = {
   redemption: number;
 };
 
-/** Support console stub — operation mix for client activity tiles. */
+/** Support console stub  operation mix for client activity tiles. */
 export function getYourOrdersOperationMix(orders: DistributorOrder[]): YourOrdersOperationMix {
   void orders;
   return { total: 0, oneTime: 0, sip: 0, redemption: 0 };

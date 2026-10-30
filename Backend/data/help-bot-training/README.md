@@ -11,23 +11,23 @@ Production inference uses **Groq + live context pack** (`SUPPORT_LLM_PROVIDER=gr
 | `manifest.json` | Batch progress (current target **52,000** examples) |
 | `compiled/dataset-summary.json` | Last **compile** run: counts, Hinglish heuristic, topic mix |
 | `exports/zynd-help-finetune-full.jsonl` | Full **52k** Phase 2 chat export (gitignored; regenerate via compile) |
-| `batch-001.jsonl` | **Batch 1 — 100** questions (all product areas) |
-| `batch-002.jsonl` | **Batch 2 — 100** (paraphrases, redeem/CAS edges, Hinglish) |
-| `batch-003.jsonl` | **Batch 3 — 100** (consent OTP, reports, risk profile, STP/SWP) |
-| `batch-004.jsonl` | **Batch 4 — 100** (order cancel, cart, typos/Hinglish) |
-| `batch-005.jsonl` | **Batch 5 — 100** (escalation, tickets, agent handoff) |
-| `batch-006.jsonl` | **Batch 6 — 100** (explore, cart, notifications, first invest) |
+| `batch-001.jsonl` | **Batch 1  100** questions (all product areas) |
+| `batch-002.jsonl` | **Batch 2  100** (paraphrases, redeem/CAS edges, Hinglish) |
+| `batch-003.jsonl` | **Batch 3  100** (consent OTP, reports, risk profile, STP/SWP) |
+| `batch-004.jsonl` | **Batch 4  100** (order cancel, cart, typos/Hinglish) |
+| `batch-005.jsonl` | **Batch 5  100** (escalation, tickets, agent handoff) |
+| `batch-006.jsonl` | **Batch 6  100** (explore, cart, notifications, first invest) |
 | `batch-007.jsonl` … | ~100 per batch until 1000 |
 
 ## Record shape (JSONL)
 
 One JSON object per line. See `schema.json`. Important fields:
 
-- `question` — customer wording (natural language)
-- `topics` — scope topics: `kyc`, `payment`, `portfolio`, `family`, `goals`, `account`, `referrals`
-- `can_answer` — whether the bot should answer from context (`true`) or escalate (`false`)
-- `context_fields` — which context pack keys the answer must use (no invented facts)
-- `solution` — approved answer pattern / template agents and the model should follow
+- `question`  customer wording (natural language)
+- `topics`  scope topics: `kyc`, `payment`, `portfolio`, `family`, `goals`, `account`, `referrals`
+- `can_answer`  whether the bot should answer from context (`true`) or escalate (`false`)
+- `context_fields`  which context pack keys the answer must use (no invented facts)
+- `solution`  approved answer pattern / template agents and the model should follow
 
 ## Batches (target 1000)
 
@@ -45,7 +45,7 @@ One JSON object per line. See `schema.json`. Important fields:
 | 010 | 100 | 1000 | **done** (curated) |
 | 011–039 | 1000 each | 30,000 | **done** (parametric Phase 1) |
 | 040–059 | 1000 each | 50,000 | **done** (Hinglish + module templates) |
-| 060 | 1000 | 51,000 | **done** (curated customer Hinglish — see `curated/`) |
+| 060 | 1000 | 51,000 | **done** (curated customer Hinglish  see `curated/`) |
 | 061 | 1000 | 52,000 | **done** (MF modules + KYC + Settings, Hinglish) |
 
 Each batch should mix:
@@ -71,7 +71,7 @@ python3 scripts/generate_help_bot_training_batch.py --batch 9
 python3 scripts/generate_help_bot_training_batch.py --batch 10
 ```
 
-### Scale corpus (Phase 1 — parametric)
+### Scale corpus (Phase 1  parametric)
 
 Curated batches **001–010** stay as-is. Grow toward any target (default **30,000** rows) with
 `batch-011.jsonl` … at **1000 lines per file**:
@@ -81,7 +81,7 @@ cd Backend
 # Idempotent: only adds rows if below target
 python3 scripts/generate_help_bot_corpus.py --target 30000 --batch-size 1000 --seed 42
 
-# Grow to 50k — batches 040+ use Hinglish + module-screen templates (auto from row 30k+)
+# Grow to 50k  batches 040+ use Hinglish + module-screen templates (auto from row 30k+)
 python3 scripts/generate_help_bot_corpus.py --target 50000 --batch-size 1000 --seed 42
 
 # Plan only
@@ -105,7 +105,7 @@ python3 scripts/build_curated_batch.py --batch 61 --source curated/batch-061-ent
 
 Templates and field paths live in `scripts/help_bot_corpus_templates.py`.
 
-## Phase 0 — catalog, coverage, eval
+## Phase 0  catalog, coverage, eval
 
 | Artifact | Purpose |
 |----------|---------|
@@ -152,7 +152,7 @@ python3 scripts/import_help_bot_training_examples.py --all-batches
 
 Requires a one-time seed ticket (script creates or reuses `TRAIN-SEED`).
 
-## Fine-tune (Phase 2 — context-rich export)
+## Fine-tune (Phase 2  context-rich export)
 
 Synthetic packs mirror live `build_context_pack` slices. Each training row includes
 **playbook + full masked JSON context + question**, and the assistant JSON is **grounded**
@@ -166,7 +166,7 @@ cd Backend
 # Sample (curated batch 1)
 python3 scripts/export_help_bot_finetune_jsonl.py --batches 1 --out /tmp/zynd-help-train.jsonl
 
-# Full corpus (~52k rows — gitignored under exports/)
+# Full corpus (~52k rows  gitignored under exports/)
 python3 scripts/compile_help_bot_dataset.py
 # Or directly:
 python3 scripts/export_help_bot_finetune_jsonl.py --batches all --out data/help-bot-training/exports/zynd-help-finetune-full.jsonl

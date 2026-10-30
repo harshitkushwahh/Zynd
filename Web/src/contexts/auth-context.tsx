@@ -194,6 +194,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
           retryAttemptRef.current += 1;
+          if (retryAttemptRef.current >= appConfig.sessionRetryMaxAttempts) {
+            clearPersistedAuthSession();
+            setUser(null);
+            setSessionRetrying(false);
+            retryAttemptRef.current = 0;
+            setLoading(false);
+            return;
+          }
           schedule();
         });
       }, delay);
@@ -212,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!hasSessionHint()) return;
       if (user) return;
       if (sessionRetrying) return;
+      if (bootstrapInFlightRef.current) return;
       void runBootstrap();
     };
 

@@ -1,4 +1,4 @@
-# Web Phase 0 — Inventory & guardrails
+# Web Phase 0  Inventory & guardrails
 
 Completed checklist for the Web app refactor program.
 
@@ -58,7 +58,7 @@ See `.env.example`.
 src/
   app/                    # Routes (landing, dashboard, settings, reset-password, API proxy)
   components/
-    auth/                 # Auth dialog (~1300 lines — frozen until Phase 1)
+    auth/                 # Auth dialog (~1300 lines  frozen until Phase 1)
     dashboard/            # Shell, nav, settings panels, MFA dialogs
     ui/                   # Design system
   contexts/               # auth-context
@@ -72,7 +72,7 @@ src/
 
 ## Hard rules (Phase 0+)
 
-1. **Do not grow** `components/auth/auth-dialog.tsx` with new flows — split in Web Phase 1.
+1. **Do not grow** `components/auth/auth-dialog.tsx` with new flows  split in Web Phase 1.
 2. New storage keys → add to `storage-keys.ts` only.
 3. New timings/limits → add to `app-config.ts`.
 4. User-facing brand/OTP copy → `copy.ts` or `brand.ts`.

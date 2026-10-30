@@ -25,6 +25,7 @@ export type PortfolioUpcomingSip = {
 export type PortfolioSummaryResponse = {
   status: string;
   has_pending_orders: boolean;
+  has_allotted_investment?: boolean;
   current_value_inr: number;
   invested_inr: number;
   total_return_inr: number;

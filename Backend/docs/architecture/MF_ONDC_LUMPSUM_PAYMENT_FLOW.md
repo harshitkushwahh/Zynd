@@ -1,4 +1,4 @@
-# ONDC lumpsum payment — Cybrilla / Finprim (Multiplus) vs Zynd
+# ONDC lumpsum payment  Cybrilla / Finprim (Multiplus) vs Zynd
 
 **Fix guide (MultiPlus comparison + P0/P1 checklist):** [MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md](./MF_ONDC_LUMPSUM_PAYMENT_FIX_GUIDE.md)
 
@@ -31,8 +31,8 @@ Typical live flow for a **single purchase** after the investor is KYC-ready and 
 
 | Field | Source |
 |-------|--------|
-| `mf_purchases.old_id` (amc order id) | From create/poll purchase — stored as `mf_orders.fp_purchase_old_id` |
-| `bank_accounts.old_id` | Synced investor bank — `investor_bank_accounts.external_old_id` |
+| `mf_purchases.old_id` (amc order id) | From create/poll purchase  stored as `mf_orders.fp_purchase_old_id` |
+| `bank_accounts.old_id` | Synced investor bank  `investor_bank_accounts.external_old_id` |
 | `payment_postback_url` | `ZYND_MF_PAYMENT_POSTBACK_URL` or per-order URL from `resolved_mf_payment_postback_url_for_order` |
 
 **Common Cybrilla-side blockers (no PG call or no token_url):**
@@ -40,14 +40,14 @@ Typical live flow for a **single purchase** after the investor is KYC-ready and 
 - Purchase still `under_review` (step B not finished).
 - Consent not applied (step C skipped).
 - Missing / invalid `bank_account_id` or `amc_order_ids`.
-- `payment_postback_url` rejected (localhost not whitelisted in sandbox — use ngrok HTTPS in `.env`).
+- `payment_postback_url` rejected (localhost not whitelisted in sandbox  use ngrok HTTPS in `.env`).
 - Confirm never sent after payment create (step E).
 
 Official API details: Finprim / Cybrilla partner docs for **MF Purchases v2** and **PG Payments (netbanking / ONDC)** on your tenant (`api.fintechprimitives.com` or sandbox host).
 
 ---
 
-## 2. Zynd backend — Cybrilla calls (code map)
+## 2. Zynd backend  Cybrilla calls (code map)
 
 Implementation: `Backend/app/application/mf/mf_ondc_order_service.py`  
 HTTP client: `Backend/app/infrastructure/mf/fp_oms_client.py`, `fp_payment_client.py`  
@@ -76,34 +76,34 @@ Terminal traces (dev): `[FINPRIM]` per HTTP call, `[MF-PAY]` for pipeline steps.
 **Advance triggers:**
 
 - MF worker: `run_mf_transaction_workers.py --orders` → `advance_ondc_orders` (every `ZYND_MF_ORDER_WORKER_TICK_SECONDS`).
-- User-facing: `GET /invest/orders/{id}`, `GET /invest/orders/{id}/payment-status`, journey endpoint — all call `advance_order_for_payment` / `reconcile_order_payment` with `force=True` on payment-status.
+- User-facing: `GET /invest/orders/{id}`, `GET /invest/orders/{id}/payment-status`, journey endpoint  all call `advance_order_for_payment` / `reconcile_order_payment` with `force=True` on payment-status.
 
 ---
 
-## 3. Zynd platform APIs (Web app — Invest now)
+## 3. Zynd platform APIs (Web app  Invest now)
 
 Flow when the user clicks **Invest now** on a fund (`mf-invest-payment-card.tsx`):
 
 | # | Method | Path | Purpose |
 |---|--------|------|---------|
 | 1 | `POST` | `/api/v1/invest/orders` | Create local checkout + order (`PENDING`). **Does not** call Cybrilla yet. |
-| 2 | (overlay) | — | `openOrderPayment(order_id)` → `MfOrderPayView` |
+| 2 | (overlay) |  | `openOrderPayment(order_id)` → `MfOrderPayView` |
 | 3 | `GET` | `/api/v1/invest/orders/{order_id}/payment-status` | **Main poll**: reconcile + advance ONDC pipeline; returns `outcome`, `order`, `fp_payment_status`. |
 | 4 | `GET` | `/api/v1/invest/orders/{order_id}` | Fallback fetch if reconcile throws; also advances order. |
 | 5 | (browser) | `order.payment_url` (`checkout.token_url`) | Auto-open when `next_action === "pay_upi"` and URL present. |
 | 6 | `POST` | `/api/v1/invest/orders/{order_id}/confirm-payment-return` | Optional explicit return sync (return route / postMessage). |
-| 7 | `POST` | `/api/v1/invest/orders/{order_id}/abandon-payment` | User dismisses overlay after returning from gateway — sets **`CANCELLED` + `failure_code: payment_abandoned`**. |
+| 7 | `POST` | `/api/v1/invest/orders/{order_id}/abandon-payment` | User dismisses overlay after returning from gateway  sets **`CANCELLED` + `failure_code: payment_abandoned`**. |
 
-**`next_action` (UI gating)** — `mf_order_service._derive_next_action`:
+**`next_action` (UI gating)**  `mf_order_service._derive_next_action`:
 
 | Order status | `payment_url` | `next_action` | UI behaviour |
 |--------------|---------------|---------------|--------------|
-| `PENDING` | — | `wait_processing` | “Processing” — waiting for submit + ONDC advance |
-| `PROCESSING` | — | `wait_review` | Under review at Cybrilla |
+| `PENDING` |  | `wait_processing` | “Processing”  waiting for submit + ONDC advance |
+| `PROCESSING` |  | `wait_review` | Under review at Cybrilla |
 | `PAYMENT_PENDING` | set | `pay_upi` | Redirect / popup to gateway |
 | `SUBMITTED` | set | `pay_upi` | Same |
 | `SUBMITTED` | missing | `wait_payment_link` | Waiting for token URL |
-| `CANCELLED` / `FAILED` | — | `failed` | Error dialog |
+| `CANCELLED` / `FAILED` |  | `failed` | Error dialog |
 
 Invest now is **not** complete until step 3 has advanced through Cybrilla steps A–F and returned `pay_upi` with a URL.
 
@@ -126,7 +126,7 @@ Use Cybrilla dashboard / API logs for one `mfp_*` purchase and tick each row:
 | 9 | Postback URL whitelisted | `.env` `ZYND_MF_PAYMENT_POSTBACK_URL` | Must match Web return route host |
 | 10 | Bank `old_id` on PG request | `external_old_id` on selected bank | Error `bank_old_id_missing` if missing |
 
-If any row **1–6** is missing in `[FINPRIM]` terminal output, the UI will stay on “processing” or fail before redirect — not necessarily “link no longer valid”.
+If any row **1–6** is missing in `[FINPRIM]` terminal output, the UI will stay on “processing” or fail before redirect  not necessarily “link no longer valid”.
 
 ---
 
@@ -148,7 +148,7 @@ So an **immediate** error on Invest now usually means one of:
 | **`POST …/abandon-payment`** | Prior dismiss of payment dialog called abandon on this order. |
 | **Payment-status `outcome: failed`** with cancelled + abandoned | `GET …/payment-status` response body right after Invest. |
 
-It is **not** the generic message for `bank_old_id_missing`, `consent_contact_missing`, or FP 4xx — those typically show **`failure_reason`** from the partner unless the order was already marked abandoned.
+It is **not** the generic message for `bank_old_id_missing`, `consent_contact_missing`, or FP 4xx  those typically show **`failure_reason`** from the partner unless the order was already marked abandoned.
 
 **Debug commands (replace IDs):**
 
@@ -162,7 +162,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 # mf_checkouts.token_url, fp_payment_id
 ```
 
-**Dev logging:** `./run.sh` with `ZYND_MF_WORKER_LOG_TO_TERMINAL=true` — watch `[FINPRIM]` and `[MF-PAY]` while clicking Invest now.
+**Dev logging:** `./run.sh` with `ZYND_MF_WORKER_LOG_TO_TERMINAL=true`  watch `[FINPRIM]` and `[MF-PAY]` while clicking Invest now.
 
 ---
 
@@ -187,10 +187,10 @@ ZYND_MF_PAYMENT_POSTBACK_URL=http://localhost:7777/dashboard/mutual-funds/orders
 
 ## 7. Known gaps / differences to validate with Multiplus
 
-1. **Submit timing** — Cybrilla submit (step A) happens on **first advance**, not on `POST /invest/orders`. Multiplus may create purchase earlier/later; Zynd always defers to advance/worker.  
-2. **Review states** — While `under_review` / `review_completed`, Zynd does not create PG payment (`_REVIEW_STATES` guard).  
-3. **Payment return route** — Postback lands on Web; overlay should resume with redirect session intact (`resumeAfterGatewayReturn` — see `mf-payment-overlay-context.tsx` / pay route host).  
-4. **Cart checkout** — Same Cybrilla sequence via `_create_cart_checkout_payment` + batch confirm (`mf_ondc_order_service.advance_ondc_cart_checkout`).
+1. **Submit timing**  Cybrilla submit (step A) happens on **first advance**, not on `POST /invest/orders`. Multiplus may create purchase earlier/later; Zynd always defers to advance/worker.  
+2. **Review states**  While `under_review` / `review_completed`, Zynd does not create PG payment (`_REVIEW_STATES` guard).  
+3. **Payment return route**  Postback lands on Web; overlay should resume with redirect session intact (`resumeAfterGatewayReturn`  see `mf-payment-overlay-context.tsx` / pay route host).  
+4. **Cart checkout**  Same Cybrilla sequence via `_create_cart_checkout_payment` + batch confirm (`mf_ondc_order_service.advance_ondc_cart_checkout`).
 
 ---
 

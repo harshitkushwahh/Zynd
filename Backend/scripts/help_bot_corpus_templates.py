@@ -74,7 +74,7 @@ HINGLISH_FRAMES: list[str] = [
     "Zynd pe {label} kaise dekhu?",
     "Please {base_lower}",
     "Need help: {base_lower}",
-    "Quick question — {base_lower}",
+    "Quick question  {base_lower}",
     "Hey, {base_lower}",
     "Can u check {label} for me?",
     "What about my {label}?",
@@ -136,7 +136,7 @@ HINGLISH_MULTI: list[tuple[list[str], list[str], str, str, bool]] = [
     (
         ["kyc", "payment"],
         ["kyc.overall_status", "payments.sip_plans.status"],
-        "KYC ho gaya par SIP start nahi ho rahi — kya missing hai?",
+        "KYC ho gaya par SIP start nahi ho rahi  kya missing hai?",
         "Quote readiness and SIP/mandate status from context only.",
         True,
     ),
@@ -164,7 +164,7 @@ HINGLISH_MULTI: list[tuple[list[str], list[str], str, str, bool]] = [
     (
         ["referrals", "account"],
         ["referrals.signup_count", "referrals.kyc_verified_count"],
-        "Referral reward pending — signup hue par KYC pending?",
+        "Referral reward pending  signup hue par KYC pending?",
         "Use referral counts; no invented reward amounts.",
         True,
     ),
@@ -248,7 +248,7 @@ DISAMBIG_PHRASES: list[str] = [
     "Will this update overnight?",
     "Should I wait 24 hours?",
     "I can share a screenshot if needed.",
-    "No rush — whenever you can.",
+    "No rush  whenever you can.",
     "Thanks for looking into this.",
     "Appreciate a clear answer.",
     "I'm stuck on this step.",
@@ -278,7 +278,7 @@ DISAMBIG_PHRASES: list[str] = [
     "AMC hasn't reflected it yet.",
     "Is allotment still pending?",
     "Could this be a holiday delay?",
-    "Weekend payment — still processing?",
+    "Weekend payment  still processing?",
     "I tried twice by mistake.",
     "I want to cancel the duplicate.",
     "Which order went through?",
@@ -289,9 +289,9 @@ DISAMBIG_PHRASES: list[str] = [
     "Has this happened before?",
     "Is my mandate still active?",
     "Did the bank reject autopay?",
-    "UPI vs mandate — which applies?",
+    "UPI vs mandate  which applies?",
     "I switched networks on my phone.",
-    "Traveling — could that matter?",
+    "Traveling  could that matter?",
     "I'm back in India now.",
     "Using WiFi not mobile data.",
     "I updated the app today.",
@@ -299,8 +299,8 @@ DISAMBIG_PHRASES: list[str] = [
     "Running latest iOS version.",
     "Desktop Chrome on macOS.",
     "Safari private window issue?",
-    "Incognito mode — still ok?",
-    "Dark mode — same data?",
+    "Incognito mode  still ok?",
+    "Dark mode  same data?",
     "Language is English in app.",
     "Can I get dates in IST?",
     "Use simple words please.",
@@ -326,7 +326,7 @@ DISAMBIG_PHRASES: list[str] = [
     "Starting fresh conversation now.",
     "Resolution prompt confused me.",
     "I tapped No by accident.",
-    "I meant Yes — issue fixed.",
+    "I meant Yes  issue fixed.",
     "Issue is NOT fixed actually.",
     "Still need help on this.",
     "Partial answer only so far.",
@@ -344,11 +344,11 @@ DISAMBIG_PHRASES: list[str] = [
     "Review submitted already?",
     "Readiness code still blocking?",
     "External KYC pending still?",
-    "Registrar delay — normal?",
+    "Registrar delay  normal?",
     "Can I invest small amount test?",
     "Minimum invest not my question.",
     "Focus on status only please.",
-    "I'll stop here — thanks.",
+    "I'll stop here  thanks.",
 ]
 
 TYPO_RULES: list[tuple[str, str]] = [
@@ -366,7 +366,7 @@ MULTI_TOPIC_QUESTIONS: list[tuple[list[str], list[str], str, str, bool]] = [
     (
         ["kyc", "payment"],
         ["kyc.overall_status", "kyc.readiness_code", "payments.sip_plans.status"],
-        "KYC looks done but I cannot start a SIP — why?",
+        "KYC looks done but I cannot start a SIP  why?",
         "Check readiness_code and SIP plan or mandate status from context; no invented blockers.",
         True,
     ),
@@ -408,14 +408,14 @@ MULTI_TOPIC_QUESTIONS: list[tuple[list[str], list[str], str, str, bool]] = [
     (
         ["portfolio", "payment", "kyc"],
         ["portfolio.holdings_count", "payments.sip_plans", "kyc.overall_status"],
-        "SIP is active but I hold zero funds — is that expected?",
+        "SIP is active but I hold zero funds  is that expected?",
         "Explain first debit timing vs holdings_count; quote sip_plans status.",
         True,
     ),
     (
         ["account", "payment"],
         ["account.phone_verified", "payments.recent_orders.failure_reason"],
-        "Payment failed after OTP — what went wrong?",
+        "Payment failed after OTP  what went wrong?",
         "Use failure_reason on recent order and phone_verified flag.",
         True,
     ),
@@ -599,7 +599,7 @@ def build_question(spec: Spec, variant: int, rng: random.Random, *, seq: int, fo
     question = _apply_typo(question, variant)
     if expansion:
         phrase = HINGLISH_DISAMBIG[seq % len(HINGLISH_DISAMBIG)]
-        question = f"{question} — {phrase}"
+        question = f"{question}  {phrase}"
     else:
         band = seq // max(len(SPECS), 1)
         if band > 0 or seq % 3 != 0:

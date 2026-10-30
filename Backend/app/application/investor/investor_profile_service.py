@@ -1,4 +1,4 @@
-"""Investor profile provisioning — Cybrilla v2 sync (future MF/payment entry point)."""
+"""Investor profile provisioning  Cybrilla v2 sync (future MF/payment entry point)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Stable consent definition keys — referenced by Web, Distributor, and Backend."""
+"""Stable consent definition keys  referenced by Web, Distributor, and Backend."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ PLATFORM_PRIVACY_POLICY = "platform.privacy_policy"
 KYC_NOMINATION_OPT_OUT = "kyc.nomination_opt_out"
 DISTRIBUTOR_CLIENT_NOMINATION_OPT_OUT = "distributor.client_nomination_opt_out"
 MF_TRANSACTION_AUTHORIZATION = "mf.transaction_authorization"
+KYC_NOMINEE_UPDATE_AUTHORIZATION = "kyc.nominee_update_authorization"
 
 ALL_SEED_KEYS = (
     PLATFORM_SIGNUP_LEGAL,
@@ -16,12 +17,15 @@ ALL_SEED_KEYS = (
     KYC_NOMINATION_OPT_OUT,
     DISTRIBUTOR_CLIENT_NOMINATION_OPT_OUT,
     MF_TRANSACTION_AUTHORIZATION,
+    KYC_NOMINEE_UPDATE_AUTHORIZATION,
 )
 
 __all__ = [
     "ALL_SEED_KEYS",
     "DISTRIBUTOR_CLIENT_NOMINATION_OPT_OUT",
+    "KYC_NOMINEE_UPDATE_AUTHORIZATION",
     "KYC_NOMINATION_OPT_OUT",
+    "MF_TRANSACTION_AUTHORIZATION",
     "PLATFORM_PRIVACY_POLICY",
     "PLATFORM_SIGNUP_LEGAL",
     "PLATFORM_TERMS_OF_SERVICE",

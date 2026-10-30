@@ -213,7 +213,7 @@ export function AddDistributorBankPanel({
           ) : (
             <div className="add-distributor-wizard-step-card add-distributor-bank-panel__manual">
               <p className="add-distributor-bank-panel__manual-note">
-                Manual entry — details will be reviewed by HO during compliance approval.
+                Manual entry  details will be reviewed by HO during compliance approval.
               </p>
 
               {bankVerified && bank.accountHolderName ? (

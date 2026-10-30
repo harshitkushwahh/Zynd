@@ -1,4 +1,4 @@
-"""MF transactions — migrations 037_mf_transactions, 047_mf_payment_foundation."""
+"""MF transactions  migrations 037_mf_transactions, 047_mf_payment_foundation."""
 
 from __future__ import annotations
 
@@ -553,6 +553,7 @@ class MfExternalHolding(Base):
     units: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     nav_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 6), nullable=True)
     market_value_inr: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 2), nullable=True)
+    cost_value_inr: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 2), nullable=True)
     as_of_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     amc_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     source: Mapped[str] = mapped_column(String(32), default="MF_CENTRAL", nullable=False)

@@ -1,4 +1,4 @@
-"""Family group governance audit events — Phase 2.
+"""Family group governance audit events  Phase 2.
 
 Revision ID: 061_family_group_governance
 Revises: 060_family_group_invites

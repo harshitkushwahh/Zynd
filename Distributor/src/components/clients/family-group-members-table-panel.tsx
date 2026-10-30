@@ -62,12 +62,12 @@ function memberInitials(name: string) {
 
 function memberEmailDisplay(member: DistributorClientFamilyMember): string {
   if (member.inYourBook && member.contactEmail) return member.contactEmail;
-  return member.emailMasked ?? "—";
+  return member.emailMasked ?? "";
 }
 
 function memberPhoneDisplay(member: DistributorClientFamilyMember): string {
   if (member.inYourBook && member.contactPhone) return member.contactPhone;
-  return "—";
+  return "";
 }
 
 type MemberTableRow = DistributorClientFamilyMember & {

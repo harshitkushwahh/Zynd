@@ -114,7 +114,7 @@ export function LumpsumCorpusDonut({
               returnPct != null && returnPct > 0 ? MF_CALC_GAIN_TEXT_CLASS : "text-foreground",
             )}
           >
-            {returnPct != null ? formatReturn(returnPct) : "—"}
+            {returnPct != null ? formatReturn(returnPct) : ""}
           </p>
           <p className="text-[11px] text-muted-foreground">{copy.mutualFunds.lumpsumChartTitle}</p>
         </div>

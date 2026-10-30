@@ -1,9 +1,11 @@
 import { DEFAULT_COUNTRY } from "@/lib/input-rules";
 
-/** Runtime app behavior — no user-facing copy. */
+/** Runtime app behavior  no user-facing copy. */
 export const appConfig = {
   sessionRetryIntervalMs: 15_000,
   sessionRetryMaxIntervalMs: 60_000,
+  /** Stop background refresh retries and clear stale session hints (landing stops polling). */
+  sessionRetryMaxAttempts: 8,
   bootstrapRetryAttempts: 4,
   bootstrapRetryBaseDelayMs: 400,
   otpLength: 6,

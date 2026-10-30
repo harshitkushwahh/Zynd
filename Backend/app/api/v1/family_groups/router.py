@@ -49,6 +49,7 @@ from app.application.documents.document_image_validation import max_bytes_for_do
 from app.application.documents.document_service import finalize_document_scan
 from app.application.documents.errors import DocumentError
 from app.application.family_groups.constants import MAX_FAMILY_GROUPS_PER_USER
+from app.application.family_groups.display import serialize_family_group
 from app.application.family_groups.errors import FamilyGroupError
 from app.application.family_groups.group_service import (
     archive_family_group,
@@ -98,7 +99,7 @@ from app.application.goals.family_goal_service import (
     update_family_goal,
 )
 from app.core.database import get_db
-from app.infrastructure.persistence.family_group_models import FamilyGroupMemberRole
+from app.infrastructure.persistence.family_group_models import FamilyGroup, FamilyGroupMemberRole
 from app.infrastructure.persistence.goal_models import GoalStatus
 from app.infrastructure.persistence.models import DocumentType, User
 
@@ -422,10 +423,21 @@ async def post_family_group_avatar(
     if avatar_document_id:
         await db.commit()
         try:
-            await finalize_document_scan(db, UUID(str(avatar_document_id)))
+            await finalize_document_scan(
+                db,
+                UUID(str(avatar_document_id)),
+                user=current_user,
+            )
         except DocumentError as exc:
             return _handle_family_group_error(
                 FamilyGroupError(exc.code, exc.message, status_code=exc.status_code)
+            )
+        group = await db.get(FamilyGroup, group_id)
+        if group is not None:
+            payload = await serialize_family_group(
+                db,
+                group,
+                viewer_user_id=current_user.id,
             )
     return _to_group_response(payload)
 

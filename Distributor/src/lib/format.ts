@@ -60,7 +60,7 @@ function formatCompactInr(amount: number): string {
  * values (100 Cr–1,000 Cr+) fit narrow cards. Use `formatAum` for full INR in tooltips.
  */
 export function formatPortfolioMetricAmount(amount: number | null): string {
-  if (amount === null) return "—";
+  if (amount === null) return "";
   const abs = Math.abs(amount);
   if (abs >= INR_CRORE) {
     return formatScaledPortfolioInrCrore(amount);
@@ -72,7 +72,7 @@ export function formatPortfolioMetricAmount(amount: number | null): string {
 }
 
 export function formatAum(amount: number | null): string {
-  if (amount === null) return "—";
+  if (amount === null) return "";
   return currencyFormatter.format(amount);
 }
 

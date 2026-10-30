@@ -1,4 +1,4 @@
-/** @deprecated Import from `@/features/auth/api/*` — barrel kept for backward compatibility. */
+/** @deprecated Import from `@/features/auth/api/*`  barrel kept for backward compatibility. */
 
 export type {
   AppleLoginProfile,

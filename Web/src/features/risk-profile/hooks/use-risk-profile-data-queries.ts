@@ -37,6 +37,10 @@ export function useRiskProfileResultQuery(enabled: boolean) {
       }
     },
     enabled,
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 404) return false;
+      return failureCount < 1;
+    },
   });
 }
 

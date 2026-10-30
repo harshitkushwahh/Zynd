@@ -1,7 +1,15 @@
 # Settings and account
 
-Settings cover profile details, investor information, and security such as password and MFA. The context may show account status, whether email and phone are verified, and whether MFA is enrolled.
+Settings cover profile, investor details, nominee, security (password, MFA, Zynd PIN, backup codes), and linked sign-in providers.
 
-Password reset starts from the sign-in screen. This bot cannot change a password, turn MFA off, or edit profile fields. Tell the customer which settings screen to open, using only the flags in the context.
+Use these context fields directly — do not guess:
 
-For Google or Apple sign-in questions, use `google_account_linked` and `apple_account_linked`. Say clearly yes or no. If neither is linked, mention `has_password_login` when relevant. Do not claim a provider is linked unless the flag is true.
+- Google / Apple: `google_account_linked`, `apple_account_linked`, and `linked_sign_in_providers`.
+- MFA: `mfa_enrolled`, `mfa_enrolled_at`; backup codes in `settings.backup_codes_remaining`.
+- Zynd PIN: `pin_enrolled`, `pin_set_at`. Reset path: Settings → Security → Zynd PIN (OTP/MFA verification).
+- Nominee from Settings: `settings.nominee_last_updated_at` and `settings.nominee_last_update_source` (`user` means updated in Settings, not only during KYC).
+- Email changes: `email_changed_at` or `email_verified_at`.
+
+This bot cannot change passwords, turn MFA off, or edit profile fields. Give the correct in-app path only.
+
+For risk profile or investor reports, use the risk_profile and reports slices — not KYC completion dates.

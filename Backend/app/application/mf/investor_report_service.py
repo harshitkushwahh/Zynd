@@ -12,6 +12,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.kyc.bootstrap_redaction import mask_pan_display
+from app.application.mf.cas_import_service import user_has_allotted_platform_investment
 from app.application.mf.investor_report_mappers import (
     capital_gains_section,
     current_indian_fy,
@@ -129,11 +130,13 @@ async def investor_report_generation_eligibility(
     user_id: UUID,
 ) -> dict[str, Any]:
     kyc = await db.get(UserKycStatus, user_id)
+    cas_import_eligible = await user_has_allotted_platform_investment(db, user_id)
     if kyc is None or kyc.overall_status != KycOverallStatus.completed:
         return {
             "can_generate": False,
             "code": "kyc_required",
             "message": "Complete KYC verification before generating reports.",
+            "cas_import_eligible": cas_import_eligible,
         }
 
     summary = await get_user_portfolio_summary(db, user_id=user_id)
@@ -143,9 +146,10 @@ async def investor_report_generation_eligibility(
             "can_generate": False,
             "code": "no_holdings",
             "message": "Invest and hold mutual fund units before generating reports.",
+            "cas_import_eligible": cas_import_eligible,
         }
 
-    return {"can_generate": True, "code": None, "message": None}
+    return {"can_generate": True, "code": None, "message": None, "cas_import_eligible": cas_import_eligible}
 
 
 async def list_investor_reports_page(

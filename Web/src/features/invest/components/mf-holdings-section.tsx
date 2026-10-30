@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,10 +12,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FieldMessage } from "@/components/ui/ui-message";
+import { MfCasImportDialog } from "@/features/invest/components/mf-cas-import-dialog";
 import {
   fetchExternalHoldings,
   type MfExternalHolding,
 } from "@/features/invest/api/invest-api";
+import { usePortfolioHoldingsQuery, usePortfolioSummaryQuery } from "@/features/dashboard/portfolio/hooks/use-portfolio-queries";
 import { formatDate, formatInr } from "@/features/invest/lib/mf-format";
 import { copy } from "@/shared/config/copy";
 
@@ -42,7 +44,13 @@ function HoldingRow({ holding }: { holding: MfExternalHolding }) {
 }
 
 export function MfHoldingsSection() {
-  const [holdings, setHoldings] = useState<MfExternalHolding[]>([]);
+  const { summary } = usePortfolioSummaryQuery();
+  const { holdings: portfolioHoldings } = usePortfolioHoldingsQuery();
+  const casAllowed =
+    summary?.has_allotted_investment === true ||
+    portfolioHoldings.some((row) => row.source !== "external");
+  const [casOpen, setCasOpen] = useState(false);
+  const [externalHoldings, setExternalHoldings] = useState<MfExternalHolding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +59,7 @@ export function MfHoldingsSection() {
     setError(null);
     try {
       const holdingsResponse = await fetchExternalHoldings();
-      setHoldings(holdingsResponse.external_holdings);
+      setExternalHoldings(holdingsResponse.external_holdings);
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.mutualFunds.holdingsLoadError);
     } finally {
@@ -71,13 +79,21 @@ export function MfHoldingsSection() {
             <CardTitle>{copy.mutualFunds.holdingsTitle}</CardTitle>
             <CardDescription>{copy.mutualFunds.holdingsDescription}</CardDescription>
           </div>
-          <Button variant="outline" disabled>
-            <RefreshCw className="size-4" />
+          <Button
+            variant="outline"
+            disabled={!casAllowed}
+            onClick={() => {
+              if (!casAllowed) return;
+              setCasOpen(true);
+            }}
+          >
             {copy.mutualFunds.casImportCta}
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          <FieldMessage variant="info" message={copy.mutualFunds.casDisabled} />
+          {casAllowed ? null : (
+            <FieldMessage variant="info" message={copy.mutualFunds.casLockedUntilInvestment} />
+          )}
           {loading ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
@@ -85,16 +101,17 @@ export function MfHoldingsSection() {
             </div>
           ) : null}
           {error ? <FieldMessage variant="error" message={error} /> : null}
-          {!loading && !error && holdings.length === 0 ? (
+          {!loading && !error && externalHoldings.length === 0 ? (
             <div className="flex min-h-[180px] items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border px-6 text-center">
               <p className="text-compact text-muted-foreground">{copy.mutualFunds.holdingsEmpty}</p>
             </div>
           ) : null}
-          {holdings.map((holding) => (
+          {externalHoldings.map((holding) => (
             <HoldingRow key={`${holding.isin}-${holding.folio_number}`} holding={holding} />
           ))}
         </CardContent>
       </Card>
+      <MfCasImportDialog open={casOpen} onOpenChange={setCasOpen} onCompleted={() => void loadHoldings()} />
     </div>
   );
 }

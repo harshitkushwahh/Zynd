@@ -12,7 +12,7 @@ import {
 
 /**
  * Silent cancel for a gateway handoff that never came back through the payment dialog.
- * Browser Back and bfcache must not call this — the payment overlay reconciles first and
+ * Browser Back and bfcache must not call this  the payment overlay reconciles first and
  * shows success or "Payment was not completed".
  */
 export async function abandonStaleMfPaymentResume(

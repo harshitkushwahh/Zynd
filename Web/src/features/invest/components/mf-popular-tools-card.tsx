@@ -11,13 +11,13 @@ import {
 import { copy } from "@/shared/config/copy";
 import { cn } from "@/lib/utils";
 
-function ToolRow({ tool }: { tool: MfPopularTool }) {
+function ToolRow({ tool, onCasImport }: { tool: MfPopularTool; onCasImport?: () => void }) {
   const Icon = MF_TOOL_ICONS[tool.icon];
 
   const rowClassName = cn(
     "flex items-center gap-3 rounded-2xl bg-muted/35 px-3 py-3",
     tool.disabled
-      ? "cursor-not-allowed opacity-50"
+      ? "pointer-events-none cursor-not-allowed opacity-50"
       : "transition-colors hover:bg-muted/55",
   );
 
@@ -42,6 +42,22 @@ function ToolRow({ tool }: { tool: MfPopularTool }) {
     );
   }
 
+  if (tool.id === "cas-import" && onCasImport) {
+    return (
+      <button
+        type="button"
+        className={`${rowClassName} w-full text-left`}
+        disabled={tool.disabled}
+        onClick={() => {
+          if (tool.disabled) return;
+          onCasImport();
+        }}
+      >
+        {content}
+      </button>
+    );
+  }
+
   return (
     <Link href={tool.href} className={rowClassName}>
       {content}
@@ -51,16 +67,17 @@ function ToolRow({ tool }: { tool: MfPopularTool }) {
 
 type MfPopularToolsCardProps = {
   tools?: MfPopularTool[];
+  onCasImport?: () => void;
 };
 
-export function MfPopularToolsCard({ tools = MF_POPULAR_TOOLS }: MfPopularToolsCardProps) {
+export function MfPopularToolsCard({ tools = MF_POPULAR_TOOLS, onCasImport }: MfPopularToolsCardProps) {
   return (
     <section className="min-w-0 max-w-full overflow-hidden rounded-3xl border border-border/70 bg-card p-4">
       <p className="text-compact font-semibold text-foreground">{copy.mutualFunds.popularToolsTitle}</p>
 
       <div className="mt-3 flex flex-col gap-2">
         {tools.map((tool) => (
-          <ToolRow key={tool.id} tool={tool} />
+          <ToolRow key={tool.id} tool={tool} onCasImport={onCasImport} />
         ))}
       </div>
     </section>

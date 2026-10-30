@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 import httpx
 
+from app.application.support.help_bot_types import BotDraft
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -20,12 +21,6 @@ _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.I)
 # Avoid hammering the LLM backend when it is down (console detail + help bot share probes).
 _llm_probe: dict[str, Any] = {"checked_at": 0.0, "ok": False, "model": "", "provider": ""}
 _LLM_PROBE_TTL_SECONDS = 45.0
-
-
-@dataclass(frozen=True)
-class BotDraft:
-    can_answer: bool
-    answer: str
 
 
 class OllamaError(Exception):
@@ -76,10 +71,11 @@ def parse_bot_draft(content: str) -> BotDraft:
     if not isinstance(payload, dict):
         raise OllamaError("Help bot reply was not an object.")
     answer = str(payload.get("answer") or "").strip()
+    needs_agent = bool(payload.get("needs_agent"))
     can_answer = bool(payload.get("can_answer")) and bool(answer)
     if len(answer) > 2000:
         answer = answer[:2000].rstrip()
-    return BotDraft(can_answer=can_answer, answer=answer)
+    return BotDraft(can_answer=can_answer, answer=answer, needs_agent=needs_agent)
 
 
 def _cache_llm_probe(*, ok: bool, model: str, provider: str) -> None:
@@ -222,6 +218,7 @@ async def _groq_chat_completion(
     max_completion_tokens: int,
     reasoning_effort: Literal["low", "medium", "high"],
     timeout_seconds: float,
+    json_mode: bool = True,
 ) -> str:
     settings = get_settings()
     api_key = settings.groq_api_key.strip()
@@ -236,9 +233,10 @@ async def _groq_chat_completion(
         "max_completion_tokens": max_completion_tokens,
         "top_p": 1,
         "stream": False,
-        "response_format": {"type": "json_object"},
         "reasoning_effort": reasoning_effort,
     }
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -412,20 +410,34 @@ def parse_routing_decision(content: str) -> RoutingDecision:
     )
 
 
+async def _groq_routing_completion(*, user_prompt: str) -> str:
+    settings = get_settings()
+    messages = [
+        {"role": "system", "content": _ROUTING_SYSTEM},
+        {"role": "user", "content": user_prompt},
+    ]
+    kwargs = {
+        "messages": messages,
+        "temperature": 0.15,
+        "max_completion_tokens": 512,
+        "reasoning_effort": "low",
+        "timeout_seconds": settings.support_routing_timeout_seconds,
+    }
+    try:
+        return await _groq_chat_completion(**kwargs, json_mode=True)
+    except OllamaError as exc:
+        detail = str(exc).lower()
+        if "json_validate_failed" not in detail and "400" not in detail:
+            raise
+        logger.info("Groq routing JSON mode failed; retrying without strict JSON schema.")
+        return await _groq_chat_completion(**kwargs, json_mode=False)
+
+
 async def complete_routing_decision(*, user_prompt: str) -> RoutingDecision:
     settings = get_settings()
     trimmed = user_prompt[:10_000]
     if settings.support_llm_provider == "groq":
-        content = await _groq_chat_completion(
-            messages=[
-                {"role": "system", "content": _ROUTING_SYSTEM},
-                {"role": "user", "content": trimmed},
-            ],
-            temperature=0.15,
-            max_completion_tokens=512,
-            reasoning_effort="medium",
-            timeout_seconds=settings.support_routing_timeout_seconds,
-        )
+        content = await _groq_routing_completion(user_prompt=trimmed)
         return parse_routing_decision(content)
 
     content = await _ollama_chat_completion(

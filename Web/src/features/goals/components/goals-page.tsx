@@ -18,6 +18,7 @@ import { FamilyGoalProgressCard } from "@/features/goals/components/family-goal-
 import { GoalProgressCard } from "@/features/goals/components/goal-progress-card";
 import { GoalsHowItWorksCard } from "@/features/goals/components/goals-how-it-works-card";
 import { GoalTemplateJourneyDialog } from "@/features/goals/components/goal-template-journey-dialog";
+import { GoalsHorizontalScrollRow } from "@/features/goals/components/goals-horizontal-scroll-row";
 import { GoalTemplateStrip } from "@/features/goals/components/goal-template-strip";
 import { GoalsSummaryPanel } from "@/features/goals/components/goals-summary-panel";
 import { GoalsArchivedDialog } from "@/features/goals/components/goals-archived-dialog";
@@ -31,12 +32,14 @@ import { useGoalsDashboardQuery } from "@/features/goals/hooks/use-goals-dashboa
 import { invalidateGoalsQueries } from "@/features/goals/lib/invalidate-goals-queries";
 import { invalidateFamilyQueries } from "@/features/family-groups/lib/invalidate-family-queries";
 import { savePersonalOrFamilyGoal, type SaveGoalInput } from "@/features/goals/lib/save-goal";
+import { sortGoalsLatestFirst } from "@/features/goals/lib/goal-summary";
 import { prefetchAllGoalTemplateIllustrations } from "@/features/goals/lib/prefetch-goal-template-illustrations";
 import {
   GOALS_FAMILY_LIST_HREF,
   GOALS_FAMILY_PREVIEW_LIMIT,
   GOALS_PERSONAL_LIST_HREF,
   GOALS_PERSONAL_PREVIEW_LIMIT,
+  GOALS_PERSONAL_PREVIEW_SCROLL_ROW_CLASS,
 } from "@/features/goals/lib/goal-navigation";
 import { queryKeys } from "@/lib/query-keys";
 import { copy } from "@/shared/config/copy";
@@ -76,7 +79,7 @@ export function GoalsPage() {
   }, [templates.length]);
 
   const activeGoals = useMemo(
-    () => goals.filter((goal) => goal.status !== "archived"),
+    () => sortGoalsLatestFirst(goals.filter((goal) => goal.status !== "archived")),
     [goals],
   );
 
@@ -231,11 +234,11 @@ export function GoalsPage() {
         <DashboardContentFade>
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-8">
             <div className="min-w-0 space-y-8">
-              <section>
+              <section className="overflow-visible">
                 <GoalTemplateStrip templates={templates} onSelect={handleOpenTemplateJourney} />
               </section>
 
-              <section className="space-y-4">
+              <section className="space-y-4 overflow-visible">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold">{copy.goals.yourGoalsTitle}</h2>
@@ -252,11 +255,14 @@ export function GoalsPage() {
                 </div>
 
                 {activeGoals.length > 0 ? (
-                  <div className="flex flex-wrap gap-3">
+                  <GoalsHorizontalScrollRow
+                    scrollClassName={GOALS_PERSONAL_PREVIEW_SCROLL_ROW_CLASS}
+                    fadeInsetClassName="top-2 bottom-10"
+                  >
                     {previewPersonalGoals.map((goal) => (
                       <GoalProgressCard key={goal.id} goal={goal} />
                     ))}
-                  </div>
+                  </GoalsHorizontalScrollRow>
                 ) : (
                   <GoalsLockedSectionEmptyState variant="personal" />
                 )}
@@ -279,11 +285,14 @@ export function GoalsPage() {
                 </div>
 
                 {familyGoals.length > 0 ? (
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <GoalsHorizontalScrollRow
+                    scrollClassName={GOALS_PERSONAL_PREVIEW_SCROLL_ROW_CLASS}
+                    fadeInsetClassName="top-2 bottom-10"
+                  >
                     {previewFamilyGoals.map((goal) => (
                       <FamilyGoalProgressCard key={`${goal.family_group_id}-${goal.id}`} goal={goal} />
                     ))}
-                  </div>
+                  </GoalsHorizontalScrollRow>
                 ) : (
                   <GoalsLockedSectionEmptyState variant="family" />
                 )}

@@ -9,7 +9,7 @@ function readWindowSearchParams() {
   return new URLSearchParams(window.location.search);
 }
 
-/** Updates the tab title as soon as the route path changes — no Suspense wait. */
+/** Updates the tab title as soon as the route path changes  no Suspense wait. */
 export function DistributorDocumentTitlePathSync() {
   const pathname = usePathname();
 

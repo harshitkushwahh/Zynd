@@ -1,15 +1,15 @@
-# Funds For You — Fund Recommendation Engine
+# Funds For You  Fund Recommendation Engine
 
-> **Core module specification** for Zynd's personalized fund recommendation platform — from rule-based tier baskets (v1) to an explainable **portfolio-built-for-you** experience (v1.1+).
+> **Core module specification** for Zynd's personalized fund recommendation platform  from rule-based tier baskets (v1) to an explainable **portfolio-built-for-you** experience (v1.1+).
 
 | Field | Value |
 | ----- | ----- |
 | **Module ID** | `recommendations.funds-for-you` |
-| **Status** | Planned — UI shell complete (dummy data); backend engine not yet built |
+| **Status** | Planned  UI shell complete (dummy data); backend engine not yet built |
 | **Last updated** | August 2026 |
 | **Primary surface** | `Web/src/components/dashboard/recommend-funds-hover-card.tsx` |
 | **Owner** | Product + Platform (Invest) |
-| **Product north star** | *"Here's a portfolio built for you — and here's why."* |
+| **Product north star** | *"Here's a portfolio built for you  and here's why."* |
 
 ---
 
@@ -38,21 +38,21 @@
 21. [File inventory](#21-file-inventory)
 22. [Open decisions and success criteria](#22-open-decisions-and-success-criteria)
 
-### Part II — Personalization & explainability
+### Part II  Personalization & explainability
 
 23. [Product philosophy shift](#23-product-philosophy-shift)
 24. [Experience pillars and X-factors](#24-experience-pillars-and-x-factors)
-25. [Why this fund? — explainability layer](#25-why-this-fund--explainability-layer)
+25. [Why this fund?  explainability layer](#25-why-this-fund--explainability-layer)
 26. [Portfolio story and portfolio roles](#26-portfolio-story-and-portfolio-roles)
 27. [Portfolio Fit Score](#27-portfolio-fit-score)
 28. [Recommendation change transparency](#28-recommendation-change-transparency)
 29. [Explore alternatives and screener bridge](#29-explore-alternatives-and-screener-bridge)
-30. [Intelligent baskets — objectives and strategies](#30-intelligent-baskets--objectives-and-strategies)
+30. [Intelligent baskets  objectives and strategies](#30-intelligent-baskets--objectives-and-strategies)
 31. [Anchor + alternatives model](#31-anchor--alternatives-model)
 32. [Diversification guardrails](#32-diversification-guardrails)
 33. [Admin preview simulator](#33-admin-preview-simulator)
 34. [Enriched API contract](#34-enriched-api-contract)
-35. [Ask Zynd — Explain my portfolio](#35-ask-zynd--explain-my-portfolio)
+35. [Ask Zynd  Explain my portfolio](#35-ask-zynd--explain-my-portfolio)
 36. [Roadmap: v1 → v1.1 → v1.5 → v2](#36-roadmap-v1--v11--v15--v2)
 37. [Future personalization dimensions](#37-future-personalization-dimensions)
 
@@ -70,11 +70,11 @@
 
 | Layer | State |
 | ----- | ----- |
-| **Web UI** | Production-quality popover: hover bridge, Framer Motion open/close, BorderGlow, Grainient background, 5-fund list, allocation donut + chip swiper, Add to cart footer — all driven by **dummy data** |
+| **Web UI** | Production-quality popover: hover bridge, Framer Motion open/close, BorderGlow, Grainient background, 5-fund list, allocation donut + chip swiper, Add to cart footer  all driven by **dummy data** |
 | **Risk profile** | Full assessment flow, `UserRiskProfile.tier`, tier config in `risk_tier_config` |
-| **MF catalog** | `Product`, `MutualFund`, category curation (`category_curation_service.py`) — browse/invest catalog, not tier baskets |
-| **Cart** | `useMfScreenerCartDrop` — working cart upsert; **not wired** to Funds For You |
-| **Recommendation engine** | **Does not exist** — no tables, services, or APIs |
+| **MF catalog** | `Product`, `MutualFund`, category curation (`category_curation_service.py`)  browse/invest catalog, not tier baskets |
+| **Cart** | `useMfScreenerCartDrop`  working cart upsert; **not wired** to Funds For You |
+| **Recommendation engine** | **Does not exist**  no tables, services, or APIs |
 
 ### Confirmed product decision
 
@@ -96,17 +96,17 @@ Investors who complete onboarding still face **choice overload** in the MF catal
 
 ### Primary goals
 
-1. **Convert risk tier into fund action** — bridge assessment outcome to investable picks in one hover surface.
-2. **Give ops full control** — no deploy required to change baskets; admin publishes config.
-3. **Build trust through stability** — users don't see a random new list every day; support can explain "why these 5".
-4. **Reuse invest infrastructure** — real `product_id`s, cart integration, MF eligibility rules.
-5. **Differentiate through explainability** — evolve from "5 funds for your risk category" to "a portfolio built for you, with reasons" (see [Part II](#part-ii--personalization--explainability)).
+1. **Convert risk tier into fund action**  bridge assessment outcome to investable picks in one hover surface.
+2. **Give ops full control**  no deploy required to change baskets; admin publishes config.
+3. **Build trust through stability**  users don't see a random new list every day; support can explain "why these 5".
+4. **Reuse invest infrastructure**  real `product_id`s, cart integration, MF eligibility rules.
+5. **Differentiate through explainability**  evolve from "5 funds for your risk category" to "a portfolio built for you, with reasons" (see [Part II](#part-ii--personalization--explainability)).
 
 ### Product positioning
 
 | Today (v1 baseline) | Target (v1.1+) |
 | ----------------- | -------------- |
-| "Here are 5 funds based on your risk profile." | **"Here's a portfolio built for you — and here's why."** |
+| "Here are 5 funds based on your risk profile." | **"Here's a portfolio built for you  and here's why."** |
 | Fund list + donut chart | Portfolio story + roles + fit score + per-fund explanations |
 | Admin maintains fund lists | Admin designs **investment strategies** with quality guardrails |
 | Stable picks (support can explain) | Explanations are a **first-class product feature**, not ops-only |
@@ -204,7 +204,7 @@ flowchart TB
 | **Basket objective** | Admin-defined strategy intent for a basket: narrative + target allocation bands. |
 | **Alternative fund** | Secondary pick in the same role/category; used when anchor unavailable without breaking portfolio story. |
 | **Portfolio story** | User-facing narrative: portfolio name, allocation mix, and "why this mix?" tied to risk tier + basket objective. |
-| **Zynd Pick** | Brand badge for curated recommendations — "Selected for your {tier} profile", not "Best Fund". |
+| **Zynd Pick** | Brand badge for curated recommendations  "Selected for your {tier} profile", not "Best Fund". |
 
 ---
 
@@ -296,19 +296,19 @@ sequenceDiagram
 
 | # | KYC | Risk profile | Baskets for tier | fund_movement_eligible | Popover content | Cart actions |
 | - | --- | ------------ | ---------------- | ---------------------- | --------------- | ------------ |
-| 1 | Incomplete | — | — | — | CTA: Complete KYC | Disabled |
-| 2 | Complete | Missing | — | — | CTA: Take risk assessment | Disabled |
-| 3 | Complete | Present | 0 active baskets | — | Empty: "Recommendations coming soon" | Disabled |
-| 4 | Complete | Present | ≥1 basket, pool < 5 | — | Empty: `insufficient_funds` | Disabled |
+| 1 | Incomplete |  |  |  | CTA: Complete KYC | Disabled |
+| 2 | Complete | Missing |  |  | CTA: Take risk assessment | Disabled |
+| 3 | Complete | Present | 0 active baskets |  | Empty: "Recommendations coming soon" | Disabled |
+| 4 | Complete | Present | ≥1 basket, pool < 5 |  | Empty: `insufficient_funds` | Disabled |
 | 5 | Complete | Present | Valid | false | Show 5 funds + chart (read-only) | Disabled + eligibility banner |
 | 6 | Complete | Present | Valid | true | Full experience | Enabled |
 
 **Viewing** recommendations requires KYC complete + risk profile (rows 3–6).  
-**Cart** requires row 6 only (`fund_movement_eligible` from auth user payload — same gate as `mf-fund-detail-view.tsx`).
+**Cart** requires row 6 only (`fund_movement_eligible` from auth user payload  same gate as `mf-fund-detail-view.tsx`).
 
 ### User journey diagrams
 
-#### Journey A — New investor
+#### Journey A  New investor
 
 ```mermaid
 stateDiagram-v2
@@ -322,7 +322,7 @@ stateDiagram-v2
   NewRecs --> HasRecs: New snapshot
 ```
 
-#### Journey B — Popover interaction (eligible user)
+#### Journey B  Popover interaction (eligible user)
 
 1. User hovers **Funds For You** in dashboard navbar (`dashboard-navbar.tsx`).
 2. Popover opens with motion + purple theme (existing UI).
@@ -333,9 +333,9 @@ stateDiagram-v2
 
 ### Gating UX principles
 
-- **Never block the hover** — popover always opens; ineligible states show messaging *inside* the panel.
-- **Actionable CTAs** — KYC block uses `useKycOptional().openDialog()`; risk block links to `/dashboard/risk-profile/assessment`.
-- **No misleading empty states** — distinguish "coming soon" (no admin config) from "complete your profile" (user action needed).
+- **Never block the hover**  popover always opens; ineligible states show messaging *inside* the panel.
+- **Actionable CTAs**  KYC block uses `useKycOptional().openDialog()`; risk block links to `/dashboard/risk-profile/assessment`.
+- **No misleading empty states**  distinguish "coming soon" (no admin config) from "complete your profile" (user action needed).
 
 ---
 
@@ -371,7 +371,7 @@ flowchart TD
   D --> F[Add funds via MF search picker]
   E --> F
   F --> G{Pool ≥ 5 investable?}
-  G -->|No| H[Validation warning — cannot publish tier]
+  G -->|No| H[Validation warning  cannot publish tier]
   G -->|Yes| I[Optional: set allocation_weight_pct per fund]
   I --> J[Preview: enter sample user_id → see stable 5]
   J --> K[Publish → config_version++]
@@ -394,8 +394,8 @@ flowchart TD
 | Tier has 0 active baskets | Error on publish | "At least one active basket required for {tier}" |
 | Basket pool < 5 active investable funds | Error | "Basket '{name}' needs ≥5 investable funds" |
 | Duplicate `product_id` in same basket | Error | "Fund already in basket" |
-| Inactive/draft product in basket | Warning | "Fund not investable — excluded at runtime" |
-| All funds same AMC | Warning | "Low diversification — AMC dedupe may reduce effective pool" |
+| Inactive/draft product in basket | Warning | "Fund not investable  excluded at runtime" |
+| All funds same AMC | Warning | "Low diversification  AMC dedupe may reduce effective pool" |
 | Allocation weights sum ≠ 100 when any set | Warning | "Weights will be normalized" |
 
 ---
@@ -460,9 +460,9 @@ erDiagram
 | `slug` | VARCHAR(128) | UNIQUE `(tier, slug)` | URL-safe, e.g. `moderate-balanced-core` |
 | `name` | VARCHAR(256) | NOT NULL | Admin display name |
 | `description` | TEXT | NULL | Optional internal note |
-| `objective_summary` | TEXT | NULL | **v1.1** — User/admin-facing strategy narrative |
-| `target_allocation` | JSONB | NULL | **v1.1** — Target bands, e.g. `{ "equity": 60, "debt": 25, "hybrid": 10, "gold": 5 }` |
-| `portfolio_display_name` | VARCHAR(256) | NULL | **v1.1** — e.g. "Moderate Growth Portfolio" |
+| `objective_summary` | TEXT | NULL | **v1.1**  User/admin-facing strategy narrative |
+| `target_allocation` | JSONB | NULL | **v1.1**  Target bands, e.g. `{ "equity": 60, "debt": 25, "hybrid": 10, "gold": 5 }` |
+| `portfolio_display_name` | VARCHAR(256) | NULL | **v1.1**  e.g. "Moderate Growth Portfolio" |
 | `is_active` | BOOLEAN | NOT NULL, default true | Inactive baskets excluded from selection |
 | `sort_order` | INTEGER | NOT NULL, default 0 | Stable ordering for hash index |
 | `created_at` | TIMESTAMPTZ | server default | |
@@ -479,10 +479,10 @@ erDiagram
 | `product_id` | UUID | FK → `products.id` ON DELETE RESTRICT | Must reference MF product |
 | `sort_order` | INTEGER | NOT NULL | Admin drag order |
 | `allocation_weight_pct` | NUMERIC(5,2) | NULL | Optional; if set on selected funds, drives donut |
-| `portfolio_role` | VARCHAR(64) | NULL | **v1.1** — `growth_engine`, `stability`, `diversifier`, `income_defensive`, `hedge` |
+| `portfolio_role` | VARCHAR(64) | NULL | **v1.1**  `growth_engine`, `stability`, `diversifier`, `income_defensive`, `hedge` |
 | `is_anchor` | BOOLEAN | NOT NULL, default false | Core pick; prefer inclusion in final 5 |
-| `is_alternative` | BOOLEAN | NOT NULL, default false | **v1.5** — Fallback when anchor unavailable |
-| `alternative_for_product_id` | UUID | NULL | **v1.5** — FK to anchor fund in same basket |
+| `is_alternative` | BOOLEAN | NOT NULL, default false | **v1.5**  Fallback when anchor unavailable |
+| `alternative_for_product_id` | UUID | NULL | **v1.5**  FK to anchor fund in same basket |
 | `is_active` | BOOLEAN | NOT NULL, default true | Soft-remove without deleting |
 | | | UNIQUE `(basket_id, product_id)` | |
 
@@ -508,11 +508,11 @@ Singleton table (one row) or append-only version history (v1: singleton).
 | `basket_id` | UUID | FK → `recommendation_basket.id` |
 | `config_version` | INTEGER | Must match `recommendation_config.published_version` |
 | `fund_product_ids` | JSONB | Ordered array of exactly 5 UUID strings |
-| `fund_metadata` | JSONB | **v1.1** — Per-fund `{ product_id, role, reason_codes[] }` |
+| `fund_metadata` | JSONB | **v1.1**  Per-fund `{ product_id, role, reason_codes[] }` |
 | `allocation_slices` | JSONB | Array of `{ id, label, value_pct }` |
-| `portfolio_fit` | JSONB | **v1.5** — `{ overall, risk_alignment, diversification, category_balance, amc_concentration }` |
-| `portfolio_story` | JSONB | **v1.1** — `{ display_name, mix_summary, why_this_mix }` |
-| `previous_snapshot_id` | UUID | NULL | **v1.5** — Link to prior snapshot for change diff |
+| `portfolio_fit` | JSONB | **v1.5**  `{ overall, risk_alignment, diversification, category_balance, amc_concentration }` |
+| `portfolio_story` | JSONB | **v1.1**  `{ display_name, mix_summary, why_this_mix }` |
+| `previous_snapshot_id` | UUID | NULL | **v1.5**  Link to prior snapshot for change diff |
 | `created_at` | TIMESTAMPTZ | When snapshot was computed |
 | `updated_at` | TIMESTAMPTZ | Last refresh |
 
@@ -527,7 +527,7 @@ Singleton table (one row) or append-only version history (v1: singleton).
 
 - File: `Backend/alembic/versions/NNN_recommendation_baskets.py`
 - Seed: `recommendation_config` row with `published_version = 0`
-- No default baskets — admin must configure before investors see recommendations
+- No default baskets  admin must configure before investors see recommendations
 
 ### ORM location
 
@@ -675,14 +675,14 @@ Reuse invest catalog query helpers where possible (`invest_catalog_*` patterns) 
 
 ### Allocation computation
 
-**Priority 1 — Admin weights**
+**Priority 1  Admin weights**
 
 If any of the 5 selected funds has `allocation_weight_pct` set:
 
 1. Sum weights for selected funds.
 2. Normalize to 100% (round to 1 decimal; adjust largest slice for drift).
 
-**Priority 2 — Category-derived buckets**
+**Priority 2  Category-derived buckets**
 
 Map each fund's primary category slug → asset class:
 
@@ -736,7 +736,7 @@ Path: `Backend/app/application/recommendations/funds_for_you_service.py`
 
 | Method | Description |
 | ------ | ----------- |
-| `resolve_for_user(session, user_id)` | Main entry — returns DTO |
+| `resolve_for_user(session, user_id)` | Main entry  returns DTO |
 | `_check_eligibility(user_id)` | KYC + risk gates |
 | `_load_or_compute_snapshot(...)` | Snapshot read-through |
 | `_pick_basket(...)` | Stable basket index |
@@ -774,9 +774,9 @@ router.include_router(admin_recommendations_router, prefix="/recommendations", t
 
 | Property | Value |
 | -------- | ----- |
-| Auth | `get_current_user` — **does not** require `require_invest_eligible_user` (user must *see* block states) |
+| Auth | `get_current_user`  **does not** require `require_invest_eligible_user` (user must *see* block states) |
 | Cache | `Cache-Control: private, max-age=300` optional |
-| Idempotent | Yes — same snapshot returned until invalidation |
+| Idempotent | Yes  same snapshot returned until invalidation |
 
 **Response 200 (baseline v1; see [§34](#34-enriched-api-contract) for full v1.5 shape)**
 
@@ -926,7 +926,7 @@ File: `Admin/src/components/risk-profile/recommendation-baskets-panel.tsx`
 │  │ ○ Income Focus│  │  └──────────────────────────────────────┘  │
 │  │ + New basket  │  │  Ordered table:                            │
 │  └───────────────┘  │  [≡] PPFCF | PPFAS | 25% weight | ✕         │
-│                     │  [≡] MIRAE LC | Mirae | — | ✕                │
+│                     │  [≡] MIRAE LC | Mirae |  | ✕                │
 │                     │  ⚠ Pool: 8/5 investable funds OK             │
 ├─────────────────────┴────────────────────────────────────────────┤
 │  Preview: user_id [________] [Run preview] → shows 5 + allocation │
@@ -973,7 +973,7 @@ Web/src/features/recommendations/
 useQuery({
   queryKey: queryKeys.recommendations.fundsForYou(),
   queryFn: fetchFundsForYou,
-  staleTime: 5 * 60 * 1000,      // 5 minutes — matches snapshot stability
+  staleTime: 5 * 60 * 1000,      // 5 minutes  matches snapshot stability
   enabled: isPopoverPresent,      // fetch on open, not on every page load
 })
 ```
@@ -992,8 +992,8 @@ File: `Web/src/components/dashboard/recommend-funds-hover-card.tsx`
 | Error state | Inline retry button; don't crash popover |
 | Block states | Switch on `block_reason` with copy from `copy.ts` |
 | Fund rows | Real AMC logos via `amc_logo_url` (same as redeem flow) |
-| Cart — single | `useMfScreenerCartDrop().addFundToCart({ product_id, … })` |
-| Cart — bulk | `addFundsToCart(funds)` for footer button |
+| Cart  single | `useMfScreenerCartDrop().addFundToCart({ product_id, … })` |
+| Cart  bulk | `addFundsToCart(funds)` for footer button |
 | Eligibility guard | Disable cart when `!user.fund_movement_eligible` |
 | Allocation panel | Pass `data.allocation` → `RecommendFundsAllocationPanel` |
 
@@ -1043,7 +1043,7 @@ Register in `Backend/app/application/admin/rbac_service.py`:
 
 Update:
 
-- `Backend/app/application/admin/permission_matrix.py` — status `enforced`
+- `Backend/app/application/admin/permission_matrix.py`  status `enforced`
 - `Backend/docs/architecture/RBAC_PERMISSION_MATRIX.md`
 - `Admin/src/lib/admin-capabilities.ts`
 
@@ -1070,7 +1070,7 @@ Add to `Admin/src/lib/admin-audit-events.ts` and backend audit writer:
 ### Data access rules
 
 - Investors can **only** read their own resolved recommendation via invest API.
-- Admin preview accepts explicit `sample_user_id` — **admin only**, audited.
+- Admin preview accepts explicit `sample_user_id`  **admin only**, audited.
 - No PII in snapshot table beyond `user_id` FK.
 
 ---
@@ -1090,10 +1090,10 @@ Add to `Admin/src/lib/admin-audit-events.ts` and backend audit writer:
 
 | Layer | Strategy |
 | ----- | -------- |
-| **DB snapshot** | Primary cache — one row per user |
+| **DB snapshot** | Primary cache  one row per user |
 | **React Query** | `staleTime: 5m`, invalidate on tier change client-side if assessment completes |
 | **HTTP** | Optional `private, max-age=300` on invest endpoint |
-| **CDN** | None — authenticated, user-specific |
+| **CDN** | None  authenticated, user-specific |
 
 ### Concurrency
 
@@ -1144,7 +1144,7 @@ Log fields on compute path:
 
 **"User sees different funds after publish"**
 
-Expected — `config_version` bump invalidates snapshot; new stable set computed on next open.
+Expected  `config_version` bump invalidates snapshot; new stable set computed on next open.
 
 ---
 
@@ -1152,18 +1152,18 @@ Expected — `config_version` bump invalidates snapshot; new stable set computed
 
 > **Note:** Core v1 ships the engine foundation. Personalization X-factors land in v1.1 / v1.5 per [§36](#36-roadmap-v1--v11--v15--v2).
 
-### Phase 1 — Backend foundation (v1, blocking)
+### Phase 1  Backend foundation (v1, blocking)
 
 - [ ] Alembic migration + SQLAlchemy models (include nullable v1.1 columns from day one where cheap)
-- [ ] `FundsForYouService` — full algorithm + snapshot
-- [ ] `BasketAdminService` — CRUD + publish
+- [ ] `FundsForYouService`  full algorithm + snapshot
+- [ ] `BasketAdminService`  CRUD + publish
 - [ ] Invest + Admin routers + schemas (baseline response; reason codes optional/null in v1)
 - [ ] RBAC permissions registered
 - [ ] Unit tests (see [§17](#17-testing-strategy))
 
 **Exit criteria:** API returns real funds for test user with seeded baskets; preview endpoint matches invest endpoint for same user.
 
-### Phase 2 — Admin console (v1)
+### Phase 2  Admin console (v1)
 
 - [ ] `recommendations-admin-api.ts` + hooks
 - [ ] Recommendation baskets panel + tier tabs
@@ -1173,7 +1173,7 @@ Expected — `config_version` bump invalidates snapshot; new stable set computed
 
 **Exit criteria:** Ops can configure Moderate tier end-to-end without SQL.
 
-### Phase 3 — Web wiring (v1)
+### Phase 3  Web wiring (v1)
 
 - [ ] `features/recommendations/` API + hook
 - [ ] Replace dummy data in hover card
@@ -1183,7 +1183,7 @@ Expected — `config_version` bump invalidates snapshot; new stable set computed
 
 **Exit criteria:** No dummy data in production path; manual QA checklist passes.
 
-### Phase 4 — Polish and ops (v1)
+### Phase 4  Polish and ops (v1)
 
 - [ ] Admin publish validation (tier coverage)
 - [ ] Audit events wired in UI
@@ -1191,17 +1191,17 @@ Expected — `config_version` bump invalidates snapshot; new stable set computed
 - [ ] Metrics + logging
 - [ ] Admin runbook published (§19)
 
-### Phase 5 — Explainability quick wins (v1.1)
+### Phase 5  Explainability quick wins (v1.1)
 
-See [§36 — v1.1](#v11--quick-wins-explainability--portfolio-story).
+See [§36  v1.1](#v11--quick-wins-explainability--portfolio-story).
 
-### Phase 6 — Differentiation (v1.5)
+### Phase 6  Differentiation (v1.5)
 
-See [§36 — v1.5](#v15--differentiation-fit-score--change-transparency).
+See [§36  v1.5](#v15--differentiation-fit-score--change-transparency).
 
-### Phase 7 — Real personalization (v2)
+### Phase 7  Real personalization (v2)
 
-See [§36 — v2](#v2--real-personalization-platform) and [§37](#37-future-personalization-dimensions).
+See [§36  v2](#v2--real-personalization-platform) and [§37](#37-future-personalization-dimensions).
 
 ---
 
@@ -1272,13 +1272,13 @@ When false, keep dummy data fallback for demos.
 
 ### Data migration
 
-- No backfill required — snapshots created lazily on first eligible API call.
+- No backfill required  snapshots created lazily on first eligible API call.
 - Admin must publish at least one basket per tier before GA messaging.
 
 ### Rollback plan
 
 1. Turn off feature flag → dummy or empty state.
-2. Revert publish not needed — previous baskets remain in DB.
+2. Revert publish not needed  previous baskets remain in DB.
 3. Snapshots remain harmless if endpoint disabled.
 
 ---
@@ -1294,8 +1294,8 @@ When false, keep dummy data fallback for demos.
 5. Drag to set priority order; mark 1–2 funds as **anchor** if they must often appear.
 6. Optionally set allocation weights on anchors (e.g. 20% each).
 7. Repeat for "Growth Tilt" and "Income Focus" baskets.
-8. Enter a test `user_id` in **Preview** — confirm 5 funds + chart.
-9. Click **Publish configuration** — note new version number.
+8. Enter a test `user_id` in **Preview**  confirm 5 funds + chart.
+9. Click **Publish configuration**  note new version number.
 10. Verify in Web app with a Moderate test user.
 
 ### Pre-publish checklist
@@ -1309,7 +1309,7 @@ When false, keep dummy data fallback for demos.
 
 - Document version and date in ops log.
 - Monitor `recommendations.degraded` metric for 24h.
-- Expect support questions — reference snapshot table for answers.
+- Expect support questions  reference snapshot table for answers.
 
 ---
 
@@ -1326,7 +1326,7 @@ When false, keep dummy data fallback for demos.
 | **Anchor + alternatives** | v1.5 | Intelligent fallback without broken picks | Basket fund rows |
 | **What changed? diff** | v1.5 | User-facing update on config_version bump | Snapshot history |
 | **Admin preview simulator** | v1.5 | Full portfolio analysis in admin | Preview API |
-| **Ask Zynd — Explain portfolio** | v1.5+ | Aggregated explanation UX | Copy templates + API |
+| **Ask Zynd  Explain portfolio** | v1.5+ | Aggregated explanation UX | Copy templates + API |
 | **Explore alternatives → screener** | v1.1 | Curated vs discovery bridge | MF screener route |
 | **Holdings-aware filtering** | v2 | Exclude heavy existing positions | Portfolio module |
 | **Investment horizon** | v2 | Moderate + 2yr vs 15yr differ | Assessment extension |
@@ -1431,10 +1431,10 @@ When false, keep dummy data fallback for demos.
 
 | Question | Default if unset |
 | -------- | ---------------- |
-| Maker-checker on publish? | No — single `recommendations.publish` permission |
+| Maker-checker on publish? | No  single `recommendations.publish` permission |
 | Soft vs hard basket delete? | Soft (`is_active=false`) |
-| Prefetch on navbar mount? | No — fetch on popover open only |
-| Feature flag for GA? | Yes — `FUNDS_FOR_YOU_LIVE` |
+| Prefetch on navbar mount? | No  fetch on popover open only |
+| Feature flag for GA? | Yes  `FUNDS_FOR_YOU_LIVE` |
 | Minimum baskets per tier for publish? | Warn only, don't block tier with 0 baskets |
 
 ### Definition of done (module complete)
@@ -1455,9 +1455,9 @@ When false, keep dummy data fallback for demos.
 
 ---
 
-# Part II — Personalization & explainability
+# Part II  Personalization & explainability
 
-This part defines how **Funds For You** evolves from a **curated recommendation engine** into a **differentiated personalization product** — without requiring ML in v1.x. The rule-based architecture stays; we add **explainability, portfolio narrative, and quality guardrails** as first-class features.
+This part defines how **Funds For You** evolves from a **curated recommendation engine** into a **differentiated personalization product**  without requiring ML in v1.x. The rule-based architecture stays; we add **explainability, portfolio narrative, and quality guardrails** as first-class features.
 
 ```mermaid
 flowchart TB
@@ -1507,11 +1507,11 @@ flowchart TB
 
 ### Design principles (all phases)
 
-1. **Explain, don't predict** — Fit scores and reasons describe *recommendation quality*, never expected returns.
-2. **Stable but transparent** — Same 5 funds until invalidation; when they change, tell the user *what* and *why*.
-3. **Rule-based first** — Derive roles, reasons, and scores from basket config + catalog metadata before ML.
-4. **Curated, not captive** — Primary path is recommended; screener remains the discovery escape hatch.
-5. **Auditable by construction** — Every explanation maps to `reason_codes` stored in snapshot JSON.
+1. **Explain, don't predict**  Fit scores and reasons describe *recommendation quality*, never expected returns.
+2. **Stable but transparent**  Same 5 funds until invalidation; when they change, tell the user *what* and *why*.
+3. **Rule-based first**  Derive roles, reasons, and scores from basket config + catalog metadata before ML.
+4. **Curated, not captive**  Primary path is recommended; screener remains the discovery escape hatch.
+5. **Auditable by construction**  Every explanation maps to `reason_codes` stored in snapshot JSON.
 
 ---
 
@@ -1534,12 +1534,12 @@ Fifteen product improvements, prioritized across releases:
 | 11 | **Explore alternatives** | P1 | v1.1 | Screener bridge |
 | 12 | **Intelligent baskets (objectives)** | P0 | v1.1 | Strategy abstraction |
 | 13 | **Zynd Pick badge** | P2 | v1.1 | Brand language |
-| 14 | **Ask Zynd — Explain portfolio** | P1 | v1.5 | Leadership pitch feature |
+| 14 | **Ask Zynd  Explain portfolio** | P1 | v1.5 | Leadership pitch feature |
 | 15 | **Goal × Risk × Horizon** | P2 | v2 | Real personalization platform |
 
 ---
 
-## 25. Why this fund? — explainability layer
+## 25. Why this fund?  explainability layer
 
 **Priority: #1 recommendation. Ship in v1.1.**
 
@@ -1588,7 +1588,7 @@ Engine assigns codes during `pick_five_stable()` and persists in `snapshot.fund_
 
 ### Copy source
 
-Extend `copy.navbar.recommendFunds.whyFund.*` — never hardcode explanation strings in components.
+Extend `copy.navbar.recommendFunds.whyFund.*`  never hardcode explanation strings in components.
 
 ---
 
@@ -1625,7 +1625,7 @@ Replace "5 funds + donut" as the sole narrative with a **portfolio header**:
 }
 ```
 
-Template engine: `portfolio_story_builder.py` — inputs: tier config title, basket objective, allocation slices.
+Template engine: `portfolio_story_builder.py`  inputs: tier config title, basket objective, allocation slices.
 
 ### Portfolio roles (v1.1)
 
@@ -1658,7 +1658,7 @@ Ensures the portfolio is understandable even for users who don't know mutual fun
 
 ## 27. Portfolio Fit Score
 
-**Phase: v1.5 — not a return prediction.**
+**Phase: v1.5  not a return prediction.**
 
 ### User experience
 
@@ -1693,7 +1693,7 @@ Service: `Backend/app/application/recommendations/portfolio_fit_scorer.py`
 
 **Compliance copy (required in UI):**
 
-> This score reflects how well this recommendation fits your profile and diversification — **not** expected investment returns.
+> This score reflects how well this recommendation fits your profile and diversification  **not** expected investment returns.
 
 ### API field
 
@@ -1714,7 +1714,7 @@ Persist in snapshot for stability.
 
 ## 28. Recommendation change transparency
 
-**Phase: v1.5 — leverages existing `config_version` invalidation.**
+**Phase: v1.5  leverages existing `config_version` invalidation.**
 
 When snapshot regenerates (publish or tier change), compare to previous snapshot:
 
@@ -1760,13 +1760,13 @@ Web: show banner when `response.change_diff` is non-null; dismiss persists to `l
 
 ## 29. Explore alternatives and screener bridge
 
-**Phase: v1.1 — preserves curated vs discovery distinction.**
+**Phase: v1.1  preserves curated vs discovery distinction.**
 
 ### Popover footer layout
 
 ```
 ┌─────────────────────────────────────────────┐
-│  ⭐ Recommended for you — 5 funds            │
+│  ⭐ Recommended for you  5 funds            │
 │  [ Add to cart ]              [ ℹ ]         │
 ├─────────────────────────────────────────────┤
 │  Want to explore? → View more funds         │
@@ -1775,15 +1775,15 @@ Web: show banner when `response.change_diff` is non-null; dismiss persists to `l
 
 **"View more funds"** → `/dashboard/invest/mutual-funds` (existing MF screener) with optional query `?from=funds-for-you&tier=moderate`.
 
-**Analytics:** track `funds_for_you.explore_screener_click` vs cart adds — measure whether recommendations satisfy or users want more control.
+**Analytics:** track `funds_for_you.explore_screener_click` vs cart adds  measure whether recommendations satisfy or users want more control.
 
-**Do not** show alternative funds inline in v1.1 — keeps popover focused; screener is the exploration surface.
+**Do not** show alternative funds inline in v1.1  keeps popover focused; screener is the exploration surface.
 
 ---
 
-## 30. Intelligent baskets — objectives and strategies
+## 30. Intelligent baskets  objectives and strategies
 
-**Phase: v1.1 — upgrade admin abstraction.**
+**Phase: v1.1  upgrade admin abstraction.**
 
 Admins don't merely maintain lists; they design **strategies**:
 
@@ -1836,7 +1836,7 @@ Engine uses target allocation for:
 
 ## 31. Anchor + alternatives model
 
-**Phase: v1.5 — extends existing `is_anchor` concept.**
+**Phase: v1.5  extends existing `is_anchor` concept.**
 
 ### Structure per role slot
 
@@ -1875,7 +1875,7 @@ Fund row columns: **Role** | **Type** (Anchor / Alternative) | **Alternative for
 
 ## 32. Diversification guardrails
 
-**Phase: v1.1 — admin quality control.**
+**Phase: v1.1  admin quality control.**
 
 Run analyzer on basket save and on publish: `basket_quality_analyzer.py`
 
@@ -1886,13 +1886,13 @@ Run analyzer on basket save and on publish: `basket_quality_analyzer.py`
 | `AMC_CONCENTRATION` | ≥4 of 5 preview picks same AMC | Warning | "High concentration: 4 of 5 funds from same AMC" |
 | `SINGLE_ASSET_CLASS` | All funds map to one bucket | Error | "Low diversification: basket contains only equity funds" |
 | `DUPLICATE_CATEGORY` | ≥3 funds same category slug | Warning | "Category overlap may reduce diversification" |
-| `MISSING_DEFENSIVE` | No debt/hybrid/gold in pool | Warning | "No defensive allocation — may not suit tier intent" |
+| `MISSING_DEFENSIVE` | No debt/hybrid/gold in pool | Warning | "No defensive allocation  may not suit tier intent" |
 | `TARGET_DRIFT` | Preview allocation deviates >15% from target | Warning | "Actual allocation diverges from target" |
 
 **Publish behavior:**
 
-- **Errors** — block publish (configurable; default block)
-- **Warnings** — allow publish with confirmation checkbox
+- **Errors**  block publish (configurable; default block)
+- **Warnings**  allow publish with confirmation checkbox
 
 ### Admin UI
 
@@ -1907,7 +1907,7 @@ Run analyzer on basket save and on publish: `basket_quality_analyzer.py`
 
 ## 33. Admin preview simulator
 
-**Phase: v1.5 — extends existing preview endpoint.**
+**Phase: v1.5  extends existing preview endpoint.**
 
 ### Simulator panel
 
@@ -1917,11 +1917,11 @@ Run analyzer on basket save and on publish: `basket_quality_analyzer.py`
 │ Basket: Balanced Core (auto from engine)                       │
 ├──────────────────────────────────────────────────────────────┤
 │ Recommended 5                                                │
-│  1. Fund A — 🟣 Growth Engine                                  │
-│  2. Fund B — 🔵 Stability                                      │
-│  3. Fund C — 🟢 Diversifier                                    │
-│  4. Fund D — 🟣 Growth Engine                                  │
-│  5. Fund E — 🟡 Hedge                                          │
+│  1. Fund A  🟣 Growth Engine                                  │
+│  2. Fund B  🔵 Stability                                      │
+│  3. Fund C  🟢 Diversifier                                    │
+│  4. Fund D  🟣 Growth Engine                                  │
+│  5. Fund E  🟡 Hedge                                          │
 ├──────────────────────────────────────────────────────────────┤
 │ Portfolio analysis                                           │
 │  Risk fit:           91                                      │
@@ -2026,9 +2026,9 @@ Web UI gracefully degrades: if `portfolio` null, show v1 layout; if `reason_code
 
 ---
 
-## 35. Ask Zynd — Explain my portfolio
+## 35. Ask Zynd  Explain my portfolio
 
-**Phase: v1.5 — flagship explainability UX.**
+**Phase: v1.5  flagship explainability UX.**
 
 ### Entry point
 
@@ -2057,7 +2057,7 @@ Footer or header action: **"Why these 5?"**
 
 ### Implementation
 
-- **No LLM required in v1.5** — template composition from `portfolio_story` + per-fund reason maps
+- **No LLM required in v1.5**  template composition from `portfolio_story` + per-fund reason maps
 - **v2 optional:** LLM polishes template text; codes remain source of truth for audit
 - Component: `Web/src/components/dashboard/recommend-funds-explain-panel.tsx`
 - Aggregator: `explain_portfolio_builder.py` on backend (returns structured sections)
@@ -2068,7 +2068,7 @@ Footer or header action: **"Why these 5?"**
 
 ## 36. Roadmap: v1 → v1.1 → v1.5 → v2
 
-### v1 — Foundation (ship first)
+### v1  Foundation (ship first)
 
 **Goal:** Working engine + admin config + Web wiring.
 
@@ -2079,25 +2079,25 @@ Footer or header action: **"Why these 5?"**
 | Stable deterministic selection | Required |
 | Baseline API (funds without roles/reasons) | Required |
 
-**User sees:** Real funds for their tier — functional but not yet differentiated.
+**User sees:** Real funds for their tier  functional but not yet differentiated.
 
 ---
 
-### v1.1 — Quick wins (explainability + portfolio story)
+### v1.1  Quick wins (explainability + portfolio story)
 
-**Goal:** *"Here's a portfolio built for you — and here's why."*
+**Goal:** *"Here's a portfolio built for you  and here's why."*
 
 | # | Deliverable | Backend | Admin | Web |
 | - | ----------- | ------- | ----- | --- |
-| 1 | Why this fund? | `reason_codes.py`, snapshot metadata | — | Fund row + why panel |
+| 1 | Why this fund? | `reason_codes.py`, snapshot metadata |  | Fund row + why panel |
 | 2 | Portfolio roles | `portfolio_role` on basket funds | Role column in editor | Role badges |
 | 3 | Portfolio story | `portfolio_story_builder.py` | Objective + target allocation | Portfolio header |
 | 4 | Allocation explanation | Template from tier + basket | Objective editor | "Why this mix?" |
-| 5 | Diversification guardrails | `basket_quality_analyzer.py` | Warning UI on publish | — |
-| 6 | Reason codes in API | Enriched fund DTO | — | Copy mapper |
-| 7 | Explore alternatives | — | — | Link to screener |
+| 5 | Diversification guardrails | `basket_quality_analyzer.py` | Warning UI on publish |  |
+| 6 | Reason codes in API | Enriched fund DTO |  | Copy mapper |
+| 7 | Explore alternatives |  |  | Link to screener |
 | 8 | Intelligent baskets | Basket objective fields | Strategy editor | Display objective |
-| 9 | Zynd Pick badge | `badge: "zynd_pick"` | — | Badge on header |
+| 9 | Zynd Pick badge | `badge: "zynd_pick"` |  | Badge on header |
 
 **Exit criteria:**
 
@@ -2108,7 +2108,7 @@ Footer or header action: **"Why these 5?"**
 
 ---
 
-### v1.5 — Differentiation
+### v1.5  Differentiation
 
 **Goal:** Signature metrics + trust on change + ops simulator.
 
@@ -2116,9 +2116,9 @@ Footer or header action: **"Why these 5?"**
 | - | ----------- | ------- | ----- | --- |
 | 1 | Portfolio Fit Score | `portfolio_fit_scorer.py` | Show in preview | Fit score card |
 | 2 | Anchor + alternatives | Selection algorithm v2 | Anchor/alt editor | Substitution reason |
-| 3 | What changed? | `recommendation_change_diff_service.py` | — | Update banner |
-| 4 | Admin simulator | Extended preview API | Full simulator panel | — |
-| 5 | Ask Zynd — Explain | `explain_portfolio_builder.py` | — | Explain panel |
+| 3 | What changed? | `recommendation_change_diff_service.py` |  | Update banner |
+| 4 | Admin simulator | Extended preview API | Full simulator panel |  |
+| 5 | Ask Zynd  Explain | `explain_portfolio_builder.py` |  | Explain panel |
 
 **Exit criteria:**
 
@@ -2129,7 +2129,7 @@ Footer or header action: **"Why these 5?"**
 
 ---
 
-### v2 — Real personalization platform
+### v2  Real personalization platform
 
 **Goal:** Move from **Risk** to **Risk × Goal × Horizon × Holdings**.
 
@@ -2188,15 +2188,15 @@ Before `pick_five`:
 pool = exclude_heavy_holdings(pool, user_holdings, threshold_pct=0.25)
 ```
 
-**UX:** Reason code `holdings_overlap_avoided` — "Complements your existing portfolio."
+**UX:** Reason code `holdings_overlap_avoided`  "Complements your existing portfolio."
 
 **Dependency:** Portfolio holdings API (dashboard portfolio module).
 
 ### 37.4 Adaptive recommendations (v2+)
 
-- Periodic review prompt: "Your profile hasn't changed — recommendations still fit"
+- Periodic review prompt: "Your profile hasn't changed  recommendations still fit"
 - Recompute when holdings drift significantly
-- Optional user-triggered refresh (product policy TBD — conflicts with stable default)
+- Optional user-triggered refresh (product policy TBD  conflicts with stable default)
 
 ### 37.5 Zynd Pick brand layer (ongoing)
 

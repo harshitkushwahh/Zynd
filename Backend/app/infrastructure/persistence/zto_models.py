@@ -1,4 +1,4 @@
-"""Zero-Touch Lookup (ZTO) persistence — consents, encrypted fetches, registry, approved profile."""
+"""Zero-Touch Lookup (ZTO) persistence  consents, encrypted fetches, registry, approved profile."""
 
 from __future__ import annotations
 

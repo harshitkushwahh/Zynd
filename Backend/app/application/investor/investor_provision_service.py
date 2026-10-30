@@ -108,7 +108,7 @@ async def _load_profile_bundle(session: AsyncSession, user_id) -> tuple[Investor
 async def provision_investor_profile(session: AsyncSession, *, user_id) -> bool:
     settings = get_settings()
     if not settings.resolved_fp_enabled:
-        logger.warning("Skipping investor provisioning for user=%s — Finprim is not enabled", user_id)
+        logger.warning("Skipping investor provisioning for user=%s  Finprim is not enabled", user_id)
         return False
 
     bundle = await _load_profile_bundle(session, user_id)

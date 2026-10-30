@@ -37,7 +37,10 @@ export type MfTransactionConsentOtpSectionProps = {
   successTitle?: string;
   successDescription?: string;
   loadFailedMessage?: string;
-  /** Prefetched from POST /orders — avoids an extra GET when the consent API is unavailable. */
+  confirmFailedMessage?: string;
+  cancelLabel?: string;
+  onCancel?: () => void;
+  /** Prefetched from POST /orders  avoids an extra GET when the consent API is unavailable. */
   initialConsent?: MfTransactionConsentContext;
   embedded?: boolean;
   autoContinueOnConfirm?: boolean;
@@ -58,6 +61,9 @@ export function MfTransactionConsentOtpSection({
   successTitle,
   successDescription,
   loadFailedMessage,
+  confirmFailedMessage,
+  cancelLabel,
+  onCancel,
   initialConsent,
   embedded = false,
   autoContinueOnConfirm = false,
@@ -185,7 +191,9 @@ export function MfTransactionConsentOtpSection({
       onConfirmed?.();
     } catch (err) {
       setDeliveryVisualState("error");
-      setError(err instanceof Error ? err.message : portfolioCopy.redeemConsentConfirmFailed);
+      setError(
+        err instanceof Error ? err.message : confirmFailedMessage ?? portfolioCopy.redeemConsentConfirmFailed,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -220,6 +228,7 @@ export function MfTransactionConsentOtpSection({
     <div
       className={cn(
         embedded ? "flex min-h-0 flex-1 flex-col px-0 pb-0 pt-0" : "px-4 pb-7 pt-2",
+        embedded && onCancel && "pb-0",
         className,
       )}
     >
@@ -242,6 +251,8 @@ export function MfTransactionConsentOtpSection({
         bannerError={loadError}
         inputError={Boolean(error) && !loadError}
         confirmLabel={confirmLabel ?? portfolioCopy.holdingConsentConfirm}
+        cancelLabel={cancelLabel}
+        onCancel={onCancel}
         infoMessage={infoMessage}
         sentResendCooldownSeconds={sentResendCooldownSeconds}
         otpExpiresInSeconds={otpExpiresInSeconds}

@@ -9,12 +9,8 @@ import { useSupportAuth } from "@/contexts/support-auth-context";
 import { formatDistributorDate } from "@/lib/format";
 import { getDisplayInitials } from "@/lib/get-display-initials";
 import { replyToSupportTicket } from "@/lib/support-tickets-api";
-import type { SupportTicket, SupportTicketDetail, SupportTicketMessage } from "@/lib/support-types";
+import type { SupportTicket, SupportTicketDetail } from "@/lib/support-types";
 import { cn } from "@/lib/utils";
-
-function createMessageId(): string {
-  return `msg-local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
 
 type SupportTicketChatPanelProps = {
   ticket: SupportTicket;
@@ -40,7 +36,7 @@ export function SupportTicketChatPanel({
   wsConnected = false,
 }: SupportTicketChatPanelProps) {
   const { displayName } = useSupportAuth();
-  const [messages, setMessages] = useState<SupportTicketMessage[]>(ticket.messages);
+  const messages = ticket.messages;
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -52,10 +48,6 @@ export function SupportTicketChatPanel({
   const investorInitials = getDisplayInitials(
     ticket.messages.find((message) => message.role === "user")?.senderName ?? ticket.userId,
   );
-
-  useEffect(() => {
-    setMessages(ticket.messages);
-  }, [ticket.messages]);
 
   useEffect(() => {
     setDraft("");
@@ -90,19 +82,9 @@ export function SupportTicketChatPanel({
     setDraft("");
     void replyToSupportTicket(ticket.id, body, mode === "internal" ? "internal" : "customer")
       .then((detail) => {
-        setMessages(detail.ticket.messages);
         onUpdated?.(detail);
       })
       .catch(() => {
-        setMessages((current) => [
-          ...current,
-          {
-            id: createMessageId(),
-            role: "system",
-            body: "That reply was not saved. Try again.",
-            createdAt: new Date().toISOString(),
-          },
-        ]);
         setDraft(body);
       })
       .finally(() => {
@@ -115,19 +97,10 @@ export function SupportTicketChatPanel({
     setSending(true);
     void replyToSupportTicket(ticket.id, "", "customer", true)
       .then((detail) => {
-        setMessages(detail.ticket.messages);
         onUpdated?.(detail);
       })
       .catch(() => {
-        setMessages((current) => [
-          ...current,
-          {
-            id: createMessageId(),
-            role: "system",
-            body: "The resolution question was not sent. Try again.",
-            createdAt: new Date().toISOString(),
-          },
-        ]);
+        // Parent ticket state stays unchanged on failure.
       })
       .finally(() => {
         setSending(false);

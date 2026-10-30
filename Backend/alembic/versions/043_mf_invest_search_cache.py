@@ -1,4 +1,4 @@
-"""MF invest search vectors & cache scale — Phase 14.
+"""MF invest search vectors & cache scale  Phase 14.
 
 Revision ID: 043_mf_invest_search_cache
 Revises: 042_mf_catalog_rules

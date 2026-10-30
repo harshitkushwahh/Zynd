@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     func,
@@ -106,6 +107,38 @@ class SupportMessage(Base):
     support_read_by: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     conversation: Mapped[SupportConversation] = relationship(back_populates="messages")
+    help_feedback: Mapped[Optional["SupportBotMessageFeedback"]] = relationship(
+        back_populates="message",
+        uselist=False,
+    )
+
+
+class SupportBotMessageFeedback(Base):
+    __tablename__ = "support_bot_message_feedback"
+    __table_args__ = (
+        CheckConstraint(
+            "choice IN ('yes', 'no')",
+            name="ck_support_bot_message_feedback_choice",
+        ),
+    )
+
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("support_messages.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    choice: Mapped[str] = mapped_column(String(8), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    message: Mapped[SupportMessage] = relationship(back_populates="help_feedback")
 
 
 class SupportTicket(Base):
@@ -163,6 +196,7 @@ class SupportTicket(Base):
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_prompted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_choice: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    bot_unhelpful_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     routing_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

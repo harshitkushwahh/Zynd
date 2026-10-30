@@ -1,11 +1,11 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-/** Scroll shell inside BrandDialog — mobile scrolls as one column; desktop delegates to panels. */
+/** Scroll shell inside BrandDialog  mobile scrolls as one column; desktop delegates to panels. */
 export const MF_JOURNEY_DIALOG_BODY_SHELL_CLASS =
   "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain [scrollbar-width:none] md:overflow-hidden [&::-webkit-scrollbar]:hidden";
 
-/** Two-column journey grid — fills the dialog body on desktop. */
+/** Two-column journey grid  fills the dialog body on desktop. */
 export const MF_JOURNEY_DIALOG_GRID_CLASS =
   "grid min-h-0 grid-cols-1 md:flex-1 md:overflow-hidden md:items-stretch";
 
